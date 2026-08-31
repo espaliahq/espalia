@@ -98,19 +98,34 @@ class Operations::Frameworks::AddCollaboratorTest < ActiveSupport::TestCase
             framework_id: @framework_id, person_id: @target_person.id.to_s, role: "role_lead"
           })
         end
-        assert_match(/scoped/, error.message)
+        assert_match(/scope_type must be "role" when role is "role_lead"/, error.message)
         assert_empty assignments("role_lead")
       end
     end
 
+    should "name the missing scope_id once the scope_type is right" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          add_collaborator(@admin_ctx, {
+            framework_id: @framework_id, person_id: @target_person.id.to_s,
+            role: "role_lead", scope_type: "role"
+          })
+        end
+        assert_match(/role_lead is scoped — provide scope_type "role" and a scope_id/, error.message)
+      end
+    end
+
+    # The pin, not just presence — and the message names the value at fault
+    # rather than also claiming a missing scope_id the caller did supply.
     should "reject a scoped role with the wrong scope_type" do
       ActsAsTenant.with_tenant(@tenant) do
-        assert_raises(Operations::Base::ParameterError) do
+        error = assert_raises(Operations::Base::ParameterError) do
           add_collaborator(@admin_ctx, {
             framework_id: @framework_id, person_id: @target_person.id.to_s,
             role: "capability_lead", scope_type: "role", scope_id: @role_id
           })
         end
+        assert_match(/scope_type must be "capability" when role is "capability_lead"/, error.message)
       end
     end
 

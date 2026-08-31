@@ -13,8 +13,10 @@
 # Stimulus controller (`collaborator-form`).
 #
 class Views::Frameworks::Collaborators::AssignmentForm < Components::Base
-  FRAMEWORK_WIDE_ROLES = %w[owner editor collaborator viewer].freeze
-  SCOPED_ROLES = %w[role_family_lead role_lead capability_category_lead capability_lead].freeze
+  # The same split the Operations enforce and advertise — read from there so
+  # the picker can never offer a shape the write path rejects.
+  FRAMEWORK_WIDE_ROLES = Operations::Frameworks::CollaboratorScopeRules::FRAMEWORK_WIDE_ROLES
+  SCOPED_ROLES = Operations::Frameworks::CollaboratorScopeRules::SCOPE_BY_ROLE.keys.freeze
   ALL_ROLES = (FRAMEWORK_WIDE_ROLES + SCOPED_ROLES).freeze
 
   # @param form_url [String] action URL for the POST

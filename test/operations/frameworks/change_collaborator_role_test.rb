@@ -81,7 +81,7 @@ class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCa
             old_role: "viewer", new_role: "capability_lead"
           })
         end
-        assert_match(/capability_lead is scoped/, error.message)
+        assert_match(/scope_type must be "capability" when new_role is "capability_lead"/, error.message)
         assert_equal %w[capability_lead viewer], roles_held
       end
     end
@@ -110,7 +110,10 @@ class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCa
             scope_type: "capability", scope_id: @cap_id
           })
         end
-        assert_match(/capability_category_lead is scoped — provide scope_type "capability_category"/, error.message)
+        assert_match(
+          /scope_type must be "capability_category" when new_role is "capability_category_lead"/,
+          error.message
+        )
         assert_equal %w[capability_lead viewer], roles_held
       end
     end

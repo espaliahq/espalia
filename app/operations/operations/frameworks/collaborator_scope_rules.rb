@@ -51,11 +51,16 @@ module Operations::Frameworks::CollaboratorScopeRules
     #
     # @param trigger [Symbol] the role parameter whose value decides
     def declare_collaborator_scope_rules(trigger)
+      # One rule per role, because each pins a DIFFERENT scope_type. No message
+      # override: the pin's own default names the value ("scope_type must be
+      # \"role\" when role is \"role_lead\""), whereas SCOPED_MESSAGE would also
+      # claim a scope_id was missing when the caller supplied a valid one.
       SCOPE_BY_ROLE.each do |role, expected_scope_type|
-        requires_when :scope_type, if: trigger, equals: role,
-                                   must_be: expected_scope_type, message: SCOPED_MESSAGE
-        requires_when :scope_id, if: trigger, equals: role, message: SCOPED_MESSAGE
+        requires_when :scope_type, if: trigger, equals: role, must_be: expected_scope_type
       end
+
+      # scope_id carries no per-role value, so the four roles share one rule.
+      requires_when :scope_id, if: trigger, in: SCOPE_BY_ROLE.keys, message: SCOPED_MESSAGE
 
       forbids_when :scope_type, if: trigger, in: FRAMEWORK_WIDE_ROLES, message: FRAMEWORK_WIDE_MESSAGE
       forbids_when :scope_id, if: trigger, in: FRAMEWORK_WIDE_ROLES, message: FRAMEWORK_WIDE_MESSAGE

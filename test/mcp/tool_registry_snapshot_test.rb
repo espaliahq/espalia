@@ -1995,17 +1995,22 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       "capability_category_lead" => "capability_category",
       "capability_lead"          => "capability"
     }
-    pins = scoped.flat_map do |role, scope_type|
-      role_match = { "properties" => { role_param => { "const" => role } }, "required" => [ role_param ] }
-      [
-        { "if" => role_match,
-          "then" => { "required" => [ "scope_type" ],
-                      "properties" => { "scope_type" => { "const" => scope_type } } } },
-        { "if" => role_match,
-          "then" => { "required" => [ "scope_id" ],
-                      "properties" => { "scope_id" => { "minLength" => 1, "pattern" => "\\S" } } } }
-      ]
+    pins = scoped.map do |role, scope_type|
+      {
+        "if" => { "properties" => { role_param => { "const" => role } }, "required" => [ role_param ] },
+        "then" => { "required" => [ "scope_type" ],
+                    "properties" => { "scope_type" => { "const" => scope_type } } }
+      }
     end
+    # scope_id carries no per-role value, so one rule covers all four.
+    scope_id_required = {
+      "if" => {
+        "properties" => { role_param => { "enum" => scoped.keys } },
+        "required" => [ role_param ]
+      },
+      "then" => { "required" => [ "scope_id" ],
+                  "properties" => { "scope_id" => { "minLength" => 1, "pattern" => "\\S" } } }
+    }
     exclusions = %w[scope_type scope_id].map do |dependent|
       {
         "if" => {
@@ -2016,7 +2021,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       }
     end
 
-    { "allOf" => pins + exclusions }
+    { "allOf" => pins + [ scope_id_required ] + exclusions }
   end
 
   # A parent is required for the entity types that hang off one and forbidden
