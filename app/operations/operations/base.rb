@@ -118,7 +118,10 @@ class Operations::Base
   # `trigger` parameter's validated value is in `values`. How it was declared
   # (`equals:` / `in:`) isn't recorded — a one-value set advertises as `const`
   # and a longer one as `enum`, which say the same thing in JSON Schema.
-  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, keyword_init: true) do
+  #
+  # `message` optionally replaces the generic wording — a String, or a callable
+  # taking the matched trigger value.
+  ConditionalRequirement = Struct.new(:dependent, :trigger, :values, :message, keyword_init: true) do
     # @param value [Object] the trigger parameter's validated value
     # @return [Boolean] whether this requirement is armed
     def triggered_by?(value)
@@ -128,6 +131,9 @@ class Operations::Base
     # @param value [Object] the trigger parameter's validated value
     # @return [String] the ParameterError message, naming the value that armed it
     def message_for(value)
+      return message.call(value) if message.respond_to?(:call)
+      return message if message
+
       "#{dependent} is required when #{trigger} is #{value.inspect}"
     end
   end
@@ -252,9 +258,13 @@ class Operations::Base
     # @param if [Symbol] the trigger parameter whose value decides
     # @param equals [Object, nil] trigger value that makes `name` required
     # @param in [Array, nil] trigger values that make `name` required
+    # @param message [String, #call, nil] replaces the generic parameter-speak
+    #   wording — pass a callable to vary it by trigger value. Worth it wherever
+    #   the message reaches a user: the web controllers flash `e.message`
+    #   verbatim, so a rule with established domain copy keeps it.
     # @raise [ArgumentError] at load time for undeclared parameters, a missing
     #   or doubled match clause, or a value outside the trigger's `allowed:` set
-    def requires_when(name, **options)
+    def requires_when(name, message: nil, **options)
       trigger = options.fetch(:if) { raise ArgumentError, "requires_when needs if: <parameter>" }
       values  = requires_when_values(**options)
       name    = name.to_sym
@@ -262,7 +272,7 @@ class Operations::Base
 
       validate_requires_when!(name, trigger, values)
       conditional_requirements << ConditionalRequirement.new(
-        dependent: name, trigger: trigger, values: values
+        dependent: name, trigger: trigger, values: values, message: message
       )
     end
 

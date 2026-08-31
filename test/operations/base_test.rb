@@ -207,6 +207,34 @@ class Operations::BaseTest < ActiveSupport::TestCase
       assert_nil out[:to_stable_id]
     end
 
+    # Web controllers flash `e.message` verbatim, so a rule with established
+    # domain copy can keep it instead of the generic parameter-speak.
+    MessageOverrideFixture = Class.new(Operations::Base) do
+      parameter :mapping_type, String, allowed: %w[same evolved split]
+      parameter :to_stable_id, String
+      parameter :note, String
+      parameter :kind, String, allowed: %w[a b]
+      requires_when :to_stable_id, if: :mapping_type, in: %w[evolved split],
+                                   message: ->(type) { "#{type} mapping needs a survivor" }
+      requires_when :note, if: :kind, equals: "b", message: "Tell us why"
+      def policy_check = nil
+      def perform = params
+    end
+
+    should "use a callable message override, passing the matched value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MessageOverrideFixture.new(context: build_context, params: { mapping_type: "split" })
+      end
+      assert_equal "split mapping needs a survivor", err.message
+    end
+
+    should "use a String message override" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MessageOverrideFixture.new(context: build_context, params: { kind: "b" })
+      end
+      assert_equal "Tell us why", err.message
+    end
+
     should "reject an undeclared dependent at load time" do
       err = assert_raises(ArgumentError) do
         Class.new(Operations::Base) do

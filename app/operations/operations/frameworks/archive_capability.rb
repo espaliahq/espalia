@@ -36,7 +36,8 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
   # gate), but one that carries ratings to a survivor names it — the same
   # rule DefineMigrationMapping declares, from its own list of types.
   requires_when :to_stable_id, if: :mapping_type,
-                               in: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES
+                               in: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES,
+                               message: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_REQUIRED_MESSAGE
 
   def policy_check
     authorize framework, :suggest_edit?

@@ -92,7 +92,7 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
             params: { framework_id: @framework_id, capability_id: @cap_id, mapping_type: "split" }
           )
         end
-        assert_match(/to_stable_id is required when mapping_type is "split"/, error.message)
+        assert_match(/split mapping requires a surviving capability/, error.message)
       end
     end
 

@@ -31,7 +31,12 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
   parameter :mapping_id,     String
   parameter :reason,         String
 
-  requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES
+  # The message reaches the publish-review page as a flash, so it keeps the
+  # domain wording rather than the generic parameter-speak.
+  SURVIVOR_REQUIRED_MESSAGE = ->(type) { "#{type} mapping requires a surviving capability (to_stable_id)" }
+
+  requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES,
+                               message: SURVIVOR_REQUIRED_MESSAGE
 
   def policy_check
     authorize framework, :define_migration_mapping?
