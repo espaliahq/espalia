@@ -63,6 +63,7 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
         )
         assert_equal @cap_id, result[:capability_id]
         assert_equal "evolved", result[:mapping_type]
+        assert_equal true, result[:mapping_recorded]
 
         # Draft auto-opened; the mapping is recorded for the draft version.
         assert framework.draft_in_progress
@@ -216,6 +217,23 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
 
         assert_equal false, result[:archived]
         assert_equal 1, pending_archive_suggestions.count
+      end
+    end
+
+    # A supplied mapping is deliberately skipped for an actor who can't define
+    # one, so the result must say so rather than echo mapping_type back as if
+    # it had been staged.
+    should "report mapping_recorded false when the actor can't define one" do
+      ActsAsTenant.with_tenant(@tenant) do
+        result = Operations::Frameworks::ArchiveCapability.call(
+          context: @collab_ctx,
+          params: { framework_id: @framework_id, capability_id: @cap_id,
+                    mapping_type: "evolved", to_stable_id: @survivor_stable, mode: "editing" }
+        )
+
+        assert_equal "evolved", result[:mapping_type]
+        assert_equal false, result[:mapping_recorded]
+        assert_equal 0, FrameworkState::MigrationMapping.where(framework_id: @framework_id).count
       end
     end
 

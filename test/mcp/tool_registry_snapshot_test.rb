@@ -1098,7 +1098,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_archive_capability",
-        "description" => "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion.",
+        "description" => "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion. A supplied migration mapping is staged only if you may define one (owner/editor); the response's mapping_recorded says whether it was, otherwise it is deferred to the publish-review gate.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

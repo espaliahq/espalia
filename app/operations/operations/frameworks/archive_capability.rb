@@ -21,7 +21,7 @@
 # (FrameworkPolicy#suggest_edit?); the *direct* branch additionally requires
 # capability-tier approval authority, otherwise it falls back to a suggestion.
 class Operations::Frameworks::ArchiveCapability < Operations::Base
-  description "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion."
+  description "Archive a capability — applied directly with approval rights in editing mode, else proposed as a suggestion. A supplied migration mapping is staged only if you may define one (owner/editor); the response's mapping_recorded says whether it was, otherwise it is deferred to the publish-review gate."
   category :write
   approval :mcp_client
 
@@ -59,9 +59,11 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
     authorize framework, :suggest_edit?
   end
 
-  # @return [Hash] { framework_id:, capability_id:, stable_id:, archived:, mapping_type: }
+  # @return [Hash] { framework_id:, capability_id:, stable_id:, archived:, mapping_type:,
+  #   mapping_recorded: }
   def perform
     archived = archive_directly?
+    mapping_recorded = false
     if archived
       handler.archive_capability(framework.framework_id, capability.capability_id, reason: params[:reason])
     else
@@ -78,14 +80,22 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
     # Record the mapping only when one was supplied AND the actor may define it
     # (owner/editor). A lead or plain suggester can't — their mapping is deferred
     # to the publish-review gate rather than erroring the archive.
-    define_mapping if params[:mapping_type].present? && can_define_mapping?
+    if params[:mapping_type].present? && can_define_mapping?
+      define_mapping
+      mapping_recorded = true
+    end
 
     {
       framework_id: framework.framework_id,
       capability_id: capability.capability_id,
       stable_id: capability.stable_id,
       archived: archived,
-      mapping_type: params[:mapping_type]
+      mapping_type: params[:mapping_type],
+      # Whether the supplied mapping was actually staged. A lead or plain
+      # suggester can't define one, so theirs is skipped and deferred to the
+      # publish-review gate — the caller must be told, not left to infer it
+      # from `mapping_type` echoing back.
+      mapping_recorded: mapping_recorded
     }
   end
 
