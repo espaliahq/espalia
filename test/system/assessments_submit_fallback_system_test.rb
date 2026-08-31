@@ -8,6 +8,10 @@ require "application_system_test_case"
 # body (evidence modal). The submit-fallback controller surfaces a retryable
 # inline error in a pre-existing live region and, for non-stream error
 # responses, claims them before Turbo renders them as a page.
+#
+# The same "a failed request must be visible and recoverable" rule covers the
+# evidence modal's lazy frame LOAD (audit issue #328): a failed GET used to
+# leave the modal on "Loading…" forever, with no error and no way forward.
 class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
 
@@ -74,6 +78,75 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
             { status: 500, headers: { "Content-Type": "text/html" } }))
         : of(url, ...a);
     JS
+  end
+
+  # Patches window.fetch to fail only the FIRST request matching the fragment,
+  # then pass everything through — so a retry can succeed. `body` nil rejects
+  # the promise (network layer); a String answers 500 with that HTML body (the
+  # response-carries-no-frame layer).
+  def patch_fetch_to_fail_once(url_fragment, body: nil)
+    failure = if body
+      "Promise.resolve(new Response(#{body.to_json}, " \
+        '{ status: 500, headers: { "Content-Type": "text/html" } }))'
+    else
+      'Promise.reject(new TypeError("Failed to fetch"))'
+    end
+    page.execute_script(<<~JS)
+      const of = window.fetch;
+      let spent = false;
+      window.fetch = (url, ...a) => {
+        if (!spent && String(url).includes(#{url_fragment.to_json})) {
+          spent = true;
+          return #{failure};
+        }
+        return of(url, ...a);
+      };
+    JS
+  end
+
+  def open_evidence_modal
+    page.execute_script(
+      "document.querySelector(\"[data-evidence-modal-mode-param='new']\").click();"
+    )
+  end
+
+  context "the evidence modal's frame failing to load" do
+    setup do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "evidence-modal"
+    end
+
+    should "surface a retryable error rather than a stuck Loading… state" do
+      patch_fetch_to_fail_once("/evidence_modal")
+      open_evidence_modal
+
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+      # The stuck placeholder is gone, not merely joined by an error.
+      assert_no_selector "turbo-frame#evidence-modal", visible: true
+
+      # Retry recovers: the form lands and the error clears.
+      page.execute_script("document.querySelector('#evidence-modal-error button').click();")
+
+      assert_selector "textarea#evm-content", visible: true
+      assert_no_selector "#evidence-modal-error", visible: true
+    end
+
+    should "keep the modal when the response carries no frame" do
+      patch_fetch_to_fail_once("/evidence_modal",
+        body: "<html><body>Internal Server Error</body></html>")
+      open_evidence_modal
+
+      # turbo:frame-missing's default would navigate the page to that body.
+      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+      assert_selector "#evidence-modal-overlay", visible: true
+      assert_no_text "Internal Server Error"
+
+      page.execute_script("document.querySelector('#evidence-modal-error button').click();")
+
+      assert_selector "textarea#evm-content", visible: true
+    end
   end
 
   context "rating submit failing at the transport layer" do
