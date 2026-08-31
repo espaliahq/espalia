@@ -484,15 +484,35 @@ module StimulusHelpers
   # already uses for click-outside listeners: construct the event and dispatch
   # it where the listener actually is.
   #
+  # A +scope+ that matches nothing is fatal, never a fallback to +window+.
+  # Silently degrading defeated the point of the scope: `press_escape(scope:
+  # "#evm-content")` means "Esc originates INSIDE the dialog", but a window
+  # dispatch still closes the modal (the listener is `keydown.esc@window`),
+  # so the test passed while testing nothing about in-dialog dispatch — the
+  # miss invisible whether the modal failed to open or the id was renamed.
+  # Same fail-loud principle as +js_fill_in+'s non-fillable guard.
+  #
   # @param scope [String, nil] CSS selector to dispatch from (bubbles to
   #   window); defaults to the window itself
   def press_escape(scope: nil)
-    page.execute_script(<<~JS, scope)
-      const target = arguments[0] ? document.querySelector(arguments[0]) : window;
-      (target || window).dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
-      );
+    # Capybara-wait semantics for a scope still rendering; the JS below
+    # covers the (tiny) race between this assertion and the dispatch.
+    assert_selector scope, visible: :all if scope
+
+    dispatched = page.evaluate_script(<<~JS, scope)
+      (() => {
+        const target = arguments[0] ? document.querySelector(arguments[0]) : window;
+        if (!target) return false;
+        target.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+        );
+        return true;
+      })()
     JS
+
+    return if dispatched
+
+    flunk("press_escape(scope: #{scope.inspect}) matched no element — nothing was dispatched.")
   end
 
   # Stubs +window.confirm+ to always return true, then runs the block.
