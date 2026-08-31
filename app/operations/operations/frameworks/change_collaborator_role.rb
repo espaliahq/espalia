@@ -25,6 +25,11 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
   parameter :scope_type,   String, allowed: SCOPE_BY_ROLE.values
   parameter :scope_id,     String
 
+  # The scope pair is fixed across the change, so it is declared against the
+  # role being moved TO; `validate_same_scope_shape!` then keeps old_role in
+  # the same shape (a cross-shape move is remove + add, not a change).
+  declare_collaborator_scope_rules :new_role
+
   # Tenant admins and framework owners may curate collaborators.
   # @raise [Pundit::NotAuthorizedError]
   def policy_check
@@ -35,7 +40,6 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
   def perform
     validate_roles_differ!
     validate_same_scope_shape!
-    validate_scope_pair!(params[:new_role])
     ensure_currently_held!
     ensure_target_not_held!
 

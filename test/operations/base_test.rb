@@ -406,6 +406,74 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  MustBeFixture = Class.new(Operations::Base) do
+    parameter :role, String, allowed: %w[role_lead viewer]
+    parameter :scope_type, String, allowed: %w[role capability]
+    requires_when :scope_type, if: :role, equals: "role_lead", must_be: "role"
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "requires_when must_be:" do
+    should "accept the pinned value" do
+      out = MustBeFixture.call(context: build_context, params: { role: "role_lead", scope_type: "role" })
+      assert_equal "role", out[:scope_type]
+    end
+
+    should "raise when the dependent carries a different allowed value" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        MustBeFixture.new(context: build_context, params: { role: "role_lead", scope_type: "capability" })
+      end
+      assert_match(/scope_type must be "role" when role is "role_lead"/, err.message)
+    end
+
+    should "still raise when the dependent is missing" do
+      assert_raises(Operations::Base::ParameterError) do
+        MustBeFixture.new(context: build_context, params: { role: "role_lead" })
+      end
+    end
+
+    should "leave the dependent unconstrained when the trigger doesn't match" do
+      out = MustBeFixture.call(context: build_context, params: { role: "viewer", scope_type: "capability" })
+      assert_equal "capability", out[:scope_type]
+    end
+
+    should "reject a pin outside the dependent's allowed set at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String, allowed: %w[role capability]
+          requires_when :scope_type, if: :role, equals: "role_lead", must_be: "nope"
+        end
+      end
+      assert_match(/outside scope_type's allowed set/, err.message)
+    end
+
+    should "reject a non-JSON-primitive pin at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String
+          requires_when :scope_type, if: :role, equals: "role_lead", must_be: :role
+        end
+      end
+      assert_match(/must_be: must be a JSON primitive/, err.message)
+    end
+
+    # A pin is meaningless on a rule that forbids the dependent outright, so it
+    # must not be silently swallowed.
+    should "reject must_be: on forbids_when at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :role, String
+          parameter :scope_type, String
+          forbids_when :scope_type, if: :role, equals: "viewer", must_be: "role"
+        end
+      end
+      assert_match(/forbids_when got unknown option\(s\): must_be/, err.message)
+    end
+  end
+
   ForbidsWhenFixture = Class.new(Operations::Base) do
     parameter :mapping_type, String, allowed: %w[same evolved split archived]
     parameter :to_stable_id, String

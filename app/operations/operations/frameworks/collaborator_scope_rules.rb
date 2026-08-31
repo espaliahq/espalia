@@ -12,8 +12,14 @@
 # role must carry a matching scope pair, a framework-wide role must carry
 # none, and the scoped entity must exist in this framework.
 #
+# The first two are declared via `declare_collaborator_scope_rules`, so they
+# are advertised in the tool schema as well as enforced; existence is a lookup
+# the schema can't express and stays in `ensure_scope_entity_exists!`.
+#
 # Includers must provide `params`, `framework`, and `explorer_graph`.
 module Operations::Frameworks::CollaboratorScopeRules
+  extend ActiveSupport::Concern
+
   # Scoped lead roles and the entity type each is scoped to. Roles absent
   # from this map are framework-wide and take no scope.
   SCOPE_BY_ROLE = {
@@ -23,6 +29,39 @@ module Operations::Frameworks::CollaboratorScopeRules
     "capability_lead"          => "capability"
   }.freeze
 
+  # Derived from the same list of roles, so a new role can't fall outside both
+  # halves of the rule.
+  FRAMEWORK_WIDE_ROLES = (FrameworkState::Collaborator::ROLES - SCOPE_BY_ROLE.keys).freeze
+
+  # Established copy — these reach the collaborator screens as a flash, so they
+  # keep the domain wording rather than the generic parameter-speak.
+  SCOPED_MESSAGE = lambda do |role|
+    "#{role} is scoped — provide scope_type \"#{SCOPE_BY_ROLE[role]}\" and a scope_id"
+  end
+  FRAMEWORK_WIDE_MESSAGE = ->(role) { "#{role} is framework-wide — omit scope_type and scope_id" }
+
+  class_methods do
+    # Declares the whole role/scope pairing against `trigger` — the parameter
+    # naming the role being granted (`:role` on add, `:new_role` on change).
+    #
+    # Three rules, each enforced at the parameter boundary AND advertised in the
+    # tool schema (mcp-server.md Lesson 15): a scoped lead role needs a scope_id
+    # and a scope_type PINNED to that role's entity type; a framework-wide role
+    # accepts neither. Call it after the parameters it names are declared.
+    #
+    # @param trigger [Symbol] the role parameter whose value decides
+    def declare_collaborator_scope_rules(trigger)
+      SCOPE_BY_ROLE.each do |role, expected_scope_type|
+        requires_when :scope_type, if: trigger, equals: role,
+                                   must_be: expected_scope_type, message: SCOPED_MESSAGE
+        requires_when :scope_id, if: trigger, equals: role, message: SCOPED_MESSAGE
+      end
+
+      forbids_when :scope_type, if: trigger, in: FRAMEWORK_WIDE_ROLES, message: FRAMEWORK_WIDE_MESSAGE
+      forbids_when :scope_id, if: trigger, in: FRAMEWORK_WIDE_ROLES, message: FRAMEWORK_WIDE_MESSAGE
+    end
+  end
+
   private
 
   def scope_type = params[:scope_type].presence
@@ -30,23 +69,6 @@ module Operations::Frameworks::CollaboratorScopeRules
 
   def actor_id
     context.person&.id&.to_s
-  end
-
-  # Enforces the role/scope pairing for the role being granted.
-  def validate_scope_pair!(role)
-    expected = SCOPE_BY_ROLE[role]
-
-    if expected.nil?
-      return if scope_type.nil? && scope_id.nil?
-
-      raise Operations::Base::ParameterError,
-            "#{role} is framework-wide — omit scope_type and scope_id"
-    end
-
-    return if scope_type == expected && scope_id.present?
-
-    raise Operations::Base::ParameterError,
-          "#{role} is scoped — provide scope_type \"#{expected}\" and a scope_id"
   end
 
   # The scoped entity must exist in this framework. Resolved from the

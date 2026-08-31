@@ -130,13 +130,20 @@ class Mcp::OperationToTool
 
   # The dependent must be present AND non-blank — `requires_when` enforces
   # exactly that at the boundary, so the branch says both rather than the
-  # weaker "the key arrived".
+  # weaker "the key arrived". A `must_be` pin publishes as `const` INSTEAD of
+  # the non-blank keywords, being strictly stronger than either.
   def then_required(requirement)
-    parameter = @operation_class.parameters.fetch(requirement.dependent)
-    keywords = non_blank_keywords(TYPE_MAPPING.fetch(parameter.type, "string"))
     branch = { required: [ requirement.dependent.to_s ] }
+    keywords = required_value_keywords(requirement)
     branch[:properties] = { requirement.dependent.to_s => keywords } if keywords.any?
     branch
+  end
+
+  def required_value_keywords(requirement)
+    return { const: requirement.must_be } unless requirement.must_be.nil?
+
+    parameter = @operation_class.parameters.fetch(requirement.dependent)
+    non_blank_keywords(TYPE_MAPPING.fetch(parameter.type, "string"))
   end
 
   # The dependent must be absent outright. `not: { required: [dep] }` objects to

@@ -268,6 +268,34 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  MustBeFixture = Class.new(Operations::Base) do
+    parameter :role, String, allowed: %w[role_lead viewer]
+    parameter :scope_type, String, allowed: %w[role capability]
+    requires_when :scope_type, if: :role, equals: "role_lead", must_be: "role"
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "requires_when must_be:" do
+    # `const` is strictly stronger than the non-blank keywords, so it replaces
+    # them rather than piling up alongside.
+    should "publish the pin as const instead of the non-blank keywords" do
+      assert_equal(
+        { required: [ "scope_type" ], properties: { "scope_type" => { const: "role" } } },
+        schema_for(MustBeFixture)[:then]
+      )
+    end
+
+    # The pin lives in the `then` branch only — the property itself still
+    # accepts either enum value, since another role may legitimately use one.
+    should "leave the top-level property's enum intact" do
+      assert_equal(
+        { type: "string", enum: %w[role capability] },
+        schema_for(MustBeFixture)[:properties]["scope_type"]
+      )
+    end
+  end
+
   ProhibitionFixture = Class.new(Operations::Base) do
     parameter :mapping_type, String, allowed: %w[same evolved archived]
     parameter :to_stable_id, String

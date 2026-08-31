@@ -985,7 +985,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "scope_id" => { "type" => "string" }
           },
           "required" => %w[framework_id person_id role],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **collaborator_scope_conditional("role")
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1198,7 +1199,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "scope_id" => { "type" => "string" }
           },
           "required" => %w[framework_id person_id old_role new_role],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **collaborator_scope_conditional("new_role")
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1985,6 +1987,43 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   # matched set is spelled out rather than read from the constant: widening
   # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
   # exists to make that land in review.
+  # The collaborator scope pair: each lead role pins scope_type to its own
+  # entity type and demands a scope_id; the four framework-wide roles accept
+  # neither. Parameterised because the two tools differ only in which parameter
+  # names the role being granted.
+  #
+  # @param role_param [String] "role" (add) or "new_role" (change)
+  def collaborator_scope_conditional(role_param)
+    scoped = {
+      "role_family_lead"         => "role_family",
+      "role_lead"                => "role",
+      "capability_category_lead" => "capability_category",
+      "capability_lead"          => "capability"
+    }
+    pins = scoped.flat_map do |role, scope_type|
+      role_match = { "properties" => { role_param => { "const" => role } }, "required" => [ role_param ] }
+      [
+        { "if" => role_match,
+          "then" => { "required" => [ "scope_type" ],
+                      "properties" => { "scope_type" => { "const" => scope_type } } } },
+        { "if" => role_match,
+          "then" => { "required" => [ "scope_id" ],
+                      "properties" => { "scope_id" => { "minLength" => 1, "pattern" => "\\S" } } } }
+      ]
+    end
+    exclusions = %w[scope_type scope_id].map do |dependent|
+      {
+        "if" => {
+          "properties" => { role_param => { "enum" => %w[owner editor collaborator viewer] } },
+          "required" => [ role_param ]
+        },
+        "then" => { "not" => { "required" => [ dependent ] } }
+      }
+    end
+
+    { "allOf" => pins + exclusions }
+  end
+
   # A parent is required for the entity types that hang off one and forbidden
   # for the framework-level ones, so both `if`s nest under one `allOf`.
   def parent_id_conditional
