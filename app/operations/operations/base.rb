@@ -177,6 +177,19 @@ class Operations::Base
     end
   end
 
+  # One `dependent_required` declaration: supplying `dependent` obliges the
+  # caller to supply `requires` too. No trigger VALUE is involved, which is why
+  # this is a plain pair rather than a {ConditionalRule}.
+  DependentRequirement = Struct.new(:dependent, :requires, :message, keyword_init: true) do
+    # @return [String] the ParameterError message
+    def message_for
+      return message.call(dependent) if message.respond_to?(:call)
+      return message if message
+
+      "#{requires} is required when #{dependent} is supplied"
+    end
+  end
+
   # Self-register every concrete subclass into Operations::Registry so the
   # MCP server can list them without an explicit manifest. Anonymous test
   # subclasses are filtered inside the registry.
@@ -362,6 +375,53 @@ class Operations::Base
     # @return [Array<ConditionalProhibition>] one entry per `forbids_when`
     def conditional_prohibitions
       @conditional_prohibitions ||= []
+    end
+
+    # Declares that supplying `name` obliges the caller to supply `requires`
+    # too — a *presence* dependency with no trigger value, which is exactly
+    # JSON Schema's `dependentRequired`.
+    #
+    #   dependent_required :to_stable_id, requires: :mapping_type
+    #
+    # This closes the hole `requires_when` / `forbids_when` leave open: both arm
+    # on the trigger's VALUE, so neither fires when the trigger is ABSENT — and
+    # an operation that then ignores the orphaned dependent drops it silently,
+    # the very bug those two exist to stop.
+    #
+    # "Supplied" means the key arrived with a non-nil value, on both sides,
+    # matching what `dependentRequired` asks of a JSON instance.
+    #
+    # @param name [Symbol] the parameter whose presence creates the obligation
+    # @param requires [Symbol] the parameter it then obliges
+    # @param message [String, #call, nil] replaces the generic wording — a
+    #   callable receives the dependent's name
+    # @raise [ArgumentError] at load time for undeclared or identical
+    #   parameters, or when `requires` is already unconditionally `required:`
+    #   (the rule could never bite — a dead constraint, like a match value
+    #   outside its trigger's enum)
+    def dependent_required(name, requires:, message: nil)
+      name = name.to_sym
+      requires = requires.to_sym
+
+      unknown = [ name, requires ] - parameters.keys
+      if unknown.any?
+        raise ArgumentError, "dependent_required names undeclared parameter(s): #{unknown.join(', ')}"
+      end
+      raise ArgumentError, "dependent_required cannot make a parameter depend on itself" if name == requires
+
+      if parameters[requires].required
+        raise ArgumentError,
+              "dependent_required requires: #{requires} is already required — the rule can never fire"
+      end
+
+      dependent_requirements << DependentRequirement.new(
+        dependent: name, requires: requires, message: message
+      ).freeze
+    end
+
+    # @return [Array<DependentRequirement>] one entry per `dependent_required`
+    def dependent_requirements
+      @dependent_requirements ||= []
     end
 
     # Convenience entry point. Forwards to a new instance's `#call`.
@@ -586,7 +646,23 @@ class Operations::Base
     validate_parameter_constraints!(validated)
     validate_conditional_requirements!(validated)
     validate_conditional_prohibitions!(validated)
+    validate_dependent_requirements!(validated)
     validated
+  end
+
+  # Enforce each `dependent_required` declaration: supplying one parameter
+  # obliges the other. Runs with the per-parameter checks (before policy_check),
+  # like every other input rule.
+  #
+  # @param validated [Hash{Symbol=>Object}]
+  # @raise [ParameterError] when the obliged parameter is absent
+  def validate_dependent_requirements!(validated)
+    self.class.dependent_requirements.each do |rule|
+      next unless supplied_at_all?(validated[rule.dependent])
+      next if supplied_at_all?(validated[rule.requires])
+
+      raise ParameterError, rule.message_for
+    end
   end
 
   # Enforce each `requires_any_of` group. Runs with the per-parameter checks

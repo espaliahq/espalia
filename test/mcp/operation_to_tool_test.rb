@@ -268,6 +268,46 @@ class Mcp::OperationToToolTest < ActiveSupport::TestCase
     end
   end
 
+  DependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String
+    parameter :to_stable_id, String
+    parameter :reason, String
+    parameter :note, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    dependent_required :reason, requires: :note
+    def policy_check = nil
+    def perform = nil
+  end
+
+  OneDependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String
+    parameter :to_stable_id, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    def policy_check = nil
+    def perform = nil
+  end
+
+  context "dependent_required" do
+    should "emit a bare dependentRequired for a single declaration" do
+      schema = schema_for(OneDependentRequiredFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal({ "to_stable_id" => [ "mapping_type" ] }, schema[:dependentRequired])
+    end
+
+    # The keyword's native shape is a map, so several declarations merge into
+    # one object rather than each claiming its own allOf branch.
+    should "merge several declarations into one dependentRequired object" do
+      schema = schema_for(DependentRequiredFixture)
+
+      assert_not schema.key?(:allOf)
+      assert_equal(
+        { "to_stable_id" => [ "mapping_type" ], "reason" => [ "note" ] },
+        schema[:dependentRequired]
+      )
+    end
+  end
+
   MustBeFixture = Class.new(Operations::Base) do
     parameter :role, String, allowed: %w[role_lead viewer]
     parameter :scope_type, String, allowed: %w[role capability]

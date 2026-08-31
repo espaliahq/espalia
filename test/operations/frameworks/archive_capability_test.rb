@@ -112,6 +112,22 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
       end
     end
 
+    # Neither value rule arms when mapping_type is absent, and define_mapping is
+    # then skipped — so the survivor used to be dropped on the floor.
+    should "reject a to_stable_id supplied with no mapping_type at all" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::ArchiveCapability.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, capability_id: @cap_id,
+                      to_stable_id: @survivor_stable }
+          )
+        end
+        assert_match(/without a mapping_type/, error.message)
+        assert_equal "active", FrameworkState::Capability.find_by(capability_id: @cap_id).status
+      end
+    end
+
     should "archive without a mapping but then block publish (mapping required)" do
       ActsAsTenant.with_tenant(@tenant) do
         Operations::Frameworks::ArchiveCapability.call(

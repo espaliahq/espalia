@@ -704,6 +704,89 @@ class Operations::BaseTest < ActiveSupport::TestCase
     end
   end
 
+  DependentRequiredFixture = Class.new(Operations::Base) do
+    parameter :mapping_type, String, allowed: %w[same evolved]
+    parameter :to_stable_id, String
+    dependent_required :to_stable_id, requires: :mapping_type
+    def policy_check = nil
+    def perform = params
+  end
+
+  context "dependent_required DSL" do
+    should "accept both supplied" do
+      out = DependentRequiredFixture.call(
+        context: build_context, params: { mapping_type: "evolved", to_stable_id: "cap_1" }
+      )
+      assert_equal "cap_1", out[:to_stable_id]
+    end
+
+    should "accept neither supplied" do
+      out = DependentRequiredFixture.call(context: build_context, params: {})
+      assert_nil out[:to_stable_id]
+    end
+
+    # The gap requires_when/forbids_when leave: both arm on the trigger's
+    # VALUE, so an absent trigger fires neither and the dependent is dropped.
+    should "raise when the dependent is supplied without its obligation" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        DependentRequiredFixture.new(context: build_context, params: { to_stable_id: "cap_1" })
+      end
+      assert_match(/mapping_type is required when to_stable_id is supplied/, err.message)
+    end
+
+    should "accept a nil dependent as not supplied" do
+      out = DependentRequiredFixture.call(context: build_context, params: { to_stable_id: nil })
+      assert_nil out[:to_stable_id]
+    end
+
+    should "use a String message override" do
+      op = Class.new(Operations::Base) do
+        parameter :a, String
+        parameter :b, String
+        dependent_required :a, requires: :b, message: "b goes with a"
+        def policy_check = nil
+        def perform = params
+      end
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        op.new(context: build_context, params: { a: "x" })
+      end
+      assert_equal "b goes with a", err.message
+    end
+
+    should "reject an undeclared parameter at load time" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          dependent_required :a, requires: :nope
+        end
+      end
+      assert_match(/dependent_required names undeclared parameter/, err.message)
+    end
+
+    should "reject a parameter depending on itself" do
+      assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          dependent_required :a, requires: :a
+        end
+      end
+    end
+
+    # An always-present obligation makes the rule dead — the same class of
+    # mistake as a match value outside its trigger's enum.
+    should "reject an obligation that is already unconditionally required" do
+      err = assert_raises(ArgumentError) do
+        Class.new(Operations::Base) do
+          parameter :a, String
+          parameter :b, String, required: true
+          dependent_required :a, requires: :b
+        end
+      end
+      assert_match(/already required — the rule can never fire/, err.message)
+    end
+  end
+
   BlankFixture = Class.new(Operations::Base) do
     parameter :name, String, allow_blank: false
     parameter :description, String

@@ -44,6 +44,17 @@ class Operations::Frameworks::ArchiveCapability < Operations::Base
                               in: Operations::Frameworks::DefineMigrationMapping::NON_SURVIVOR_TYPES,
                               message: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_FORBIDDEN_MESSAGE
 
+  # Both rules above arm on mapping_type's VALUE, so neither fires when it is
+  # omitted entirely — and `define_mapping` is then skipped, dropping the
+  # survivor on the floor. `mapping_type` is optional here (it can be deferred
+  # to publish-review), so the pairing needs saying separately.
+  # DefineMigrationMapping needs no equivalent: mapping_type is required there.
+  MAPPING_TYPE_REQUIRED_MESSAGE =
+    "to_stable_id was supplied without a mapping_type — say how the capability evolves"
+
+  dependent_required :to_stable_id, requires: :mapping_type,
+                                    message: MAPPING_TYPE_REQUIRED_MESSAGE
+
   def policy_check
     authorize framework, :suggest_edit?
   end

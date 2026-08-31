@@ -1111,7 +1111,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           },
           "required" => %w[framework_id capability_id],
           "additionalProperties" => false,
-          **survivor_mapping_conditional
+          **survivor_mapping_conditional(mapping_type_optional: true)
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1982,11 +1982,6 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
     }
   end
 
-  # `requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES` —
-  # shared by the two tools that stage a capability migration mapping. The
-  # matched set is spelled out rather than read from the constant: widening
-  # SURVIVOR_TYPES changes what these two tools advertise, and this snapshot
-  # exists to make that land in review.
   # The collaborator scope pair: each lead role pins scope_type to its own
   # entity type and demands a scope_id; the four framework-wide roles accept
   # neither. Parameterised because the two tools differ only in which parameter
@@ -2056,28 +2051,38 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
 
   # The survivor rule has two halves — required for the mapping types that
   # carry ratings forward, forbidden for the ones that don't — so both `if`s
-  # nest under one `allOf`.
-  def survivor_mapping_conditional
-    {
-      "allOf" => [
-        {
-          "if" => {
-            "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
-            "required" => [ "mapping_type" ]
-          },
-          "then" => {
-            "required" => [ "to_stable_id" ],
-            "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
-          }
+  # nest under one `allOf`. The matched sets are spelled out rather than read
+  # from SURVIVOR_TYPES / NON_SURVIVOR_TYPES: widening either changes what
+  # these two tools advertise, and this snapshot exists to make that land in
+  # review.
+  #
+  # @param mapping_type_optional [Boolean] true for archive_capability, whose
+  #   mapping_type may be omitted — so it alone also declares the presence
+  #   pairing that stops a survivor arriving with no mapping type at all
+  def survivor_mapping_conditional(mapping_type_optional: false)
+    branches = [
+      {
+        "if" => {
+          "properties" => { "mapping_type" => { "enum" => %w[evolved split] } },
+          "required" => [ "mapping_type" ]
         },
-        {
-          "if" => {
-            "properties" => { "mapping_type" => { "enum" => %w[same archived new] } },
-            "required" => [ "mapping_type" ]
-          },
-          "then" => { "not" => { "required" => [ "to_stable_id" ] } }
+        "then" => {
+          "required" => [ "to_stable_id" ],
+          "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
         }
-      ]
-    }
+      },
+      {
+        "if" => {
+          "properties" => { "mapping_type" => { "enum" => %w[same archived new] } },
+          "required" => [ "mapping_type" ]
+        },
+        "then" => { "not" => { "required" => [ "to_stable_id" ] } }
+      }
+    ]
+    if mapping_type_optional
+      branches << { "dependentRequired" => { "to_stable_id" => [ "mapping_type" ] } }
+    end
+
+    { "allOf" => branches }
   end
 end

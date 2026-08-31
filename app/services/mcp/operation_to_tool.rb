@@ -86,7 +86,7 @@ class Mcp::OperationToTool
   #
   # @return [Hash] merged into the input schema (empty when unconstrained)
   def constraint_schema
-    constraints = any_of_groups + if_then_schemas
+    constraints = any_of_groups + if_then_schemas + dependent_required_schema
 
     case constraints.size
     when 0 then {}
@@ -106,6 +106,22 @@ class Mcp::OperationToTool
   def if_then_schemas
     @operation_class.conditional_requirements.map { |r| conditional_schema(r, then_required(r)) } +
       @operation_class.conditional_prohibitions.map { |p| conditional_schema(p, then_forbidden(p)) }
+  end
+
+  # Every `dependent_required` pair collapses into ONE `dependentRequired`
+  # object — the keyword's native shape is a map of dependent → obliged names,
+  # so several declarations merge rather than each claiming a branch.
+  #
+  # @return [Array<Hash>] zero or one entry, for the constraint list
+  def dependent_required_schema
+    rules = @operation_class.dependent_requirements
+    return [] if rules.empty?
+
+    map = rules.each_with_object({}) do |rule, out|
+      (out[rule.dependent.to_s] ||= []) << rule.requires.to_s
+    end
+
+    [ { dependentRequired: map } ]
   end
 
   def conditional_schema(rule, then_branch)
