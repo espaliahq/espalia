@@ -31,17 +31,14 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
   parameter :mapping_id,     String
   parameter :reason,         String
 
+  requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES
+
   def policy_check
     authorize framework, :define_migration_mapping?
   end
 
   # @return [Hash] { framework_id:, mapping_id:, from_stable_id:, to_stable_id:, mapping_type: }
   def perform
-    if SURVIVOR_TYPES.include?(params[:mapping_type]) && params[:to_stable_id].blank?
-      raise Operations::Base::ParameterError,
-            "#{params[:mapping_type]} mapping requires a surviving capability (to_stable_id)"
-    end
-
     mapping_id = params[:mapping_id].presence || SecureRandom.uuid_v7
 
     Frameworks::CommandHandler.new.define_migration_mapping(

@@ -80,7 +80,7 @@ class Operations::Frameworks::DefineMigrationMappingTest < ActiveSupport::TestCa
             params: { framework_id: @framework_id, from_stable_id: @from, mapping_type: "evolved" }
           )
         end
-        assert_match(/surviving capability/i, error.message)
+        assert_match(/to_stable_id is required when mapping_type is "evolved"/, error.message)
         assert_equal 0, mappings.count
       end
     end

@@ -1109,7 +1109,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "mode" => { "type" => "string", "enum" => %w[editing suggesting] }
           },
           "required" => %w[framework_id capability_id],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **survivor_mapping_conditional
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1261,7 +1262,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "reason" => { "type" => "string" }
           },
           "required" => %w[framework_id from_stable_id mapping_type],
-          "additionalProperties" => false
+          "additionalProperties" => false,
+          **survivor_mapping_conditional
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1973,6 +1975,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       "then" => {
         "required" => [ "custom_type_label" ],
         "properties" => { "custom_type_label" => { "minLength" => 1, "pattern" => "\\S" } }
+      }
+    }
+  end
+
+  # `requires_when :to_stable_id, if: :mapping_type, in: SURVIVOR_TYPES` —
+  # shared by the two tools that stage a capability migration mapping.
+  def survivor_mapping_conditional
+    {
+      "if" => {
+        "properties" => {
+          "mapping_type" => {
+            "enum" => Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES
+          }
+        },
+        "required" => [ "mapping_type" ]
+      },
+      "then" => {
+        "required" => [ "to_stable_id" ],
+        "properties" => { "to_stable_id" => { "minLength" => 1, "pattern" => "\\S" } }
       }
     }
   end

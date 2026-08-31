@@ -82,6 +82,20 @@ class Operations::Frameworks::ArchiveCapabilityTest < ActiveSupport::TestCase
       end
     end
 
+    # A mapping is optional here, but one carrying ratings to a survivor must
+    # name it — the rule is declared (and advertised) via requires_when.
+    should "reject a survivor mapping_type with no to_stable_id" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::ArchiveCapability.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, capability_id: @cap_id, mapping_type: "split" }
+          )
+        end
+        assert_match(/to_stable_id is required when mapping_type is "split"/, error.message)
+      end
+    end
+
     should "archive without a mapping but then block publish (mapping required)" do
       ActsAsTenant.with_tenant(@tenant) do
         Operations::Frameworks::ArchiveCapability.call(
