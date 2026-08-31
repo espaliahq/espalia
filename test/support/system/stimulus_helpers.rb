@@ -407,6 +407,13 @@ module StimulusHelpers
     )
   end
 
+  # The exactly-one half of +guard_click_signal!+, split out so each check
+  # stays independently readable and testable.
+  #
+  # @param helper [Symbol] the calling helper — pass +__method__+
+  # @param signals [Hash{Symbol=>String,nil}] only the signal kwargs that
+  #   helper accepts, in precedence order
+  # @raise [ArgumentError] when zero, or more than one, signal is supplied
   def assert_exactly_one_signal!(helper, **signals)
     supplied = signals.compact.keys
     return if supplied.size == 1

@@ -17,9 +17,13 @@ require Rails.root.join("test/support/system/stimulus_helpers")
 # host below raises if `page` is touched. A test that reached the browser
 # would fail with that message instead of the expected ArgumentError.
 class StimulusHelpersSignalGuardTest < ActiveSupport::TestCase
+  # Browser-less include target for the helpers under test.
   class Host
     include StimulusHelpers
 
+    # Raises to prove the guard runs before any page interaction.
+    #
+    # @raise [RuntimeError] whenever a helper reaches the browser
     def page
       raise "page was touched before the signal guard ran"
     end
