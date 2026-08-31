@@ -1,34 +1,41 @@
 # frozen_string_literal: true
 
-# Changes a collaborator's role on a framework within the same scope —
-# e.g. promote a framework-wide viewer to editor.
+# Changes a collaborator's **framework-wide** role — e.g. promote a viewer to
+# editor. Permission-changing → :in_app approval.
 #
-# The scope pair stays fixed across the change (the aggregate keys the old
-# and new assignment on the same scope), so old_role and new_role must
-# share a scope shape: both framework-wide, or both scoped to the same
-# entity type. Permission-changing → :in_app approval.
+# Framework-wide is the whole surface, not a restriction bolted on. The scope
+# pair stays fixed across the change (the aggregate keys the old and new
+# assignment on the same scope), so both roles must share a scope shape — and
+# every scoped lead role has its OWN entity type, so two DIFFERENT scoped roles
+# never share one. Same-shape plus roles-must-differ therefore leaves exactly
+# the framework-wide pairs, which is what the enums now advertise. A change to
+# or from a lead role is remove + add.
 #
-# This surface is MCP-first: the web UI models a role change as remove +
-# add, so the underlying `change_collaborator_role` command had no
-# user-facing caller until this Operation.
+# This surface is MCP-first: the web UI models every role change as remove +
+# add, so the underlying `change_collaborator_role` command has no web caller.
 class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
   include Operations::Frameworks::CollaboratorScopeRules
 
-  description "Change a collaborator's role on a framework within the same scope (e.g. viewer → editor). Moving between differently-scoped roles requires remove + add."
+  description "Change a collaborator's framework-wide role on a framework (e.g. viewer → editor). Only the framework-wide roles (owner/editor/collaborator/viewer) can be changed in place: to move a person to or from a scoped lead role, call frameworks_remove_collaborator for the old role then frameworks_add_collaborator for the new one."
   category :write
   approval :in_app
 
   parameter :framework_id, String, required: true
   parameter :person_id,    String, required: true
-  parameter :old_role,     String, required: true, allowed: FrameworkState::Collaborator::ROLES
-  parameter :new_role,     String, required: true, allowed: FrameworkState::Collaborator::ROLES
+  parameter :old_role,     String, required: true, allowed: FRAMEWORK_WIDE_ROLES
+  parameter :new_role,     String, required: true, allowed: FRAMEWORK_WIDE_ROLES
   parameter :scope_type,   String, allowed: SCOPE_BY_ROLE.values
   parameter :scope_id,     String
 
-  # The scope pair is fixed across the change, so it is declared against the
-  # role being moved TO; `validate_same_scope_shape!` then keeps old_role in
-  # the same shape (a cross-shape move is remove + add, not a change).
-  declare_collaborator_scope_rules :new_role
+  # Every role this operation accepts is framework-wide, so a scope pair is
+  # never meaningful — the forbid covers the whole enum. The two parameters
+  # stay DECLARED rather than being dropped: an undeclared key is silently
+  # discarded by validate_params, which is the silent-drop anti-pattern this
+  # work exists to remove. Supplied, they are loudly rejected.
+  forbids_when :scope_type, if: :new_role, in: FRAMEWORK_WIDE_ROLES,
+                            message: FRAMEWORK_WIDE_MESSAGE
+  forbids_when :scope_id, if: :new_role, in: FRAMEWORK_WIDE_ROLES,
+                          message: FRAMEWORK_WIDE_MESSAGE
 
   # Tenant admins and framework owners may curate collaborators.
   # @raise [Pundit::NotAuthorizedError]
@@ -39,7 +46,6 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
   # @return [Hash] { framework_id:, person_id:, old_role:, new_role:, scope_type:, scope_id:, changed: }
   def perform
     validate_roles_differ!
-    validate_same_scope_shape!
     ensure_currently_held!
     ensure_target_not_held!
 
@@ -69,13 +75,6 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
     raise Operations::Base::ParameterError, "new_role must differ from old_role"
   end
 
-  def validate_same_scope_shape!
-    return if SCOPE_BY_ROLE[params[:old_role]] == SCOPE_BY_ROLE[params[:new_role]]
-
-    raise Operations::Base::ParameterError,
-          "#{params[:old_role]} and #{params[:new_role]} are scoped differently — remove the old role and add the new one instead"
-  end
-
   def ensure_currently_held!
     return if collaborator_assignment(params[:old_role]).exists?
 
@@ -92,12 +91,10 @@ class Operations::Frameworks::ChangeCollaboratorRole < Operations::Base
           "person already holds #{params[:new_role]} on this framework with this scope"
   end
 
+  # No `explorer_graph`: the concern needs one only for
+  # `ensure_scope_entity_exists!`, and this operation's scope is always nil, so
+  # there is never an entity to resolve. AddCollaborator still provides one.
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
-  end
-
-  def explorer_graph
-    @explorer_graph ||= Frameworks::ExplorerGraph.load(framework.framework_id) ||
-                        Frameworks::ExplorerGraph.rebuild(framework.framework_id)
   end
 end

@@ -2,11 +2,12 @@
 
 require "test_helper"
 
-# ChangeCollaboratorRole moves a collaborator between roles that share a
-# scope shape (both framework-wide, or both scoped to the same entity
-# type). Cross-shape moves, unheld old roles, already-held new roles, and
-# no-op changes all classify as invalid params — never aggregate
-# RuntimeErrors (→ internal error over MCP) or duplicate read-model rows.
+# ChangeCollaboratorRole moves a collaborator between FRAMEWORK-WIDE roles —
+# the only pairs that share a scope shape, since each scoped lead role has its
+# own entity type and the shape is fixed across a change. Scoped roles, a
+# supplied scope pair, unheld old roles, already-held new roles, and no-op
+# changes all classify as invalid params — never aggregate RuntimeErrors
+# (→ internal error over MCP) or duplicate read-model rows.
 class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCase
   setup do
     @admin_user = create(:user)
@@ -57,9 +58,11 @@ class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCa
       end
     end
 
-    # The scope pair is coherent for the new role, so only the shape rule can
-    # catch this — the declared scope rules pass.
-    should "reject a cross-shape change carrying a valid scope pair" do
+    # Every scoped lead role has its OWN entity type, so two different scoped
+    # roles never share a scope shape — and the shape is fixed across a change.
+    # Scoped roles are therefore outside this tool's enum entirely, and the
+    # guidance to remove + add lives in its description.
+    should "reject a scoped new_role as outside the allowed set" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do
           change_role(@admin_ctx, {
@@ -68,52 +71,36 @@ class Operations::Frameworks::ChangeCollaboratorRoleTest < ActiveSupport::TestCa
             scope_type: "capability", scope_id: @cap_id
           })
         end
-        assert_match(/scoped differently/, error.message)
+        assert_match(/new_role must be one of/, error.message)
         assert_equal %w[capability_lead viewer], roles_held
       end
     end
 
-    should "reject a move to a scoped role with no scope supplied" do
+    should "reject a scoped old_role as outside the allowed set" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do
           change_role(@admin_ctx, {
             framework_id: @framework_id, person_id: @target_person.id.to_s,
-            old_role: "viewer", new_role: "capability_lead"
+            old_role: "capability_lead", new_role: "editor"
           })
         end
-        assert_match(/scope_type must be "capability" when new_role is "capability_lead"/, error.message)
+        assert_match(/old_role must be one of/, error.message)
         assert_equal %w[capability_lead viewer], roles_held
       end
     end
 
-    should "reject a move to a framework-wide role that carries a scope" do
+    # The scope parameters stay declared precisely so a supplied pair is
+    # rejected rather than silently dropped by validate_params.
+    should "reject a framework-wide change that carries a scope pair" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do
           change_role(@admin_ctx, {
             framework_id: @framework_id, person_id: @target_person.id.to_s,
-            old_role: "capability_lead", new_role: "editor",
+            old_role: "viewer", new_role: "editor",
             scope_type: "capability", scope_id: @cap_id
           })
         end
         assert_match(/editor is framework-wide/, error.message)
-        assert_equal %w[capability_lead viewer], roles_held
-      end
-    end
-
-    # The pin, not just presence: a scoped role only accepts its OWN entity type.
-    should "reject a scoped role given the wrong scope_type" do
-      ActsAsTenant.with_tenant(@tenant) do
-        error = assert_raises(Operations::Base::ParameterError) do
-          change_role(@admin_ctx, {
-            framework_id: @framework_id, person_id: @target_person.id.to_s,
-            old_role: "capability_lead", new_role: "capability_category_lead",
-            scope_type: "capability", scope_id: @cap_id
-          })
-        end
-        assert_match(
-          /scope_type must be "capability_category" when new_role is "capability_category_lead"/,
-          error.message
-        )
         assert_equal %w[capability_lead viewer], roles_held
       end
     end

@@ -1178,20 +1178,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_change_collaborator_role",
-        "description" => "Change a collaborator's role on a framework within the same scope (e.g. viewer → editor). Moving between differently-scoped roles requires remove + add.",
+        "description" => "Change a collaborator's framework-wide role on a framework (e.g. viewer → editor). Only the framework-wide roles (owner/editor/collaborator/viewer) can be changed in place: to move a person to or from a scoped lead role, call frameworks_remove_collaborator for the old role then frameworks_add_collaborator for the new one.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "framework_id" => { "type" => "string" },
             "person_id" => { "type" => "string" },
-            "old_role" => {
-              "type" => "string",
-              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
-            },
-            "new_role" => {
-              "type" => "string",
-              "enum" => %w[owner editor role_family_lead role_lead capability_category_lead capability_lead collaborator viewer]
-            },
+            # Framework-wide only: a scoped lead role can never be changed in
+            # place, since each has its own entity type and the scope pair is
+            # fixed across the change. Moving to/from one is remove + add.
+            "old_role" => { "type" => "string", "enum" => %w[owner editor collaborator viewer] },
+            "new_role" => { "type" => "string", "enum" => %w[owner editor collaborator viewer] },
             "scope_type" => {
               "type" => "string",
               "enum" => %w[role_family role capability_category capability]
@@ -1200,7 +1197,18 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           },
           "required" => %w[framework_id person_id old_role new_role],
           "additionalProperties" => false,
-          **collaborator_scope_conditional("new_role")
+          # Every accepted role is framework-wide, so the forbid covers the
+          # whole enum — the params stay declared so a supplied scope is
+          # rejected rather than silently dropped.
+          "allOf" => %w[scope_type scope_id].map do |dependent|
+            {
+              "if" => {
+                "properties" => { "new_role" => { "enum" => %w[owner editor collaborator viewer] } },
+                "required" => [ "new_role" ]
+              },
+              "then" => { "not" => { "required" => [ dependent ] } }
+            }
+          end
         },
         "annotations" => {
           "readOnlyHint" => false,
@@ -1984,10 +1992,10 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
 
   # The collaborator scope pair: each lead role pins scope_type to its own
   # entity type and demands a scope_id; the four framework-wide roles accept
-  # neither. Parameterised because the two tools differ only in which parameter
-  # names the role being granted.
+  # neither. Only add_collaborator carries the full rule — change_collaborator_role
+  # accepts framework-wide roles alone, so it spells out its two forbids inline.
   #
-  # @param role_param [String] "role" (add) or "new_role" (change)
+  # @param role_param [String] the parameter naming the role being granted
   def collaborator_scope_conditional(role_param)
     scoped = {
       "role_family_lead"         => "role_family",

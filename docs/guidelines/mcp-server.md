@@ -556,10 +556,21 @@ Still unexpressed — a ledger, so the next round knows what it is buying:
   declaring `allow_blank: false`. Nothing new is needed — just adoption.
 
 Deliberately out of scope, not a gap: **relationships between two free values**
-(`new_role must differ from old_role`; old and new role must share a scope
-shape) would need an 8×8 enumeration to express, and **existence lookups** ("no
-such capability in this framework") are database questions a schema can never
-answer. Both stay as `perform` checks by design.
+(`new_role must differ from old_role`) would need an N×N enumeration to
+express, and **existence lookups** ("no such capability in this framework") are
+database questions a schema can never answer. Both stay as `perform` checks by
+design.
+
+One such rule turned out not to need expressing at all. `change_collaborator_role`
+enforced "old and new role must share a scope shape" in `perform` — but every
+scoped lead role has its OWN entity type, so two different scoped roles never
+share one, and the shape is fixed across a change. Same-shape plus
+roles-must-differ therefore left **only** the framework-wide pairs: the rule was
+an enum in disguise. Restricting both parameters to `FRAMEWORK_WIDE_ROLES` says
+it in the schema, deletes the check, and moves the remove + add guidance into
+the tool description where a client reads it before calling. Worth asking of any
+surviving `perform` check: is it really a relationship, or a narrower enum you
+haven't noticed?
 
 ## Approval declaration cheat sheet
 
