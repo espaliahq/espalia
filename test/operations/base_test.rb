@@ -393,7 +393,7 @@ class Operations::BaseTest < ActiveSupport::TestCase
           requires_when :label, if: :kind, equals: "otehr"
         end
       end
-      assert_match(/outside its allowed set/, err.message)
+      assert_match(/outside kind.s allowed set/, err.message)
     end
 
     should "reject a parameter depending on itself" do
@@ -509,7 +509,7 @@ class Operations::BaseTest < ActiveSupport::TestCase
           requires_when :scope_type, if: :role, equals: "role_lead", must_be: :role
         end
       end
-      assert_match(/must_be: must be a JSON primitive/, err.message)
+      assert_match(/must_be value must be JSON primitives/, err.message)
     end
 
     # A pin is meaningless on a rule that forbids the dependent outright, so it
@@ -713,7 +713,7 @@ class Operations::BaseTest < ActiveSupport::TestCase
           forbids_when :label, if: :kind, equals: "c"
         end
       end
-      assert_match(/outside its allowed set/, err.message)
+      assert_match(/outside kind.s allowed set/, err.message)
     end
 
     should "snapshot the in: set against later mutation" do
