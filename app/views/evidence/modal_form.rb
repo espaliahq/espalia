@@ -371,10 +371,14 @@ class Views::Evidence::ModalForm < Views::Base
   def footer
     div(class: "flex justify-end gap-2 pt-2") do
       button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
-      # `submit-guard` disables this while the write is in flight, so a
-      # double-click can't fire a second POST (audit issue #335).
-      button(type: "submit", data: { submit_guard_target: "button" },
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed") { submit_label }
+      # Turbo owns the in-flight treatment: `data-turbo-submits-with` swaps the
+      # label and `config.forms.submitter` ("disabled") disables the button,
+      # both restored on `turbo:submit-end`. `submit-guard` on the form adds
+      # only what Turbo can't — blocking a re-entrant submit (audit issue
+      # #335). `min-w-44` limits how far the footer slides when the label
+      # shortens; no single value fits all three labels exactly.
+      button(type: "submit", data: { turbo_submits_with: "Saving…" },
+             class: "inline-flex items-center justify-center min-h-11 min-w-44 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed") { submit_label }
     end
   end
 
