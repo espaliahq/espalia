@@ -67,56 +67,43 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  # Patches window.fetch to answer 500 (text/html body — the page-destroying
-  # class) for URLs containing the given fragment. A page reload clears it.
-  def patch_fetch_to_fail(url_fragment)
+  # One fetch patch for every failure shape this file needs. Matching requests
+  # (URL contains `fragment`) are counted in `window.__matched` and answered
+  # per `respond`; everything else passes through. `window.__unpatchFetch()`
+  # restores the real fetch, so a test can prove its retry genuinely lands.
+  #
+  # @param respond [Symbol, String] :error_500 — a 500 with an HTML body (the
+  #   page-destroying class Turbo would otherwise render as the page);
+  #   :reject — the network layer, no response at all;
+  #   :delay — hold the request open until `window.__releaseFetch()`, so a
+  #   second submission can be attempted while the first is genuinely still
+  #   in flight (no sleep, no timing guess);
+  #   a String — a 500 carrying that body, with `content_type`.
+  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
+  # @param content_type [String] response type for a String body — text/html
+  #   reaches Turbo's frame handling, anything else is discarded by it silently
+  def patch_fetch(fragment, respond: :error_500, once: false, content_type: "text/html")
+    body = respond.is_a?(String) ? respond : "<html><body>Internal Server Error</body></html>"
+    answer =
+      case respond
+      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
+      when :delay  then "new Promise((res, rej) => { " \
+                        "window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
+      else "Promise.resolve(new Response(#{body.to_json}, " \
+           "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
+      end
+
     page.execute_script(<<~JS)
       const of = window.fetch;
       window.__unpatchFetch = () => { window.fetch = of; };
-      window.fetch = (url, ...a) => String(url).includes(#{url_fragment.to_json})
-        ? Promise.resolve(new Response("<html><body>Internal Server Error</body></html>",
-            { status: 500, headers: { "Content-Type": "text/html" } }))
-        : of(url, ...a);
-    JS
-  end
-
-  # Patches window.fetch to fail only the FIRST request matching the fragment,
-  # then pass everything through — so a retry can succeed. `body` nil rejects
-  # the promise (network layer); a String answers 500 with that HTML body (the
-  # response-carries-no-frame layer); `content_type` switches the response to
-  # a body Turbo will not even try to render (the silent-discard layer).
-  def patch_fetch_to_fail_once(url_fragment, body: nil, content_type: "text/html")
-    failure = if body
-      "Promise.resolve(new Response(#{body.to_json}, " \
-        "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
-    else
-      'Promise.reject(new TypeError("Failed to fetch"))'
-    end
-    page.execute_script(<<~JS)
-      const of = window.fetch;
+      window.__matched = 0;
       let spent = false;
       window.fetch = (url, ...a) => {
-        if (!spent && String(url).includes(#{url_fragment.to_json})) {
-          spent = true;
-          return #{failure};
-        }
-        return of(url, ...a);
-      };
-    JS
-  end
-
-  # Patches window.fetch to count and delay requests matching the fragment, so
-  # a second submission can be attempted while the first is still in flight.
-  def patch_fetch_to_delay(url_fragment, ms: 2000)
-    page.execute_script(<<~JS)
-      const of = window.fetch;
-      window.__matched = 0;
-      window.fetch = (url, ...a) => {
-        if (!String(url).includes(#{url_fragment.to_json})) return of(url, ...a);
+        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
+        if (#{once.to_json} && spent) return of(url, ...a);
+        spent = true;
         window.__matched++;
-        return new Promise((resolve, reject) => {
-          setTimeout(() => of(url, ...a).then(resolve, reject), #{ms});
-        });
+        return #{answer};
       };
     JS
   end
@@ -147,123 +134,129 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     )
   end
 
-  context "the evidence modal's frame failing to load" do
+  # Both evidence-modal contexts below enter through the same door: the
+  # assessment screen with the matrix settled and the modal controller live.
+  context "on the assessment screen" do
     setup do
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       wait_for_stimulus "evidence-modal"
     end
 
-    should "surface a retryable error rather than a stuck Loading… state" do
-      patch_fetch_to_fail_once("/evidence_modal")
-      open_evidence_modal
+    context "the evidence modal's frame failing to load" do
+      should "surface a retryable error rather than a stuck Loading… state" do
+        patch_fetch("/evidence_modal", respond: :reject, once: true)
+        open_evidence_modal
 
-      assert_selector "#evidence-modal-overlay", visible: true
-      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
-      # The stuck placeholder is gone, not merely joined by an error.
-      assert_no_selector "turbo-frame#evidence-modal", visible: true
+        assert_selector "#evidence-modal-overlay", visible: true
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+        # The stuck placeholder is gone, not merely joined by an error.
+        assert_no_selector "turbo-frame#evidence-modal", visible: true
 
-      # Retry recovers: the form lands and the error clears.
-      click_modal_error_button "Retry"
+        # Retry recovers: the form lands and the error clears.
+        click_modal_error_button "Retry"
 
-      assert_selector "textarea#evm-content", visible: true
-      assert_no_selector "#evidence-modal-error", visible: true
+        assert_selector "textarea#evm-content", visible: true
+        assert_no_selector "#evidence-modal-error", visible: true
+      end
+
+      should "keep the modal when the response carries no frame" do
+        patch_fetch("/evidence_modal", once: true,
+          respond: "<html><body>Internal Server Error</body></html>")
+        open_evidence_modal
+
+        # turbo:frame-missing's un-prevented default renders Turbo's own
+        # "Content missing" into the frame and throws; cancelling it keeps our
+        # error state instead. Either way the raw 500 body must never surface.
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+        assert_selector "#evidence-modal-overlay", visible: true
+        assert_no_text "Internal Server Error"
+
+        click_modal_error_button "Retry"
+
+        assert_selector "textarea#evm-content", visible: true
+      end
+
+      # The silent layer: a non-HTML body (a proxy's text/plain 502) makes
+      # `FetchResponse#responseHTML` resolve undefined, so Turbo's `loadResponse`
+      # returns having rendered nothing AND dispatched nothing — no
+      # frame-missing, no fetch-request-error. Only `responseReceived` catches it.
+      should "surface a non-HTML failure Turbo discards without any event" do
+        patch_fetch("/evidence_modal", once: true,
+          respond: "502 Bad Gateway", content_type: "text/plain")
+        open_evidence_modal
+
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+        assert_no_selector "turbo-frame#evidence-modal", visible: true
+        assert_no_text "502 Bad Gateway"
+
+        click_modal_error_button "Retry"
+
+        assert_selector "textarea#evm-content", visible: true
+        assert_no_selector "#evidence-modal-error", visible: true
+      end
+
+      # Retry is not the only way out: the form's own ×/Cancel went down with
+      # the hidden frame, so the error state carries the exit itself.
+      should "offer a Close that dismisses the modal" do
+        patch_fetch("/evidence_modal", respond: :reject, once: true)
+        open_evidence_modal
+
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+
+        click_modal_error_button "Close"
+
+        assert_no_selector "#evidence-modal-overlay", visible: true
+      end
     end
 
-    should "keep the modal when the response carries no frame" do
-      patch_fetch_to_fail_once("/evidence_modal",
-        body: "<html><body>Internal Server Error</body></html>")
-      open_evidence_modal
+    # One user action, one request (audit issue #335): the modal's submit button
+    # is disabled for the duration of the write, and a re-entrant submit while
+    # one is in flight never reaches the server.
+    context "submitting the evidence modal" do
+      setup do
+        open_evidence_modal
+        assert_selector "textarea#evm-content", visible: true
+        wait_for_stimulus "submit-guard"
+      end
 
-      # turbo:frame-missing's un-prevented default renders Turbo's own
-      # "Content missing" into the frame and throws; cancelling it keeps our
-      # error state instead. Either way the raw 500 body must never surface.
-      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
-      assert_selector "#evidence-modal-overlay", visible: true
-      assert_no_text "Internal Server Error"
+      should "lock the submit button in flight and send exactly one save" do
+        patch_fetch("/evidence/save", respond: :delay)
+        fill_evidence_form("Feedback worth keeping")
+        submit_evidence_form
 
-      click_modal_error_button "Retry"
+        # The save is genuinely still open — held by the patch, not by a sleep.
+        assert_selector "#evidence-modal-overlay button[type=submit][disabled]",
+          text: "Saving…", visible: true
 
-      assert_selector "textarea#evm-content", visible: true
-    end
+        # A second attempt — a click on the locked button AND a programmatic
+        # submit that bypasses it — must not reach the server. Both dispatch
+        # synchronously, so the count is settled the moment they return.
+        submit_evidence_form
+        page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
+        assert_equal 1, page.evaluate_script("window.__matched")
 
-    # The silent layer: a non-HTML body (a proxy's text/plain 502) makes
-    # `FetchResponse#responseHTML` resolve undefined, so Turbo's `loadResponse`
-    # returns having rendered nothing AND dispatched nothing — no
-    # frame-missing, no fetch-request-error. Only `responseReceived` catches it.
-    should "surface a non-HTML failure Turbo discards without any event" do
-      patch_fetch_to_fail_once("/evidence_modal",
-        body: "502 Bad Gateway", content_type: "text/plain")
-      open_evidence_modal
+        # Release the held save: it lands, and it landed once.
+        page.execute_script("window.__releaseFetch();")
+        assert_text "Feedback worth keeping"
+        assert_equal 1, page.evaluate_script("window.__matched")
+      end
 
-      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
-      assert_no_selector "turbo-frame#evidence-modal", visible: true
-      assert_no_text "502 Bad Gateway"
+      should "unlock the submit button when the save fails, so it can be retried" do
+        patch_fetch("/evidence/save")
+        fill_evidence_form("Feedback worth keeping")
+        submit_evidence_form
 
-      click_modal_error_button "Retry"
+        assert_selector "#evidence-modal-overlay [data-submit-fallback-target='message']",
+          text: "Couldn't save your feedback", visible: true
+        assert_selector "#evidence-modal-overlay button[type=submit]:not([disabled])",
+          text: "Add feedback / evidence", visible: true
 
-      assert_selector "textarea#evm-content", visible: true
-      assert_no_selector "#evidence-modal-error", visible: true
-    end
-
-    # Retry is not the only way out: the form's own ×/Cancel went down with
-    # the hidden frame, so the error state carries the exit itself.
-    should "offer a Close that dismisses the modal" do
-      patch_fetch_to_fail_once("/evidence_modal")
-      open_evidence_modal
-
-      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
-
-      click_modal_error_button "Close"
-
-      assert_no_selector "#evidence-modal-overlay", visible: true
-    end
-  end
-
-  # One user action, one request (audit issue #335): the modal's submit button
-  # is disabled for the duration of the write, and a re-entrant submit while
-  # one is in flight never reaches the server.
-  context "submitting the evidence modal" do
-    setup do
-      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
-      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-      wait_for_stimulus "evidence-modal"
-      open_evidence_modal
-      assert_selector "textarea#evm-content", visible: true
-      wait_for_stimulus "submit-guard"
-    end
-
-    should "lock the submit button in flight and send exactly one save" do
-      patch_fetch_to_delay("/evidence/save")
-      fill_evidence_form("Feedback worth keeping")
-      submit_evidence_form
-
-      assert_selector "#evidence-modal-overlay button[type=submit][disabled]",
-        text: "Saving…", visible: true
-
-      # A second attempt — a click on the locked button AND a programmatic
-      # submit that bypasses it — must not reach the server.
-      submit_evidence_form
-      page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
-
-      assert_text "Feedback worth keeping"
-      assert_equal 1, page.evaluate_script("window.__matched")
-    end
-
-    should "unlock the submit button when the save fails, so it can be retried" do
-      patch_fetch_to_fail("/evidence/save")
-      fill_evidence_form("Feedback worth keeping")
-      submit_evidence_form
-
-      assert_selector "#evidence-modal-overlay [data-submit-fallback-target='message']",
-        text: "Couldn't save your feedback", visible: true
-      assert_selector "#evidence-modal-overlay button[type=submit]:not([disabled])",
-        text: "Add feedback / evidence", visible: true
-
-      # And the retry genuinely goes through.
-      page.execute_script("window.__unpatchFetch();")
-      submit_evidence_form
-      assert_text "Feedback worth keeping"
+        # And the retry genuinely goes through.
+        page.execute_script("window.__unpatchFetch();")
+        submit_evidence_form
+        assert_text "Feedback worth keeping"
+      end
     end
   end
 
@@ -273,7 +266,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
 
-      patch_fetch_to_fail("/ratings")
+      patch_fetch("/ratings")
       page.execute_script(<<~JS)
         const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
         wrapper.querySelector("[data-dropdown-target='trigger']").click();
@@ -313,13 +306,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       wait_for_stimulus "submit-fallback", scope: "#rating-#{@cap_stable}-1"
 
-      page.execute_script(<<~JS)
-        const of = window.fetch;
-        window.__unpatchFetch = () => { window.fetch = of; };
-        window.fetch = (url, ...a) => String(url).includes("/ratings")
-          ? Promise.reject(new TypeError("Failed to fetch"))
-          : of(url, ...a);
-      JS
+      patch_fetch("/ratings", respond: :reject)
       page.execute_script(<<~JS)
         const wrapper = document.querySelector("#rating-#{@cap_stable}-1 [data-controller~='submit-fallback']");
         wrapper.querySelector("[data-dropdown-target='trigger']").click();
@@ -361,7 +348,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-modal-overlay", visible: true
       assert_selector "#evm-content", visible: true
 
-      patch_fetch_to_fail("/evidence/save")
+      patch_fetch("/evidence/save")
       page.execute_script(<<~JS)
         const ta = document.querySelector("#evm-content");
         ta.value = "Feedback worth keeping";
