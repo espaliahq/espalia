@@ -236,8 +236,12 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
         assert_equal 1, page.evaluate_script("window.__matched")
 
-        # Release the held save: it lands, and it landed once.
+        # Release the held save: it lands, and it landed once. The modal
+        # closing is the proof the round trip completed — only then can the
+        # text assertion be about the rendered evidence card, not the still
+        # open form.
         page.execute_script("window.__releaseFetch();")
+        assert_no_selector "#evidence-modal-overlay", visible: true
         assert_text "Feedback worth keeping"
         assert_equal 1, page.evaluate_script("window.__matched")
       end
@@ -252,9 +256,10 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         assert_selector "#evidence-modal-overlay button[type=submit]:not([disabled])",
           text: "Add feedback / evidence", visible: true
 
-        # And the retry genuinely goes through.
+        # And the retry genuinely goes through — modal closed, card rendered.
         page.execute_script("window.__unpatchFetch();")
         submit_evidence_form
+        assert_no_selector "#evidence-modal-overlay", visible: true
         assert_text "Feedback worth keeping"
       end
     end
