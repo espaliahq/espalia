@@ -141,7 +141,13 @@ export default class extends BaseController {
       ...overlay.querySelectorAll(
         "textarea, input[type='text'], input[type='url'], input[type='search'], input[type='email']",
       ),
-    ].some((el) => el.value !== el.defaultValue && el.value.trim() !== "")
+    ]
+      // Only what the user can actually see. A hidden subtree still holds its
+      // field values — the evidence modal hides its whole frame behind a
+      // load-failure error — and guarding text nobody can read asks "discard
+      // your unsaved feedback?" about a form that isn't on screen.
+      .filter((el) => el.offsetParent !== null)
+      .some((el) => el.value !== el.defaultValue && el.value.trim() !== "")
     return dirty && !window.confirm(message)
   }
 

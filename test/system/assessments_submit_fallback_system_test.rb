@@ -83,11 +83,12 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
   # Patches window.fetch to fail only the FIRST request matching the fragment,
   # then pass everything through — so a retry can succeed. `body` nil rejects
   # the promise (network layer); a String answers 500 with that HTML body (the
-  # response-carries-no-frame layer).
-  def patch_fetch_to_fail_once(url_fragment, body: nil)
+  # response-carries-no-frame layer); `content_type` switches the response to
+  # a body Turbo will not even try to render (the silent-discard layer).
+  def patch_fetch_to_fail_once(url_fragment, body: nil, content_type: "text/html")
     failure = if body
       "Promise.resolve(new Response(#{body.to_json}, " \
-        '{ status: 500, headers: { "Content-Type": "text/html" } }))'
+        "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
     else
       'Promise.reject(new TypeError("Failed to fetch"))'
     end
@@ -126,6 +127,15 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     )
   end
 
+  # The frame-load error state's Retry / Close, dispatched by label.
+  def click_modal_error_button(label)
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("#evidence-modal-error button")]
+        .find((b) => b.textContent.trim() === #{label.to_json})
+        .click();
+    JS
+  end
+
   def fill_evidence_form(text)
     js_fill_in "#evm-content", with: text
     js_fill_in "#evm-valence", with: "demonstrated"
@@ -154,7 +164,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
       assert_no_selector "turbo-frame#evidence-modal", visible: true
 
       # Retry recovers: the form lands and the error clears.
-      page.execute_script("document.querySelector('#evidence-modal-error button').click();")
+      click_modal_error_button "Retry"
 
       assert_selector "textarea#evm-content", visible: true
       assert_no_selector "#evidence-modal-error", visible: true
@@ -165,14 +175,48 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         body: "<html><body>Internal Server Error</body></html>")
       open_evidence_modal
 
-      # turbo:frame-missing's default would navigate the page to that body.
+      # turbo:frame-missing's un-prevented default renders Turbo's own
+      # "Content missing" into the frame and throws; cancelling it keeps our
+      # error state instead. Either way the raw 500 body must never surface.
       assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
       assert_selector "#evidence-modal-overlay", visible: true
       assert_no_text "Internal Server Error"
 
-      page.execute_script("document.querySelector('#evidence-modal-error button').click();")
+      click_modal_error_button "Retry"
 
       assert_selector "textarea#evm-content", visible: true
+    end
+
+    # The silent layer: a non-HTML body (a proxy's text/plain 502) makes
+    # `FetchResponse#responseHTML` resolve undefined, so Turbo's `loadResponse`
+    # returns having rendered nothing AND dispatched nothing — no
+    # frame-missing, no fetch-request-error. Only `responseReceived` catches it.
+    should "surface a non-HTML failure Turbo discards without any event" do
+      patch_fetch_to_fail_once("/evidence_modal",
+        body: "502 Bad Gateway", content_type: "text/plain")
+      open_evidence_modal
+
+      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+      assert_no_selector "turbo-frame#evidence-modal", visible: true
+      assert_no_text "502 Bad Gateway"
+
+      click_modal_error_button "Retry"
+
+      assert_selector "textarea#evm-content", visible: true
+      assert_no_selector "#evidence-modal-error", visible: true
+    end
+
+    # Retry is not the only way out: the form's own ×/Cancel went down with
+    # the hidden frame, so the error state carries the exit itself.
+    should "offer a Close that dismisses the modal" do
+      patch_fetch_to_fail_once("/evidence_modal")
+      open_evidence_modal
+
+      assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+
+      click_modal_error_button "Close"
+
+      assert_no_selector "#evidence-modal-overlay", visible: true
     end
   end
 

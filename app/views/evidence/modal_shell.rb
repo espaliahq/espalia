@@ -6,11 +6,13 @@
 # sets the frame `src` and opens the overlay; the server renders the form.
 #
 # The frame's inline fallback is a "Loading…" placeholder. When the frame's
-# GET fails outright (network error, or a response carrying no matching frame)
-# Turbo leaves that placeholder in place forever — a modal stuck on "Loading…"
-# with no error and no way forward (audit issue #328). The error state below
-# is rendered hidden and revealed by `evidence-modal#loadFailed`, giving the
-# failure a voice and a Retry.
+# GET fails — the network drops, the response carries no matching frame, or it
+# isn't HTML at all (a proxy's text/plain 502, which Turbo discards in total
+# silence) — that placeholder stands forever: a modal stuck on "Loading…" with
+# no error and no way forward (audit issue #328). The error state below is
+# rendered hidden and revealed by `evidence-modal#loadFailed`, giving the
+# failure a voice, a Retry, and — since the form's own ×/Cancel went down with
+# the hidden frame — a way out.
 #
 # Rendered once per surface, INSIDE the element that owns both the `modal` and
 # `evidence-modal` controllers. On the assessment screen that element also
@@ -34,6 +36,7 @@ class Views::Evidence::ModalShell < Views::Base
                           "modal:open@window->submit-fallback#submitStart " \
                           "turbo:fetch-request-error->evidence-modal#loadFailed " \
                           "turbo:frame-missing->evidence-modal#loadFailed " \
+                          "turbo:before-fetch-response->evidence-modal#responseReceived " \
                           "turbo:frame-load->evidence-modal#loadSucceeded" }) do
         render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-modal", loading: "lazy", data: { evidence_modal_target: "frame" }) do
@@ -47,21 +50,28 @@ class Views::Evidence::ModalShell < Views::Base
   private
 
   # The frame-load failure state: hidden until `evidence-modal#loadFailed`
-  # reveals it (in place of the "Loading…" placeholder), with a Retry that
-  # re-fetches the frame. `role="alert"` so the failure is announced, not
-  # only seen.
+  # reveals it (in place of the "Loading…" placeholder). `role="alert"` so the
+  # failure is announced, not only seen, and `tabindex="-1"` so the controller
+  # can move focus here — the Retry the user just pressed is inside the frame
+  # we hide, and focus would otherwise fall out of the dialog to <body>.
+  #
+  # Two ways forward, because hiding the frame also hides the form's own
+  # ×/Cancel: Retry re-fetches, Close dismisses. The copy stays failure-
+  # agnostic — the same state covers a dropped connection, a 500, and an
+  # expired session, so "check your connection" would misdirect two of three.
   # @return [void]
   def load_error
-    div(id: "evidence-modal-error", role: "alert", hidden: true,
+    div(id: "evidence-modal-error", role: "alert", hidden: true, tabindex: "-1",
         class: "p-6 space-y-3", data: { evidence_modal_target: "error" }) do
-      p(class: "p-2 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 " \
-               "text-xs text-red-700 dark:text-red-300") do
-        "Couldn't load the form — check your connection and try again."
+      p(class: Components::Kit::SubmitFallbackMessage::PANEL_CLASSES) do
+        "Couldn't load the form. Try again — if it keeps failing, close this and reload the page."
       end
-      button(type: "button", data: { action: "evidence-modal#retry" },
-             class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 " \
-                    "dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 " \
-                    "cursor-pointer") { "Retry" }
+      div(class: "flex gap-2") do
+        button(type: "button", data: { action: "evidence-modal#retry" },
+               class: Views::Evidence::ModalForm::SECONDARY_BTN) { "Retry" }
+        button(type: "button", data: { action: "modal#close" },
+               class: Views::Evidence::ModalForm::SECONDARY_BTN) { "Close" }
+      end
     end
   end
 end
