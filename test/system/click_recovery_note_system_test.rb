@@ -17,25 +17,26 @@ require "application_system_test_case"
 # from under the recovery ("Save settings" → "Save changes").
 #
 # Note it can NOT be staged as "findable by id, different visible text" any
-# more: the finder now mirrors Capybara's resolution (id and title as well as
+# more: the finder mirrors Capybara's resolution (id and title as well as
 # text), so it would succeed by id — which is the point of that fix.
+#
+# This test proves WIRING, not timing, so both waits are shrunk (see
+# +landed_wait+ and the +using_wait_time+ below) and it signs nobody in:
+# every second spent here is spent on every CI run forever.
 class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
   # No signal this string could ever satisfy — the helper's final assertion
   # is guaranteed to fail, which is the branch under test.
   ABSENT_TEXT = "ZZ_SIGNAL_THAT_NEVER_APPEARS_ZZ"
 
-  setup do
-    @tenant = FactoryBot.create(:tenant)
-    @user = FactoryBot.create(:user, password: "password123")
-    ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
-
-    sign_in_as(@user)
-  end
+  # The dropped-click window. Real value is 8s of pure waiting here.
+  def landed_wait = 0.5
 
   context "click_link_with_js_fallback" do
     should "name the missed JS recovery in the failure when its target is gone" do
-      visit root_path
-      assert_text "Home"
+      # The unauthenticated Devise form is the cheapest real page we have —
+      # no factories, no sign-in, and the helper never looks at the content.
+      visit new_user_session_path
+      assert_selector "input#user_email"
 
       # Consumed by the pointer click, so the recovery finds nothing.
       page.execute_script(<<~JS)
@@ -47,7 +48,10 @@ class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
       JS
 
       error = assert_raises(Minitest::Assertion) do
-        click_link_with_js_fallback("Vanishing link", expect_text: ABSENT_TEXT)
+        # Shrinks the final assertion's wait, which reads Capybara's default.
+        Capybara.using_wait_time(1) do
+          click_link_with_js_fallback("Vanishing link", expect_text: ABSENT_TEXT)
+        end
       end
 
       # The original assertion failure survives...

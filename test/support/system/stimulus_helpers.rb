@@ -196,9 +196,9 @@ module StimulusHelpers
     # potentially interfering with the in-flight fetch.
     landed =
       if expect_text
-        page.has_text?(expect_text, wait: 8)
+        page.has_text?(expect_text, wait: landed_wait)
       else
-        page.has_css?(expect_selector, wait: 8)
+        page.has_css?(expect_selector, wait: landed_wait)
       end
 
     yield unless landed
@@ -234,7 +234,7 @@ module StimulusHelpers
     # same failure the JS dispatch below exists for; don't let it raise.
     begin
       click_link locator
-      return if landed?(expect_text, expect_selector, wait: 8)
+      return if landed?(expect_text, expect_selector, wait: landed_wait)
     rescue Selenium::WebDriver::Error::ElementClickInterceptedError
       # fall through to the JS dispatch
     end
@@ -286,7 +286,7 @@ module StimulusHelpers
 
     begin
       find(selector, match: :first).click
-      return if landed?(expect_text, expect_selector, wait: 8)
+      return if landed?(expect_text, expect_selector, wait: landed_wait)
     rescue Selenium::WebDriver::Error::ElementClickInterceptedError
       # A sticky overlay (the comparison drawer) at the current scroll is
       # the same drop the JS dispatch below exists for.
@@ -320,7 +320,7 @@ module StimulusHelpers
 
     begin
       click_button locator
-      return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
+      return if landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait)
     rescue Selenium::WebDriver::Error::ElementClickInterceptedError
       # Same interception-is-a-drop rule as the link/selector helpers.
     end
@@ -337,7 +337,7 @@ module StimulusHelpers
       })()
     JS
 
-    return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
+    return if landed?(expect_text, expect_selector, expect_no_text, wait: landed_wait)
 
     # JS click also dropped (or the synthetic click event bypassed Turbo's
     # submit interceptor). Submit the button's form via requestSubmit() —
@@ -822,6 +822,18 @@ module StimulusHelpers
   # @return [String]
   def recovery_note(text)
     "#{RECOVERY_NOTE_PREFIX} #{text}"
+  end
+
+  # How long a guarded click waits before deciding it was dropped.
+  #
+  # Long enough for a slow CI Turbo Frame round-trip: too short and the
+  # recovery fires mid-navigation, potentially interfering with the in-flight
+  # fetch. Overridable so a test of the helpers' own wiring — where the
+  # timeout is dead waiting, not part of the subject — can shrink it.
+  #
+  # @return [Integer, Float] seconds
+  def landed_wait
+    8
   end
 
   # Runs a recovery script, tolerating the document being swapped under it.
