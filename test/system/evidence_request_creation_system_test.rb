@@ -53,6 +53,32 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     sign_in_as(@manager_user)
   end
 
+  # Patch `window.fetch` so a matching request (URL contains `fragment`) is
+  # answered per `respond` instead of reaching the server; everything else
+  # passes through. Matches are counted in `window.__matched`.
+  #
+  # @param respond [Symbol] :delay — hold the request open until
+  #   `window.__releaseFetch()`, so a second submission can be attempted while
+  #   the first is genuinely still in flight (no sleep, no timing guess)
+  def patch_fetch(fragment, respond: :delay)
+    answer =
+      case respond
+      when :delay then "new Promise((res, rej) => { window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
+      else 'Promise.reject(new TypeError("Failed to fetch"))'
+      end
+
+    page.execute_script(<<~JS)
+      const of = window.fetch;
+      window.__unpatchFetch = () => { window.fetch = of; };
+      window.__matched = 0;
+      window.fetch = (url, ...a) => {
+        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
+        window.__matched++;
+        return #{answer};
+      };
+    JS
+  end
+
   def open_request_modal
     visit assessment_path(@report_assignment)
     assert_text "Critical Thinking"
@@ -67,6 +93,56 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     JS
     assert_selector "#evidence-request-modal-overlay", visible: true
     assert_text "Who can speak to this?"
+  end
+
+  # Select the peer suggestion chip, which enables Send and counts it.
+  def select_peer_suggestion
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("#evidence-request-modal-overlay button")]
+        .find((b) => b.textContent.includes("Pat Peer"))?.click()
+    JS
+    assert_selector "#evidence-request-modal-overlay button[type='submit']", text: "Send 1 request"
+  end
+
+  def click_send
+    page.execute_script(
+      "document.querySelector(\"#evidence-request-modal-overlay button[type='submit']\").click();"
+    )
+  end
+
+  # One user action, one request (audit issue #335). This write is NOT
+  # idempotent — RequestEvidence mints a fresh request_id per POST — so a
+  # second submission that lands means duplicate requests and duplicate
+  # notifications for every recipient.
+  should "lock Send in flight and send exactly one request per click" do
+    open_request_modal
+    select_peer_suggestion
+    wait_for_stimulus "submit-guard"
+
+    patch_fetch("/evidence_requests")
+    click_send
+
+    # The POST is genuinely still open — held by the patch, not by a sleep.
+    assert_selector "#evidence-request-modal-overlay button[type='submit'][disabled]",
+      text: "Sending…", visible: true
+
+    # A second attempt — a click on the locked button AND a programmatic
+    # submit that bypasses it — must not reach the server. Both dispatch
+    # synchronously, so the count is settled the moment they return.
+    click_send
+    page.execute_script(
+      "document.querySelector(\"#evidence-request-modal-overlay form\").requestSubmit();"
+    )
+    assert_equal 1, page.evaluate_script("window.__matched")
+
+    # Release the held POST: it lands, and it landed once.
+    page.execute_script("window.__releaseFetch();")
+    assert_text "Feedback request"
+    assert_equal 1, page.evaluate_script("window.__matched")
+
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal 1, EvidenceRequest.where(requestee_person_id: @peer.id, person_id: @report.id).count
+    end
   end
 
   should "offer the assessee themselves as a recipient (a manager can ask for more evidence)" do
