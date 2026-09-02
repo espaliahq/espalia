@@ -19,6 +19,10 @@
 #       004_after_click_link_Continue.png
 #       ...
 #
+# A namespaced class becomes a single dash-joined segment, so paths stay
+# artifact-upload safe:
+#   tmp/screenshots/AssessmentCycles-EvidenceReportSystemTest/...
+#
 # You can also call `screenshot("label")` explicitly inside any test body.
 module AutoScreenshots
   extend ActiveSupport::Concern
@@ -47,10 +51,24 @@ module AutoScreenshots
   def ensure_screenshot_dir!
     return if @screenshot_dir
 
-    test_class = self.class.name
-    test_name = screenshot_test_name
-    @screenshot_dir = Rails.root.join("tmp", "screenshots", test_class, test_name)
+    @screenshot_dir = Rails.root.join(
+      "tmp", "screenshots", screenshot_class_name, screenshot_test_name
+    )
     FileUtils.mkdir_p(@screenshot_dir)
+  end
+
+  # The class-name path segment, safe for artifact upload.
+  #
+  # A namespaced class ("AssessmentCycles::EvidenceReportSystemTest") would
+  # otherwise put a colon in the path, which actions/upload-artifact rejects —
+  # and it errors the whole step, so a namespaced suite anywhere in the tree
+  # loses every failure screenshot the step exists to preserve. "-" keeps the
+  # namespace boundary readable where "_" would blur into a class that
+  # genuinely has one.
+  #
+  # @return [String]
+  def screenshot_class_name
+    sanitize_for_filename(self.class.name.to_s.gsub("::", "-"))
   end
 
   def screenshot_test_name
