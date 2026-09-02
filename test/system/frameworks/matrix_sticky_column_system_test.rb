@@ -121,12 +121,21 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
   # "the translucency pattern recognises every alpha form" below.
   TRANSLUCENT_BG_PATTERN = %q{/(^|:)bg-\S+\/(\d+(\.\d+)?|\[[^\]]+\])$/}
 
-  # Only the MASKING elements. Descendants of a sticky cell composite over its
-  # opaque background, so translucency there is harmless and correct — the
-  # "Pending archive" badge, search `<mark>`s and hover affordances all use it.
-  # Sweeping `.sticky *` made this scan false-fail, with fix guidance pointing
-  # at the wrong thing, the moment the fixture grew any of them.
-  STICKY_CELL_SELECTOR = "table td.sticky, table th.sticky"
+  # Only the MASKING elements — each cell's OWN class list, never a
+  # descendant's. Descendants composite over the cell's opaque background, so
+  # translucency there is harmless and correct: the "Pending archive" badge,
+  # search `<mark>`s and hover affordances all use it. Sweeping `.sticky *`
+  # made this scan false-fail, with fix guidance pointing at the wrong thing,
+  # the moment the fixture grew any of them.
+  #
+  # The category header's masking cell needs naming explicitly: its sticky box
+  # is the `<tr>`, so the `<td>` that actually carries the background matches
+  # neither `td.sticky` nor `th.sticky` — a translucent hover or dark variant
+  # added there would have sailed past this scan, and the computed probe only
+  # reads the resting state. Direct-child only, to stay on the masking element
+  # rather than sweeping the header's contents.
+  STICKY_CELL_SELECTOR =
+    "table td.sticky, table th.sticky, tr[data-matrix-target='categoryHeader'] > td"
 
   context "with the matrix scrolled horizontally" do
     setup { visit framework_path(@framework_id) }
@@ -151,7 +160,7 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
             { name: "header corner", selector: "thead th.sticky.left-0" },
             {
               name: "category header band",
-              selector: "tr[data-matrix-target='categoryHeader'] td",
+              selector: "tr[data-matrix-target='categoryHeader'] > td",
               fallback: "tr[data-matrix-target='categoryHeader']"
             }
           ];
