@@ -202,7 +202,9 @@ bin/rails test:system        # Run system tests (Capybara + Selenium)
 
 # The above test tasks run as part of precommit so if you are done just run precommit, not individual test tasks
 
-SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png} -> use /screenshot-test skill to run + visually examine results
+SCREENSHOTS=1 bin/rails test test/system/foo.rb  # Capture screenshots per action -> saves to tmp/screenshots/{TestClass}/{test_name}/{001_action.png}
+                                                # (a namespaced class dash-joins: AssessmentCycles::Foo -> AssessmentCycles-Foo)
+                                                # -> use /screenshot-test skill to run + visually examine results
 
 # Visual verification in a real browser via the chrome-devtools MCP — the MANDATORY
 # visual pass for every front-end change (additional to system tests, never a

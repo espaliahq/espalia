@@ -181,6 +181,9 @@ System tests support automatic screenshot capture via `SCREENSHOTS=1`. Use the `
 ```bash
 SCREENSHOTS=1 bin/rails test test/system/foo.rb
 # Screenshots saved to: tmp/screenshots/{TestClass}/{test_name}/{001_action.png}
+# A namespaced class writes a dash-joined directory — AssessmentCycles::Foo
+# → tmp/screenshots/AssessmentCycles-Foo/... — because upload-artifact
+# rejects a colon anywhere in the path.
 ```
 
 ## Responsive Behaviour Testing (NON-NEGOTIABLE)
@@ -342,6 +345,8 @@ expand_matrix_row("#capability-name-#{@cap_stable}")
 
 **Adding new helpers:** If a new controller with toggle behavior is added, create a thin wrapper that calls the private `stimulus_toggle` primitive with the controller's specific selectors.
 
+**These helpers emit `note: JS recovery —` lines too, and they mean something different here.** `stimulus_toggle` asserts the toggle exists *before* dispatching, so a dispatch that later matches nothing points at **detachment or a frame re-render** — a Turbo Frame replaced the node in one of the two `wait_for_turbo_idle` windows — not at a drifted selector. The note says which dispatch missed, so read it before assuming the selector is wrong.
+
 ## Click-and-Retry for Turbo Navigation Links (NON-NEGOTIABLE)
 
 **Use `click_with_retry` for Turbo Drive and Turbo Frame navigation links that drive cross-frame updates.** The Stimulus toggle helpers above only protect Stimulus actions. Plain `<a>` links — including those with `data-turbo-frame=...` — are equally vulnerable to silently dropped clicks on slow CI, but the existing helpers don't cover them.
@@ -373,9 +378,9 @@ end
 | `click_button_with_js_fallback(locator, expect_text:)` (or `expect_no_text:` when the success signal is content *disappearing* — an appearance signal already on the page can never arm the fallback) | `click_with_retry { click_button "..." }` |
 | `click_selector_with_js_fallback(selector, expect_text:)` — for elements addressed by CSS selector rather than visible text (e.g. `a[data-person-id=…]` dots) | `click_with_retry { find("...").click }` |
 
-These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
+These do one Capybara click, and if the destination text/selector doesn't appear within 8s, re-find the target and dispatch a synchronous `el.click()` from an `evaluate_script` that reports whether it found anything — bypassing Selenium pointer hit-testing entirely, so the second attempt is guaranteed to fire.
 
-**If a failure carries a `note: the JS recovery found no …` line, read it first.** It means the fallback's finder matched nothing — usually the locator drifted (a link's label changed) rather than the dropped click the bare failure implies. The helpers never fail *because* of the miss (a slow first click can land after the fallback runs, so the assertion keeps its full wait); the note appears only alongside a genuine failure it is likely to explain.
+**If a failure carries a `note: JS recovery —` line, read it first.** That is the shared cue for every recovery in the helpers, and the phrase after it names the cause the evidence actually supports: a drifted locator, an element rendered late, a frame re-render, a detached node, or a document replaced mid-navigation. The helpers never fail *because* of a miss (a slow first click can land after the recovery runs, so the assertion keeps its full wait); the note appears only alongside a genuine failure it is likely to explain.
 
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
