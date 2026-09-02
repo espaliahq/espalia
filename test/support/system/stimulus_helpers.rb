@@ -714,10 +714,20 @@ module StimulusHelpers
     find(trigger_selector).click
     return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)", wait: 2)
 
-    page.execute_script(<<~JS, trigger_selector)
-      document.querySelector(arguments[0])?.click();
+    clicked = page.evaluate_script(<<~JS, trigger_selector)
+      (() => {
+        const el = document.querySelector(arguments[0]);
+        if (!el) return false;
+        el.click();
+        return true;
+      })()
     JS
-    assert_selector "#{cell_selector} [role='menu']:not(.hidden)", wait: 4
+
+    misses = clicked ? [] : [ "the JS recovery matched no pill trigger for #{trigger_selector.inspect}" ]
+
+    assert_after_recovery(misses) do
+      assert_selector "#{cell_selector} [role='menu']:not(.hidden)", wait: 4
+    end
   end
 
   # Waits until Turbo Drive / Turbo Frame are idle — no busy frames, no
@@ -829,7 +839,7 @@ module StimulusHelpers
     # first one, which is intentional.
     assert_selector toggle_selector
 
-    dispatch_js_click(toggle_selector)
+    first_dispatch = dispatch_js_click(toggle_selector)
 
     # Wait for any Turbo Frame fetch the click might have triggered to
     # settle before the visibility check — otherwise a mid-flight frame
@@ -848,17 +858,52 @@ module StimulusHelpers
     # action when we dispatched. Re-dispatch only because the toggle is
     # still in its un-toggled state — re-clicking a toggle that has already
     # moved to "visible" would undo the first click.
-    dispatch_js_click(toggle_selector)
+    second_dispatch = dispatch_js_click(toggle_selector)
     wait_for_turbo_idle(wait: 3)
 
-    assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
-    assert_selector scoped_visible, visible: true
+    # A dispatch that matched nothing is worth naming: the assert_selector
+    # above proved the toggle existed, so a miss here means it was detached
+    # in between — the two wait_for_turbo_idle windows are exactly where a
+    # Turbo Frame replacement would have done it. Without the note, a frame
+    # that re-renders the toggle looks identical to a dropped click.
+    misses = dispatch_misses(toggle_selector, first_dispatch, second_dispatch)
+
+    assert_after_recovery(misses) do
+      assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
+      assert_selector scoped_visible, visible: true
+    end
   end
 
+  # Describes which of +stimulus_toggle+'s two JS dispatches found nothing.
+  #
+  # @param selector [String] the toggle selector both dispatches used
+  # @param first [Boolean] whether the first dispatch found an element
+  # @param second [Boolean] whether the re-dispatch found one
+  # @return [Array<String>] zero or one phrase for +assert_after_recovery+
+  def dispatch_misses(selector, first, second)
+    missed =
+      if first && second then return []
+      elsif first then "the re-dispatch"
+      elsif second then "the first JS dispatch"
+      else "both JS dispatches"
+      end
+
+    [ "#{missed} matched nothing for #{selector.inspect} — it WAS present when asserted, " \
+      "so a Turbo Frame replacement likely detached it in between" ]
+  end
+
+  # Dispatches a synchronous JS click on the first match.
+  #
+  # @param selector [String] CSS selector of the element to click
+  # @return [Boolean] whether an element was found and clicked
   def dispatch_js_click(selector)
-    page.execute_script(<<~JS, selector)
-      const el = document.querySelector(arguments[0]);
-      if (el) el.click();
+    page.evaluate_script(<<~JS, selector)
+      (() => {
+        const el = document.querySelector(arguments[0]);
+        if (!el) return false;
+        el.click();
+        return true;
+      })()
     JS
   end
 end

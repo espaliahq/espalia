@@ -55,4 +55,29 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
       misses.each { |miss| assert_match(/#{Regexp.escape(miss)}/, error.message) }
     end
   end
+
+  context "#dispatch_misses" do
+    should "report nothing when both dispatches found the toggle" do
+      assert_empty subject.send(:dispatch_misses, "#toggle", true, true)
+    end
+
+    should "name the re-dispatch when only it missed" do
+      note = subject.send(:dispatch_misses, "#toggle", true, false).sole
+
+      assert_match(/the re-dispatch matched nothing for "#toggle"/, note)
+      assert_match(/Turbo Frame replacement likely detached it/, note)
+    end
+
+    should "name the first dispatch when only it missed" do
+      note = subject.send(:dispatch_misses, "#toggle", false, true).sole
+
+      assert_match(/the first JS dispatch matched nothing/, note)
+    end
+
+    should "report both when neither dispatch found the toggle" do
+      note = subject.send(:dispatch_misses, "#toggle", false, false).sole
+
+      assert_match(/both JS dispatches matched nothing/, note)
+    end
+  end
 end
