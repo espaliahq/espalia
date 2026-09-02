@@ -41,11 +41,37 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   # clicks on the opacity-0 control flake on starved CI), then wait for the
   # modal's Turbo Frame to load.
   def open_binding_editor(size: DESKTOP_SIZE)
+    visit_edit_mode(size: size)
+    trigger_binding_editor
+
+    assert_selector "#binding-editor-modal", visible: true
+    assert_selector "turbo-frame#binding-editor", visible: true
+    assert_text "Engineering Manager" # the unbound role offered in the add select
+  end
+
+  def visit_edit_mode(size: DESKTOP_SIZE)
     page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@admin_user)
     visit edit_framework_path(@framework_id)
     wait_for_stimulus "matrix"
+  end
 
+  # Patch `window.fetch` so the FIRST request whose URL contains `fragment`
+  # rejects at the network layer; everything else (and every later match)
+  # passes through, so a retry can succeed.
+  def patch_fetch(fragment)
+    page.execute_script(<<~JS)
+      const of = window.fetch;
+      let spent = false;
+      window.fetch = (url, ...a) => {
+        if (spent || !String(url).includes(#{fragment.to_json})) return of(url, ...a);
+        spent = true;
+        return Promise.reject(new TypeError("Failed to fetch"));
+      };
+    JS
+  end
+
+  def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
     assert_text "Edit roles…"
@@ -53,10 +79,6 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       [...document.querySelectorAll("[role='menuitem']")]
         .find((b) => b.textContent.trim().startsWith("Edit roles")).click();
     JS
-
-    assert_selector "#binding-editor-modal", visible: true
-    assert_selector "turbo-frame#binding-editor", visible: true
-    assert_text "Engineering Manager" # the unbound role offered in the add select
   end
 
   context "as a tenant admin in edit mode" do
@@ -78,6 +100,25 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
         assert_selector "span.decoration-amber-400", text: "Engineering Manager"
       end
       assert_text(/draft/i) # the header draft pill — a draft was auto-opened
+    end
+
+    # Audit issue #365: an un-handled frame failure rendered Turbo's own
+    # "Content missing" into the editor (or left "Loading…" standing) inside
+    # the multi-megabyte edit-mode explorer, with no retry.
+    should "surface a retryable error when the editor frame fails to load" do
+      visit_edit_mode
+      patch_fetch("capability_bindings")
+      trigger_binding_editor
+
+      assert_selector "#binding-editor-modal", visible: true
+      assert_selector "#binding-editor-error", text: "Couldn't load the roles editor", visible: true
+      assert_no_selector "turbo-frame#binding-editor", visible: true
+      assert_no_text "Content missing"
+
+      page.execute_script('document.querySelector("#binding-editor-error button").click();')
+
+      assert_selector "#binding-editor select#binding-add-role", visible: true
+      assert_no_selector "#binding-editor-error", visible: true
     end
 
     should "remove the only role binding, un-scoping the capability" do

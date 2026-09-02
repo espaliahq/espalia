@@ -103,8 +103,19 @@ class Views::Assessments::Evidence::Card < Views::Base
   # toggle JS-free; the turbo frame inside is `loading: "lazy"`, so the
   # thread (comments + stream-read lifecycle rows) is only fetched when
   # the disclosure opens and the frame becomes visible.
+  #
+  # `frame-error` is mounted on THIS disclosure, not the card list: many
+  # cards render per page, and each instance must own exactly one frame and
+  # its own error block (audit issue #365) — a failed GET otherwise leaves
+  # "Loading discussion…" standing forever with no retry.
   def discussion_disclosure
-    details(class: "mt-1") do
+    details(class: "mt-1",
+            data: { controller: "frame-error",
+                    action: "turbo:before-fetch-request->frame-error#requestStarted " \
+                            "turbo:fetch-request-error->frame-error#loadFailed " \
+                            "turbo:frame-missing->frame-error#loadFailed " \
+                            "turbo:before-fetch-response->frame-error#responseReceived " \
+                            "turbo:frame-load->frame-error#loadSucceeded" }) do
       summary(
         class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
                "inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
@@ -124,11 +135,17 @@ class Views::Assessments::Evidence::Card < Views::Base
           span { "Discuss" }
         end
       end
-      turbo_frame_tag(thread_frame_id, src: thread_frame_src, loading: "lazy") do
+      turbo_frame_tag(thread_frame_id, src: thread_frame_src, loading: "lazy",
+                      data: { frame_error_target: "frame" }) do
         div(class: "py-1 text-[10px] italic text-gray-600 dark:text-gray-300") do
           "Loading discussion…"
         end
       end
+      # No Close: this is not a modal — collapsing the disclosure is the exit.
+      render Components::Kit::FrameLoadError.new(
+        id: "#{thread_frame_id}-error", classes: "py-1 space-y-2",
+        message: "Couldn't load the discussion. Try again — if it keeps failing, reload the page."
+      )
     end
   end
 

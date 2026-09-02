@@ -22,16 +22,29 @@ class Views::Frameworks::Explorer::BindingEditorModal < Views::Base
 
   private
 
+  # `frame-error` gives a failed frame GET a voice: without it an
+  # un-handled `turbo:frame-missing` renders Turbo's own "Content missing"
+  # inside the multi-megabyte edit-mode explorer, with no retry (#365).
   def body
     div(
       data: {
-        controller: "binding-editor-form",
-        binding_editor_form_bindings_url_value: framework_capability_bindings_path(@framework_id)
+        controller: "binding-editor-form frame-error",
+        binding_editor_form_bindings_url_value: framework_capability_bindings_path(@framework_id),
+        action: "turbo:before-fetch-request->frame-error#requestStarted " \
+                "turbo:fetch-request-error->frame-error#loadFailed " \
+                "turbo:frame-missing->frame-error#loadFailed " \
+                "turbo:before-fetch-response->frame-error#responseReceived " \
+                "turbo:frame-load->frame-error#loadSucceeded"
       }
     ) do
-      turbo_frame_tag("binding-editor", data: { binding_editor_form_target: "frame" }) do
+      turbo_frame_tag("binding-editor",
+                      data: { binding_editor_form_target: "frame", frame_error_target: "frame" }) do
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
+      render Components::Kit::FrameLoadError.new(
+        id: "binding-editor-error", closeable: true, classes: "space-y-3",
+        message: "Couldn't load the roles editor. Try again — if it keeps failing, close this and reload the page."
+      )
     end
   end
 end

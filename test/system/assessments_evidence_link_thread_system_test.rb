@@ -71,6 +71,33 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
     "#evidence-link-thread-#{@evidence_id}-#{@cap_stable}-1"
   end
 
+  # Patch `window.fetch` so a matching request (URL contains `fragment`) is
+  # answered per `respond` instead of reaching the server; everything else
+  # passes through.
+  #
+  # @param respond [Symbol] :reject — the network layer, no response at all
+  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
+  def patch_fetch(fragment, respond: :reject, once: false)
+    answer =
+      case respond
+      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
+      else "Promise.resolve(new Response(\"\", { status: 500, " \
+           'headers: { "Content-Type": "text/html" } }))'
+      end
+
+    page.execute_script(<<~JS)
+      const of = window.fetch;
+      window.__unpatchFetch = () => { window.fetch = of; };
+      let spent = false;
+      window.fetch = (url, ...a) => {
+        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
+        if (#{once.to_json} && spent) return of(url, ...a);
+        spent = true;
+        return #{answer};
+      };
+    JS
+  end
+
   def open_disclosure
     visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
     # The matrix frame eagerly re-fetches after initial render; opening
@@ -121,6 +148,35 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
       assert_selector "#evidence-#{@evidence_id} summary", text: /1 comment/
       assert_selector "#evidence-#{@evidence_id} summary", text: /Is this a growth signal\?/
+    end
+
+    # Audit issue #365: a failed lazy GET used to leave "Loading discussion…"
+    # standing forever, with no error and no retry.
+    should "surface a retryable error when the thread frame fails to load" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      assert_selector "#evidence-#{@evidence_id}", visible: true
+
+      # Patch before opening: the frame only fetches once the disclosure's
+      # content becomes visible.
+      patch_fetch("link_thread", once: true)
+      page.execute_script(<<~JS)
+        const details = document.querySelector('#evidence-#{@evidence_id} details');
+        details.open = true;
+        details.scrollIntoView({ block: 'center' });
+      JS
+
+      assert_selector "#{thread_frame_selector}-error",
+        text: "Couldn't load the discussion", visible: true
+      # The stuck placeholder is gone, not merely joined by an error.
+      assert_no_selector thread_frame_selector, visible: true
+
+      page.execute_script(<<~JS)
+        document.querySelector("#{thread_frame_selector}-error button").click();
+      JS
+
+      assert_text "Alice linked this feedback as “Demonstrates”"
+      assert_no_selector "#{thread_frame_selector}-error", visible: true
     end
 
     should "show the preserved-history notice on a removed linkage's thread" do
