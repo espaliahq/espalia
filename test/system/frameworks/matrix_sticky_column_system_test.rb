@@ -30,7 +30,10 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
 
     ActsAsTenant.with_tenant(@tenant) do
       handler = Frameworks::CommandHandler.new
-      FactoryBot.create(:tenant_user, tenant: @tenant, user: @user)
+      # Admin so edit mode renders: the "+ Add capability" sticky band is
+      # gated on FrameworkPolicy#edit_structure?, and it owes the same
+      # opacity invariant as every other sticky cell.
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @user, role: :admin)
 
       @framework_id = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Sticky Column Framework")
@@ -130,113 +133,45 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
   #
   # The category header's masking cell needs naming explicitly: its sticky box
   # is the `<tr>`, so the `<td>` that actually carries the background matches
-  # neither `td.sticky` nor `th.sticky` — a translucent hover or dark variant
-  # added there would have sailed past this scan, and the computed probe only
-  # reads the resting state. Direct-child only, to stay on the masking element
-  # rather than sweeping the header's contents.
+  # neither `td.sticky` nor `th.sticky`. Direct-child only, to stay on the
+  # masking element rather than sweeping the header's contents.
   STICKY_CELL_SELECTOR =
     "table td.sticky, table th.sticky, tr[data-matrix-target='categoryHeader'] > td"
 
-  context "with the matrix scrolled horizontally" do
+  # `fallback` covers a cell whose stickiness lives on an ancestor: the
+  # category header's <tr> is the sticky box, the <td> merely carries the
+  # background that masks it.
+  VIEW_MODE_CELLS = [
+    { name: "expanded row gutter", selector: "tr[data-matrix-target='expandedRow'] td.sticky" },
+    { name: "compact row capability cell", selector: "tr[data-matrix-target='row'] td.sticky" },
+    { name: "header corner", selector: "thead th.sticky.left-0" },
+    {
+      name: "category header band",
+      selector: "tr[data-matrix-target='categoryHeader'] > td",
+      fallback: "tr[data-matrix-target='categoryHeader']"
+    }
+  ].freeze
+
+  # Edit mode adds the "+ Add capability" band — a full-width sticky cell that
+  # view mode never renders, so view-only coverage left it unpinned.
+  EDIT_MODE_CELLS = (VIEW_MODE_CELLS + [
+    {
+      name: "add-capability band",
+      selector: "td.sticky:has([data-modal-target-id='add-capability-modal'])"
+    }
+  ]).freeze
+
+  context "with the matrix scrolled horizontally in view mode" do
     setup { visit framework_path(@framework_id) }
 
     should "paint every sticky cell fully opaque so nothing bleeds through" do
       expand_matrix_row("tr[data-matrix-target='row']")
 
-      result = page.evaluate_script(<<~JS)
-        (() => {
-          const isOpaque = #{OPACITY_PROBE_JS};
-          const isTransparent = (bg) => bg === "transparent" || bg === "rgba(0, 0, 0, 0)";
-
-          const scroller = document.querySelector("[data-matrix-target='scrollContainer']");
-          scroller.scrollLeft = scroller.scrollWidth;
-
-          // `fallback` covers a cell whose stickiness lives on an ancestor: the
-          // category header's <tr> is the sticky box, the <td> merely carries
-          // the background that masks it.
-          const cells = [
-            { name: "expanded row gutter", selector: "tr[data-matrix-target='expandedRow'] td.sticky" },
-            { name: "compact row capability cell", selector: "tr[data-matrix-target='row'] td.sticky" },
-            { name: "header corner", selector: "thead th.sticky.left-0" },
-            {
-              name: "category header band",
-              selector: "tr[data-matrix-target='categoryHeader'] > td",
-              fallback: "tr[data-matrix-target='categoryHeader']"
-            }
-          ];
-
-          const probed = cells.map(({ name, selector, fallback }) => {
-            const el = document.querySelector(selector);
-            if (!el) return { name, state: "missing", selector };
-
-            let bg = getComputedStyle(el).backgroundColor;
-            let source = selector;
-            if (isTransparent(bg) && fallback) {
-              const ancestor = document.querySelector(fallback);
-              if (ancestor) {
-                bg = getComputedStyle(ancestor).backgroundColor;
-                source = fallback;
-              }
-            }
-            return { name, state: "probed", bg, source, opaque: isOpaque(bg) };
-          });
-
-          return { scrollLeft: scroller.scrollLeft, probed };
-        })()
-      JS
-
-      # Without real horizontal overflow there is nothing to bleed through and
-      # the assertions below would pass vacuously.
-      assert_operator result["scrollLeft"], :>, 0,
-                      "matrix did not scroll horizontally — fixture is no longer wide enough"
-
-      result["probed"].each do |cell|
-        refute_equal "missing", cell["state"],
-                     "no element matched #{cell["selector"].inspect} — the sticky cell this " \
-                     "test guards has moved or stopped rendering"
-
-        refute_equal "unparseable", cell["opaque"],
-                     "probe could not parse the computed colour #{cell["bg"].inspect} for the " \
-                     "#{cell["name"]} — the canvas probe needs teaching, the app may be fine"
-
-        assert_equal true, cell["opaque"],
-                     "the #{cell["name"]} (#{cell["source"]}) is not opaque (#{cell["bg"]}) — " \
-                     "content scrolling beneath it will show through"
-      end
+      assert_sticky_cells_opaque(VIEW_MODE_CELLS)
     end
 
     should "declare no translucent background on any sticky cell, hover included" do
-      # No row expansion here: the scan reads class lists, which querySelectorAll
-      # returns whether or not the expanded row is hidden.
-      #
-      # The computed check above only sees the resting state. A `/NN` alpha
-      # hiding in a hover or dark variant bleeds only while hovering, or only
-      # in dark mode — which is exactly how `dark:group-hover:bg-gray-800/50`
-      # survived on the compact row. Read the class lists so every variant is
-      # covered.
-      result = page.evaluate_script(<<~JS)
-        (() => {
-          const cells = document.querySelectorAll("#{STICKY_CELL_SELECTOR}");
-          const offenders = [];
-          for (const el of cells) {
-            for (const token of el.classList) {
-              if (#{TRANSLUCENT_BG_PATTERN}.test(token)) offenders.push(token);
-            }
-          }
-          return { scanned: cells.length, offenders: [ ...new Set(offenders) ] };
-        })()
-      JS
-
-      # A scan that reaches nothing reports "clean" — assert it actually looked.
-      assert_operator result["scanned"], :>=, MIN_STICKY_CELLS,
-                      "only #{result["scanned"]} sticky cell(s) matched " \
-                      "#{STICKY_CELL_SELECTOR.inspect} — the scan is no longer reaching the " \
-                      "matrix, so its clean result means nothing"
-
-      assert_empty result["offenders"],
-                   "translucent background(s) on a sticky matrix cell: " \
-                   "#{result["offenders"].inspect} — use the opaque composite instead " \
-                   "(framework-explorer.md, Hard-Won Lesson 24)"
+      assert_no_translucent_sticky_backgrounds
     end
 
     should "recognise every alpha form the translucency pattern must catch" do
@@ -268,5 +203,117 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
         assert_equal false, matched, "#{token} is not a translucent background but the pattern flags it"
       end
     end
+  end
+
+  context "with the matrix scrolled horizontally in edit mode" do
+    # `q` renders a search <mark> INSIDE the sticky capability cell, and that
+    # mark is translucent in dark mode (`dark:bg-amber-400/40`). Harmless — it
+    # composites over the cell's opaque background — so it is exactly the
+    # descendant the scan must NOT flag. Free to arrange, so the scan's scoping
+    # is exercised rather than merely asserted in a comment.
+    setup { visit edit_framework_path(@framework_id, q: "Strategic") }
+
+    should "paint every sticky cell fully opaque, the add-capability band included" do
+      expand_matrix_row("tr[data-matrix-target='row']")
+
+      assert_sticky_cells_opaque(EDIT_MODE_CELLS)
+    end
+
+    should "declare no translucent background on any sticky cell, descendants aside" do
+      # Prove the translucent descendant is actually on the page — otherwise
+      # the scan below passes without ever meeting the case it must tolerate.
+      assert_selector "td.sticky mark.dark\\:bg-amber-400\\/40", visible: :all
+
+      assert_no_translucent_sticky_backgrounds
+    end
+  end
+
+  private
+
+  # Scrolls the matrix fully right and asserts each named cell masks what
+  # passes beneath it.
+  #
+  # @param cells [Array<Hash>] name / selector / optional ancestor fallback
+  def assert_sticky_cells_opaque(cells)
+    result = page.evaluate_script(<<~JS)
+      (() => {
+        const isOpaque = #{OPACITY_PROBE_JS};
+        const isTransparent = (bg) => bg === "transparent" || bg === "rgba(0, 0, 0, 0)";
+
+        const scroller = document.querySelector("[data-matrix-target='scrollContainer']");
+        scroller.scrollLeft = scroller.scrollWidth;
+
+        const probed = #{cells.to_json}.map(({ name, selector, fallback }) => {
+          const el = document.querySelector(selector);
+          if (!el) return { name, state: "missing", selector };
+
+          let bg = getComputedStyle(el).backgroundColor;
+          let source = selector;
+          if (isTransparent(bg) && fallback) {
+            const ancestor = document.querySelector(fallback);
+            if (ancestor) {
+              bg = getComputedStyle(ancestor).backgroundColor;
+              source = fallback;
+            }
+          }
+          return { name, state: "probed", bg, source, opaque: isOpaque(bg) };
+        });
+
+        return { scrollLeft: scroller.scrollLeft, probed };
+      })()
+    JS
+
+    # Without real horizontal overflow there is nothing to bleed through and
+    # the assertions below would pass vacuously.
+    assert_operator result["scrollLeft"], :>, 0,
+                    "matrix did not scroll horizontally — fixture is no longer wide enough"
+
+    result["probed"].each do |cell|
+      refute_equal "missing", cell["state"],
+                   "no element matched #{cell["selector"].inspect} — the sticky cell this " \
+                   "test guards has moved or stopped rendering"
+
+      refute_equal "unparseable", cell["opaque"],
+                   "probe could not parse the computed colour #{cell["bg"].inspect} for the " \
+                   "#{cell["name"]} — the canvas probe needs teaching, the app may be fine"
+
+      assert_equal true, cell["opaque"],
+                   "the #{cell["name"]} (#{cell["source"]}) is not opaque (#{cell["bg"]}) — " \
+                   "content scrolling beneath it will show through"
+    end
+  end
+
+  # Reads every sticky cell's own class list for a translucent background.
+  #
+  # No row expansion needed: querySelectorAll returns the expanded row whether
+  # or not it is hidden. The computed probe above only sees the resting state,
+  # so a `/NN` alpha hiding in a hover or dark variant — bleeding only while
+  # hovering, or only in dark mode, which is exactly how
+  # `dark:group-hover:bg-gray-800/50` survived on the compact row — is caught
+  # here instead.
+  def assert_no_translucent_sticky_backgrounds
+    result = page.evaluate_script(<<~JS)
+      (() => {
+        const cells = document.querySelectorAll("#{STICKY_CELL_SELECTOR}");
+        const offenders = [];
+        for (const el of cells) {
+          for (const token of el.classList) {
+            if (#{TRANSLUCENT_BG_PATTERN}.test(token)) offenders.push(token);
+          }
+        }
+        return { scanned: cells.length, offenders: [ ...new Set(offenders) ] };
+      })()
+    JS
+
+    # A scan that reaches nothing reports "clean" — assert it actually looked.
+    assert_operator result["scanned"], :>=, MIN_STICKY_CELLS,
+                    "only #{result["scanned"]} sticky cell(s) matched " \
+                    "#{STICKY_CELL_SELECTOR.inspect} — the scan is no longer reaching the " \
+                    "matrix, so its clean result means nothing"
+
+    assert_empty result["offenders"],
+                 "translucent background(s) on a sticky matrix cell: " \
+                 "#{result["offenders"].inspect} — use the opaque composite instead " \
+                 "(framework-explorer.md, Hard-Won Lesson 24)"
   end
 end
