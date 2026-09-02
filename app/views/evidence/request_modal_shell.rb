@@ -13,6 +13,12 @@
 # The panel carries the shared `frame-error` controller: a failed GET would
 # otherwise leave the modal on "Loading…" forever with no way out at all — this
 # modal's own × lives inside the frame that never loaded (audit issue #365).
+#
+# It carries `submit-fallback` for the same reason the evidence modal does
+# (audit issue #316): a transport-level failure on Send is otherwise completely
+# silent, and a 5xx HTML body would be rendered as the page — destroying the
+# recipients and message the user just assembled. The live region sits OUTSIDE
+# the frame so it survives the frame swap a failed submit can trigger.
 class Views::Evidence::RequestModalShell < Views::Base
   def view_template
     div(id: "evidence-request-modal-overlay",
@@ -23,12 +29,19 @@ class Views::Evidence::RequestModalShell < Views::Base
       div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
           tabindex: "-1",
           data: { modal_target: "panel",
-                  controller: "frame-error",
-                  action: "turbo:before-fetch-request->frame-error#requestStarted " \
+                  controller: "submit-fallback frame-error",
+                  submit_fallback_text_value: "Couldn't send your request — check your connection " \
+                                              "and try again. Your recipients are still here.",
+                  action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
+                          "turbo:submit-start->submit-fallback#submitStart " \
+                          "turbo:submit-end->submit-fallback#submitEnd " \
+                          "modal:open@window->submit-fallback#submitStart " \
+                          "turbo:before-fetch-request->frame-error#requestStarted " \
                           "turbo:fetch-request-error->frame-error#loadFailed " \
                           "turbo:frame-missing->frame-error#loadFailed " \
                           "turbo:before-fetch-response->frame-error#responseReceived " \
                           "turbo:frame-load->frame-error#loadSucceeded" }) do
+        render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-request-modal", loading: "lazy",
                         data: { request_evidence_target: "frame", frame_error_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }

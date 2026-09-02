@@ -134,6 +134,35 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # Audit issue #316 on this modal: a transport-level failure on Send was
+  # completely silent — the guard unlocked the button and nothing else changed,
+  # so "did it send?" was unanswerable — and a 5xx HTML body would have been
+  # rendered as the page, destroying the recipients and message just assembled.
+  should "surface a transport failure on Send and recover on retry" do
+    open_request_modal
+    select_peer_suggestion
+    wait_for_stimulus "submit-guard"
+
+    patch_fetch("/evidence_requests", respond: :reject)
+    click_send
+
+    # The modal stays, the failure is named, and the button is usable again.
+    assert_selector "#evidence-request-modal-overlay [data-submit-fallback-target='message']",
+      text: "Couldn't send your request", visible: true
+    assert_selector "#evidence-request-modal-overlay", visible: true
+    assert_selector "#evidence-request-modal-overlay button[type='submit']:not([disabled])",
+      text: "Send 1 request", visible: true
+
+    # And the retry genuinely goes through — one request, not two.
+    page.execute_script("window.__unpatchFetch();")
+    click_send
+
+    assert_text "Feedback request"
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal 1, EvidenceRequest.where(requestee_person_id: @peer.id, person_id: @report.id).count
+    end
+  end
+
   should "offer the assessee themselves as a recipient (a manager can ask for more evidence)" do
     open_request_modal
     assert_selector "[data-request-evidence-target='suggestions'] button", text: "Report Alex (assessee)"
