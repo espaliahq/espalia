@@ -25,8 +25,21 @@
 module Views::Frameworks::Explorer::Concerns::StickyColumn
   # Right-edge treatment for the sticky column: a slim shadow that reads as
   # "content passes beneath this", so text clipping at the boundary looks
-  # deliberate rather than broken. Applied to every cell in the column (header
-  # corner, compact row, expanded row) so the edge is continuous.
+  # deliberate rather than broken.
+  #
+  # Applied to the three cells that ARE the column — the header corner, the
+  # compact row's capability cell, and the expanded row's gutter — so its edge
+  # is continuous down the table.
+  #
+  # DELIBERATELY NOT applied to the two full-width bands that also carry
+  # `sticky left-0`: the category header and the edit-mode "+ Add capability"
+  # row. Both are `colspan`-the-whole-table (measured: 1704px against the
+  # column's 203px), so their right edge is the table's outer edge, not the
+  # column boundary — a shadow there would draw a stray line down the far side
+  # of the matrix. They interrupt the column's edge by design, being bands
+  # across it rather than cells in it. They still owe the opacity invariant
+  # above, and both satisfy it (`bg-white dark:bg-gray-900`, `bg-gray-100
+  # dark:bg-gray-800`).
   #
   # Literal class strings — Tailwind's JIT scans source for complete class
   # names and cannot see an interpolated one (Hard-Won Lesson 12).
