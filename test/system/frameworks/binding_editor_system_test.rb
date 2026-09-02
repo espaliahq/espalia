@@ -41,11 +41,24 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   # clicks on the opacity-0 control flake on starved CI), then wait for the
   # modal's Turbo Frame to load.
   def open_binding_editor(size: DESKTOP_SIZE)
+    visit_edit_mode(size: size)
+    trigger_binding_editor
+
+    assert_selector "#binding-editor-modal", visible: true
+    assert_selector "turbo-frame#binding-editor", visible: true
+    assert_text "Engineering Manager" # the unbound role offered in the add select
+  end
+
+  # Sign in and land on the edit-mode explorer with the matrix settled.
+  private def visit_edit_mode(size: DESKTOP_SIZE)
     page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@admin_user)
     visit edit_framework_path(@framework_id)
     wait_for_stimulus "matrix"
+  end
 
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
+  def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
     assert_text "Edit roles…"
@@ -53,10 +66,6 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       [...document.querySelectorAll("[role='menuitem']")]
         .find((b) => b.textContent.trim().startsWith("Edit roles")).click();
     JS
-
-    assert_selector "#binding-editor-modal", visible: true
-    assert_selector "turbo-frame#binding-editor", visible: true
-    assert_text "Engineering Manager" # the unbound role offered in the add select
   end
 
   context "as a tenant admin in edit mode" do
@@ -78,6 +87,54 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
         assert_selector "span.decoration-amber-400", text: "Engineering Manager"
       end
       assert_text(/draft/i) # the header draft pill — a draft was auto-opened
+    end
+
+    # Audit issue #365: an un-handled frame failure rendered Turbo's own
+    # "Content missing" into the editor (or left "Loading…" standing) inside
+    # the multi-megabyte edit-mode explorer, with no retry.
+    should "surface a retryable error when the editor frame fails to load" do
+      visit_edit_mode
+      patch_fetch("capability_bindings", respond: :reject, once: true)
+      trigger_binding_editor
+
+      assert_selector "#binding-editor-modal", visible: true
+      assert_selector "#binding-editor-error", text: "Couldn't load the roles editor", visible: true
+      assert_no_selector "turbo-frame#binding-editor", visible: true
+      assert_no_text "Content missing"
+
+      page.execute_script('document.querySelector("#binding-editor-error button").click();')
+
+      assert_selector "#binding-editor select#binding-add-role", visible: true
+      assert_no_selector "#binding-editor-error", visible: true
+    end
+
+    # The other half of that rule: `frame-error` speaks for the frame's own
+    # GET, never for a form submitted INSIDE it. Turbo dispatches
+    # `turbo:frame-missing` on the frame either way (verified in
+    # turbo-rails 2.0.23: `formSubmissionFailedWithResponse` →
+    # `loadResponse` → `#willHandleFrameMissingFromResponse`, whose dispatch
+    # target is `this.element`), so claiming it unconditionally hid the whole
+    # editor — every row, and any weight the user had typed into another —
+    # behind "Couldn't load…", whose Retry then re-GETs over that work.
+    should "leave a failed in-frame form submission to Turbo" do
+      open_binding_editor
+
+      # A 500 HTML body to the weight PATCH: no <turbo-frame> in it, so this is
+      # exactly the frame-missing shape — arriving from a submission, not a load.
+      patch_fetch("capability_bindings")
+      page.execute_script(
+        'document.querySelector("#binding-editor form input[name=\'binding[weight]\']")' \
+        ".closest('form').requestSubmit();"
+      )
+
+      # The POST genuinely left — otherwise the assertions below would pass on
+      # a dropped submit having proved nothing.
+      assert_fetch_matched 1
+
+      # Our error never claims it, and the editor stays standing. Turbo's own
+      # default owns the response from here (its copy is not our contract).
+      assert_no_selector "#binding-editor-error", visible: true
+      assert_selector "turbo-frame#binding-editor", visible: true
     end
 
     should "remove the only role binding, un-scoping the capability" do

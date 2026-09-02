@@ -1012,6 +1012,21 @@ the `binding-editor` Turbo Frame at {Frameworks::CapabilityBindingsController#in
 for that capability (with a cache-buster so reopening the same capability refetches
 the latest state). All add/remove/weight actions then re-render the frame in place.
 
+### frame_error_controller.js (edit mode only, in the explorer)
+Shared with the assessment surfaces — the machinery is documented once in
+[assessments.md](assessments.md)'s Stimulus-controller table, where it was
+extracted from the evidence modal. In the explorer it rides the **binding-editor
+and level-editor modal bodies**: a failed frame GET would otherwise render
+Turbo's own "Content missing" into the multi-megabyte edit-mode explorer with no
+retry, or leave "Loading…" standing forever (audit issue #365). Mounting is a
+bare `data-controller="frame-error"` plus the `frame` / `error` targets — the
+five listeners bind themselves in `connect()`, so a new surface cannot half-wire
+them. Two rules matter when extending it here: it speaks **only for the frame's
+own GET** — a failed in-frame row save (a weight PATCH, a level rename) keeps its
+form and its typed values, because `turbo:frame-missing` is claimed only while a
+load armed it — and the error copy is built from `subject:` + `closeable:` by
+`Kit::FrameLoadError`, never passed in as free text.
+
 ### suggestion_action_controller.js (edit mode only)
 Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
 
@@ -1378,7 +1393,7 @@ line (§9).
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
 | `app/views/frameworks/explorer/add_role_modal.rb` | Shared role modal — `:new` ("+ Add role" trigger, family implied, POST → `AddRole`) or `:edit` (role-row kebab, PATCH via id template → `UpdateRole`) |
-| `app/views/frameworks/explorer/level_editor_modal.rb` | Shared "Edit levels" modal (embedded) — body is the `level-editor` Turbo Frame; opened by the role-row kebab |
+| `app/views/frameworks/explorer/level_editor_modal.rb` | Shared "Edit levels" modal (embedded) — body is the `level-editor` Turbo Frame; opened by the role-row kebab. Carries the shared `frame-error` controller + `Kit::FrameLoadError` block (audit issue #365): an un-handled `turbo:frame-missing` otherwise renders Turbo's own "Content missing" into the editor, with no retry |
 | `app/views/frameworks/explorer/level_editor_frame.rb` | Levels-editor frame body — per-row title/code saves, radio-with-clear entry flag, add row with in-frame errors; re-renders in place |
 | `app/javascript/controllers/level_editor_form_controller.js` | Points the level-editor frame at the clicked role on `modal:open`; fires `org-structure:updated` after in-frame saves |
 | `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + tooltip copy — "not visible in the published view yet", derived from published-level presence |
@@ -1413,7 +1428,7 @@ line (§9).
 | `app/views/frameworks/explorer/add_capability_modal.rb` | Shared add-capability modal (name + description + role bindings) |
 | `app/views/frameworks/explorer/add_category_modal.rb` | Shared add-category modal (name + description) |
 | `app/views/frameworks/explorer/archive_category_modal.rb` | Shared archive-category modal (confirm + optional reason; no migration mapping) — opened by the header kebab |
-| `app/views/frameworks/explorer/binding_editor_modal.rb` | Shared "Edit roles" modal (embedded) — body is the `binding-editor` Turbo Frame; opened by the row kebab |
+| `app/views/frameworks/explorer/binding_editor_modal.rb` | Shared "Edit roles" modal (embedded) — body is the `binding-editor` Turbo Frame; opened by the row kebab. Same `frame-error` + `Kit::FrameLoadError` wiring as the level-editor modal (audit issue #365) — the frame-failure machinery is documented in [assessments.md](assessments.md)'s Stimulus controllers table, where it was extracted from the evidence modal |
 | `app/views/frameworks/explorer/binding_editor_frame.rb` | Binding-editor frame body — lists role bindings (weight + Remove) + add-role form; re-renders in place on each action |
 | `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
@@ -1493,6 +1508,8 @@ line (§9).
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
+| `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state (error + Retry in place of a stuck "Loading…" or Turbo's "Content missing") — self-binds its five listeners in `connect()`; on the explorer it rides the binding-/level-editor modal bodies (audit issue #365) |
+| `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — message built from `subject:` + `closeable:`, Retry, and a Close for modals |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` / `update_role_family?` / `update_role?` / `update_level?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/operations/operations/frameworks/suggest_edit.rb` | Shared web + MCP operation — framework content edits (capability/category name + description, expectation + illustration text): authority-aware auto-approve in editing mode, pending suggestion otherwise; amends the author's pending edit on a field (→ `SuggestionAmended`) instead of stacking consecutive duplicates |

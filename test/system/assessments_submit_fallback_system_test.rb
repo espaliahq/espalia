@@ -67,47 +67,8 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  # One fetch patch for every failure shape this file needs. Matching requests
-  # (URL contains `fragment`) are counted in `window.__matched` and answered
-  # per `respond`; everything else passes through. `window.__unpatchFetch()`
-  # restores the real fetch, so a test can prove its retry genuinely lands.
-  #
-  # @param respond [Symbol, String] :error_500 — a 500 with an HTML body (the
-  #   page-destroying class Turbo would otherwise render as the page);
-  #   :reject — the network layer, no response at all;
-  #   :delay — hold the request open until `window.__releaseFetch()`, so a
-  #   second submission can be attempted while the first is genuinely still
-  #   in flight (no sleep, no timing guess);
-  #   a String — a 500 carrying that body, with `content_type`.
-  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
-  # @param content_type [String] response type for a String body — text/html
-  #   reaches Turbo's frame handling, anything else is discarded by it silently
-  def patch_fetch(fragment, respond: :error_500, once: false, content_type: "text/html")
-    body = respond.is_a?(String) ? respond : "<html><body>Internal Server Error</body></html>"
-    answer =
-      case respond
-      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
-      when :delay  then "new Promise((res, rej) => { " \
-                        "window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
-      else "Promise.resolve(new Response(#{body.to_json}, " \
-           "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
-      end
-
-    page.execute_script(<<~JS)
-      const of = window.fetch;
-      window.__unpatchFetch = () => { window.fetch = of; };
-      window.__matched = 0;
-      let spent = false;
-      window.fetch = (url, ...a) => {
-        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
-        if (#{once.to_json} && spent) return of(url, ...a);
-        spent = true;
-        window.__matched++;
-        return #{answer};
-      };
-    JS
-  end
-
+  # `patch_fetch` (every failure shape these tests need) is shared —
+  # test/support/system/fetch_stub_helpers.rb.
   def open_evidence_modal
     page.execute_script(
       "document.querySelector(\"[data-evidence-modal-mode-param='new']\").click();"
@@ -196,6 +157,54 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         assert_no_selector "#evidence-modal-error", visible: true
       end
 
+      # A restored snapshot (Turbo Drive's cache, or the browser's back button)
+      # reinstates this DOM as-is but hands it to a FRESH controller instance
+      # that never saw the failure — and that state is permanently dead: Retry
+      # has no `requestedUrl` to re-fetch (silent no-op), and the hidden
+      # `loading="lazy"` frame can never re-fetch itself either (an
+      # IntersectionObserver sees nothing of a hidden element), so pointing its
+      # `src` goes into the void. Reconnecting must reset to the truthful
+      # initial state.
+      #
+      # The restore is simulated rather than driven through `page.go_back`:
+      # what actually breaks is "fresh controller over failed DOM", and
+      # re-adding `data-controller` reproduces exactly that, deterministically
+      # — whereas a real back-navigation depends on Turbo's snapshot cache
+      # having kept a modal overlay whose visibility is Stimulus-owned, which
+      # tests the cache more than the controller.
+      should "recover a failure state restored from a snapshot" do
+        patch_fetch("/evidence_modal", respond: :reject, once: true)
+        open_evidence_modal
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+
+        # Detach and re-attach the controller over the still-failed DOM. In TWO
+        # scripts on purpose: Stimulus reacts to `data-controller` via a
+        # MutationObserver that reads the attribute's CURRENT value when it
+        # processes a batch, so removing and restoring it inside one task nets
+        # out to no change and never reconnects. Separate `execute_script`
+        # calls are separate tasks, so the disconnect is processed first.
+        page.execute_script(<<~JS)
+          const panel = document.querySelector("#evidence-modal-overlay [data-modal-target='panel']");
+          panel.dataset.frameErrorControllers = panel.getAttribute("data-controller");
+          panel.setAttribute("data-controller",
+            panel.getAttribute("data-controller").replace("frame-error", "").trim());
+        JS
+        page.execute_script(<<~JS)
+          const panel = document.querySelector("#evidence-modal-overlay [data-modal-target='panel']");
+          panel.setAttribute("data-controller", panel.dataset.frameErrorControllers);
+        JS
+
+        # The error is gone and the frame — with its "Loading…" placeholder —
+        # is back, so the reopen below has something live to point at.
+        assert_no_selector "#evidence-modal-error", visible: true
+        assert_selector "turbo-frame#evidence-modal", visible: true
+
+        # And the modal genuinely works again: reopening loads the form (the
+        # patch was `once`, so this attempt reaches the server).
+        open_evidence_modal
+        assert_selector "textarea#evm-content", visible: true
+      end
+
       # Retry is not the only way out: the form's own ×/Cancel went down with
       # the hidden frame, so the error state carries the exit itself.
       should "offer a Close that dismisses the modal" do
@@ -234,7 +243,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         # synchronously, so the count is settled the moment they return.
         submit_evidence_form
         page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
-        assert_equal 1, page.evaluate_script("window.__matched")
+        assert_fetch_matched 1
 
         # Release the held save: it lands, and it landed once. The modal
         # closing is the proof the round trip completed — only then can the

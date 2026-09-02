@@ -14,10 +14,12 @@ class Views::Evidence::RequestForm < Views::Base
   INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
           "text-gray-900 dark:text-gray-100 text-sm focus-visible:ring-primary focus-visible:border-primary"
   LABEL = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
-  SECONDARY_BTN = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 " \
-                  "text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
-  PRIMARY_BTN = "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium " \
-                "cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+  SECONDARY_BTN = Components::Kit::FrameLoadError::BUTTON_CLASSES
+  # `min-w-44` (as on the evidence modal's Save) limits how far the footer
+  # slides when the label swaps between "Send requests", "Send N request(s)",
+  # and Turbo's in-flight "Sending…".
+  PRIMARY_BTN = "inline-flex items-center justify-center min-h-11 min-w-44 px-4 rounded-md bg-primary " \
+                "text-white text-sm font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
 
   # @param assignment_id [String]
   # @param capability_stable_id [String]
@@ -42,8 +44,18 @@ class Views::Evidence::RequestForm < Views::Base
       div(class: "p-5", data: { controller: "request-evidence", request_evidence_candidates_url_value: @candidates_url }) do
         header
         context_card
+        # `submit-guard` blocks a re-entrant submit while one is in flight
+        # (audit issue #335). It matters more here than on the evidence save:
+        # `Operations::Assessments::RequestEvidence` mints a fresh `request_id`
+        # per POST, so a double-submit sends — and notifies — every recipient
+        # twice. Turbo owns the rest of the in-flight treatment (disabling the
+        # submitter, the `data-turbo-submits-with` label swap).
         form_with(url: @submit_url, method: :post, class: "space-y-4",
-                  data: { turbo_frame: "_top", action: "turbo:submit-end->modal#submitted" }) do
+                  data: { turbo_frame: "_top", controller: "submit-guard",
+                          action: "turbo:submit-end->modal#submitted " \
+                                  "submit->submit-guard#guard " \
+                                  "turbo:submit-start->submit-guard#start " \
+                                  "turbo:submit-end->submit-guard#end" }) do
           hidden_field("assignment_id", @assignment_id)
           hidden_field("capability_stable_id", @capability_stable_id)
           hidden_field("level_ordinal", @level_ordinal)
@@ -128,8 +140,12 @@ class Views::Evidence::RequestForm < Views::Base
   def footer
     div(class: "flex items-center justify-end gap-2 pt-2") do
       button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
+      # Turbo swaps the button's innerHTML for "Sending…" and restores it on
+      # `turbo:submit-end` — including the count span, whose Stimulus target
+      # re-registers on the restored node.
       button(type: "submit", disabled: true,
-             data: { request_evidence_target: "submit" }, class: PRIMARY_BTN) do
+             data: { request_evidence_target: "submit", turbo_submits_with: "Sending…" },
+             class: PRIMARY_BTN) do
         span(data: { request_evidence_target: "label" }) { "Send requests" }
       end
     end

@@ -88,6 +88,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   include AutoScreenshots
   include StimulusHelpers
+  include FetchStubHelpers
 
   setup do
     with_browser_retries do

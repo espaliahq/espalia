@@ -24,17 +24,24 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
 
   private
 
+  # `frame-error` gives a failed frame GET a voice: without it an
+  # un-handled `turbo:frame-missing` renders Turbo's own "Content missing"
+  # inside the multi-megabyte edit-mode explorer, with no retry (#365).
   def body
     div(
       data: {
-        controller: "level-editor-form",
+        controller: "level-editor-form frame-error",
         level_editor_form_levels_url_value: framework_levels_path(@framework_id),
         action: "turbo:submit-end->level-editor-form#submitted"
       }
     ) do
-      turbo_frame_tag("level-editor", data: { level_editor_form_target: "frame" }) do
+      turbo_frame_tag("level-editor",
+                      data: { level_editor_form_target: "frame", frame_error_target: "frame" }) do
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
+      render Components::Kit::FrameLoadError.new(
+        id: "level-editor-error", subject: "the levels editor", closeable: true, classes: "space-y-3"
+      )
     end
   end
 end

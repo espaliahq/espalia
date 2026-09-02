@@ -53,11 +53,11 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     sign_in_as(@manager_user)
   end
 
-  def open_request_modal
-    visit assessment_path(@report_assignment)
-    assert_text "Critical Thinking"
-    # Open the evidence-actions kebab, then the "Request evidence" item.
-    # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
+  #
+  # Open the evidence-actions kebab, then the "Request evidence" item.
+  # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+  def trigger_request_modal
     page.execute_script(<<~JS)
       document.querySelector("button[aria-label='Feedback / evidence actions']")?.click()
     JS
@@ -65,8 +65,105 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       [...document.querySelectorAll("button")]
         .find((b) => b.textContent.trim() === "Request feedback / evidence")?.click()
     JS
+  end
+
+  # The frame-load error state's Retry / Close, dispatched by label.
+  def click_modal_error_button(label)
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("#evidence-request-modal-error button")]
+        .find((b) => b.textContent.trim() === #{label.to_json})
+        .click();
+    JS
+  end
+
+  # Visit the report's assessment and open the request modal, synced on its
+  # loaded form.
+  private def open_request_modal
+    visit assessment_path(@report_assignment)
+    assert_text "Critical Thinking"
+    trigger_request_modal
     assert_selector "#evidence-request-modal-overlay", visible: true
     assert_text "Who can speak to this?"
+  end
+
+  # Select the peer suggestion chip, which enables Send and counts it.
+  def select_peer_suggestion
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("#evidence-request-modal-overlay button")]
+        .find((b) => b.textContent.includes("Pat Peer"))?.click()
+    JS
+    assert_selector "#evidence-request-modal-overlay button[type='submit']", text: "Send 1 request"
+  end
+
+  # JS-dispatched Send click (testing.md: pointer clicks drop on starved CI).
+  private def click_send
+    page.execute_script(
+      "document.querySelector(\"#evidence-request-modal-overlay button[type='submit']\").click();"
+    )
+  end
+
+  # One user action, one request (audit issue #335). This write is NOT
+  # idempotent — RequestEvidence mints a fresh request_id per POST — so a
+  # second submission that lands means duplicate requests and duplicate
+  # notifications for every recipient.
+  should "lock Send in flight and send exactly one request per click" do
+    open_request_modal
+    select_peer_suggestion
+    wait_for_stimulus "submit-guard"
+
+    patch_fetch("/evidence_requests", respond: :delay)
+    click_send
+
+    # The POST is genuinely still open — held by the patch, not by a sleep.
+    assert_selector "#evidence-request-modal-overlay button[type='submit'][disabled]",
+      text: "Sending…", visible: true
+
+    # A second attempt — a click on the locked button AND a programmatic
+    # submit that bypasses it — must not reach the server. Both dispatch
+    # synchronously, so the count is settled the moment they return.
+    click_send
+    page.execute_script(
+      "document.querySelector(\"#evidence-request-modal-overlay form\").requestSubmit();"
+    )
+    assert_fetch_matched 1
+
+    # Release the held POST: it lands, and it landed once.
+    page.execute_script("window.__releaseFetch();")
+    assert_text "Feedback request"
+    assert_equal 1, page.evaluate_script("window.__matched")
+
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal 1, EvidenceRequest.where(requestee_person_id: @peer.id, person_id: @report.id).count
+    end
+  end
+
+  # Audit issue #316 on this modal: a transport-level failure on Send was
+  # completely silent — the guard unlocked the button and nothing else changed,
+  # so "did it send?" was unanswerable — and a 5xx HTML body would have been
+  # rendered as the page, destroying the recipients and message just assembled.
+  should "surface a transport failure on Send and recover on retry" do
+    open_request_modal
+    select_peer_suggestion
+    wait_for_stimulus "submit-guard"
+
+    patch_fetch("/evidence_requests", respond: :reject)
+    click_send
+
+    # The modal stays, the failure is named, and the button is usable again.
+    assert_selector "#evidence-request-modal-overlay [data-submit-fallback-target='message']",
+      text: "Couldn't send your request", visible: true
+    assert_selector "#evidence-request-modal-overlay", visible: true
+    assert_selector "#evidence-request-modal-overlay button[type='submit']:not([disabled])",
+      text: "Send 1 request", visible: true
+
+    # And the retry genuinely goes through — one request, not two.
+    page.execute_script("window.__unpatchFetch();")
+    click_send
+
+    assert_text "Feedback request"
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal 1, EvidenceRequest.where(requestee_person_id: @peer.id, person_id: @report.id).count
+    end
   end
 
   should "offer the assessee themselves as a recipient (a manager can ask for more evidence)" do
@@ -105,6 +202,62 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       assert_not_nil req
       assert_equal "pending", req.status
       assert_equal @cap_stable, req.capability_stable_id
+    end
+  end
+
+  # The #328 failure mode on this modal (audit issue #365): a failed frame GET
+  # used to leave "Loading…" standing forever — and with no exit at all, since
+  # this modal's own × lives inside the frame that never loaded.
+  context "the request modal's frame failing to load" do
+    setup do
+      visit assessment_path(@report_assignment)
+      assert_text "Critical Thinking"
+      wait_for_stimulus "frame-error"
+    end
+
+    should "surface a retryable error rather than a stuck Loading… state" do
+      patch_fetch("evidence_request_modal", respond: :reject, once: true)
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-overlay", visible: true
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+      # The stuck placeholder is gone, not merely joined by an error.
+      assert_no_selector "turbo-frame#evidence-request-modal", visible: true
+
+      click_modal_error_button "Retry"
+
+      assert_text "Who can speak to this?"
+      assert_no_selector "#evidence-request-modal-error", visible: true
+    end
+
+    # A non-HTML body (a proxy's text/plain 502) makes `responseHTML` resolve
+    # undefined, so Turbo renders nothing AND dispatches nothing — neither
+    # frame-missing nor fetch-request-error. Only `responseReceived` catches it.
+    should "surface a non-HTML failure Turbo discards without any event" do
+      patch_fetch("evidence_request_modal", once: true,
+        respond: "502 Bad Gateway", content_type: "text/plain")
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+      assert_no_text "502 Bad Gateway"
+
+      click_modal_error_button "Retry"
+
+      assert_text "Who can speak to this?"
+    end
+
+    should "offer a Close that dismisses the modal" do
+      patch_fetch("evidence_request_modal", respond: :reject, once: true)
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+
+      click_modal_error_button "Close"
+
+      assert_no_selector "#evidence-request-modal-overlay", visible: true
     end
   end
 
