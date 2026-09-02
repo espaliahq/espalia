@@ -32,6 +32,19 @@ module RuboCop
       # test that asserts the confirm dialog text), opt out inline:
       #
       #   accept_confirm(/Are you sure/) { click_button "Delete" } # rubocop:disable SystemTests/FlakeProneClick
+      #
+      # The same escape hatch covers a Selenium ActionBuilder chain —
+      # `page.driver.browser.action.send_keys(:escape).perform` is flagged
+      # (the send_keys receiver is deliberately unconstrained) even though
+      # `press_escape` is not a drop-in replacement for a real key-dispatch
+      # chain. No such call exists today; disable inline if one is ever
+      # needed.
+      #
+      # Deliberately narrow: `escape_arg?` recognises only a literal
+      # `:escape`, bare or one array level deep. A computed or aliased Esc
+      # (`send_keys(key)`, `send_keys(KEYS[:esc])`) is NOT flagged — a
+      # low-false-positive posture, not coverage. The `.coderabbit.yaml`
+      # path instructions are the intended net for those fuzzier forms.
       class FlakeProneClick < RuboCop::Cop::Base
         MSG_ACCEPT_CONFIRM =
           "Use `auto_confirm` instead of `accept_confirm` for data-turbo-confirm " \
@@ -67,7 +80,10 @@ module RuboCop
             :click ...)
         PATTERN
 
-        # Matches `send_keys(:escape)` / `send_keys([:shift, :escape])`.
+        # Matches EVERY `send_keys` call, on any receiver — the Esc filtering
+        # is entirely `escape_arg?`'s job (both are required in `on_send`).
+        # Widening this pattern without that guard would flag every
+        # `send_keys(:tab)` in the suite.
         def_node_matcher :escape_send_keys?, <<~PATTERN
           (send _ :send_keys ...)
         PATTERN

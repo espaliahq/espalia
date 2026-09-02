@@ -16,7 +16,11 @@ SystemTests/FlakeProneClick:
   Enabled: true
   Include:
     - "test/system/**/*.rb"
-    - "test/support/system/**/*.rb"
+    # Patterns, not filenames: the base classes (application_system_test_case)
+    # and every shared helper are in scope, so extracting sign-in machinery to
+    # a new support file can't quietly reopen the gap.
+    - "test/*.rb"
+    - "test/support/**/*.rb"
 
 GrowthOs/ControllersMustUseOperations:
   Enabled: true

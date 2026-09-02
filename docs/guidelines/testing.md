@@ -301,6 +301,8 @@ setup do
 end
 ```
 
+**The JS re-submit fallback fails the test loudly if the Devise form stops matching its selector** (`SIGN_IN_FORM_SELECTOR` in `test/application_system_test_case.rb`). It used to no-op silently, so a view or route change surfaced as a generic "still on the sign-in page" failure blaming the dropped click the fallback exists to recover from. A Devise change now names itself; a slow first submit that lands mid-fallback is still tolerated.
+
 ## Stimulus Toggle Helpers (NON-NEGOTIABLE)
 
 **Use purpose-specific toggle helpers instead of bare `find(...).click` for Stimulus-driven toggles.** On slow CI runners, Selenium's synthetic pointer clicks have been observed to drop silently when Chrome's JS event loop is starved or when the target is momentarily obscured (sticky element, mid-flight layout, scroll position). These helpers dispatch the click via JS (`element.click()`) instead — synchronous, bypasses pointer hit-testing, the Stimulus action handler runs inline before the script returns. The primitive (`stimulus_toggle`) re-dispatches once if the visible state never appears, gated on the toggle still being un-toggled (avoids ping-pong). It also waits for `wait_for_turbo_idle` before and after the click so a mid-flight Turbo Frame replacement can't detach the just-toggled element.
@@ -372,6 +374,8 @@ end
 | `click_selector_with_js_fallback(selector, expect_text:)` — for elements addressed by CSS selector rather than visible text (e.g. `a[data-person-id=…]` dots) | `click_with_retry { find("...").click }` |
 
 These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
+
+**Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
@@ -455,6 +459,8 @@ press_escape(scope: "#evm-content")   # dispatch from an element; it bubbles
 ```
 
 Same principle as the `MouseEvent` rule below: dispatch the event where the listener actually is.
+
+**A supplied `scope:` must match.** The helper resolves it with Capybara (so it waits for an element still rendering) and fails the test if it never appears — it no longer falls back to a window dispatch. That fallback was invisible and self-defeating: a window dispatch still closes the modal, so a renamed id or a modal that never opened left the test passing while proving nothing about in-dialog dispatch.
 
 ## Click-Outside Listeners Need a Real `MouseEvent`
 

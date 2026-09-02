@@ -128,6 +128,8 @@ module StimulusHelpers
   # Turbo Drive navigation clicks and Turbo Frame link clicks that may be
   # silently dropped when Chrome's event loop is starved on slow CI runners.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param expect_text [String, nil] text that should appear after the click
   # @param expect_selector [String, nil] CSS selector that should appear
   #   after the click (alternative to +expect_text+)
@@ -138,9 +140,7 @@ module StimulusHelpers
   #     within("#scoring-panel") { click_on "Delivering" }
   #   end
   def click_with_retry(expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     yield
 
@@ -175,13 +175,13 @@ module StimulusHelpers
   # synchronous and bypasses pointer hit-testing entirely, so the second
   # attempt is guaranteed to fire.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param locator [String] the link text/locator
   # @param expect_text [String, nil] text expected on destination
   # @param expect_selector [String, nil] selector expected on destination
   def click_link_with_js_fallback(locator, expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     # An intercepted click (a sticky overlay — the comparison drawer, a
     # sticky header — sitting over the link at the current scroll) is the
@@ -215,13 +215,13 @@ module StimulusHelpers
   # destination signal doesn't land, a synchronous JS `el.click()` bypasses
   # Selenium pointer hit-testing entirely.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param selector [String] CSS selector of the element to click
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
   def click_selector_with_js_fallback(selector, expect_text: nil, expect_selector: nil)
-    raise ArgumentError, "expect_text or expect_selector required" unless expect_text || expect_selector
-
-    assert_signal_is_a_transition!(expect_text, expect_selector)
+    guard_click_signal!(__method__, expect_text: expect_text, expect_selector: expect_selector)
 
     begin
       find(selector, match: :first).click
@@ -251,16 +251,17 @@ module StimulusHelpers
   # already on the page satisfies the landed-check instantly and the fallback
   # never arms, so a dropped click sails through to the caller's assertions.
   #
+  # Pass EXACTLY ONE success signal — see +assert_exactly_one_signal!+.
+  #
   # @param locator [String] button text/locator
   # @param expect_text [String, nil] text expected after the click
   # @param expect_selector [String, nil] selector expected after the click
   # @param expect_no_text [String, nil] text expected to DISAPPEAR after the click
   def click_button_with_js_fallback(locator, expect_text: nil, expect_selector: nil, expect_no_text: nil)
-    unless expect_text || expect_selector || expect_no_text
-      raise ArgumentError, "expect_text, expect_selector, or expect_no_text required"
-    end
-
-    assert_signal_is_a_transition!(expect_text, expect_selector, expect_no_text)
+    guard_click_signal!(
+      __method__,
+      expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
+    )
 
     begin
       click_button locator
@@ -379,15 +380,62 @@ module StimulusHelpers
     end
   end
 
+  # The single entry point every guarded click helper calls first: exactly
+  # one success signal, and that signal must be a real transition.
+  #
+  # One choke point rather than two calls per helper — the two checks share
+  # their inputs, and the helper's name comes from +__method__+ so a rename
+  # can't leave a hand-typed string blaming the wrong method.
+  #
+  # Exactly-one: the helpers pick their signal by strict precedence
+  # (text > selector > no_text) in the landed-check AND in the final
+  # assertion, so without this a call passing two signals would have all but
+  # the first SILENTLY IGNORED — never armed, never asserted. An author
+  # writing `expect_text: "Saved", expect_selector: "#draft-badge"` believing
+  # both are checked would get exactly the disarmed-fallback bug this
+  # machinery exists to catch, reintroduced through the ignored argument.
+  # When a click genuinely needs two assertions, assert the second yourself
+  # after the helper returns.
+  #
+  # @param helper [Symbol] the calling helper — pass +__method__+
+  # @param signals [Hash{Symbol=>String,nil}] only the signal kwargs that
+  #   helper accepts, in precedence order
+  def guard_click_signal!(helper, **signals)
+    assert_exactly_one_signal!(helper, **signals)
+    assert_signal_is_a_transition!(
+      signals[:expect_text], signals[:expect_selector], signals[:expect_no_text]
+    )
+  end
+
+  # The exactly-one half of +guard_click_signal!+, split out so each check
+  # stays independently readable and testable.
+  #
+  # @param helper [Symbol] the calling helper — pass +__method__+
+  # @param signals [Hash{Symbol=>String,nil}] only the signal kwargs that
+  #   helper accepts, in precedence order
+  # @raise [ArgumentError] when zero, or more than one, signal is supplied
+  def assert_exactly_one_signal!(helper, **signals)
+    supplied = signals.compact.keys
+    return if supplied.size == 1
+
+    accepted = signals.keys.map { |key| "#{key}:" }.join(", ")
+    given = supplied.empty? ? "none" : supplied.map { |key| "#{key}:" }.join(" + ")
+
+    raise ArgumentError,
+          "#{helper}: pass exactly one of #{accepted} (given: #{given}). " \
+          "The helper checks a single signal by precedence, so a second one " \
+          "would be silently ignored — never armed, never asserted."
+  end
+
   # Refuses a success signal that is ALREADY true before the click.
   #
-  # A JS-fallback helper decides "the click was dropped" by checking whether
+  # A guarded click helper decides "the click was dropped" by checking whether
   # its signal appeared. If the signal was on the page all along, that check
-  # succeeds instantly, the fallback never arms, and a dropped click sails
-  # through to the caller's real assertions — which is how a guarded test can
-  # still fail on CI (`expect_text: "Brand colors"` on a dashboard whose tile
-  # already read "Brand colors and typography for this tenant."). Same shape
-  # as `expect_selector: "body"`.
+  # succeeds instantly, the recovery (a retry, or the JS dispatch) never arms,
+  # and a dropped click sails through to the caller's real assertions — which
+  # is how a guarded test can still fail on CI (`expect_text: "Brand colors"`
+  # on a dashboard whose tile already read "Brand colors and typography for
+  # this tenant."). Same shape as `expect_selector: "body"`.
   #
   # Fails loudly at authoring time instead: pick a signal that only exists on
   # the far side of the click. See testing.md, "An Assertion a Dropped Click
@@ -396,15 +444,18 @@ module StimulusHelpers
     if expect_text && page.has_text?(expect_text, wait: 0)
       raise ArgumentError,
             "expect_text #{expect_text.inspect} is already on the page before the click, " \
-            "so the JS fallback can never arm. Pick text that only the destination renders."
+            "so the dropped-click detection can never arm. Pick text that only the " \
+            "destination renders."
     elsif expect_selector && page.has_css?(expect_selector, wait: 0)
       raise ArgumentError,
             "expect_selector #{expect_selector.inspect} already matches before the click, " \
-            "so the JS fallback can never arm. Pick a selector only the destination renders."
+            "so the dropped-click detection can never arm. Pick a selector only the " \
+            "destination renders."
     elsif expect_no_text && page.has_no_text?(expect_no_text, wait: 0)
       raise ArgumentError,
             "expect_no_text #{expect_no_text.inspect} is already absent before the click, " \
-            "so the JS fallback can never arm. Pick text that is visible until the click lands."
+            "so the dropped-click detection can never arm. Pick text that is visible " \
+            "until the click lands."
     end
   end
 
@@ -436,15 +487,51 @@ module StimulusHelpers
   # already uses for click-outside listeners: construct the event and dispatch
   # it where the listener actually is.
   #
+  # A +scope+ that matches nothing is fatal, never a fallback to +window+.
+  # Silently degrading defeated the point of the scope: `press_escape(scope:
+  # "#evm-content")` means "Esc originates INSIDE the dialog", but a window
+  # dispatch still closes the modal (the listener is `keydown.esc@window`),
+  # so the test passed while testing nothing about in-dialog dispatch — the
+  # miss invisible whether the modal failed to open or the id was renamed.
+  # Same fail-loud principle as +js_fill_in+'s non-fillable guard.
+  #
+  # The scope is resolved ONCE, by Capybara, and the element itself is passed
+  # to the script — as +js_fill_in+ does. Resolving it twice (assert_selector
+  # then a document-global +querySelector+) used two different lookups: inside
+  # a +within+ block Capybara scopes to the current node while querySelector
+  # does not, so the helper could assert one element and dispatch on another
+  # (or none). +find+'s ElementNotFound is the loud failure.
+  #
+  # Resolution is VISIBLE-ONLY (Capybara's default), deliberately. Several
+  # modals are embedded in the initial render and merely hidden until opened,
+  # so +visible: :all+ would resolve the hidden panel after a dropped
+  # open-click: Esc dispatches from a hidden node, bubbles to window, and the
+  # caller's `assert_no_selector …, visible: true` passes vacuously against a
+  # modal that never opened. Visible-only makes that fail loudly too.
+  #
+  # So pass +scope+ only when the element is expected to be present AND
+  # visible at dispatch time. For a close-path sequence where it may already
+  # be gone (a second Esc, say), use bare +press_escape+ — the listener is on
+  # the window regardless.
+  #
   # @param scope [String, nil] CSS selector to dispatch from (bubbles to
   #   window); defaults to the window itself
   def press_escape(scope: nil)
-    page.execute_script(<<~JS, scope)
-      const target = arguments[0] ? document.querySelector(arguments[0]) : window;
-      (target || window).dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
-      );
-    JS
+    target = scope ? find(scope) : nil
+
+    if target
+      page.execute_script(<<~JS, target)
+        arguments[0].dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+        );
+      JS
+    else
+      page.execute_script(<<~JS)
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })
+        );
+      JS
+    end
   end
 
   # Stubs +window.confirm+ to always return true, then runs the block.
