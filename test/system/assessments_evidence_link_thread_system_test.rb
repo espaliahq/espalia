@@ -71,32 +71,7 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
     "#evidence-link-thread-#{@evidence_id}-#{@cap_stable}-1"
   end
 
-  # Patch `window.fetch` so a matching request (URL contains `fragment`) is
-  # answered per `respond` instead of reaching the server; everything else
-  # passes through.
-  #
-  # @param respond [Symbol] :reject — the network layer, no response at all
-  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
-  def patch_fetch(fragment, respond: :reject, once: false)
-    answer =
-      case respond
-      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
-      else "Promise.resolve(new Response(\"\", { status: 500, " \
-           'headers: { "Content-Type": "text/html" } }))'
-      end
-
-    page.execute_script(<<~JS)
-      const of = window.fetch;
-      window.__unpatchFetch = () => { window.fetch = of; };
-      let spent = false;
-      window.fetch = (url, ...a) => {
-        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
-        if (#{once.to_json} && spent) return of(url, ...a);
-        spent = true;
-        return #{answer};
-      };
-    JS
-  end
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
 
   def open_disclosure
     visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
@@ -159,7 +134,7 @@ class AssessmentsEvidenceLinkThreadSystemTest < ApplicationSystemTestCase
 
       # Patch before opening: the frame only fetches once the disclosure's
       # content becomes visible.
-      patch_fetch("link_thread", once: true)
+      patch_fetch("link_thread", respond: :reject, once: true)
       page.execute_script(<<~JS)
         const details = document.querySelector('#evidence-#{@evidence_id} details');
         details.open = true;

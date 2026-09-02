@@ -56,21 +56,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     wait_for_stimulus "matrix"
   end
 
-  # Patch `window.fetch` so the FIRST request whose URL contains `fragment`
-  # rejects at the network layer; everything else (and every later match)
-  # passes through, so a retry can succeed.
-  def patch_fetch(fragment)
-    page.execute_script(<<~JS)
-      const of = window.fetch;
-      let spent = false;
-      window.fetch = (url, ...a) => {
-        if (spent || !String(url).includes(#{fragment.to_json})) return of(url, ...a);
-        spent = true;
-        return Promise.reject(new TypeError("Failed to fetch"));
-      };
-    JS
-  end
-
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
   def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
@@ -107,7 +93,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     # the multi-megabyte edit-mode explorer, with no retry.
     should "surface a retryable error when the editor frame fails to load" do
       visit_edit_mode
-      patch_fetch("capability_bindings")
+      patch_fetch("capability_bindings", respond: :reject, once: true)
       trigger_binding_editor
 
       assert_selector "#binding-editor-modal", visible: true

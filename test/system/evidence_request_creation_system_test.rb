@@ -53,46 +53,8 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     sign_in_as(@manager_user)
   end
 
-  # Patch `window.fetch` so a matching request (URL contains `fragment`) is
-  # answered per `respond` instead of reaching the server; everything else
-  # passes through. Matches are counted in `window.__matched`;
-  # `window.__unpatchFetch()` restores the real fetch so a test can prove its
-  # retry genuinely lands.
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
   #
-  # @param respond [Symbol, String] :error_500 — a 500 with an HTML body;
-  #   :reject — the network layer, no response at all;
-  #   :delay — hold the request open until `window.__releaseFetch()`, so a
-  #   second submission can be attempted while the first is genuinely still in
-  #   flight (no sleep, no timing guess);
-  #   a String — a 500 carrying that body, with `content_type`.
-  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
-  # @param content_type [String] response type for a String body
-  def patch_fetch(fragment, respond: :error_500, once: false, content_type: "text/html")
-    body = respond.is_a?(String) ? respond : "<html><body>Internal Server Error</body></html>"
-    answer =
-      case respond
-      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
-      when :delay  then "new Promise((res, rej) => { " \
-                        "window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
-      else "Promise.resolve(new Response(#{body.to_json}, " \
-           "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
-      end
-
-    page.execute_script(<<~JS)
-      const of = window.fetch;
-      window.__unpatchFetch = () => { window.fetch = of; };
-      window.__matched = 0;
-      let spent = false;
-      window.fetch = (url, ...a) => {
-        if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
-        if (#{once.to_json} && spent) return of(url, ...a);
-        spent = true;
-        window.__matched++;
-        return #{answer};
-      };
-    JS
-  end
-
   # Open the evidence-actions kebab, then the "Request evidence" item.
   # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
   def trigger_request_modal
