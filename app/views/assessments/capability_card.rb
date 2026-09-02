@@ -2,9 +2,9 @@
 
 # Card-per-capability in the assessment view.
 #
-# Replaces the old matrix row (AssessmentRow). Each capability is a
-# standalone card with a horizontal level strip + optional expansion
-# panel for the focused level.
+# Replaced the old assessment matrix row, whose components were removed
+# once nothing rendered them. Each capability is a standalone card with a
+# horizontal level strip + optional expansion panel for the focused level.
 #
 class Views::Assessments::CapabilityCard < Views::Base
   # @param capability_data [Hash] from MatrixDataBuilder
