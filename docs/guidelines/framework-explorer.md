@@ -941,6 +941,15 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 | Category headers | `sticky top-[41px]` | `z-[5]` | Below column headers, above data |
 | Left column (capability name) | `sticky left-0` | `z-[2]` | Visible when scrolling horizontally |
 
+**Every sticky cell must be OPAQUE in both themes (NON-NEGOTIABLE).** A sticky cell is a mask — content scrolls underneath it — so a translucent background (`bg-…/NN`) or a missing one lets that content render straight through. This applies to hover and focus variants too, not just the base class. Where the design wants a tint, use the **opaque composite** (the literal hex of that tint over the surface behind it) rather than the translucent token, so the cell looks identical but actually masks; derive it by compositing in the browser, not by eye, and record the token + surface at the call site. The shared right-edge treatment and the full rationale live in [`concerns/sticky_column.rb`](../../app/views/frameworks/explorer/concerns/sticky_column.rb) — see Hard-Won Lesson 24.
+
+| Sticky cell | Light | Dark |
+|---|---|---|
+| Header corner + level columns | `bg-gray-50` | `dark:bg-gray-900` |
+| Compact row (capability name) | `bg-white`, hover `bg-gray-50` | `dark:bg-gray-900`, hover `dark:bg-[#172131]` (= `gray-800/50` over `gray-900`) |
+| Expanded row (empty gutter) | `bg-[#fafcff]` (= `blue-50/30` over white) | `dark:bg-[#111b31]` (= `blue-900/10` over `gray-900`) |
+| Category header row | `bg-gray-100` | `dark:bg-gray-800` |
+
 **Single scroll container.** The only scroll container is `main_pane` in `show_view.rb` (`flex-1 overflow-auto`, tagged `data-matrix-target="scrollContainer"`). The `<table>` must be rendered as a direct child of the turbo-frame inside it — do NOT wrap it in `overflow-x-auto` (or any `overflow-*`) divs. CSS `position: sticky` anchors to the nearest scrolling ancestor, so a nested overflow wrapper silently captures the anchor and breaks vertical stickiness (see Hard-Won Lesson 11).
 
 ## Stimulus Controller Responsibilities
@@ -1289,6 +1298,34 @@ page-unresponsive dialog. Two rules fell out:
 The deeper fix (rendering the inline-edit forms lazily so the matrix frame
 itself shrinks) is tracked separately; until then, treat "re-fetch the matrix"
 as a last resort in any new explorer feature.
+
+### 24. A translucent background on a sticky cell is a hole, not a tint
+
+`position: sticky` does not clip what passes under it — the cell's own
+background is the only thing masking the scrolled content. So a sticky cell
+with `bg-blue-50/30 dark:bg-blue-900/10` (the expanded row's gutter) let a full
+column of illustration text render straight through it, landing directly under
+the capability name and reading as overlapping text (issue #371, reported from
+the field). The tint looked right in a static screenshot; the bug only appears
+once the matrix is scrolled horizontally.
+
+Two things this cost us that are worth remembering:
+
+- **Hover and focus variants count.** The compact row's base `bg-white
+  dark:bg-gray-900` was opaque, but `dark:group-hover:bg-gray-800/50` was not —
+  a bleed that appears only while hovering, only in dark mode. Audit the whole
+  variant set, not the base class.
+- **The fix is the opaque composite, not "drop the tint".** Replacing the tint
+  with plain `bg-white` makes the cell mask but no longer match its row;
+  substituting the un-alpha'd token (`bg-blue-50`) overshoots badly (`#eff6ff`
+  vs the `#fafcff` the row actually renders). Composite the real value in the
+  browser — `ctx.fillStyle = base; fillRect; ctx.fillStyle = tint; fillRect;
+  getImageData` gives the exact sRGB result — and use that literal, recording
+  which token over which surface it came from.
+
+The invariant, the current values, and the shared right-edge treatment live in
+`app/views/frameworks/explorer/concerns/sticky_column.rb`; the opacity contract
+is pinned by `test/system/frameworks/matrix_sticky_column_system_test.rb`.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
