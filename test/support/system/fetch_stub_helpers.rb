@@ -24,6 +24,11 @@ module FetchStubHelpers
   # in `window.__matched`, and `window.__unpatchFetch()` restores the real
   # fetch, so a test can prove its retry genuinely lands.
   #
+  # Patches never STACK: a second call unpatches first, so `of` always closes
+  # over the real fetch. Stacking made `__unpatchFetch` restore the *previous
+  # stub* rather than the browser's fetch, and silently reset `__matched`
+  # mid-test — both failures a passing assertion would happily hide.
+  #
   # @param fragment [String] substring matched against the request URL
   # @param respond [Symbol, String] :error_500 — a 500 with an HTML body (the
   #   page-destroying class Turbo would otherwise render as the page);
@@ -39,15 +44,26 @@ module FetchStubHelpers
     answer =
       case respond
       when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
+      # Every held request queues its own resolver, so `__releaseFetch()`
+      # settles ALL of them (in the order they were held). Assigning a single
+      # resolver instead stranded every held request but the last — invisible
+      # unless the test happened to assert on the one that got dropped.
       when :delay  then "new Promise((res, rej) => { " \
-                        "window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
+                        "window.__heldFetches.push(() => of(url, ...a).then(res, rej)); })"
       else "Promise.resolve(new Response(#{body.to_json}, " \
            "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
       end
 
     page.execute_script(<<~JS)
+      window.__unpatchFetch?.();
       const of = window.fetch;
       window.__unpatchFetch = () => { window.fetch = of; };
+      window.__heldFetches = window.__heldFetches || [];
+      window.__releaseFetch = () => {
+        const held = window.__heldFetches;
+        window.__heldFetches = [];
+        held.forEach((send) => send());
+      };
       window.__matched = 0;
       let spent = false;
       window.fetch = (url, ...a) => {
@@ -58,5 +74,24 @@ module FetchStubHelpers
         return #{answer};
       };
     JS
+  end
+
+  # Wait until exactly `count` matching requests have left the page, then
+  # assert it. The stub bumps `__matched` synchronously, but Turbo only reaches
+  # `fetch` a microtask or more after a submit dispatches — so a bare
+  # `evaluate_script` straight after one reads 0 and proves nothing. Use this
+  # whenever the count is the evidence that an action reached the server
+  # (rather than following an assertion that already round-tripped).
+  #
+  # @param count [Integer] expected number of matched requests
+  # @return [void]
+  def assert_fetch_matched(count)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
+    matched = page.evaluate_script("window.__matched")
+    while matched < count && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+      sleep 0.05
+      matched = page.evaluate_script("window.__matched")
+    end
+    assert_equal count, matched
   end
 end

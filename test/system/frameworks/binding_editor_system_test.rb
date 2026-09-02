@@ -107,6 +107,35 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       assert_no_selector "#binding-editor-error", visible: true
     end
 
+    # The other half of that rule: `frame-error` speaks for the frame's own
+    # GET, never for a form submitted INSIDE it. Turbo dispatches
+    # `turbo:frame-missing` on the frame either way (verified in
+    # turbo-rails 2.0.23: `formSubmissionFailedWithResponse` →
+    # `loadResponse` → `#willHandleFrameMissingFromResponse`, whose dispatch
+    # target is `this.element`), so claiming it unconditionally hid the whole
+    # editor — every row, and any weight the user had typed into another —
+    # behind "Couldn't load…", whose Retry then re-GETs over that work.
+    should "leave a failed in-frame form submission to Turbo" do
+      open_binding_editor
+
+      # A 500 HTML body to the weight PATCH: no <turbo-frame> in it, so this is
+      # exactly the frame-missing shape — arriving from a submission, not a load.
+      patch_fetch("capability_bindings")
+      page.execute_script(
+        'document.querySelector("#binding-editor form input[name=\'binding[weight]\']")' \
+        ".closest('form').requestSubmit();"
+      )
+
+      # The POST genuinely left — otherwise the assertions below would pass on
+      # a dropped submit having proved nothing.
+      assert_fetch_matched 1
+
+      # Our error never claims it, and the editor stays standing. Turbo's own
+      # default owns the response from here (its copy is not our contract).
+      assert_no_selector "#binding-editor-error", visible: true
+      assert_selector "turbo-frame#binding-editor", visible: true
+    end
+
     should "remove the only role binding, un-scoping the capability" do
       open_binding_editor
 

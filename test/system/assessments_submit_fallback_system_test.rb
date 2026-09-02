@@ -157,6 +157,54 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         assert_no_selector "#evidence-modal-error", visible: true
       end
 
+      # A restored snapshot (Turbo Drive's cache, or the browser's back button)
+      # reinstates this DOM as-is but hands it to a FRESH controller instance
+      # that never saw the failure — and that state is permanently dead: Retry
+      # has no `requestedUrl` to re-fetch (silent no-op), and the hidden
+      # `loading="lazy"` frame can never re-fetch itself either (an
+      # IntersectionObserver sees nothing of a hidden element), so pointing its
+      # `src` goes into the void. Reconnecting must reset to the truthful
+      # initial state.
+      #
+      # The restore is simulated rather than driven through `page.go_back`:
+      # what actually breaks is "fresh controller over failed DOM", and
+      # re-adding `data-controller` reproduces exactly that, deterministically
+      # — whereas a real back-navigation depends on Turbo's snapshot cache
+      # having kept a modal overlay whose visibility is Stimulus-owned, which
+      # tests the cache more than the controller.
+      should "recover a failure state restored from a snapshot" do
+        patch_fetch("/evidence_modal", respond: :reject, once: true)
+        open_evidence_modal
+        assert_selector "#evidence-modal-error", text: "Couldn't load the form", visible: true
+
+        # Detach and re-attach the controller over the still-failed DOM. In TWO
+        # scripts on purpose: Stimulus reacts to `data-controller` via a
+        # MutationObserver that reads the attribute's CURRENT value when it
+        # processes a batch, so removing and restoring it inside one task nets
+        # out to no change and never reconnects. Separate `execute_script`
+        # calls are separate tasks, so the disconnect is processed first.
+        page.execute_script(<<~JS)
+          const panel = document.querySelector("#evidence-modal-overlay [data-modal-target='panel']");
+          panel.dataset.frameErrorControllers = panel.getAttribute("data-controller");
+          panel.setAttribute("data-controller",
+            panel.getAttribute("data-controller").replace("frame-error", "").trim());
+        JS
+        page.execute_script(<<~JS)
+          const panel = document.querySelector("#evidence-modal-overlay [data-modal-target='panel']");
+          panel.setAttribute("data-controller", panel.dataset.frameErrorControllers);
+        JS
+
+        # The error is gone and the frame — with its "Loading…" placeholder —
+        # is back, so the reopen below has something live to point at.
+        assert_no_selector "#evidence-modal-error", visible: true
+        assert_selector "turbo-frame#evidence-modal", visible: true
+
+        # And the modal genuinely works again: reopening loads the form (the
+        # patch was `once`, so this attempt reaches the server).
+        open_evidence_modal
+        assert_selector "textarea#evm-content", visible: true
+      end
+
       # Retry is not the only way out: the form's own ×/Cancel went down with
       # the hidden frame, so the error state carries the exit itself.
       should "offer a Close that dismisses the modal" do
