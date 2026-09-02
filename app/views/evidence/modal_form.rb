@@ -75,7 +75,11 @@ class Views::Evidence::ModalForm < Views::Base
         # hub's redirect must navigate the page, and turbo_stream responses (the
         # assessment surface) still apply globally regardless of frame target.
         form_with(url: form_action, method: form_method, class: "space-y-3",
-                  data: { turbo_frame: "_top", action: "turbo:submit-end->modal#submitted" }) do
+                  data: { turbo_frame: "_top", controller: "submit-guard",
+                          action: "turbo:submit-end->modal#submitted " \
+                                  "submit->submit-guard#guard " \
+                                  "turbo:submit-start->submit-guard#start " \
+                                  "turbo:submit-end->submit-guard#end" }) do
           hidden_fields
           content_fields
           links_section
@@ -367,8 +371,14 @@ class Views::Evidence::ModalForm < Views::Base
   def footer
     div(class: "flex justify-end gap-2 pt-2") do
       button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
-      button(type: "submit",
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { submit_label }
+      # Turbo owns the in-flight treatment: `data-turbo-submits-with` swaps the
+      # label and `config.forms.submitter` ("disabled") disables the button,
+      # both restored on `turbo:submit-end`. `submit-guard` on the form adds
+      # only what Turbo can't — blocking a re-entrant submit (audit issue
+      # #335). `min-w-44` limits how far the footer slides when the label
+      # shortens; no single value fits all three labels exactly.
+      button(type: "submit", data: { turbo_submits_with: "Saving…" },
+             class: "inline-flex items-center justify-center min-h-11 min-w-44 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed") { submit_label }
     end
   end
 

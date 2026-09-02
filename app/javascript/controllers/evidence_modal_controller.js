@@ -4,7 +4,11 @@
 // Two roles, same controller class:
 //   - PAGE instance (on the wrapper with `modal`): `load` sets the lazy
 //     turbo-frame `src` from a trigger's action params, so the server renders
-//     the right mode/prefill each open.
+//     the right mode/prefill each open. `loadFailed`/`responseReceived`/
+//     `retry`/`loadSucceeded` own the frame's failure state (audit issue
+//     #328): a frame GET that errors, comes back without the frame, or comes
+//     back as anything other than HTML leaves Turbo's placeholder up forever,
+//     so we swap in an inline error offering Retry and Close.
 //   - IN-FRAME instance (inside the rendered form): `typeChanged` toggles the
 //     custom-type label; `addLink`/`removeLink` manage the "Applies to"
 //     rows, each showing that cell's behavioural expectation and expandable
@@ -22,7 +26,7 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels", "valences"]
+  static targets = ["frame", "error", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels", "valences"]
   static values = { url: { type: String, default: "/evidence_modal" } }
 
   // PAGE: point the lazy frame at the render endpoint for this trigger.
@@ -37,7 +41,81 @@ export default class extends BaseController {
     if (p.capabilityStableId) q.set("capability_stable_id", p.capabilityStableId)
     if (p.levelOrdinal != null && p.levelOrdinal !== "") q.set("level_ordinal", p.levelOrdinal)
     if (p.returnTo) q.set("return_to", p.returnTo)
-    this.frameTarget.src = `${this.urlValue}?${q.toString()}`
+    // Remember what we ASKED for; `retry` must not read it back off the
+    // attribute. Turbo rewrites the frame's `src` to the response's final URL
+    // whenever the fetch redirected (FrameController#loadResponse: `if
+    // (fetchResponse.redirected || …) this.sourceURL = fetchResponse.response.url`),
+    // so once an expired session bounces this GET to the sign-in page the
+    // attribute names that page — and every retry would re-fetch it forever.
+    this.requestedSrc = `${this.urlValue}?${q.toString()}`
+    // A new open must never inherit the previous open's failure.
+    this.#showFrame()
+    this.frameTarget.src = this.requestedSrc
+  }
+
+  // PAGE: the frame's GET failed — the network dropped
+  // (`turbo:fetch-request-error`) or the response carried no matching frame
+  // (`turbo:frame-missing`, e.g. a 500 HTML body). Turbo's own handling of
+  // both leaves the "Loading…" placeholder standing, so show the error state
+  // instead. `turbo:frame-missing` is cancelled because its default
+  // (`#handleFrameMissingFromResponse`) renders Turbo's own "Content missing"
+  // into the frame and then throws TurboFrameMissingError — it does NOT
+  // navigate; the page-visiting `visit` in the event detail is offered to a
+  // handler, never called for us.
+  loadFailed(event) {
+    if (!this.#isFrameEvent(event)) return
+    if (event.type === "turbo:frame-missing") event.preventDefault()
+    this.#failLoad()
+  }
+
+  // PAGE: a response Turbo will render NOTHING from, and complain about
+  // nowhere. `FetchResponse#responseHTML` resolves `undefined` for any
+  // non-HTML content type, and `FrameController#loadResponse` then returns
+  // without rendering and without dispatching `turbo:frame-missing` — so a
+  // proxy's text/plain 502 reproduces the original stuck-"Loading…" bug in
+  // total silence. Claim exactly that case.
+  responseReceived(event) {
+    if (!this.#isFrameEvent(event)) return
+    const response = event.detail?.fetchResponse
+    if (!response) return
+    // HTML is Turbo's own path: it either renders the frame or raises
+    // `turbo:frame-missing`, which `loadFailed` above already owns.
+    if (response.isHTML) return
+    // A turbo-stream response belongs to Turbo's document-level stream
+    // observer, which acts on this same event — not ours to claim.
+    if ((response.contentType || "").includes("vnd.turbo-stream")) return
+    this.#failLoad()
+  }
+
+  // PAGE: a load landed — the frame speaks for itself now. Un-hiding it is
+  // the symmetric half of `#failLoad`: a load this controller didn't initiate
+  // (a future `frame.reload()`) must never leave a hidden frame beside a
+  // hidden error, which renders as an empty modal.
+  loadSucceeded(event) {
+    if (!this.#isFrameEvent(event)) return
+    this.#showFrame()
+  }
+
+  // PAGE: re-fetch the frame after a failure, from the URL we asked for.
+  retry() {
+    if (!this.hasFrameTarget || !this.requestedSrc) return
+    this.#showFrame()
+
+    const frame = this.frameTarget
+    // Changing `src` is the whole retry — no `loading` flip needed. Turbo's
+    // `#loadSourceURL` sets `#hasBeenLoaded` after the FIRST attempt whatever
+    // its outcome (every request-outcome hook resolves the awaited visit
+    // promise), and `sourceURLChanged` fetches on `loading == eager ||
+    // #hasBeenLoaded`. Two attribute writes, though, not one: `#willHandle-
+    // FrameMissingFromResponse` sets `complete` (which makes `#loadSourceURL`
+    // bail), and the retry URL is often byte-identical to the one already on
+    // the attribute — a rejected fetch never rewrites it — so clearing `src`
+    // first guarantees the change is observed. The cleared value fires
+    // `sourceURLChanged` too, but with no `sourceURL` it issues no request;
+    // exactly one fetch leaves here, from the final assignment.
+    frame.removeAttribute("complete")
+    frame.removeAttribute("src")
+    frame.src = this.requestedSrc
   }
 
   // IN-FRAME: reveal the custom-type label only for "other".
@@ -81,6 +159,33 @@ export default class extends BaseController {
   }
 
   // private
+
+  // Turbo's frame events bubble, so the panel-level listeners also see form
+  // submissions and any nested frame — only the evidence frame's own load
+  // drives this state.
+  #isFrameEvent(event) {
+    return this.hasFrameTarget && event.target === this.frameTarget
+  }
+
+  // Back to the frame (its "Loading…" placeholder) with no error showing.
+  // Must precede any `src` assignment: a hidden frame is never "in the
+  // viewport", so a lazy fetch from here would never start.
+  #showFrame() {
+    if (this.hasErrorTarget) this.errorTarget.hidden = true
+    if (this.hasFrameTarget) this.frameTarget.hidden = false
+  }
+
+  // Hiding the frame takes its stuck "Loading…" placeholder (or a previous
+  // open's stale form) down with it, so the error is the modal's whole body.
+  // Focus follows it there: on a repeat failure the Retry the user just
+  // pressed is inside the frame we hide, and focus would otherwise drop to
+  // <body> — outside the dialog, with the announcement unread.
+  #failLoad() {
+    if (this.hasFrameTarget) this.frameTarget.hidden = true
+    if (!this.hasErrorTarget) return
+    this.errorTarget.hidden = false
+    this.errorTarget.focus()
+  }
 
   #rebuildLevels() {
     if (!this.hasLinkLevelTarget || !this.hasLinkCapabilityTarget) return
