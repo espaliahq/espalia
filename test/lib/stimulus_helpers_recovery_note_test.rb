@@ -82,16 +82,62 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
       assert_match(/Turbo Frame replacement likely detached it/, note)
     end
 
-    should "name the first dispatch when only it missed" do
+    should "call a first-dispatch miss a re-render when the re-dispatch found it" do
       note = subject.send(:dispatch_misses, "#toggle", false, true).sole
 
       assert_match(/the first JS dispatch matched nothing/, note)
+      assert_match(/a frame re-render, not a missing element/, note)
+      # The element was found, so detachment is the wrong conclusion here.
+      assert_no_match(/detached/, note)
     end
 
     should "report both when neither dispatch found the toggle" do
       note = subject.send(:dispatch_misses, "#toggle", false, false).sole
 
       assert_match(/both JS dispatches matched nothing/, note)
+      assert_match(/likely detached it/, note)
+    end
+
+    context "when no re-dispatch was needed" do
+      should "report nothing when the only dispatch found the toggle" do
+        assert_empty subject.send(:dispatch_misses, "#toggle", true, :skipped)
+      end
+
+      should "name the single dispatch when it missed" do
+        note = subject.send(:dispatch_misses, "#toggle", false, :skipped).sole
+
+        assert_match(/the JS dispatch matched nothing for "#toggle"/, note)
+      end
+    end
+  end
+
+  context "#button_misses" do
+    should "report nothing when the JS click stage acted" do
+      assert_empty subject.send(:button_misses, "Save", true, "no-form")
+      assert_empty subject.send(:button_misses, "Save", true, "no-button")
+      assert_empty subject.send(:button_misses, "Save", true, "submitted")
+    end
+
+    should "call a stage-1 miss a late render when requestSubmit submitted" do
+      note = subject.send(:button_misses, "Save", false, "submitted").sole
+
+      assert_match(/likely rendered late/, note)
+      # requestSubmit worked, so drift is the wrong conclusion.
+      assert_no_match(/drifted/, note)
+    end
+
+    should "blame drift only when neither stage found the button" do
+      note = subject.send(:button_misses, "Save", false, "no-button").sole
+
+      assert_match(/neither stage found a button matching "Save"/, note)
+      assert_match(/locator has likely drifted/, note)
+    end
+
+    should "distinguish a button that sits outside any form" do
+      note = subject.send(:button_misses, "Save", false, "no-form").sole
+
+      assert_match(/neither stage acted/, note)
+      assert_match(/outside any <form>/, note)
     end
   end
 end

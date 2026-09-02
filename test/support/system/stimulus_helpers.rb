@@ -38,14 +38,14 @@ module StimulusHelpers
   #    rebinds `arguments` to the empty inner list — every finder then matches
   #    against `undefined` and the recovery is disarmed suite-wide, with no
   #    error to say so.
-  #
-  # Locates a button the way +click_button_with_js_fallback+'s recovery does,
-  # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
-  # can never make them resolve different buttons.
+
   # Shared opening of every miss note — the greppable cue documented in
   # testing.md. Each phrase then carries its own cause hint.
   RECOVERY_NOTE_PREFIX = "note: JS recovery —"
 
+  # Locates a button the way +click_button_with_js_fallback+'s recovery does,
+  # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
+  # can never make them resolve different buttons.
   BUTTON_FINDER_JS = <<~JS
     const text = arguments[0];
     const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
@@ -223,15 +223,26 @@ module StimulusHelpers
       # fall through to the JS dispatch
     end
 
-    # First click was dropped. Find the link by visible text and dispatch
-    # a synthetic click via JS — bypasses Selenium pointer hit-testing.
-    # Reports whether it found one, so a miss can explain a later failure
-    # (see +assert_after_recovery+).
+    # First click was dropped. Re-find the link and dispatch a synthetic
+    # click via JS — bypasses Selenium pointer hit-testing. Reports whether
+    # it found one, so a miss can explain a later failure (see
+    # +assert_after_recovery+).
+    #
+    # The finder mirrors Capybara's own link resolution — id and title as
+    # well as text. Matching text alone left the recovery permanently dead
+    # for an id- or title-style locator, and the miss note then asserted the
+    # opposite of the truth: it blamed a drifted locator when a dropped click
+    # was exactly what had happened.
     clicked = page.evaluate_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
         const links = Array.from(document.querySelectorAll("a"));
-        const link = links.find(a => a.textContent.trim() === text || a.textContent.includes(text));
+        const link = links.find(a =>
+          a.id === text ||
+          (a.getAttribute("title") || "") === text ||
+          a.textContent.trim() === text ||
+          a.textContent.includes(text)
+        );
         if (!link) return false;
         link.click();
         return true;
@@ -796,23 +807,30 @@ module StimulusHelpers
 
   # Miss list for +click_button_with_js_fallback+'s two stages.
   #
+  # A note is owed only when NO stage acted. A stage that missed while the
+  # other worked is not a problem to report: "no-form" is EXPECTED for a
+  # plain Stimulus button whose click stage already fired, and a stage-1 miss
+  # is moot once requestSubmit has submitted the form.
+  #
   # @param locator [String] the button locator both stages used
   # @param clicked [Boolean] whether the JS click stage found a button
   # @param outcome [String] the requestSubmit stage's result
   # @return [Array<String>]
   def button_misses(locator, clicked, outcome)
-    misses = []
-    misses << recovery_note("the JS click stage found no button matching #{locator.inspect}") unless clicked
+    return [] if clicked
 
     case outcome
-    when "no-button"
-      misses << recovery_note("the requestSubmit stage found no button matching #{locator.inspect}")
+    when "submitted"
+      # Not drift: the button existed by the time the second stage looked.
+      [ recovery_note("the JS click stage found no button matching #{locator.inspect}, but the " \
+                      "requestSubmit stage later found and submitted it — likely rendered late") ]
     when "no-form"
-      misses << recovery_note("the requestSubmit stage found a button matching " \
-                              "#{locator.inspect} but it sits outside any <form>")
+      [ recovery_note("neither stage acted: the JS click stage found no button matching " \
+                      "#{locator.inspect}, and the requestSubmit stage found one outside any <form>") ]
+    else
+      [ recovery_note("neither stage found a button matching #{locator.inspect} — the locator " \
+                      "has likely drifted") ]
     end
-
-    misses
   end
 
   # Clicks a toggle element via JS-dispatch and asserts the visible state.
@@ -874,8 +892,12 @@ module StimulusHelpers
     # Short window for the synchronous handler to flip the visible state.
     # If it lands, we're done after the standard verify+visible asserts.
     if page.has_css?(scoped_visible, visible: true, wait: 3)
-      assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
-      assert_selector scoped_visible, visible: true
+      # Enriched too: the first dispatch's miss is already known here, and
+      # these asserts can still fail (a verify attribute that never flipped).
+      assert_after_recovery(dispatch_misses(toggle_selector, first_dispatch, :skipped)) do
+        assert_selector scoped_verify, visible: :all, wait: 5 if scoped_verify
+        assert_selector scoped_visible, visible: true
+      end
       return
     end
 
@@ -905,17 +927,33 @@ module StimulusHelpers
   # @param first [Boolean] whether the first dispatch found an element
   # @param second [Boolean] whether the re-dispatch found one
   # @return [Array<String>] zero or one phrase for +assert_after_recovery+
+  # Each branch carries the conclusion that is actually true of it: a
+  # dispatch that missed while the other found the element points at a frame
+  # RE-RENDER (the node was replaced, not removed), where a miss with no
+  # successful sibling points at detachment.
+  #
+  # @param selector [String] the toggle selector the dispatches used
+  # @param first [Boolean] whether the first dispatch found an element
+  # @param second [Boolean, :skipped] the re-dispatch's result, or +:skipped+
+  #   when the toggle went visible and no re-dispatch was needed
+  # @return [Array<String>]
   def dispatch_misses(selector, first, second)
+    detached = "it WAS present when asserted, so a Turbo Frame replacement likely detached it"
+
+    return first ? [] : [ recovery_note(only_dispatch_missed(selector, detached)) ] if second == :skipped
     return [] if first && second
 
-    missed =
-      if first then "the re-dispatch"
-      elsif second then "the first JS dispatch"
-      else "both JS dispatches"
-      end
+    if !first && second
+      return [ recovery_note("the first JS dispatch matched nothing for #{selector.inspect}, but " \
+                             "the re-dispatch found it — a frame re-render, not a missing element") ]
+    end
 
-    [ recovery_note("#{missed} matched nothing for #{selector.inspect} — it WAS present when " \
-                    "asserted, so a Turbo Frame replacement likely detached it in between") ]
+    missed = first ? "the re-dispatch" : "both JS dispatches"
+    [ recovery_note("#{missed} matched nothing for #{selector.inspect} — #{detached} in between") ]
+  end
+
+  def only_dispatch_missed(selector, detached)
+    "the JS dispatch matched nothing for #{selector.inspect} — #{detached} first"
   end
 
   # Dispatches a synchronous JS click on the first match.
