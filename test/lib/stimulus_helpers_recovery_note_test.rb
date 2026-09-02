@@ -117,6 +117,27 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
     end
   end
 
+  context "#rating_misses" do
+    should "report nothing when the popover form was submitted" do
+      assert_empty subject.send(:rating_misses, "#rating-1", "Most", "submitted")
+    end
+
+    should "distinguish a popover that never opened from a missing form" do
+      no_item = subject.send(:rating_misses, "#rating-1", "Most", "no-item").sole
+      no_form = subject.send(:rating_misses, "#rating-1", "Most", "no-form").sole
+
+      assert_match(/no menu item containing "Most"/, no_item)
+      assert_match(/popover may not have opened/, no_item)
+      assert_match(/outside any <form>/, no_form)
+    end
+
+    should "name a rating cell that was not on the page" do
+      note = subject.send(:rating_misses, "#rating-1", "Most", "no-wrapper").sole
+
+      assert_match(/the rating cell "#rating-1" was not on the page/, note)
+    end
+  end
+
   context "#single_stage_misses" do
     should "report nothing when the stage acted" do
       assert_empty subject.send(:single_stage_misses, true, "found no <a>")

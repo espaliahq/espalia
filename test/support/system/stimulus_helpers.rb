@@ -693,11 +693,21 @@ module StimulusHelpers
   # @param frequency [String] short phrase to match
   def click_rating_frequency(cell_selector, frequency)
     open_pill_popover(cell_selector)
-    page.execute_script(<<~JS, cell_selector, frequency)
-      const wrapper = document.querySelector(arguments[0]);
-      const items = Array.from(wrapper.querySelectorAll('[role="menuitem"]'));
-      const item = items.find(b => b.textContent.trim().includes(arguments[1]));
-      item?.closest("form")?.requestSubmit(item);
+
+    # The comment below has always named this failure mode; now the helper
+    # reports it rather than leaving the reader to infer it.
+    outcome = evaluate_recovery_script(<<~JS, cell_selector, frequency)
+      (() => {
+        const wrapper = document.querySelector(arguments[0]);
+        if (!wrapper) return "no-wrapper";
+        const items = Array.from(wrapper.querySelectorAll('[role="menuitem"]'));
+        const item = items.find(b => b.textContent.trim().includes(arguments[1]));
+        if (!item) return "no-item";
+        const form = item.closest("form");
+        if (!form) return "no-form";
+        form.requestSubmit(item);
+        return "submitted";
+      })()
     JS
 
     # Final assertion ensures we surface a real failure if the JS fallback
@@ -707,7 +717,9 @@ module StimulusHelpers
     # phrase on success — we assert on the trigger button rather than
     # any specific ring/selected class so the assertion survives styling
     # changes.
-    assert_selector "#{cell_selector} button[aria-haspopup='menu']", text: frequency
+    assert_after_recovery(rating_misses(cell_selector, frequency, outcome)) do
+      assert_selector "#{cell_selector} button[aria-haspopup='menu']", text: frequency
+    end
   end
 
   # Opens the pill popover. Stimulus dropdown click handling is robust
@@ -836,6 +848,27 @@ module StimulusHelpers
     return [ recovery_note(MID_NAVIGATION_PHRASE) ] if acted == :unavailable
 
     acted ? [] : [ recovery_note(missed_phrase) ]
+  end
+
+  # Miss list for +click_rating_frequency+'s popover submit.
+  #
+  # @param cell_selector [String] the rating cell
+  # @param frequency [String] the phrase the menu item should contain
+  # @param outcome [String, :unavailable] the script's result
+  # @return [Array<String>]
+  def rating_misses(cell_selector, frequency, outcome)
+    case outcome
+    when "submitted" then []
+    when :unavailable then [ recovery_note(MID_NAVIGATION_PHRASE) ]
+    when "no-wrapper"
+      [ recovery_note("the rating cell #{cell_selector.inspect} was not on the page") ]
+    when "no-item"
+      [ recovery_note("the popover under #{cell_selector.inspect} had no menu item containing " \
+                      "#{frequency.inspect} — the popover may not have opened, or the phrase changed") ]
+    else
+      [ recovery_note("the #{frequency.inspect} menu item under #{cell_selector.inspect} sits " \
+                      "outside any <form>, so it could not be submitted") ]
+    end
   end
 
   # Miss list for +click_button_with_js_fallback+'s two stages.
