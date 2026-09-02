@@ -115,11 +115,19 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # moving away from the sign-in path within the wait window. (We pin on the
     # sign-in path leaving, not on root_path landing, so this stays robust
     # regardless of where a successful sign-in routes.)
+    misses = []
     unless page.has_no_current_path?(new_user_session_path, wait: Capybara.default_max_wait_time)
-      submit_sign_in_form_via_js(user.email, password)
+      misses = submit_sign_in_form_via_js(user.email, password)
     end
 
-    assert_no_current_path new_user_session_path
+    # Same record-then-enrich shape as the guarded click helpers: the recovery
+    # reports what it could not find, and this full-wait assertion decides the
+    # outcome. It replaces the zero-wait "are we still on the sign-in page?"
+    # probe the fallback used to flunk behind — that probe re-opened the very
+    # late-landing race it was written to close, on the suite's highest-traffic
+    # helper, by turning a navigation that committed a beat later into a false
+    # "Update SIGN_IN_FORM_SELECTOR".
+    assert_after_recovery(misses) { assert_no_current_path new_user_session_path }
   end
 
   # Suppress Rails' automatic failure screenshot when the browser session
@@ -175,6 +183,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # Same as +submit_sign_in_form+ but submits via a JS-dispatched
   # +form.requestSubmit()+ — bypasses Selenium's synthetic pointer click
   # entirely so a starved CI runner can't drop the submission.
+  #
+  # @return [Array<String>] miss phrases for +assert_after_recovery+; empty
+  #   when the form was found and submitted
   def submit_sign_in_form_via_js(email, password)
     ensure_sign_in_form_loaded
 
@@ -201,7 +212,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # script source: a selector containing a double quote would otherwise
     # break the script at JS parse time, replacing the curated flunk with a
     # cryptic SyntaxError.
-    submitted = page.evaluate_script(<<~JS, SIGN_IN_FORM_SELECTOR)
+    submitted = evaluate_recovery_script(<<~JS, SIGN_IN_FORM_SELECTOR)
       (() => {
         const form = document.querySelector(arguments[0]);
         if (!form) return false;
@@ -216,33 +227,19 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       })()
     JS
 
-    return if submitted
-
-    # No form — but that is only a selector failure if we are still ON the
-    # sign-in page. On a starved runner the first click can be honoured with
-    # a Turbo round-trip slower than the wait window, so we enter this
-    # fallback and the delayed navigation commits mid-method: the form is
-    # gone because sign-in already succeeded. Returning lets the caller's
-    # assert_no_current_path confirm that.
-    return if left_sign_in_page?
-
-    flunk(
-      "sign-in JS fallback found no form matching #{SIGN_IN_FORM_SELECTOR.inspect} — " \
-      "the Devise sign-in form's action or markup changed, so the recovery path " \
-      "for a dropped submit click is dead. Update SIGN_IN_FORM_SELECTOR."
+    single_stage_misses(
+      submitted,
+      "found no form matching #{SIGN_IN_FORM_SELECTOR.inspect} — the Devise sign-in form's " \
+      "action or markup changed, so the recovery for a dropped submit click is dead. " \
+      "Update SIGN_IN_FORM_SELECTOR in test/application_system_test_case.rb"
     )
   rescue Capybara::ElementNotFound
-    # The same late-navigation race, caught one step earlier: the credential
-    # fields are gone because the first submit landed after all. Anything
-    # else is a genuine missing field and must stay loud.
-    raise unless left_sign_in_page?
-  end
-
-  # True once the browser has left the Devise sign-in page — i.e. a sign-in
-  # actually landed. Distinguishes a real markup/selector failure from the
-  # survivable race where a slow first submit commits mid-fallback.
-  def left_sign_in_page?
-    page.has_no_current_path?(new_user_session_path, wait: 0)
+    # The credential fields are gone. Either the first submit landed after
+    # all (survivable — the assertion in sign_in_as will pass) or the form
+    # changed (the assertion fails and this note explains it). Reporting
+    # rather than raising lets that assertion decide, with its full wait.
+    [ recovery_note("found no credential field to fill — the first submit may have landed, or " \
+                    "the Devise form changed") ]
   end
 
   # Retries a block that makes the first Selenium call, rescuing the
