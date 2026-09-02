@@ -24,6 +24,37 @@
 #   toggle_panel
 #   expand_matrix_row("#capability-name-#{stable_id}")
 module StimulusHelpers
+  # == Recovery-script contracts (read before touching any evaluate_script here)
+  #
+  # Every JS recovery in this file depends on two things that are invisible at
+  # the call site:
+  #
+  # 1. Capybara's +evaluate_script+ prepends `return ` to the script source,
+  #    which is why each one is a single `(() => { ... })()` expression rather
+  #    than a statement sequence.
+  # 2. `arguments[0]` resolves ONLY because an arrow function inherits
+  #    `arguments` from the WebDriver wrapper Selenium generates around the
+  #    script. Rewriting any of these IIFEs as `function () { ... }` silently
+  #    rebinds `arguments` to the empty inner list — every finder then matches
+  #    against `undefined` and the recovery is disarmed suite-wide, with no
+  #    error to say so.
+  #
+  # Locates a button the way +click_button_with_js_fallback+'s recovery does,
+  # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
+  # can never make them resolve different buttons.
+  # Shared opening of every miss note — the greppable cue documented in
+  # testing.md. Each phrase then carries its own cause hint.
+  RECOVERY_NOTE_PREFIX = "note: JS recovery —"
+
+  BUTTON_FINDER_JS = <<~JS
+    const text = arguments[0];
+    const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
+    const btn = buttons.find(b => {
+      const label = (b.textContent || b.value || "").trim();
+      return label === text || label.includes(text);
+    });
+  JS
+
   # Waits until the named Stimulus controller has connected.
   #
   # @param controller_name [String] the Stimulus controller identifier
@@ -161,11 +192,10 @@ module StimulusHelpers
     # default on a starved CI runner. We've observed cases where even an 8s
     # wait misses on the first runner cycle of the day — bumping to match
     # Capybara's default_max_wait_time gives us full headroom.
-    if expect_text
-      assert_text expect_text, wait: Capybara.default_max_wait_time
-    else
-      assert_selector expect_selector, wait: Capybara.default_max_wait_time
-    end
+    #
+    # No misses to report: this helper retries the Capybara click rather than
+    # running a JS recovery, so there is no finder that can come up empty.
+    assert_after_recovery([], expect_text: expect_text, expect_selector: expect_selector)
   end
 
   # Clicks a link by locator, retrying with a JS-dispatched click if the
@@ -208,15 +238,9 @@ module StimulusHelpers
       })()
     JS
 
-    misses = clicked ? [] : [ "the JS recovery found no <a> matching #{locator.inspect}" ]
+    misses = single_stage_misses(clicked, "found no <a> matching #{locator.inspect}")
 
-    assert_after_recovery(misses) do
-      if expect_text
-        assert_text expect_text, wait: Capybara.default_max_wait_time
-      else
-        assert_selector expect_selector, wait: Capybara.default_max_wait_time
-      end
-    end
+    assert_after_recovery(misses, expect_text: expect_text, expect_selector: expect_selector)
   end
 
   # Like +click_link_with_js_fallback+ but for elements addressed by a CSS
@@ -241,24 +265,10 @@ module StimulusHelpers
       # the same drop the JS dispatch below exists for.
     end
 
-    clicked = page.evaluate_script(<<~JS, selector)
-      (() => {
-        const el = document.querySelector(arguments[0]);
-        if (!el) return false;
-        el.click();
-        return true;
-      })()
-    JS
+    clicked = dispatch_js_click(selector)
+    misses = single_stage_misses(clicked, "matched no element for #{selector.inspect}")
 
-    misses = clicked ? [] : [ "the JS recovery matched no element for #{selector.inspect}" ]
-
-    assert_after_recovery(misses) do
-      if expect_text
-        assert_text expect_text, wait: Capybara.default_max_wait_time
-      else
-        assert_selector expect_selector, wait: Capybara.default_max_wait_time
-      end
-    end
+    assert_after_recovery(misses, expect_text: expect_text, expect_selector: expect_selector)
   end
 
   # Like +click_link_with_js_fallback+ but for buttons (incl. form submits).
@@ -291,23 +301,14 @@ module StimulusHelpers
     # First click dropped — fall back to JS click, which fires synchronously
     # and bypasses Selenium pointer hit-testing. The two recovery stages are
     # tracked separately so a failure can name which one found nothing.
-    misses = []
-
     clicked = page.evaluate_script(<<~JS, locator)
       (() => {
-        const text = arguments[0];
-        const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
-        const btn = buttons.find(b => {
-          const label = (b.textContent || b.value || "").trim();
-          return label === text || label.includes(text);
-        });
+        #{BUTTON_FINDER_JS}
         if (!btn) return false;
         btn.click();
         return true;
       })()
     JS
-
-    misses << "the JS click recovery found no button matching #{locator.inspect}" unless clicked
 
     return if landed?(expect_text, expect_selector, expect_no_text, wait: 8)
 
@@ -318,12 +319,7 @@ module StimulusHelpers
     # latter is a markup change, not a locator drift.
     outcome = page.evaluate_script(<<~JS, locator)
       (() => {
-        const text = arguments[0];
-        const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
-        const btn = buttons.find(b => {
-          const label = (b.textContent || b.value || "").trim();
-          return label === text || label.includes(text);
-        });
+        #{BUTTON_FINDER_JS}
         if (!btn) return "no-button";
         const form = btn.closest("form");
         if (!form) return "no-form";
@@ -332,23 +328,10 @@ module StimulusHelpers
       })()
     JS
 
-    case outcome
-    when "no-button"
-      misses << "the requestSubmit recovery found no button matching #{locator.inspect}"
-    when "no-form"
-      misses << "the requestSubmit recovery found a button matching " \
-                "#{locator.inspect} but it sits outside any <form>"
-    end
-
-    assert_after_recovery(misses) do
-      if expect_text
-        assert_text expect_text, wait: Capybara.default_max_wait_time
-      elsif expect_selector
-        assert_selector expect_selector, wait: Capybara.default_max_wait_time
-      else
-        assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
-      end
-    end
+    assert_after_recovery(
+      button_misses(locator, clicked, outcome),
+      expect_text: expect_text, expect_selector: expect_selector, expect_no_text: expect_no_text
+    )
   end
 
   # Sets a field's value via a JS assignment + dispatched input/change events,
@@ -714,16 +697,8 @@ module StimulusHelpers
     find(trigger_selector).click
     return if page.has_css?("#{cell_selector} [role='menu']:not(.hidden)", wait: 2)
 
-    clicked = page.evaluate_script(<<~JS, trigger_selector)
-      (() => {
-        const el = document.querySelector(arguments[0]);
-        if (!el) return false;
-        el.click();
-        return true;
-      })()
-    JS
-
-    misses = clicked ? [] : [ "the JS recovery matched no pill trigger for #{trigger_selector.inspect}" ]
+    clicked = dispatch_js_click(trigger_selector)
+    misses = single_stage_misses(clicked, "matched no pill trigger for #{trigger_selector.inspect}")
 
     assert_after_recovery(misses) do
       assert_selector "#{cell_selector} [role='menu']:not(.hidden)", wait: 4
@@ -773,21 +748,71 @@ module StimulusHelpers
   # fails, where a drifted locator is the likeliest explanation and the note
   # saves a debugging session spent on starved-runner theories.
   #
+  # Owns the by-precedence final assertion as well, so the four helpers each
+  # hand over their signals in one line instead of repeating the ladder.
+  # A block wins over the signals, for callers whose final assertion is not a
+  # text/selector wait (+stimulus_toggle+, +sign_in_as+).
+  #
   # @param misses [Array<String>] one phrase per recovery step that found
   #   nothing; empty when every step acted
-  # @yield the helper's final assertion
+  # @param expect_text [String, nil] text the click should produce
+  # @param expect_selector [String, nil] selector the click should produce
+  # @param expect_no_text [String, nil] text the click should remove
+  # @yield an assertion to run instead of the signal ladder
   # @raise [Minitest::Assertion] the original failure, with the notes appended
-  def assert_after_recovery(misses)
-    yield
+  def assert_after_recovery(misses, expect_text: nil, expect_selector: nil, expect_no_text: nil)
+    if block_given?
+      yield
+    elsif expect_text
+      assert_text expect_text, wait: Capybara.default_max_wait_time
+    elsif expect_selector
+      assert_selector expect_selector, wait: Capybara.default_max_wait_time
+    else
+      assert_no_text expect_no_text, wait: Capybara.default_max_wait_time
+    end
   rescue Minitest::Assertion => e
     raise if misses.empty?
 
-    raise e.class, <<~MESSAGE.strip, e.backtrace
-      #{e.message}
+    raise e.class, "#{e.message}\n\n#{misses.join("\n")}", e.backtrace
+  end
 
-      note: #{misses.join("; ")}. If that locator drifted, the recovery never
-      fired — the failure above is then misattributed to a dropped click.
-    MESSAGE
+  # A miss phrase, carrying the prefix every note shares so a reader (or a
+  # log grep) can spot one without knowing which helper produced it.
+  #
+  # @param text [String] the phrase, including its own cause hint
+  # @return [String]
+  def recovery_note(text)
+    "#{RECOVERY_NOTE_PREFIX} #{text}"
+  end
+
+  # Miss list for a recovery with a single find-and-act stage.
+  #
+  # @param acted [Boolean] whether the stage found its target and acted
+  # @param missed_phrase [String] what to say when it did not
+  # @return [Array<String>]
+  def single_stage_misses(acted, missed_phrase)
+    acted ? [] : [ recovery_note(missed_phrase) ]
+  end
+
+  # Miss list for +click_button_with_js_fallback+'s two stages.
+  #
+  # @param locator [String] the button locator both stages used
+  # @param clicked [Boolean] whether the JS click stage found a button
+  # @param outcome [String] the requestSubmit stage's result
+  # @return [Array<String>]
+  def button_misses(locator, clicked, outcome)
+    misses = []
+    misses << recovery_note("the JS click stage found no button matching #{locator.inspect}") unless clicked
+
+    case outcome
+    when "no-button"
+      misses << recovery_note("the requestSubmit stage found no button matching #{locator.inspect}")
+    when "no-form"
+      misses << recovery_note("the requestSubmit stage found a button matching " \
+                              "#{locator.inspect} but it sits outside any <form>")
+    end
+
+    misses
   end
 
   # Clicks a toggle element via JS-dispatch and asserts the visible state.
@@ -881,15 +906,16 @@ module StimulusHelpers
   # @param second [Boolean] whether the re-dispatch found one
   # @return [Array<String>] zero or one phrase for +assert_after_recovery+
   def dispatch_misses(selector, first, second)
+    return [] if first && second
+
     missed =
-      if first && second then return []
-      elsif first then "the re-dispatch"
+      if first then "the re-dispatch"
       elsif second then "the first JS dispatch"
       else "both JS dispatches"
       end
 
-    [ "#{missed} matched nothing for #{selector.inspect} — it WAS present when asserted, " \
-      "so a Turbo Frame replacement likely detached it in between" ]
+    [ recovery_note("#{missed} matched nothing for #{selector.inspect} — it WAS present when " \
+                    "asserted, so a Turbo Frame replacement likely detached it in between") ]
   end
 
   # Dispatches a synchronous JS click on the first match.

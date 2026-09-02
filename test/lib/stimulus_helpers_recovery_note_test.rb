@@ -42,7 +42,20 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
 
       assert_match(/expected to find text "Saved"/, error.message)
       assert_match(/the JS recovery found no <a> matching "Save"/, error.message)
-      assert_match(/misattributed to a dropped click/, error.message)
+    end
+
+    should "run the signal ladder when given no block" do
+      host = Class.new(Host) do
+        attr_reader :asserted
+
+        def assert_text(text, **) = @asserted = [ :text, text ]
+        def assert_selector(sel, **) = @asserted = [ :selector, sel ]
+        def assert_no_text(text, **) = @asserted = [ :no_text, text ]
+      end.new
+
+      host.send(:assert_after_recovery, [], expect_selector: "#badge")
+
+      assert_equal [ :selector, "#badge" ], host.asserted
     end
 
     should "list every miss when several recovery steps found nothing" do
@@ -64,6 +77,7 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
     should "name the re-dispatch when only it missed" do
       note = subject.send(:dispatch_misses, "#toggle", true, false).sole
 
+      assert note.start_with?(StimulusHelpers::RECOVERY_NOTE_PREFIX), note
       assert_match(/the re-dispatch matched nothing for "#toggle"/, note)
       assert_match(/Turbo Frame replacement likely detached it/, note)
     end

@@ -48,9 +48,9 @@ class ClickRecoveryNoteSystemTest < ApplicationSystemTestCase
 
       # The original assertion failure survives...
       assert_match(/#{Regexp.escape(ABSENT_TEXT)}/, error.message)
-      # ...and now says why blaming a dropped click would be wrong.
+      # ...and now carries the recovery note, under its shared cue.
+      assert_match(/#{Regexp.escape(StimulusHelpers::RECOVERY_NOTE_PREFIX)}/, error.message)
       assert_match(/found no <a> matching "drifted-link"/, error.message)
-      assert_match(/misattributed to a dropped click/, error.message)
     end
   end
 end
