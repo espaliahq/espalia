@@ -7,6 +7,7 @@
 # When many roles are selected, shows compact level codes.
 #
 class Views::Frameworks::Explorer::MatrixHeader < Views::Base
+  include Views::Frameworks::Explorer::Concerns::StickyColumn
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
 
   # Threshold: show full titles when this many or fewer distinct roles
@@ -36,6 +37,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
 
   def corner_cell
     th(class: "sticky top-0 left-0 z-20 bg-gray-50 dark:bg-gray-900 " \
+              "#{STICKY_EDGE_CLASSES} " \
               "px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 " \
               "uppercase tracking-wide border-b border-r border-gray-200 dark:border-gray-700 " \
               "min-w-[200px]") do

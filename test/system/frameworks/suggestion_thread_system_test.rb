@@ -117,9 +117,18 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     # Reply via the comment kebab — one level of indent on the reply card.
     # The Reply item is a Stimulus-action control, so dispatch the click via
     # JS (synthetic pointer clicks drop silently on starved CI).
+    # Resolve AND click inside one script: the comment lives in a
+    # Turbo-Stream-replaced thread frame, so a handle cached by `find` can go
+    # stale before `execute_script` uses it (testing.md, "Avoiding Stale
+    # Element References with Turbo Streams"). The revealed reply box below is
+    # the success signal, so a miss here still fails loudly.
     open_dropdown(scope: "li[id^='comment-']")
-    reply_item = find("li[id^='comment-'] [role='menu'] button", text: "Reply", visible: :all)
-    page.execute_script("arguments[0].click()", reply_item)
+    page.execute_script(<<~JS)
+      const item = Array.from(
+        document.querySelectorAll("li[id^='comment-'] [role='menu'] button")
+      ).find((b) => b.textContent.trim() === "Reply");
+      item?.click();
+    JS
     # The reply form's visibility is the click's success signal (a
     # placeholder isn't page text, so assert on the revealed control).
     reply_box = find("textarea[placeholder='Reply…']", visible: true)
