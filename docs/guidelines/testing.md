@@ -375,6 +375,8 @@ end
 
 These do one Capybara click, and if the destination text/selector doesn't appear within 8s, dispatch a synchronous `el.click()` via `execute_script` — bypasses Selenium pointer hit-testing entirely so the second attempt is guaranteed to fire.
 
+**If a failure carries a `note: the JS recovery found no …` line, read it first.** It means the fallback's finder matched nothing — usually the locator drifted (a link's label changed) rather than the dropped click the bare failure implies. The helpers never fail *because* of the miss (a slow first click can land after the fallback runs, so the assertion keeps its full wait); the note appears only alongside a genuine failure it is likely to explain.
+
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
