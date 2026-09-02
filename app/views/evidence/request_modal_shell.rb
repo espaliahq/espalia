@@ -35,20 +35,14 @@ class Views::Evidence::RequestModalShell < Views::Base
                   action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
                           "turbo:submit-start->submit-fallback#submitStart " \
                           "turbo:submit-end->submit-fallback#submitEnd " \
-                          "modal:open@window->submit-fallback#submitStart " \
-                          "turbo:before-fetch-request->frame-error#requestStarted " \
-                          "turbo:fetch-request-error->frame-error#loadFailed " \
-                          "turbo:frame-missing->frame-error#loadFailed " \
-                          "turbo:before-fetch-response->frame-error#responseReceived " \
-                          "turbo:frame-load->frame-error#loadSucceeded" }) do
+                          "modal:open@window->submit-fallback#submitStart" }) do
         render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-request-modal", loading: "lazy",
                         data: { request_evidence_target: "frame", frame_error_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
         end
         render Components::Kit::FrameLoadError.new(
-          id: "evidence-request-modal-error", closeable: true,
-          message: "Couldn't load the request form. Try again — if it keeps failing, close this and reload the page."
+          id: "evidence-request-modal-error", subject: "the request form", closeable: true
         )
       end
     end

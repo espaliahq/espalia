@@ -1012,6 +1012,21 @@ the `binding-editor` Turbo Frame at {Frameworks::CapabilityBindingsController#in
 for that capability (with a cache-buster so reopening the same capability refetches
 the latest state). All add/remove/weight actions then re-render the frame in place.
 
+### frame_error_controller.js (edit mode only, in the explorer)
+Shared with the assessment surfaces — the machinery is documented once in
+[assessments.md](assessments.md)'s Stimulus-controller table, where it was
+extracted from the evidence modal. In the explorer it rides the **binding-editor
+and level-editor modal bodies**: a failed frame GET would otherwise render
+Turbo's own "Content missing" into the multi-megabyte edit-mode explorer with no
+retry, or leave "Loading…" standing forever (audit issue #365). Mounting is a
+bare `data-controller="frame-error"` plus the `frame` / `error` targets — the
+five listeners bind themselves in `connect()`, so a new surface cannot half-wire
+them. Two rules matter when extending it here: it speaks **only for the frame's
+own GET** — a failed in-frame row save (a weight PATCH, a level rename) keeps its
+form and its typed values, because `turbo:frame-missing` is claimed only while a
+load armed it — and the error copy is built from `subject:` + `closeable:` by
+`Kit::FrameLoadError`, never passed in as free text.
+
 ### suggestion_action_controller.js (edit mode only)
 Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
 
@@ -1493,6 +1508,8 @@ line (§9).
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
 | `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
+| `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state (error + Retry in place of a stuck "Loading…" or Turbo's "Content missing") — self-binds its five listeners in `connect()`; on the explorer it rides the binding-/level-editor modal bodies (audit issue #365) |
+| `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — message built from `subject:` + `closeable:`, Retry, and a Close for modals |
 | `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` / `update_role_family?` / `update_role?` / `update_level?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/operations/operations/frameworks/suggest_edit.rb` | Shared web + MCP operation — framework content edits (capability/category name + description, expectation + illustration text): authority-aware auto-approve in editing mode, pending suggestion otherwise; amends the author's pending edit on a field (→ `SuggestionAmended`) instead of stacking consecutive duplicates |

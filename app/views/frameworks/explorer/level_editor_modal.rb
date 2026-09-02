@@ -32,12 +32,7 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
       data: {
         controller: "level-editor-form frame-error",
         level_editor_form_levels_url_value: framework_levels_path(@framework_id),
-        action: "turbo:submit-end->level-editor-form#submitted " \
-                "turbo:before-fetch-request->frame-error#requestStarted " \
-                "turbo:fetch-request-error->frame-error#loadFailed " \
-                "turbo:frame-missing->frame-error#loadFailed " \
-                "turbo:before-fetch-response->frame-error#responseReceived " \
-                "turbo:frame-load->frame-error#loadSucceeded"
+        action: "turbo:submit-end->level-editor-form#submitted"
       }
     ) do
       turbo_frame_tag("level-editor",
@@ -45,8 +40,7 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
       render Components::Kit::FrameLoadError.new(
-        id: "level-editor-error", closeable: true, classes: "space-y-3",
-        message: "Couldn't load the levels editor. Try again — if it keeps failing, close this and reload the page."
+        id: "level-editor-error", subject: "the levels editor", closeable: true, classes: "space-y-3"
       )
     end
   end

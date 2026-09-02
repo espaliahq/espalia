@@ -30,8 +30,7 @@ class Views::Evidence::ModalForm < Views::Base
           "text-gray-900 dark:text-gray-100 text-sm " \
           "focus-visible:ring-primary focus-visible:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
   LABEL = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
-  SECONDARY_BTN = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 " \
-                  "text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
+  SECONDARY_BTN = Components::Kit::FrameLoadError::BUTTON_CLASSES
 
   # @param mode [Symbol, String] :new, :edit, or :respond
   # @param assignment_id [String]

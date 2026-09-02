@@ -40,21 +40,33 @@
 // event also means whichever controller points the frame needs no cooperation
 // from this one.
 //
-// Usage — mount on an element wrapping ONE frame and its error block:
-//   <div data-controller="frame-error"
-//        data-action="turbo:before-fetch-request->frame-error#requestStarted
-//                     turbo:fetch-request-error->frame-error#loadFailed
-//                     turbo:frame-missing->frame-error#loadFailed
-//                     turbo:before-fetch-response->frame-error#responseReceived
-//                     turbo:frame-load->frame-error#loadSucceeded">
+// Usage — mount on an element wrapping ONE frame and its error block. The five
+// listeners are bound in `connect()`, NOT declared per mount site: they are
+// this controller's entire reason to exist, and hand-copying the action string
+// to a sixth surface with one line missed would silently drop one failure
+// shape — the exact class of hole #365 was. All five events bubble
+// (Turbo's `dispatch` sets `bubbles: true`) and every handler already scopes
+// itself to `frameTarget`, so listening on the host element is equivalent.
+//   <div data-controller="frame-error">
 //     <turbo-frame id="…" loading="lazy" data-frame-error-target="frame">Loading…</turbo-frame>
-//     <%= render Components::Kit::FrameLoadError.new(id: "…-error") %>
+//     <%= render Components::Kit::FrameLoadError.new(id: "…-error", subject: "the form") %>
 //   </div>
 
 import BaseController from "controllers/base_controller"
 
+// [event name, handler name] — the complete set this controller listens for.
+const LISTENERS = [
+  ["turbo:before-fetch-request", "requestStarted"],
+  ["turbo:fetch-request-error", "loadFailed"],
+  ["turbo:frame-missing", "loadFailed"],
+  ["turbo:before-fetch-response", "responseReceived"],
+  ["turbo:frame-load", "loadSucceeded"]
+]
+
 export default class extends BaseController {
   static targets = ["frame", "error"]
+
+  #boundListeners = []
 
   // A restored snapshot (Turbo Drive cache, or the browser's back button) can
   // reinstate this DOM mid-failure — frame hidden, error showing — but hands
@@ -69,6 +81,20 @@ export default class extends BaseController {
   connect() {
     super.connect()
     if (this.hasErrorTarget && !this.errorTarget.hidden) this.#showFrame()
+
+    this.#boundListeners = LISTENERS.map(([type, handler]) => {
+      const listener = this[handler].bind(this)
+      this.element.addEventListener(type, listener)
+      return [type, listener]
+    })
+  }
+
+  disconnect() {
+    this.#boundListeners.forEach(([type, listener]) => {
+      this.element.removeEventListener(type, listener)
+    })
+    this.#boundListeners = []
+    super.disconnect()
   }
 
   // A fetch for our frame is starting: remember what it asked for, arm the

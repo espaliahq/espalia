@@ -29,12 +29,7 @@ class Views::Frameworks::Explorer::BindingEditorModal < Views::Base
     div(
       data: {
         controller: "binding-editor-form frame-error",
-        binding_editor_form_bindings_url_value: framework_capability_bindings_path(@framework_id),
-        action: "turbo:before-fetch-request->frame-error#requestStarted " \
-                "turbo:fetch-request-error->frame-error#loadFailed " \
-                "turbo:frame-missing->frame-error#loadFailed " \
-                "turbo:before-fetch-response->frame-error#responseReceived " \
-                "turbo:frame-load->frame-error#loadSucceeded"
+        binding_editor_form_bindings_url_value: framework_capability_bindings_path(@framework_id)
       }
     ) do
       turbo_frame_tag("binding-editor",
@@ -42,8 +37,7 @@ class Views::Frameworks::Explorer::BindingEditorModal < Views::Base
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
       render Components::Kit::FrameLoadError.new(
-        id: "binding-editor-error", closeable: true, classes: "space-y-3",
-        message: "Couldn't load the roles editor. Try again — if it keeps failing, close this and reload the page."
+        id: "binding-editor-error", subject: "the roles editor", closeable: true, classes: "space-y-3"
       )
     end
   end

@@ -109,13 +109,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   # its own error block (audit issue #365) — a failed GET otherwise leaves
   # "Loading discussion…" standing forever with no retry.
   def discussion_disclosure
-    details(class: "mt-1",
-            data: { controller: "frame-error",
-                    action: "turbo:before-fetch-request->frame-error#requestStarted " \
-                            "turbo:fetch-request-error->frame-error#loadFailed " \
-                            "turbo:frame-missing->frame-error#loadFailed " \
-                            "turbo:before-fetch-response->frame-error#responseReceived " \
-                            "turbo:frame-load->frame-error#loadSucceeded" }) do
+    details(class: "mt-1", data: { controller: "frame-error" }) do
       summary(
         class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
                "inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
@@ -143,8 +137,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       end
       # No Close: this is not a modal — collapsing the disclosure is the exit.
       render Components::Kit::FrameLoadError.new(
-        id: "#{thread_frame_id}-error", classes: "py-1 space-y-2",
-        message: "Couldn't load the discussion. Try again — if it keeps failing, reload the page."
+        id: "#{thread_frame_id}-error", subject: "the discussion", classes: "py-1 space-y-2"
       )
     end
   end
