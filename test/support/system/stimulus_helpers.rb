@@ -43,6 +43,22 @@ module StimulusHelpers
   # testing.md. Each phrase then carries its own cause hint.
   RECOVERY_NOTE_PREFIX = "note: JS recovery —"
 
+  # Errors Selenium raises when a script runs against a document that is
+  # being replaced. The recovery scripts run in exactly that window — right
+  # after a click whose navigation may still be in flight — so these are a
+  # normal condition here, not a test failure. +landed?+ already rescues the
+  # same class for the same reason.
+  RECOVERY_SCRIPT_ERRORS = [
+    Selenium::WebDriver::Error::JavascriptError,
+    Selenium::WebDriver::Error::StaleElementReferenceError,
+    Selenium::WebDriver::Error::UnknownError
+  ].freeze
+
+  # What a recovery reports when it could not run at all.
+  MID_NAVIGATION_PHRASE =
+    "could not run — the document was being replaced mid-navigation, so no " \
+    "recovery was attempted (not a locator problem)"
+
   # Locates a button the way +click_button_with_js_fallback+'s recovery does,
   # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
   # can never make them resolve different buttons.
@@ -233,7 +249,7 @@ module StimulusHelpers
     # for an id- or title-style locator, and the miss note then asserted the
     # opposite of the truth: it blamed a drifted locator when a dropped click
     # was exactly what had happened.
-    clicked = page.evaluate_script(<<~JS, locator)
+    clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
         const links = Array.from(document.querySelectorAll("a"));
@@ -312,7 +328,7 @@ module StimulusHelpers
     # First click dropped — fall back to JS click, which fires synchronously
     # and bypasses Selenium pointer hit-testing. The two recovery stages are
     # tracked separately so a failure can name which one found nothing.
-    clicked = page.evaluate_script(<<~JS, locator)
+    clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         #{BUTTON_FINDER_JS}
         if (!btn) return false;
@@ -328,7 +344,7 @@ module StimulusHelpers
     # invokes Turbo's submit-listener synchronously, the most reliable path.
     # Distinguishes "no such button" from "button outside any form": the
     # latter is a markup change, not a locator drift.
-    outcome = page.evaluate_script(<<~JS, locator)
+    outcome = evaluate_recovery_script(<<~JS, locator)
       (() => {
         #{BUTTON_FINDER_JS}
         if (!btn) return "no-button";
@@ -796,12 +812,29 @@ module StimulusHelpers
     "#{RECOVERY_NOTE_PREFIX} #{text}"
   end
 
+  # Runs a recovery script, tolerating the document being swapped under it.
+  #
+  # A hard error here would fail a test the design promises can still pass:
+  # the whole point of the record-then-enrich shape is that a slow first
+  # click may land late, and that landing is precisely what tears the
+  # document down while the script is running.
+  #
+  # @return [Object, :unavailable] the script's value, or +:unavailable+
+  def evaluate_recovery_script(script, *args)
+    page.evaluate_script(script, *args)
+  rescue *RECOVERY_SCRIPT_ERRORS
+    :unavailable
+  end
+
   # Miss list for a recovery with a single find-and-act stage.
   #
-  # @param acted [Boolean] whether the stage found its target and acted
+  # @param acted [Boolean, :unavailable] whether the stage found its target
+  #   and acted, or +:unavailable+ if the script could not run
   # @param missed_phrase [String] what to say when it did not
   # @return [Array<String>]
   def single_stage_misses(acted, missed_phrase)
+    return [ recovery_note(MID_NAVIGATION_PHRASE) ] if acted == :unavailable
+
     acted ? [] : [ recovery_note(missed_phrase) ]
   end
 
@@ -817,6 +850,7 @@ module StimulusHelpers
   # @param outcome [String] the requestSubmit stage's result
   # @return [Array<String>]
   def button_misses(locator, clicked, outcome)
+    return [ recovery_note(MID_NAVIGATION_PHRASE) ] if [ clicked, outcome ].include?(:unavailable)
     return [] if clicked
 
     case outcome
@@ -938,6 +972,8 @@ module StimulusHelpers
   #   when the toggle went visible and no re-dispatch was needed
   # @return [Array<String>]
   def dispatch_misses(selector, first, second)
+    return [ recovery_note(MID_NAVIGATION_PHRASE) ] if [ first, second ].include?(:unavailable)
+
     detached = "it WAS present when asserted, so a Turbo Frame replacement likely detached it"
 
     return first ? [] : [ recovery_note(only_dispatch_missed(selector, detached)) ] if second == :skipped
@@ -959,9 +995,10 @@ module StimulusHelpers
   # Dispatches a synchronous JS click on the first match.
   #
   # @param selector [String] CSS selector of the element to click
-  # @return [Boolean] whether an element was found and clicked
+  # @return [Boolean, :unavailable] whether an element was found and clicked,
+  #   or +:unavailable+ if the document was being replaced
   def dispatch_js_click(selector)
-    page.evaluate_script(<<~JS, selector)
+    evaluate_recovery_script(<<~JS, selector)
       (() => {
         const el = document.querySelector(arguments[0]);
         if (!el) return false;

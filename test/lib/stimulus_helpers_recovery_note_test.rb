@@ -109,6 +109,29 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
         assert_match(/the JS dispatch matched nothing for "#toggle"/, note)
       end
     end
+
+    should "say the dispatch could not run when the document was replaced" do
+      note = subject.send(:dispatch_misses, "#toggle", :unavailable, :skipped).sole
+
+      assert_match(/could not run/, note)
+    end
+  end
+
+  context "#single_stage_misses" do
+    should "report nothing when the stage acted" do
+      assert_empty subject.send(:single_stage_misses, true, "found no <a>")
+    end
+
+    should "carry the caller's phrase when the stage found nothing" do
+      assert_match(/found no <a>/, subject.send(:single_stage_misses, false, "found no <a>").sole)
+    end
+
+    should "override the phrase when the script could not run" do
+      note = subject.send(:single_stage_misses, :unavailable, "found no <a>").sole
+
+      assert_match(/could not run/, note)
+      assert_no_match(/found no <a>/, note)
+    end
   end
 
   context "#button_misses" do
@@ -131,6 +154,13 @@ class StimulusHelpersRecoveryNoteTest < ActiveSupport::TestCase
 
       assert_match(/neither stage found a button matching "Save"/, note)
       assert_match(/locator has likely drifted/, note)
+    end
+
+    should "say the recovery could not run when the document was replaced" do
+      note = subject.send(:button_misses, "Save", :unavailable, :unavailable).sole
+
+      assert_match(/could not run/, note)
+      assert_match(/not a locator problem/, note)
     end
 
     should "distinguish a button that sits outside any form" do
