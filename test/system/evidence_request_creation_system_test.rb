@@ -76,7 +76,9 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     JS
   end
 
-  def open_request_modal
+  # Visit the report's assessment and open the request modal, synced on its
+  # loaded form.
+  private def open_request_modal
     visit assessment_path(@report_assignment)
     assert_text "Critical Thinking"
     trigger_request_modal
@@ -93,7 +95,8 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     assert_selector "#evidence-request-modal-overlay button[type='submit']", text: "Send 1 request"
   end
 
-  def click_send
+  # JS-dispatched Send click (testing.md: pointer clicks drop on starved CI).
+  private def click_send
     page.execute_script(
       "document.querySelector(\"#evidence-request-modal-overlay button[type='submit']\").click();"
     )
@@ -122,7 +125,7 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     page.execute_script(
       "document.querySelector(\"#evidence-request-modal-overlay form\").requestSubmit();"
     )
-    assert_equal 1, page.evaluate_script("window.__matched")
+    assert_fetch_matched 1
 
     # Release the held POST: it lands, and it landed once.
     page.execute_script("window.__releaseFetch();")

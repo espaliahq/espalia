@@ -243,7 +243,7 @@ class AssessmentsSubmitFallbackSystemTest < ApplicationSystemTestCase
         # synchronously, so the count is settled the moment they return.
         submit_evidence_form
         page.execute_script("document.querySelector('#evidence-modal-overlay form').requestSubmit();")
-        assert_equal 1, page.evaluate_script("window.__matched")
+        assert_fetch_matched 1
 
         # Release the held save: it lands, and it landed once. The modal
         # closing is the proof the round trip completed — only then can the

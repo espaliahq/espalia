@@ -49,7 +49,8 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     assert_text "Engineering Manager" # the unbound role offered in the add select
   end
 
-  def visit_edit_mode(size: DESKTOP_SIZE)
+  # Sign in and land on the edit-mode explorer with the matrix settled.
+  private def visit_edit_mode(size: DESKTOP_SIZE)
     page.driver.browser.manage.window.resize_to(*size)
     sign_in_as(@admin_user)
     visit edit_framework_path(@framework_id)
