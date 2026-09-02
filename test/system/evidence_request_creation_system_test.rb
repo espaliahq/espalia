@@ -55,35 +55,47 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
 
   # Patch `window.fetch` so a matching request (URL contains `fragment`) is
   # answered per `respond` instead of reaching the server; everything else
-  # passes through. Matches are counted in `window.__matched`.
+  # passes through. Matches are counted in `window.__matched`;
+  # `window.__unpatchFetch()` restores the real fetch so a test can prove its
+  # retry genuinely lands.
   #
-  # @param respond [Symbol] :delay — hold the request open until
-  #   `window.__releaseFetch()`, so a second submission can be attempted while
-  #   the first is genuinely still in flight (no sleep, no timing guess)
-  def patch_fetch(fragment, respond: :delay)
+  # @param respond [Symbol, String] :error_500 — a 500 with an HTML body;
+  #   :reject — the network layer, no response at all;
+  #   :delay — hold the request open until `window.__releaseFetch()`, so a
+  #   second submission can be attempted while the first is genuinely still in
+  #   flight (no sleep, no timing guess);
+  #   a String — a 500 carrying that body, with `content_type`.
+  # @param once [Boolean] patch only the FIRST match, so a retry can succeed
+  # @param content_type [String] response type for a String body
+  def patch_fetch(fragment, respond: :error_500, once: false, content_type: "text/html")
+    body = respond.is_a?(String) ? respond : "<html><body>Internal Server Error</body></html>"
     answer =
       case respond
-      when :delay then "new Promise((res, rej) => { window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
-      else 'Promise.reject(new TypeError("Failed to fetch"))'
+      when :reject then 'Promise.reject(new TypeError("Failed to fetch"))'
+      when :delay  then "new Promise((res, rej) => { " \
+                        "window.__releaseFetch = () => of(url, ...a).then(res, rej); })"
+      else "Promise.resolve(new Response(#{body.to_json}, " \
+           "{ status: 500, headers: { \"Content-Type\": #{content_type.to_json} } }))"
       end
 
     page.execute_script(<<~JS)
       const of = window.fetch;
       window.__unpatchFetch = () => { window.fetch = of; };
       window.__matched = 0;
+      let spent = false;
       window.fetch = (url, ...a) => {
         if (!String(url).includes(#{fragment.to_json})) return of(url, ...a);
+        if (#{once.to_json} && spent) return of(url, ...a);
+        spent = true;
         window.__matched++;
         return #{answer};
       };
     JS
   end
 
-  def open_request_modal
-    visit assessment_path(@report_assignment)
-    assert_text "Critical Thinking"
-    # Open the evidence-actions kebab, then the "Request evidence" item.
-    # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+  # Open the evidence-actions kebab, then the "Request evidence" item.
+  # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+  def trigger_request_modal
     page.execute_script(<<~JS)
       document.querySelector("button[aria-label='Feedback / evidence actions']")?.click()
     JS
@@ -91,6 +103,21 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       [...document.querySelectorAll("button")]
         .find((b) => b.textContent.trim() === "Request feedback / evidence")?.click()
     JS
+  end
+
+  # The frame-load error state's Retry / Close, dispatched by label.
+  def click_modal_error_button(label)
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("#evidence-request-modal-error button")]
+        .find((b) => b.textContent.trim() === #{label.to_json})
+        .click();
+    JS
+  end
+
+  def open_request_modal
+    visit assessment_path(@report_assignment)
+    assert_text "Critical Thinking"
+    trigger_request_modal
     assert_selector "#evidence-request-modal-overlay", visible: true
     assert_text "Who can speak to this?"
   end
@@ -119,7 +146,7 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     select_peer_suggestion
     wait_for_stimulus "submit-guard"
 
-    patch_fetch("/evidence_requests")
+    patch_fetch("/evidence_requests", respond: :delay)
     click_send
 
     # The POST is genuinely still open — held by the patch, not by a sleep.
@@ -181,6 +208,62 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
       assert_not_nil req
       assert_equal "pending", req.status
       assert_equal @cap_stable, req.capability_stable_id
+    end
+  end
+
+  # The #328 failure mode on this modal (audit issue #365): a failed frame GET
+  # used to leave "Loading…" standing forever — and with no exit at all, since
+  # this modal's own × lives inside the frame that never loaded.
+  context "the request modal's frame failing to load" do
+    setup do
+      visit assessment_path(@report_assignment)
+      assert_text "Critical Thinking"
+      wait_for_stimulus "frame-error"
+    end
+
+    should "surface a retryable error rather than a stuck Loading… state" do
+      patch_fetch("evidence_request_modal", respond: :reject, once: true)
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-overlay", visible: true
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+      # The stuck placeholder is gone, not merely joined by an error.
+      assert_no_selector "turbo-frame#evidence-request-modal", visible: true
+
+      click_modal_error_button "Retry"
+
+      assert_text "Who can speak to this?"
+      assert_no_selector "#evidence-request-modal-error", visible: true
+    end
+
+    # A non-HTML body (a proxy's text/plain 502) makes `responseHTML` resolve
+    # undefined, so Turbo renders nothing AND dispatches nothing — neither
+    # frame-missing nor fetch-request-error. Only `responseReceived` catches it.
+    should "surface a non-HTML failure Turbo discards without any event" do
+      patch_fetch("evidence_request_modal", once: true,
+        respond: "502 Bad Gateway", content_type: "text/plain")
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+      assert_no_text "502 Bad Gateway"
+
+      click_modal_error_button "Retry"
+
+      assert_text "Who can speak to this?"
+    end
+
+    should "offer a Close that dismisses the modal" do
+      patch_fetch("evidence_request_modal", respond: :reject, once: true)
+      trigger_request_modal
+
+      assert_selector "#evidence-request-modal-error",
+        text: "Couldn't load the request form", visible: true
+
+      click_modal_error_button "Close"
+
+      assert_no_selector "#evidence-request-modal-overlay", visible: true
     end
   end
 

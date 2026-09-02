@@ -9,6 +9,10 @@
 # evidence modal's overlay, every trigger must name its overlay via
 # `data-modal-target-id` (framework-explorer Hard-Won Lesson 19) — this one is
 # `evidence-request-modal-overlay`.
+#
+# The panel carries the shared `frame-error` controller: a failed GET would
+# otherwise leave the modal on "Loading…" forever with no way out at all — this
+# modal's own × lives inside the frame that never loaded (audit issue #365).
 class Views::Evidence::RequestModalShell < Views::Base
   def view_template
     div(id: "evidence-request-modal-overlay",
@@ -18,10 +22,21 @@ class Views::Evidence::RequestModalShell < Views::Base
         role: "dialog", aria: { modal: "true" }) do
       div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
           tabindex: "-1",
-          data: { modal_target: "panel" }) do
-        turbo_frame_tag("evidence-request-modal", loading: "lazy", data: { request_evidence_target: "frame" }) do
+          data: { modal_target: "panel",
+                  controller: "frame-error",
+                  action: "turbo:before-fetch-request->frame-error#requestStarted " \
+                          "turbo:fetch-request-error->frame-error#loadFailed " \
+                          "turbo:frame-missing->frame-error#loadFailed " \
+                          "turbo:before-fetch-response->frame-error#responseReceived " \
+                          "turbo:frame-load->frame-error#loadSucceeded" }) do
+        turbo_frame_tag("evidence-request-modal", loading: "lazy",
+                        data: { request_evidence_target: "frame", frame_error_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
         end
+        render Components::Kit::FrameLoadError.new(
+          id: "evidence-request-modal-error", closeable: true,
+          message: "Couldn't load the request form. Try again — if it keeps failing, close this and reload the page."
+        )
       end
     end
   end
