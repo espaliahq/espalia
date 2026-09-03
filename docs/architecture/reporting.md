@@ -166,7 +166,8 @@ item ID, never by capability link.
   cycle's activity can fall in — `Reporting::CycleMonth.available_for`, which
   runs from the opening month through the current month for an open cycle, and
   through the close *or the latest cycle-attributed activity* for a closed one,
-  so a late response recorded after close stays selectable) narrows the counts
+  so a late response recorded after close stays selectable — including a legacy
+  null-cycle response, found through its in-span request) narrows the counts
   to feedback **recorded** and requests **sent** in that calendar month. Cycle
   attribution runs first, so a month is always a slice of the cycle.
   Participants stay the cycle's participants (coverage is "participants with

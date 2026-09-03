@@ -46,19 +46,42 @@ class Reporting::CycleMonth
     months.reverse
   end
 
-  # The newest feedback or request timestamp explicitly attributed to the
-  # cycle. Legacy rows carry no cycle id and are only ever inferred inside an
-  # enrollment window, which the cycle's own span already covers.
+  # The newest feedback or request timestamp the cycle report can attribute
+  # to the cycle. Explicit rows carry the cycle id. Legacy rows (no cycle id)
+  # are attributed by `Reporting::EvidenceCoverage` from enrollment windows,
+  # which the cycle's own span covers — except a legacy *response*, which
+  # inherits its request's cycle and may be recorded after close. Those are
+  # found through requests that fall inside the cycle's span for an enrolled
+  # participant; that is a slight over-approximation of the query's
+  # exactly-one-window rule, and erring wide only ever offers a month that
+  # reports zero.
   #
   # @param cycle [AssessmentCycle]
   # @return [Time, nil]
   def self.latest_activity_at(cycle)
+    requests = attributed_requests(cycle)
     [
       EvidenceItem.where(cycle_id: cycle.cycle_id).maximum(:recorded_at),
-      EvidenceRequest.where(cycle_id: cycle.cycle_id).maximum(:requested_at)
+      EvidenceItem.where(id: requests.where.not(evidence_id: nil).select(:evidence_id)).maximum(:recorded_at),
+      requests.maximum(:requested_at)
     ].compact.max
   end
   private_class_method :latest_activity_at
+
+  # @param cycle [AssessmentCycle]
+  # @return [ActiveRecord::Relation<EvidenceRequest>] requests explicitly on
+  #   the cycle, plus legacy ones sent inside its span to an enrolled participant
+  def self.attributed_requests(cycle)
+    span = cycle.opened_at..(cycle.closed_at || Time.current)
+    enrolled = AssessmentCycleEnrollment.where(cycle_id: cycle.cycle_id).select(:person_id)
+
+    EvidenceRequest.where(cycle_id: cycle.cycle_id).or(
+      EvidenceRequest.where(
+        cycle_id: nil, framework_id: cycle.framework_id, person_id: enrolled, requested_at: span
+      )
+    )
+  end
+  private_class_method :attributed_requests
 
   # @param cycle [AssessmentCycle]
   # @param key [String, nil] a `YYYY-MM` month key

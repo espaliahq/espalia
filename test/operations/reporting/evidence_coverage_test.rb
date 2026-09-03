@@ -150,6 +150,32 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_equal 1, late.dig(:metrics, :feedback_provided)
     end
 
+    should "offer the month of a legacy response that inherits its request's cycle after close" do
+      next_month = @this_month.next_month
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(status: "closed", closed_at: @this_month + 1.day)
+        AssessmentCycleEnrollment.where(cycle_id: @cycle.cycle_id).update_all(enrolled_at: @last_month)
+        item = create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @cycle.framework_id, cycle_id: nil,
+          recorded_at: next_month + 1.day)
+        create(:evidence_request,
+          tenant: @tenant, requester: @manager, requestee: @author,
+          person_id: @report.id, framework_id: @cycle.framework_id, cycle_id: nil,
+          status: "responded", requested_at: @this_month, evidence_id: item.id)
+      end
+
+      result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+      assert_equal next_month.strftime("%Y-%m"), result[:available_months].first[:month]
+
+      late = call_op(
+        context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, month: next_month.strftime("%Y-%m") }
+      )
+      assert_equal 1, late.dig(:metrics, :feedback_provided)
+      assert_equal 1, late.dig(:metrics, :provided_by_request)
+    end
+
     should "still offer the opening month when the clock precedes it" do
       travel_to(@last_month - 1.day) do
         result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
