@@ -85,6 +85,117 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     assert_equal 0, mine.dig(:metrics, :participant_count)
   end
 
+  context "month filter" do
+    setup do
+      @this_month = Time.current.beginning_of_month
+      @last_month = @this_month.prev_month
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(opened_at: @last_month)
+        create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @cycle.framework_id, cycle_id: @cycle.cycle_id,
+          source: "peer", feedback_direction: "peer_to_peer",
+          recorded_at: @last_month + 2.days)
+      end
+    end
+
+    should "narrow the counts to one month and describe the period" do
+      result = call_op(
+        context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, month: @last_month.strftime("%Y-%m") }
+      )
+
+      assert_equal 1, result.dig(:metrics, :feedback_provided)
+      assert_equal 1, result.dig(:metrics, :feedback_directionality, :peer_to_peer)
+      assert_equal @last_month.strftime("%Y-%m"), result.dig(:period, :month)
+      assert_equal @last_month.strftime("%B %Y"), result.dig(:period, :label)
+      assert_equal @last_month.iso8601, result.dig(:period, :starts_at)
+      assert_equal @last_month.end_of_month.iso8601, result.dig(:period, :ends_at)
+    end
+
+    should "report the whole cycle and list the available months without a month" do
+      result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+
+      assert_equal 2, result.dig(:metrics, :feedback_provided)
+      assert_nil result[:period]
+      assert_equal [ @this_month, @last_month ].map { |m| m.strftime("%Y-%m") },
+        result[:available_months].map { |m| m[:month] }
+      assert_equal @this_month.strftime("%B %Y"), result[:available_months].first[:label]
+    end
+
+    should "reject a malformed month" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, month: "June 2026" })
+      end
+      assert_match(/YYYY-MM/, error.message)
+    end
+
+    should "offer the month of a response recorded after a cycle closed" do
+      next_month = @this_month.next_month
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(status: "closed", closed_at: @this_month + 1.day)
+        create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @cycle.framework_id, cycle_id: @cycle.cycle_id,
+          recorded_at: next_month + 1.day)
+      end
+
+      result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+      assert_equal next_month.strftime("%Y-%m"), result[:available_months].first[:month]
+
+      late = call_op(
+        context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, month: next_month.strftime("%Y-%m") }
+      )
+      assert_equal 1, late.dig(:metrics, :feedback_provided)
+    end
+
+    should "offer the month of a legacy response that inherits its request's cycle after close" do
+      next_month = @this_month.next_month
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(status: "closed", closed_at: @this_month + 1.day)
+        AssessmentCycleEnrollment.where(cycle_id: @cycle.cycle_id).update_all(enrolled_at: @last_month)
+        item = create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @cycle.framework_id, cycle_id: nil,
+          recorded_at: next_month + 1.day)
+        create(:evidence_request,
+          tenant: @tenant, requester: @manager, requestee: @author,
+          person_id: @report.id, framework_id: @cycle.framework_id, cycle_id: nil,
+          status: "responded", requested_at: @this_month, evidence_id: item.id)
+      end
+
+      result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+      assert_equal next_month.strftime("%Y-%m"), result[:available_months].first[:month]
+
+      late = call_op(
+        context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, month: next_month.strftime("%Y-%m") }
+      )
+      assert_equal 1, late.dig(:metrics, :feedback_provided)
+      assert_equal 1, late.dig(:metrics, :provided_by_request)
+    end
+
+    should "still offer the opening month when the clock precedes it" do
+      travel_to(@last_month - 1.day) do
+        result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+        assert_includes result[:available_months].map { |m| m[:month] }, @last_month.strftime("%Y-%m")
+
+        error = assert_raises(Operations::Base::ParameterError) do
+          call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, month: "2001-01" })
+        end
+        assert_match(/outside the cycle/, error.message)
+      end
+    end
+
+    should "reject a month the cycle never spanned" do
+      error = assert_raises(Operations::Base::ParameterError) do
+        call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, month: "2001-01" })
+      end
+      assert_match(/outside the cycle/, error.message)
+    end
+  end
+
   should "deny a member with no reports in the cycle" do
     outsider_user = create(:user)
     outsider_tu = ActsAsTenant.with_tenant(@tenant) do

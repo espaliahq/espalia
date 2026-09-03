@@ -542,6 +542,13 @@ Still unexpressed — a ledger, so the next round knows what it is buying:
   `perform` and advertised as bare `integer`/`number`. JSON Schema says this
   natively (`minimum` / `exclusiveMinimum`), so this wants a `min:`/`max:`
   clause on `parameter` — the cheapest remaining item.
+- **String formats.** `reporting_evidence_coverage`'s `month` advertises a
+  `YYYY-MM` `pattern` via `schema:` (documentation-only) and checks it in
+  `perform` with `Reporting::CycleMonth.valid_key?` — the two are built from
+  one `MONTH_PATTERN` constant so they can't drift, but a `pattern:` clause on
+  `parameter` (emit `pattern`, run `match?` in `Parameter#validate!`) would
+  make it one declaration and move the check to the boundary. Same shape as the
+  numeric-bounds item above.
 - **Per-discriminator object key sets.** `frameworks_suggest_create`'s
   `proposed_attributes` advertises the UNION of every entity type's keys with
   the per-type required/allowed sets only in prose in its `description`;

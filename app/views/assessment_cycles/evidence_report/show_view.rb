@@ -15,6 +15,10 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   # @param group_by [String] active grouping (manager | role | level)
   # @param scope [String] active scope (all | mine)
   # @param can_scope_to_self [Boolean] whether to show the scope switcher
+  #
+  # The active month and the months on offer are read from the report itself
+  # (`period` / `available_months`), so the view and the MCP payload can't
+  # disagree about which window the counts describe.
   def initialize(cycle:, report:, group_by: "manager", scope: "all",
                  can_scope_to_self: false, user: nil, current_tenant: nil, tenants: [])
     @cycle = cycle
@@ -53,6 +57,12 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
 
   def groups = @report.dig(:groups, @group_by.to_sym) || []
 
+  def period = @report[:period]
+
+  def available_months = @report[:available_months] || []
+
+  def month_key = period&.dig(:month)
+
   def header
     div do
       a(
@@ -68,13 +78,48 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         end
       end
       p(class: "mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300") do
-        "Feedback provided during this cycle, whether requested or proactive, alongside the request response funnel."
+        if period
+          "Feedback recorded and requests sent in #{period[:label]}, whether requested or proactive, " \
+            "alongside the request response funnel."
+        else
+          "Feedback provided during this cycle, whether requested or proactive, alongside the request response funnel."
+        end
       end
       report_navigation
       div(class: "mt-3 flex flex-wrap items-center gap-3") do
         group_tabs
         scope_toggle
+        month_filter
       end
+    end
+  end
+
+  # Narrow the report to one month of the cycle. A plain GET form with an
+  # explicit Apply (no submit-on-change) so changing the select never moves
+  # the page out from under a keyboard or screen-reader user.
+  def month_filter
+    return if available_months.empty?
+
+    form(
+      action: evidence_assessment_cycle_path(@cycle), method: "get",
+      class: "flex flex-wrap items-center gap-2"
+    ) do
+      carried_params(month: nil).each { |name, value| input(type: "hidden", name: name, value: value) }
+      label(
+        for: "evidence-report-month",
+        class: "text-sm font-medium text-gray-600 dark:text-gray-300"
+      ) { "Month" }
+      select(
+        id: "evidence-report-month", name: "month",
+        class: "min-h-11 min-w-40 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900 " \
+               "dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+      ) do
+        option(value: "", selected: month_key.nil?) { "Whole cycle" }
+        available_months.each do |candidate|
+          option(value: candidate[:month], selected: candidate[:month] == month_key) { candidate[:label] }
+        end
+      end
+      button(type: "submit", class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Apply" }
     end
   end
 
@@ -127,10 +172,17 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   end
 
   def report_path(group: @group_by, scope: @scope)
-    params = {}
-    params[:group] = group if group && group != "manager"
-    params[:scope] = "mine" if scope == "mine"
-    evidence_assessment_cycle_path(@cycle, **params)
+    evidence_assessment_cycle_path(@cycle, **carried_params(group: group, scope: scope))
+  end
+
+  # The filter params a link or form must carry so switching one axis keeps
+  # the others; defaults are omitted to keep URLs clean.
+  def carried_params(group: @group_by, scope: @scope, month: month_key)
+    {
+      group: (group if group && group != "manager"),
+      scope: ("mine" if scope == "mine"),
+      month: month
+    }.compact
   end
 
   def summary_grid
@@ -301,8 +353,14 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
 
   def reporting_note
     p(class: "text-sm text-gray-600 dark:text-gray-300") do
-      "Counts are based on unique feedback items first provided for this cycle. " \
+      plain "Counts are based on unique feedback items first provided for this cycle. " \
         "Relinking existing evidence does not count it again. Withdrawn feedback is shown separately."
+      if period
+        plain " #{period[:label]} counts feedback by when it was recorded (including withdrawn items, " \
+          "whenever they were withdrawn) and requests by when they were sent, with their current status. " \
+          "The two windows differ: feedback answering an earlier month's request counts here as by request, " \
+          "while the request itself counts in the month it was sent."
+      end
     end
   end
 

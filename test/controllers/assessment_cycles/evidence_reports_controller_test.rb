@@ -8,8 +8,11 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
     ActsAsTenant.with_tenant(@tenant) do
       @framework_id = SecureRandom.uuid_v7
       @role = create(:framework_role, name: "Engineer")
+      @this_month = Time.current.beginning_of_month
+      @last_month = @this_month.prev_month
       @cycle = create(:assessment_cycle,
-        tenant: @tenant, name: "Q1 2026", framework_id: @framework_id)
+        tenant: @tenant, name: "Q1 2026", framework_id: @framework_id,
+        opened_at: @last_month)
 
       @manager_user = create(:user, password: "password123")
       @manager = create(:person,
@@ -28,6 +31,10 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
         tenant: @tenant, author: author, person_id: @report.id,
         framework_id: @framework_id, cycle_id: @cycle.cycle_id,
         content: "Private feedback content")
+      create(:evidence_item, with_link: false,
+        tenant: @tenant, author: author, person_id: other.id,
+        framework_id: @framework_id, cycle_id: @cycle.cycle_id,
+        recorded_at: @last_month + 1.day)
       requested = create(:evidence_item, with_link: false,
         tenant: @tenant, author: author, person_id: @report.id,
         framework_id: @framework_id, cycle_id: @cycle.cycle_id)
@@ -80,6 +87,32 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_includes response.body, "Engineer"
       assert_includes response.body, "Feedback and evidence coverage by role"
+    end
+
+    should "narrow the report to one month of the cycle" do
+      sign_in @admin_user
+      get evidence_assessment_cycle_path(@cycle, group: "role", month: @last_month.strftime("%Y-%m"))
+
+      assert_response :success
+      assert_includes response.body, "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
+      assert_includes response.body, "1 of 2 participants have feedback"
+      assert_select "option[value=?][selected]", @last_month.strftime("%Y-%m"),
+        text: @last_month.strftime("%B %Y")
+      # Switching the grouping keeps the month.
+      assert_includes response.body,
+        evidence_assessment_cycle_path(@cycle, group: "level", month: @last_month.strftime("%Y-%m"))
+    end
+
+    should "offer every month the cycle spans and fall back to the whole cycle for an unknown month" do
+      sign_in @admin_user
+      get evidence_assessment_cycle_path(@cycle, month: "1999-01")
+
+      assert_response :success
+      assert_select "option[value=''][selected]", text: "Whole cycle"
+      assert_includes response.body, "1999-01 isn&#39;t a month of this cycle, so the whole cycle is shown."
+      assert_includes response.body, @this_month.strftime("%B %Y")
+      assert_includes response.body, @last_month.strftime("%B %Y")
+      assert_includes response.body, "2 of 2 participants have feedback"
     end
 
     should "narrow an admin to their own empty subtree" do
