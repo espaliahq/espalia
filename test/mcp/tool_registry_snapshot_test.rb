@@ -1907,6 +1907,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "scope" => { "type" => "string", "enum" => [ "mine", "all" ] },
             "month" => {
               "type" => "string",
+              "minLength" => 1,
               "pattern" => "^[0-9]{4}-(0[1-9]|1[0-2])$",
               "description" => "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."
             }

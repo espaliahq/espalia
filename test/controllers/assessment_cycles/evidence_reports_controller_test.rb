@@ -96,8 +96,8 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_includes response.body, "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
       assert_includes response.body, "1 of 2 participants have feedback"
-      assert_includes response.body,
-        %(<option value="#{@last_month.strftime("%Y-%m")}" selected="selected">#{@last_month.strftime("%B %Y")}</option>)
+      assert_select "option[value=?][selected]", @last_month.strftime("%Y-%m"),
+        text: @last_month.strftime("%B %Y")
       # Switching the grouping keeps the month.
       assert_includes response.body,
         evidence_assessment_cycle_path(@cycle, group: "level", month: @last_month.strftime("%Y-%m"))
@@ -108,7 +108,8 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
       get evidence_assessment_cycle_path(@cycle, month: "1999-01")
 
       assert_response :success
-      assert_includes response.body, %(<option value="" selected="selected">Whole cycle</option>)
+      assert_select "option[value=''][selected]", text: "Whole cycle"
+      assert_includes response.body, "1999-01 isn&#39;t a month of this cycle, so the whole cycle is shown."
       assert_includes response.body, @this_month.strftime("%B %Y")
       assert_includes response.body, @last_month.strftime("%B %Y")
       assert_includes response.body, "2 of 2 participants have feedback"

@@ -727,9 +727,11 @@ Either surface can narrow the report to **one calendar month** of the cycle
 (`month: "YYYY-MM"` over MCP; a Month select + Apply on the web — a plain GET
 form, deliberately not submit-on-change). The month counts feedback by
 `recorded_at` and requests by `requested_at`, inside the cycle attribution
-above; request statuses stay current. `Reporting::CycleMonth` owns the key
-format, the label, and the "months this cycle has spanned" list that both the
-select and the MCP payload's `available_months` render.
+above; request statuses stay current, so the two card families use different
+windows (see [reporting.md §4.9](../architecture/reporting.md)). Boundaries are
+UTC (`Time.zone`) until tenants carry a zone. `Reporting::CycleMonth` owns the
+key format, the label, and the months list that both the select and the MCP
+payload's `available_months` render.
 
 **Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with

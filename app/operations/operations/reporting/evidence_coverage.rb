@@ -19,7 +19,9 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   parameter :cycle_id, String, required: true
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :scope, String, required: false, allowed: %w[mine all]
-  parameter :month, String, required: false, schema: {
+  # `allow_blank: false` keeps the runtime in step with the advertised pattern
+  # (which no empty string matches): omit the key for the whole cycle.
+  parameter :month, String, required: false, allow_blank: false, schema: {
     pattern: ::Reporting::CycleMonth::JSON_SCHEMA_PATTERN,
     description: "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."
   }
@@ -30,6 +32,7 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
 
   # @return [Hash] aggregate cycle feedback coverage
   def perform
+    month = resolve_month
     result = ::Reporting::EvidenceCoverage.new(
       cycle: cycle,
       scope_person_ids: scope_person_ids,
@@ -37,7 +40,7 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
       period: month&.range
     ).call
 
-    serialize(result)
+    serialize(result, month)
   end
 
   private
@@ -57,21 +60,15 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   # The requested month, or nil for the whole cycle. A malformed key or a
   # month the cycle never spanned is the caller's mistake, so it surfaces as
   # a ParameterError (-32602 over MCP) rather than an empty report.
-  def month
-    return @month if defined?(@month)
-
-    @month = resolve_month
-  end
-
   def resolve_month
     key = params[:month]
-    return nil if key.blank?
+    return nil if key.nil?
 
     unless ::Reporting::CycleMonth.valid_key?(key)
       raise ParameterError, "month must be formatted YYYY-MM, got #{key.inspect}"
     end
 
-    available_months.find { |candidate| candidate.key == key } ||
+    ::Reporting::CycleMonth.find_in(cycle, key, months: available_months) ||
       raise(ParameterError,
             "month #{key} is outside the cycle's lifespan " \
             "(#{available_months.last.key} to #{available_months.first.key})")
@@ -91,10 +88,10 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
     !policy.cohort_full_access? || params[:scope] == "mine"
   end
 
-  def serialize(result)
+  def serialize(result, month)
     {
       cycle: { id: result.cycle.cycle_id, name: result.cycle.name },
-      period: period_payload,
+      period: period_payload(month),
       available_months: available_months.map { |candidate| { month: candidate.key, label: candidate.label } },
       metrics: metrics_payload(result.metrics),
       groups: result.groups.transform_values do |groups|
@@ -104,7 +101,7 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   end
 
   # @return [Hash, nil] the month the counts were narrowed to; nil for the whole cycle
-  def period_payload
+  def period_payload(month)
     return nil unless month
 
     {

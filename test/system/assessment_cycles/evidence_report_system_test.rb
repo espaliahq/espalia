@@ -149,7 +149,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       expect_text: "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
 
     assert_text "1 of 2 participants have feedback"
-    assert_select_value "Month", @last_month.strftime("%Y-%m")
+    assert_equal @last_month.strftime("%Y-%m"), find_field("Month").value
     screenshot("light_desktop_month")
 
     click_link_with_js_fallback "By role", expect_text: "Engineer"
@@ -180,10 +180,6 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
   end
 
   private
-
-  def assert_select_value(locator, value)
-    assert_equal value, find_field(locator).value
-  end
 
   def scroll_direction_card_into_view
     heading = find("h2", text: "Feedback direction")

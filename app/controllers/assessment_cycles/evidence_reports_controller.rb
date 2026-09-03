@@ -51,9 +51,16 @@ class AssessmentCycles::EvidenceReportsController < ApplicationController
 
   # A month the cycle actually spans, or nil for the whole cycle. Anything
   # else (a typo, a month before the cycle opened) falls back to the whole
-  # cycle rather than erroring, like the other filter params.
+  # cycle like the other filter params — but says so, since the URL still
+  # names the month a shared link asked for.
   def month_param
-    Reporting::CycleMonth.find_in(@cycle, params[:month])&.key
+    return @month_param if defined?(@month_param)
+
+    @month_param = Reporting::CycleMonth.find_in(@cycle, params[:month])&.key
+    if params[:month].present? && @month_param.nil?
+      flash.now[:alert] = "#{params[:month]} isn't a month of this cycle, so the whole cycle is shown."
+    end
+    @month_param
   end
 
   def can_scope_to_self?

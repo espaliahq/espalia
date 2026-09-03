@@ -130,6 +130,38 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_match(/YYYY-MM/, error.message)
     end
 
+    should "offer the month of a response recorded after a cycle closed" do
+      next_month = @this_month.next_month
+      ActsAsTenant.with_tenant(@tenant) do
+        @cycle.update!(status: "closed", closed_at: @this_month + 1.day)
+        create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @cycle.framework_id, cycle_id: @cycle.cycle_id,
+          recorded_at: next_month + 1.day)
+      end
+
+      result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+      assert_equal next_month.strftime("%Y-%m"), result[:available_months].first[:month]
+
+      late = call_op(
+        context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, month: next_month.strftime("%Y-%m") }
+      )
+      assert_equal 1, late.dig(:metrics, :feedback_provided)
+    end
+
+    should "still offer the opening month when the clock precedes it" do
+      travel_to(@last_month - 1.day) do
+        result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+        assert_includes result[:available_months].map { |m| m[:month] }, @last_month.strftime("%Y-%m")
+
+        error = assert_raises(Operations::Base::ParameterError) do
+          call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, month: "2001-01" })
+        end
+        assert_match(/outside the cycle/, error.message)
+      end
+    end
+
     should "reject a month the cycle never spanned" do
       error = assert_raises(Operations::Base::ParameterError) do
         call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, month: "2001-01" })

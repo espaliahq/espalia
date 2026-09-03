@@ -163,14 +163,24 @@ item ID, never by capability link.
   enrollment-snapshot level. Contributor identities and feedback content never
   enter the result.
 - **Monthly period**: an optional `month` (`YYYY-MM`, one of the months the
-  cycle has spanned — `Reporting::CycleMonth.available_for`) narrows the counts
-  to feedback **recorded** and requests **sent** in that calendar month
-  (application time zone). Cycle attribution runs first, so a month is always a
-  slice of the cycle. Participants stay the cycle's participants (coverage is
-  "participants with feedback that month"), and request statuses are current —
-  a request sent in the month and answered later still reads as fulfilled. The
-  payload carries the resolved `period` (nil for the whole cycle) and the
-  `available_months` so a client never has to guess the valid keys.
+  cycle's activity can fall in — `Reporting::CycleMonth.available_for`, which
+  runs from the opening month through the current month for an open cycle, and
+  through the close *or the latest cycle-attributed activity* for a closed one,
+  so a late response recorded after close stays selectable) narrows the counts
+  to feedback **recorded** and requests **sent** in that calendar month. Cycle
+  attribution runs first, so a month is always a slice of the cycle.
+  Participants stay the cycle's participants (coverage is "participants with
+  feedback that month"). Two deliberate consequences, both stated in the
+  report's note: the feedback and request cards use **different windows**
+  (feedback answering an earlier month's request is "by request" in the month
+  it was recorded, while the request counts — with its *current* status — in
+  the month it was sent, so monthly by-request feedback and fulfilled requests
+  need not agree), and withdrawn / cancelled items follow their original
+  timestamp, not the withdrawal. Month boundaries are `Time.zone` — **UTC**,
+  as neither the app nor tenants configure a zone — so the payload's
+  `starts_at` / `ends_at` are the authoritative window; a per-tenant zone is a
+  follow-up. The payload carries the resolved `period` (nil for the whole
+  cycle) and `available_months` so a client never has to guess the valid keys.
 
 **Immutable attribution.** New `EvidenceRequested` and `EvidenceRecorded`
 events carry nullable `cycle_id`; their projections copy it to
@@ -203,7 +213,8 @@ so `EvidenceCollection::CODE_VERSION` remains 3 and no rebuild is required.
 
 - Web — `GET /assessment_cycles/:id/evidence`, with whole-cycle / My-org scope,
   manager / role / level tabs, and a Month select + Apply (`?month=YYYY-MM`; an
-  unknown month falls back to the whole cycle, like the other filter params).
+  unknown month falls back to the whole cycle like the other filter params, with
+  a flash saying so since the shared URL still names a month).
 - MCP — `Operations::Reporting::EvidenceCoverage`
   (`reporting_evidence_coverage`, summary by default, `mode: "full"` for groups,
   `month: "YYYY-MM"` for one month — a malformed or out-of-cycle month is a
