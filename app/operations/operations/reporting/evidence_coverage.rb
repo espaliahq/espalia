@@ -26,6 +26,11 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
     description: "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."
   }
 
+  # Anyone the cycle's evidence report admits: managers with reports in the
+  # cycle, tenant admins, and global admins (`AssessmentCyclePolicy#evidence_report?`).
+  #
+  # @raise [Pundit::NotAuthorizedError] when the caller may not view the report
+  # @raise [ActiveRecord::RecordNotFound] when the cycle doesn't exist in the tenant
   def policy_check
     authorize cycle, :evidence_report?
   end
