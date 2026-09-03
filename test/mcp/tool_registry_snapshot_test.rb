@@ -1896,13 +1896,20 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "across the caller's org subtree (admins see the whole cycle): feedback " \
           "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
           "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
-          "and optional manager/role/level groups.",
+          "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
+          "recorded and requests sent in one calendar month of the cycle; the response lists " \
+          "the months available.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "cycle_id" => { "type" => "string" },
             "mode" => { "type" => "string", "enum" => [ "summary", "full" ] },
-            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
+            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] },
+            "month" => {
+              "type" => "string",
+              "pattern" => "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "description" => "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."
+            }
           },
           "required" => [ "cycle_id" ],
           "additionalProperties" => false

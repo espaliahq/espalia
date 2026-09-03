@@ -116,6 +116,52 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     end
   end
 
+  context "monthly reporting period" do
+    setup do
+      @this_month = Time.current.beginning_of_month
+      @last_month = @this_month.prev_month
+      @cycle.update!(opened_at: @last_month)
+
+      feedback(person: @first, recorded_at: @last_month + 3.days)
+      feedback(person: @first, recorded_at: @this_month + 2.hours)
+      feedback(person: @second, recorded_at: @this_month + 3.hours, status: "withdrawn")
+      request(person: @first, status: "responded", requested_at: @last_month + 1.day,
+        evidence_id: feedback(person: @first, recorded_at: @this_month + 4.hours).id)
+      request(person: @second, status: "pending", requested_at: @this_month + 1.hour)
+    end
+
+    should "count feedback recorded and requests sent inside the period" do
+      report = Reporting::EvidenceCoverage.new(cycle: @cycle, period: @this_month.all_month).call
+
+      assert_equal @this_month.all_month, report.period
+      assert_equal 2, report.metrics.feedback_provided
+      assert_equal 1, report.metrics.provided_by_request
+      assert_equal 1, report.metrics.feedback_withdrawn
+      assert_equal 1, report.metrics.participants_with_feedback
+      assert_equal 50, report.metrics.participant_coverage_pct
+      assert_equal 1, report.metrics.requests_sent
+      assert_equal 1, report.metrics.requests_pending
+    end
+
+    should "keep a request sent in the period fulfilled even when answered later" do
+      report = Reporting::EvidenceCoverage.new(cycle: @cycle, period: @last_month.all_month).call
+
+      assert_equal 1, report.metrics.feedback_provided
+      assert_equal 0, report.metrics.provided_by_request
+      assert_equal 1, report.metrics.requests_sent
+      assert_equal 1, report.metrics.requests_fulfilled
+      assert_equal 100, report.metrics.request_fulfillment_pct
+    end
+
+    should "report the whole cycle with a nil period" do
+      report = result
+
+      assert_nil report.period
+      assert_equal 3, report.metrics.feedback_provided
+      assert_equal 2, report.metrics.requests_sent
+    end
+  end
+
   context "immutable provision attribution" do
     should "not count prior-cycle evidence that is relinked in this cycle" do
       previous = create(:assessment_cycle, :closed,

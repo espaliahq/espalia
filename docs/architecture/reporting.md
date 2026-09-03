@@ -162,6 +162,15 @@ item ID, never by capability link.
 - **Grouping**: assessed person by live manager, enrollment-snapshot role, or
   enrollment-snapshot level. Contributor identities and feedback content never
   enter the result.
+- **Monthly period**: an optional `month` (`YYYY-MM`, one of the months the
+  cycle has spanned — `Reporting::CycleMonth.available_for`) narrows the counts
+  to feedback **recorded** and requests **sent** in that calendar month
+  (application time zone). Cycle attribution runs first, so a month is always a
+  slice of the cycle. Participants stay the cycle's participants (coverage is
+  "participants with feedback that month"), and request statuses are current —
+  a request sent in the month and answered later still reads as fulfilled. The
+  payload carries the resolved `period` (nil for the whole cycle) and the
+  `available_months` so a client never has to guess the valid keys.
 
 **Immutable attribution.** New `EvidenceRequested` and `EvidenceRecorded`
 events carry nullable `cycle_id`; their projections copy it to
@@ -192,10 +201,13 @@ so `EvidenceCollection::CODE_VERSION` remains 3 and no rebuild is required.
 
 **Surfaces**:
 
-- Web — `GET /assessment_cycles/:id/evidence`, with whole-cycle / My-org scope
-  and manager / role / level tabs.
+- Web — `GET /assessment_cycles/:id/evidence`, with whole-cycle / My-org scope,
+  manager / role / level tabs, and a Month select + Apply (`?month=YYYY-MM`; an
+  unknown month falls back to the whole cycle, like the other filter params).
 - MCP — `Operations::Reporting::EvidenceCoverage`
-  (`reporting_evidence_coverage`, summary by default, `mode: "full"` for groups).
+  (`reporting_evidence_coverage`, summary by default, `mode: "full"` for groups,
+  `month: "YYYY-MM"` for one month — a malformed or out-of-cycle month is a
+  `ParameterError`, -32602).
 
 **Authorization**: `AssessmentCyclePolicy#evidence_report?`, the same audience
 and subtree rules as cohort and attainment reporting.

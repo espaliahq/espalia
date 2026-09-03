@@ -18,8 +18,10 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       role = FactoryBot.create(:framework_role, name: "Engineer")
       level = FactoryBot.create(:framework_level,
         role_id: role.role_id, ordinal: 2, title: "Mid Engineer", code: "E2")
+      @last_month = Time.current.beginning_of_month.prev_month
       @cycle = FactoryBot.create(:assessment_cycle,
-        tenant: @tenant, name: "Q1 2026", framework_id: framework_id)
+        tenant: @tenant, name: "Q1 2026", framework_id: framework_id,
+        opened_at: @last_month)
 
       manager = FactoryBot.create(:person, tenant: @tenant, name: "Team Manager")
       report = FactoryBot.create(:person,
@@ -54,6 +56,11 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
         tenant: @tenant, author: author, person_id: report.id,
         framework_id: framework_id, cycle_id: @cycle.cycle_id,
         source: "peer", feedback_direction: nil)
+      FactoryBot.create(:evidence_item, with_link: false,
+        tenant: @tenant, author: author, person_id: report.id,
+        framework_id: framework_id, cycle_id: @cycle.cycle_id,
+        source: "peer", feedback_direction: "peer_to_peer",
+        recorded_at: @last_month + 2.days)
       FactoryBot.create(:evidence_request,
         tenant: @tenant, requester: manager, requestee: author,
         person_id: report.id, framework_id: framework_id,
@@ -132,6 +139,36 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     assert_text "Request fulfilment"
   end
 
+  should "narrow the report to one month of the cycle on desktop" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit evidence_assessment_cycle_path(@cycle)
+    assert_text "2 of 2 participants have feedback"
+
+    select @last_month.strftime("%B %Y"), from: "Month"
+    click_button_with_js_fallback "Apply",
+      expect_text: "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
+
+    assert_text "1 of 2 participants have feedback"
+    assert_select_value "Month", @last_month.strftime("%Y-%m")
+    screenshot("light_desktop_month")
+
+    click_link_with_js_fallback "By role", expect_text: "Engineer"
+    assert_text "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
+  end
+
+  should "narrow the report to one month of the cycle on mobile" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    visit evidence_assessment_cycle_path(@cycle)
+    assert_text "2 of 2 participants have feedback"
+
+    select @last_month.strftime("%B %Y"), from: "Month"
+    click_button_with_js_fallback "Apply",
+      expect_text: "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
+
+    assert_text "1 of 2 participants have feedback"
+    screenshot("light_mobile_month")
+  end
+
   should "switch the grouped breakdown to role" do
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     visit evidence_assessment_cycle_path(@cycle)
@@ -143,6 +180,10 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def assert_select_value(locator, value)
+    assert_equal value, find_field(locator).value
+  end
 
   def scroll_direction_card_into_view
     heading = find("h2", text: "Feedback direction")

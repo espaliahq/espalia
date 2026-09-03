@@ -723,6 +723,14 @@ or individual request row. Managers see their `Person#all_reports` subtree;
 admins/HR see the whole cycle and can switch to My org. Web and MCP share
 `Operations::Reporting::EvidenceCoverage`.
 
+Either surface can narrow the report to **one calendar month** of the cycle
+(`month: "YYYY-MM"` over MCP; a Month select + Apply on the web — a plain GET
+form, deliberately not submit-on-change). The month counts feedback by
+`recorded_at` and requests by `requested_at`, inside the cycle attribution
+above; request statuses stay current. `Reporting::CycleMonth` owns the key
+format, the label, and the "months this cycle has spanned" list that both the
+select and the MCP payload's `available_months` render.
+
 **Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"

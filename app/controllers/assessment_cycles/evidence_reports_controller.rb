@@ -2,7 +2,8 @@
 
 # Feedback and evidence-request coverage for an assessment cycle. Managers see
 # their live org subtree; admins/HR see the whole cycle and may narrow to their
-# own subtree. The shared Operation also backs the MCP tool surface.
+# own subtree, and anyone can narrow the report to one month of the cycle. The
+# shared Operation also backs the MCP tool surface.
 class AssessmentCycles::EvidenceReportsController < ApplicationController
   before_action :set_cycle
 
@@ -15,7 +16,8 @@ class AssessmentCycles::EvidenceReportsController < ApplicationController
       params: {
         cycle_id: @cycle.cycle_id,
         mode: "full",
-        scope: scope_param
+        scope: scope_param,
+        month: month_param
       }
     )
 
@@ -45,6 +47,13 @@ class AssessmentCycles::EvidenceReportsController < ApplicationController
 
   def scope_param
     params[:scope] == "mine" ? "mine" : "all"
+  end
+
+  # A month the cycle actually spans, or nil for the whole cycle. Anything
+  # else (a typo, a month before the cycle opened) falls back to the whole
+  # cycle rather than erroring, like the other filter params.
+  def month_param
+    Reporting::CycleMonth.find_in(@cycle, params[:month])&.key
   end
 
   def can_scope_to_self?

@@ -11,6 +11,12 @@
 # inferred cycle; evidence recorded before a request remains attributed to its
 # original provision cycle.
 #
+# An optional reporting period narrows the cycle's activity to one window:
+# feedback recorded and requests sent inside it. Attribution runs first, so
+# the period is always a slice of the cycle, never a way around it. Request
+# statuses are their current state — a request sent in the window and
+# answered later still reads as fulfilled.
+#
 # Privacy: this query returns workflow counts only. It never exposes evidence
 # content, contributor identity, or individual request details.
 class Reporting::EvidenceCoverage
@@ -64,8 +70,9 @@ class Reporting::EvidenceCoverage
   # One manager, role, or level breakdown row.
   Group = Data.define(:key, :label, :metrics)
 
-  # Complete query result.
-  Result = Data.define(:cycle, :metrics, :groups) do
+  # Complete query result. `period` is the time window the counts were
+  # narrowed to, or nil for the whole cycle.
+  Result = Data.define(:cycle, :period, :metrics, :groups) do
     def any? = metrics.participant_count.positive?
   end
 
@@ -84,10 +91,13 @@ class Reporting::EvidenceCoverage
   # @param cycle [AssessmentCycle]
   # @param scope_person_ids [Array<String>, nil] manager subtree, or nil for all
   # @param mode [Symbol] :summary omits grouped breakdowns; :full includes them
-  def initialize(cycle:, scope_person_ids: nil, mode: :full)
+  # @param period [Range<Time>, nil] window to narrow feedback recorded and
+  #   requests sent to; nil counts the whole cycle
+  def initialize(cycle:, scope_person_ids: nil, mode: :full, period: nil)
     @cycle = cycle
     @scope_person_ids = scope_person_ids
     @mode = mode
+    @period = period
   end
 
   # @return [Reporting::EvidenceCoverage::Result]
@@ -105,6 +115,7 @@ class Reporting::EvidenceCoverage
 
     Result.new(
       cycle: @cycle,
+      period: @period,
       metrics: build_metrics(participants),
       groups: @mode == :full ? build_groups(participants) : {}
     )
@@ -143,18 +154,24 @@ class Reporting::EvidenceCoverage
   end
 
   def load_request_rows
-    EvidenceRequest
+    scope = EvidenceRequest
       .where(person_id: @participant_ids, framework_id: @cycle.framework_id)
       .where(cycle_id: [ nil, @cycle.cycle_id ])
+    scope = scope.where(requested_at: @period) if @period
+
+    scope
       .pluck(:id, :person_id, :status, :evidence_id, :requested_at, :cycle_id)
       .map { |attributes| RequestRow.new(*attributes) }
       .select { |row| request_cycle(row) == @cycle.cycle_id }
   end
 
   def load_evidence_rows
-    rows = EvidenceItem
+    scope = EvidenceItem
       .where(person_id: @participant_ids, framework_id: @cycle.framework_id)
       .where(cycle_id: [ nil, @cycle.cycle_id ])
+    scope = scope.where(recorded_at: @period) if @period
+
+    rows = scope
       .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction)
       .map { |attributes| EvidenceRow.new(*attributes) }
 
@@ -315,6 +332,6 @@ class Reporting::EvidenceCoverage
   end
 
   def empty_result
-    Result.new(cycle: @cycle, metrics: build_metrics([]), groups: {})
+    Result.new(cycle: @cycle, period: @period, metrics: build_metrics([]), groups: {})
   end
 end

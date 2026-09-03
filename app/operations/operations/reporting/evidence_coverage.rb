@@ -3,19 +3,26 @@
 # Aggregate feedback provision and evidence-request coverage for an assessment
 # cycle, shared by the web report and MCP. Managers are restricted to their
 # live org subtree; admins can view the whole cycle or choose their own subtree.
+# An optional `month` narrows the counts to one calendar month of the cycle.
 # Returns counts only — never feedback content or contributor identities.
 class Operations::Reporting::EvidenceCoverage < Operations::Base
   description "Aggregate feedback and evidence-request coverage for an assessment cycle " \
               "across the caller's org subtree (admins see the whole cycle): feedback " \
               "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
               "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
-              "and optional manager/role/level groups."
+              "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
+              "recorded and requests sent in one calendar month of the cycle; the response lists " \
+              "the months available."
   category :read
   approval :none
 
   parameter :cycle_id, String, required: true
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :scope, String, required: false, allowed: %w[mine all]
+  parameter :month, String, required: false, schema: {
+    pattern: ::Reporting::CycleMonth::JSON_SCHEMA_PATTERN,
+    description: "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."
+  }
 
   def policy_check
     authorize cycle, :evidence_report?
@@ -26,7 +33,8 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
     result = ::Reporting::EvidenceCoverage.new(
       cycle: cycle,
       scope_person_ids: scope_person_ids,
-      mode: mode
+      mode: mode,
+      period: month&.range
     ).call
 
     serialize(result)
@@ -40,6 +48,33 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
 
   def mode
     params[:mode] == "full" ? :full : :summary
+  end
+
+  def available_months
+    @available_months ||= ::Reporting::CycleMonth.available_for(cycle)
+  end
+
+  # The requested month, or nil for the whole cycle. A malformed key or a
+  # month the cycle never spanned is the caller's mistake, so it surfaces as
+  # a ParameterError (-32602 over MCP) rather than an empty report.
+  def month
+    return @month if defined?(@month)
+
+    @month = resolve_month
+  end
+
+  def resolve_month
+    key = params[:month]
+    return nil if key.blank?
+
+    unless ::Reporting::CycleMonth.valid_key?(key)
+      raise ParameterError, "month must be formatted YYYY-MM, got #{key.inspect}"
+    end
+
+    available_months.find { |candidate| candidate.key == key } ||
+      raise(ParameterError,
+            "month #{key} is outside the cycle's lifespan " \
+            "(#{available_months.last.key} to #{available_months.first.key})")
   end
 
   def policy
@@ -59,10 +94,24 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   def serialize(result)
     {
       cycle: { id: result.cycle.cycle_id, name: result.cycle.name },
+      period: period_payload,
+      available_months: available_months.map { |candidate| { month: candidate.key, label: candidate.label } },
       metrics: metrics_payload(result.metrics),
       groups: result.groups.transform_values do |groups|
         groups.map { |group| group_payload(group) }
       end
+    }
+  end
+
+  # @return [Hash, nil] the month the counts were narrowed to; nil for the whole cycle
+  def period_payload
+    return nil unless month
+
+    {
+      month: month.key,
+      label: month.label,
+      starts_at: month.range.begin.iso8601,
+      ends_at: month.range.end.iso8601
     }
   end
 
