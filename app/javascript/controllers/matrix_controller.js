@@ -15,6 +15,7 @@
 // </div>
 
 import BaseController from "controllers/base_controller"
+import { get } from "@rails/request.js"
 
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
@@ -282,6 +283,9 @@ export default class extends BaseController {
 
     const isExpanding = expandedRow.classList.contains("hidden")
     expandedRow.classList.toggle("hidden")
+    // First expand fetches the row's illustrations (the matrix ships a
+    // placeholder per row — see #ensureExpandedRowLoaded).
+    if (isExpanding) this.#ensureExpandedRowLoaded(expandedRow)
 
     // Rotate chevron
     const chevron = row.querySelector("[data-matrix-target='rowChevron']")
@@ -758,7 +762,7 @@ export default class extends BaseController {
 
   // ── Panel navigation ── (triggered by suggestion:navigate from context pane)
 
-  navigateToEntity(event) {
+  async navigateToEntity(event) {
     const {
       level, categoryId, capabilityId, capabilityStableId, levelOrdinal, expectationId, suggestionId
     } = event.detail || {}
@@ -807,18 +811,43 @@ export default class extends BaseController {
     // suggestions pane), reveal it first — otherwise the expand + scroll
     // land on a still-hidden row.
     this.#revealCategoryForRow(row)
-    this.#expandRow(resolvedCapabilityId)
+    const loading = this.#expandRow(resolvedCapabilityId)
 
     // Cell-level navigation is only honoured when the target column is
     // actually rendered — the current roles/track selection may not include a
     // role with a level at that ordinal (and a capability-anchored
     // clarification can carry an ordinal with no expectation cell). Without a
     // renderable target, downgrade to capability focus rather than pointing
-    // the pane/URL at a cell with no on-screen referent.
-    const targetCell = (level === "cell" && levelOrdinal != null)
-      ? this.expandedRowTargets
-          .find(r => r.dataset.capabilityId === resolvedCapabilityId)
-          ?.querySelector(`td[data-level-ordinal='${levelOrdinal}']`)
+    // the pane/URL at a cell with no on-screen referent. Decided from the
+    // COMPACT row's cell: the expanded row is fetched on demand (Hard-Won
+    // Lesson 25), and focus + URL must settle now, not after the fetch.
+    const compactCell = (level === "cell" && levelOrdinal != null)
+      ? row.querySelector(`td[data-level-ordinal='${levelOrdinal}']`)
+      : null
+
+    if (compactCell) {
+      this.#setFocus({
+        level: "cell",
+        categoryId: categoryId || this.#categoryIdForRow(row),
+        capabilityId: resolvedCapabilityId,
+        capabilityStableId: resolvedStableId,
+        levelOrdinal,
+        expectationId: expectationId || compactCell.dataset.expectationId || null
+      })
+    } else {
+      this.#setFocus({
+        level: "capability",
+        categoryId: categoryId || this.#categoryIdForRow(row),
+        capabilityId: resolvedCapabilityId,
+        capabilityStableId: resolvedStableId
+      })
+    }
+
+    // Scrolling waits for the expanded row's content — the suggestion anchor
+    // and the expanded cell live inside it.
+    const expandedRow = await loading
+    const targetCell = compactCell
+      ? expandedRow?.querySelector(`td[data-level-ordinal='${levelOrdinal}']`) || compactCell
       : null
 
     // Land on the exact decorated element when the entry named a pending
@@ -826,9 +855,8 @@ export default class extends BaseController {
     // roles × several examples), so centering the CELL routinely leaves the
     // actual example off-screen ("it takes me to the vicinity… I have to
     // scroll up or down"). Every rendered pending decoration (squiggle /
-    // ghost) carries [data-suggestion-id], so the anchor is already in the
-    // DOM; a suggestion whose role isn't in the current selection has no
-    // anchor and falls back to the cell.
+    // ghost) carries [data-suggestion-id]; a suggestion whose role isn't in
+    // the current selection has no anchor and falls back to the cell.
     const anchor = suggestionId ? this.#suggestionAnchor(suggestionId) : null
 
     if (anchor) {
@@ -841,24 +869,6 @@ export default class extends BaseController {
       this.#flashNavigationTarget(targetCell)
     } else {
       row.scrollIntoView({ behavior: "smooth", block: "center" })
-    }
-
-    if (targetCell) {
-      this.#setFocus({
-        level: "cell",
-        categoryId: categoryId || this.#categoryIdForRow(row),
-        capabilityId: resolvedCapabilityId,
-        capabilityStableId: resolvedStableId,
-        levelOrdinal,
-        expectationId: expectationId || targetCell.dataset.expectationId || null
-      })
-    } else {
-      this.#setFocus({
-        level: "capability",
-        categoryId: categoryId || this.#categoryIdForRow(row),
-        capabilityId: resolvedCapabilityId,
-        capabilityStableId: resolvedStableId
-      })
     }
   }
 
@@ -1614,13 +1624,15 @@ export default class extends BaseController {
     this.#updateRowDimming(null)
   }
 
-  // Programmatically expands a row by capability ID (accordion: collapses others).
+  // Programmatically expands a row by capability ID (accordion: collapses
+  // others). Resolves with the expanded <tr> once its content is loaded (see
+  // #ensureExpandedRowLoaded) — null when the capability isn't in the matrix.
   #expandRow(capId) {
-    const expandedRow = this.expandedRowTargets.find(r => r.dataset.capabilityId === capId)
-    if (!expandedRow) return
+    const expandedRow = this.#expandedRowFor(capId)
+    if (!expandedRow) return Promise.resolve(null)
 
-    // Already expanded — nothing to do
-    if (!expandedRow.classList.contains("hidden")) return
+    // Already expanded — just make sure the content is there
+    if (!expandedRow.classList.contains("hidden")) return this.#ensureExpandedRowLoaded(expandedRow)
 
     // Collapse any other expanded row (accordion)
     this.expandedRowTargets.forEach(r => {
@@ -1638,6 +1650,93 @@ export default class extends BaseController {
     if (chevron) chevron.classList.add("rotate-90")
 
     this.#updateRowDimming(capId)
+    return this.#ensureExpandedRowLoaded(expandedRow)
+  }
+
+  // The expanded <tr> for a capability. A DOM query rather than
+  // `expandedRowTargets`: a just-loaded row replaces its placeholder in the
+  // same task, and Stimulus registers the new target a microtask later.
+  #expandedRowFor(capId) {
+    return this.element.querySelector(
+      `tr[data-matrix-target="expandedRow"][data-capability-id="${CSS.escape(capId)}"]`
+    )
+  }
+
+  // ── Lazy expanded rows ── (framework explorer)
+
+  // Loads an expanded row's content the first time it is needed. The matrix
+  // ships every expanded row as a hidden PLACEHOLDER (`data-loaded="false"` +
+  // `data-expanded-src`): the illustrations were 81% of the edit-mode payload
+  // for rows the accordion never shows (framework-explorer.md, lazy-row
+  // lesson). Resolves with the row in the DOM — the loaded <tr> that replaced
+  // the placeholder, or the placeholder itself in its error state. Rows
+  // without a src (the assessment card layout, an already-loaded row) resolve
+  // at once. Concurrent callers for one row share a single fetch.
+  #ensureExpandedRowLoaded(expandedRow) {
+    if (!expandedRow || expandedRow.dataset.loaded !== "false") return Promise.resolve(expandedRow)
+
+    const capId = expandedRow.dataset.capabilityId
+    this._expandedRowLoads ||= new Map()
+    if (this._expandedRowLoads.has(capId)) return this._expandedRowLoads.get(capId)
+
+    const load = this.#fetchExpandedRow(expandedRow)
+      .finally(() => this._expandedRowLoads.delete(capId))
+    this._expandedRowLoads.set(capId, load)
+    return load
+  }
+
+  async #fetchExpandedRow(placeholder) {
+    this.#setExpandedRowState(placeholder, "loading")
+
+    let loaded = null
+    try {
+      const response = await get(placeholder.dataset.expandedSrc, { responseKind: "html" })
+      if (response.ok) loaded = this.#parseExpandedRow(await response.html, placeholder.dataset.capabilityId)
+    } catch {
+      loaded = null
+    }
+
+    if (!loaded) {
+      this.#setExpandedRowState(placeholder, "error")
+      return placeholder
+    }
+
+    // Keep the accordion state the placeholder has NOW — the user may have
+    // collapsed (or re-expanded) the row while the fetch was in flight — and
+    // swap in the same task, so no frame paints between the two.
+    loaded.classList.toggle("hidden", placeholder.classList.contains("hidden"))
+    placeholder.replaceWith(loaded)
+    return loaded
+  }
+
+  // A <template> parses a bare <tr> correctly (a plain innerHTML on a div
+  // would drop the row wrapper). Anything that isn't the expected loaded row
+  // for this capability — a sign-in page after a session expiry, an error
+  // page — is treated as a failed load rather than inserted into the table.
+  #parseExpandedRow(html, capId) {
+    const template = document.createElement("template")
+    template.innerHTML = html
+    const tr = template.content.firstElementChild
+    const isLoadedRow = tr?.tagName === "TR" &&
+      tr.dataset.capabilityId === capId &&
+      tr.dataset.loaded === "true"
+    return isLoadedRow ? tr : null
+  }
+
+  // Toggles the placeholder's server-rendered loading / error lines.
+  #setExpandedRowState(row, state) {
+    row.querySelectorAll("[data-expanded-row-state]").forEach(el => {
+      const active = el.dataset.expandedRowState === state
+      el.classList.toggle("hidden", !active)
+      if (el.dataset.expandedRowState === "error") el.classList.toggle("flex", active)
+    })
+  }
+
+  // The placeholder's Retry button after a failed load.
+  retryExpandedRow(event) {
+    event.stopPropagation()
+    const row = event.currentTarget.closest("tr[data-matrix-target='expandedRow']")
+    if (row) this.#ensureExpandedRowLoaded(row)
   }
 
   // The grid element decorated for a pending suggestion (inline-diff

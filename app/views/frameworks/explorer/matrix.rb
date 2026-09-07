@@ -81,7 +81,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             # relative to what the viewer SEES (filters can hide categories),
             # and the matrix re-renders after each move so these stay fresh.
             prev_category_id: index.positive? ? @categories[index - 1][:category].category_id : nil,
-            next_category_id: @categories[index + 1]&.dig(:category)&.category_id
+            next_category_id: @categories[index + 1]&.dig(:category)&.category_id,
+            track_filter: @matrix_data[:track_filter]
           )
         end
       end

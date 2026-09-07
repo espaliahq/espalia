@@ -19,8 +19,9 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
                  roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 prev_category_id: nil, next_category_id: nil)
+                 prev_category_id: nil, next_category_id: nil, track_filter: "both")
     @category = category_data[:category]
+    @track_filter = track_filter
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
     @category_pending_edit = category_data[:pending_edit]
@@ -264,7 +265,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         can_edit_structure: @can_edit_structure,
         approval_authority: @approval_authority,
         prev_capability_id: index&.positive? ? movable[index - 1] : nil,
-        next_capability_id: index ? movable[index + 1] : nil
+        next_capability_id: index ? movable[index + 1] : nil,
+        track_filter: @track_filter
       )
     end
   end

@@ -65,7 +65,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # every other suggestion flow. With no proposal yet, show "+ Add expectation".
   def authorable_cell
     td(class: "group/cell px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-gray-50/40 dark:bg-gray-800/20 align-top") do
+              "bg-gray-50/40 dark:bg-gray-800/20 align-top",
+       data: { level_ordinal: @ordinal }) do
       creates = @cell_data[:pending_expectation_creates] || []
       if creates.any?
         creates.each { |suggestion| render_pending_ghost(suggestion) }
@@ -91,13 +92,19 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   def empty_cell
     td(class: "px-3 py-2.5 text-center border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-gray-50/50 dark:bg-gray-800/20 align-top") do
+              "bg-gray-50/50 dark:bg-gray-800/20 align-top",
+       data: { level_ordinal: @ordinal }) do
       span(class: "text-gray-300 dark:text-gray-600") { "\u2014" }
     end
   end
 
+  # Every compact cell carries its level ordinal (and the filled cell its
+  # expectation id) so feed navigation can settle cell focus from the compact
+  # row synchronously — the expanded row is fetched on demand and may not be
+  # in the DOM yet (Hard-Won Lesson 25).
   def filled_cell
-    td(class: "group/cell px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top") do
+    td(class: "group/cell px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
+       data: { level_ordinal: @ordinal, expectation_id: @cell_data[:expectation].expectation_id }) do
       # One layout for both states — the kebab is conditional, the wrapper is
       # not, so the pending-edit cell can't drift from the plain cell. No
       # flex-1 on the text: the kebab sits right after it, not at the far edge

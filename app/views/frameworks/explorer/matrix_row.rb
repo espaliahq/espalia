@@ -4,7 +4,9 @@
 #
 # Renders two <tr> elements:
 # 1. Compact row (always visible): capability name + expectation text per level cell
-# 2. Expanded row (hidden by default): full illustrations for each cell
+# 2. Expanded row (hidden by default): a placeholder that fetches the full
+#    illustrations for each cell the first time the row is expanded — see
+#    {Views::Frameworks::Explorer::ExpandedRow}
 #
 class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::StickyColumn
@@ -22,13 +24,17 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   #   don't each fire a `FrameworkState::Role.find_by` query
   # @param prev_capability_id [String, nil] the movable row above (for "Move up")
   # @param next_capability_id [String, nil] the movable row below (for "Move down")
+  # @param track_filter [String] "ic" / "management" / "both" — rides on the
+  #   expanded row's fetch URL so the lazily loaded illustrations match the
+  #   role scope the compact row was rendered for
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
                  roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 prev_capability_id: nil, next_capability_id: nil)
+                 prev_capability_id: nil, next_capability_id: nil, track_filter: "both")
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
+    @track_filter = track_filter
     @framework_id = framework_id
     @mode = mode
     @roles_by_id = roles_by_id
@@ -160,28 +166,35 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
   end
 
+  # The expanded row ships as a hidden PLACEHOLDER — the matrix controller
+  # fetches the real content from `data-expanded-src` on first expand. The
+  # illustrations for every capability were 81% of the edit-mode payload while
+  # the accordion shows one row at a time (framework-explorer.md, lazy-row
+  # lesson).
   def expanded_row
-    tr(
-      class: "hidden #{strikethrough_classes}",
-      data: { matrix_target: "expandedRow", capability_id: @capability.capability_id }
-    ) do
-      # Empty sticky column (row-actions kebab lives in the compact row, by
-      # the capability name).
-      #
-      # OPAQUE equivalents of the expanded row's tint, not the tint itself:
-      # #fafcff is blue-50/30 over white and #111b31 is blue-900/10 over
-      # gray-900, so this cell matches its neighbouring expanded cells while
-      # actually masking what scrolls beneath it. As `bg-blue-50/30
-      # dark:bg-blue-900/10` it was translucent, and a whole column of
-      # illustration text rendered through it (issue #371).
-      td(class: "sticky left-0 z-[2] bg-[#fafcff] dark:bg-[#111b31] " \
-                "#{STICKY_EDGE_CLASSES} " \
-                "border-b border-r border-gray-100 dark:border-gray-800") { }
+    render Views::Frameworks::Explorer::ExpandedRow.new(
+      capability_data: @capability_data,
+      merged_levels: @merged_levels,
+      framework_id: @framework_id,
+      expanded_src: expanded_src,
+      loaded: false,
+      mode: @mode
+    )
+  end
 
-      # Expanded cells with full illustrations
-      @merged_levels.each do |level|
-        expanded_cell(level[:ordinal])
-      end
+  # The fetch URL for this row's content — mode-specific (edit mode renders the
+  # inline editors, ghosts and "+ Add illustration"), carrying the role/track
+  # scope the compact row was rendered under. Defaults (all roles, both
+  # tracks) are omitted so the URL stays short.
+  def expanded_src
+    params = {}
+    params[:roles] = @selected_role_ids if @selected_role_ids.present?
+    params[:track] = @track_filter if @track_filter.present? && @track_filter != "both"
+
+    if @mode == :edit
+      edit_expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id, **params)
+    else
+      expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id, **params)
     end
   end
 
@@ -329,94 +342,5 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
 
   def archive_added_in_draft?
     @capability.respond_to?(:added_in_draft) && @capability.added_in_draft
-  end
-
-  def expanded_cell(ordinal) # rubocop:disable Metrics/MethodLength
-    cell_data = @cells[ordinal]
-
-    # An authorable placeholder (empty-but-applicable cell) has no expectation,
-    # so there are no illustrations to show — render the blank expanded td.
-    if cell_data.nil? || cell_data[:expectation].nil? || cell_data[:bound_selected_role_ids].blank?
-      td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-                "bg-blue-50/30 dark:bg-blue-900/10 align-top") { }
-      return
-    end
-
-    expectation = cell_data[:expectation]
-
-    td(
-      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-             "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
-             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
-      data: {
-        action: "click->matrix#focusCell",
-        capability_id: @capability.capability_id,
-        level_ordinal: ordinal,
-        expectation_id: expectation.expectation_id
-      }
-    ) do
-      ill_pending_edits = cell_data[:illustration_pending_edits] || {}
-      ill_pending_edit_details = cell_data[:illustration_pending_edit_details] || {}
-      ill_clarifications = cell_data[:illustration_clarifications] || {}
-      pending_creates = cell_data[:pending_illustration_creates] || []
-
-      cell_data[:bound_selected_role_ids].each do |role_id|
-        role = @roles_by_id[role_id]
-        next unless role
-
-        illustrations = cell_data[:illustrations_by_role][role_id] || []
-        role_pending_creates = pending_creates.select { |s| s.proposed_attributes["role_id"] == role_id }
-
-        div(class: "mb-2 last:mb-0") do
-          render Components::Kit::Badge.new(role.code, variant: :default)
-          ul_attrs = {
-            id: "illustrations-#{expectation.expectation_id}-#{role_id}",
-            class: "mt-1 space-y-1.5"
-          }
-          # ↑/↓ reordering — edit-rights holders only, and only when there is
-          # something to reorder. The controller moves the DOM node on a 204,
-          # so the expanded row never collapses (no matrix refresh).
-          can_reorder = @mode == :edit && @can_edit_structure && illustrations.size > 1
-          if can_reorder
-            ul_attrs[:data] = {
-              controller: "reorder-list",
-              reorder_list_url_value:
-                framework_illustration_reorders_path(framework_id: @framework_id),
-              reorder_list_param_name_value: "illustration_id"
-            }
-          end
-          ul(**ul_attrs) do
-            illustrations.each do |ill|
-              render Views::Frameworks::Explorer::IllustrationFrame.new(
-                illustration: ill,
-                framework_id: @framework_id,
-                pending_edit_count: ill_pending_edits[ill.illustration_id] || 0,
-                pending_edit: ill_pending_edit_details[ill.illustration_id],
-                mode: @mode,
-                can_reorder: can_reorder,
-                approval_authority: @approval_authority,
-                discuss_context_label: "#{@capability.name} · L#{ordinal} · #{role.name} example",
-                clarification: ill_clarifications[ill.illustration_id]
-              )
-            end
-            role_pending_creates.each do |suggestion|
-              render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
-                suggestion: suggestion,
-                framework_id: @framework_id,
-                is_author: suggestion.author_id.to_s == @current_person_id.to_s,
-                approval_authority: @approval_authority
-              )
-            end
-          end
-          if @mode == :edit
-            render Views::Frameworks::Explorer::NewIllustrationFrame.new(
-              expectation_id: expectation.expectation_id,
-              role_id: role_id,
-              framework_id: @framework_id
-            )
-          end
-        end
-      end
-    end
   end
 end

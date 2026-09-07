@@ -102,7 +102,7 @@ PageLayout
         │               │   │   ├── CapabilityDescriptionFrame (edit: inline editor; "Add a description…" when blank)
         │               │   │   └── MatrixCell × N
         │               │   │       └── ExpectationTextFrame (edit: inline editor)
-        │               │   └── expanded row (illustrations, hidden)
+        │               │   └── ExpandedRow (hidden PLACEHOLDER; content fetched on first expand)
         │               │       └── expanded td (click → matrix#focusCell)
         │               │           ├── IllustrationFrame (edit: pencil + inline editor)
         │               │           ├── PendingIllustrationFrame (ghost; edit mode only)
@@ -979,7 +979,7 @@ job via `updateSearch`. See §4a.
   the query with the role/track scope read back from the browser URL, via the
   shared `#rebuildMatrixFrame`. See §4a.
 - **Category collapse** (sibling row walking — triggered by chevron button only; the category name runs `focusCategory`)
-- **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse.
+- **Row expansion** (toggle hidden expanded row by capability ID). Dispatches `matrix:focus-changed` with `level: "capability"` on expand, `level: "framework"` on collapse. **The first expand fetches the row's content** (`#ensureExpandedRowLoaded`): the matrix ships each expanded row as a placeholder (`data-loaded="false"` + `data-expanded-src`), the controller GETs the loaded `<tr>` via `@rails/request.js`, swaps it in preserving the accordion state, and shows the placeholder's server-rendered error line + Retry (`retryExpandedRow`) on failure. `#expandRow` resolves with the loaded row, so `navigateToEntity` awaits it before looking for the target cell / suggestion anchor (Hard-Won Lesson 25).
 - **Cell focus** (`focusCell` on expanded-row `<td>`) — dispatches `matrix:focus-changed` with `level: "cell"`. Ignores clicks that land on interactive children (buttons, links, inputs, forms, `[contenteditable]`) so inline editors inside the cell don't accidentally toggle focus.
 - **Category focus** (`focusCategory` on the category name span). Dispatches `matrix:focus-changed` with `level: "category"`. Re-click clears to framework focus.
 - **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header. When the entry names a **pending suggestion**, scrolls to that suggestion's decorated element (`[data-suggestion-id]` anchor) and pulses `.suggestion-nav-highlight` on it — an expanded cell can be taller than the viewport, so cell-centering alone leaves the example off-screen; the cell/row scroll is the anchor-less fallback (the cell gets the same pulse).
@@ -1295,9 +1295,12 @@ page-unresponsive dialog. Two rules fell out:
   `context-pane` debounces the signal into a single feed reload (~300ms)
   instead of re-fetching the 300KB+ feed once per event.
 
-The deeper fix (rendering the inline-edit forms lazily so the matrix frame
-itself shrinks) is tracked separately; until then, treat "re-fetch the matrix"
-as a last resort in any new explorer feature.
+The largest part of that frame is gone since Lesson 25 (the expanded rows are
+fetched on demand — 7.6 MB → 1.5 MB on the same framework); the remaining bulk
+is the pre-rendered inline-edit forms and kebab menus, tracked in
+[#379](https://github.com/mr-yum/growth-os/issues/379) and
+[#380](https://github.com/mr-yum/growth-os/issues/380). Until those land,
+treat "re-fetch the matrix" as a last resort in any new explorer feature.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
@@ -1326,6 +1329,50 @@ Two things this cost us that are worth remembering:
 The invariant, the current values, and the shared right-edge treatment live in
 `app/views/frameworks/explorer/concerns/sticky_column.rb`; the opacity contract
 is pinned by `test/system/frameworks/matrix_sticky_column_system_test.rb`.
+
+### 25. The expanded rows are fetched on demand — never render them into the matrix
+
+Measured on the real me&u framework (36 capabilities, 997 illustrations, all
+roles): the hidden expanded rows were **81% of the edit-mode matrix** (6.2 of
+7.6 MB — 850 illustration frames and 1,131 "+ Add illustration" frames, each
+with its own form and Stimulus mount) and 79% of view mode's 1.3 MB, for rows
+the accordion shows one at a time. One role-checkbox toggle cost ~7 s of
+client time parsing and mounting all of it.
+
+So `MatrixRow#expanded_row` renders only a placeholder `<tr>`
+(`Views::Frameworks::Explorer::ExpandedRow` with `loaded: false`): the
+accordion's target/data attributes, one loading cell, and `data-expanded-src`
+— the mode-specific `expanded_row` / `edit_expanded_row` endpoint carrying the
+row's role/track scope. `matrix_controller#ensureExpandedRowLoaded` fetches
+it on first expand and swaps the `<tr>` (parsed through a `<template>`, which
+is what makes a bare `<tr>` string parse as a row). Rules that fall out:
+
+- **Anything that looks inside an expanded row must await `#expandRow`** —
+  it resolves with the loaded row. Feed navigation to a pending illustration's
+  squiggle, cell-level navigation (`td[data-level-ordinal]`), and any future
+  "scroll to X inside the row" go through it. A synchronous
+  `expandedRowTargets.find(...).querySelector(...)` sees the placeholder.
+- **The loaded row keeps whatever `hidden` state the placeholder has at swap
+  time** — a user can collapse (or re-expand) while the fetch is in flight, and
+  the swap happens in the same task as the state check so no frame paints
+  between them.
+- **The endpoint runs the same `MatrixDataBuilder`** as the matrix (in-memory,
+  ~7 ms) and picks the capability out, so the loaded row cannot drift from the
+  compact row it sits under; a capability outside the current scope is a 404,
+  which the client renders as the placeholder's error state (never inserted
+  into the table — the parser guard rejects anything that isn't the expected
+  `<tr>`, a sign-in page included).
+- **Surgical resolution streams targeting `illustration-*` /
+  `pending-suggestion-*` frames only find a target when the row is open** —
+  the correct outcome; a closed row fetches fresh on its next expand. The
+  illustration-create stream appends to a `<ul>` that exists only in a loaded
+  row, which is the only place the form can be submitted from.
+- **The row's content is still heavy** (~450 KB for one capability across 11
+  roles in edit mode) because of the per-illustration forms and kebabs —
+  #379 / #380 shrink that next.
+
+Pinned by `test/system/frameworks/lazy_expanded_row_system_test.rb` and the
+`expanded_rows` contexts in `test/controllers/frameworks_controller_test.rb`.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
@@ -1450,7 +1497,8 @@ line (§9).
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact + expanded capability row; row-actions kebab (`Kit::Dropdown`, unconditional in edit mode) — inline Approve/Reject of pending name/description edits + Discuss… + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12, §12a) |
+| `app/views/frameworks/explorer/expanded_row.rb` | The expanded (illustrations) row — shipped as a hidden placeholder, served loaded by `FrameworksController#expanded_row` / `#edit_expanded_row` on first expand (Hard-Won Lesson 25) |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact capability row + the `ExpandedRow` placeholder; row-actions kebab (`Kit::Dropdown`, unconditional in edit mode) — inline Approve/Reject of pending name/description edits + Discuss… + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12, §12a) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + hover "Discuss…" button (§12a) + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
 | `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, ↑/↓ reorder chevrons (edit-structure holders), pencil, then the ⋮ kebab (Approve/Reject when approvable + Discuss… + Archive…) |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) — pencil (amend/alternative) + Approve/Reject kebab for tier-authority viewers |
@@ -1516,7 +1564,7 @@ line (§9).
 | `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
 | `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor`. Names entities from the read model **supplemented by the creating event in the window** (so draft-added capabilities/expectations — deferred from the read model — are still named in "Added a capability" / binding entries), and pins the **level** on expectation entries ("Capability · L`n`") |
 | `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
-| `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) |
+| `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) + `expanded_row` / `edit_expanded_row` (one capability's lazily fetched expanded row) |
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |

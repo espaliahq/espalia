@@ -137,6 +137,10 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       page.execute_script(<<~JS)
         document.querySelector("tr[data-capability-id='#{@cap_a_id}']")?.click();
       JS
+      # The expanded row's cells arrive with the on-demand fetch (Hard-Won
+      # Lesson 25) — wait for the loaded row before clicking one.
+      assert_selector "tr[data-matrix-target='expandedRow'][data-capability-id='#{@cap_a_id}'][data-loaded='true']",
+                      visible: true
       page.execute_script(<<~JS)
         document.querySelector("td[data-action='click->matrix#focusCell'][data-level-ordinal='2']")?.click();
       JS
