@@ -22,9 +22,6 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
     @approval_authority = approval_authority
     @merged_levels = matrix_data[:merged_levels]
     @categories = matrix_data[:categories]
-    # Prebuild role lookup so expanded cells don't hit AR once per bound
-    # role per row — that was adding N+1 queries on edit-mode render.
-    @roles_by_id = matrix_data[:selected_roles].index_by(&:role_id)
   end
 
   def view_template
@@ -57,7 +54,10 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   end
 
   def matrix_table
-    table(class: "w-full border-collapse") do
+    # The role/track scope every on-demand expanded-row fetch appends to its
+    # row's `data-expanded-src` — carried ONCE here rather than once per row
+    # (Hard-Won Lesson 25).
+    table(class: "w-full border-collapse", data: { expanded_row_scope: expanded_row_scope }) do
       render Views::Frameworks::Explorer::MatrixHeader.new(
         merged_levels: @merged_levels,
         selected_role_count: @matrix_data[:selected_roles].size,
@@ -72,7 +72,6 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             selected_role_ids: @selected_role_ids,
             framework_id: @framework_id,
             mode: @mode,
-            roles_by_id: @roles_by_id,
             current_person_id: @current_person_id,
             search_query: @matrix_data[:search_query],
             can_edit_structure: @can_edit_structure,
@@ -81,12 +80,29 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
             # relative to what the viewer SEES (filters can hide categories),
             # and the matrix re-renders after each move so these stay fresh.
             prev_category_id: index.positive? ? @categories[index - 1][:category].category_id : nil,
-            next_category_id: @categories[index + 1]&.dig(:category)&.category_id,
-            track_filter: @matrix_data[:track_filter]
+            next_category_id: @categories[index + 1]&.dig(:category)&.category_id
           )
         end
       end
     end
+  end
+
+  # Query string of the scope the matrix was rendered under — the same
+  # role/track selection the expanded rows must be fetched with. Defaults
+  # (all roles, both tracks) are omitted so the common case is empty.
+  #
+  # @return [String]
+  def expanded_row_scope
+    scope_params(@selected_role_ids).to_query
+  end
+
+  # @return [Hash] `roles` / `track` as the explorer URLs carry them
+  def scope_params(role_ids)
+    params = {}
+    params[:roles] = role_ids if role_ids.present?
+    track = @matrix_data[:track_filter]
+    params[:track] = track if track.present? && track != "both"
+    params
   end
 
   def empty_state
@@ -126,9 +142,7 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   # track filter (the only other URL-encoded axis; role-family scope is carried
   # by `roles[]`) so clearing the search doesn't silently reset IC/Mgmt.
   def reset_path(role_ids)
-    params = { roles: role_ids }
-    track = @matrix_data[:track_filter]
-    params[:track] = track if track.present? && track != "both"
+    params = scope_params(role_ids).merge(roles: role_ids)
 
     if @mode == :edit
       edit_framework_path(@framework_id, **params)

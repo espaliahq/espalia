@@ -14,30 +14,24 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
   include Views::Frameworks::Explorer::Concerns::DiscussTrigger
+  include Views::Frameworks::Explorer::Concerns::PendingArchive
 
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (for illustration PATCH URLs)
   # @param mode [Symbol] :view or :edit
-  # @param roles_by_id [Hash] { role_id => Role } — reused in expanded cells so they
-  #   don't each fire a `FrameworkState::Role.find_by` query
   # @param prev_capability_id [String, nil] the movable row above (for "Move up")
   # @param next_capability_id [String, nil] the movable row below (for "Move down")
-  # @param track_filter [String] "ic" / "management" / "both" — rides on the
-  #   expanded row's fetch URL so the lazily loaded illustrations match the
-  #   role scope the compact row was rendered for
   def initialize(capability_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
+                 current_person_id: nil, search_query: nil, can_edit_structure: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 prev_capability_id: nil, next_capability_id: nil, track_filter: "both")
+                 prev_capability_id: nil, next_capability_id: nil)
     @capability_data = capability_data
     @merged_levels = merged_levels
     @selected_role_ids = selected_role_ids
-    @track_filter = track_filter
     @framework_id = framework_id
     @mode = mode
-    @roles_by_id = roles_by_id
     @current_person_id = current_person_id
     @search_query = search_query
     @can_edit_structure = can_edit_structure
@@ -53,7 +47,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     # Struck through (edit mode only) when the capability is staged for archive
     # in the open draft — the "going away on publish" affordance. Still carries
     # the "Pending archive" badge for the explicit label.
-    @struck = @mode == :edit && @capability.respond_to?(:pending_archive) && @capability.pending_archive
+    @struck = struck?(@capability, @mode)
   end
 
   def view_template
@@ -62,11 +56,6 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   end
 
   private
-
-  # Red line-through across the whole row when the capability is staged for
-  # archive. Applied to each cell (`[&>td]`) rather than the <tr>, because
-  # text-decoration doesn't reliably propagate from a table-row to its cells.
-  STRIKETHROUGH_CLASSES = "[&>td]:line-through [&>td]:decoration-red-400 [&>td]:decoration-2"
 
   def strikethrough_classes
     @struck ? STRIKETHROUGH_CLASSES : ""
@@ -159,7 +148,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # *archive* keeps an explicit "Pending archive" badge — removal is a distinct
   # state (the row is also struck through), not just "differs from published".
   def draft_state_badge
-    return unless @capability.respond_to?(:pending_archive) && @capability.pending_archive
+    return unless pending_archive?(@capability)
 
     span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
                 "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
@@ -167,10 +156,10 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   end
 
   # The expanded row ships as a hidden PLACEHOLDER — the matrix controller
-  # fetches the real content from `data-expanded-src` on first expand. The
+  # fetches the real content from `data-expanded-src` (+ the table's shared
+  # role/track scope, see Matrix#expanded_row_scope) on first expand. The
   # illustrations for every capability were 81% of the edit-mode payload while
-  # the accordion shows one row at a time (framework-explorer.md, lazy-row
-  # lesson).
+  # the accordion shows one row at a time (framework-explorer.md, Lesson 25).
   def expanded_row
     render Views::Frameworks::Explorer::ExpandedRow.new(
       capability_data: @capability_data,
@@ -182,19 +171,15 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     )
   end
 
-  # The fetch URL for this row's content — mode-specific (edit mode renders the
-  # inline editors, ghosts and "+ Add illustration"), carrying the role/track
-  # scope the compact row was rendered under. Defaults (all roles, both
-  # tracks) are omitted so the URL stays short.
+  # The mode-specific path for this row's content (edit mode renders the inline
+  # editors, ghosts and "+ Add illustration"). Deliberately WITHOUT the role/
+  # track query: that rides once on the table, not once per row — at 100 roles ×
+  # 150 capabilities a per-row copy is ~700 KB of attribute text.
   def expanded_src
-    params = {}
-    params[:roles] = @selected_role_ids if @selected_role_ids.present?
-    params[:track] = @track_filter if @track_filter.present? && @track_filter != "both"
-
     if @mode == :edit
-      edit_expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id, **params)
+      edit_expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id)
     else
-      expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id, **params)
+      expanded_row_framework_path(@framework_id, capability_id: @capability.capability_id)
     end
   end
 
@@ -226,7 +211,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   # toggle + the viewer's authority — whether it applies directly or lands as a
   # pending archive suggestion, so the kebab no longer gates on edit_structure.
   def show_archive_action?
-    !(@capability.respond_to?(:pending_archive) && @capability.pending_archive)
+    !pending_archive?(@capability)
   end
 
   # Pending name / description edits the viewer may approve, as

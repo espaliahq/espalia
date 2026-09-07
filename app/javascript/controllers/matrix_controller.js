@@ -118,6 +118,7 @@ export default class extends BaseController {
     this.#setupCapabilityScrollObserver()
 
     this.#dispatchInitialFocus()
+    this.#resumeOpenPlaceholders()
   }
 
   disconnect() {
@@ -812,14 +813,18 @@ export default class extends BaseController {
     // land on a still-hidden row.
     this.#revealCategoryForRow(row)
     const loading = this.#expandRow(resolvedCapabilityId)
+    // Last click wins: a slower earlier navigation must not scroll the viewport
+    // back to its row after a later one has landed.
+    const navigation = this._navigationToken = (this._navigationToken || 0) + 1
 
-    // Cell-level navigation is only honoured when the target column is
-    // actually rendered — the current roles/track selection may not include a
-    // role with a level at that ordinal (and a capability-anchored
-    // clarification can carry an ordinal with no expectation cell). Without a
-    // renderable target, downgrade to capability focus rather than pointing
-    // the pane/URL at a cell with no on-screen referent. Decided from the
-    // COMPACT row's cell: the expanded row is fetched on demand (Hard-Won
+    // Cell-level navigation is only honoured when the target cell is actually
+    // rendered — an expectation at that ordinal for a selected bound role. The
+    // current roles/track selection may not include such a role, and a
+    // capability-anchored clarification can carry an ordinal with no
+    // expectation cell; without a target, downgrade to capability focus rather
+    // than pointing the pane/URL at a cell with no on-screen referent. Decided
+    // from the COMPACT row's cell (only focusable cells carry
+    // data-level-ordinal): the expanded row is fetched on demand (Hard-Won
     // Lesson 25), and focus + URL must settle now, not after the fetch.
     const compactCell = (level === "cell" && levelOrdinal != null)
       ? row.querySelector(`td[data-level-ordinal='${levelOrdinal}']`)
@@ -846,6 +851,7 @@ export default class extends BaseController {
     // Scrolling waits for the expanded row's content — the suggestion anchor
     // and the expanded cell live inside it.
     const expandedRow = await loading
+    if (navigation !== this._navigationToken) return
     const targetCell = compactCell
       ? expandedRow?.querySelector(`td[data-level-ordinal='${levelOrdinal}']`) || compactCell
       : null
@@ -1628,7 +1634,7 @@ export default class extends BaseController {
   // others). Resolves with the expanded <tr> once its content is loaded (see
   // #ensureExpandedRowLoaded) — null when the capability isn't in the matrix.
   #expandRow(capId) {
-    const expandedRow = this.#expandedRowFor(capId)
+    const expandedRow = this.expandedRowTargets.find(r => r.dataset.capabilityId === capId)
     if (!expandedRow) return Promise.resolve(null)
 
     // Already expanded — just make sure the content is there
@@ -1653,51 +1659,52 @@ export default class extends BaseController {
     return this.#ensureExpandedRowLoaded(expandedRow)
   }
 
-  // The expanded <tr> for a capability. A DOM query rather than
-  // `expandedRowTargets`: a just-loaded row replaces its placeholder in the
-  // same task, and Stimulus registers the new target a microtask later.
-  #expandedRowFor(capId) {
-    return this.element.querySelector(
-      `tr[data-matrix-target="expandedRow"][data-capability-id="${CSS.escape(capId)}"]`
-    )
-  }
-
   // ── Lazy expanded rows ── (framework explorer)
 
   // Loads an expanded row's content the first time it is needed. The matrix
   // ships every expanded row as a hidden PLACEHOLDER (`data-loaded="false"` +
-  // `data-expanded-src`): the illustrations were 81% of the edit-mode payload
-  // for rows the accordion never shows (framework-explorer.md, lazy-row
-  // lesson). Resolves with the row in the DOM — the loaded <tr> that replaced
-  // the placeholder, or the placeholder itself in its error state. Rows
-  // without a src (the assessment card layout, an already-loaded row) resolve
-  // at once. Concurrent callers for one row share a single fetch.
+  // `data-expanded-src`; the table carries the role/track scope once in
+  // `data-expanded-row-scope`): the illustrations were 81% of the edit-mode
+  // payload for rows the accordion never shows (framework-explorer.md, Lesson
+  // 25). Resolves with the row in the DOM — the loaded <tr> that replaced the
+  // placeholder, or the placeholder itself in its error state. Rows without a
+  // src (the assessment card layout, an already-loaded row) resolve at once.
+  //
+  // The in-flight promise lives on the placeholder ELEMENT, not on this
+  // controller: the controller sits outside the matrix frame and outlives a
+  // frame reload, so a capability-keyed map would hand a fresh placeholder
+  // (same capability, new node) a promise that resolves by swapping a node no
+  // longer in the document.
   #ensureExpandedRowLoaded(expandedRow) {
     if (!expandedRow || expandedRow.dataset.loaded !== "false") return Promise.resolve(expandedRow)
 
-    const capId = expandedRow.dataset.capabilityId
-    this._expandedRowLoads ||= new Map()
-    if (this._expandedRowLoads.has(capId)) return this._expandedRowLoads.get(capId)
-
-    const load = this.#fetchExpandedRow(expandedRow)
-      .finally(() => this._expandedRowLoads.delete(capId))
-    this._expandedRowLoads.set(capId, load)
-    return load
+    expandedRow._expandedRowLoad ||= this.#fetchExpandedRow(expandedRow)
+    return expandedRow._expandedRowLoad
   }
 
   async #fetchExpandedRow(placeholder) {
     this.#setExpandedRowState(placeholder, "loading")
 
     let loaded = null
+    let response = null
     try {
-      const response = await get(placeholder.dataset.expandedSrc, { responseKind: "html" })
+      response = await get(this.#expandedRowUrl(placeholder), { responseKind: "html" })
       if (response.ok) loaded = this.#parseExpandedRow(await response.html, placeholder.dataset.capabilityId)
     } catch {
-      loaded = null
+      response = null
+    }
+
+    // A 401 is an expired session: Retry could never succeed, so reload —
+    // the page-level redirect lands on sign-in and back here afterwards.
+    if (response?.statusCode === 401) {
+      window.location.reload()
+      return placeholder
     }
 
     if (!loaded) {
       this.#setExpandedRowState(placeholder, "error")
+      // Failed — let a Retry (or the next expand) issue a fresh fetch.
+      delete placeholder._expandedRowLoad
       return placeholder
     }
 
@@ -1707,6 +1714,24 @@ export default class extends BaseController {
     loaded.classList.toggle("hidden", placeholder.classList.contains("hidden"))
     placeholder.replaceWith(loaded)
     return loaded
+  }
+
+  // A Turbo cache restore can bring back an expanded placeholder frozen on
+  // "Loading examples…" (the snapshot was taken mid-fetch; the fresh controller
+  // has no fetch in flight). Pick those up on connect.
+  #resumeOpenPlaceholders() {
+    this.expandedRowTargets
+      .filter(r => r.dataset.loaded === "false" && !r.classList.contains("hidden"))
+      .forEach(r => this.#ensureExpandedRowLoaded(r))
+  }
+
+  // The row's own path plus the scope the matrix was rendered under. The
+  // scope is carried once on the table (not once per row — at 100 roles ×
+  // 150 capabilities that copy is ~700 KB of attribute text).
+  #expandedRowUrl(placeholder) {
+    const src = placeholder.dataset.expandedSrc
+    const scope = placeholder.closest("table")?.dataset.expandedRowScope
+    return scope ? `${src}?${scope}` : src
   }
 
   // A <template> parses a bare <tr> correctly (a plain innerHTML on a div
@@ -1723,13 +1748,17 @@ export default class extends BaseController {
     return isLoadedRow ? tr : null
   }
 
-  // Toggles the placeholder's server-rendered loading / error lines.
+  // Toggles the placeholder's server-rendered loading line and its
+  // Kit::FrameLoadError block; a failure moves focus into the alert so the
+  // Retry is the next Tab stop (the same contract as frame-error#failLoad).
   #setExpandedRowState(row, state) {
-    row.querySelectorAll("[data-expanded-row-state]").forEach(el => {
-      const active = el.dataset.expandedRowState === state
-      el.classList.toggle("hidden", !active)
-      if (el.dataset.expandedRowState === "error") el.classList.toggle("flex", active)
-    })
+    const loading = row.querySelector("[data-expanded-row-state='loading']")
+    const error = row.querySelector("[role='alert']")
+    if (loading) loading.hidden = state !== "loading"
+    if (error) {
+      error.hidden = state !== "error"
+      if (state === "error") error.focus()
+    }
   }
 
   // The placeholder's Retry button after a failed load.

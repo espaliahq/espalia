@@ -291,6 +291,14 @@ end
 This bug is invisible to a system test that `visit`s the destination path
 directly — only clicking the in-frame link reproduces it, so exercise the real
 click path (see [testing.md](testing.md) and [chrome-mcp.md](chrome-mcp.md)).
+
+**Table rows are the one place a lazy frame can't go.** The HTML parser
+foster-parents a `<turbo-frame>` out of a `<tbody>`, and a frame inside a
+single spanning `<td>` can't produce per-column cells, so the explorer's
+on-demand expanded row is fetched by its Stimulus controller and swapped in
+as a `<tr>` parsed through a `<template>` — reusing `Kit::FrameLoadError`
+(with `retry_action:`) for the failure state so the vocabulary stays one
+(see [framework-explorer.md](framework-explorer.md), Hard-Won Lesson 25).
 For the related rule that a frame's re-render response must carry the same
 `mode:` / permission flags / counts as the initial render, see
 [framework-explorer.md](framework-explorer.md) Hard-Won Lessons 13 & 16.

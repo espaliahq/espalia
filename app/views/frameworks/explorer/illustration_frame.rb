@@ -2,7 +2,7 @@
 
 # Renders a single role illustration inside its Turbo Frame.
 #
-# Used both in the initial matrix render (inside MatrixRow#expanded_cell)
+# Used both in the on-demand expanded row (ExpandedRow#expanded_cell)
 # and as the Turbo Frame response returned after an inline edit is saved.
 # The frame ID matches so Turbo can swap the content after form submission.
 #

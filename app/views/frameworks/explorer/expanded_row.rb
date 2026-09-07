@@ -24,18 +24,20 @@
 #
 class Views::Frameworks::Explorer::ExpandedRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::StickyColumn
+  include Views::Frameworks::Explorer::Concerns::PendingArchive
 
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param framework_id [String]
-  # @param expanded_src [String] URL the controller fetches the loaded row from
   # @param loaded [Boolean] placeholder (false) or full content (true)
+  # @param expanded_src [String, nil] the placeholder's fetch path (the matrix
+  #   controller appends the table's role/track scope); unused once loaded
   # @param mode [Symbol] :view or :edit
   # @param roles_by_id [Hash] { role_id => Role }
   # @param current_person_id [String, nil]
   # @param can_edit_structure [Boolean]
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority]
-  def initialize(capability_data:, merged_levels:, framework_id:, expanded_src:, loaded:, mode: :view,
+  def initialize(capability_data:, merged_levels:, framework_id:, loaded:, expanded_src: nil, mode: :view,
                  roles_by_id: {}, current_person_id: nil, can_edit_structure: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @capability_data = capability_data
@@ -50,7 +52,6 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
     @approval_authority = approval_authority
     @capability = capability_data[:capability]
     @cells = capability_data[:cells]
-    @struck = @mode == :edit && @capability.respond_to?(:pending_archive) && @capability.pending_archive
   end
 
   def view_template
@@ -64,7 +65,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
         capability_id: @capability.capability_id,
         expanded_src: @expanded_src,
         loaded: @loaded.to_s
-      }
+      }.compact
     ) do
       gutter_cell
       if @loaded
@@ -77,8 +78,11 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
 
   private
 
+  # Only the loaded content is struck for a pending-archive capability — the
+  # placeholder's loading line and its error/Retry must never read as deleted
+  # text.
   def strikethrough_classes
-    @struck ? Views::Frameworks::Explorer::MatrixRow::STRIKETHROUGH_CLASSES : ""
+    @loaded && struck?(@capability, @mode) ? STRIKETHROUGH_CLASSES : ""
   end
 
   # Empty sticky column (row-actions kebab lives in the compact row, by the
@@ -96,27 +100,25 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
               "border-b border-r border-gray-100 dark:border-gray-800") { }
   end
 
-  # One cell spanning every level column: the loading line, and the (hidden)
-  # failure line the controller reveals when the fetch fails — server-rendered
-  # so the copy lives here, not in JavaScript.
+  # One cell spanning every level column: the loading line, and the shared
+  # (hidden) load-failure block the controller reveals when the fetch fails —
+  # the same `Kit::FrameLoadError` the lazy frames use, with the matrix's own
+  # Retry action since no `frame-error` controller is involved.
   def placeholder_cell
     td(
-      colspan: @merged_levels.size,
+      colspan: [ @merged_levels.size, 1 ].max,
       class: "px-3 py-3 border-b border-gray-100 dark:border-gray-800 " \
              "bg-blue-50/30 dark:bg-blue-900/10 align-top text-xs"
     ) do
-      p(class: "text-gray-500 dark:text-gray-400", data: { expanded_row_state: "loading" }) do
+      p(class: "text-gray-600 dark:text-gray-300", data: { expanded_row_state: "loading" }) do
         "Loading examples…"
       end
-      div(class: "hidden items-center gap-3", role: "alert", data: { expanded_row_state: "error" }) do
-        span(class: "text-red-700 dark:text-red-400") { "Couldn’t load the examples for this capability." }
-        button(
-          type: "button",
-          class: "rounded border border-gray-300 dark:border-gray-600 px-2 py-0.5 " \
-                 "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "click->matrix#retryExpandedRow" }
-        ) { "Retry" }
-      end
+      render Components::Kit::FrameLoadError.new(
+        id: "expanded-row-error-#{@capability.capability_id}",
+        subject: "the examples for this capability",
+        classes: "space-y-2",
+        retry_action: "matrix#retryExpandedRow"
+      )
     end
   end
 

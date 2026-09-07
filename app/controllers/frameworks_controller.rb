@@ -94,13 +94,24 @@ class FrameworksController < ApplicationController
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
-      can_edit_structure: can_edit_structure,
-      approval_authority: suggestion_approval_authority(mode),
       archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
       roles: can_edit_structure ? framework_roles(graph) : [],
-      current_person_id: current_person&.id&.to_s,
-      search_query: resolved_search_query
+      search_query: resolved_search_query,
+      **viewer_matrix_flags(mode)
     )
+  end
+
+  # The per-viewer flags every matrix render threads down to the cells —
+  # one definition so the explorer shell, the matrix frame and the on-demand
+  # expanded row can't gate an affordance differently (Hard-Won Lessons 13/16).
+  #
+  # @return [Hash] current_person_id / can_edit_structure / approval_authority
+  def viewer_matrix_flags(mode)
+    {
+      current_person_id: current_person&.id&.to_s,
+      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
+      approval_authority: suggestion_approval_authority(mode)
+    }
   end
 
   # Renders the loaded expanded `<tr>` for one capability under the current
@@ -120,14 +131,10 @@ class FrameworksController < ApplicationController
       capability_data: capability_data,
       merged_levels: matrix_data[:merged_levels],
       framework_id: @framework.framework_id,
-      # The URL this row was fetched from — what a Retry re-requests.
-      expanded_src: request.original_fullpath,
       loaded: true,
       mode: mode,
       roles_by_id: matrix_data[:selected_roles].index_by(&:role_id),
-      current_person_id: current_person&.id&.to_s,
-      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
-      approval_authority: suggestion_approval_authority(mode)
+      **viewer_matrix_flags(mode)
     ), layout: false
   end
 
@@ -139,9 +146,7 @@ class FrameworksController < ApplicationController
       matrix_data: matrix_data,
       selected_role_ids: parse_role_ids,
       mode: mode,
-      current_person_id: current_person&.id&.to_s,
-      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
-      approval_authority: suggestion_approval_authority(mode)
+      **viewer_matrix_flags(mode)
     ), layout: false
   end
 

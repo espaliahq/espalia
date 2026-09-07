@@ -351,7 +351,7 @@ See `app/models/frameworks/suggestion_diff.rb` for the algorithm and `test/model
 | `MatrixRow` → `CapabilityNameFrame` | Capability name (compact row, sticky left column) | `capability_data[:pending_suggestion_count]` | `capability_data[:pending_edit]` (field `name`) |
 | `MatrixRow` → `CapabilityDescriptionFrame` | Capability description (compact row, under the name) | `capability_data[:pending_suggestion_count]` | `capability_data[:description_pending_edit]` (field `description`) |
 | `MatrixCell` → `ExpectationTextFrame` | Expectation text (compact cell) | `cell_data[:pending_suggestion_count]` | `cell_data[:pending_edit]` (field `description`) |
-| `MatrixRow` → `IllustrationFrame` | Illustration text (expanded row) | `cell_data[:illustration_pending_edits][illustration_id]` | `cell_data[:illustration_pending_edit_details][illustration_id]` |
+| `ExpandedRow` → `IllustrationFrame` | Illustration text (expanded row, fetched on demand) | `cell_data[:illustration_pending_edits][illustration_id]` | `cell_data[:illustration_pending_edit_details][illustration_id]` |
 
 **InlineIndicator pill** (`app/views/frameworks/suggestions/inline_indicator.rb`) — small amber "N pending" count badge. Currently rendered **only** by `MatrixCell`, and **only** when `pending_suggestion_count >= 2`. With the inline diff visible, the pill's job shifts: it tells reviewers that more proposals exist on this expectation than the one currently shown interleaved. Category / capability / illustration rows do not render the pill.
 
@@ -771,7 +771,10 @@ composition follows the phlex-views.md rule: the kebab is the right-most
 control and absorbs secondary actions — the illustration kebab also holds
 Archive…, the role-tree kebab also holds Add level…. The per-viewer authority is threaded into the
 matrix the same way `can_edit_structure` is: controller → `Matrix` →
-`MatrixCategoryGroup` → `MatrixRow` → `MatrixCell` / `IllustrationFrame`.
+`MatrixCategoryGroup` → `MatrixRow` → `MatrixCell`, and — because the expanded
+row is a separate on-demand response (Lesson 25) — controller →
+`ExpandedRow` → `IllustrationFrame` via `FrameworksController#viewer_matrix_flags`,
+the one definition all three matrix renders splat.
 `matrix#toggleRow` already ignores clicks inside
 `[data-controller~='dropdown']`, so opening a kebab never expands the row.
 
@@ -1341,11 +1344,16 @@ client time parsing and mounting all of it.
 
 So `MatrixRow#expanded_row` renders only a placeholder `<tr>`
 (`Views::Frameworks::Explorer::ExpandedRow` with `loaded: false`): the
-accordion's target/data attributes, one loading cell, and `data-expanded-src`
-— the mode-specific `expanded_row` / `edit_expanded_row` endpoint carrying the
-row's role/track scope. `matrix_controller#ensureExpandedRowLoaded` fetches
-it on first expand and swaps the `<tr>` (parsed through a `<template>`, which
-is what makes a bare `<tr>` string parse as a row). Rules that fall out:
+accordion's target/data attributes, one loading cell (with the shared
+`Kit::FrameLoadError` block for failures), and `data-expanded-src` — the
+mode-specific `expanded_row` / `edit_expanded_row` path. The role/track scope
+rides ONCE on the `<table>` (`data-expanded-row-scope`), not once per row: at
+100 roles × 150 capabilities a per-row copy is ~700 KB of attribute text.
+`matrix_controller#ensureExpandedRowLoaded` fetches it on first expand and
+swaps the `<tr>` (parsed through a `<template>`, which is what makes a bare
+`<tr>` string parse as a row). A `<turbo-frame>` can't do this job: the HTML
+parser foster-parents a custom element out of a `<tbody>`, and a frame inside
+one spanning `<td>` can't yield the per-column cells. Rules that fall out:
 
 - **Anything that looks inside an expanded row must await `#expandRow`** —
   it resolves with the loaded row. Feed navigation to a pending illustration's
@@ -1356,6 +1364,19 @@ is what makes a bare `<tr>` string parse as a row). Rules that fall out:
   time** — a user can collapse (or re-expand) while the fetch is in flight, and
   the swap happens in the same task as the state check so no frame paints
   between them.
+- **The in-flight promise lives on the placeholder element, not the
+  controller.** The `matrix` controller sits outside the matrix frame and
+  survives frame reloads; a capability-keyed cache would hand a fresh
+  placeholder (same capability, new node after a role toggle) a promise that
+  resolves by swapping a node no longer in the document — "Loading examples…"
+  forever. Same reason `connect()` re-fetches any placeholder a Turbo cache
+  restore brought back open, and `navigateToEntity` checks a navigation token
+  after the await so a slow earlier click can't scroll back over a later one.
+- **Cell focus is decided from the compact row.** Only a focusable compact
+  cell (expectation + selected bound role) carries `data-level-ordinal`, so
+  feed navigation settles focus + URL synchronously and only the scroll waits
+  for the row; `expand_matrix_row` in system tests waits for the loaded row by
+  default (`await_content: false` when the load is under test).
 - **The endpoint runs the same `MatrixDataBuilder`** as the matrix (in-memory,
   ~7 ms) and picks the capability out, so the loaded row cannot drift from the
   compact row it sits under; a capability outside the current scope is a 404,

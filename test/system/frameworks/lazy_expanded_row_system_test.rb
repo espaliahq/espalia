@@ -82,20 +82,12 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
       expand_matrix_row("#capability-name-#{@cap_id}")
       assert_text ILLUSTRATION
 
-      ill_li = find("#illustration-#{@ill_id} li[data-controller='inline-editor']")
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", ill_li
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li
-      )
-      js_fill_in ill_li.find("textarea[name='illustration[description]']", visible: :all),
+      form = start_inline_edit("#illustration-#{@ill_id} li[data-controller='inline-editor']")
+      js_fill_in form.find("textarea[name='illustration[description]']"),
                  with: "Proactively seeks guidance from the tech lead"
       # requestSubmit() rather than a button click — see testing.md, "Inline-Editor
       # Form Submits".
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').requestSubmit();", ill_li
-      )
+      page.execute_script("arguments[0].requestSubmit();", form)
 
       assert_text "Proactively seeks guidance from the tech lead"
       assert_no_text ILLUSTRATION
@@ -115,19 +107,19 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
         row.dataset.expandedSrc = row.dataset.expandedSrc.replace(/[^/]+(\\?.*)?$/, "not-a-capability");
       JS
 
-      expand_matrix_row("#capability-name-#{@cap_id}")
+      expand_matrix_row("#capability-name-#{@cap_id}", await_content: false)
 
-      assert_text "Couldn’t load the examples for this capability."
+      assert_text "Couldn't load the examples for this capability."
       assert_no_text ILLUSTRATION
 
       page.execute_script(<<~JS, good_src)
         const row = document.querySelector(#{PLACEHOLDER.to_json});
         row.dataset.expandedSrc = arguments[0];
-        row.querySelector("[data-action='click->matrix#retryExpandedRow']").click();
+        row.querySelector("[data-action='matrix#retryExpandedRow']").click();
       JS
 
       assert_text ILLUSTRATION
-      assert_no_text "Couldn’t load the examples for this capability."
+      assert_no_text "Couldn't load the examples for this capability."
       assert_selector LOADED_ROW, visible: true
     end
   end
