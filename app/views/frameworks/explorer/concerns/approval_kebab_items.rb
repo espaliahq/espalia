@@ -44,10 +44,7 @@ module Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
                "inline-flex items-center justify-center " \
                "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
       ) do
-        svg(class: "w-4 h-4", fill: "currentColor", viewBox: "0 0 20 20") do |s|
-          s.path(d: "M10 6a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 " \
-                    "6a2 2 0 100 4 2 2 0 000-4z")
-        end
+        icon("kebab", class: "w-4 h-4")
       end
     end
   end

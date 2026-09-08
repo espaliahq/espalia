@@ -83,13 +83,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 "min-w-[200px] align-top group-hover:bg-gray-50 dark:group-hover:bg-[#172131]") do
         div(class: "flex items-start gap-2") do
           # Expand indicator
-          svg(
-            class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
-            data: { matrix_target: "rowChevron" },
-            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-          ) do |s|
-            s.path(d: "M9 5l7 7-7 7")
-          end
+          icon("chevron-right",
+               class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+               data: { matrix_target: "rowChevron" })
 
           div do
             div(class: "flex items-start gap-1") do

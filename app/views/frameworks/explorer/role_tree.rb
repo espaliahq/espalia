@@ -196,12 +196,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           data: { action: "tree#toggleGroup", family_id: role_family.role_family_id },
           aria: { expanded: true }
         ) do
-          svg(
-            class: "w-3 h-3 rotate-90 transition-transform",
-            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-          ) do |s|
-            s.path(d: "M9 5l7 7-7 7")
-          end
+          icon("chevron-right", class: "w-3 h-3 rotate-90 transition-transform")
         end
 
         # Family checkbox
@@ -303,16 +298,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       title: "Edit role family",
       aria: { label: "Edit #{role_family.name}" }
     ) do
-      svg(
-        class: "w-3.5 h-3.5", fill: "none", viewBox: "0 0 24 24",
-        stroke: "currentColor", stroke_width: "2"
-      ) do |s|
-        s.path(
-          stroke_linecap: "round", stroke_linejoin: "round",
-          d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 " \
-             "2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-        )
-      end
+      icon("pencil", class: "w-3.5 h-3.5")
     end
   end
 

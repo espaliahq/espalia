@@ -55,12 +55,7 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
       class: "text-xs text-gray-400 hover:text-primary flex items-center gap-1 py-0.5",
       data: { editor_display: true, action: "field-editor#open" }
     ) do
-      svg(
-        class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-        stroke: "currentColor", stroke_width: "2"
-      ) do |s|
-        s.path(d: "M12 4v16m8-8H4")
-      end
+      icon("plus", class: "w-3 h-3")
       plain "Add illustration"
     end
   end

@@ -173,11 +173,11 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   # handlers live on the enclosing UL's reorder-list controller, which POSTs
   # the neighbour-relative move and repositions this frame's node on success.
   def reorder_buttons
-    reorder_button("Move illustration up", "reorder-list#moveUp", "M4.5 15.75l7.5-7.5 7.5 7.5")
-    reorder_button("Move illustration down", "reorder-list#moveDown", "M19.5 8.25l-7.5 7.5-7.5-7.5")
+    reorder_button("Move illustration up", "reorder-list#moveUp", "chevron-up")
+    reorder_button("Move illustration down", "reorder-list#moveDown", "chevron-down")
   end
 
-  def reorder_button(label, action, chevron_path)
+  def reorder_button(label, action, chevron_icon)
     button(
       type: "button",
       class: "opacity-0 group-hover/ill:opacity-100 " \
@@ -186,10 +186,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       data: { action: action },
       aria_label: label
     ) do
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-          stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(stroke_linecap: "round", stroke_linejoin: "round", d: chevron_path)
-      end
+      icon(chevron_icon, class: "w-3 h-3")
     end
   end
 

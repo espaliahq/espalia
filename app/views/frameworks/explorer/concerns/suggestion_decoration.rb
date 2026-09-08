@@ -198,19 +198,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     end
 
     span(**attrs) do
-      svg(
-        xmlns: "http://www.w3.org/2000/svg",
-        class: "w-2.5 h-2.5",
-        fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
-        aria: { hidden: "true" }
-      ) do |s|
-        s.path(
-          stroke_linecap: "round",
-          stroke_linejoin: "round",
-          d: "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 " \
-             "8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
-        )
-      end
+      icon("discuss", class: "w-2.5 h-2.5")
       span(class: "text-[9px] font-medium leading-none") { count.to_s } if count.to_i > 1
     end
   end

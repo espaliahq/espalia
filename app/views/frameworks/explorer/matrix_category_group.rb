@@ -98,13 +98,9 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             },
             aria_label: "Toggle category"
           ) do
-            svg(
-              class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
-              data: { matrix_target: "categoryChevron" },
-              fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-            ) do |s|
-              s.path(d: "M9 5l7 7-7 7")
-            end
+            icon("chevron-right",
+                 class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
+                 data: { matrix_target: "categoryChevron" })
           end
 
           # Name + count row, with the (optionally inline-editable) description
@@ -179,14 +175,14 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
 
   def category_reorder_chevrons
     if @prev_category_id
-      category_move_chevron("Move category up", @prev_category_id, "before", "M4.5 15.75l7.5-7.5 7.5 7.5")
+      category_move_chevron("Move category up", @prev_category_id, "before", "chevron-up")
     end
     if @next_category_id
-      category_move_chevron("Move category down", @next_category_id, "after", "M19.5 8.25l-7.5 7.5-7.5-7.5")
+      category_move_chevron("Move category down", @next_category_id, "after", "chevron-down")
     end
   end
 
-  def category_move_chevron(label, target_id, placement, chevron_path)
+  def category_move_chevron(label, target_id, placement, chevron_icon)
     button(
       type: "button",
       class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
@@ -202,10 +198,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
       },
       aria_label: label
     ) do
-      svg(class: "w-4 h-4", fill: "none", viewBox: "0 0 24 24",
-          stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(stroke_linecap: "round", stroke_linejoin: "round", d: chevron_path)
-      end
+      icon(chevron_icon, class: "w-4 h-4")
     end
   end
 
@@ -231,18 +224,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
       },
       aria_label: "Archive category"
     ) do
-      svg(
-        class: "w-4 h-4", fill: "none", viewBox: "0 0 24 24",
-        stroke: "currentColor", stroke_width: "2"
-      ) do |s|
-        s.path(
-          stroke_linecap: "round", stroke_linejoin: "round",
-          d: "M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 " \
-             "01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 " \
-             "1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 " \
-             "1.125v1.5c0 .621.504 1.125 1.125 1.125z"
-        )
-      end
+      icon("archive", class: "w-4 h-4")
     end
   end
 

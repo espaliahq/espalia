@@ -53,9 +53,7 @@ class Views::Frameworks::Explorer::NewExpectationFrame < Views::Base
              "py-1.5 opacity-0 group-hover/new-exp:opacity-100 focus-visible:opacity-100 transition-opacity",
       data: { editor_display: true, action: "field-editor#open" }
     ) do
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(d: "M12 4v16m8-8H4")
-      end
+      icon("plus", class: "w-3 h-3")
       plain "Add expectation"
     end
   end
