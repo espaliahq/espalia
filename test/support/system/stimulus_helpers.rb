@@ -220,13 +220,22 @@ module StimulusHelpers
     JS
   end
 
-  # Cancels the open editor via its Cancel button (JS-dispatched).
+  # Cancels the open editor via its Cancel button (JS-dispatched) and waits for
+  # the host to be back in read mode — like every other toggle helper, this
+  # asserts the resulting visible state, so a dropped cancel fails here instead
+  # of surfacing later as a confusing assertion about whatever the still-open
+  # editor covers.
   #
   # @param form [Capybara::Node::Element] the form returned by +start_inline_edit+
+  # @return [Capybara::Node::Element] the host, back in display mode
   def cancel_inline_edit(form)
+    host = form.ancestor("[data-editor-action]")
     page.execute_script(
       "arguments[0].querySelector(\"[data-action*='field-editor#cancel']\").click();", form
     )
+    host.assert_no_selector("[data-editor-form]")
+    host.assert_selector("[data-editor-display]", visible: true)
+    host
   end
 
   # Performs a click via the given block and retries it once if the expected

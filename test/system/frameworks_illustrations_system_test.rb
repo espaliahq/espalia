@@ -114,8 +114,8 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       form = start_inline_edit(ill_li)
       js_fill_in form.find("[data-editor-input]"), with: "This should not be saved"
 
+      # The helper asserts the editor is gone and the display is back.
       cancel_inline_edit(form)
-      assert_no_selector "[data-editor-form]"
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
