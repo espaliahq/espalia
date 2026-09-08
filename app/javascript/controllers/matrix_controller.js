@@ -207,6 +207,7 @@ export default class extends BaseController {
   // to one axis (role selection OR text query) preserves the others.
   #rebuildMatrixFrame({ roleIds, track, query } = {}) {
     if (!this.hasFrameTarget || !this.basePathValue) return
+    if (!this.#confirmDiscardOpenEditor()) return
 
     const current = new URL(window.location)
     const resolvedRoleIds = roleIds ?? current.searchParams.getAll("roles[]")
@@ -222,6 +223,18 @@ export default class extends BaseController {
 
     // Update browser URL for shareability
     this.#updateBrowserUrl(resolvedRoleIds, resolvedTrack, resolvedQuery)
+  }
+
+  // Re-fetching the matrix destroys any open inline editor with it. The shared
+  // field editor stamps `data-editor-dirty="true"` on the explorer root while it
+  // holds unsaved text (it is an ancestor of this controller's element), so ask
+  // before throwing that work away. Declining aborts the re-fetch — the filter
+  // control the user just touched stays ahead of the grid until they save or
+  // cancel, which beats silently losing what they typed.
+  #confirmDiscardOpenEditor() {
+    if (!this.element.closest("[data-editor-dirty='true']")) return true
+
+    return window.confirm("Discard your unsaved change?")
   }
 
   // ── Category Collapse ──

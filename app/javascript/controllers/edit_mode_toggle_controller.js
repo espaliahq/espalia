@@ -36,6 +36,13 @@ export default class extends BaseController {
 
     this.writeCookie(mode)
     this.applyStyling(mode)
+    // The shared inline editor derives its Save-vs-Propose label from this mode
+    // plus the viewer's server-computed authority, so it needs to hear the flip
+    // immediately — not on the next page load.
+    window.dispatchEvent(new CustomEvent("framework-edit-mode:changed", {
+      bubbles: true,
+      detail: { mode: mode }
+    }))
   }
 
   // private

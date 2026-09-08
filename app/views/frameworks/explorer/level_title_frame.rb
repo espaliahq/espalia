@@ -54,26 +54,24 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine inline-flex items-start gap-1", data: { controller: "inline-editor" }) do
-      # `flex`, NOT `inline-flex`: the inline editor hides this target by
-      # adding `hidden`, which ties on specificity with display utilities and
-      # loses to `inline-flex` in the bundle's order (it beats `flex`) — the
-      # editor then renders BESIDE the still-visible title. See
-      # assessments.md Hard-Won Lesson 17.
-      div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
+    div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
+      div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_title
         render_inline_editor_pencil(aria_label: "Edit level title")
       end
-      # Compact width + single row so the editor stays in place within the
-      # narrow, centred level-title header cell (min-w-[180px]) instead of
-      # ballooning it with the default sentence-width form.
-      render_inline_editor_form(
-        action: framework_level_path(framework_id: @framework_id, id: @level_id),
-        field_name: "level[title]",
-        current_value: @title,
-        rows: 1,
-        width_classes: "w-36"
-      )
     end
+  end
+
+  # Direct edit — no approval tier, so the editor always says "Save". A single
+  # row keeps the editor in place within the narrow, centred header cell.
+  def editor_data
+    field_editor_data(
+      action: framework_level_path(framework_id: @framework_id, id: @level_id),
+      field: "level[title]",
+      value: @title.to_s,
+      label: "Level title",
+      outcome: "apply",
+      rows: 1
+    )
   end
 end

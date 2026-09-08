@@ -178,24 +178,55 @@ module StimulusHelpers
     assert_selector(scope ? "#{scope} #{loaded}" : loaded, visible: true)
   end
 
-  # Opens an inline editor (illustration / capability / category / expectation
-  # frame) by JS-dispatching its hover-revealed pencil — the real
-  # `inline-editor#startEdit` path, which a synthetic pointer click on an
-  # `opacity-0` button drops on starved CI — and waits for the form to show.
+  # Opens the explorer's shared inline editor for one host (illustration /
+  # capability / category / expectation / org-structure frame) by JS-dispatching
+  # its hover-revealed pencil — the real `field-editor#open` path, which a
+  # synthetic pointer click on an `opacity-0` button drops on starved CI — and
+  # waits for the cloned form to appear.
   #
   # @param container [Capybara::Node::Element, String] the element (or CSS
-  #   selector) holding the `inline-editor` controller
-  # @return [Capybara::Node::Element] the revealed form
+  #   selector) carrying — or containing — the `data-editor-action` host
+  # @return [Capybara::Node::Element] the editor form
   def start_inline_edit(container)
     element = container.is_a?(String) ? find(container) : container
-    # The editor can be inserted late (the on-demand expanded row) — wait for
-    # its controller to connect before dispatching, or the click has no handler.
-    connected = element.matches_css?("[data-controller~='inline-editor']") ? element : element.find("[data-controller~='inline-editor']", visible: :all)
-    connected.assert_matches_selector("[data-connected]", wait: Capybara.default_max_wait_time)
+    host = if element.matches_css?("[data-editor-action]")
+      element
+    else
+      element.find("[data-editor-action]", visible: :all, match: :first)
+    end
+    # ONE controller drives every editor, on the explorer root — wait for it to
+    # connect before dispatching, or the click has no handler.
+    assert_selector "[data-controller~='field-editor'][data-connected]", visible: :all, match: :first
     page.execute_script(
-      "arguments[0].querySelector(\"[data-action*='inline-editor#startEdit']\").click();", element
+      "arguments[0].querySelector(\"[data-action*='field-editor#open']\").click();", host
     )
-    element.find("[data-inline-editor-target='form']", visible: true)
+    host.find("[data-editor-form]", visible: true)
+  end
+
+  # Sets the open editor's textarea via JS (Selenium drops characters on starved
+  # CI) and submits with requestSubmit() — see testing.md, "Inline-Editor Form
+  # Submits".
+  #
+  # @param form [Capybara::Node::Element] the form returned by +start_inline_edit+
+  # @param with [String] the value to save
+  def submit_inline_edit(form, with:)
+    page.execute_script(<<~JS, form, with.to_s)
+      const [f, value] = [arguments[0], arguments[1]]
+      const input = f.querySelector("[data-editor-input]")
+      input.value = value
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+      f.requestSubmit()
+    JS
+  end
+
+  # Cancels the open editor via its Cancel button (JS-dispatched).
+  #
+  # @param form [Capybara::Node::Element] the form returned by +start_inline_edit+
+  def cancel_inline_edit(form)
+    page.execute_script(
+      "arguments[0].querySelector(\"[data-action*='field-editor#cancel']\").click();", form
+    )
   end
 
   # Performs a click via the given block and retries it once if the expected

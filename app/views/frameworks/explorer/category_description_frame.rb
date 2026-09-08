@@ -23,14 +23,18 @@ class Views::Frameworks::Explorer::CategoryDescriptionFrame < Views::Base
   # @param pending_edit_count [Integer]
   # @param pending_edit [Hash, nil] latest pending edit descriptor (renders as a diff)
   # @param search_query [String, nil]
+  # @param error [String, nil] a rejected inline save (see CapabilityNameFrame)
+  # @param attempted_value [String, nil] the value the rejected save carried
   def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0,
-                 pending_edit: nil, search_query: nil)
+                 pending_edit: nil, search_query: nil, error: nil, attempted_value: nil)
     @category = category
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
     @search_query = search_query
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -56,9 +60,9 @@ class Views::Frameworks::Explorer::CategoryDescriptionFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex items-start gap-1 #{TEXT_CLASSES}",
-        data: { controller: "inline-editor" }) do
-      div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
+    div(class: "group/ine flex flex-col items-start gap-1 #{TEXT_CLASSES}", data: editor_data) do
+      render_field_editor_error(@error)
+      div(class: "flex items-start gap-1", data: { editor_display: true }) do
         if @pending_edit
           # A pending edit renders as the inline diff (its own decoration);
           # don't also apply the wavy-underline class.
@@ -72,12 +76,18 @@ class Views::Frameworks::Explorer::CategoryDescriptionFrame < Views::Base
         end
         render_inline_editor_pencil(aria_label: "Edit category description")
       end
-      render_inline_editor_form(
-        action: framework_category_path(framework_id: @framework_id, id: @category.category_id),
-        field_name: "capability_category[description]",
-        current_value: inline_editor_value(@category.description, @pending_edit),
-        rows: 2
-      )
     end
+  end
+
+  def editor_data
+    field_editor_data(
+      action: framework_category_path(framework_id: @framework_id, id: @category.category_id),
+      field: "capability_category[description]",
+      value: @error ? @attempted_value.to_s : inline_editor_value(@category.description, @pending_edit),
+      label: "Category description",
+      entity: "capability_category",
+      rows: 2,
+      error: @error
+    )
   end
 end

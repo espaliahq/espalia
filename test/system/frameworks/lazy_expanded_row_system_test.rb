@@ -72,7 +72,7 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
       # Edit-mode content rides along: the "+ Add illustration" affordance and
       # the illustration's own inline editor.
       assert_text "Add illustration"
-      assert_selector "#illustration-#{@ill_id} [data-controller='inline-editor']", visible: :all
+      assert_selector "#illustration-#{@ill_id} [data-editor-action]", visible: :all
     end
 
     should "save an inline illustration edit inside the lazily loaded row" do
@@ -82,12 +82,10 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
       expand_matrix_row("#capability-name-#{@cap_id}")
       assert_text ILLUSTRATION
 
-      form = start_inline_edit("#illustration-#{@ill_id} li[data-controller='inline-editor']")
-      js_fill_in form.find("textarea[name='illustration[description]']"),
-                 with: "Proactively seeks guidance from the tech lead"
+      form = start_inline_edit("#illustration-#{@ill_id} li[data-editor-action]")
       # requestSubmit() rather than a button click — see testing.md, "Inline-Editor
       # Form Submits".
-      page.execute_script("arguments[0].requestSubmit();", form)
+      submit_inline_edit(form, with: "Proactively seeks guidance from the tech lead")
 
       assert_text "Proactively seeks guidance from the tech lead"
       assert_no_text ILLUSTRATION

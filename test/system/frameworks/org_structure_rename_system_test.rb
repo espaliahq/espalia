@@ -60,17 +60,23 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       assert_text "Engineer One"
     end
 
-    # Regression: the level-title editor used the shared sentence-width form
+    # Regression: the level-title editor used a fixed sentence-width form
     # (w-80/w-96), which ballooned the narrow, centred header cell so the editor
-    # rendered offset ("next to") rather than in place. It must use the compact
-    # width so it edits within the column.
-    should "render the level-title editor with the compact in-cell width" do
+    # rendered offset ("next to") rather than in place — and, in a level column,
+    # widened the whole table. The shared editor is `w-full min-w-0` of its host,
+    # so opening it must not change the header cell's width (#379).
+    should "not widen the level column when the editor opens" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
-      form = find("turbo-frame#level-title-#{@level_id} form", visible: :all)
-      assert_includes form[:class], "w-36"
-      assert_not_includes form[:class], "w-96"
+
+      header = find("turbo-frame#level-title-#{@level_id}").ancestor("th")
+      width_before = header.evaluate_script("this.getBoundingClientRect().width")
+
+      form = start_inline_edit("turbo-frame#level-title-#{@level_id} > div")
+      assert_includes form[:class], "w-full"
+      assert_in_delta width_before,
+                      header.evaluate_script("this.getBoundingClientRect().width"), 1.0
     end
   end
 
@@ -85,30 +91,21 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       assert_no_selector "[aria-label='Edit role family name']"
       # Matrix header: no level-title inline editor or pencil.
       assert_text "Engineer I"
-      assert_no_selector "turbo-frame#level-title-#{@level_id} [data-controller='inline-editor']"
+      assert_no_selector "turbo-frame#level-title-#{@level_id} [data-editor-action]"
       assert_no_selector "[aria-label='Edit level title']"
     end
   end
 
   private
 
-  # Reveal the hidden inline-editor form inside a turbo-frame, set the textarea
-  # via JS (Selenium send_keys drops chars on starved CI), and submit the form
-  # synchronously — the same JS-dispatch pattern the other inline editors use.
+  # Open the shared inline editor on a turbo-frame's host and save the new
+  # value — the JS-dispatch pattern the other inline editors use (Selenium
+  # clicks on the opacity-0 pencil + send_keys both flake on starved CI).
   def submit_inline_rename(frame_id, field_name, value)
-    editor = find("turbo-frame##{frame_id} > div")
-    page.execute_script(
-      "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", editor
-    )
-    page.execute_script(
-      "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", editor
-    )
-    page.execute_script(<<~JS, editor, field_name, value)
-      const ta = arguments[0].querySelector(`textarea[name='${arguments[1]}']`);
-      ta.value = arguments[2];
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
-      ta.dispatchEvent(new Event("change", { bubbles: true }));
-    JS
-    page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+    form = start_inline_edit("turbo-frame##{frame_id} > div")
+    assert_equal field_name, form.find("[data-editor-input]", visible: :all)[:name]
+    # Org structure has no approval tier, so the editor always says "Save".
+    assert_equal "Save", form.find("[data-editor-submit]").text
+    submit_inline_edit(form, with: value)
   end
 end

@@ -52,16 +52,24 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex items-start gap-1", data: { controller: "inline-editor" }) do
-      div(class: "flex items-start gap-1 min-w-0", data: { inline_editor_target: "display" }) do
+    div(class: "group/ine flex flex-col items-start gap-1", data: editor_data) do
+      div(class: "flex items-start gap-1 min-w-0", data: { editor_display: true }) do
         plain_name
         render_inline_editor_pencil(aria_label: "Edit role family name")
       end
-      render_inline_editor_form(
-        action: framework_role_family_path(framework_id: @framework_id, id: @role_family.role_family_id),
-        field_name: "role_family[name]",
-        current_value: @role_family.name
-      )
     end
+  end
+
+  # Org-structure renames are direct edits with no approval tier, so the editor
+  # always says "Save" — never "Propose".
+  def editor_data
+    field_editor_data(
+      action: framework_role_family_path(framework_id: @framework_id, id: @role_family.role_family_id),
+      field: "role_family[name]",
+      value: @role_family.name.to_s,
+      label: "Role family name",
+      outcome: "apply",
+      rows: 2
+    )
   end
 end

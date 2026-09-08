@@ -62,24 +62,12 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
       visit_edit
 
       # The empty level-2 cell exposes the authoring affordance (hover-revealed).
-      assert_selector "button[data-inline-editor-target='display']", text: "Add expectation", visible: :all
+      assert_selector "button[data-editor-display]", text: "Add expectation", visible: :all
 
-      # Reveal the inline form (JS-click the opacity-0 control), fill, and submit
-      # via requestSubmit (the form redirects on success — testing.md JS-submit).
-      page.execute_script(<<~JS)
-        [...document.querySelectorAll("button[data-inline-editor-target='display']")]
-          .find((b) => b.textContent.includes("Add expectation")).click();
-      JS
-      # Set the textarea via JS value-dispatch — Selenium send_keys can drop
-      # characters on starved CI and the assertion depends on this value
-      # (testing.md). Then submit the (redirecting) form.
-      page.execute_script(<<~JS, find("textarea[name='behavioural_expectation[description]']"))
-        const el = arguments[0];
-        el.value = "Identifies root causes";
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-      page.execute_script('document.querySelector("form[action$=\'/expectations\']").requestSubmit();')
+      # Open the shared editor on the cell's authoring host and submit (the form
+      # redirects on success — testing.md JS-submit).
+      form = start_inline_edit(find("[data-editor-submit-label='Add'][data-editor-turbo-frame='_top']", match: :first))
+      submit_inline_edit(form, with: "Identifies root causes")
 
       assert_text "Added an expectation"
       assert_text(/draft/i) # a draft was auto-opened by the shape-changing add
@@ -116,7 +104,7 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
   context "as a tenant admin on a mobile viewport" do
     should "still expose the + Add expectation affordance" do
       visit_edit(size: MOBILE_SIZE)
-      assert_selector "button[data-inline-editor-target='display']", text: "Add expectation", visible: :all
+      assert_selector "button[data-editor-display]", text: "Add expectation", visible: :all
     end
   end
 end

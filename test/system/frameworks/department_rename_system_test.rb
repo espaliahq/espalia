@@ -43,15 +43,15 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
     should "rename a department header across every family in the group" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
-      assert_selector "input[name='department[from]'][value='Finance']", visible: :all
+      assert_selector department_header("Finance"), visible: :all
 
       rename_department("Finance", "Commercial Finance")
 
-      # The header is renamed (the group's hidden from-value updates) and the
-      # old "Finance" group is gone, while "Engineering" is untouched.
-      assert_selector "input[name='department[from]'][value='Commercial Finance']", visible: :all
-      assert_no_selector "input[name='department[from]'][value='Finance']", visible: :all
-      assert_selector "input[name='department[from]'][value='Engineering']", visible: :all
+      # The header is renamed (its editor host re-renders with the new label)
+      # and the old "Finance" group is gone, while "Engineering" is untouched.
+      assert_selector department_header("Commercial Finance"), visible: :all
+      assert_no_selector department_header("Finance"), visible: :all
+      assert_selector department_header("Engineering"), visible: :all
       # Both families moved with the rename.
       assert_text "Financial Control"
       assert_text "Finance Operations"
@@ -64,12 +64,12 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       toggle_role_pane
-      assert_selector "input[name='department[from]'][value='Finance']", visible: :all
+      assert_selector department_header("Finance"), visible: :all
 
       rename_department("Finance", "Commercial Finance")
 
-      assert_selector "input[name='department[from]'][value='Commercial Finance']", visible: :all
-      assert_no_selector "input[name='department[from]'][value='Finance']", visible: :all
+      assert_selector department_header("Commercial Finance"), visible: :all
+      assert_no_selector department_header("Finance"), visible: :all
     end
   end
 
@@ -79,7 +79,7 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
       assert_text(/finance/i)
       assert_no_selector "[aria-label='Rename department']"
-      assert_no_selector "input[name='department[from]']", visible: :all
+      assert_no_selector "[data-editor-field='department[to]']", visible: :all
     end
   end
 
@@ -88,20 +88,14 @@ class Frameworks::DepartmentRenameSystemTest < ApplicationSystemTestCase
   # Reveal a department header's inline editor, set the new label, and submit —
   # the JS-dispatch pattern the other inline editors use (Selenium clicks on the
   # opacity-0 pencil + send_keys both flake on starved CI).
+  # The department header's shared-editor host, keyed by the label it shows.
+  def department_header(label)
+    "[data-editor-field='department[to]'][data-editor-value='#{label}']"
+  end
+
   def rename_department(from, to)
-    container = find("input[name='department[from]'][value='#{from}']", visible: :all)
-      .ancestor("[data-controller~='inline-editor']")
-    page.execute_script(
-      "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", container
-    )
-    page.execute_script(
-      "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", container
-    )
-    page.execute_script(<<~JS, container, to)
-      const input = arguments[0].querySelector("input[name='department[to]']");
-      input.value = arguments[1];
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    JS
-    page.execute_script("arguments[0].querySelector('form').requestSubmit();", container)
+    container = find(department_header(from), visible: :all)
+    form = start_inline_edit(container)
+    submit_inline_edit(form, with: to)
   end
 end

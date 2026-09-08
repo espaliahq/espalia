@@ -1,15 +1,17 @@
 # frozen_string_literal: true
 
-# Renders an "Add illustration" inline form inside a Turbo Frame.
+# Renders the "+ Add illustration" affordance inside a Turbo Frame.
 #
 # After a successful POST the controller returns a Turbo Stream that:
 # 1. Appends the new IllustrationFrame to `ul#illustrations-{eid}-{rid}`
-# 2. Replaces this frame with a fresh copy (button visible, form hidden)
+# 2. Replaces this frame with a fresh copy (button visible again)
 #
-# Reuses the inline-editor Stimulus controller — same display/form/input
-# target pattern as IllustrationFrame.
+# The form itself is NOT pre-rendered — the shared field editor clones it from
+# the explorer root's template when the button is clicked.
 #
 class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
+
   # @param expectation_id [String] UUID of the parent expectation
   # @param role_id [String] UUID of the role this illustration will belong to
   # @param framework_id [String] UUID of the framework (for the POST URL)
@@ -21,23 +23,37 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
 
   def view_template
     turbo_frame_tag("new-illustration-#{@expectation_id}-#{@role_id}") do
-      div(
-        class: "group/new-ill pl-2 mt-1",
-        data: { controller: "inline-editor" }
-      ) do
+      div(class: "group/new-ill pl-2 mt-1", data: editor_data) do
         add_button
-        add_form
       end
     end
   end
 
   private
 
+  def editor_data
+    field_editor_data(
+      action: framework_illustrations_path(framework_id: @framework_id),
+      field: "illustration[description]",
+      value: "",
+      label: "New illustration",
+      entity: "role_illustration",
+      method: "post",
+      rows: 3,
+      submit_label: "Add",
+      placeholder: "Describe how this behaviour shows up in this role…",
+      extra: {
+        "illustration[expectation_id]" => @expectation_id,
+        "illustration[role_id]" => @role_id
+      }
+    )
+  end
+
   def add_button
     button(
       type: "button",
       class: "text-xs text-gray-400 hover:text-primary flex items-center gap-1 py-0.5",
-      data: { inline_editor_target: "display", action: "inline-editor#startEdit" }
+      data: { editor_display: true, action: "field-editor#open" }
     ) do
       svg(
         class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
@@ -46,45 +62,6 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
         s.path(d: "M12 4v16m8-8H4")
       end
       plain "Add illustration"
-    end
-  end
-
-  def add_form
-    form(
-      class: "hidden",
-      method: "post",
-      action: framework_illustrations_path(framework_id: @framework_id),
-      data: {
-        inline_editor_target: "form",
-        turbo: "true",
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "illustration[expectation_id]", value: @expectation_id)
-      input(type: "hidden", name: "illustration[role_id]", value: @role_id)
-
-      textarea(
-        class: "w-full text-xs border border-primary rounded px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "resize-none focus:outline-none focus:ring-1 focus:ring-primary",
-        rows: "3",
-        name: "illustration[description]",
-        placeholder: "Describe how this behaviour shows up in this role…",
-        data: { inline_editor_target: "input" }
-      ) { "" }
-
-      div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-        ) { "Add" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
-        ) { "Cancel" }
-      end
     end
   end
 end

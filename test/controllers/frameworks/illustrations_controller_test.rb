@@ -234,11 +234,13 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
             params: { illustration: { description: "First edit" } }
 
       assert_response :success
-      # Pencil button has data-action="inline-editor#startEdit" — if mode:
-      # is not passed as :edit the button is dropped and subsequent edits
-      # become impossible. Caught a regression in the inline-editor refactor.
-      assert_includes response.body, "inline-editor#startEdit",
+      # Pencil button has data-action="field-editor#open" — if mode: is not
+      # passed as :edit the button (and the data-editor-* host the shared editor
+      # reads) are dropped and subsequent edits become impossible.
+      assert_includes response.body, "field-editor#open",
                       "response must retain the edit affordance for the next click"
+      assert_includes response.body, "data-editor-action",
+                      "response must retain the shared editor's host data"
     end
 
     should "create 3 events (EditSuggested + SuggestionApproved + RoleIllustrationUpdated)" do

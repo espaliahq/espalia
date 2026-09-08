@@ -5,7 +5,7 @@ require "application_system_test_case"
 # Smoke tests for Phase 2 — the edit-mode UI affordances.
 # Confirms /edit differs from /show in the ways the user can see:
 # mode badge in the header, mode switcher, context pane open by default,
-# inline-editor controllers + add-illustration frames visible only in edit.
+# inline-edit hosts + add-illustration frames visible only in edit.
 class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
   setup do
     @tenant = FactoryBot.create(:tenant)
@@ -60,12 +60,19 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_no_text(/Suggestion/)
     end
 
-    should "not render inline-editor controllers on illustrations" do
+    should "not render inline-edit hosts on illustrations" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
-      assert_no_selector "li[data-controller='inline-editor']"
+      assert_no_selector "li[data-editor-action]"
+    end
+
+    should "not render the shared inline-editor template or its controller" do
+      sign_in_as(@admin_user)
+      visit framework_path(@framework_id)
+      assert_no_selector "[data-controller~='field-editor']", visible: :all
+      assert_no_selector "[data-field-editor-target='template']", visible: :all
     end
 
     should "not render the add-illustration frame" do
@@ -95,11 +102,23 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "[data-framework-explorer-target='contextPane']:not(.hidden)"
     end
 
-    should "render inline-editor controllers on illustrations" do
+    should "render inline-edit hosts on illustrations" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       expand_matrix_row("tr[data-capability-id]")
-      assert_selector "li[data-controller='inline-editor']"
+      assert_selector "li[data-editor-action]"
+    end
+
+    should "ship ONE shared editor template and no pre-rendered inline-edit forms" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_selector "[data-controller~='field-editor'][data-connected]", visible: :all
+      assert_selector "[data-field-editor-target='template']", count: 1, visible: :all
+      # The matrix ships display markup + data only — the editor is cloned in
+      # on demand (#379). Only the template's own textarea exists, and it is
+      # inert inside <template>, so nothing matches in the live DOM.
+      assert_no_selector "#framework-matrix textarea", visible: :all
+      assert_no_selector "#framework-matrix [data-editor-form]", visible: :all
     end
 
     should "render the add-illustration frame" do
@@ -124,32 +143,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
 
-      # Reveal the inline-editor form for the capability name. The pencil is
-      # hover-only in CSS; flip the display/form visibility directly.
       editor = find("turbo-frame#capability-name-" \
                     "#{FrameworkState::Capability.first.capability_id} > div")
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
-        editor
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
-        editor
-      )
-
-      # Set the value via JS and fire input/change events — Selenium's
-      # send_keys can drop characters on starved CI runners, leaving the
-      # textarea with the original capability name. The server then sees
-      # no-op edit and the assertion below fails. JS assignment is
-      # deterministic; the events fire any Stimulus listeners that may
-      # gate the submit on dirty-state.
-      page.execute_script(<<~JS, editor)
-        const ta = arguments[0].querySelector("textarea[name='capability[name]']");
-        ta.value = "Sharper Strategic Thinking";
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+      form = start_inline_edit(editor)
+      submit_inline_edit(form, with: "Sharper Strategic Thinking")
 
       assert_text "Sharper Strategic Thinking"
       assert_no_text "Strategic Thinking", exact: true
@@ -161,21 +158,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       cap_id = FrameworkState::Capability.first.capability_id
       editor = find("turbo-frame#capability-description-#{cap_id} > div")
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
-        editor
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
-        editor
-      )
-      page.execute_script(<<~JS, editor)
-        const ta = arguments[0].querySelector("textarea[name='capability[description]']");
-        ta.value = "Balances competing priorities.";
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+      form = start_inline_edit(editor)
+      submit_inline_edit(form, with: "Balances competing priorities.")
 
       assert_text "Balances competing priorities."
     end
@@ -188,26 +172,13 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       editor = find("turbo-frame#category-name-#{cat_id} > div")
       # Regression: the focus target wrapping the name must be a role=button
       # span, not a <button> — a <button> ancestor makes the browser reparent
-      # the nested inline-editor form/pencil out, breaking name editing. Assert
-      # the form + pencil survive inside the inline-editor controller.
-      assert editor.has_css?("form[action*='/categories/#{cat_id}']", visible: :all)
-      assert editor.has_css?("[data-action*='inline-editor#startEdit']", visible: :all)
+      # the nested pencil out, breaking name editing. Assert the editor host +
+      # pencil survive inside the focus target.
+      assert_equal "/frameworks/#{@framework_id}/categories/#{cat_id}", editor[:"data-editor-action"]
+      assert editor.has_css?("[data-action*='field-editor#open']", visible: :all)
 
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
-        editor
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
-        editor
-      )
-      page.execute_script(<<~JS, editor)
-        const ta = arguments[0].querySelector("textarea[name='capability_category[name]']");
-        ta.value = "Cognition & Judgement";
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+      form = start_inline_edit(editor)
+      submit_inline_edit(form, with: "Cognition & Judgement")
 
       assert_text "Cognition & Judgement"
     end
@@ -218,21 +189,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       cat_id = FrameworkState::CapabilityCategory.first.category_id
       editor = find("turbo-frame#category-description-#{cat_id} > div")
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
-        editor
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
-        editor
-      )
-      page.execute_script(<<~JS, editor)
-        const ta = arguments[0].querySelector("textarea[name='capability_category[description]']");
-        ta.value = "How we reason and decide.";
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+      form = start_inline_edit(editor)
+      submit_inline_edit(form, with: "How we reason and decide.")
 
       assert_text "How we reason and decide."
     end
@@ -280,16 +238,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # Inline-edit a capability name.
       cap_id = FrameworkState::Capability.first.capability_id
       editor = find("turbo-frame#capability-name-#{cap_id} > div")
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')",
-        editor
-      )
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')",
-        editor
-      )
-      js_fill_in editor.find("textarea[name='capability[name]']"), with: "Proposed Name"
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", editor)
+      form = start_inline_edit(editor)
+      # The Save button states what will actually happen: Suggesting mode means
+      # this lands as a proposal even for an auto-approve authority holder.
+      assert_equal "Propose", form.find("[data-editor-submit]").text
+      submit_inline_edit(form, with: "Proposed Name")
 
       # Wait for the Turbo frame to swap — pending-edit decoration is the
       # reliable signal that the server responded.
@@ -307,7 +260,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_equal "Proposed Name", suggestion.suggested_value
 
       # The suggestions pane should surface the freshly-landed pending row
-      # WITHOUT a page refresh — the inline-editor dispatches
+      # WITHOUT a page refresh — the shared editor dispatches
       # `suggestion:submitted` and the context pane reloads its frame.
       within "#suggestion-panel" do
         assert_text "Proposed Name"
@@ -349,7 +302,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # Still edit mode: expanding the row reveals the inline editors that
       # only render in edit mode.
       expand_matrix_row("tr[data-capability-id]")
-      assert_selector "li[data-controller='inline-editor']"
+      assert_selector "li[data-editor-action]"
 
       # Clear the filter — must remain in edit mode. Sync on the banner
       # DISAPPEARING (only true of the cleared render) for the same
@@ -360,7 +313,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "turbo-frame#framework-matrix[complete]", visible: :all
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id]")
-      assert_selector "li[data-controller='inline-editor']"
+      assert_selector "li[data-editor-action]"
     end
   end
 
@@ -670,10 +623,10 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # only on the controller re-render right after submitting.
       within "turbo-frame#capability-description-#{capability.capability_id}" do
         assert_selector "span.decoration-sky-400", text: "Considers long-term impact"
-        # The inline editor is pre-filled with the pending proposal (so editing
-        # refines it), not the original value.
-        textarea = find("textarea[name='capability[description]']", visible: :all)
-        assert_equal "Considers long-term impact", textarea.value
+        # The editor is seeded with the pending PROPOSAL (so editing refines it),
+        # not the original value — the host carries it for the shared editor.
+        assert_equal "Considers long-term impact",
+                     find("[data-editor-action]", visible: :all)[:"data-editor-value"]
       end
     end
   end
@@ -782,16 +735,15 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
 
       frame = find("turbo-frame[id^='level-title-']", match: :first)
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"display\"] button').click();", frame
-      )
+      start_inline_edit(frame)
 
       within frame do
-        assert_selector "form", visible: true
-        # The display target must actually hide — `hidden` loses to a
+        assert_selector "[data-editor-form]", visible: true
+        # The display element must actually hide — a `hidden` class loses to a
         # competing `inline-flex` on the same element (assessments.md
-        # Lesson 17), which left the editor rendering BESIDE the title.
-        assert_no_selector "[data-inline-editor-target='display']", visible: true
+        # Lesson 17), which left the editor rendering BESIDE the title, so the
+        # editor sets display:none inline instead.
+        assert_no_selector "[data-editor-display]", visible: true
       end
     end
 
