@@ -10,6 +10,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   include Views::Frameworks::Explorer::Concerns::PendingArchive
   include Views::Frameworks::Explorer::Concerns::HoverCluster
   include Views::Frameworks::Explorer::Concerns::MenuItems
+  include Views::Frameworks::Explorer::Concerns::StickyColumn
 
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
@@ -50,12 +51,17 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
 
   # "+ Add capability" row at the foot of the category — opens the shared
   # add-capability modal, naming this category via the trigger dataset.
+  #
+  # Deliberately NOT `colspan`-ed across the table: a matrix-wide dashed box
+  # puts its affordance wherever the row happens to be centred, which at the
+  # default horizontal scroll is off-screen. It lives in the **capability
+  # column** — the column it adds to — which the sticky left edge keeps in view
+  # however far right the viewer has scrolled (#380 visual pass).
   def add_capability_row
     tr do
       td(
-        colspan: @merged_levels.size + 1,
-        class: "sticky left-0 px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 " \
-               "bg-white dark:bg-gray-900"
+        class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 #{STICKY_EDGE_CLASSES} " \
+               "px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 min-w-[200px]"
       ) do
         render_add_affordance(
           "Add capability",

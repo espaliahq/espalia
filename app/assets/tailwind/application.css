@@ -352,7 +352,10 @@ input[type="week"] {
 .explorer-add {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  /* Left-anchored, never centred: an add row spans its container, and a centred
+   * label in a matrix-wide row sits off-screen at the default horizontal
+   * scroll — the affordance reads as an empty dashed box (#380 visual pass). */
+  justify-content: flex-start;
   gap: 0.25rem;
   width: 100%;
   padding: 0.25rem 0.5rem;

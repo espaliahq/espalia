@@ -91,6 +91,10 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-explorer-menu]", visible: :all
     end
 
+    # A `position: fixed` menu still composites inside the nearest stacking
+    # context, and the sticky capability column is `z-[2]` — so without the
+    # lift the next row's equally-ranked sticky cell paints over the menu's
+    # lower items (#380 visual pass).
     should "open the shared inline editor from the menu's Edit item" do
       # The kebab lives OUTSIDE the name's Turbo Frame, so the item names the
       # frame and the editor resolves its host from it.
@@ -145,6 +149,38 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
       JS
       assert scopes.any?, "the cell should carry hover-cluster controls"
       assert_equal [ "cell" ], scopes.uniq
+    end
+  end
+
+  # One add treatment: a dashed ghost, always visible, anchored where the thing
+  # it adds will land (§11a).
+  context "the add affordances" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+    end
+
+    should "keep the add-capability label in the capability column, not centred across the table" do
+      # Its label must be readable at the default horizontal scroll — a
+      # colspan-ed row centres it somewhere off to the right (#380 visual pass).
+      label = find("button.explorer-add", text: "Add capability", match: :first)
+      column = find("th, td", text: "CAPABILITY", match: :first)
+
+      assert label.rect.x < column.rect.x + column.rect.width,
+             "the add-capability affordance must sit inside the capability column"
+      assert label.rect.width < column.rect.width + 40,
+             "the add-capability affordance must not span the whole table"
+    end
+
+    should "render every add affordance in the one dashed-ghost treatment" do
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Add illustration"
+
+      [ "Add capability", "Add illustration" ].each do |label|
+        assert_selector "button.explorer-add", text: label
+      end
     end
   end
 

@@ -722,7 +722,12 @@ gone). Add is one dashed ghost (`HoverCluster#render_add_affordance`,
 `.explorer-add`), **always visible** in edit mode so it is keyboard reachable
 and discoverable on touch — used by "+ Add category" (stats bar), "+ Add
 capability" (category footer), "+ Add expectation" (empty cell, previously
-hover-only) and "+ Add illustration" (expanded row).
+hover-only) and "+ Add illustration" (expanded row). Its label is
+**left-anchored, and an add row sits in the column it adds to** — the
+add-capability row is a single sticky cell in the capability column, NOT a
+`colspan`-ed row: a centred label in a matrix-wide row lands off-screen at the
+default horizontal scroll, leaving an empty dashed box where the affordance
+should be (found by #380's visual pass).
 
 **Icons are a sprite.** `Components::Kit::IconSprite` renders one `<symbol>` set
 per page from `Kit::PageLayout`; call sites use
