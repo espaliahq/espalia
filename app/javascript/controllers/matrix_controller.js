@@ -1703,9 +1703,10 @@ export default class extends BaseController {
       response = null
     }
 
-    // A 401 is an expired session: Retry could never succeed, so reload —
-    // the page-level redirect lands on sign-in and back here afterwards.
-    if (response?.statusCode === 401) {
+    // An expired session answers 401 (XHR) or a followed redirect to the
+    // sign-in page (200, `redirected`): Retry could never succeed either way,
+    // so reload — the page-level redirect lands on sign-in and back here.
+    if (response?.statusCode === 401 || response?.redirected) {
       window.location.reload()
       return placeholder
     }
