@@ -707,6 +707,10 @@ Rules:
   trigger on scroll** rather than dismissing, and closes on Esc (focus returns
   to the trigger), an outside click, `modal:open`, or acting on any item except
   Approve (which swaps itself to "✓ Approved" in place).
+- **The trigger's stacking context is lifted while the menu is open.** `fixed`
+  escapes overflow clipping but not paint order (Hard-Won Lesson 31), so the
+  controller raises the nearest positioned+z-indexed ancestor to `z-index: 9`
+  for the life of the menu and restores the inline value on close.
 - **ARIA is unchanged**: `aria-haspopup` / `aria-expanded` on the trigger,
   `role="menu"` + `role="menuitem"` on the built menu, ArrowUp/Down/Home/End
   roving focus, and focus-within reveal so a keyboard user can reach the
@@ -1688,6 +1692,43 @@ explorer root.** `position: fixed` escapes the matrix's scroll clipping either
 way, but a menu item still has to reach its entity — `field-editor#open`
 resolves its host with `closest("[data-editor-action]")` and `reorder-list`
 with `closest("[data-reorder-item-id]")`. A root-mounted menu breaks both.
+
+### 31. `position: fixed` escapes clipping, not paint order
+
+The delegated kebab menu is `position: fixed`, which was supposed to settle
+where it renders: no overflow ancestor can clip it. It still came out **under
+the row below it** — the last two items of a capability menu were painted over
+by the next row's cells.
+
+`fixed` takes an element out of flow and out of its ancestors' *clipping*, but
+it still composites inside the nearest ancestor that creates a **stacking
+context**. The matrix's sticky capability column is `position: sticky;
+z-index: 2`, so the menu — however high its own `z-50` — could only ever paint
+at z-index 2 among that column's siblings, and the equally-ranked sticky cell
+of the NEXT row wins on document order.
+
+Two fixes were available and the cheaper one is wrong here: portalling the menu
+to `document.body` removes every ancestor, but the menu's items resolve their
+entity by `closest(…)` (`field-editor#open` → `[data-editor-action]`,
+`reorder-list#moveUp` → `[data-reorder-item-id]`, and Stimulus binds
+`reorder-list` actions by ancestry at all), so a portalled menu would need every
+one of those re-plumbed. Instead the controller **lifts the offending ancestor**
+while the menu is open (`LIFTED_Z = 9`) and restores its inline `z-index` on
+close — chosen to clear the grid's body cells (z-2) and category headers (z-5)
+while staying under the sticky column headers (z-10) and corner (z-20).
+
+Two things to carry forward:
+
+- **When an overlay renders "behind" something, look for a z-indexed positioned
+  ancestor before touching the overlay's own z-index.** Raising `z-50` to
+  `z-9999` would have changed nothing.
+- **A paint-order test must probe where the overlap actually is.** The first
+  version sampled the centre of the menu's last item — which overhangs into the
+  non-positioned level columns, where the bug does not exist — and passed
+  happily against the broken build. The test now computes the intersection with
+  a later sticky cell and fails loudly if the fixture produces none, so it can
+  never pass vacuously (testing.md's "an assertion a dropped click would also
+  satisfy is not a test").
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 

@@ -38,6 +38,19 @@ const MENU_CLASSES =
 
 const VIEWPORT_MARGIN = 8
 
+// `position: fixed` escapes overflow clipping but NOT paint order: a fixed
+// element still composites inside the nearest ancestor that creates a stacking
+// context. The matrix's sticky capability column is `z-[2]`, so a menu opened
+// in one row was painted over by the equally-ranked sticky cell of the row
+// BELOW it (reported from #380's visual pass — the row menu's last two items
+// were covered). Lifting that ancestor while the menu is open fixes it without
+// portalling the menu away from the entity its items resolve against.
+//
+// The value sits above the grid's body cells (z-2) and category headers (z-5)
+// and below the sticky column headers (z-10) and corner (z-20), so an open menu
+// never paints over the chrome that has to stay legible.
+const LIFTED_Z = 9
+
 // Reject-modal copy per suggestion kind: [what the verb acts on, what the modal
 // calls the entity].
 const SUGGESTION_LABELS = {
@@ -60,6 +73,7 @@ export default class extends BaseController {
     super.connect()
     this.openTrigger = null
     this.menu = null
+    this.lifted = null
     this.resolved = new Map()
     this._onScroll = this.#onScroll.bind(this)
     // A menu item that opens a modal leaves the menu on screen behind it — and
@@ -176,6 +190,7 @@ export default class extends BaseController {
     // `closest("[data-editor-action]")`, `reorder-list#moveUp` by
     // `closest("[data-reorder-item-id]")`). `position: fixed` keeps it out of
     // the matrix's scroll clipping regardless.
+    this.#liftStackingContext(trigger)
     trigger.insertAdjacentElement("afterend", menu)
     // Acting on a menu item closes it — every item is a one-shot action.
     // Approve is the exception: it swaps itself to "✓ Approved" in place, which
@@ -199,11 +214,37 @@ export default class extends BaseController {
   }
 
   #teardownMenu() {
+    this.#restoreStackingContext()
     this.menu?.remove()
     this.menu = null
     this.openTrigger = null
     window.removeEventListener("scroll", this._onScroll, true)
     window.removeEventListener("resize", this._onScroll)
+  }
+
+  // See LIFTED_Z. Walks to the nearest ancestor that creates a stacking context
+  // (positioned + an explicit z-index) and raises it, remembering the inline
+  // value so close() can put it back exactly as it was.
+  #liftStackingContext(trigger) {
+    let node = trigger.parentElement
+    while (node && node !== document.body) {
+      const style = window.getComputedStyle(node)
+      if (style.position !== "static" && style.zIndex !== "auto") {
+        if (Number(style.zIndex) < LIFTED_Z) {
+          this.lifted = { node, zIndex: node.style.zIndex }
+          node.style.zIndex = String(LIFTED_Z)
+        }
+        return
+      }
+      node = node.parentElement
+    }
+  }
+
+  #restoreStackingContext() {
+    if (!this.lifted) return
+
+    this.lifted.node.style.zIndex = this.lifted.zIndex
+    this.lifted = null
   }
 
   #build(item) {

@@ -37,6 +37,15 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
       handler.set_behavioural_expectation(@framework_id, eid, SecureRandom.uuid_v7, cap_id, 1,
                                           "Asks clarifying questions")
+      # Two more rows below the first, so a menu opened on row 1 overlaps them —
+      # the arrangement the sticky-column paint-order bug needs (§11a).
+      2.times do |index|
+        other = SecureRandom.uuid_v7
+        handler.add_capability(@framework_id, other, SecureRandom.uuid_v7, cat_id, "Filler #{index}")
+        handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, other, rid)
+        handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
+                                            other, 1, "Filler expectation #{index}")
+      end
       handler.publish_version(@framework_id, "test")
     end
   end
@@ -95,6 +104,53 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
     # context, and the sticky capability column is `z-[2]` — so without the
     # lift the next row's equally-ranked sticky cell paints over the menu's
     # lower items (#380 visual pass).
+    should "paint over the rows beneath it, not under the next sticky cell" do
+      open_explorer_menu("Capability actions")
+
+      # Probe where the overlap actually is: the menu overhangs the sticky
+      # column into the level columns, and only the part still over a LATER
+      # row's sticky cell is at risk — a centre-only probe misses the bug. The
+      # script reports the overlap it found so a fixture with no overlap fails
+      # loudly instead of passing vacuously.
+      probe = page.evaluate_script(<<~JS)
+        (() => {
+          const menu = document.querySelector("[data-explorer-menu]");
+          const box = menu.getBoundingClientRect();
+          const cells = [...document.querySelectorAll("tr[data-hover-cluster='row'] td.sticky")]
+            .filter((cell) => !menu.contains(cell) && !cell.contains(menu));
+          for (const cell of cells) {
+            const r = cell.getBoundingClientRect();
+            const x = Math.max(box.left, r.left) + 2;
+            const y = Math.max(box.top, r.top) + 2;
+            if (x >= Math.min(box.right, r.right) || y >= Math.min(box.bottom, r.bottom)) continue;
+
+            const hit = document.elementFromPoint(x, y);
+            return { overlapped: true, inMenu: Boolean(hit && hit.closest("[data-explorer-menu]")) };
+          }
+          return { overlapped: false, inMenu: false };
+        })()
+      JS
+
+      assert probe["overlapped"],
+             "fixture problem: no later sticky cell overlaps the open menu, so nothing is proved"
+      assert probe["inMenu"],
+             "the menu must paint over a later row's sticky cell, not under it"
+    end
+
+    should "restore the lifted stacking context when the menu closes" do
+      column = "tr[data-hover-cluster='row'] td.sticky"
+      before = page.evaluate_script("getComputedStyle(document.querySelector(arguments[0])).zIndex",
+                                    column)
+      open_explorer_menu("Capability actions")
+      press_escape
+
+      assert_no_selector "[data-explorer-menu]", visible: :all
+      assert_equal before,
+                   page.evaluate_script(
+                     "getComputedStyle(document.querySelector(arguments[0])).zIndex", column
+                   )
+    end
+
     should "open the shared inline editor from the menu's Edit item" do
       # The kebab lives OUTSIDE the name's Turbo Frame, so the item names the
       # frame and the editor resolves its host from it.
