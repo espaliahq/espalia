@@ -17,6 +17,10 @@
 import BaseController from "controllers/base_controller"
 import { get } from "@rails/request.js"
 
+// Upper bound on one expanded-row fetch (an edit-mode row on a large framework
+// is ~450 KB); past it the placeholder shows its error state with Retry.
+const EXPANDED_ROW_TIMEOUT_MS = 20_000
+
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
@@ -1688,7 +1692,12 @@ export default class extends BaseController {
     let loaded = null
     let response = null
     try {
-      response = await get(this.#expandedRowUrl(placeholder), { responseKind: "html" })
+      response = await get(this.#expandedRowUrl(placeholder), {
+        responseKind: "html",
+        // A hung request must end in the error state (Retry), not a permanent
+        // "Loading examples…" — request.js adds no timeout of its own.
+        signal: AbortSignal.timeout(EXPANDED_ROW_TIMEOUT_MS)
+      })
       if (response.ok) loaded = this.#parseExpandedRow(await response.html, placeholder.dataset.capabilityId)
     } catch {
       response = null

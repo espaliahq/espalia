@@ -188,6 +188,10 @@ module StimulusHelpers
   # @return [Capybara::Node::Element] the revealed form
   def start_inline_edit(container)
     element = container.is_a?(String) ? find(container) : container
+    # The editor can be inserted late (the on-demand expanded row) — wait for
+    # its controller to connect before dispatching, or the click has no handler.
+    connected = element.matches_css?("[data-controller~='inline-editor']") ? element : element.find("[data-controller~='inline-editor']", visible: :all)
+    connected.assert_matches_selector("[data-connected]", wait: Capybara.default_max_wait_time)
     page.execute_script(
       "arguments[0].querySelector(\"[data-action*='inline-editor#startEdit']\").click();", element
     )

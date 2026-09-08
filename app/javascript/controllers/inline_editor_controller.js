@@ -18,9 +18,13 @@
 //     </form>
 //   </li>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 
-export default class extends Controller {
+// BaseController stamps `data-connected` on connect — the readiness signal
+// system tests wait on before dispatching the pencil click (the editor is
+// inserted late by the on-demand expanded row, so a click can otherwise land
+// before the action handler exists).
+export default class extends BaseController {
   static targets = ["display", "form", "input"]
 
   startEdit() {
