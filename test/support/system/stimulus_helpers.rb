@@ -161,13 +161,41 @@ module StimulusHelpers
   # @param capability_selector [String] CSS selector for the capability
   #   element to click (e.g. "#capability-name-{stable_id}")
   # @param scope [String, nil] optional CSS selector to scope the toggle
-  def expand_matrix_row(capability_selector, scope: nil)
+  # The explorer fetches the expanded row's content on first expand (Hard-Won
+  # Lesson 25), so by default this also waits for the loaded row — a
+  # `querySelector` into the row straight after the click would otherwise race
+  # the fetch. Pass `await_content: false` when the load itself is under test.
+  def expand_matrix_row(capability_selector, scope: nil, await_content: true)
     wait_for_stimulus "matrix", scope: scope
     stimulus_toggle(
       capability_selector,
       visible_selector: "[data-matrix-target='expandedRow']",
       scope: scope
     )
+    return unless await_content
+
+    loaded = "[data-matrix-target='expandedRow']:not([data-loaded='false'])"
+    assert_selector(scope ? "#{scope} #{loaded}" : loaded, visible: true)
+  end
+
+  # Opens an inline editor (illustration / capability / category / expectation
+  # frame) by JS-dispatching its hover-revealed pencil — the real
+  # `inline-editor#startEdit` path, which a synthetic pointer click on an
+  # `opacity-0` button drops on starved CI — and waits for the form to show.
+  #
+  # @param container [Capybara::Node::Element, String] the element (or CSS
+  #   selector) holding the `inline-editor` controller
+  # @return [Capybara::Node::Element] the revealed form
+  def start_inline_edit(container)
+    element = container.is_a?(String) ? find(container) : container
+    # The editor can be inserted late (the on-demand expanded row) — wait for
+    # its controller to connect before dispatching, or the click has no handler.
+    connected = element.matches_css?("[data-controller~='inline-editor']") ? element : element.find("[data-controller~='inline-editor']", visible: :all)
+    connected.assert_matches_selector("[data-connected]", wait: Capybara.default_max_wait_time)
+    page.execute_script(
+      "arguments[0].querySelector(\"[data-action*='inline-editor#startEdit']\").click();", element
+    )
+    element.find("[data-inline-editor-target='form']", visible: true)
   end
 
   # Performs a click via the given block and retries it once if the expected

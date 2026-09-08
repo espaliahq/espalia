@@ -36,11 +36,16 @@ class Components::Kit::FrameLoadError < Components::Base
   # @param subject [String] what failed to load, as a noun phrase ("the form")
   # @param closeable [Boolean] render a Close (dispatches `modal#close`)
   # @param classes [String] layout utilities for the host surface
-  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: "p-6 space-y-3")
+  # @param retry_action [String] Stimulus action the Retry dispatches — the
+  #   `frame-error` controller's by default; a host that reloads by other
+  #   means (the matrix's on-demand expanded row) names its own
+  def initialize(id:, subject: DEFAULT_SUBJECT, closeable: false, classes: "p-6 space-y-3",
+                 retry_action: "frame-error#retry")
     @id = id
     @subject = subject
     @closeable = closeable
     @classes = classes
+    @retry_action = retry_action
   end
 
   # Failure-agnostic by design: one state covers a dropped connection, a 500,
@@ -59,7 +64,7 @@ class Components::Kit::FrameLoadError < Components::Base
         class: @classes, data: { frame_error_target: "error" }) do
       p(class: Components::Kit::SubmitFallbackMessage::PANEL_CLASSES) { message }
       div(class: "flex gap-2") do
-        button(type: "button", data: { action: "frame-error#retry" }, class: BUTTON_CLASSES) { "Retry" }
+        button(type: "button", data: { action: @retry_action }, class: BUTTON_CLASSES) { "Retry" }
         if @closeable
           button(type: "button", data: { action: "modal#close" }, class: BUTTON_CLASSES) { "Close" }
         end

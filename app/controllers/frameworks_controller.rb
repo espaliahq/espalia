@@ -3,7 +3,7 @@
 class FrameworksController < ApplicationController
   include Frameworks::SuggestionAuthority
 
-  before_action :set_framework, only: [ :show, :matrix, :edit, :edit_matrix ]
+  before_action :set_framework, only: [ :show, :matrix, :edit, :edit_matrix, :expanded_row, :edit_expanded_row ]
 
   # GET /frameworks
   def index
@@ -51,6 +51,22 @@ class FrameworksController < ApplicationController
     render_matrix_frame(mode: :edit)
   end
 
+  # GET /frameworks/:id/expanded_rows/:capability_id
+  #
+  # One capability's expanded row (per-role illustrations), fetched by the
+  # matrix controller the first time the row is expanded. The matrix itself
+  # ships only a placeholder per row — see {Views::Frameworks::Explorer::ExpandedRow}.
+  def expanded_row
+    authorize @framework, :matrix?
+    render_expanded_row(mode: :view)
+  end
+
+  # GET /frameworks/:id/edit/expanded_rows/:capability_id
+  def edit_expanded_row
+    authorize @framework, :edit_matrix?
+    render_expanded_row(mode: :edit)
+  end
+
   private
 
   # Renders the full Framework Explorer shell for the given mode. Keeps
@@ -78,13 +94,48 @@ class FrameworksController < ApplicationController
       mode: mode,
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
-      can_edit_structure: can_edit_structure,
-      approval_authority: suggestion_approval_authority(mode),
       archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
       roles: can_edit_structure ? framework_roles(graph) : [],
-      current_person_id: current_person&.id&.to_s,
-      search_query: resolved_search_query
+      search_query: resolved_search_query,
+      **viewer_matrix_flags(mode)
     )
+  end
+
+  # The per-viewer flags every matrix render threads down to the cells —
+  # one definition so the explorer shell, the matrix frame and the on-demand
+  # expanded row can't gate an affordance differently (Hard-Won Lessons 13/16).
+  #
+  # @return [Hash] current_person_id / can_edit_structure / approval_authority
+  def viewer_matrix_flags(mode)
+    {
+      current_person_id: current_person&.id&.to_s,
+      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
+      approval_authority: suggestion_approval_authority(mode)
+    }
+  end
+
+  # Renders the loaded expanded `<tr>` for one capability under the current
+  # role/track scope. Runs the same builder as the matrix (in-memory, a few ms)
+  # and picks the capability out, so the row can't drift from what the compact
+  # row was rendered against. 404 when the capability isn't in scope (archived,
+  # filtered out by the role selection, or not this framework's).
+  def render_expanded_row(mode:)
+    _graph, matrix_data = load_explorer_matrix(mode: mode)
+    capability_id = params.expect(:capability_id)
+    capability_data = matrix_data[:categories]
+      .flat_map { |category| category[:capabilities] }
+      .find { |data| data[:capability].capability_id == capability_id }
+    return head :not_found unless capability_data
+
+    render Views::Frameworks::Explorer::ExpandedRow.new(
+      capability_data: capability_data,
+      merged_levels: matrix_data[:merged_levels],
+      framework_id: @framework.framework_id,
+      loaded: true,
+      mode: mode,
+      roles_by_id: matrix_data[:selected_roles].index_by(&:role_id),
+      **viewer_matrix_flags(mode)
+    ), layout: false
   end
 
   def render_matrix_frame(mode:)
@@ -95,9 +146,7 @@ class FrameworksController < ApplicationController
       matrix_data: matrix_data,
       selected_role_ids: parse_role_ids,
       mode: mode,
-      current_person_id: current_person&.id&.to_s,
-      can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
-      approval_authority: suggestion_approval_authority(mode)
+      **viewer_matrix_flags(mode)
     ), layout: false
   end
 

@@ -26,8 +26,12 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
       cat = create(:framework_capability_category, framework_id: framework_id, name: "Thinking", ordinal: 1)
       cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
       create(:framework_capability_role_binding, capability_id: cap.capability_id, role_id: @ic_role.role_id)
-      create(:framework_behavioural_expectation,
+      expectation = create(:framework_behavioural_expectation,
         capability_id: cap.capability_id, level_ordinal: 1, description: "Asks good questions")
+      @capability = cap
+      create(:framework_role_illustration,
+        expectation_id: expectation.expectation_id, role_id: @ic_role.role_id,
+        description: "Pairs with a senior on framing the problem")
     end
   end
 
@@ -216,6 +220,70 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "turbo-frame"
       assert_not_includes response.body, "<html"
+    end
+  end
+
+  context "GET /frameworks/:id/expanded_rows/:capability_id" do
+    should "render the loaded expanded row for a tenant member" do
+      sign_in @user
+      get expanded_row_framework_path(@framework.framework_id, capability_id: @capability.capability_id)
+
+      assert_response :success
+      assert_not_includes response.body, "<html"
+      assert_includes response.body, "Pairs with a senior on framing the problem"
+      assert_includes response.body, %(data-loaded="true")
+      assert_includes response.body, %(data-capability-id="#{@capability.capability_id}")
+      # View mode: no edit affordances in the loaded row.
+      assert_not_includes response.body, "Add illustration"
+    end
+
+    should "scope the illustrations to the requested roles" do
+      sign_in @user
+      get expanded_row_framework_path(@framework.framework_id, capability_id: @capability.capability_id,
+                                      roles: [ @mgmt_role.role_id ])
+
+      assert_response :success
+      assert_not_includes response.body, "Pairs with a senior on framing the problem"
+    end
+
+    should "404 for a capability outside the framework" do
+      sign_in @user
+      get expanded_row_framework_path(@framework.framework_id, capability_id: SecureRandom.uuid_v7)
+
+      assert_response :not_found
+    end
+
+    should "redirect unauthenticated users to sign in" do
+      get expanded_row_framework_path(@framework.framework_id, capability_id: @capability.capability_id)
+
+      assert_redirected_to new_user_session_path
+    end
+  end
+
+  context "GET /frameworks/:id/edit/expanded_rows/:capability_id" do
+    should "redirect non-collaborator" do
+      sign_in @user
+      get edit_expanded_row_framework_path(@framework.framework_id, capability_id: @capability.capability_id)
+
+      assert_response :redirect
+    end
+
+    should "render the edit-mode row with its affordances for a collaborator" do
+      ActsAsTenant.with_tenant(@tenant) do
+        person = create(:person, tenant: @tenant, email: @user.email)
+        TenantUser.find_by(user: @user).update!(person: person)
+        create(:framework_collaborator, tenant: @tenant,
+               framework_id: @framework.framework_id, person_id: person.id,
+               role: "collaborator")
+      end
+
+      sign_in @user
+      get edit_expanded_row_framework_path(@framework.framework_id, capability_id: @capability.capability_id)
+
+      assert_response :success
+      assert_includes response.body, "Pairs with a senior on framing the problem"
+      assert_includes response.body, "Add illustration"
+      assert_includes response.body, %(data-controller="inline-editor")
     end
   end
 

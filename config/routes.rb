@@ -179,6 +179,10 @@ Rails.application.routes.draw do
       get :matrix
       get :edit
       get "edit/matrix" => "frameworks#edit_matrix", as: :edit_matrix
+      # One capability's expanded (illustrations) row, fetched on first expand —
+      # the matrix ships a placeholder per row (framework-explorer.md, lazy-row lesson).
+      get "expanded_rows/:capability_id" => "frameworks#expanded_row", as: :expanded_row
+      get "edit/expanded_rows/:capability_id" => "frameworks#edit_expanded_row", as: :edit_expanded_row
     end
     resources :illustrations, only: [ :create, :update ], controller: "frameworks/illustrations"
     resources :illustration_archives, only: [ :create ], controller: "frameworks/illustration_archives"

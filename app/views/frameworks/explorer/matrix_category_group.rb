@@ -7,17 +7,17 @@
 #
 class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::PendingArchive
 
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
-  # @param roles_by_id [Hash] { role_id => Role } — passed through to rows to avoid per-cell AR lookups
   # @param prev_category_id [String, nil] the visible category above (for the ↑ move chevron)
   # @param next_category_id [String, nil] the visible category below (for the ↓ move chevron)
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
-                 roles_by_id: {}, current_person_id: nil, search_query: nil, can_edit_structure: false,
+                 current_person_id: nil, search_query: nil, can_edit_structure: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
                  prev_category_id: nil, next_category_id: nil)
     @category = category_data[:category]
@@ -30,7 +30,6 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @selected_role_ids = selected_role_ids
     @framework_id = framework_id
     @mode = mode
-    @roles_by_id = roles_by_id
     @current_person_id = current_person_id
     @search_query = search_query
     @can_edit_structure = can_edit_structure
@@ -258,7 +257,6 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         selected_role_ids: @selected_role_ids,
         framework_id: @framework_id,
         mode: @mode,
-        roles_by_id: @roles_by_id,
         current_person_id: @current_person_id,
         search_query: @search_query,
         can_edit_structure: @can_edit_structure,
@@ -275,7 +273,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def movable_capability_ids
     @capabilities.filter_map do |cap_data|
       cap = cap_data[:capability]
-      next if cap.respond_to?(:pending_archive) && cap.pending_archive
+      next if pending_archive?(cap)
 
       cap.capability_id
     end

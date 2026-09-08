@@ -318,7 +318,8 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `toggle_sidebar(scope:)` | sidebar | Opens the mobile sidebar drawer |
 | `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
-| `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector |
+| `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector (the row's content loads on demand — assert on it, not on the row) |
+| `start_inline_edit(container)` | inline-editor | Opens an inline editor via its pencil, returns the revealed form |
 | `click_rating_frequency(cell_selector, freq)` | (rating cell) | Clicks a frequency button, retries until ring-1 lands |
 
 ```ruby
