@@ -130,7 +130,11 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   def render_field_editor_error(error)
     return if error.blank?
 
-    p(class: "text-[11px] text-red-700 dark:text-red-400", role: "alert") do
+    # data-editor-error-line: the editor clears this (and the host's
+    # data-editor-error) when the user cancels, so a failed-then-abandoned edit
+    # doesn't leave a permanent-looking alert in the grid.
+    p(class: "text-[11px] text-red-700 dark:text-red-400", role: "alert",
+      data: { editor_error_line: true }) do
       "Couldn’t save: #{error}"
     end
   end

@@ -53,6 +53,14 @@ export default class extends BaseController {
     super.connect()
     this.openHost = null
     this.openForm = null
+    // A Turbo Drive cache snapshot is taken BEFORE disconnect() runs, so a
+    // restored page can carry an orphaned editor whose display element is still
+    // hidden. Clear any before the user meets it.
+    this.element.querySelectorAll("[data-editor-form]").forEach((form) => {
+      const display = form.parentElement?.querySelector("[data-editor-display]")
+      if (display) display.style.display = ""
+      form.remove()
+    })
   }
 
   disconnect() {
@@ -90,7 +98,10 @@ export default class extends BaseController {
       this.cancel()
       return
     }
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+    // Cmd/Ctrl+Enter always saves. On a single-row host (a level title, a
+    // category name, a department label) plain Enter saves too — a newline
+    // there is never wanted, and it used to be an <input type=text>.
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey || this.#singleRow)) {
       event.preventDefault()
       this.openForm?.requestSubmit()
     }
@@ -176,6 +187,7 @@ export default class extends BaseController {
     const form = this.#buildForm(host)
     if (!form) return
 
+    this.#pinWidth(host, form)
     const display = host.querySelector("[data-editor-display]")
     // Inline style, not a `hidden` class: the display element usually carries
     // its own `flex`/`inline-flex` utility, which ties `.hidden` on
@@ -196,6 +208,28 @@ export default class extends BaseController {
       } catch { /* non-text input — ignore */ }
       this.autogrow()
     }
+  }
+
+  // `width: 100%` is unreliable inside an auto-layout table: the cell's width
+  // isn't settled during the intrinsic pass, so the percentage falls back to
+  // shrink-to-fit and the editor collapses to roughly its buttons (~110px).
+  // Pin it to the host's OWN pre-open width instead — the host already occupies
+  // exactly that, so the column's negotiation is unchanged whatever the
+  // viewport. Never floor it to a "comfortable" minimum: on a squeezed mobile
+  // table that floor becomes new min-content and widens the column (Lesson 27).
+  // Hosts that want a roomy editor make themselves full-width instead (a
+  // percentage width contributes nothing intrinsic) — see LevelTitleFrame.
+  #pinWidth(host, form) {
+    const hostWidth = host.getBoundingClientRect().width
+    let cellInner = Infinity
+    const cell = host.closest("td, th")
+    if (cell) {
+      const style = window.getComputedStyle(cell)
+      cellInner =
+        cell.clientWidth - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0)
+    }
+    const width = Math.min(hostWidth, cellInner)
+    if (width > 0) form.style.width = `${width}px`
   }
 
   #buildForm(host) {
@@ -295,6 +329,11 @@ export default class extends BaseController {
 
   #discardEditor() {
     this.openForm?.remove()
+    // A rejected save re-rendered the frame with a server-side alert. Abandoning
+    // the edit must take the alert with it, or the cell keeps a
+    // permanent-looking "Couldn't save" banner until the next frame render.
+    this.openHost?.querySelector("[data-editor-error-line]")?.remove()
+    this.openHost?.removeAttribute("data-editor-error")
     this.#forgetEditor()
   }
 
@@ -314,6 +353,10 @@ export default class extends BaseController {
 
   #input() {
     return this.openForm?.querySelector("[data-editor-input]")
+  }
+
+  get #singleRow() {
+    return this.openHost?.dataset.editorRows === "1"
   }
 
   #eventTouchesOpenEditor(event) {

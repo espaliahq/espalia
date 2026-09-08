@@ -54,6 +54,11 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
   end
 
   def editable
+    # Deliberately shrink-to-fit: the shared editor pins its width to the host's
+    # own, and a `w-full` host here sits in a flex row beside the role-code
+    # badges, so the pinned px width would be ADDED to the row's intrinsic width
+    # and widen the level column by ~108px (Lesson 27). A short level title in a
+    # title-width box is the accepted trade.
     div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_title

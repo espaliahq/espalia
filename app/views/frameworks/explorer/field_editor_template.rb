@@ -62,7 +62,11 @@ class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
         ) { "" }
 
         div(class: "flex flex-wrap items-center gap-1 mt-1") do
-          button(type: "submit", class: SUBMIT_CLASSES, data: { editor_submit: true }) { "Save" }
+          button(
+            type: "submit", class: SUBMIT_CLASSES,
+            aria_describedby: "field-editor-outcome-hint",
+            data: { editor_submit: true }
+          ) { "Save" }
           button(
             type: "button", class: CANCEL_CLASSES,
             data: { action: "field-editor#cancel" }
@@ -71,7 +75,9 @@ class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
           # label (Save / Propose) and the amber border, and any visible text
           # here leaks into the intrinsic width of an auto-layout table cell —
           # widening the column the moment an editor opens (#379).
-          span(class: "sr-only", data: { editor_hint: true }) { }
+          # Only one editor is ever open, so a fixed id is safe — it lets the
+          # submit button carry the outcome as its description.
+          span(id: "field-editor-outcome-hint", class: "sr-only", data: { editor_hint: true }) { }
         end
       end
     end

@@ -151,6 +151,22 @@ class Frameworks::InlineEditorSystemTest < ApplicationSystemTestCase
       assert_equal "   ", find("[data-editor-input]").value
       assert_text "Strategic Thinking"
     end
+
+    should "clear the error when the rejected edit is abandoned" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      submit_inline_edit(start_inline_edit(capability_name_host), with: "   ")
+      assert_text "Couldn’t save:"
+
+      cancel_inline_edit(find("[data-editor-form]"))
+
+      # Otherwise the cell keeps a permanent-looking alert until the next full
+      # matrix render (found in the Chrome MCP pass).
+      assert_no_text "Couldn’t save:"
+      assert_no_selector "[data-editor-error]", visible: :all
+      assert_text "Strategic Thinking"
+    end
   end
 
   context "unsaved-change guard" do
