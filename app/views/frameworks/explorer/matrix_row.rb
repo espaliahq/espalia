@@ -66,7 +66,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     tr(
       class: "#{@bound ? '' : 'opacity-50'} #{strikethrough_classes} group cursor-pointer scroll-mt-20 " \
              "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-      data: hover_cluster_data("row").merge(
+      # The cluster attribute only earns its bytes in edit mode — view mode has
+      # no hover controls to reveal.
+      data: (@mode == :edit ? hover_cluster_data("row") : {}).merge(
         action: "click->matrix#toggleRow",
         matrix_target: "row",
         capability_id: @capability.capability_id,

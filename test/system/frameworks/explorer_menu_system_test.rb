@@ -196,6 +196,18 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
              "focusing into the row reveals its whole cluster (keyboard reachability)"
     end
 
+    should "hang the role tree's rename pencil off the tree row, not the name span" do
+      # A tree row already reveals the family's edit dialog and the role's ⋮ on
+      # row hover; the pencil must appear at the same moment, not when the
+      # pointer happens to be over the name (§11a).
+      owners = page.evaluate_script(<<~JS)
+        [...document.querySelectorAll("[data-tree-target='role'] [data-cluster~='tree']")]
+          .map((el) => el.closest("[data-hover-cluster]").dataset.treeTarget || "")
+      JS
+      assert owners.any?, "the tree row should carry a cluster control"
+      assert_equal [ "role" ], owners.uniq
+    end
+
     should "keep a cell's cluster scoped to that cell" do
       # A cell's controls must not pop when the pointer is elsewhere in the row —
       # they answer to the cell's own scope.

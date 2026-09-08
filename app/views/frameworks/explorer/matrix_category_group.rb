@@ -88,7 +88,9 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         colspan: col_count,
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
-        div(class: "flex items-start gap-2", data: hover_cluster_data("cat")) do
+        # Edit mode only — view mode has no hover controls to reveal.
+        div(class: "flex items-start gap-2",
+            data: (@mode == :edit ? hover_cluster_data("cat") : {})) do
           # Chevron collapses/expands the category rows
           button(
             type: "button",

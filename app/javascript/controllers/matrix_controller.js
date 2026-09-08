@@ -366,7 +366,9 @@ export default class extends BaseController {
     // form/textarea live inside the focus target) so editing the category name
     // — or typing in its editor — never also toggles category focus. Mirrors
     // focusCell's guard.
-    if (event.target.closest("button, a, input, textarea, select, form, [contenteditable]")) return
+    if (event.target.closest(
+      "button, a, input, textarea, select, form, [contenteditable], [role='menu']"
+    )) return
 
     event.stopPropagation()
     const target = event.currentTarget

@@ -15,6 +15,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # For the shared kebab_trigger + kebab_item_classes (the tree passes its
   # denser padding).
   include Views::Frameworks::Explorer::Concerns::KebabChrome
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
 
   TRACK_OPTIONS = [
     { value: "both", label: "All" },
@@ -186,8 +187,11 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       data: { tree_target: "group", family_id: role_family.role_family_id }
     ) do
       # Family header
+      # The row owns its hover cluster: the family's inline-rename pencil reveals
+      # with the row's other hover controls, not on the name span (§11a).
       div(class: "flex items-center gap-2 px-3 py-1.5 rounded-md " \
-                 "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer group") do
+                 "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer group",
+          data: hover_cluster_data("tree")) do
         # Disclosure triangle
         button(
           type: "button",
@@ -306,7 +310,8 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     div(
       class: "flex items-center gap-2 px-3 py-1 rounded-md " \
              "hover:bg-gray-100 dark:hover:bg-gray-800 group",
-      data: { tree_target: "role", role_id: role.role_id, track: role.track }
+      data: hover_cluster_data("tree")
+              .merge(tree_target: "role", role_id: role.role_id, track: role.track)
     ) do
       input(
         type: "checkbox",

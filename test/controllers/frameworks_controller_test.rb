@@ -260,6 +260,18 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "GET /frameworks/:id/matrix (view mode)" do
+    should "ship no hover-cluster machinery — there is nothing to reveal" do
+      sign_in @user
+      get matrix_framework_path(@framework.framework_id)
+
+      assert_response :success
+      assert_not_includes response.body, "data-hover-cluster"
+      assert_not_includes response.body, "data-cluster"
+      assert_not_includes response.body, "explorer-menu#toggle"
+    end
+  end
+
   context "GET /frameworks/:id/expanded_rows/:capability_id" do
     should "render the loaded expanded row for a tenant member" do
       sign_in @user

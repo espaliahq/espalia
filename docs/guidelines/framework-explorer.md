@@ -669,6 +669,10 @@ carries `data-hover-cluster="<scope>"` and every control in its cluster carries
 `data-cluster="<scope> inline|kebab"`; one CSS rule set in
 `app/assets/tailwind/application.css` pairs them. Scopes: `row` · `cell` ·
 `ill` · `cat` (the grid) + `tree` · `hdr` (the role pane, the level titles).
+The owner is the **row / cell / item**, never the text: the role tree's rename
+pencil hangs off the tree row that already reveals the family's edit dialog and
+the role's ⋮, so a tree row's controls appear at one moment too. The attribute
+is emitted in edit mode only — view mode has nothing to reveal.
 `Concerns::HoverCluster#render_hover_cluster` renders the cluster; a pencil that
 belongs to the entity's own Turbo Frame (a capability name, a category name, an
 expectation text — the frame re-render has to carry it, and the shared editor

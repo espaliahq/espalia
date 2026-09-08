@@ -105,7 +105,7 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # selected bound role; an empty or not-applicable cell is not a focus target.
   def filled_cell
     td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
-       data: hover_cluster_data("cell").merge(focus_target_data)) do
+       data: cell_cluster_data.merge(focus_target_data)) do
       # One layout for both states — the kebab is conditional, the wrapper is
       # not, so the pending-edit cell can't drift from the plain cell. No
       # flex-1 on the text: the kebab sits right after it, not at the far edge
@@ -123,6 +123,11 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
                                  suggestion_id: @cell_data[:clarification_suggestion_id])
       illustration_indicator if @cell_data[:illustration_count] > 0
     end
+  end
+
+  # View mode has no hover controls to reveal, so it ships no cluster attribute.
+  def cell_cluster_data
+    @mode == :edit ? hover_cluster_data("cell") : {}
   end
 
   def focus_target_data
