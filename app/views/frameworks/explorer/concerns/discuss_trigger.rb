@@ -9,6 +9,15 @@
 # Stimulus mount of its own: the edit-mode matrix already carries thousands of
 # controller mounts, and one per cell is the wrong direction (Lesson 23).
 module Views::Frameworks::Explorer::Concerns::DiscussTrigger
+  # The Discuss controls are hover-cluster members, so every host needs the
+  # cluster's data helpers — pulled in here rather than repeated at ~15 call
+  # sites where forgetting one is a NoMethodError at render time.
+  def self.included(base)
+    super
+    base.include(Views::Frameworks::Explorer::Concerns::HoverCluster)
+    base.include(Views::Frameworks::Explorer::Concerns::MenuItems)
+  end
+
   MODAL_ID = "request-clarification-modal"
 
   # @param capability_id [String, nil]
@@ -33,33 +42,28 @@ module Views::Frameworks::Explorer::Concerns::DiscussTrigger
   end
 
   # Hover-revealed speech-bubble button — the in-grid trigger (expectation
-  # cells). `reveal_classes` carry the caller's `group/…` hover token, which
-  # must be a literal in the caller's source (Lesson 12).
+  # cells). Reveals with the rest of its entity's cluster and is hidden on
+  # coarse pointers, where the kebab's "Discuss…" item takes over
+  # ({HoverCluster}).
   #
-  # @param reveal_classes [String]
+  # @param scope [String] hover-cluster scope
   # @param label [String] accessible name
-  def render_discuss_button(reveal_classes:, label:, **anchor)
+  def render_discuss_button(scope:, label:, **anchor)
     button(
       type: "button",
       aria: { label: label },
       title: label,
-      class: "shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 " \
-             "cursor-pointer transition-opacity focus-visible:opacity-100 " \
-             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60 " \
-             "#{reveal_classes}",
-      data: discuss_trigger_data(**anchor)
+      class: "explorer-cluster-btn p-0.5",
+      data: cluster_control_data(scope).merge(discuss_trigger_data(**anchor))
     ) { discuss_icon }
   end
 
-  # Menu item form — for the kebabs (capability row, illustration), where the
-  # kebab is the right-most control and absorbs secondary actions.
-  def render_discuss_menu_item(**anchor)
-    button(
-      type: "button",
-      role: "menuitem",
-      class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: discuss_trigger_data(**anchor)
-    ) { "Discuss…" }
+  # Menu-node form — for the kebabs, where the kebab is the right-most control
+  # and absorbs secondary actions (and is the only control on a touch device).
+  #
+  # @return [Hash] one item node for {MenuItems}
+  def discuss_menu_item(**anchor)
+    menu_item_node("Discuss…", **discuss_trigger_data(**anchor))
   end
 
   # Speech bubble — the same content-language glyph the open-clarification

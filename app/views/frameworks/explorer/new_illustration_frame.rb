@@ -23,7 +23,7 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
 
   def view_template
     turbo_frame_tag("new-illustration-#{@expectation_id}-#{@role_id}") do
-      div(class: "group/new-ill pl-2 mt-1", data: editor_data) do
+      div(class: "pl-2 mt-1", data: editor_data) do
         add_button
       end
     end
@@ -50,13 +50,8 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
   end
 
   def add_button
-    button(
-      type: "button",
-      class: "text-xs text-gray-400 hover:text-primary flex items-center gap-1 py-0.5",
-      data: { editor_display: true, action: "field-editor#open" }
-    ) do
-      icon("plus", class: "w-3 h-3")
-      plain "Add illustration"
-    end
+    render_add_affordance(
+      "Add illustration", editor_display: true, action: "field-editor#open"
+    )
   end
 end

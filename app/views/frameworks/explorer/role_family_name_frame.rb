@@ -15,6 +15,7 @@
 #
 class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
   include Views::Frameworks::Explorer::Concerns::InlineEditable
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::GhostEntities
@@ -52,10 +53,10 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex flex-col items-start gap-1", data: editor_data) do
+    div(class: "flex flex-col items-start gap-1", data: hover_cluster_data("tree").merge(editor_data)) do
       div(class: "flex items-start gap-1 min-w-0", data: { editor_display: true }) do
         plain_name
-        render_inline_editor_pencil(aria_label: "Edit role family name")
+        render_inline_editor_pencil(aria_label: "Edit role family name", scope: "tree")
       end
     end
   end

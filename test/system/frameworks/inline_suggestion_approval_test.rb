@@ -181,17 +181,14 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_status("approved")
 
       # The row kebab lives OUTSIDE the surgically-replaced frame and survives
-      # the resolution — its items must go terminal (approve relabelled, both
-      # disabled), never linger actionable against a resolved suggestion.
-      # DOM-level wait first: wait_for_status polls the read model, which
-      # flips mid-POST — before the response reaches the client and
-      # suggestion:resolved marks the (still-hidden) menu items.
-      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
-                      text: "✓ Approved", visible: :all
-      open_dropdown(scope: "tr[data-capability-id='#{@cap_id}']")
-      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
-                      text: "✓ Approved"
-      assert_selector "tr[data-capability-id='#{@cap_id}'] button[role='menuitem'][disabled]",
+      # the resolution. Its menu is built on open (#380), so the guarantee is
+      # that a menu built AFTER the resolution opens already terminal — approve
+      # relabelled, both items disabled — never actionable against a resolved
+      # suggestion.
+      assert_selector "#suggestion-panel", text: "✓ Approved"
+      open_explorer_menu("Capability actions", scope: "tr[data-capability-id='#{@cap_id}']")
+      assert_selector "[data-explorer-menu] button[role='menuitem'][disabled]", text: "✓ Approved"
+      assert_selector "[data-explorer-menu] button[role='menuitem'][disabled]",
                       text: "Reject description change"
     end
 
@@ -200,16 +197,12 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      # Open the row-actions dropdown, then approve the pending description edit.
-      page.execute_script(
-        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
-        "button[data-dropdown-target='trigger']\").click()"
-      )
+      # Open the row-actions menu, then approve the pending description edit.
+      open_explorer_menu("Capability actions", scope: "tr[data-capability-id='#{@cap_id}']")
       assert_text "Approve description change"
-      page.execute_script(
-        "document.querySelector(\"tr[data-capability-id='#{@cap_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved")
       assert_equal "A sharper capability description",
@@ -222,16 +215,11 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      # The cell kebab is the row's second dropdown (after the row-actions one).
-      page.execute_script(
-        "document.querySelectorAll(\"tr[data-capability-id='#{@cap_id}'] " \
-        "button[data-dropdown-target='trigger']\")[1].click()"
-      )
+      open_explorer_menu("Expectation actions", scope: "tr[data-capability-id='#{@cap_id}']")
       assert_text "Approve expectation change"
-      page.execute_script(
-        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved", exp_sugg_id)
       assert_equal "Asks sharper clarifying questions",
@@ -245,17 +233,13 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      # Touch devices have no hover — the trigger stays visible via
-      # pointer-coarse:opacity-100 and the same JS click path applies.
-      page.execute_script(
-        "document.querySelectorAll(\"tr[data-capability-id='#{@cap_id}'] " \
-        "button[data-dropdown-target='trigger']\")[1].click()"
-      )
+      # Touch devices have no hover — the kebab stays visible and the rest of
+      # the cluster collapses into it (#380).
+      open_explorer_menu("Expectation actions", scope: "tr[data-capability-id='#{@cap_id}']")
       assert_text "Approve expectation change"
-      page.execute_script(
-        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{exp_sugg_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved", exp_sugg_id)
       assert_equal "Asks sharper clarifying questions",
@@ -268,18 +252,14 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      page.execute_script(
-        "document.querySelector(\"#illustration-#{@ill_id} " \
-        "button[data-dropdown-target='trigger']\").click()"
-      )
+      open_explorer_menu("Illustration actions", scope: "#illustration-#{@ill_id}")
       assert_text "Approve illustration change"
       # Archive lives in the same kebab — the menu is the illustration's
       # single "more actions" home.
       assert_text "Archive…"
-      page.execute_script(
-        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved", ill_sugg_id)
       assert_equal "Raises risks early and in writing",
@@ -292,15 +272,12 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      page.execute_script(
-        "document.querySelector(\"turbo-frame[id='pending-suggestion-#{create_sugg_id}'] " \
-        "button[data-dropdown-target='trigger']\").click()"
-      )
+      open_explorer_menu("New-illustration suggestion actions",
+                         scope: "turbo-frame[id='pending-suggestion-#{create_sugg_id}']")
       assert_text "Approve new illustration"
-      page.execute_script(
-        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{create_sugg_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved", create_sugg_id)
       assert FrameworkState::RoleIllustration.exists?(description: "Shares a written risk log weekly"),
@@ -313,9 +290,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      page.execute_script(
-        "document.querySelector(\"button[data-reject-suggestion-id='#{create_sugg_id}']\").click()"
-      )
+      use_explorer_menu("New-illustration suggestion actions", "Reject new illustration",
+                        scope: "turbo-frame[id='pending-suggestion-#{create_sugg_id}']")
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Covered by the existing example"
       click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
@@ -332,15 +308,11 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      page.execute_script(
-        "document.querySelector(\"#illustration-#{@ill_id} " \
-        "button[data-dropdown-target='trigger']\").click()"
-      )
+      open_explorer_menu("Illustration actions", scope: "#illustration-#{@ill_id}")
       assert_text "Approve illustration change"
-      page.execute_script(
-        "document.querySelector(\"[data-suggestion-action-approve-url-value*='#{ill_sugg_id}'] " \
-        "button[data-action='suggestion-action#approve']\").click()"
-      )
+      page.execute_script(<<~JS)
+        document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
+      JS
 
       wait_for_status("approved", ill_sugg_id)
       assert_equal "Raises risks early and in writing",

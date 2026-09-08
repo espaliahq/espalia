@@ -220,3 +220,165 @@ input[type="week"] {
     background-color: transparent;
   }
 }
+
+/* Framework explorer — the ONE hover-cluster rule (#380).
+ *
+ * Every hover control used to carry its own Tailwind `group-hover/<token>`
+ * reveal, and the tokens differed per control: the capability pencil revealed
+ * on the name span, the row kebab on the whole row, the cell's Discuss bubble
+ * on the cell, the illustration controls on the item. Controls therefore
+ * popped in at different moments as the pointer crossed a single row.
+ *
+ * Now the entity that OWNS a cluster carries `data-hover-cluster="<scope>"`
+ * and each control in it carries `data-cluster-scope="<scope>"` — so a whole
+ * cluster reveals at once, a nested scope (a cell inside a row) still reveals
+ * independently, and there is no interpolated Tailwind token for the JIT to
+ * miss (Hard-Won Lesson 12). Scopes: row · cell · ill · cat · tree · hdr.
+ * Written as plain CSS rather than utility classes because it repeats on
+ * thousands of grid elements — an attribute pair is ~25 bytes where the
+ * utility string was ~200. */
+[data-cluster] {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+/* The cluster's controls share one chrome definition, written as CSS rather
+ * than utilities because it repeats on every pencil, Discuss bubble and kebab
+ * in the grid — ~180 bytes of class string each, thousands of times. */
+.explorer-cluster-btn,
+.explorer-kebab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.25rem;
+  color: var(--color-gray-400);
+  cursor: pointer;
+}
+
+.explorer-kebab {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.explorer-cluster-btn:hover,
+.explorer-kebab:hover {
+  color: var(--color-primary);
+}
+
+.explorer-cluster-btn:focus-visible,
+.explorer-kebab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+
+/* Items of a menu built by `explorer_menu_controller.js`. */
+.explorer-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.explorer-menu-item:hover {
+  background-color: var(--color-gray-100);
+}
+
+.explorer-menu-item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.explorer-menu-item--approve {
+  color: var(--color-green-700);
+}
+
+@media (prefers-color-scheme: dark) {
+  .explorer-menu-item {
+    color: var(--color-gray-200);
+  }
+
+  .explorer-menu-item:hover {
+    background-color: var(--color-gray-700);
+  }
+
+  .explorer-menu-item--approve {
+    color: var(--color-green-400);
+  }
+}
+
+[data-hover-cluster="row"]:hover [data-cluster~="row"],
+[data-hover-cluster="row"]:focus-within [data-cluster~="row"],
+[data-hover-cluster="cell"]:hover [data-cluster~="cell"],
+[data-hover-cluster="cell"]:focus-within [data-cluster~="cell"],
+[data-hover-cluster="ill"]:hover [data-cluster~="ill"],
+[data-hover-cluster="ill"]:focus-within [data-cluster~="ill"],
+[data-hover-cluster="cat"]:hover [data-cluster~="cat"],
+[data-hover-cluster="cat"]:focus-within [data-cluster~="cat"],
+[data-hover-cluster="tree"]:hover [data-cluster~="tree"],
+[data-hover-cluster="tree"]:focus-within [data-cluster~="tree"],
+[data-hover-cluster="hdr"]:hover [data-cluster~="hdr"],
+[data-hover-cluster="hdr"]:focus-within [data-cluster~="hdr"],
+[data-cluster]:focus-visible,
+[data-cluster][aria-expanded="true"] {
+  opacity: 1;
+}
+
+/* Touch devices have no hover, and a permanently-visible cluster of three
+ * controls per cell would crush the text it decorates — so the cluster
+ * collapses to its kebab, which carries the same actions as menu items. */
+@media (pointer: coarse) {
+  [data-cluster~="kebab"] {
+    opacity: 1;
+  }
+
+  [data-cluster~="inline"] {
+    display: none;
+  }
+}
+
+/* Framework explorer — the ONE "add" treatment (#380).
+ *
+ * "+ Add capability" was a plain footer row, "+ Add expectation" a hover-only
+ * button, "+ Add illustration" always visible: three affordances for the same
+ * act. They are now one dashed ghost, always visible in edit mode (so it is
+ * keyboard reachable and discoverable on touch) and quiet enough not to
+ * compete with the content it sits under. */
+.explorer-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: 1px dashed var(--color-gray-300);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.explorer-add:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.explorer-add:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .explorer-add {
+    border-color: var(--color-gray-700);
+    color: var(--color-gray-300);
+  }
+}

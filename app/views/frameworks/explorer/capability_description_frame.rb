@@ -59,7 +59,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex flex-col items-start gap-1 #{TEXT_CLASSES}", data: editor_data) do
+    div(class: "flex flex-col items-start gap-1 #{TEXT_CLASSES}", data: editor_data) do
       render_field_editor_error(@error)
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         if @pending_edit
@@ -73,7 +73,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
         else
           span(class: "italic text-gray-400 dark:text-gray-500") { "Add a description…" }
         end
-        render_inline_editor_pencil(aria_label: "Edit capability description")
+        render_inline_editor_pencil(aria_label: "Edit capability description", scope: "row")
       end
     end
   end

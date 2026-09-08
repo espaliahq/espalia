@@ -26,6 +26,9 @@
 //                             on it automatically, seeded with the attempted
 //                             value, so typed text is never lost
 //
+// A trigger that is NOT inside its host (a kebab's "Edit…" item) names the
+// host's Turbo Frame with `data-editor-host-frame` instead.
+//
 // Inside the host, `[data-editor-display]` is the read-mode element (hidden
 // while editing) and a pencil carries `data-action="field-editor#open"`.
 //
@@ -81,7 +84,7 @@ export default class extends BaseController {
     event.preventDefault()
     event.stopPropagation()
 
-    const host = event.currentTarget.closest("[data-editor-action]")
+    const host = this.#hostFor(event.currentTarget)
     if (!host) return
     if (host === this.openHost) {
       this.#input()?.focus()
@@ -220,6 +223,22 @@ export default class extends BaseController {
   }
 
   // private
+
+  // The pencil sits inside its host, so `closest` normally finds it. A kebab's
+  // "Edit…" item does not (the kebab lives outside the entity's Turbo Frame so a
+  // frame swap can't drop it) — those triggers name the frame instead.
+  #hostFor(trigger) {
+    const nested = trigger.closest("[data-editor-action]")
+    if (nested) return nested
+
+    const frameId = trigger.dataset.editorHostFrame
+    if (!frameId) return null
+
+    const frame = document.getElementById(frameId)
+    if (!frame) return null
+
+    return frame.matches("[data-editor-action]") ? frame : frame.querySelector("[data-editor-action]")
+  }
 
   #openOn(host) {
     const form = this.#buildForm(host)

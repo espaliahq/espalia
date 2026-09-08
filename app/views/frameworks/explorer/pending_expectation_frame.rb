@@ -15,7 +15,8 @@
 class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::InlineEditable
-  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
+  include Views::Frameworks::Explorer::Concerns::MenuItems
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: behavioural_expectation
   # @param framework_id [String]
@@ -35,8 +36,9 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   end
 
   def view_template
-    # `group/ine` so the shared inline-edit pencil reveals on hover.
-    div(class: "group/ine relative mb-1", data: editor_data) do
+    # The ghost owns its own hover cluster — it can sit beside a sibling ghost
+    # in the same cell, so the cluster must reveal per proposal, not per cell.
+    div(class: "relative mb-1", data: hover_cluster_data("ill").merge(editor_data)) do
       display
     end
   end
@@ -80,9 +82,12 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
         span(class: "text-sm text-gray-700 dark:text-gray-300 " \
                     "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
       end
-      render_inline_editor_pencil(aria_label: @is_author ? "Amend suggestion" : "Suggest alternative")
-      # Kebab last — always the right-most control (phlex-views.md).
-      approval_kebab if approvable?
+      # pencil · kebab (framework-explorer.md §11).
+      render_hover_cluster(
+        scope: "ill",
+        pencil: { aria_label: @is_author ? "Amend suggestion" : "Suggest alternative" },
+        menu: (approval_trigger_data if approvable?)
+      )
     end
   end
 
@@ -93,16 +98,14 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
     @approval_authority.can_approve?("behavioural_expectation")
   end
 
-  def approval_kebab
-    render_approval_kebab(
-      framework_id: @framework_id,
-      suggestion_id: @suggestion.suggestion_id,
-      change_label: "new expectation",
-      entity_label: "new expectation",
-      preview: proposed_text.to_s,
-      trigger_label: "New-expectation suggestion actions",
-      reveal_classes: "opacity-0 group-hover/ine:opacity-100 " \
-                      "group-focus-within/ine:opacity-100"
-    )
+  # A pending create is approvable from the grid like a pending edit — the
+  # client-side builder composes the Approve / Reject pair from these ids.
+  def approval_trigger_data
+    {
+      label: "New-expectation suggestion actions",
+      kind: "expectation-create",
+      sid: @suggestion.suggestion_id,
+      preview: proposed_text.to_s
+    }
   end
 end

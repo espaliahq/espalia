@@ -221,6 +221,43 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "turbo-frame"
       assert_not_includes response.body, "<html"
     end
+
+    # The grid's kebabs are delegated to ONE root-mounted controller (#380):
+    # the frame ships bare triggers carrying ids, never a rendered menu and
+    # never a per-kebab Stimulus mount. These are the perf claims that quietly
+    # regress the moment someone renders a menu into the matrix again.
+    should "ship no menu markup and no per-kebab controller mounts" do
+      as_collaborator
+      get edit_matrix_framework_path(@framework.framework_id)
+
+      assert_response :success
+      assert_includes response.body, %(data-action="explorer-menu#toggle")
+      assert_not_includes response.body, %(controller="dropdown")
+      assert_not_includes response.body, %(role="menu")
+      assert_not_includes response.body, %(role="menuitem")
+      assert_not_includes response.body, "reorder-move"
+      assert_not_includes response.body, "suggestion-action"
+      # Icons are sprite references, not path definitions (the sprite itself is
+      # rendered once in the layout, outside this frame).
+      assert_includes response.body, %(<use href="#icon-kebab")
+      assert_not_includes response.body, "<path"
+    end
+
+    should "give every hover control one cluster scope and mark the coarse-pointer fallback" do
+      as_collaborator
+      get edit_matrix_framework_path(@framework.framework_id)
+
+      assert_response :success
+      # The entity owns the scope; every control in its cluster names the same
+      # one, so the whole cluster reveals together (HoverCluster).
+      assert_includes response.body, %(data-hover-cluster="row")
+      assert_includes response.body, %(data-hover-cluster="cell")
+      assert_includes response.body, %(data-cluster="row kebab")
+      assert_includes response.body, %(data-cluster="cell inline")
+      # The old per-control tokens are gone.
+      assert_not_includes response.body, "group/ine"
+      assert_not_includes response.body, "group/cell"
+    end
   end
 
   context "GET /frameworks/:id/expanded_rows/:capability_id" do
@@ -288,6 +325,19 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  # Gives @user a Person + a suggest-rights collaborator record, which is what
+  # the edit surfaces gate on.
+  def as_collaborator
+    ActsAsTenant.with_tenant(@tenant) do
+      person = create(:person, tenant: @tenant, email: @user.email)
+      TenantUser.find_by(user: @user).update!(person: person)
+      create(:framework_collaborator, tenant: @tenant,
+             framework_id: @framework.framework_id, person_id: person.id,
+             role: "collaborator")
+    end
+    sign_in @user
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

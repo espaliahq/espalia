@@ -8,7 +8,8 @@
 #
 class Views::Frameworks::Explorer::MatrixCell < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
-  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
+  include Views::Frameworks::Explorer::Concerns::MenuItems
   include Views::Frameworks::Explorer::Concerns::DiscussTrigger
 
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
@@ -64,8 +65,9 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # affordance — amending the existing proposal is the way to change it, like
   # every other suggestion flow. With no proposal yet, show "+ Add expectation".
   def authorable_cell
-    td(class: "group/cell px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-gray-50/40 dark:bg-gray-800/20 align-top") do
+    td(class: "px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
+              "bg-gray-50/40 dark:bg-gray-800/20 align-top",
+       data: hover_cluster_data("cell")) do
       creates = @cell_data[:pending_expectation_creates] || []
       if creates.any?
         creates.each { |suggestion| render_pending_ghost(suggestion) }
@@ -102,16 +104,18 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # Lesson 25). Same contract as the expanded cell: an expectation AND a
   # selected bound role; an empty or not-applicable cell is not a focus target.
   def filled_cell
-    td(class: "group/cell px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
-       data: focus_target_data) do
+    td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
+       data: hover_cluster_data("cell").merge(focus_target_data)) do
       # One layout for both states — the kebab is conditional, the wrapper is
       # not, so the pending-edit cell can't drift from the plain cell. No
       # flex-1 on the text: the kebab sits right after it, not at the far edge
       # of the cell (phlex-views.md, pencil-placement rule).
       div(class: "flex items-start gap-1") do
         div(class: "min-w-0") { expectation_text }
-        discuss_button if @mode == :edit
-        expectation_approval_kebab if approvable_pending_edit?
+        # pencil · discuss · kebab — the pencil is rendered by
+        # ExpectationTextFrame above (it has to travel with the frame), the rest
+        # here (framework-explorer.md §11, HoverCluster).
+        expectation_hover_cluster if @mode == :edit
       end
       # Open clarification discussion on this expectation — content glyph,
       # never the pending-change vocabulary (nothing is proposed).
@@ -127,51 +131,46 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
     { level_ordinal: @ordinal, expectation_id: @cell_data[:expectation].expectation_id }
   end
 
-  # Ask a question about this expectation. Offered to every edit-mode viewer —
-  # edit mode already requires the suggest rights a clarification needs. Sits
-  # before the kebab, which stays the right-most control (phlex-views.md).
-  def discuss_button
-    render_discuss_button(
-      reveal_classes: "opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 " \
-                      "pointer-coarse:opacity-100",
-      label: "Discuss this expectation",
-      capability_id: @cell_data[:expectation].capability_id,
-      level_ordinal: @ordinal,
-      context_label: cell_context_label
+  # The cell's hover cluster: the Discuss bubble plus the ⋮ that carries every
+  # cell action as a menu item — including "Edit expectation…", because on a
+  # coarse pointer the cluster collapses to the kebab alone. Offered to every
+  # edit-mode viewer (edit mode already requires suggest rights).
+  def expectation_hover_cluster
+    render_hover_cluster(
+      scope: "cell",
+      discuss: {
+        label: "Discuss this expectation",
+        capability_id: @cell_data[:expectation].capability_id,
+        level_ordinal: @ordinal,
+        context_label: cell_context_label
+      },
+      menu: { label: "Expectation actions", kind: "expectation", **cell_menu_data }
     )
   end
 
+  # Only the ids the client-side builder can't read off the grid. The
+  # capability's name (the Discuss context label) comes from the `<tr>`.
+  def cell_menu_data
+    data = { expectation: @cell_data[:expectation].expectation_id, level: @ordinal }
+    data.merge!(approval_menu_data(@cell_data[:pending_edit])) if approvable_pending_edit?
+    data
+  end
+
   def cell_context_label
-    [ @capability_name, "L#{@ordinal}" ].compact.join(" · ")
+    [ @capability_name, "L#{@ordinal}" ].compact.join(" \u00b7 ")
   end
 
   # The expectation's pending edit is approvable from the grid when the viewer
-  # clears the expectation tier — same §12 machinery as the row kebab. Rendered
-  # OUTSIDE ExpectationTextFrame so the inline-edit frame swap can't drop it
-  # (the trade-off: a pending edit landed via the swap gets its kebab on the
-  # next matrix render — the squiggle click's card covers the interim).
+  # clears the expectation tier — same §12 machinery as the row kebab. The kebab
+  # is rendered OUTSIDE ExpectationTextFrame so the inline-edit frame swap can't
+  # drop it (the trade-off: a pending edit landed via the swap gets its
+  # Approve/Reject items on the next matrix render — the squiggle click's card
+  # covers the interim).
   def approvable_pending_edit?
     @mode == :edit &&
       @cell_data[:pending_edit].present? &&
       @cell_data[:pending_edit][:suggestion_id].present? &&
       @approval_authority.can_approve?("behavioural_expectation")
-  end
-
-  def expectation_approval_kebab
-    render_approval_kebab(
-      framework_id: @framework_id,
-      suggestion_id: @cell_data[:pending_edit][:suggestion_id],
-      change_label: "expectation change",
-      entity_label: "expectation",
-      preview: @cell_data[:pending_edit][:suggested_value].to_s,
-      trigger_label: "Expectation suggestion actions",
-      # Cell-scoped reveal (not the row group — hovering the capability name
-      # must not pop kebabs across every pending cell), with focus-within so
-      # a keyboard user's focused trigger is visible (the focus lands on the
-      # dropdown's <button>, so focus-visible on this span can never match).
-      reveal_classes: "opacity-0 group-hover/cell:opacity-100 " \
-                      "group-focus-within/cell:opacity-100"
-    )
   end
 
   def expectation_text

@@ -12,7 +12,7 @@
 # Usage (inside a view component that wraps the display text in a
 # turbo_frame_tag):
 #
-#   div(class: "group/ine inline-flex items-start gap-1",
+#   div(class: "inline-flex items-start gap-1",
 #       data: field_editor_data(
 #         action: framework_capability_path(...), field: "capability[name]",
 #         value: inline_editor_value(@name, @pending_edit), label: "Capability name",
@@ -20,32 +20,32 @@
 #       )) do
 #     div(data: { editor_display: true }) do
 #       plain @name
-#       render_inline_editor_pencil(aria_label: "Edit capability name")
+#       render_inline_editor_pencil(aria_label: "Edit capability name", scope: "row")
 #     end
 #     render_field_editor_error(@error)
 #   end
 #
 module Views::Frameworks::Explorer::Concerns::InlineEditable
-  # Small pencil icon button that opens the shared editor. Visible on hover via
-  # the `group-hover/ine` token — the caller must add `group/ine` to an
-  # ancestor element.
-  #
-  # The class literal is intentionally not built by interpolation because
-  # Tailwind's JIT scans source files and only generates CSS for the exact
-  # strings it sees. An interpolated `group-hover/#{token}:opacity-100` is
-  # invisible to the scanner — the class lands on the element but no
-  # matching CSS is produced, so the pencil stays permanently hidden.
+  # The inline-edit pencil controls are hover-cluster members, so every host needs the
+  # cluster's data helpers — pulled in here rather than repeated at ~15 call
+  # sites where forgetting one is a NoMethodError at render time.
+  def self.included(base)
+    super
+    base.include(Views::Frameworks::Explorer::Concerns::HoverCluster)
+  end
+
+  # Small pencil icon button that opens the shared editor. It is the FIRST
+  # control of its entity's hover cluster (pencil · discuss · kebab) and reveals
+  # with the rest of it — see {HoverCluster}. On a coarse pointer it is hidden
+  # and the entity's kebab carries an "Edit…" item instead.
   #
   # @param aria_label [String]
-  def render_inline_editor_pencil(aria_label:)
-    # Visible on hover (desktop pointer) and on keyboard focus so
-    # tab-navigating users can reach the edit affordance too.
+  # @param scope [String] hover-cluster scope ("row", "cell", "ill", "cat")
+  def render_inline_editor_pencil(aria_label:, scope:)
     button(
       type: "button",
-      class: "opacity-0 group-hover/ine:opacity-100 " \
-             "group-focus-within/ine:opacity-100 focus-visible:opacity-100 " \
-             "transition-opacity text-gray-400 hover:text-primary shrink-0",
-      data: { action: "field-editor#open" },
+      class: "explorer-cluster-btn",
+      data: cluster_control_data(scope).merge(action: "field-editor#open"),
       aria_label: aria_label
     ) do
       render_inline_editor_pencil_icon

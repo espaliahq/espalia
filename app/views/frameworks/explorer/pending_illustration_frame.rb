@@ -10,7 +10,8 @@
 #
 class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
-  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
+  include Views::Frameworks::Explorer::Concerns::MenuItems
   include Views::Frameworks::Explorer::Concerns::InlineEditable
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: role_illustration
@@ -39,8 +40,8 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   def view_template
     turbo_frame_tag("pending-suggestion-#{@suggestion.suggestion_id}") do
       li(
-        class: "group/ill relative text-xs text-gray-600 dark:text-gray-400",
-        data: editor_data
+        class: "relative text-xs text-gray-600 dark:text-gray-400",
+        data: hover_cluster_data("ill").merge(editor_data)
       ) do
         error_line if @error.present?
         display_mode
@@ -108,9 +109,13 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
           span(class: decoration) { @attrs[:description] }
         end
       end
-      edit_button
-      # Kebab last — always the right-most control (phlex-views.md).
-      approval_kebab if approvable?
+      # pencil · kebab — the pencil amends the proposal, the kebab carries the
+      # approve/reject pair (and is the only control on a touch device).
+      render_hover_cluster(
+        scope: "ill",
+        pencil: { aria_label: @is_author ? "Amend suggestion" : "Suggest alternative" },
+        menu: (approval_trigger_data if approvable?)
+      )
     end
   end
 
@@ -121,29 +126,14 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
     @approval_authority.can_approve?("role_illustration")
   end
 
-  def approval_kebab
-    render_approval_kebab(
-      framework_id: @framework_id,
-      suggestion_id: @suggestion.suggestion_id,
-      change_label: "new illustration",
-      entity_label: "new illustration",
-      preview: @attrs[:description].to_s,
-      trigger_label: "New-illustration suggestion actions",
-      reveal_classes: "opacity-0 group-hover/ill:opacity-100 " \
-                      "group-focus-within/ill:opacity-100"
-    )
-  end
-
-  def edit_button
-    button(
-      type: "button",
-      class: "opacity-0 group-hover/ill:opacity-100 " \
-             "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
-             "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
-      data: { action: "field-editor#open" },
-      aria_label: @is_author ? "Amend suggestion" : "Suggest alternative"
-    ) do
-      render_inline_editor_pencil_icon
-    end
+  # A pending create is approvable from the grid like a pending edit — the
+  # client-side builder composes the Approve / Reject pair from these ids.
+  def approval_trigger_data
+    {
+      label: "New-illustration suggestion actions",
+      kind: "illustration-create",
+      sid: @suggestion.suggestion_id,
+      preview: @attrs[:description].to_s
+    }
   end
 end

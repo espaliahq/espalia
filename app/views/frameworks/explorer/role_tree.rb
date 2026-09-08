@@ -14,7 +14,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   include Views::Frameworks::Explorer::Concerns::GhostEntities
   # For the shared kebab_trigger + kebab_item_classes (the tree passes its
   # denser padding).
-  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::KebabChrome
 
   TRACK_OPTIONS = [
     { value: "both", label: "All" },

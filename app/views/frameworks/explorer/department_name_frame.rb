@@ -12,6 +12,7 @@
 # stay checked. The shared `inline-editor` controller drives the display/form
 # toggle and the hover pencil.
 class Views::Frameworks::Explorer::DepartmentNameFrame < Views::Base
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
   include Views::Frameworks::Explorer::Concerns::InlineEditable
 
   HEADER_CLASSES = "px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 " \
@@ -41,10 +42,10 @@ class Views::Frameworks::Explorer::DepartmentNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex flex-col #{HEADER_CLASSES}", data: editor_data) do
+    div(class: "flex flex-col #{HEADER_CLASSES}", data: hover_cluster_data("tree").merge(editor_data)) do
       div(class: "flex items-center gap-1 min-w-0", data: { editor_display: true }) do
         span(class: "truncate") { @department }
-        render_inline_editor_pencil(aria_label: "Rename department")
+        render_inline_editor_pencil(aria_label: "Rename department", scope: "tree")
       end
     end
   end

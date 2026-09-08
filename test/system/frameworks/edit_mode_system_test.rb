@@ -407,8 +407,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         check "Software Engineer"
       end
       # "Added" is all over the activity feed — the new capability landing in
-      # the matrix is the signal.
-      click_button_with_js_fallback("Add capability", expect_text: "Systems Design")
+      # the matrix is the signal. Scoped to the modal: the grid's own
+      # "Add capability" ghost carries the same label (#380).
+      click_selector_with_js_fallback(
+        "#add-capability-modal button[type='submit']", expect_text: "Systems Design"
+      )
       assert_text "Added"
     end
   end
@@ -505,10 +508,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
 
       assert_text "Retire Me"
-      # Only the empty category exposes the kebab; the populated "Thinking" does
-      # not — so exactly one archive-category control renders, and it's the empty one.
-      assert_selector "button[aria-label='Archive category']", count: 1, visible: :all
-      assert_selector "button[data-archive-category-id='#{@empty_cat}']", visible: :all
+      # Every category header carries a kebab, but only the empty one's menu
+      # offers Archive — the flag the client-side builder gates on.
+      assert_selector "button[data-menu='category'][data-menu-archive]", count: 1, visible: :all
+      open_explorer_menu("Category actions", scope: "tr[data-category-id='#{@empty_cat}']")
+      assert_selector "[data-explorer-menu] [role='menuitem']", text: "Archive…"
     end
 
     should "open the archive-category modal from the kebab and archive the empty category" do
@@ -517,10 +521,8 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_text "Retire Me"
 
-      # Hover-revealed (opacity-0) button — JS-click to avoid pointer-drop flake.
-      page.execute_script(<<~JS)
-        document.querySelector("button[data-archive-category-id='#{@empty_cat}']").click();
-      JS
+      use_explorer_menu("Category actions", "Archive…",
+                        scope: "tr[data-category-id='#{@empty_cat}']")
       assert_selector "#archive-category-modal", visible: true
       within "#archive-category-modal" do
         assert_text "Retire Me" # name prefilled from the trigger dataset
@@ -1028,16 +1030,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_text "Critical Thinking"
 
-      # Open the SECOND capability row's kebab, then JS-dispatch its "Move up"
-      # item (hover-revealed Stimulus actions drop pointer clicks on CI).
-      page.execute_script(<<~JS)
-        const row = [...document.querySelectorAll("tr[data-capability-id]")]
-          .find(tr => tr.textContent.includes("Critical Thinking") &&
-                      tr.querySelector("[data-controller='reorder-move']"));
-        const item = [...row.querySelectorAll("[data-controller='reorder-move']")]
-          .find(el => el.textContent.trim() === "Move up");
-        item.click();
-      JS
+      # The second capability row's kebab — "Move up" is a menu item, the ONE
+      # reorder treatment (#380).
+      moving_row = find("tr[data-capability-id]", text: "Critical Thinking", match: :first)
+      use_explorer_menu("Capability actions", "Move up",
+                        scope: "tr[data-capability-id='#{moving_row[:'data-capability-id']}']")
 
       # A successful move dispatches org-structure:updated → matrix#refresh.
       # Assert by capability id + document order (general-sibling combinator),
@@ -1063,24 +1060,22 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
   context "reordering categories" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
-        # A second category so the header ↑/↓ chevrons render.
+        # A second category so the header kebab offers Move up/down.
         Frameworks::CommandHandler.new.add_capability_category(
           @framework_id, SecureRandom.uuid_v7, "Delivery", ordinal: 2
         )
       end
     end
 
-    should "move a category up via the header chevron and re-render in the new order" do
+    should "move a category up via the header kebab and re-render in the new order" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
       assert_text "Delivery"
 
-      # JS-dispatch the second category's hover-revealed "move up" chevron
-      # (pointer clicks on hover-revealed Stimulus actions drop on starved CI).
-      page.execute_script(<<~JS)
-        document.querySelectorAll("button[aria-label='Move category up']")[0].click();
-      JS
+      # Reorder is a kebab item everywhere now (#380) — the second category's
+      # menu is the first one offering "Move up".
+      use_explorer_menu("Category actions", "Move up", index: 1)
 
       # A successful move dispatches org-structure:updated → matrix#refresh;
       # the re-rendered matrix lists Delivery's header before Thinking's.
@@ -1094,21 +1089,20 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "not render category move chevrons in view mode" do
+    should "offer no category kebab in view mode" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
       # The empty "Delivery" category is hidden in view mode (Lesson 18) —
       # sync on the published category instead.
       assert_text "Thinking"
-      assert_no_selector "button[aria-label='Move category up']"
-      assert_no_selector "button[aria-label='Move category down']"
+      assert_no_selector "button[data-menu='category']", visible: :all
     end
   end
 
   context "reordering illustrations" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
-        # A second illustration so the ↑/↓ chevrons render (they need >1).
+        # A second illustration so the Move up/down items render (they need >1).
         # Illustration adds are shape-preserving, so post-publish is live.
         Frameworks::CommandHandler.new.add_role_illustration(
           @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
@@ -1117,19 +1111,16 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "move an illustration up via the chevron and persist the order" do
+    should "move an illustration up via the kebab and persist the order" do
       sign_in_as(@admin_user)
       visit edit_framework_path(@framework_id)
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
 
-      # JS-dispatch the second frame's "move up" chevron — hover-revealed
-      # buttons drop pointer clicks on starved CI (see stimulus helpers doc).
-      page.execute_script(<<~JS)
-        const items = document.querySelectorAll("ul[id^='illustrations-'] [data-reorder-item-id]");
-        items[1].querySelector("button[aria-label='Move illustration up']").click();
-      JS
+      # Reorder is a kebab item everywhere now (#380); the second illustration
+      # is the one that can move up.
+      use_explorer_menu("Illustration actions", "Move up", index: 1)
 
       # The reorder-list controller repositions the frame only after the
       # server answers 204, so DOM order flipping proves the round trip.
@@ -1144,12 +1135,12 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "not render reorder chevrons in view mode" do
+    should "offer no illustration kebab in view mode" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
-      assert_no_selector "button[aria-label='Move illustration up']"
+      assert_no_selector "button[data-menu='illustration']", visible: :all
     end
   end
 

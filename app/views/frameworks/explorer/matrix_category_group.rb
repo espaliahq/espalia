@@ -8,6 +8,8 @@
 class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::PendingArchive
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
+  include Views::Frameworks::Explorer::Concerns::MenuItems
 
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
@@ -55,19 +57,13 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         class: "sticky left-0 px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 " \
                "bg-white dark:bg-gray-900"
       ) do
-        button(
-          type: "button",
-          class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
-          data: {
-            action: "click->modal#open",
-            modal_target_id: "add-capability-modal",
-            add_category_id: @category.category_id,
-            add_category_name: @category.name
-          }
-        ) do
-          span(class: "text-sm leading-none") { "+" }
-          plain "Add capability"
-        end
+        render_add_affordance(
+          "Add capability",
+          action: "click->modal#open",
+          modal_target_id: "add-capability-modal",
+          add_category_id: @category.category_id,
+          add_category_name: @category.name
+        )
       end
     end
   end
@@ -86,7 +82,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         colspan: col_count,
         class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
       ) do
-        div(class: "group flex items-start gap-2") do
+        div(class: "flex items-start gap-2", data: hover_cluster_data("cat")) do
           # Chevron collapses/expands the category rows
           button(
             type: "button",
@@ -141,8 +137,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
                 end
               end
 
-              category_reorder_chevrons if show_reorder_chevrons?
-              archive_category_kebab if show_archive_category_kebab?
+              category_actions_kebab if @mode == :edit
             end
 
             # Description: inline-editable in edit mode (also shown when blank,
@@ -164,68 +159,31 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     end
   end
 
-  # ↑/↓ move chevrons — edit mode + edit-structure rights, each rendered only
-  # when a visible neighbour exists in that direction. Same hover-revealed
-  # icon-button vocabulary as the archive control beside them; a successful
-  # move refreshes the matrix (org-structure:updated), which re-renders with
-  # fresh neighbour ids.
-  def show_reorder_chevrons?
-    @mode == :edit && @can_edit_structure && (@prev_category_id || @next_category_id)
+  # The category header's hover cluster. The pencils belong to the name /
+  # description Turbo Frames (they travel with the frame); this is the ⋮ that
+  # gathers everything else — Edit name/description (the touch stand-in for the
+  # pencils), Move up / Move down (the ONE reorder treatment, replacing the old
+  # ↑/↓ chevrons) and Archive… for an empty category.
+  #
+  # The kebab sits next to the NAME, not the far right of the full-width header,
+  # which scrolls off-screen on a matrix with many level columns.
+  def category_actions_kebab
+    render_hover_cluster(
+      scope: "cat",
+      menu: { label: "Category actions", kind: "category", **category_menu_data }
+    )
   end
 
-  def category_reorder_chevrons
-    if @prev_category_id
-      category_move_chevron("Move category up", @prev_category_id, "before", "chevron-up")
+  # Only what the client-side builder can't read off the header row (which
+  # publishes `data-category-id`).
+  def category_menu_data
+    data = { name: @category.name }
+    if @can_edit_structure
+      data[:prev] = @prev_category_id
+      data[:next] = @next_category_id
     end
-    if @next_category_id
-      category_move_chevron("Move category down", @next_category_id, "after", "chevron-down")
-    end
-  end
-
-  def category_move_chevron(label, target_id, placement, chevron_icon)
-    button(
-      type: "button",
-      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
-             "transition-opacity inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-             "text-gray-400 hover:text-primary",
-      data: {
-        controller: "reorder-move",
-        reorder_move_url_value: framework_category_reorders_path(framework_id: @framework_id),
-        reorder_move_body_value: {
-          reorder: { category_id: @category.category_id, target_id: target_id, placement: placement }
-        }.to_json,
-        action: "reorder-move#move"
-      },
-      aria_label: label
-    ) do
-      icon(chevron_icon, class: "w-4 h-4")
-    end
-  end
-
-  # Archive affordance — edit mode, edit-structure rights, and only when the
-  # category holds no active capabilities (the aggregate refuses otherwise, so
-  # we don't offer it). Hover-revealed at the right of the header; opens the
-  # shared archive-category modal, naming this category via the trigger dataset.
-  def show_archive_category_kebab?
-    @mode == :edit && @can_edit_structure && @category_archivable
-  end
-
-  def archive_category_kebab
-    button(
-      type: "button",
-      class: "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 " \
-             "transition-opacity inline-flex items-center justify-center w-5 h-5 rounded shrink-0 " \
-             "text-gray-400 hover:text-primary",
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "archive-category-modal",
-        archive_category_id: @category.category_id,
-        archive_category_name: @category.name
-      },
-      aria_label: "Archive category"
-    ) do
-      icon("archive", class: "w-4 h-4")
-    end
+    data[:archive] = "1" if @can_edit_structure && @category_archivable
+    data
   end
 
   def capability_rows

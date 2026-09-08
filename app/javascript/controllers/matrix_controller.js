@@ -268,10 +268,13 @@ export default class extends BaseController {
 
   toggleRow(event) {
     // Ignore clicks on interactive children (the inline-edit pencil, the
-    // row-actions kebab, inline forms, links) so editing or opening the
-    // actions menu doesn't also toggle the row. The expand/collapse chevron
-    // is an <svg> (not an interactive element), so it still falls through.
-    if (event.target.closest("button, a, input, textarea, select, form, [data-controller~='dropdown']")) {
+    // row-actions kebab and its open menu, inline forms, links) so editing or
+    // opening the actions menu doesn't also toggle the row. The expand/collapse
+    // chevron is an <svg> (not an interactive element), so it still falls
+    // through.
+    if (event.target.closest(
+      "button, a, input, textarea, select, form, [data-controller~='dropdown'], [role='menu']"
+    )) {
       return
     }
 

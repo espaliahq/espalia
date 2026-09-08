@@ -98,6 +98,49 @@ module StimulusHelpers
     )
   end
 
+  # Opens one of the framework explorer's delegated kebab menus (#380).
+  #
+  # The trigger is hover-revealed (`opacity: 0`), which Selenium reports as not
+  # displayed and drops pointer clicks on, so the click is JS-dispatched. The
+  # menu itself does not exist until then — it is built from the trigger's
+  # dataset by `explorer_menu_controller.js`.
+  #
+  # @param label [String] the trigger's aria-label ("Capability actions", …)
+  # @param scope [String, nil] CSS selector narrowing which trigger to open
+  # @param index [Integer] which matching trigger, in document order
+  def open_explorer_menu(label, scope: nil, index: 0)
+    wait_for_stimulus "explorer-menu"
+    selector = [ scope, "button[aria-label='#{label}']" ].compact.join(" ")
+    assert_selector selector, visible: :all, minimum: index + 1
+    # Scroll it into view first: the menu is `position: fixed` at the trigger,
+    # so a trigger below the fold would open its menu off-screen.
+    page.execute_script(<<~JS, selector, index)
+      const trigger = document.querySelectorAll(arguments[0])[arguments[1]];
+      trigger.scrollIntoView({ block: "center" });
+      trigger.click();
+    JS
+    assert_selector "[data-explorer-menu]", visible: true
+  end
+
+  # Clicks an item of the OPEN explorer menu by its leading text.
+  #
+  # @param label [String]
+  # @param expect_text [String, nil] content that only exists after the action
+  def click_explorer_menu_item(label, expect_text: nil)
+    assert_selector "[data-explorer-menu] [role='menuitem']", text: label, visible: true
+    page.execute_script(<<~JS, label)
+      [...document.querySelectorAll("[data-explorer-menu] [role='menuitem']")]
+        .find((item) => item.textContent.trim().startsWith(arguments[0])).click();
+    JS
+    assert_text expect_text if expect_text
+  end
+
+  # Opens the explorer menu named by +label+ and clicks one of its items.
+  def use_explorer_menu(label, item, scope: nil, index: 0, expect_text: nil)
+    open_explorer_menu(label, scope: scope, index: index)
+    click_explorer_menu_item(item, expect_text: expect_text)
+  end
+
   # Opens the mobile sidebar drawer.
   #
   # @param scope [String, nil] optional CSS selector to scope the toggle

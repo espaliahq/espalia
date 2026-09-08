@@ -62,11 +62,11 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
+    div(class: "inline-flex flex-col items-start gap-1", data: editor_data) do
       render_field_editor_error(@error)
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_name
-        render_inline_editor_pencil(aria_label: "Edit category name")
+        render_inline_editor_pencil(aria_label: "Edit category name", scope: "cat")
       end
     end
   end

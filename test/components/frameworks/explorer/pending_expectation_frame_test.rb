@@ -42,8 +42,11 @@ class Views::Frameworks::Explorer::PendingExpectationFrameTest < ActiveSupport::
   context "Views::Frameworks::Explorer::PendingExpectationFrame" do
     should "render the approval kebab for a viewer with expectation-tier authority" do
       html = render_frame(ALL_TIERS)
-      assert_includes html, "Approve new expectation"
-      assert_includes html, "Reject new expectation"
+      # The menu itself is built client-side from the trigger's ids (#380), so
+      # the server's contract is the kebab kind + the suggestion it names.
+      assert_includes html, %(data-menu="expectation-create")
+      assert_includes html, %(data-menu-sid="#{@suggestion.suggestion_id}")
+      assert_includes html, "New-expectation suggestion actions"
       # Kebab is the right-most control — the pencil comes before the trigger.
       pencil = html.index("Amend suggestion") || html.index("Suggest alternative")
       trigger = html.index("New-expectation suggestion actions")
@@ -53,7 +56,7 @@ class Views::Frameworks::Explorer::PendingExpectationFrameTest < ActiveSupport::
 
     should "render no kebab without authority" do
       html = render_frame(Frameworks::SuggestionApprovalAuthority.none)
-      assert_not_includes html, "Approve new expectation"
+      assert_not_includes html, %(data-menu="expectation-create")
       assert_not_includes html, "New-expectation suggestion actions"
     end
   end
