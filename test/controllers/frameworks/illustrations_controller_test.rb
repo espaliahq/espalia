@@ -228,6 +228,17 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "re-render the frame with an inline error on a blank save" do
+      sign_in @user
+      patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),
+            params: { illustration: { description: "" } }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "illustration-#{@ill_id}"
+      assert_includes response.body, "Couldn\u2019t save:"
+      assert_includes response.body, "data-editor-error"
+    end
+
     should "include the pencil affordance in the response so re-editing stays possible" do
       sign_in @user
       patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),

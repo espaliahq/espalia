@@ -73,12 +73,28 @@ class Frameworks::CapabilitiesControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "return unprocessable_content when no editable field is supplied" do
+    should "re-render the frame with an inline error and the attempted value on a blank save" do
       sign_in @user
       patch framework_capability_path(framework_id: @framework_id, id: @cap_id),
             params: { capability: { name: "" } }
 
+      # A bodyless 4xx is invisible to Turbo — the user clicks Save and nothing
+      # happens. The frame must come back carrying the message.
       assert_response :unprocessable_content
+      assert_includes response.body, "Couldn\u2019t save:"
+      assert_includes response.body, "data-editor-error"
+    end
+
+    should "echo the attempted description back so nothing typed is lost" do
+      sign_in @user
+      Operations::Frameworks::SuggestEdit.stub :call, ->(*) { raise Operations::Base::ParameterError, "nope" } do
+        patch framework_capability_path(framework_id: @framework_id, id: @cap_id),
+              params: { capability: { description: "Half-written thought" } }
+      end
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "Half-written thought"
+      assert_includes response.body, "nope"
     end
 
     should "return not_found for an unknown capability id" do

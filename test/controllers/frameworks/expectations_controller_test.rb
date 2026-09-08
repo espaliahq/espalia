@@ -59,12 +59,14 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "reject blank descriptions" do
+    should "reject blank descriptions with an inline error, not a bodyless 422" do
       sign_in @user
       patch framework_expectation_path(framework_id: @framework_id, id: @eid),
             params: { behavioural_expectation: { description: "" } }
 
       assert_response :unprocessable_content
+      assert_includes response.body, "Couldn\u2019t save:"
+      assert_includes response.body, "data-editor-error"
     end
 
     should "deny non-contributor viewers" do

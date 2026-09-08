@@ -28,6 +28,18 @@ class Frameworks::CategoriesControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "PATCH /frameworks/:framework_id/categories/:id" do
+    should "re-render the frame with an inline error on a blank save" do
+      sign_in @user
+      patch framework_category_path(framework_id: @framework_id, id: @cat_id),
+            params: { capability_category: { name: "" } }
+
+      # Never a bodyless 4xx — Turbo ignores those, so the user sees nothing.
+      assert_response :unprocessable_content
+      assert_includes response.body, "category-name-#{@cat_id}"
+      assert_includes response.body, "Couldn\u2019t save:"
+      assert_includes response.body, "data-editor-error"
+    end
+
     should "submit a suggest_edit and return the re-rendered name frame" do
       sign_in @user
       patch framework_category_path(framework_id: @framework_id, id: @cat_id),

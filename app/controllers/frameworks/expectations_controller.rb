@@ -48,10 +48,16 @@ class Frameworks::ExpectationsController < ApplicationController
   end
 
   # PATCH /frameworks/:framework_id/expectations/:id
+  #
+  # A rejected save re-renders THIS frame with the message and the attempted
+  # text (status 422) rather than answering bodyless — Turbo ignores a bodyless
+  # response, so the user saw nothing at all (Hard-Won Lesson 26). The shared
+  # field editor re-opens on the returned `data-editor-error` host, so the typed
+  # text survives the swap.
   def update
     authorize @framework, :suggest_edit?
     new_description = params.expect(behavioural_expectation: [ :description ])[:description]
-    return head(:unprocessable_content) if new_description.blank?
+    return render_save_error("the text can\u2019t be blank", new_description) if new_description.blank?
 
     Operations::Frameworks::SuggestEdit.call(
       context: pundit_user,
@@ -73,12 +79,25 @@ class Frameworks::ExpectationsController < ApplicationController
       pending_edit: latest_pending_edit
     ), layout: false
   rescue ActiveRecord::RecordNotFound
-    head :not_found
-  rescue Operations::Base::ParameterError, RuntimeError
-    head :unprocessable_content
+    render_save_error("this expectation no longer exists \u2014 reload the page", new_description)
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    render_save_error(e.message, new_description)
   end
 
   private
+
+  # Re-render the expectation frame carrying the error + the attempted value.
+  def render_save_error(message, attempted_value)
+    render Views::Frameworks::Explorer::ExpectationTextFrame.new(
+      expectation: @expectation,
+      framework_id: @framework.framework_id,
+      mode: :edit,
+      pending_edit_count: pending_edits_on_expectation,
+      pending_edit: latest_pending_edit,
+      error: message,
+      attempted_value: attempted_value
+    ), layout: false, status: :unprocessable_content
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))
