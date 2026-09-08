@@ -1465,27 +1465,66 @@ editor handles its own transport failures instead (`turbo:frame-missing` /
 `turbo:fetch-request-error`), which is also the only place that can keep the
 open editor and its text.
 
-### 27. Percentage widths still leak intrinsic width into an auto-layout table
+### 27. An editor inside an auto-layout table can only be as wide as its host already is
 
 The old inline-edit form was a fixed `w-80 sm:w-96`; opening one in a level
-column widened the matrix to 1,922 px and pushed later levels off-screen. Making
-the shared editor `w-full min-w-0` fixes the gross case but **not** the residual:
-in `table-layout: auto` a column's width is negotiated from its content's
-intrinsic width, and a percentage width resolves to `auto` for that negotiation —
-so every child's max-content still leaks through. Measured: a level column still
-grew 18 px the moment an editor opened.
+column widened the matrix to 1,922 px and pushed later levels off-screen. The
+obvious replacement — `w-full min-w-0` — is wrong in two opposite ways at once,
+and understanding why is the whole lesson:
 
-Two dead ends before the fix: `cols="1"` on the textarea (it wasn't the
-textarea), and pinning the form to the cell's current inner width in JS (the
-form then contributed its px width *on top of* the host's other content — the
-column grew 108 px instead of 18). What actually did it was removing the visible
-outcome hint from the button row (`sr-only`), leaving Save/Cancel as the widest
-intrinsic contributors. The rule: inside a matrix cell, **any text you add to an
-editor is a column-width change** — put explanatory copy in `sr-only`, a
-`title`, or the button label itself. Pinned by
+- **A percentage width doesn't render wide.** Inside a `<td>` whose width is
+  still being negotiated, Chrome resolves `width: 100%` as shrink-to-fit, so the
+  editor collapsed to roughly its own Save/Cancel buttons (~110 px) instead of
+  filling the cell.
+- **But everything else you add DOES widen the column.** `table-layout: auto`
+  negotiates each column from its content's *intrinsic* width, so any definite
+  width, and any text with a wide min-content, leaks straight through. Three
+  measured dead ends: a visible "Applies immediately / Lands as a suggestion for
+  review" hint in the button row (+18 px per column — it is now `sr-only`);
+  pinning the form to the **cell's** inner width (+108 px, because the form's px
+  width is added to whatever else shares its flex row); and flooring the pinned
+  width at a "comfortable" 144 px (+20 px on a squeezed mobile table, where the
+  floor becomes the column's new min-content).
+
+What works is pinning the form to the **host's own pre-open width**
+(`#pinWidth`): the host already occupied exactly that much, so the negotiation
+is unchanged at every viewport, and a block-level host (an expectation cell, a
+description, an illustration) hands the editor the full cell. A shrink-to-fit
+host (a capability name, a level title) gets a narrower editor — accepted, since
+the alternative is moving the column. `LevelTitleFrame` documents the one place
+this was tried and reverted.
+
+The general rule: inside a matrix cell, **any text or definite width you add to
+an editor is a column-width change**. Put explanatory copy in `sr-only`, a
+`title`, or the button label. Pinned by
 `test/system/frameworks/org_structure_rename_system_test.rb` ("not widen the
 level column when the editor opens") and the mobile case in
 `inline_editor_system_test.rb`.
+
+### 28. Turbo's submit-end can beat its own frame render — don't drop state on it
+
+Three of the shared editor's handlers hang on Turbo's ordering, and the
+intuitive reading is wrong. In turbo-rails 2.0.23 `formSubmissionFailedWith
+Response` / `…SucceededWithResponse` call `loadResponse` **un-awaited**, while
+`turbo:submit-end` is dispatched from `FetchRequest#perform`'s `finally`. So
+`turbo:submit-end` fires *before* the frame has rendered, and before any
+`turbo:frame-missing` the response provokes.
+
+Consequences the editor has to live with:
+
+- **Never release ownership of the form in `submitted()` on failure.** Doing so
+  disarmed `frameMissing` (so a 5xx or a sign-in redirect rendered Turbo's
+  "Content missing" over the user's text after all) and, on a network drop,
+  stranded a form the controller no longer knew about — visible on screen,
+  Cancel a no-op, and a second pencil click appended a *second* editor.
+- **Re-open after a rejected save on `turbo:frame-render`, not `submit-end`** —
+  at submit-end the error frame isn't in the DOM yet.
+- **Arm transport handlers explicitly.** `turbo:frame-missing` is dispatched on
+  the frame for *any* load, so claiming it by "does this frame contain my form"
+  also swallowed the matrix's and the expanded row's own failure handling
+  (Lesson 25's sign-in-redirect recovery). Track the submitting form from
+  `turbo:submit-start` and match on identity — the same shape
+  `frame_error_controller` already uses.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 

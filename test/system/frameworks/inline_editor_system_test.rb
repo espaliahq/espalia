@@ -51,6 +51,13 @@ class Frameworks::InlineEditorSystemTest < ApplicationSystemTestCase
     find("turbo-frame#capability-name-#{@cap_id} > div")
   end
 
+  # A role checkbox re-fetches the whole matrix — the guarded path.
+  def toggle_first_role
+    page.execute_script(
+      "document.querySelector(\"input[data-action*='tree#toggleRole']\").click();"
+    )
+  end
+
   # The editor binds Esc / Cmd+Enter on the textarea itself, so dispatch the
   # KeyboardEvent there — Selenium's key dispatch needs an interactable target
   # and drops keys on starved CI (testing.md, press_escape).
@@ -183,12 +190,29 @@ class Frameworks::InlineEditorSystemTest < ApplicationSystemTestCase
       # rather than using dismiss_confirm — a modal handler registered around a
       # JS-dispatched click races on starved CI (testing.md, auto_confirm).
       page.execute_script("window.confirm = () => false;")
-      page.execute_script(
-        "document.querySelector(\"input[data-action*='tree#toggleRole']\").click();"
-      )
+      toggle_first_role
 
       assert_selector "[data-editor-form]", visible: true
       assert_equal "Work in progress", find("[data-editor-input]").value
+    end
+
+    should "let go of the editor once the discard is accepted, and not re-prompt" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+
+      form = start_inline_edit(capability_name_host)
+      js_fill_in form.find("[data-editor-input]"), with: "Work in progress"
+
+      page.execute_script("window.__confirms = 0; window.confirm = () => { window.__confirms++; return true };")
+      toggle_first_role
+      assert_no_selector "[data-editor-form]"
+      # The dirty flag must not outlive the frame swap, or every later filter
+      # change re-prompts with nothing to discard.
+      assert_no_selector "[data-editor-dirty='true']", visible: :all
+
+      toggle_first_role
+      assert_equal 1, page.evaluate_script("window.__confirms")
     end
   end
 

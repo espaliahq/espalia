@@ -169,6 +169,7 @@ class Views::Frameworks::ShowView < Views::Base
       actions << "turbo:frame-missing->field-editor#frameMissing"
       actions << "turbo:fetch-request-error->field-editor#fetchError"
       actions << "framework-edit-mode:changed@window->field-editor#modeChanged"
+      actions << "field-editor:discard@window->field-editor#discard"
       data[:field_editor_approvals_value] = editor_approvals.to_json
       data[:field_editor_mode_value] = @edit_mode.to_s
     end

@@ -233,8 +233,12 @@ export default class extends BaseController {
   // cancel, which beats silently losing what they typed.
   #confirmDiscardOpenEditor() {
     if (!this.element.closest("[data-editor-dirty='true']")) return true
+    if (!window.confirm("Discard your unsaved change?")) return false
 
-    return window.confirm("Discard your unsaved change?")
+    // Tell the editor to let go — the frame swap below destroys its form, and a
+    // dirty flag that outlived it would re-prompt on every later filter change.
+    window.dispatchEvent(new CustomEvent("field-editor:discard"))
+    return true
   }
 
   // ── Category Collapse ──

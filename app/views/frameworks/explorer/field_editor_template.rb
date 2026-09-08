@@ -30,7 +30,8 @@ class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
         data: {
           editor_form: true,
           turbo: "true",
-          action: "turbo:submit-end->field-editor#submitted"
+          action: "turbo:submit-start->field-editor#submitStart " \
+                  "turbo:submit-end->field-editor#submitted"
         }
       ) do
         # Turbo adds the CSRF header itself, but the "+ Add expectation" path

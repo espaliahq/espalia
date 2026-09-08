@@ -38,6 +38,9 @@ import BaseController from "controllers/base_controller"
 const CONNECTION_ERROR = "Couldn't save — check your connection and try again."
 const REJECTED_ERROR = "Couldn't save — the page may be out of date. Reload and try again."
 const DISCARD_PROMPT = "Discard your unsaved change?"
+// `scrollHeight` excludes the border, and `box-sizing: border-box` then clips
+// the last line by exactly that much — hence the +2px on autogrow.
+const BORDER_ALLOWANCE = 2
 
 export default class extends BaseController {
   static targets = ["template"]
@@ -53,6 +56,8 @@ export default class extends BaseController {
     super.connect()
     this.openHost = null
     this.openForm = null
+    this.submittingForm = null
+    this.#clearDirty()
     // A Turbo Drive cache snapshot is taken BEFORE disconnect() runs, so a
     // restored page can carry an orphaned editor whose display element is still
     // hidden. Clear any before the user meets it.
@@ -91,6 +96,14 @@ export default class extends BaseController {
     this.#closeOpenEditor({ force: true })
   }
 
+  // The matrix is about to re-fetch and the user accepted the discard prompt —
+  // let go of the editor so its dirty flag doesn't outlive the frame swap and
+  // re-prompt on every later filter change (or on a programmatic
+  // `matrix#refresh`, which has no user gesture behind it at all).
+  discard() {
+    this.#closeOpenEditor({ force: true })
+  }
+
   keydown(event) {
     if (event.key === "Escape") {
       event.preventDefault()
@@ -113,16 +126,27 @@ export default class extends BaseController {
     const input = this.#input()
     if (!input) return
     input.style.height = "auto"
-    input.style.height = `${input.scrollHeight}px`
+    input.style.height = `${input.scrollHeight + BORDER_ALLOWANCE}px`
     this.#refreshDirty()
   }
 
   // ── Submission outcomes ──
 
+  // Arms the transport-failure handlers for THIS editor's own submission. The
+  // flag outlives turbo:submit-end on purpose: `frameMissing` is dispatched from
+  // inside an un-awaited `loadResponse`, so it can land afterwards (verified in
+  // turbo-rails 2.0.23) — the events that consume it clear it.
+  submitStart(event) {
+    if (event.target !== this.openForm) return
+
+    this.submittingForm = event.target
+  }
+
   submitted(event) {
     if (event.detail?.success) {
-      // The frame swap already removed our form; just drop the reference and
-      // let the context pane know a suggestion may have landed.
+      // The frame swap will remove this form; drop the reference and let the
+      // context pane know a suggestion may have landed.
+      this.submittingForm = null
       this.#forgetEditor()
       window.dispatchEvent(new CustomEvent("suggestion:submitted", {
         bubbles: true,
@@ -131,18 +155,27 @@ export default class extends BaseController {
       return
     }
 
-    // A domain rejection re-renders the entity's frame with data-editor-error
-    // + the attempted value. That render is async and NOT awaited before
-    // turbo:submit-end fires, so the re-open is driven by turbo:frame-render
-    // (#frameRendered) — here we only drop the now-detached form.
-    this.#forgetEditor()
+    // Deliberately keep owning the editor on failure. The response's frame
+    // render — and any turbo:frame-missing — happen in an un-awaited
+    // `loadResponse` that can resolve AFTER submit-end, so dropping the
+    // reference here would disarm `frameMissing` and strand the form on a
+    // network error (it would still be on screen, but Cancel would no-op).
   }
 
   // The entity's frame was replaced. When the new content carries a save error,
   // re-open the editor on it, seeded with the value the user tried to save.
   frameRendered(event) {
+    if (this.submittingForm && event.target?.contains?.(this.submittingForm)) {
+      this.submittingForm = null
+    }
     const host = event.target?.querySelector?.("[data-editor-error]")
-    if (!host || host === this.openHost) return
+    if (!host) {
+      // Our host went with the render (a successful save, or a rejection that
+      // rendered no error) — stop tracking the now-detached form.
+      if (this.openHost && !this.openHost.isConnected) this.#forgetEditor()
+      return
+    }
+    if (host === this.openHost) return
 
     this.#closeOpenEditor({ force: true })
     this.#openOn(host)
@@ -152,16 +185,21 @@ export default class extends BaseController {
   // would render its own "Content missing" into the cell and take the editor
   // with it — claim the event, keep the editor and its text, and say so.
   frameMissing(event) {
-    if (!this.#eventTouchesOpenEditor(event)) return
+    if (!this.#ownSubmissionFrame(event)) return
 
+    this.submittingForm = null
     event.preventDefault()
     this.#showTransportError(REJECTED_ERROR)
   }
 
   // The network dropped mid-submit — nothing rendered at all.
   fetchError(event) {
-    if (!this.#eventTouchesOpenEditor(event)) return
+    // The event's target is the FORM for a submission and the FRAME for a frame
+    // load, so this identity check keeps us out of the matrix / expanded-row
+    // frames' own failure handling.
+    if (!this.submittingForm || event.target !== this.submittingForm) return
 
+    this.submittingForm = null
     this.#showTransportError(CONNECTION_ERROR)
   }
 
@@ -343,6 +381,10 @@ export default class extends BaseController {
     this.openHost = null
     this.openForm = null
     this.initialValue = ""
+    this.#clearDirty()
+  }
+
+  #clearDirty() {
     delete this.element.dataset.editorDirty
   }
 
@@ -359,8 +401,15 @@ export default class extends BaseController {
     return this.openHost?.dataset.editorRows === "1"
   }
 
-  #eventTouchesOpenEditor(event) {
-    return Boolean(this.openForm?.isConnected && event.target?.contains?.(this.openForm))
+  // turbo:frame-missing is dispatched on the FRAME unconditionally, including
+  // for frame loads this controller knows nothing about — claim it only while
+  // our own submission is in flight and only for the frame that submission
+  // targeted.
+  #ownSubmissionFrame(event) {
+    return Boolean(
+      this.submittingForm?.isConnected &&
+      event.target === this.submittingForm.closest("turbo-frame")
+    )
   }
 
   #showTransportError(message) {
