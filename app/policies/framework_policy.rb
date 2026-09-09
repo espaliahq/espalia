@@ -186,7 +186,7 @@ class FrameworkPolicy < ApplicationPolicy
   def framework_collaborator_can_edit?
     return false unless person.present?
 
-    collaborator_roles.with_edit_rights.exists?
+    collaborator_roles.can_edit?
   end
 
   # Checks whether the current person holds any non-viewer collaborator role

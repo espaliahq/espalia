@@ -21,16 +21,20 @@ class Frameworks::SuggestionApprovalAuthority
   # @param framework_id [String]
   # @param person [Person, nil] the viewer's domain person (nil → no collaborator roles)
   # @param tenant_admin [Boolean] whether the viewer is a tenant/global admin
+  # @param collaborator_roles [Frameworks::CollaboratorRoles, nil] the viewer's
+  #   roles when the caller already holds them — a request that also runs the
+  #   policy has, and this is otherwise two more queries for the same rows
   # @return [Frameworks::SuggestionApprovalAuthority]
-  def self.for(framework_id:, person:, tenant_admin:)
+  def self.for(framework_id:, person:, tenant_admin:, collaborator_roles: nil)
     return new(tenant_admin: true, tier1: true, tier2: true, tier3: true) if tenant_admin
     return none unless person
 
-    roles = FrameworkState::Collaborator.for_framework(framework_id).for_person(person.id)
-    content_approve = roles.with_content_approve_rights.exists?
+    roles = collaborator_roles ||
+            Frameworks::CollaboratorRoles.load(framework_id: framework_id, person_id: person.id)
+    content_approve = roles.can_approve_content?
     new(
       tenant_admin: false,
-      tier1: roles.with_edit_rights.exists?,
+      tier1: roles.can_edit?,
       tier2: content_approve,
       tier3: content_approve
     )

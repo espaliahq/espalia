@@ -12,33 +12,36 @@ module FrameworkCollaboratorPermissions
 
   private
 
-  # All collaborator records for this person on this framework.
+  # This person's collaborator roles on this framework, loaded ONCE. Every
+  # predicate below used to be its own `EXISTS` query, and one edit-mode render
+  # asks several of them; the value object answers them from the roles it
+  # already holds (#383).
   #
-  # @return [ActiveRecord::Relation<FrameworkState::Collaborator>]
+  # @return [Frameworks::CollaboratorRoles]
   def collaborator_roles
-    @collaborator_roles ||= FrameworkState::Collaborator
-      .for_framework(record.framework_id)
-      .for_person(person.id)
+    @collaborator_roles ||= Frameworks::CollaboratorRoles.load(
+      framework_id: record.framework_id, person_id: person&.id
+    )
   end
 
   # @return [Boolean]
   def has_any_collaborator_role?
-    collaborator_roles.exists?
+    collaborator_roles.any?
   end
 
   # @return [Boolean]
   def can_suggest?
-    collaborator_roles.with_suggest_rights.exists?
+    collaborator_roles.can_suggest?
   end
 
   # @return [Boolean]
   def can_publish?
-    collaborator_roles.with_publish_rights.exists?
+    collaborator_roles.can_publish?
   end
 
   # @return [Boolean]
   def can_manage_collaborators?
-    collaborator_roles.where(role: "owner").exists?
+    collaborator_roles.owner?
   end
 
   # Whether the person can approve a suggestion at the given review tier.
@@ -47,12 +50,9 @@ module FrameworkCollaboratorPermissions
   # @return [Boolean]
   def can_approve_tier?(tier)
     case tier
-    when 1
-      collaborator_roles.with_edit_rights.exists?
-    when 2, 3
-      collaborator_roles.with_content_approve_rights.exists?
-    else
-      false
+    when 1 then collaborator_roles.can_edit?
+    when 2, 3 then collaborator_roles.can_approve_content?
+    else false
     end
   end
 end

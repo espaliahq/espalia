@@ -23,7 +23,8 @@ module Frameworks::ExplorerMatrix
   #
   # @return [Hash] current_person_id / can_edit_structure / approval_authority
   def viewer_matrix_flags(mode)
-    {
+    @viewer_matrix_flags ||= {}
+    @viewer_matrix_flags[mode] ||= {
       current_person_id: current_person&.id&.to_s,
       can_edit_structure: mode == :edit && policy(@framework).edit_structure?,
       approval_authority: suggestion_approval_authority(mode)

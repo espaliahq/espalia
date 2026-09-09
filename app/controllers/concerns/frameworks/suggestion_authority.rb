@@ -14,7 +14,21 @@ module Frameworks::SuggestionAuthority
     Frameworks::SuggestionApprovalAuthority.for(
       framework_id: @framework.framework_id,
       person: current_person,
-      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
+      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false,
+      collaborator_roles: framework_collaborator_roles
+    )
+  end
+
+  # The viewer's collaborator roles on `@framework`, loaded once per request and
+  # shared with everything that asks — the authority above, and (via Pundit's
+  # per-record policy cache) the policy's own `edit?` / `edit_structure?` /
+  # `publish?`. Each of those was a separate `EXISTS` for rows a person holds a
+  # handful of (#383).
+  #
+  # @return [Frameworks::CollaboratorRoles]
+  def framework_collaborator_roles
+    @framework_collaborator_roles ||= Frameworks::CollaboratorRoles.load(
+      framework_id: @framework.framework_id, person_id: current_person&.id
     )
   end
 end

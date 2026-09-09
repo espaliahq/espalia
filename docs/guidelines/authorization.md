@@ -173,12 +173,22 @@ class FrameworkPolicy < ApplicationPolicy
 
   def framework_collaborator_can_edit?
     return false unless person.present?
-    collaborator_roles.with_edit_rights.exists?
+    collaborator_roles.can_edit?
   end
 end
 ```
 
-The concern provides: `collaborator_roles`, `has_any_collaborator_role?`, `can_publish?`, `can_manage_collaborators?`, `can_approve_tier?(tier)`.
+The concern provides: `collaborator_roles`, `has_any_collaborator_role?`, `can_suggest?`, `can_publish?`, `can_manage_collaborators?`, `can_approve_tier?(tier)`.
+
+**`collaborator_roles` is a loaded value object, not a relation.** A person holds
+a handful of roles at most, and one edit-mode render asks several questions of
+them (`edit?`, `edit_structure?`, `publish?`, plus
+`Frameworks::SuggestionApprovalAuthority`'s tiers) — each of which used to be its
+own `EXISTS`. `Frameworks::CollaboratorRoles.load` reads the roles once and
+answers every predicate in memory; controllers that also build the approval
+authority pass their loaded copy to it (`Frameworks::SuggestionAuthority
+#framework_collaborator_roles`) so the request loads them exactly once. Add new
+predicates to the value object rather than reaching for a scope + `exists?`.
 
 ## Impersonation ("view as another user")
 
@@ -203,6 +213,7 @@ Rules baked into the implementation:
 | `app/policies/assessment_policy.rb` | Person/manager assessment access |
 | `app/policies/concerns/framework_collaborator_permissions.rb` | Reusable collaborator role queries |
 | `app/read_models/framework_state/collaborator.rb` | Collaborator read model with role scopes |
+| `app/models/frameworks/collaborator_roles.rb` | One viewer's roles on one framework, loaded once and answered in memory |
 | `app/controllers/application_controller.rb` | Identity chain helpers, `pundit_user`, `rescue_from` |
 | `app/controllers/concerns/impersonatable.rb` | Impersonation session: context override, read-only guard, expiry, re-auth |
 | `app/policies/impersonation_policy.rb` | `create?` — who a tenant admin may "view as" |
