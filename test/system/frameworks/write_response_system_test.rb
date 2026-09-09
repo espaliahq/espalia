@@ -175,8 +175,11 @@ class Frameworks::WriteResponseSystemTest < ApplicationSystemTestCase
       # still be pointing at the pre-move order here.
       open_explorer_menu("Capability actions",
                          scope: "tr[data-capability-id='#{@other_cap_id}']")
-      assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
+      # Present-first: assert_no_selector returns the moment nothing matches, so
+      # asserting the absence first could pass against a menu that hasn't
+      # rendered its items yet and would never catch a re-added "Move up".
       assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
+      assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
     end
   end
 

@@ -23,8 +23,9 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   # @param level_ordinal [Integer] the cell's level ordinal
   # @param is_author [Boolean] whether the viewer authored this proposal
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority] gates
-  #   the inline Approve/Reject kebab (§12). Form submits are full navigations
-  #   (`_top`), so no controller re-threading is needed here.
+  #   the inline Approve/Reject kebab (§12). A submit from this ghost's editor
+  #   re-renders the whole CELL (Turbo Stream, §11b) rather than this frame, so
+  #   the authority is re-threaded by the matrix render, not by the controller.
   def initialize(suggestion:, framework_id:, level_ordinal:, is_author: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @suggestion = suggestion
