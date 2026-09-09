@@ -148,9 +148,13 @@ module Frameworks::ExplorerMatrix
   #   out of scope
   def load_expanded_row_data(mode:, capability_id:)
     graph = load_explorer_graph
+    scope = capability_suggestion_scope(graph, capability_id)
+    # No such capability in this framework at all — answer "not in scope"
+    # without a pending-suggestion read the 404 would only throw away.
+    return [ graph, { selected_roles: [], merged_levels: [], capability: nil } ] unless scope
+
     builder = explorer_builder(
-      graph, mode: mode, include_illustrations: true,
-      suggestion_scope: capability_suggestion_scope(graph, capability_id)
+      graph, mode: mode, include_illustrations: true, suggestion_scope: scope
     )
 
     [ graph, builder.build_capability(capability_id) ]
