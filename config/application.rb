@@ -10,6 +10,33 @@ Bundler.require(*Rails.groups)
 
 module GrowthOs
   class Application < Rails::Application
+    # Below this a gzip frame costs about as much as it saves. Only consulted
+    # when the response DECLARES its length: Rails leaves Content-Length to the
+    # server, so most responses reach the deflater without one. An unknown
+    # length is compressed — that is where the big payloads are, and the
+    # alternative (buffering the body to measure it) is exactly the cost this
+    # is trying to avoid.
+    COMPRESSION_MIN_BYTES = 1024
+
+    # Types whose payload is text we author. Everything else either arrives
+    # compressed already (images, fonts, archives) or is not worth the CPU.
+    COMPRESSIBLE_TYPES = %r{\A(?:text/|application/(?:json|xml|javascript|ecmascript)|
+                               application/vnd\.[\w.+-]*\+?(?:json|xml))}x
+
+    # Rack 3 downcases response header names; be explicit rather than relying
+    # on that, since this runs on every response.
+    COMPRESSIBLE = lambda do |_env, _status, headers, _body|
+      # Already encoded by the app (a pre-gzipped asset, a proxied response):
+      # re-framing it would corrupt the encoding chain.
+      next false if headers["content-encoding"] || headers["Content-Encoding"]
+
+      type = headers["content-type"] || headers["Content-Type"]
+      next false unless type&.match?(COMPRESSIBLE_TYPES)
+
+      length = headers["content-length"] || headers["Content-Length"]
+      length.nil? || length.to_i >= COMPRESSION_MIN_BYTES
+    end
+
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
@@ -35,6 +62,24 @@ module GrowthOs
     # Throttling for abuse-prone endpoints — currently only OAuth Dynamic
     # Client Registration. Disabled in test/dev via the initializer.
     config.middleware.use Rack::Attack
+
+    # Compress our own HTML/JSON/JS responses.
+    #
+    # growthos.work sits behind Cloudflare, which already compresses at the
+    # edge (measured 2026-09-09: the sign-in page, 16,914 B identity vs 3,496 B
+    # gzip). This covers the two paths that edge does not: a self-hosted
+    # deployment with no proxy in front of it — an explicitly supported
+    # deployment model — and the origin-to-edge hop, which matters when the
+    # response is the explorer's ~1 MB matrix frame.
+    #
+    # Placed between Rack::ConditionalGet and Rack::ETag so ETag digests the
+    # UNCOMPRESSED body and this compresses afterwards: one weak validator for
+    # both representations, which is exactly what a weak ETag is for.
+    #
+    # Skips anything already compressed and anything binary — see COMPRESSIBLE:
+    # a content-type allowlist so images, fonts and PDFs aren't re-compressed
+    # for nothing, plus a floor for responses that declare a small length.
+    config.middleware.insert_before Rack::ETag, Rack::Deflater, if: COMPRESSIBLE
 
     # Nothing in this app attaches images, so Active Storage never needs to
     # process a variant. Say so explicitly: since 8.1.3.1 the engine resolves
