@@ -1135,6 +1135,45 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # Every other Move surface omits the direction it can't take; the
+    # illustration menu reads its position from the DOM at open time, because an
+    # in-place move reorders the list without re-rendering the trigger.
+    should "offer only the move directions the illustration actually has" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+
+      open_explorer_menu("Illustration actions", index: 0)
+      assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
+      assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
+      press_escape
+
+      open_explorer_menu("Illustration actions", index: 1)
+      assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
+      assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
+    end
+
+    # …and the DOM is the source of truth: after an in-place move the SAME
+    # trigger must offer the opposite direction, with no re-render in between.
+    should "follow the illustration to its new position after a move" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      expand_matrix_row("tr[data-capability-id]")
+      assert_text "Beta second illustration"
+
+      use_explorer_menu("Illustration actions", "Move up", index: 1)
+      assert_selector "ul[id^='illustrations-'] turbo-frame:first-of-type",
+                      text: "Beta second illustration"
+
+      # The moved item is now first — its menu offers Move down only.
+      open_explorer_menu("Illustration actions", index: 0)
+      assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
+      assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
+    end
+
     should "offer no illustration kebab in view mode" do
       sign_in_as(@admin_user)
       visit framework_path(@framework_id)

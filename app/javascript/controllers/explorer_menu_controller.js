@@ -477,12 +477,19 @@ const BUILDERS = {
       "discuss-illustration-id": id,
       "discuss-context-label": data.menuContext
     }))
+    // The enclosing UL's `reorder-list` controller resolves the neighbour from
+    // DOM order and moves this frame's node in place on success — no matrix
+    // refresh, so the expanded row and the scroll position survive. Offer only
+    // the directions that exist, like every other menu's Move items; position is
+    // read from the DOM at open time (NOT from a server flag), because an
+    // in-place move changes the order without re-rendering the trigger.
     if (data.menuMove) {
-      // The enclosing UL's `reorder-list` controller resolves the neighbour from
-      // DOM order and moves this frame's node in place on success — no matrix
-      // refresh, so the expanded row and the scroll position survive.
-      items.push({ label: "Move up", data: { action: "reorder-list#moveUp" } })
-      items.push({ label: "Move down", data: { action: "reorder-list#moveDown" } })
+      const siblings = reorderSiblings(trigger)
+      const index = siblings.indexOf(trigger.closest("[data-reorder-item-id]"))
+      if (index > 0) items.push({ label: "Move up", data: { action: "reorder-list#moveUp" } })
+      if (index >= 0 && index < siblings.length - 1) {
+        items.push({ label: "Move down", data: { action: "reorder-list#moveDown" } })
+      }
     }
     items.push({
       form: true,
@@ -586,6 +593,13 @@ function moveItem(label, url, reorder) {
       action: "reorder-move#move"
     }
   }
+}
+
+// The items `reorder-list` itself would move between — same list, same
+// selector, so the menu can never offer a direction the controller no-ops.
+function reorderSiblings(trigger) {
+  const list = trigger.closest("[data-controller~='reorder-list']")
+  return list ? Array.from(list.querySelectorAll("[data-reorder-item-id]")) : []
 }
 
 function applyData(element, data) {
