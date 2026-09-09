@@ -41,9 +41,17 @@ class Frameworks::MatrixDataBuilder
   #   the user can't see. Every surface searched here is visible in the
   #   compact matrix. Role dimming is untouched — a dimmed-but-matching
   #   capability still shows.
+  # @param include_illustrations [Boolean] whether cells carry their per-role
+  #   illustrations and the per-illustration pending/clarification maps. The
+  #   compact matrix has consumed none of these since the expanded row became
+  #   an on-demand fetch (#378), and grouping ~1,000 illustrations by role plus
+  #   two pending-map walks per illustration is most of the builder's work.
+  #   The cell's "N examples" count and its clarification total still include
+  #   them either way — both are rendered on the compact cell.
   def initialize(framework:, role_families:, categories:, selected_role_ids:, track_filter: "both",
                  mode: :view, pending_suggestions: {}, pending_illustration_creates: {},
-                 pending_expectation_creates: {}, search_query: nil)
+                 pending_expectation_creates: {}, search_query: nil,
+                 include_illustrations: true)
     @framework = framework
     @role_families = role_families
     @categories = categories
@@ -55,6 +63,7 @@ class Frameworks::MatrixDataBuilder
     @pending_expectation_creates = pending_expectation_creates
     @search_query = search_query.to_s.strip.presence
     @search_tokens = @search_query.to_s.downcase.split
+    @include_illustrations = include_illustrations
   end
 
   # Builds the matrix data structure.
@@ -84,7 +93,48 @@ class Frameworks::MatrixDataBuilder
     }
   end
 
+  # Builds ONE capability, applying the same visibility rules #build applies to
+  # all of them (archived category, inactive/draft-hidden capability, role-family
+  # scope, and the text filter) — so a capability this returns is exactly a
+  # capability the matrix would have rendered.
+  #
+  # The expanded row needs one capability's cells and the level/role axes around
+  # them; running the whole framework through the builder to then `find` one
+  # entry made an expand cost the same as a full matrix render.
+  #
+  # @param capability_id [String]
+  # @return [Hash] `{ selected_roles:, merged_levels:, capability: }` —
+  #   `capability` is nil when the capability is not in scope
+  def build_capability(capability_id)
+    @selected_roles = resolve_selected_roles
+    merged_levels = build_merged_levels(@selected_roles)
+    ordinals = merged_levels.map { |l| l[:ordinal] }
+    family_role_ids = build_family_role_ids(@selected_roles)
+    selected_role_id_set = @selected_roles.map(&:role_id).to_set
+
+    { selected_roles: @selected_roles,
+      merged_levels: merged_levels,
+      capability: locate_capability(capability_id, ordinals, family_role_ids, selected_role_id_set) }
+  end
+
   private
+
+  # @return [Hash, nil] the one capability's data, or nil when out of scope
+  def locate_capability(capability_id, ordinals, family_role_ids, selected_role_id_set)
+    @categories.each do |category|
+      next if category_archived?(category)
+
+      capability = category.capabilities.find { |c| c.capability_id == capability_id }
+      next unless capability
+
+      data = build_one_capability(capability, ordinals, family_role_ids, selected_role_id_set)
+      return nil unless data
+      return nil if searching? && filter_by_search(category, [ data ]).empty?
+
+      return data
+    end
+    nil
+  end
 
   def searching?
     @search_tokens.any?
@@ -232,31 +282,37 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Array<Hash>]
   def build_capabilities(category, ordinals, family_role_ids, selected_role_id_set)
-    category.capabilities
-      .select { |c| c.status == "active" && entity_visible?(c) }
-      .filter_map do |capability|
-      visible_bindings = capability.bindings.select { |b| entity_visible?(b) }
-      binding_role_ids = visible_bindings.map(&:role_id).to_set
-
-      # Only include capabilities bound to roles in the same families
-      next unless binding_role_ids.intersect?(family_role_ids)
-
-      bound_to_selected = binding_role_ids.intersect?(selected_role_id_set)
-      cells = build_cells(capability, ordinals, selected_role_id_set)
-
-      {
-        capability: capability,
-        bound_to_selected: bound_to_selected,
-        cells: cells,
-        pending_suggestion_count: pending_count("capability", capability.capability_id),
-        pending_edit: pending_latest_edit("capability", capability.capability_id, "name"),
-        description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description"),
-        # Capability-anchored clarifications (a cell with no expectation) glyph
-        # the capability row — there is no cell to hang them on.
-        clarification_count: clarification_count("capability", capability.capability_id),
-        clarification_suggestion_id: clarification_suggestion_id("capability", capability.capability_id)
-      }
+    category.capabilities.filter_map do |capability|
+      build_one_capability(capability, ordinals, family_role_ids, selected_role_id_set)
     end
+  end
+
+  # One capability's matrix entry, or nil when it is not visible in this mode or
+  # not bound to any role in the selected families.
+  #
+  # @return [Hash, nil]
+  def build_one_capability(capability, ordinals, family_role_ids, selected_role_id_set)
+    return nil unless capability.status == "active" && entity_visible?(capability)
+
+    binding_role_ids = capability.bindings
+      .select { |b| entity_visible?(b) }
+      .map(&:role_id).to_set
+
+    # Only include capabilities bound to roles in the same families
+    return nil unless binding_role_ids.intersect?(family_role_ids)
+
+    {
+      capability: capability,
+      bound_to_selected: binding_role_ids.intersect?(selected_role_id_set),
+      cells: build_cells(capability, ordinals, selected_role_id_set),
+      pending_suggestion_count: pending_count("capability", capability.capability_id),
+      pending_edit: pending_latest_edit("capability", capability.capability_id, "name"),
+      description_pending_edit: pending_latest_edit("capability", capability.capability_id, "description"),
+      # Capability-anchored clarifications (a cell with no expectation) glyph
+      # the capability row — there is no cell to hang them on.
+      clarification_count: clarification_count("capability", capability.capability_id),
+      clarification_suggestion_id: clarification_suggestion_id("capability", capability.capability_id)
+    }
   end
 
   # Builds the cell hash for a capability across all level ordinals.
@@ -305,10 +361,6 @@ class Frameworks::MatrixDataBuilder
       illustrations = expectation.illustrations
         .select { |ill| selected_role_id_set.include?(ill.role_id) }
 
-      illustrations_by_role = illustrations
-        .group_by(&:role_id)
-        .transform_values { |ills| ills.sort_by(&:ordinal) }
-
       discussions = cell_clarifications(expectation, illustrations)
 
       cells[ordinal] = {
@@ -318,7 +370,7 @@ class Frameworks::MatrixDataBuilder
         # filled transition an authored expectation makes.
         capability_id: capability.capability_id,
         illustration_count: illustrations.size,
-        illustrations_by_role: illustrations_by_role,
+        illustrations_by_role: illustrations_by_role(illustrations),
         bound_selected_role_ids: bound_selected_role_ids,
         pending_suggestion_count: pending_count("behavioural_expectation", expectation.expectation_id),
         pending_edit: pending_latest_edit("behavioural_expectation", expectation.expectation_id, "description"),
@@ -330,9 +382,20 @@ class Frameworks::MatrixDataBuilder
         illustration_pending_edits: illustration_pending_edits(illustrations),
         illustration_pending_edit_details: illustration_pending_edit_details(illustrations),
         illustration_clarifications: discussions[:by_illustration],
-        pending_illustration_creates: @pending_illustration_creates[expectation.expectation_id] || []
+        pending_illustration_creates: @include_illustrations ?
+          (@pending_illustration_creates[expectation.expectation_id] || []) : []
       }
     end
+  end
+
+  # role_id => that role's illustrations in display order. Empty when the caller
+  # asked for none — see the `include_illustrations` note on #initialize.
+  #
+  # @return [Hash<String, Array>]
+  def illustrations_by_role(illustrations)
+    return {} unless @include_illustrations
+
+    illustrations.group_by(&:role_id).transform_values { |ills| ills.sort_by(&:ordinal) }
   end
 
   # Builds a hash of illustration_id => pending edit count for illustrations
@@ -341,6 +404,8 @@ class Frameworks::MatrixDataBuilder
   # @param illustrations [Array<FrameworkState::RoleIllustration>]
   # @return [Hash<String, Integer>]
   def illustration_pending_edits(illustrations)
+    return {} unless @include_illustrations
+
     illustrations.each_with_object({}) do |ill, h|
       count = pending_count("role_illustration", ill.illustration_id)
       h[ill.illustration_id] = count if count > 0
@@ -353,6 +418,8 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Hash<String, Hash>]
   def illustration_pending_edit_details(illustrations)
+    return {} unless @include_illustrations
+
     illustrations.each_with_object({}) do |ill, h|
       latest = pending_latest_edit("role_illustration", ill.illustration_id, "description")
       h[ill.illustration_id] = latest if latest
@@ -370,9 +437,17 @@ class Frameworks::MatrixDataBuilder
   #
   # @return [Hash] { count:, open_id:, by_illustration: }
   def cell_clarifications(expectation, illustrations)
+    # The per-illustration map is the expanded row's; the TOTAL is the compact
+    # cell's, so the illustrations are counted either way.
     by_illustration = illustration_clarifications(illustrations)
     own = clarification_count("behavioural_expectation", expectation.expectation_id)
-    total = own + by_illustration.values.sum { |c| c[:count] }
+    from_illustrations =
+      if @include_illustrations
+        by_illustration.values.sum { |c| c[:count] }
+      else
+        illustrations.sum { |ill| clarification_count("role_illustration", ill.illustration_id) }
+      end
+    total = own + from_illustrations
 
     # Genuinely the newest across the whole cell: preferring the expectation's
     # (or an arbitrary illustration's) would open an older card than the one the
@@ -391,6 +466,8 @@ class Frameworks::MatrixDataBuilder
   # @param illustrations [Array<FrameworkState::RoleIllustration>]
   # @return [Hash<String, Hash>]
   def illustration_clarifications(illustrations)
+    return {} unless @include_illustrations
+
     illustrations.each_with_object({}) do |ill, h|
       count = clarification_count("role_illustration", ill.illustration_id)
       next unless count > 0

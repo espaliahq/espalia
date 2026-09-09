@@ -682,11 +682,119 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
     end
   end
 
+  # The compact matrix stopped consuming illustrations when the expanded row
+  # became an on-demand fetch (#378); the builder stopped computing them for it
+  # in #383. Both halves matter: the grouped map must be gone, and the counts
+  # the COMPACT cell renders must survive.
+  context "include_illustrations: false" do
+    should "drop the per-role map the expanded row consumes" do
+      cell = compact_cell
+
+      assert_empty cell[:illustrations_by_role]
+      assert_empty cell[:illustration_pending_edits]
+      assert_empty cell[:illustration_pending_edit_details]
+      assert_empty cell[:illustration_clarifications]
+      assert_empty cell[:pending_illustration_creates]
+    end
+
+    should "keep the example count the compact cell renders" do
+      cell = find_capability(build_matrix(selected_role_ids: []), "Strategic Thinking")[:cells][1]
+
+      assert_operator cell[:illustration_count], :>, 0
+      assert_equal cell[:illustration_count], compact_cell[:illustration_count]
+    end
+
+    should "keep counting discussions on the examples it no longer maps" do
+      # An illustration-anchored clarification is invisible on a collapsed row
+      # unless the cell's own glyph counts it — the count must not depend on
+      # the map being built.
+      illustration = @expectations.first.illustrations.first
+      pending = {
+        [ "role_illustration", illustration.illustration_id ] => {
+          count: 0, clarification_count: 2, latest_by_field: {},
+          latest_clarification: { id: "a", suggestion_id: "s1", created_at: Time.current }
+        }
+      }
+
+      [ true, false ].each do |include_ills|
+        result = builder(include_illustrations: include_ills, mode: :edit,
+                         pending_suggestions: pending).build
+        cell = find_capability(result, "Strategic Thinking")[:cells][1]
+
+        assert_equal 2, cell[:clarification_count],
+                     "illustration discussions must count with include_illustrations: #{include_ills}"
+        assert_equal "s1", cell[:clarification_suggestion_id]
+      end
+    end
+  end
+
+  context "#build_capability" do
+    should "return the same entry the full build produces for that capability" do
+      capability = find_capability(build_matrix(selected_role_ids: []), "Strategic Thinking")
+      one = builder(include_illustrations: true)
+        .build_capability(capability[:capability].capability_id)
+
+      assert_equal capability[:capability].capability_id, one[:capability][:capability].capability_id
+      assert_equal capability[:cells].keys.sort, one[:capability][:cells].keys.sort
+      assert_equal build_matrix(selected_role_ids: [])[:merged_levels], one[:merged_levels]
+    end
+
+    should "carry the illustrations the expanded row renders" do
+      capability = find_capability(build_matrix(selected_role_ids: []), "Strategic Thinking")
+      one = builder(include_illustrations: true)
+        .build_capability(capability[:capability].capability_id)
+
+      assert_predicate one[:capability][:cells][1][:illustrations_by_role], :any?
+    end
+
+    should "report a capability outside the role scope as not found" do
+      # Strategic Thinking is bound to the Engineering roles only.
+      design_only = builder(include_illustrations: true, selected_role_ids: [ @design_role.role_id ])
+      capability_id = @capability.capability_id
+
+      assert_nil design_only.build_capability(capability_id)[:capability]
+    end
+
+    should "report an unknown capability as not found" do
+      assert_nil builder(include_illustrations: true).build_capability(SecureRandom.uuid_v7)[:capability]
+    end
+
+    should "respect the text filter, like the grid it is expanded from" do
+      capability_id = @capability.capability_id
+
+      assert builder(include_illustrations: true, search_query: "Strategic")
+        .build_capability(capability_id)[:capability]
+      assert_nil builder(include_illustrations: true, search_query: "nothing-matches-this")
+        .build_capability(capability_id)[:capability]
+    end
+  end
+
   private
+
+  # One compact cell built the way the matrix builds it (illustrations excluded).
+  def compact_cell
+    find_capability(
+      build_matrix(selected_role_ids: [], include_illustrations: false), "Strategic Thinking"
+    )[:cells][1]
+  end
+
+  def builder(include_illustrations:, selected_role_ids: [], mode: :view,
+              pending_suggestions: {}, search_query: nil)
+    Frameworks::MatrixDataBuilder.new(
+      framework: @framework,
+      role_families: @role_families,
+      categories: @categories,
+      selected_role_ids: selected_role_ids,
+      mode: mode,
+      pending_suggestions: pending_suggestions,
+      search_query: search_query,
+      include_illustrations: include_illustrations
+    )
+  end
 
   def build_matrix(selected_role_ids:, track_filter: "both", categories: nil,
                    pending_suggestions: {}, pending_illustration_creates: {},
-                   search_query: nil, mode: :view)
+                   search_query: nil, mode: :view, include_illustrations: true)
     Frameworks::MatrixDataBuilder.new(
       framework: @framework,
       role_families: @role_families,
@@ -696,7 +804,8 @@ class Frameworks::MatrixDataBuilderTest < ActiveSupport::TestCase
       mode: mode,
       pending_suggestions: pending_suggestions,
       pending_illustration_creates: pending_illustration_creates,
-      search_query: search_query
+      search_query: search_query,
+      include_illustrations: include_illustrations
     ).build
   end
 
