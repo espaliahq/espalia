@@ -246,6 +246,7 @@ input[type="week"] {
  * than utilities because it repeats on every pencil, Discuss bubble and kebab
  * in the grid — ~180 bytes of class string each, thousands of times. */
 .explorer-cluster-btn,
+.explorer-discuss,
 .explorer-kebab {
   display: inline-flex;
   align-items: center;
@@ -262,11 +263,13 @@ input[type="week"] {
 }
 
 .explorer-cluster-btn:hover,
+.explorer-discuss:hover,
 .explorer-kebab:hover {
   color: var(--color-primary);
 }
 
 .explorer-cluster-btn:focus-visible,
+.explorer-discuss:focus-visible,
 .explorer-kebab:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
@@ -441,4 +444,282 @@ input[type="week"] {
 #framework-matrix[busy] {
   opacity: 0.55;
   transition: opacity 120ms ease;
+}
+
+/* ── Framework explorer: the matrix's repeated chrome, as classes (#383) ──
+ *
+ * Same reasoning as `.explorer-kebab` / `.explorer-add` above (#380), applied
+ * to what was left: after the on-demand expanded row (#378), the shared inline
+ * editor (#379) and the delegated menus (#380), `class="…"` was the single
+ * largest attribute in the edit-mode matrix frame — 234,518 B, 23% of it, and
+ * ~190 KB of that in twenty repeated strings. A utility string is paid for on
+ * every element it decorates; a class name is paid for once, in the stylesheet.
+ *
+ * Two rules for anything added here:
+ *
+ * - The names are literals at their call sites, so Tailwind's JIT is not
+ *   involved and Hard-Won Lesson 12 (no interpolated class names) is unaffected.
+ * - These rules sit OUTSIDE Tailwind's layers, so they beat a utility for the
+ *   same property. Never pair one with a utility that sets a property it
+ *   declares — put the variant in the class, or leave the whole thing a
+ *   utility. **Backgrounds on sticky cells deliberately stay utilities**, so
+ *   the opacity guard in `matrix_sticky_column_system_test.rb` keeps reading
+ *   the class list it was written against (Hard-Won Lesson 24).
+ */
+
+/* The display wrapper an inline editor replaces: text, then its cluster.
+ * phlex-views.md's pencil-placement rule in one class. */
+.mx-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+/* The text beside the cluster must be allowed to shrink, or a long expectation
+ * pushes the column wide. Applies to the whole line rather than the text alone:
+ * the controls are `flex-shrink: 0`, so a min-width floor of 0 changes nothing
+ * for them, and this saves a `min-w-0` on 302 elements. */
+.mx-line > * {
+  min-width: 0;
+}
+
+/* A level cell in the compact grid. */
+.mx-cell {
+  padding: 0.625rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-gray-100);
+  border-right: 1px solid var(--color-gray-100);
+}
+
+/* A level the capability does not reach — the em-dash cell. */
+.mx-cell-empty {
+  text-align: center;
+  background-color: color-mix(in oklab, var(--color-gray-50) 50%, transparent);
+}
+
+/* The sticky capability cell. Its background (and hover background) stay
+ * utilities — see the note above. */
+.mx-cap-cell {
+  padding: 0.625rem 1rem;
+  vertical-align: top;
+  min-width: 200px;
+  border-bottom: 1px solid var(--color-gray-100);
+  border-right: 1px solid var(--color-gray-100);
+}
+
+/* The sticky column's right edge: "content passes beneath this". Applied to
+ * every cell that IS the column — see Concerns::StickyColumn for which cells
+ * take it and which deliberately don't. */
+.mx-sticky-edge {
+  box-shadow: 6px 0 6px -6px rgba(15, 23, 42, 0.25);
+}
+
+/* The compact capability row. `group` stays a utility on the same element —
+ * the sticky cell's `group-hover:` variants depend on Tailwind seeing it. */
+.mx-row {
+  cursor: pointer;
+  scroll-margin-top: 5rem;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mx-row:hover {
+  background-color: var(--color-gray-50);
+}
+
+/* Behavioural-expectation text. Pending-edit decoration composes on top —
+ * that is text-decoration, which this does not set. */
+.mx-expectation {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-gray-700);
+}
+
+/* "N examples" under a compact cell's expectation. */
+.mx-examples {
+  margin-top: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mx-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background-color: var(--color-primary);
+}
+
+.mx-count {
+  font-size: 10px;
+  color: var(--color-gray-600);
+}
+
+/* Compact role/level code badge in the matrix header (e.g. "E1"). */
+.mx-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 10px;
+  font-weight: 500;
+  background-color: var(--color-gray-200);
+  color: var(--color-gray-600);
+}
+
+/* Expanded-row cells. The blue wash is a tint over an OPAQUE neighbour, not a
+ * sticky mask — the gutter cell that IS the sticky column keeps its opaque
+ * composite as a utility. */
+.mx-exp-cell {
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-gray-100);
+  border-right: 1px solid var(--color-gray-100);
+  background-color: color-mix(in oklab, var(--color-blue-50) 30%, transparent);
+}
+
+.mx-exp-cell--focusable {
+  cursor: pointer;
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mx-exp-cell--focusable:hover {
+  background-color: color-mix(in oklab, var(--color-blue-100) 50%, transparent);
+}
+
+/* The placeholder row's one spanning cell, before the fetch lands. */
+.mx-exp-placeholder {
+  padding: 0.75rem;
+  vertical-align: top;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  border-bottom: 1px solid var(--color-gray-100);
+  background-color: color-mix(in oklab, var(--color-blue-50) 30%, transparent);
+}
+
+/* Borders only — the gutter's opaque background and stickiness are utilities. */
+.mx-exp-gutter {
+  border-bottom: 1px solid var(--color-gray-100);
+  border-right: 1px solid var(--color-gray-100);
+}
+
+/* The cluster's Discuss bubble: the shared control chrome above plus its own
+ * padding, as ONE name rather than two (it repeats once per expectation cell). */
+.explorer-discuss {
+  padding: 0.125rem;
+}
+
+/* A cluster control's glyph is sized by the control, not by a utility pair on
+ * every `<svg>`: `w-4 h-4` on 340 kebabs and `w-3.5 h-3.5` on 282 Discuss
+ * bubbles is ~11 KB of class text for three fixed sizes. Call sites pass no
+ * class at all (`icon("kebab")`), so there is nothing to keep in step. */
+.explorer-kebab > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.explorer-discuss > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.explorer-cluster-btn > svg,
+.explorer-add > svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+/* The inline editor's host is the positioning context for its error line. The
+ * host contract already marks it (`data-editor-action`), so it needs no class
+ * of its own — 282 of them in one matrix frame. */
+[data-editor-action] {
+  position: relative;
+}
+
+/* The neutral secondary button and the red inline-error panel. Named here
+ * because `Kit::FrameLoadError` ships one of each into EVERY expanded-row
+ * placeholder — ~11 KB of repeated utility text in one matrix frame. Their
+ * Ruby constants now carry these names, so every other caller follows. */
+.kit-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-gray-300);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  cursor: pointer;
+}
+
+.kit-alert-panel {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-red-200);
+  background-color: var(--color-red-50);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-red-700);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mx-cell,
+  .mx-cap-cell,
+  .mx-exp-cell,
+  .mx-exp-gutter {
+    border-bottom-color: var(--color-gray-800);
+    border-right-color: var(--color-gray-800);
+  }
+
+  .mx-exp-placeholder {
+    border-bottom-color: var(--color-gray-800);
+  }
+
+  .mx-cell-empty {
+    background-color: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
+  }
+
+  .mx-sticky-edge {
+    box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);
+  }
+
+  .mx-row:hover {
+    background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent);
+  }
+
+  .mx-expectation {
+    color: var(--color-gray-300);
+  }
+
+  .mx-count,
+  .mx-badge {
+    color: var(--color-gray-300);
+  }
+
+  .mx-badge {
+    background-color: var(--color-gray-700);
+  }
+
+  .mx-exp-cell,
+  .mx-exp-placeholder {
+    background-color: color-mix(in oklab, var(--color-blue-900) 10%, transparent);
+  }
+
+  .mx-exp-cell--focusable:hover {
+    background-color: color-mix(in oklab, var(--color-blue-900) 20%, transparent);
+  }
+
+  .kit-btn-secondary {
+    border-color: var(--color-gray-600);
+    color: var(--color-gray-200);
+  }
+
+  .kit-alert-panel {
+    border-color: var(--color-red-800);
+    background-color: color-mix(in oklab, var(--color-red-900) 20%, transparent);
+    color: var(--color-red-300);
+  }
 }

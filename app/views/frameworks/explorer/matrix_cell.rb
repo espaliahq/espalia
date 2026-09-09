@@ -114,9 +114,7 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # and Phlex omits a nil attribute — so this stays addressable whenever there
   # is anything to address.
   def empty_cell
-    td(id: cell_id,
-       class: "px-3 py-2.5 text-center border-b border-r border-gray-100 dark:border-gray-800 " \
-              "bg-gray-50/50 dark:bg-gray-800/20 align-top") do
+    td(id: cell_id, class: "mx-cell mx-cell-empty") do
       span(class: "text-gray-300 dark:text-gray-600") { "\u2014" }
     end
   end
@@ -127,15 +125,14 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # Lesson 25). Same contract as the expanded cell: an expectation AND a
   # selected bound role; an empty or not-applicable cell is not a focus target.
   def filled_cell
-    td(id: cell_id,
-       class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
+    td(id: cell_id, class: "mx-cell",
        data: cell_cluster_data.merge(focus_target_data)) do
       # One layout for both states — the kebab is conditional, the wrapper is
       # not, so the pending-edit cell can't drift from the plain cell. No
       # flex-1 on the text: the kebab sits right after it, not at the far edge
       # of the cell (phlex-views.md, pencil-placement rule).
-      div(class: "flex items-start gap-1") do
-        div(class: "min-w-0") { expectation_text }
+      div(class: "mx-line") do
+        div { expectation_text }
         # pencil · discuss · kebab — the pencil is rendered by
         # ExpectationTextFrame above (it has to travel with the frame), the rest
         # here (framework-explorer.md §11, HoverCluster).
@@ -223,9 +220,9 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   end
 
   def illustration_indicator
-    div(class: "mt-1.5 flex items-center gap-1") do
-      span(class: "w-1.5 h-1.5 rounded-full bg-primary") { }
-      span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mx-examples") do
+      span(class: "mx-dot") { }
+      span(class: "mx-count") do
         count = @cell_data[:illustration_count]
         "#{count} #{'example'.pluralize(count)}"
       end

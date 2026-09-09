@@ -73,8 +73,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   def compact_row
     tr(
       id: self.class.compact_row_id(@capability.capability_id),
-      class: "#{@bound ? '' : 'opacity-50'} #{strikethrough_classes} group cursor-pointer scroll-mt-20 " \
-             "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
+      class: "#{@bound ? '' : 'opacity-50'} #{strikethrough_classes} group mx-row",
       # The cluster attribute only earns its bytes in edit mode — view mode has
       # no hover controls to reveal.
       data: (@mode == :edit ? hover_cluster_data("row") : {}).merge(
@@ -99,10 +98,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       # straight through it (see framework-explorer.md, Hard-Won Lesson 24).
       # #172131 is gray-800/50 composited over gray-900, so the hovered sticky
       # cell matches the rest of the hovered row exactly.
-      td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 " \
-                "#{STICKY_EDGE_CLASSES} " \
-                "px-4 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 " \
-                "min-w-[200px] align-top group-hover:bg-gray-50 dark:group-hover:bg-[#172131]") do
+      td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 #{STICKY_EDGE_CLASSES} mx-cap-cell " \
+                "group-hover:bg-gray-50 dark:group-hover:bg-[#172131]") do
         div(class: "flex items-start gap-2") do
           # Expand indicator
           icon("chevron-right",
@@ -110,7 +107,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                data: { matrix_target: "rowChevron" })
 
           div do
-            div(class: "flex items-start gap-1") do
+            div(class: "mx-line") do
               render Views::Frameworks::Explorer::CapabilityNameFrame.new(
                 capability: @capability,
                 framework_id: @framework_id,

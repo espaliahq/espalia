@@ -46,8 +46,8 @@ module Views::Frameworks::Explorer::Concerns::StickyColumn
   # scroll (#380), so it takes the edge treatment like every other cell in the
   # column.
   #
-  # Literal class strings — Tailwind's JIT scans source for complete class
-  # names and cannot see an interpolated one (Hard-Won Lesson 12).
-  STICKY_EDGE_CLASSES =
-    "shadow-[6px_0_6px_-6px_rgba(15,23,42,0.25)] dark:shadow-[6px_0_8px_-6px_rgba(0,0,0,0.65)]"
+  # A component class, not a pair of arbitrary-value shadow utilities: this
+  # string rode ~100 cells per matrix frame at ~110 bytes each (#383). Defined
+  # in app/assets/tailwind/application.css, alongside its dark variant.
+  STICKY_EDGE_CLASSES = "mx-sticky-edge"
 end

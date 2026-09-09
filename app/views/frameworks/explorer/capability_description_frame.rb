@@ -61,7 +61,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
   def editable
     div(class: "flex flex-col items-start gap-1 #{TEXT_CLASSES}", data: editor_data) do
       render_field_editor_error(@error)
-      div(class: "flex items-start gap-1", data: { editor_display: true }) do
+      div(class: "mx-line", data: { editor_display: true }) do
         if @pending_edit
           # A pending edit renders as the inline diff (its own decoration);
           # don't also apply the wavy-underline class.

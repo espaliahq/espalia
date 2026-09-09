@@ -20,8 +20,10 @@
 class Components::Kit::FrameLoadError < Components::Base
   # The neutral secondary-button treatment. Canonical: the evidence forms'
   # SECONDARY_BTN point here, so the three copies can't drift apart.
-  BUTTON_CLASSES = "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 " \
-                   "dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
+  # A component class (app/assets/tailwind/application.css), not a utility
+  # string: every expanded-row placeholder in the explorer's matrix ships one of
+  # these, so the utilities were ~6 KB of repeated text per frame (#383).
+  BUTTON_CLASSES = "kit-btn-secondary"
 
   # What the reader was trying to open, when the caller doesn't name it.
   DEFAULT_SUBJECT = "this"

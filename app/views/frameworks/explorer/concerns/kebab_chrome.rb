@@ -38,7 +38,7 @@ module Views::Frameworks::Explorer::Concerns::KebabChrome
                "inline-flex items-center justify-center " \
                "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
       ) do
-        icon("kebab", class: "w-4 h-4")
+        icon("kebab")
       end
     end
   end

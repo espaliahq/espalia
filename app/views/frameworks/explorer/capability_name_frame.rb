@@ -75,7 +75,7 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
     # while only the display child is present.
     div(class: "inline-flex flex-col items-start gap-1", data: editor_data) do
       render_field_editor_error(@error)
-      div(class: "flex items-start gap-1", data: { editor_display: true }) do
+      div(class: "mx-line", data: { editor_display: true }) do
         plain_name
         render_inline_editor_pencil(aria_label: "Edit capability name", scope: "row")
       end

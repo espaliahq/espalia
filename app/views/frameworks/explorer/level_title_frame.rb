@@ -61,7 +61,7 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
     # and widen the level column by ~108px (Lesson 27). A short level title in a
     # title-width box is the accepted trade.
     div(class: "inline-flex flex-col items-start gap-1", data: hover_cluster_data("hdr").merge(editor_data)) do
-      div(class: "flex items-start gap-1", data: { editor_display: true }) do
+      div(class: "mx-line", data: { editor_display: true }) do
         plain_title
         render_inline_editor_pencil(aria_label: "Edit level title", scope: "hdr", collapses: false)
       end
