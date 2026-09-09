@@ -129,14 +129,17 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
-      # The hover-revealed archive control posts a tiny confirm-guarded form.
-      # Stub the confirm to true and submit it synchronously (the archive form
-      # is the one in the display region — not the inline-editor edit form).
-      ill_li = find("li[data-editor-action*='/illustrations/']", match: :first)
+      # Archive is a confirm-guarded form submit inside the illustration's ⋮
+      # menu, which only exists once the kebab is opened (#380). Stub the
+      # confirm to true and submit synchronously.
+      open_explorer_menu("Illustration actions",
+                         scope: "li[data-editor-action*='/illustrations/']")
       auto_confirm do
-        page.execute_script(
-          "arguments[0].querySelector(\"form[action*='illustration_archives']\").requestSubmit();", ill_li
-        )
+        page.execute_script(<<~JS)
+          document.querySelector(
+            "[data-explorer-menu] form[action*='illustration_archives']"
+          ).requestSubmit();
+        JS
       end
 
       # Redirected back to edit mode; the removal applied live (illustrations

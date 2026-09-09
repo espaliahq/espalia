@@ -6,6 +6,7 @@ class Components::Base < Phlex::HTML
   include Phlex::Rails::Helpers::TurboFrameTag
   include Phlex::Rails::Helpers::TurboStreamFrom
   include Components::Helpers::LocalTimeHelpers
+  include Components::Helpers::IconHelpers
 
   if Rails.env.development?
     def before_template

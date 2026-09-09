@@ -73,11 +73,11 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
     # flex-col: the shared editor is appended after the display element, and a
     # rejected save renders its message above it. Visually identical to a row
     # while only the display child is present.
-    div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
+    div(class: "inline-flex flex-col items-start gap-1", data: editor_data) do
       render_field_editor_error(@error)
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_name
-        render_inline_editor_pencil(aria_label: "Edit capability name")
+        render_inline_editor_pencil(aria_label: "Edit capability name", scope: "row")
       end
     end
   end

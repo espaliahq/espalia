@@ -268,10 +268,13 @@ export default class extends BaseController {
 
   toggleRow(event) {
     // Ignore clicks on interactive children (the inline-edit pencil, the
-    // row-actions kebab, inline forms, links) so editing or opening the
-    // actions menu doesn't also toggle the row. The expand/collapse chevron
-    // is an <svg> (not an interactive element), so it still falls through.
-    if (event.target.closest("button, a, input, textarea, select, form, [data-controller~='dropdown']")) {
+    // row-actions kebab and its open menu, inline forms, links) so editing or
+    // opening the actions menu doesn't also toggle the row. The expand/collapse
+    // chevron is an <svg> (not an interactive element), so it still falls
+    // through.
+    if (event.target.closest(
+      "button, a, input, textarea, select, form, [data-controller~='dropdown'], [role='menu']"
+    )) {
       return
     }
 
@@ -363,7 +366,9 @@ export default class extends BaseController {
     // form/textarea live inside the focus target) so editing the category name
     // — or typing in its editor — never also toggles category focus. Mirrors
     // focusCell's guard.
-    if (event.target.closest("button, a, input, textarea, select, form, [contenteditable]")) return
+    if (event.target.closest(
+      "button, a, input, textarea, select, form, [contenteditable], [role='menu']"
+    )) return
 
     event.stopPropagation()
     const target = event.currentTarget

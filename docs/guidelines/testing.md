@@ -320,6 +320,9 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
 | `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector (the row's content loads on demand — assert on it, not on the row) |
 | `start_inline_edit(container)` | field-editor | Opens the explorer's shared inline editor via its pencil, returns the cloned form |
+| `open_explorer_menu(label, scope:, index:)` | explorer-menu | Opens one of the explorer grid's delegated kebab menus by its trigger's aria-label (the menu does not exist until then) |
+| `click_explorer_menu_item(label, expect_text:)` | explorer-menu | Clicks an item of the OPEN explorer menu by its leading text |
+| `use_explorer_menu(label, item, …)` | explorer-menu | The two above in one call |
 | `submit_inline_edit(form, with:)` | field-editor | Sets the editor's textarea via JS and `requestSubmit()`s it |
 | `cancel_inline_edit(form)` | field-editor | Cancels an open editor via its Cancel button |
 | `click_rating_frequency(cell_selector, freq)` | (rating cell) | Clicks a frequency button, retries until ring-1 lands |

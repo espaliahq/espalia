@@ -198,8 +198,10 @@ export default class extends BaseController {
     // node. The invoker is re-resolved each time: the original node if it
     // survived, its same-id replacement if a stream swapped it, or the
     // ancestor dropdown's kebab when the invoking menu item hid with its
-    // menu. An anonymous invoker replaced by a refresh has nothing durable
-    // to return to; focus is left alone rather than guessed.
+    // menu, or the element named by `data-modal-focus-return` when the
+    // invoker was built on the fly and cannot survive at all. An anonymous
+    // invoker replaced by a refresh has nothing durable to return to; focus
+    // is left alone rather than guessed.
     const trigger = this.triggerElement
     this.triggerElement = null
     if (!trigger) return
@@ -216,6 +218,12 @@ export default class extends BaseController {
       const candidate =
         (document.contains(trigger) && trigger.offsetParent !== null && trigger) ||
         (trigger.id && document.getElementById(trigger.id)) ||
+        // An invoker that names its return target explicitly. The explorer's
+        // delegated kebab menus are BUILT on open and destroyed with the modal
+        // they launch, so no node of theirs survives to be re-resolved — the
+        // menu item names the ⋮ that opened it instead.
+        (trigger.dataset.modalFocusReturn &&
+          document.getElementById(trigger.dataset.modalFocusReturn)) ||
         [
           trigger
             .closest("[data-controller~='dropdown']")

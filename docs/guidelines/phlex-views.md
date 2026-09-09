@@ -146,7 +146,7 @@ A kebab reads as "…more" — the overflow home for a row's secondary actions. 
 rules, both non-negotiable:
 
 - **The kebab is always the right-most control in its cluster.** Primary
-  single-purpose affordances (the inline-edit pencil, reorder chevrons) come
+  single-purpose affordances (the inline-edit pencil, a Discuss bubble) come
   before it; nothing renders after it. A kebab followed by more buttons
   contradicts its own "more" semantics.
 - **Secondary and destructive actions live inside the kebab, not beside it.**
@@ -156,9 +156,14 @@ rules, both non-negotiable:
   permanently reserves row width (`opacity-0` still occupies layout) and
   crushes the text it decorates — the role tree learned this the hard way.
 
-Use the shared trigger (`Views::Frameworks::Explorer::Concerns::ApprovalKebabItems#kebab_trigger`)
-rather than hand-rolling the ⋮ glyph, and include `pointer-coarse` visibility so
-touch devices aren't left with an invisible control.
+Use a shared trigger rather than hand-rolling the ⋮ glyph, and make sure the
+trigger stays visible on `pointer-coarse` so touch devices aren't left with an
+invisible control. In the framework explorer's grid that is
+`Views::Frameworks::Explorer::Concerns::MenuItems#render_menu_trigger` — a bare
+trigger whose menu one root-mounted controller builds on open (see
+[framework-explorer.md](framework-explorer.md) §11a; a per-kebab `Kit::Dropdown`
+does not scale to a grid). Elsewhere — and in the explorer's role tree — use
+`Kit::Dropdown` with `Concerns::KebabChrome#kebab_trigger`.
 
 ## Controller Rendering
 

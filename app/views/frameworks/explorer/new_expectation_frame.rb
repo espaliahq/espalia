@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # "+ Add expectation" affordance for an empty-but-applicable matrix cell (edit
-# mode). Mirrors NewIllustrationFrame: a hover-revealed button that opens the
-# shared field editor and POSTs to {Frameworks::ExpectationsController#create}.
+# mode). The shared dashed-ghost add treatment (HoverCluster#render_add_affordance),
+# always visible, opening the shared field editor and POSTing to
+# {Frameworks::ExpectationsController#create}.
 #
 # The submit is a full Turbo Drive navigation (`data-turbo-frame="_top"`) —
 # authoring is shape-changing, so the controller redirects back to the edit page
@@ -20,7 +21,7 @@ class Views::Frameworks::Explorer::NewExpectationFrame < Views::Base
   end
 
   def view_template
-    div(class: "group/new-exp", data: editor_data) do
+    div(data: editor_data) do
       add_button
     end
   end
@@ -47,16 +48,8 @@ class Views::Frameworks::Explorer::NewExpectationFrame < Views::Base
   end
 
   def add_button
-    button(
-      type: "button",
-      class: "w-full text-xs text-gray-400 hover:text-primary flex items-center justify-center gap-1 " \
-             "py-1.5 opacity-0 group-hover/new-exp:opacity-100 focus-visible:opacity-100 transition-opacity",
-      data: { editor_display: true, action: "field-editor#open" }
-    ) do
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(d: "M12 4v16m8-8H4")
-      end
-      plain "Add expectation"
-    end
+    render_add_affordance(
+      "Add expectation", editor_display: true, action: "field-editor#open"
+    )
   end
 end

@@ -68,11 +68,11 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine relative", data: editor_data) do
+    div(class: "relative", data: editor_data) do
       render_field_editor_error(@error)
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_text
-        render_inline_editor_pencil(aria_label: "Edit expectation text")
+        render_inline_editor_pencil(aria_label: "Edit expectation text", scope: "cell")
       end
     end
   end

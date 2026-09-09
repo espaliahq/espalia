@@ -35,6 +35,10 @@ class Components::Kit::PageLayout < Components::Base
       class: "min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950",
       data: { controller: "sidebar" }
     ) do
+      # One `<symbol>` set per page — repeated glyphs are `<use href="#icon-…">`
+      # at the call site rather than a full path definition each time (#380).
+      render Components::Kit::IconSprite.new
+
       # Skip link — first focusable element, visible only on keyboard focus
       # (WCAG 2.4.1 Bypass Blocks). Jumps past the navbar to main content.
       a(

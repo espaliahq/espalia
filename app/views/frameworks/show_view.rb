@@ -162,7 +162,14 @@ class Views::Frameworks::ShowView < Views::Base
       # ONE inline editor for the whole explorer — pencils delegate to it and it
       # clones the FieldEditorTemplate into place (#379).
       controllers << "field-editor"
+      # ONE kebab-menu controller for the whole grid — triggers carry their items
+      # as data and the menu is built on open (#380).
+      controllers << "explorer-menu"
       actions << "keydown.esc@window->modal#escape"
+      actions << "keydown.esc@window->explorer-menu#escape"
+      actions << "keydown->explorer-menu#keydown"
+      actions << "click@window->explorer-menu#clickOutside"
+      actions << "suggestion:resolved@window->explorer-menu#onResolved"
       # A squiggle click opens a suggestion card — reveal the pane if collapsed.
       actions << "suggestion:open-card@window->framework-explorer#openContextPane"
       actions << "turbo:frame-render->field-editor#frameRendered"
@@ -172,8 +179,21 @@ class Views::Frameworks::ShowView < Views::Base
       actions << "field-editor:discard@window->field-editor#discard"
       data[:field_editor_approvals_value] = editor_approvals.to_json
       data[:field_editor_mode_value] = @edit_mode.to_s
+      data[:explorer_menu_paths_value] = menu_paths.to_json
     end
     data.merge(controller: controllers.join(" "), action: actions.join(" "))
+  end
+
+  # Route templates the grid's kebab menus build their actions from — once on
+  # the root rather than on every trigger, and never hand-written in JS (#380).
+  def menu_paths
+    id = @framework.framework_id
+    {
+      approve: approve_framework_suggestion_path(id, ":id", inline: 1),
+      capabilityReorder: framework_capability_reorders_path(framework_id: id),
+      categoryReorder: framework_category_reorders_path(framework_id: id),
+      illustrationArchive: framework_illustration_archives_path(framework_id: id)
+    }
   end
 
   # Whether the viewer clears each content entity's review tier — computed

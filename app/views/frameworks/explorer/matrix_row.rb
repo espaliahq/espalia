@@ -12,7 +12,8 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   include Views::Frameworks::Explorer::Concerns::StickyColumn
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
-  include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::HoverCluster
+  include Views::Frameworks::Explorer::Concerns::MenuItems
   include Views::Frameworks::Explorer::Concerns::DiscussTrigger
   include Views::Frameworks::Explorer::Concerns::PendingArchive
 
@@ -65,11 +66,16 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     tr(
       class: "#{@bound ? '' : 'opacity-50'} #{strikethrough_classes} group cursor-pointer scroll-mt-20 " \
              "hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-      data: {
+      # The cluster attribute only earns its bytes in edit mode — view mode has
+      # no hover controls to reveal.
+      data: (@mode == :edit ? hover_cluster_data("row") : {}).merge(
         action: "click->matrix#toggleRow",
         matrix_target: "row",
-        capability_id: @capability.capability_id
-      }
+        capability_id: @capability.capability_id,
+        # Published once per row so the row's and its cells' menus can build
+        # their "Discuss…" context label without repeating the name per cell.
+        capability_name: @capability.name
+      )
     ) do
       # Capability name (sticky left column)
       # Every background here is OPAQUE, hover included — a sticky cell with a
@@ -83,13 +89,9 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
                 "min-w-[200px] align-top group-hover:bg-gray-50 dark:group-hover:bg-[#172131]") do
         div(class: "flex items-start gap-2") do
           # Expand indicator
-          svg(
-            class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
-            data: { matrix_target: "rowChevron" },
-            fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
-          ) do |s|
-            s.path(d: "M9 5l7 7-7 7")
-          end
+          icon("chevron-right",
+               class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+               data: { matrix_target: "rowChevron" })
 
           div do
             div(class: "flex items-start gap-1") do
@@ -183,16 +185,13 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     end
   end
 
-  # Row-actions kebab — edit mode, hover-revealed next to the capability-name
-  # pencil. A dropdown menu (Kit::Dropdown) gathering the actions available on
-  # this capability for this viewer: inline Approve / Reject of its pending
-  # name / description edits (approval authority — the actionable-feed pattern,
-  # framework-explorer.md §12), plus Archive (any suggest-rights viewer — the
-  # Operation decides direct-vs-suggestion). The kebab renders only when at least
-  # one action applies.
+  # Row-actions kebab — edit mode, the LAST control of the row's hover cluster
+  # (pencil · discuss · kebab; framework-explorer.md §11/§12). It gathers every
+  # action available on this capability for this viewer: inline Approve / Reject
+  # of its pending name / description edits (approval authority — the
+  # actionable-feed pattern), the "Edit …" stand-ins for the hover pencils, and
+  # Discuss / Move / Edit roles / Archive.
   #
-  # toggleRow ignores clicks inside `[data-controller~='dropdown']`, so opening
-  # the menu never also expands the row.
   # Every edit-mode row has at least "Discuss…" (edit mode already carries the
   # suggest rights a clarification needs), so the kebab is unconditional there.
   def show_row_kebab?
@@ -214,115 +213,48 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
     !pending_archive?(@capability)
   end
 
-  # Pending name / description edits the viewer may approve, as
-  # { field_label:, suggestion_id:, preview: }. Both are tier-2 ("capability").
-  def capability_edit_actions
-    return [] unless @approval_authority.can_approve?("capability")
-
-    [
-      edit_action("name", @capability_pending_edit),
-      edit_action("description", @description_pending_edit)
-    ].compact
-  end
-
-  def edit_action(field_label, descriptor)
-    return nil unless descriptor && descriptor[:suggestion_id]
-
-    { field_label: field_label,
-      suggestion_id: descriptor[:suggestion_id],
-      preview: descriptor[:suggested_value].to_s }
-  end
-
   def row_actions_kebab
-    render Components::Kit::Dropdown.new(align: :left) do |dd|
-      kebab_trigger(dd, label: "Capability actions",
-        reveal_classes: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")
-      dd.menu do
-        capability_edit_actions.each { |action| kebab_edit_items(action) }
-        kebab_discuss_item
-        kebab_move_items if show_move_actions?
-        kebab_binding_item if show_binding_action?
-        kebab_archive_item if show_archive_action?
-      end
+    render_hover_cluster(
+      scope: "row",
+      menu: {
+        label: "Capability actions",
+        kind: "capability",
+        **row_menu_data
+      }
+    )
+  end
+
+  # Everything the client-side builder needs to compose this row's menu:
+  # approvals the viewer may act on, the neighbours a move targets, and the
+  # flags for the two structural items. The capability's id and name come from
+  # the `<tr>`; the item labels and paths live in the controller (#380).
+  def row_menu_data
+    data = { levels: @merged_levels.map { |level| level[:ordinal] }.join(",") }
+    if @approval_authority.can_approve?("capability")
+      data.merge!(approval_menu_data(@capability_pending_edit, prefix: "name_"))
+      data.merge!(approval_menu_data(@description_pending_edit, prefix: "desc_"))
     end
+    if show_move_actions?
+      data[:prev] = @prev_capability_id
+      data[:next] = @next_capability_id
+    end
+    data[:bindings] = "1" if show_binding_action?
+    if show_archive_action?
+      data[:archive] = "1"
+      data[:stable] = @capability.stable_id
+      data[:mapping] = (!archive_added_in_draft?).to_s
+    end
+    data
   end
 
-  # "Discuss…" — ask about the capability. Unlike the cell trigger it names no
-  # level, so the modal offers this row's levels (plus "the capability as a
-  # whole") rather than assuming one.
-  def kebab_discuss_item
-    render_discuss_menu_item(
-      capability_id: @capability.capability_id,
-      context_label: @capability.name,
-      level_options: @merged_levels.map { |level| { ordinal: level[:ordinal], label: "L#{level[:ordinal]}" } }
-    )
-  end
-
-  # Approve (inline POST) + Reject (shared modal) for one pending field edit —
-  # the shared §12 kebab machinery (ApprovalKebabItems).
-  def kebab_edit_items(action)
-    render_approval_kebab_items(
-      framework_id: @framework_id,
-      suggestion_id: action[:suggestion_id],
-      change_label: "#{action[:field_label]} change",
-      entity_label: "capability #{action[:field_label]}",
-      preview: action[:preview]
-    )
-  end
-
-  # "Move up / Move down" — reorder within the category, relative to the
-  # movable row the viewer sees in that direction (struck pending-archive rows
-  # are skipped; a struck row itself gets no move items). Direct structural
-  # edit on the edit-structure bar. Each item POSTs via reorder-move and, on
-  # 204, dispatches org-structure:updated → matrix#refresh — fresh neighbour
-  # ids every render, like the category header chevrons.
+  # "Move up / Move down" — reorder within the category, relative to the movable
+  # row the viewer sees in that direction (struck pending-archive rows are
+  # skipped; a struck row itself gets no move items). Direct structural edit on
+  # the edit-structure bar. Each item POSTs via reorder-move and, on 204,
+  # dispatches org-structure:updated → matrix#refresh — fresh neighbour ids
+  # every render.
   def show_move_actions?
     @can_edit_structure && !@struck && (@prev_capability_id || @next_capability_id)
-  end
-
-  def kebab_move_items
-    kebab_move_item("Move up", @prev_capability_id, "before") if @prev_capability_id
-    kebab_move_item("Move down", @next_capability_id, "after") if @next_capability_id
-  end
-
-  def kebab_move_item(label, target_id, placement)
-    button(
-      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: {
-        controller: "reorder-move",
-        reorder_move_url_value: framework_capability_reorders_path(framework_id: @framework_id),
-        reorder_move_body_value: {
-          reorder: { capability_id: @capability.capability_id, target_id: target_id, placement: placement }
-        }.to_json,
-        action: "reorder-move#move"
-      }
-    ) { label }
-  end
-
-  def kebab_binding_item
-    button(
-      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "binding-editor-modal",
-        binding_editor_capability_id: @capability.capability_id,
-        binding_editor_capability_name: @capability.name
-      }
-    ) { "Edit roles…" }
-  end
-
-  def kebab_archive_item
-    button(
-      type: "button", role: "menuitem", class: kebab_item_classes("text-gray-700 dark:text-gray-200"),
-      data: {
-        action: "click->modal#open",
-        modal_target_id: "archive-capability-modal",
-        archive_capability_id: @capability.capability_id,
-        archive_capability_name: @capability.name,
-        archive_stable_id: @capability.stable_id,
-        archive_needs_mapping: (!archive_added_in_draft?).to_s
-      }
-    ) { "Archive…" }
   end
 
   def archive_added_in_draft?

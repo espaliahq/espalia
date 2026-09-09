@@ -88,7 +88,7 @@ PageLayout
     ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + "N Suggestions" toggle — edit only)
     ├── FieldEditorTemplate (edit only — the ONE inline-edit <form>, inert in a <template>)
     ├── ArchiveModal / AddCapabilityModal / AddCategoryModal / ArchiveCategoryModal (edit + can_edit_structure; data-controller="modal")
-    │   (root also carries data-controller="field-editor" in edit mode)
+    │   (root also carries data-controller="field-editor" + "explorer-menu" in edit mode)
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -443,28 +443,30 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   phlex-views.md) → `Operations::Frameworks::ArchiveIllustration`: direct
   `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
   migration mapping since illustrations carry no ratings.)*
-- **Illustration ↑/↓ reorder chevrons** — hover-revealed on each illustration
-  in the expanded row, next to the pencil/archive (edit +
-  `can_edit_structure`, list >1). Display-order only → **shape-preserving,
-  applies live**. The `reorder-list` Stimulus controller (on the per-role
+- **Illustration kebab (⋮) → Move up / Move down** — in each illustration's ⋮
+  menu in the expanded row (edit + `can_edit_structure`, list >1). Display-order
+  only → **shape-preserving, applies live**. The `reorder-list` Stimulus
+  controller (on the per-role
   `<ul>`) POSTs a neighbour-relative move (`{ illustration_id, target_id,
   placement }`) to `IllustrationReordersController`, which translates it into
   the complete ordered list for the shared
   `Operations::Frameworks::ReorderIllustrations` (web + MCP — the MCP tool
   takes the full list, no N-swap dance). On a 204 the controller moves the
   frame's DOM node in place — **no matrix refresh**, so the expanded row and
-  scroll position survive repeated moves; other viewers pick the order up on
+  scroll position survive; the menu closes with the click, so a second move
+  re-opens the kebab (the trade for one reorder treatment everywhere — §11a);
+  other viewers pick the order up on
   their next interaction (feed-live / matrix-not, Lesson 21). The Operation
   and the aggregate both refuse any list that isn't an exact permutation of
   that expectation × role's illustrations (a smuggled foreign id would
   silently renumber another expectation's list). Surfaces in the feed as
   `illustration_reordered` ("Reordered the E · Software Engineer
   illustrations", edits group).
-- **Category ↑/↓ reorder chevrons** — hover-revealed on the category header
-  next to the archive control (edit + `can_edit_structure`; each direction
+- **Category kebab (⋮) → Move up / Move down** — in the category header's ⋮
+  menu (edit + `can_edit_structure`; each direction
   only when a **visible** neighbour exists — role/search filters can hide
   categories, and a move is relative to what the viewer sees). Shape-
-  preserving, applies live. Each chevron is a `reorder-move` button POSTing
+  preserving, applies live. Each item is a `reorder-move` button POSTing
   the neighbour-relative move to `CategoryReordersController`, which
   re-inserts the category next to that neighbour within the full active order
   and dispatches `Operations::Frameworks::ReorderCategories` (web + MCP,
@@ -479,7 +481,7 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **Row-actions kebab (⋮) → Move up / Move down** — reorder a capability
   within its category (edit + `can_edit_structure`; items appear only for a
   **movable** neighbour — struck pending-archive rows are skipped and get no
-  move items themselves). Same machinery as the category chevrons: a
+  move items themselves). Same machinery as the category items: a
   `reorder-move` POST to `CapabilityReordersController` → 204 →
   `org-structure:updated` → `matrix#refresh`. The controller and
   `Operations::Frameworks::ReorderCapabilities` (web + MCP) resolve the
@@ -503,7 +505,7 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   management). Add/remove are shape-changing (auto-open a draft, deferred to
   publish); weight edits are shape-preserving (apply live). Individual tolerance
   is an advanced lever exposed via the Operation/MCP only — no UI field yet.
-- **Archive-category kebab** — hover-revealed next to the category **name**
+- **Category kebab (⋮) → Archive…** — in the same ⋮ next to the category **name**
   (not the far right of the full-width header, which scrolls off-screen on a
   matrix with many level columns), **only for an empty category** (the aggregate refuses to archive one
   that still holds active capabilities, so we don't offer it otherwise —
@@ -654,6 +656,118 @@ read model until publish** (see Hard-Won Lesson 17). `ArchiveCategory` has no
 migration mapping (categories carry no ratings) but the aggregate rejects it
 while active capabilities remain — empty the category first.
 
+### 11a. One hover cluster, one kebab machinery, one add treatment (#380)
+
+Three vocabularies the grid used to have several of. All three are also the
+edit matrix's biggest remaining payload lever after #378/#379 — the grid
+repeats each of them thousands of times.
+
+**One hover cluster.** An entity's controls appear in the fixed order
+**pencil · discuss · kebab**, and reveal *together* on hover or focus-within of
+the entity's own **row / cell / item** — never on the text span. The entity
+carries `data-hover-cluster="<scope>"` and every control in its cluster carries
+`data-cluster="<scope> inline|kebab"`; one CSS rule set in
+`app/assets/tailwind/application.css` pairs them. Scopes: `row` · `cell` ·
+`ill` · `cat` (the grid) + `tree` · `hdr` (the role pane, the level titles).
+The owner is the **row / cell / item**, never the text: the role tree's rename
+pencil hangs off the tree row that already reveals the family's edit dialog and
+the role's ⋮, so a tree row's controls appear at one moment too. The attribute
+is emitted in edit mode only — view mode has nothing to reveal.
+`Concerns::HoverCluster#render_hover_cluster` renders the cluster; a pencil that
+belongs to the entity's own Turbo Frame (a capability name, a category name, an
+expectation text — the frame re-render has to carry it, and the shared editor
+resolves its host by `closest("[data-editor-action]")`) is rendered by that
+frame via `render_inline_editor_pencil(scope:)` immediately before the cluster.
+Two things fall out:
+
+- **No interpolated Tailwind token, so Hard-Won Lesson 12 can't bite here** —
+  there is no class name to build, only a scope name.
+- **`pointer-coarse` collapses the cluster to the kebab.** `inline` controls are
+  `display: none` there and the kebab stays visible, which is why every kebab
+  also carries the cluster's **Edit…** and **Discuss…** as menu items. A
+  kebab-borne "Edit…" is not inside its editor host, so it names the host's
+  frame with `data-editor-host-frame` and `field-editor#open` resolves it
+  (documented in that controller's header). A control whose cluster has **no
+  kebab** — a level title, the org-structure renames, a pending ghost's amend
+  pencil — is marked **`standalone`** and stays visible instead: hiding it there
+  would make it unreachable on touch rather than relocating it. The invariant
+  (every `inline` control shares its cluster with a `kebab`) is pinned by
+  `explorer_menu_system_test.rb`, because `resize_to` cannot flip
+  `pointer: coarse` and no viewport test would catch a violation.
+- **A menu item that opens a modal names its focus-return target.** The item is
+  destroyed with the menu, so the dialog has no surviving invoker to hand focus
+  back to on close — every re-resolution path in `modal_controller` assumes a
+  `Kit::Dropdown`. Built items therefore carry `data-modal-focus-return="<the
+  trigger's id>"`, and closing the menu with focus still inside it returns focus
+  to the trigger (the APG menu-button contract, and what makes Tab-out land on
+  the control after the kebab).
+
+**One kebab machinery.** The grid ships a **bare trigger button** carrying only
+the ids and permission flags its menu needs;
+[`explorer_menu_controller.js`](../../app/javascript/controllers/explorer_menu_controller.js) —
+mounted ONCE on the explorer root, event-delegated — builds the menu on open
+from the trigger's dataset plus the coordinates the grid already publishes
+(`tr[data-capability-id]`, `tr[data-capability-name]`, `tr[data-category-id]`,
+`[data-reorder-item-id]`). Route templates ride once on the root
+(`data-explorer-menu-paths-value`), so no Rails path is hand-written in JS.
+Rules:
+
+- **Authority stays server-side.** A viewer who cannot approve never receives
+  the suggestion id, so the builder has no Approve/Reject to compose.
+- **Built items keep the `data-*` the real behaviour needs**, so they still
+  drive the same controllers as before — `modal#open`, `field-editor#open`,
+  `reorder-move#move`, `reorder-list#moveUp`, `suggestion-action#approve`.
+  Those now mount on the ONE open menu instead of on hundreds of closed ones.
+- **Every Move item that exists can move.** The capability and category menus
+  omit a direction with no neighbour from their server-sent ids; the
+  illustration menu reads its position **from the DOM** at open time instead,
+  because `reorder-list` moves the node in place — a server flag would be stale
+  the moment the first move landed.
+- **The menu is inserted next to its trigger** (`position: fixed`, viewport
+  clamped, flips above when there is no room below) — not at the root — so a
+  menu item can still reach its entity by `closest(…)`. It **follows its
+  trigger on scroll** rather than dismissing, and closes on Esc (focus returns
+  to the trigger), an outside click, `modal:open`, or acting on any item except
+  Approve (which swaps itself to "✓ Approved" in place).
+- **The trigger's stacking context is lifted while the menu is open.** `fixed`
+  escapes overflow clipping but not paint order (Hard-Won Lesson 31), so the
+  controller raises the nearest positioned+z-indexed ancestor to `z-index: 9`
+  for the life of the menu and restores the inline value on close.
+- **ARIA is unchanged**: `aria-haspopup` / `aria-expanded` on the trigger,
+  `role="menu"` + `role="menuitem"` on the built menu, ArrowUp/Down/Home/End
+  roving focus, and focus-within reveal so a keyboard user can reach the
+  trigger at all.
+- The **role tree's** per-role ⋮ deliberately stays on `Kit::Dropdown`
+  (`strategy: :fixed`): it is one menu per role in a scrolling pane, not
+  thousands in a grid, and it isn't in the matrix frame at all. Its shared
+  chrome lives in `Concerns::KebabChrome`.
+
+**One reorder treatment, one add treatment.** Reorder is **"Move up" / "Move
+down" kebab items everywhere** (the category and illustration ↑/↓ chevrons are
+gone). Add is one dashed ghost (`HoverCluster#render_add_affordance`,
+`.explorer-add`), **always visible** in edit mode so it is keyboard reachable
+and discoverable on touch — used by "+ Add category" (stats bar), "+ Add
+capability" (category footer), "+ Add expectation" (empty cell, previously
+hover-only) and "+ Add illustration" (expanded row). Its label is
+**left-anchored, and an add row sits in the column it adds to** — the
+add-capability row is a single sticky cell in the capability column, NOT a
+`colspan`-ed row: a centred label in a matrix-wide row lands off-screen at the
+default horizontal scroll, leaving an empty dashed box where the affordance
+should be (found by #380's visual pass).
+
+**Icons are a sprite.** `Components::Kit::IconSprite` renders one `<symbol>` set
+per page from `Kit::PageLayout`; call sites use
+`icon("pencil", class: "w-3 h-3")` → `<svg><use href="#icon-pencil"></svg>`. The
+grid drew the same handful of glyphs 758 times in the matrix and 208 times in
+every expanded row.
+
+Measured on the seeded me&u framework (edit matrix, `track=both`), against the
+post-#379 baseline: **1,222,619 → 946,778 B (−22.6%)**, `data-controller`
+mounts **111 → 0**, `Kit::Dropdown` mounts **38 → 0**, `<svg>` bytes
+**218,515 → ~103,000** (count rises to 1,040 because every cell now has a
+kebab, but each is a ~55-byte `<use>`). One expanded row (the widest
+capability): **362,526 → 228,000 B (−37%)**, controller mounts **70 → 0**.
+
 ### 12. Actionable feed entries (inline suggestion review) — the recurring pattern
 
 The activity feed is not just a narrative log — a **pending suggestion's
@@ -741,17 +855,19 @@ keyboard) — cheaper and more robust than `stopPropagation` (which would also k
 the `modal#open` listener that fires during bubbling).
 
 **Multiple surfaces, one machinery.** The same pattern drives the grid-side
-kebabs, all backed by the shared
-`Views::Frameworks::Explorer::Concerns::ApprovalKebabItems` concern:
+kebabs — every one of them a **bare trigger** that
+`explorer_menu_controller.js` turns into a menu on open (§11a), fed by
+`Views::Frameworks::Explorer::Concerns::MenuItems#approval_menu_data`:
 
-- **Matrix row-actions kebab** (`MatrixRow`, a `Kit::Dropdown`) — when a
-  capability has a pending name / description edit the viewer can approve, the
-  kebab gains **Approve / Reject «field» change** items (alongside
-  **Archive…**, offered to any suggest-rights viewer — see §11).
-- **Expectation cell kebab** (`MatrixCell`) — a hover-revealed ⋮ next to an
-  expectation carrying a pending edit, for viewers who clear the expectation
-  tier. Rendered OUTSIDE `ExpectationTextFrame` so the inline-edit frame swap
-  can't drop it (no controller re-threading needed).
+- **Matrix row-actions kebab** (`MatrixRow`) — when a capability has a pending
+  name / description edit the viewer can approve, the trigger carries that
+  suggestion's id and the menu gains **Approve / Reject «field» change** items
+  (alongside **Archive…**, offered to any suggest-rights viewer — see §11).
+- **Expectation cell kebab** (`MatrixCell`) — the ⋮ of every expectation cell in
+  edit mode; the Approve/Reject pair appears when the cell carries a pending
+  edit and the viewer clears the expectation tier. Rendered OUTSIDE
+  `ExpectationTextFrame` so the inline-edit frame swap can't drop it (no
+  controller re-threading needed).
 - **Illustration kebab** (`IllustrationFrame`) — same, inside the expanded
   row's hover control cluster, gated on the illustration tier. This one lives
   INSIDE the illustration's Turbo Frame, so `IllustrationsController#update`
@@ -781,8 +897,15 @@ matrix the same way `can_edit_structure` is: controller → `Matrix` →
 row is a separate on-demand response (Lesson 25) — controller →
 `ExpandedRow` → `IllustrationFrame` via `FrameworksController#viewer_matrix_flags`,
 the one definition all three matrix renders splat.
-`matrix#toggleRow` already ignores clicks inside
-`[data-controller~='dropdown']`, so opening a kebab never expands the row.
+`matrix#toggleRow` ignores clicks on any `button`/`form`/`[role='menu']`, so
+opening a kebab — or acting in its menu — never expands the row.
+
+**Resolution memory lives on the controller, not on a mounted kebab.** A menu
+that no longer exists can't be marked terminal, so `explorer-menu` keeps the
+set of resolved suggestion ids it has seen (from `suggestion:resolved@window`)
+and renders their Approve/Reject items disabled + "✓ Approved" when a menu is
+built *later* — the same guarantee the per-kebab `suggestion-action` mount used
+to give a menu already in the DOM (Hard-Won Lesson 23).
 
 ### 12a. Suggestions are anchored discussions — the clarification kind
 
@@ -1054,6 +1177,20 @@ Host contract (see the controller's header comment for the full list):
 place **only** for the non-explorer hosts that use `<select>` / `<input type=date>`
 rather than a textarea — the assessment-cycle settings frames. Don't add new
 explorer callers to it.
+
+### explorer_menu_controller.js (edit mode only) — ONE menu for the whole grid
+Mounted **once** on the explorer root; every ⋮ in the matrix ships as a bare
+`<button data-action="explorer-menu#toggle" data-menu="<kind>" data-menu-*="…">`
+and the menu is built on open from that dataset plus the grid's own coordinates
+(§11a). Kinds: `capability` · `expectation` · `illustration` · `category` ·
+`expectation-create` · `illustration-create`, each with a builder function in the
+controller. Owns the open/close lifecycle (Esc → focus back to trigger, outside
+click, `modal:open`, acting on an item), fixed positioning that follows the
+trigger on scroll, roving ArrowUp/Down/Home/End focus, and the **resolved-
+suggestion memory** that renders a later-built Approve/Reject pair terminal
+(§12). It builds nothing itself that behaves — items carry the `data-*` for
+`modal#open` / `field-editor#open` / `reorder-move#move` / `reorder-list#moveUp`
+/ `suggestion-action#approve`, which mount on the one open menu.
 
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
@@ -1341,11 +1478,17 @@ page-unresponsive dialog. Two rules fell out:
   instead of re-fetching the 300KB+ feed once per event.
 
 Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
-7.6 MB → 1.5 MB on the same framework) and Lesson 27 (one shared inline editor
+7.6 MB → 1.5 MB on the same framework), Lesson 29 (delegated kebabs, a CSS
+hover-cluster rule and an icon sprite — a further −22.6%) and Lesson 27 (one
+shared inline editor
 — 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
-zero). The remaining bulk is the pre-rendered kebab menus, tracked in
-[#380](https://github.com/mr-yum/growth-os/issues/380). Even so, treat
-"re-fetch the matrix" as a last resort in any new explorer feature.
+zero). The pre-rendered kebab menus went with Lesson 29, and the frame now
+carries **no Stimulus mounts at all** — so the remaining bulk is the content
+itself plus the shared editor's per-host `data-editor-*` contract (~175 KB of
+the 947 KB), which buys the zero pre-rendered forms and has no cheaper form.
+Even so, treat "re-fetch the matrix" as a last resort in any new explorer
+feature: ~950 KB of HTML per approval is still the wrong shape, and the
+surgical streams exist so it never has to happen.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
@@ -1526,6 +1669,93 @@ Consequences the editor has to live with:
   `turbo:submit-start` and match on identity — the same shape
   `frame_error_controller` already uses.
 
+### 29. Delegating a widget is only a win if the trigger stays small
+
+The first cut of the delegated kebab (#380) shipped each trigger's whole menu as
+a JSON `data-menu-items` blob — labels, URLs, modal ids, the lot. It removed
+every `Kit::Dropdown` mount as intended and made the matrix **bigger**:
+1,081,634 → 1,435,013 B. Two reasons, both worth remembering:
+
+- **An attribute is HTML-escaped, so JSON is expensive there.** Every `"` in the
+  payload renders as `&quot;` — six bytes for one. A blob with a hundred quotes
+  costs 600 bytes of escaping alone, and it repeats per trigger.
+- **A delegated widget invites more instances.** Making the cell kebab
+  unconditional (so a touch user has one control per cell — §11a) went from 38
+  triggers to 330. A per-trigger payload that was tolerable at 38 is the whole
+  budget at 330.
+
+The shape that works: the trigger carries **ids and permission flags only**, the
+controller holds the labels and composes the items, and anything already on the
+grid is read rather than repeated (`tr[data-capability-name]` feeds every cell's
+Discuss context label). Two more levers fell out once the triggers multiplied:
+
+- **Repeated chrome belongs in CSS, not in a class attribute.** The kebab's
+  utility string was ~200 bytes × 330, the pencil's ~160 × 374. `.explorer-kebab`
+  / `.explorer-cluster-btn` / `.explorer-menu-item` / `.explorer-add` are plain
+  CSS for the same reason the hover-cluster rule is: they repeat thousands of
+  times, and utilities are paid for per element.
+- **The same goes for icons.** A `<use href="#icon-pencil">` is ~55 bytes
+  whatever the glyph costs to define — 218 KB of inline paths became ~103 KB of
+  references *while the icon count grew*.
+
+Final: **1,222,619 → 946,778 B (−22.6%)** on the matrix, 111 → 0 controller
+mounts; one expanded row **362,526 → 228,000 B (−37%)**, 70 → 0 mounts.
+
+### 30. A fixed menu should follow its trigger, not dismiss on scroll
+
+`Kit::Dropdown`'s fixed strategy closes on any scroll, because a `position:
+fixed` panel otherwise detaches from the trigger it belongs to. Carrying that
+rule into the delegated menu made it flaky in a way that looked like a dropped
+click: a JS-dispatched `scrollIntoView` immediately before the trigger click
+queues a scroll event that lands *after* the menu opens, closing it in the same
+turn. Repositioning on scroll instead is both cheaper to reason about and
+better behaviour — the menu tracks its trigger, and the only close-on-scroll
+case left is the honest one (the menu's own node was replaced by a surgical
+Turbo Stream, so `isConnected` is false).
+
+The related placement rule: **insert the menu next to its trigger, not at the
+explorer root.** `position: fixed` escapes the matrix's scroll clipping either
+way, but a menu item still has to reach its entity — `field-editor#open`
+resolves its host with `closest("[data-editor-action]")` and `reorder-list`
+with `closest("[data-reorder-item-id]")`. A root-mounted menu breaks both.
+
+### 31. `position: fixed` escapes clipping, not paint order
+
+The delegated kebab menu is `position: fixed`, which was supposed to settle
+where it renders: no overflow ancestor can clip it. It still came out **under
+the row below it** — the last two items of a capability menu were painted over
+by the next row's cells.
+
+`fixed` takes an element out of flow and out of its ancestors' *clipping*, but
+it still composites inside the nearest ancestor that creates a **stacking
+context**. The matrix's sticky capability column is `position: sticky;
+z-index: 2`, so the menu — however high its own `z-50` — could only ever paint
+at z-index 2 among that column's siblings, and the equally-ranked sticky cell
+of the NEXT row wins on document order.
+
+Two fixes were available and the cheaper one is wrong here: portalling the menu
+to `document.body` removes every ancestor, but the menu's items resolve their
+entity by `closest(…)` (`field-editor#open` → `[data-editor-action]`,
+`reorder-list#moveUp` → `[data-reorder-item-id]`, and Stimulus binds
+`reorder-list` actions by ancestry at all), so a portalled menu would need every
+one of those re-plumbed. Instead the controller **lifts the offending ancestor**
+while the menu is open (`LIFTED_Z = 9`) and restores its inline `z-index` on
+close — chosen to clear the grid's body cells (z-2) and category headers (z-5)
+while staying under the sticky column headers (z-10) and corner (z-20).
+
+Two things to carry forward:
+
+- **When an overlay renders "behind" something, look for a z-indexed positioned
+  ancestor before touching the overlay's own z-index.** Raising `z-50` to
+  `z-9999` would have changed nothing.
+- **A paint-order test must probe where the overlap actually is.** The first
+  version sampled the centre of the menu's last item — which overhangs into the
+  non-positioned level columns, where the bug does not exist — and passed
+  happily against the broken build. The test now computes the intersection with
+  a later sticky cell and fails loudly if the fixture produces none, so it can
+  never pass vacuously (testing.md's "an assertion a dropped click would also
+  satisfy is not a test").
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -1650,9 +1880,9 @@ line (§9).
 | `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/expanded_row.rb` | The expanded (illustrations) row — shipped as a hidden placeholder, served loaded by `FrameworksController#expanded_row` / `#edit_expanded_row` on first expand (Hard-Won Lesson 25) |
-| `app/views/frameworks/explorer/matrix_row.rb` | Compact capability row + the `ExpandedRow` placeholder; row-actions kebab (`Kit::Dropdown`, unconditional in edit mode) — inline Approve/Reject of pending name/description edits + Discuss… + Move up/down (reorder) + Edit roles… (binding editor) + Archive (§11, §12, §12a) |
+| `app/views/frameworks/explorer/matrix_row.rb` | Compact capability row + the `ExpandedRow` placeholder; row-actions kebab trigger (unconditional in edit mode) — its menu carries inline Approve/Reject of pending name/description edits + Edit name/description… + Discuss… + Move up/down + Edit roles… + Archive (§11, §11a, §12, §12a) |
 | `app/views/frameworks/explorer/matrix_cell.rb` | Expectation text + hover "Discuss…" button (§12a) + illustration indicator + pending-count pill (≥2); renders "+ Add expectation" for an empty-but-applicable cell (any edit-mode viewer) |
-| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, ↑/↓ reorder chevrons (edit-structure holders), pencil, then the ⋮ kebab (Approve/Reject when approvable + Discuss… + Archive…) |
+| `app/views/frameworks/explorer/illustration_frame.rb` | Real illustration row in expanded cell — pending-edit decoration, then the hover cluster: pencil, then the ⋮ kebab (Approve/Reject when approvable + Edit example… + Discuss… + Move up/down + Archive…) |
 | `app/views/frameworks/explorer/pending_illustration_frame.rb` | Ghost entry for pending-create illustration suggestions (edit mode only) — pencil (amend/alternative) + Approve/Reject kebab for tier-authority viewers |
 | `app/views/frameworks/explorer/new_illustration_frame.rb` | "+" Add illustration affordance (edit mode only) |
 | `app/views/frameworks/explorer/new_expectation_frame.rb` | "+ Add expectation" affordance for an empty-but-applicable cell (any edit-mode viewer; follows the suggest/approve path) |
@@ -1670,7 +1900,12 @@ line (§9).
 | `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
-| `app/views/frameworks/explorer/concerns/approval_kebab_items.rb` | Shared §12 Approve/Reject kebab machinery — items for the row kebab, standalone kebabs for expectation cells + illustrations |
+| `app/views/frameworks/explorer/concerns/menu_items.rb` | The grid's kebab triggers — `render_menu_trigger` + `approval_menu_data`; the menu itself is built client-side (§11a, #380) |
+| `app/views/frameworks/explorer/concerns/hover_cluster.rb` | The ONE hover-cluster rule (scopes + `render_hover_cluster`) and the ONE add affordance (`render_add_affordance`) (§11a) |
+| `app/views/frameworks/explorer/concerns/kebab_chrome.rb` | Shared ⋮ chrome for the remaining `Kit::Dropdown` kebab (the role tree) |
+| `app/javascript/controllers/explorer_menu_controller.js` | ONE delegated kebab-menu controller for the whole grid (§11a) |
+| `app/components/kit/icon_sprite.rb` | The ONE `<symbol>` set, rendered per page by `Kit::PageLayout`; call sites use `icon(name, class:)` |
+| `app/components/helpers/icon_helpers.rb` | `icon("pencil", class: …)` → `<svg><use href="#icon-pencil">` |
 | `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |
 | `app/controllers/concerns/frameworks/suggestion_resolution_streams.rb` | Surgical inline approve/reject responses — Turbo Streams replacing just the affected entity's frame; nil → 204 → client full-refresh fallback (Hard-Won Lesson 23) |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
@@ -1735,8 +1970,8 @@ line (§9).
 | `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
 | `app/controllers/frameworks/category_reorders_controller.rb` | Move a category before/after a visible sibling (POST → `ReorderCategories`; 204 → `org-structure:updated` refresh) |
 | `app/controllers/frameworks/capability_reorders_controller.rb` | Move a capability before/after a movable sibling in its category (POST → `ReorderCapabilities`; graph-resolved, 204 → refresh) |
-| `app/javascript/controllers/reorder_move_controller.js` | Single-move POST button — on success dispatches `org-structure:updated` (matrix refresh) for entities that can't be DOM-moved in place |
-| `app/javascript/controllers/reorder_list_controller.js` | ↑/↓ list reordering — POSTs the neighbour-relative move, repositions the item's node on success |
+| `app/javascript/controllers/reorder_move_controller.js` | Single-move POST menu item — on success dispatches `org-structure:updated` (matrix refresh) for entities that can't be DOM-moved in place; mounts on the open menu, not on the grid |
+| `app/javascript/controllers/reorder_list_controller.js` | Move up/down within a list — POSTs the neighbour-relative move, repositions the item's node on success (the illustrations `<ul>` keeps the mount; the buttons are menu items) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
@@ -1758,6 +1993,8 @@ line (§9).
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
+| `test/components/kit/icon_sprite_test.rb` | Sprite symbols + the `icon` helper's `<use>` output |
 | `test/system/frameworks/inline_editor_system_test.rb` | Shared editor — keyboard, Save vs Propose per role, surfaced save errors, unsaved-change guard, no table reflow (both viewports) |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
 | `test/system/frameworks/suggestion_thread_system_test.rb` | Suggestion card + thread system tests (pane + detail page) |
