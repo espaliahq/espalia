@@ -6,6 +6,13 @@
 # and stores resulting events.
 #
 class Frameworks::CommandHandler
+  # The reviewer comment stamped on an approval the command handler made
+  # itself, because the author already had authority in editing mode. It is the
+  # ONE marker that distinguishes "I typed and it applied" from "someone
+  # reviewed my proposal" — {Frameworks::ActivityFeedQuery} reads it to collapse
+  # the propose → approve → apply chain into the single applied-change entry.
+  AUTO_APPROVAL_COMMENT = "Auto-approved"
+
   # @param repository [Frameworks::Repository]
   def initialize(repository: Frameworks::Repository.new)
     @repository = repository
@@ -419,7 +426,7 @@ class Frameworks::CommandHandler
                              field, suggested_value, author_id, rationale: rationale)
 
       if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
-        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+        framework.approve_suggestion(suggestion_id, author_id, comment: AUTO_APPROVAL_COMMENT)
       end
     end
   end
@@ -452,7 +459,7 @@ class Frameworks::CommandHandler
                                parent_id: parent_id, author_id: author_id, rationale: rationale)
 
       if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
-        created_entity_id = framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+        created_entity_id = framework.approve_suggestion(suggestion_id, author_id, comment: AUTO_APPROVAL_COMMENT)
       end
     end
 
@@ -478,7 +485,7 @@ class Frameworks::CommandHandler
                                author_id: author_id, rationale: rationale)
 
       if mode == :editing && framework.can_approve?(author_id, target_entity_type: target_entity_type)
-        framework.approve_suggestion(suggestion_id, author_id, comment: "Auto-approved")
+        framework.approve_suggestion(suggestion_id, author_id, comment: AUTO_APPROVAL_COMMENT)
       end
     end
   end

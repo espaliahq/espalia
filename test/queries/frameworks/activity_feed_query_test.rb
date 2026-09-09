@@ -32,9 +32,9 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
   teardown { ActsAsTenant.current_tenant = nil }
 
   # Appends a raw event to the framework stream with tenant + actor metadata.
-  def append(event_class, data:, actor_id: nil)
-    event = event_class.new(data: { framework_id: @fwid }.merge(data),
-                            metadata: { tenant_id: @tenant.id, actor_id: actor_id }.compact)
+  def append(event_class, data:, actor_id: nil, correlation_id: nil)
+    metadata = { tenant_id: @tenant.id, actor_id: actor_id, correlation_id: correlation_id }.compact
+    event = event_class.new(data: { framework_id: @fwid }.merge(data), metadata: metadata)
     Rails.configuration.event_store.append(
       event, stream_name: EventStreamNaming.framework_stream(@fwid)
     )
@@ -43,6 +43,26 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
 
   def entries(**kwargs)
     Frameworks::ActivityFeedQuery.new(framework: @framework, **kwargs).call
+  end
+
+  # The three events one auto-approved inline edit writes, all sharing the
+  # request's correlation id. Defined on the class (not inside the context) so
+  # shoulda's instance_eval'd blocks can reach it.
+  def append_auto_approved_chain(with_applied_change: true,
+                                 comment: Frameworks::CommandHandler::AUTO_APPROVAL_COMMENT)
+    append(Frameworks::Events::EditSuggested,
+      data: { suggestion_id: @auto_sid, target_entity_type: "capability",
+              target_entity_id: @cap.capability_id, field: "description",
+              suggested_value: "Sharper", author_id: @actor.id },
+      correlation_id: @correlation)
+    append(Frameworks::Events::SuggestionApproved,
+      data: { suggestion_id: @auto_sid, reviewer_id: @actor.id, comment: comment },
+      correlation_id: @correlation)
+    return unless with_applied_change
+
+    append(Frameworks::Events::CapabilityUpdated,
+      data: { capability_id: @cap.capability_id, description: "Sharper" },
+      correlation_id: @correlation)
   end
 
   context "suggestion lifecycle" do
@@ -210,6 +230,43 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
       entry = entries.find { |e| e.kind == "suggestion_edit" }
       assert_equal 2, entry.comment_count
       assert_equal "Latest word", entry.latest_comment
+    end
+  end
+
+  # One edit made in editing mode by an authority-holder writes three events —
+  # EditSuggested, an "Auto-approved" SuggestionApproved, and the *Updated that
+  # applied it. Rendered literally that is three entries for the explorer's
+  # commonest action (#381).
+  context "auto-approved edit chain" do
+    setup do
+      @auto_sid = SecureRandom.uuid_v7
+      @correlation = SecureRandom.uuid_v7
+      create(:framework_suggested_edit,
+        tenant: @tenant, framework_id: @fwid, suggestion_id: @auto_sid,
+        target_entity_type: "capability", target_entity_id: @cap.capability_id,
+        field: "description", kind: "edit", author_id: @actor.id, status: "approved")
+    end
+
+    should "collapse to the single applied-change entry" do
+      append_auto_approved_chain
+
+      kinds = entries.map(&:kind)
+      assert_equal [ "capability_updated" ], kinds
+    end
+
+    should "keep the chain when the applied change is not in the batch" do
+      # Nothing narrates the action otherwise — collapsing here would delete it
+      # from the feed rather than de-duplicate it.
+      append_auto_approved_chain(with_applied_change: false)
+
+      assert_equal [ "suggestion_approved", "suggestion_edit" ], entries.map(&:kind)
+    end
+
+    should "keep a human review visible" do
+      append_auto_approved_chain(comment: "Looks good")
+
+      assert_equal [ "capability_updated", "suggestion_approved", "suggestion_edit" ],
+                   entries.map(&:kind)
     end
   end
 
