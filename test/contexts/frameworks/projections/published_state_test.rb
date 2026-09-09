@@ -918,8 +918,13 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "X" },
         metadata: { tenant_id: @tenant.id })
 
+      # Two replaces per feed-relevant event: the pane's sync signal AND the
+      # header's pending badge, which lives outside the pane's frame and would
+      # otherwise stay stale until a full reload (#381).
       broadcasts = capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }
-      assert_equal [ [ "framework_activity", @framework_id ] ], broadcasts
+      assert_equal [ [ "framework_activity", @framework_id ] ] * 2, broadcasts
+      assert_equal [ "framework-activity-sync-signal", "framework-pending-badge" ],
+                   capture_activity_broadcast_targets { @projection.send(:broadcast_framework_activity, event) }
     end
 
     should "not broadcast for an event the feed does not surface" do
@@ -947,7 +952,7 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       broadcasts = within_tenant do
         capture_activity_broadcasts { @projection.send(:broadcast_framework_activity, event) }
       end
-      assert_equal [ [ "framework_activity", @framework_id ] ], broadcasts
+      assert_equal [ [ "framework_activity", @framework_id ] ] * 2, broadcasts
     end
 
     should "stay silent during replay" do
@@ -971,6 +976,15 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       yield
     end
     broadcasts
+  end
+
+  # Captures which DOM ids the block's broadcasts replace.
+  def capture_activity_broadcast_targets
+    targets = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*_args, **kw) { targets << kw[:target] }) do
+      yield
+    end
+    targets
   end
 
   # Emits an event through the projection.
