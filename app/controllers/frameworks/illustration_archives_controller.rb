@@ -71,7 +71,9 @@ class Frameworks::IllustrationArchivesController < ApplicationController
 
   # A *proposed* removal leaves the illustration on the grid; re-render its
   # frame so the pending decoration lands immediately (Hard-Won Lesson 16), with
-  # the discussion context re-threaded (Lesson 13).
+  # the discussion context AND any concurrent pending text edit re-threaded
+  # (Lesson 13) — dropping `pending_edit` would collapse that edit's inline diff
+  # to a bare wiggle until the expanded row is fetched again.
   def illustration_frame_streams
     [ turbo_stream.replace(
       "illustration-#{@illustration.illustration_id}",
@@ -81,6 +83,7 @@ class Frameworks::IllustrationArchivesController < ApplicationController
           framework_id: @framework.framework_id,
           mode: :edit,
           pending_edit_count: pending_illustration_proposal_count,
+          pending_edit: latest_pending_illustration_edit,
           can_reorder: policy(@framework).reorder_illustrations?,
           approval_authority: framework_suggestion_approval_authority,
           discuss_context_label: illustration_discuss_context_label(@illustration),
@@ -92,11 +95,26 @@ class Frameworks::IllustrationArchivesController < ApplicationController
   end
 
   def pending_illustration_proposal_count
+    pending_illustration_scope.proposals.count
+  end
+
+  # The latest pending text edit, so its inline diff survives the swap.
+  def latest_pending_illustration_edit
+    edit = pending_illustration_scope.edits.where(field: "description")
+      .order(created_at: :desc).first
+    return nil unless edit
+
+    { suggested_value: edit.suggested_value,
+      suggestion_id: edit.suggestion_id,
+      created_at: edit.created_at }
+  end
+
+  def pending_illustration_scope
     FrameworkState::SuggestedEdit.where(
       framework_id: @framework.framework_id,
       target_entity_type: "role_illustration",
       target_entity_id: @illustration.illustration_id,
       status: "pending"
-    ).proposals.count
+    )
   end
 end

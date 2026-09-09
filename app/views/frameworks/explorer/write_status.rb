@@ -23,7 +23,11 @@ class Views::Frameworks::Explorer::WriteStatus < Views::Base
       role: "status",
       aria_live: "polite",
       aria_atomic: "true",
-      class: "fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+      # `top-16`, not the layout flash's `top-4`: this region fires on EVERY
+      # write, and at `top-4` it sits over the 48px navbar — covering the
+      # notification bell and the account menu for four seconds each time. A
+      # once-per-navigation flash could afford that; a per-write toast cannot.
+      class: "fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none"
     ) { }
   end
 end

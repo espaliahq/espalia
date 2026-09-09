@@ -45,11 +45,11 @@ export default class extends BaseController {
         body: JSON.stringify(this.bodyValue),
         contentType: "application/json"
       })
-      // request.js renders an OK turbo-stream response (the toast) itself; a
-      // refusal answers a 422 stream it does not, so render that explicitly
-      // rather than leaving the user with no feedback at all.
+      // request.js renders the toast itself for BOTH outcomes — its perform()
+      // auto-renders a turbo-stream response on `ok || unprocessableEntity` —
+      // so rendering it again here would tear the toast down and restart its
+      // dismiss timer. All that's left to do is move the node on success.
       if (response.ok) this.#applyMove()
-      else if (response.isTurboStream) await response.renderTurboStream()
     } catch (error) {
       // Network failure — leave the DOM showing server state; don't let the
       // rejection escape the fire-and-forget action.

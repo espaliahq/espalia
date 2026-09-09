@@ -23,6 +23,10 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       handler.add_role_family(@framework_id, rfid, "Engineering")
       handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "E1", "E1")
+      # A second level, so the cell authored into below is a real (empty but
+      # applicable) matrix cell — the create response streams that cell back and
+      # deliberately streams nothing for a cell outside the current scope.
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 2, "E2", "E2")
       handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)

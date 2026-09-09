@@ -217,10 +217,15 @@ module Frameworks::WriteResponse
   # Replaces one capability × level `<td>` — the grain an authored expectation
   # changes (empty affordance → rendered expectation, or → a pending ghost).
   #
-  # @return [Array] one turbo_stream fragment, or [] when out of scope
+  # @return [Array] one turbo_stream fragment, or [] when out of scope. A cell
+  #   with no data under this scope is deliberately NOT streamed: the write's
+  #   form carries the scope read at SUBMIT time, so a role filter changed while
+  #   the editor was open can land the write in a scope where the cell is no
+  #   longer applicable — and replacing it with the un-addressable em-dash cell
+  #   would leave nothing for a later write to target.
   def cell_replace_streams(capability_id, ordinal)
     data = write_capability_data(capability_id)
-    return [] unless data
+    return [] unless data && data[:cells][ordinal]
 
     [ turbo_stream.replace(
       Views::Frameworks::Explorer::MatrixCell.cell_id(capability_id, ordinal),
