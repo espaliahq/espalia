@@ -23,11 +23,13 @@ class Views::Frameworks::Explorer::WriteStatus < Views::Base
       role: "status",
       aria_live: "polite",
       aria_atomic: "true",
-      # `top-16`, not the layout flash's `top-4`: this region fires on EVERY
-      # write, and at `top-4` it sits over the 48px navbar — covering the
-      # notification bell and the account menu for four seconds each time. A
-      # once-per-navigation flash could afford that; a per-write toast cannot.
-      class: "fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+      # Bottom-right, not the layout flash's `top-4 right-4`. This region fires
+      # on EVERY write, so unlike a once-per-navigation flash it cannot afford
+      # to cover anything the user acts on: at `top-4` it sits over the navbar's
+      # notification bell and account menu, and at `top-16` over the framework
+      # header's Publish button — for four seconds, every time. The explorer's
+      # bottom-right is the only corner holding nothing but content.
+      class: "fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
     ) { }
   end
 end
