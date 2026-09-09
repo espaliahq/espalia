@@ -519,7 +519,8 @@ class Views::Frameworks::ShowView < Views::Base
 
   def explorer_layout
     div(
-      class: "flex -mx-6 -mb-6 h-[calc(100vh-12rem)] border-t border-gray-200 dark:border-gray-700",
+      class: "relative flex -mx-6 -mb-6 h-[calc(100vh-12rem)] " \
+             "border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "matrix",
         matrix_base_path_value: matrix_base_path,
@@ -527,12 +528,27 @@ class Views::Frameworks::ShowView < Views::Base
                 "framework-search:changed@window->matrix#updateSearch " \
                 "suggestion:navigate@window->matrix#navigateToEntity " \
                 "suggestion:resolved@window->matrix#refresh " \
-                "org-structure:updated@window->matrix#refresh"
+                "org-structure:updated@window->matrix#refresh " \
+                "turbo:frame-load->matrix#frameSettled " \
+                "turbo:frame-missing->matrix#frameSettled " \
+                "turbo:fetch-request-error->matrix#frameSettled"
       }
     ) do
+      matrix_busy_bar
       left_pane
       main_pane
       right_pane_placeholder if @mode == :edit
+    end
+  end
+
+  # Indeterminate loading bar across the top of the explorer, owned by the
+  # matrix controller for the WHOLE wait — the debounce window plus the fetch.
+  # Turbo's own `busy` attribute only covers the second half, so on its own it
+  # would leave a filter change looking ignored for the first 300ms (#383).
+  def matrix_busy_bar
+    div(class: "mx-busy", hidden: true, role: "status",
+        aria: { live: "polite" }, data: { matrix_target: "busy" }) do
+      span(class: "sr-only") { "Updating the matrix\u2026" }
     end
   end
 

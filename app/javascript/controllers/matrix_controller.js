@@ -6,9 +6,17 @@
 // When urlSync is enabled (assessment views), synchronises the browser URL
 // with category/capability selection so state is shareable via links.
 //
+// Filter re-fetches (role/track selection and the free-text query) are
+// COALESCED: each axis change pushes the browser URL immediately but schedules
+// the frame fetch on a shared trailing debounce, so a burst of checkbox toggles
+// costs one request instead of N (#383). A `busy` target — a thin indeterminate
+// bar across the top of the explorer — covers the whole wait, including the
+// debounce window that Turbo's own `busy` attribute cannot see.
+//
 // <div data-controller="matrix"
 //      data-matrix-base-path-value="/frameworks/abc/matrix"
 //      data-action="tree:changed@window->matrix#updateSelection">
+//   <div data-matrix-target="busy" hidden></div>
 //   <turbo-frame id="framework-matrix" data-matrix-target="frame">
 //     ...
 //   </turbo-frame>
@@ -21,10 +29,15 @@ import { get } from "@rails/request.js"
 // is ~450 KB); past it the placeholder shows its error state with Retry.
 const EXPANDED_ROW_TIMEOUT_MS = 20_000
 
+// Trailing debounce for filter re-fetches. Long enough that a run of checkbox
+// clicks (or a role toggle followed by a search) settles into one fetch, short
+// enough that a single deliberate toggle still feels immediate.
+const FILTER_DEBOUNCE_MS = 300
+
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
-                     "scrollContainer", "col", "card"]
+                     "scrollContainer", "col", "card", "busy"]
   static values = {
     basePath: String,
     urlSync: { type: Boolean, default: false },
@@ -126,6 +139,11 @@ export default class extends BaseController {
   }
 
   disconnect() {
+    if (this._filterDebounceTimer) {
+      clearTimeout(this._filterDebounceTimer)
+      this._filterDebounceTimer = null
+      this._pendingFilterFetch = null
+    }
     if (this._frame && this._frameLoadHandler) {
       this._frame.removeEventListener("turbo:frame-load", this._frameLoadHandler)
       this._frame = null
@@ -175,7 +193,20 @@ export default class extends BaseController {
 
   updateSelection(event) {
     const { roleIds, track } = event.detail
-    this.#rebuildMatrixFrame({ roleIds, track })
+    this.#rebuildMatrixFrame({ roleIds, track, debounce: true })
+  }
+
+  // ── Busy state ──
+
+  // The frame carries Turbo's own `busy` attribute only once the fetch is in
+  // flight; the debounce window before it is invisible. Own the indicator for
+  // the whole wait instead, and clear it whichever way the fetch ends.
+  frameSettled(event) {
+    if (!this.hasFrameTarget) return
+    if (event?.target !== this.frameTarget) return
+    if (this._pendingFilterFetch) return
+
+    this.#setBusy(false)
   }
 
   // Free-text filter changed (framework-search:changed). The text query is
@@ -183,7 +214,7 @@ export default class extends BaseController {
   // in the browser URL so neither filter clobbers the other.
   updateSearch(event) {
     const { query } = event.detail || {}
-    this.#rebuildMatrixFrame({ query: query ?? "" })
+    this.#rebuildMatrixFrame({ query: query ?? "", debounce: true })
   }
 
   // Re-fetch the matrix frame with the current filter axes unchanged. Called
@@ -205,8 +236,11 @@ export default class extends BaseController {
   // Rebuilds the matrix Turbo Frame src from the three filter axes. Any axis
   // not supplied by the caller is read back from the browser URL, so a change
   // to one axis (role selection OR text query) preserves the others.
-  #rebuildMatrixFrame({ roleIds, track, query } = {}) {
+  #rebuildMatrixFrame({ roleIds, track, query, debounce = false } = {}) {
     if (!this.hasFrameTarget || !this.basePathValue) return
+    // Asked at interaction time, not at flush time: the prompt has to belong to
+    // the click that would throw the work away. Confirming clears the dirty
+    // flag, so a burst asks once.
     if (!this.#confirmDiscardOpenEditor()) return
 
     const current = new URL(window.location)
@@ -219,10 +253,43 @@ export default class extends BaseController {
     url.searchParams.set("track", resolvedTrack)
     if (resolvedQuery) url.searchParams.set("q", resolvedQuery)
 
-    this.frameTarget.src = url.toString()
-
-    // Update browser URL for shareability
+    // Update browser URL for shareability — immediate, so the address bar and
+    // the `#rebuildMatrixFrame` axis read-back never lag behind the controls.
     this.#updateBrowserUrl(resolvedRoleIds, resolvedTrack, resolvedQuery)
+
+    if (!debounce) {
+      this.#applyFrameSrc(url.toString())
+      return
+    }
+
+    // One shared timer for both filter axes, so a role toggle and a search
+    // landing in the same window produce one fetch rather than two.
+    this.#setBusy(true)
+    this._pendingFilterFetch = url.toString()
+    clearTimeout(this._filterDebounceTimer)
+    this._filterDebounceTimer = setTimeout(() => {
+      const src = this._pendingFilterFetch
+      this._pendingFilterFetch = null
+      if (src) this.#applyFrameSrc(src)
+    }, FILTER_DEBOUNCE_MS)
+  }
+
+  // Turbo no-ops when `src` is assigned its current value, so a filter round
+  // trip back to a state already rendered would leave the busy bar up forever.
+  #applyFrameSrc(src) {
+    if (this.frameTarget.getAttribute("src") === src) {
+      this.#setBusy(false)
+      return
+    }
+
+    this.#setBusy(true)
+    this.frameTarget.src = src
+  }
+
+  #setBusy(busy) {
+    if (!this.hasBusyTarget) return
+
+    this.busyTarget.hidden = !busy
   }
 
   // Re-fetching the matrix destroys any open inline editor with it. The shared
