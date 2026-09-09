@@ -113,12 +113,22 @@ module StimulusHelpers
     selector = [ scope, "button[aria-label='#{label}']" ].compact.join(" ")
     assert_selector selector, visible: :all, minimum: index + 1
     # Scroll it into view first: the menu is `position: fixed` at the trigger,
-    # so a trigger below the fold would open its menu off-screen.
-    page.execute_script(<<~JS, selector, index)
-      const trigger = document.querySelectorAll(arguments[0])[arguments[1]];
-      trigger.scrollIntoView({ block: "center" });
-      trigger.click();
+    # so a trigger below the fold would open its menu off-screen. The script
+    # returns the trigger's id, which the controller mints as it opens — so a
+    # dropped click reports nil rather than letting a menu left open by an
+    # earlier step satisfy the assertion below (testing.md: an assertion a
+    # dropped click would also satisfy is not a test).
+    opened_id = page.evaluate_script(<<~JS, selector, index)
+      (() => {
+        const trigger = document.querySelectorAll(arguments[0])[arguments[1]];
+        if (!trigger) return null;
+        trigger.scrollIntoView({ block: "center" });
+        trigger.click();
+        return trigger.getAttribute("aria-expanded") === "true" ? trigger.id : null;
+      })()
     JS
+    assert opened_id.present?, "the click on #{selector}[#{index}] did not open its menu"
+    assert_selector "##{opened_id}[aria-expanded='true']"
     assert_selector "[data-explorer-menu]", visible: true
   end
 
