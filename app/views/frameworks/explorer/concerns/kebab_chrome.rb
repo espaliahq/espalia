@@ -38,7 +38,11 @@ module Views::Frameworks::Explorer::Concerns::KebabChrome
                "inline-flex items-center justify-center " \
                "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
       ) do
-        icon("kebab")
+        # Sized here, not by a parent rule: this trigger is a `Kit::Dropdown`
+        # span, not one of the grid's `.explorer-kebab` buttons (whose glyph the
+        # button sizes — #383). One per role in the tree, so the utility costs
+        # nothing worth saving.
+        icon("kebab", class: "w-4 h-4")
       end
     end
   end
