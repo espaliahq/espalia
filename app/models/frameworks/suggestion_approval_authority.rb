@@ -65,4 +65,13 @@ class Frameworks::SuggestionApprovalAuthority
   def any?
     @tenant_admin || @tiers.value?(true)
   end
+
+  # Stable identity of this authority, for mixing into the explorer's
+  # conditional-GET key: two viewers with the same answers get the same grid,
+  # and a collaborator-role change moves the key.
+  #
+  # @return [String]
+  def cache_key
+    "saa/#{@tenant_admin ? 1 : 0}/#{@tiers.keys.sort.map { |t| @tiers[t] ? 1 : 0 }.join}"
+  end
 end

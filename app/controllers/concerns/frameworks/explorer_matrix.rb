@@ -39,6 +39,85 @@ module Frameworks::ExplorerMatrix
     framework_suggestion_approval_authority
   end
 
+  # Conditional-GET key for a matrix (or expanded-row) render, so a filter
+  # toggled back to a state the browser already holds costs a 304 instead of a
+  # re-download and re-parse of the whole grid.
+  #
+  # Every input the rendered HTML depends on is in here: the graph snapshot
+  # (structure), the pending-suggestion table (edit-mode decorations), the
+  # three filter axes, the mode, and the viewer's own permissions — plus the
+  # running release, without which a deploy that changed the markup would keep
+  # being answered from the previous release's HTML.
+  #
+  # Returns nil — no ETag, always a full render — when there is nothing
+  # dependable to key on:
+  #
+  # - no persisted graph row (test factories and AR-only frameworks build the
+  #   graph on the fly from `FrameworkState::*`, whose freshness this key does
+  #   not capture);
+  # - in development, where code reloading changes the markup without moving
+  #   any of these inputs.
+  #
+  # @param mode [Symbol] :view or :edit
+  # @param extra [Object] anything narrowing the render further (the expanded
+  #   row's capability id)
+  # @return [Array, nil]
+  def explorer_matrix_etag(mode:, extra: nil)
+    return nil if Rails.env.development?
+
+    snapshot = FrameworkExplorerGraph
+      .where(framework_id: @framework.framework_id)
+      .pick(:updated_at, :format_version)
+    return nil unless snapshot
+
+    flags = viewer_matrix_flags(mode)
+    [
+      "explorer-matrix",
+      Rails.application.config.x.release_id,
+      @framework.framework_id,
+      [ timestamp_token(snapshot.first), snapshot.last ],
+      suggestion_freshness(mode),
+      mode,
+      parse_role_ids.sort,
+      resolved_track_filter,
+      resolved_search_query,
+      flags[:current_person_id],
+      flags[:can_edit_structure],
+      flags[:approval_authority].cache_key,
+      extra
+    ]
+  end
+
+  # Freshness of the pending-suggestion decorations (wiggles, diffs, ghosts,
+  # clarification glyphs). Nil in view mode, which renders none of them.
+  #
+  # MAX(updated_at) alone would miss a row leaving the table, so the count
+  # rides along — the projection resolves rather than deletes today, but an
+  # ETag that assumes it will keep doing so is a stale grid waiting to happen.
+  #
+  # @return [Array, nil]
+  def suggestion_freshness(mode)
+    return nil unless mode == :edit
+
+    latest, count = FrameworkState::SuggestedEdit
+      .where(framework_id: @framework.framework_id)
+      .pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)"))
+
+    [ timestamp_token(latest), count ]
+  end
+
+  # Sub-second-precision token for a timestamp in a cache key.
+  #
+  # `ActiveSupport::Cache.expand_cache_key` stringifies a Time through
+  # `to_param`, which drops to WHOLE SECONDS — so two edits inside the same
+  # second produced the same key and the second one was answered with a stale
+  # 304. Nanoseconds, the way ActiveRecord's own `cache_version` does it.
+  #
+  # @return [String, nil]
+  def timestamp_token(time)
+    time&.utc&.to_fs(:nsec)
+  end
+
   # Builds the matrix data consumed by the explorer. Sources structural
   # data from the persisted {Frameworks::ExplorerGraph} snapshot; pending
   # suggestions still come from the AR suggested_edits table.

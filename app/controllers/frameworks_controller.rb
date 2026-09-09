@@ -32,6 +32,8 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id/matrix
   def matrix
     authorize @framework, :matrix?
+    return if matrix_fresh?(mode: :view)
+
     render_matrix_frame(mode: :view)
   end
 
@@ -50,6 +52,8 @@ class FrameworksController < ApplicationController
   # GET /frameworks/:id/edit/matrix
   def edit_matrix
     authorize @framework, :edit_matrix?
+    return if matrix_fresh?(mode: :edit)
+
     render_matrix_frame(mode: :edit)
   end
 
@@ -60,16 +64,37 @@ class FrameworksController < ApplicationController
   # ships only a placeholder per row — see {Views::Frameworks::Explorer::ExpandedRow}.
   def expanded_row
     authorize @framework, :matrix?
+    return if matrix_fresh?(mode: :view, extra: params.expect(:capability_id))
+
     render_expanded_row(mode: :view)
   end
 
   # GET /frameworks/:id/edit/expanded_rows/:capability_id
   def edit_expanded_row
     authorize @framework, :edit_matrix?
+    return if matrix_fresh?(mode: :edit, extra: params.expect(:capability_id))
+
     render_expanded_row(mode: :edit)
   end
 
   private
+
+  # Sets the conditional-GET ETag for a matrix render and reports whether the
+  # request was answered with a 304. Turbo frame fetches and the expanded row's
+  # request.js GET both send `If-None-Match`, so a filter toggled back to a
+  # state the browser already holds costs neither a download nor a re-parse.
+  #
+  # Deliberately BEFORE the graph load and the builder: the key is four cheap
+  # reads, the render it guards is the expensive part.
+  #
+  # @return [Boolean] true when a 304 has already been sent
+  def matrix_fresh?(mode:, extra: nil)
+    etag = explorer_matrix_etag(mode: mode, extra: extra)
+    return false unless etag
+
+    fresh_when(etag: etag)
+    performed?
+  end
 
   # Renders the full Framework Explorer shell for the given mode. Keeps
   # show/#edit symmetric — only mode and the `can_edit`/`is_admin` flags
