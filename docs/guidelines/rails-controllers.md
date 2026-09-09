@@ -114,6 +114,40 @@ def create
 end
 ```
 
+## Conditional GET on expensive reads
+
+An endpoint whose response is large and re-requested with the same inputs should
+answer a repeat with a 304. Set the ETag **before** doing the expensive work, and
+key it on everything the response depends on:
+
+```ruby
+def matrix
+  authorize @framework, :matrix?
+  return if matrix_fresh?(mode: :view)   # fresh_when + performed?
+
+  render_matrix_frame(mode: :view)
+end
+```
+
+Four rules that are easy to miss and silent when missed (learned on the
+framework explorer — see [framework-explorer.md](framework-explorer.md)
+Hard-Won Lesson 34):
+
+- **Include the running build.** A deploy changes the markup without changing
+  any data, so a key derived only from records serves the previous release's
+  HTML. `Rails.application.config.x.release_id` carries it.
+- **Timestamps go in at sub-second precision.** `ActiveSupport::Cache.expand_cache_key`
+  stringifies a `Time` to whole seconds, so two writes in the same second share
+  a key. Use `updated_at.utc.to_fs(:nsec)`.
+- **Include the viewer's permissions** when the response differs per viewer, and
+  leave `Cache-Control: private` (Rails' default for `fresh_when`) in place.
+- **Skip the ETag entirely rather than key on something you cannot see.** In
+  development, code reloading changes the markup without moving any input; a
+  record whose freshness the key does not capture is the same problem.
+
+Cover it with an integration test that sends `If-None-Match` — and land on the
+sign-in redirect first, because Rails mixes the flash into every ETag.
+
 ## Anti-patterns
 
 ```ruby

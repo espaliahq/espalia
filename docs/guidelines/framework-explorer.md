@@ -124,18 +124,67 @@ PageLayout
 
 ```
 Controller
+  → explorer_matrix_etag → fresh_when → 304?              # four cheap reads, before any of the below
   → Frameworks::ExplorerGraph.load(framework_id)          # single indexed jsonb fetch
       (falls back to .rebuild on miss / format bump)
   → MatrixDataBuilder(framework: graph, mode: :view|:edit) # in-memory filter + structure
       — view mode: filter out added_in_draft entities, drop pending-suggestion maps
       — edit mode: include everything, wire pending decorations
+      — the matrix: include_illustrations: false (nothing renders them)
+      — an expanded row: #build_capability(id), illustrations on, suggestions
+        scoped to that capability's entity ids
   → ShowView / MatrixFrameView (renders Phlex components with mode:)
     → Stimulus controllers (manage interactivity)
 ```
 
+**The read endpoints are conditional (#383).** `#matrix` / `#edit_matrix` /
+`#expanded_row` / `#edit_expanded_row` set an ETag over everything the HTML
+depends on — the graph snapshot's `updated_at`, the pending-suggestion table's
+max `updated_at` + count (edit mode only), the three filter axes, the mode, the
+viewer's own permissions, and the running release — **before** the graph load and
+the builder, so a filter toggled back to a state the browser already holds costs
+neither a download nor a re-parse. Two deliberate holes: the key is skipped in
+**development** (code reloading changes the markup without moving any input) and
+for a framework with **no persisted graph row** (an AR-only fixture rebuilds the
+graph on the fly, and the key can see nothing about those tables' freshness).
+The running release comes from `Rails.application.config.x.release_id` —
+`RENDER_GIT_COMMIT`, else a per-process token; without it a deploy that changed
+the markup would keep being answered from the previous release's HTML. Timestamps
+enter the key at **nanosecond** precision: `ActiveSupport::Cache.expand_cache_key`
+stringifies a `Time` to whole seconds, so two edits inside the same second once
+produced the same key.
+
+**Both filter axes share one debounce.** `matrix#updateSelection` and
+`#updateSearch` push the browser URL immediately (the address bar, and the
+axis read-back the *next* filter change depends on, must never lag the
+controls) but schedule the fetch on one 300ms trailing timer, so a burst of
+checkbox clicks — or a role toggle and a search landing together — costs one
+fetch. `matrix#refresh` (the §12 fallback) stays immediate. A thin
+indeterminate bar (`[data-matrix-target="busy"]`, `.mx-busy`, `role="status"`)
+covers the WHOLE wait: Turbo's own `busy` attribute only appears once a request
+is in flight, so on its own it would leave the first 300ms looking ignored.
+
 The matrix reads from the `Frameworks::ExplorerGraph` snapshot — a persistent JSON hash tree written atomically after each graph-relevant `Repository#with_framework` command, in the same transaction as its events (comment-only commits skip the rewrite; bulk writers using `Repository#batch` — seeds, imports — defer to ONE write at the end of the unit of work). The explorer no longer eager-loads the `FrameworkState::*` AR tree; that substrate remains for assessments, reporting, HRIS, and the full suggestions index. See `docs/architecture/framework-edit-mode-benchmarks.md` for why (read latency is ~6 ms p50 at Small, ~19 ms at Medium — versus hundreds of ms for AR eager-load or aggregate replay).
 
 `MatrixDataBuilder` is the single source of truth for what the matrix displays. Operates entirely in-memory on the duck-typed graph — no additional queries. Framework size stays in the 100–200 capability / 50–100 role range.
+
+**It builds only what its caller renders (#383).** Two kwargs, both load-bearing:
+
+- `include_illustrations:` — false for the compact matrix, which has rendered no
+  illustration data since the expanded row became an on-demand fetch (#378), so
+  grouping ~1,000 illustrations by role and walking two pending maps per
+  illustration was pure waste. The cell's "N examples" count and its discussion
+  total still include them, because both are rendered on the compact cell.
+- `#build_capability(id)` — the expanded row's entry point. It applies the same
+  visibility rules `#build` applies to all of them (archived category,
+  draft-hidden capability, role-family scope, text filter), so a row it returns
+  is exactly a row the matrix would have rendered, and the controller scopes the
+  pending-suggestion read to that capability's own entity ids
+  (`ExplorerMatrix#capability_suggestion_scope`).
+
+Measured on the seeded me&u framework (38 capabilities, 995 illustrations,
+11 roles × 8 levels): full build 3.63 ms with illustrations, 2.48 ms without,
+**0.17 ms** for one capability.
 
 ## Key Design Decisions
 
@@ -1212,7 +1261,15 @@ on input. Does NOT touch the matrix or URL itself — that's `matrix_controller`
 job via `updateSearch`. See §4a.
 
 ### matrix_controller.js
-- **Turbo Frame update** (builds URL from selection, sets frame src)
+- **Turbo Frame update** (builds URL from selection, sets frame src) —
+  **debounced**: both filter axes share one 300ms trailing timer, so a burst of
+  checkbox toggles is one fetch (#383). The URL push stays immediate; the
+  unsaved-editor confirm stays at interaction time (the prompt belongs to the
+  click that would discard the work, and confirming clears the dirty flag so a
+  burst asks once).
+- **Busy state** (`busy` target + `frameSettled`) — the indicator is shown from
+  the click and cleared on the frame's load / miss / fetch-error, so it covers
+  the debounce window Turbo's own `busy` attribute cannot see.
 - **Text-filter update** (`updateSearch` on `framework-search:changed`) — merges
   the query with the role/track scope read back from the browser URL, via the
   shared `#rebuildMatrixFrame`. See §4a.
@@ -1608,16 +1665,21 @@ page-unresponsive dialog. Two rules fell out:
 
 Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
 7.6 MB → 1.5 MB on the same framework), Lesson 29 (delegated kebabs, a CSS
-hover-cluster rule and an icon sprite — a further −22.6%) and Lesson 27 (one
+hover-cluster rule and an icon sprite — a further −22.6%), Lesson 27 (one
 shared inline editor
 — 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
-zero). The pre-rendered kebab menus went with Lesson 29, and the frame now
+zero) and Lesson 33 (the repeated utility strings as component classes —
+1,030,352 → 907,516 B, class-attribute bytes −52%). The pre-rendered kebab
+menus went with Lesson 29, and the frame now
 carries **no Stimulus mounts at all** — so the remaining bulk is the content
-itself plus the shared editor's per-host `data-editor-*` contract (~175 KB of
-the 947 KB), which buys the zero pre-rendered forms and has no cheaper form.
+itself plus the shared editor's per-host `data-editor-*` contract (~175 KB),
+which buys the zero pre-rendered forms and has no cheaper form. **On the wire
+it is 55 KB**, gzipped (#383), and a filter toggled back to a state the browser
+holds is a 304.
 Even so, treat "re-fetch the matrix" as a last resort in any new explorer
-feature: ~950 KB of HTML per approval is still the wrong shape, and the
-surgical streams exist so it never has to happen.
+feature: ~900 KB of HTML per approval is still the wrong shape, and the
+surgical streams exist so it never has to happen. `test/performance/
+explorer_payload_test.rb` now fails when any of this grows back.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
@@ -1909,6 +1971,61 @@ Two things that follow, both easy to get wrong:
   viewers who can add a capability, so the anchor is never missing when it is
   needed.
 
+### 33. A utility string is paid for per element; a class name once
+
+After #378/#379/#380 the single biggest attribute left in the edit-mode matrix
+frame was `class` — 234,518 B, 23% of it, with ~190 KB in **twenty** strings the
+grid repeats hundreds to thousands of times (`px-3 py-2.5 border-b border-r …`
+on 282 cells, the sticky column's two arbitrary-value shadows on ~100, the
+expectation paragraph's text tokens on 282). Moving them into component classes
+in `app/assets/tailwind/application.css` — the treatment #380 gave
+`.explorer-kebab` / `.explorer-add` — took class bytes to 111,682 (**−52%**) and
+the frame to 907,516 B.
+
+Three rules for anything added there:
+
+- **These rules sit OUTSIDE Tailwind's layers, so they beat a utility for the
+  same property.** Never pair a component class with a utility that sets a
+  property it declares — put the variant in the class, or leave the whole thing
+  a utility.
+- **Sticky-cell backgrounds deliberately stay utilities.** The opacity guard in
+  `matrix_sticky_column_system_test.rb` scans the class list it was written
+  against (Lesson 24); moving `bg-*` into CSS would make that scan report a
+  clean grid it could no longer see. The geometry and the edge shadow moved;
+  the backgrounds did not.
+- **A glyph can be sized by the control that holds it.** `.explorer-kebab > svg`
+  and friends removed `w-4 h-4` from 340 kebabs and `w-3.5 h-3.5` from 282
+  Discuss bubbles; the call sites pass no class at all (`icon("kebab")`), so
+  there is nothing to keep in step. Same trick for the inline editor's
+  positioning context: `[data-editor-action] { position: relative }` reuses the
+  host contract instead of a `relative` on 282 elements.
+
+The names are literals at their call sites, so the JIT is not involved and
+Lesson 12 (no interpolated class names) is unaffected.
+
+### 34. A cache key must move when the code does, and at sub-second precision
+
+Two things the explorer's conditional GET (#383) got wrong before it got them
+right, both silent:
+
+- **A deploy changes the markup without changing any data.** An ETag derived
+  purely from the graph snapshot and the filter axes is identical across
+  releases, so the browser keeps rendering the *previous* release's grid until
+  something in the framework happens to change. The running release is in the
+  key (`config.x.release_id` — `RENDER_GIT_COMMIT`, else a per-process token,
+  which costs a cross-worker cache miss rather than a stale hit).
+- **`ActiveSupport::Cache.expand_cache_key` stringifies a `Time` to whole
+  seconds.** Two edits inside the same second therefore produced the same key,
+  and the second one was answered with a stale 304 — caught only because a test
+  edited a capability immediately after reading the matrix. Every timestamp in
+  a key goes in at nanosecond precision (`utc.to_fs(:nsec)`), the way
+  ActiveRecord's own `cache_version` does it.
+
+A third, benign, surprise while testing it: **Rails mixes the flash into every
+ETag** (`ActionController::EtagWithFlash`), so a request still carrying a
+sign-in notice keys differently from the identical one after it. Integration
+tests must land on the redirect before measuring.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -2025,7 +2142,10 @@ line (§9).
 |------|---------|
 | `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout; hosts the write-status region + the DraftStatus slots (§11b) |
 | `app/controllers/concerns/frameworks/write_response.rb` | The ONE write-response contract — toast, draft-status and row/category/cell stream builders shared by every edit-mode write (§11b) |
-| `app/controllers/concerns/frameworks/explorer_matrix.rb` | The matrix build + per-viewer flags, shared by the read actions AND every write that streams rows back |
+| `app/controllers/concerns/frameworks/explorer_matrix.rb` | The matrix build + per-viewer flags, shared by the read actions AND every write that streams rows back; also the conditional-GET key and the expanded row's single-capability path (#383) |
+| `app/models/frameworks/collaborator_roles.rb` | One viewer's collaborator roles on one framework, loaded once and answered in memory |
+| `config/initializers/release_id.rb` | The running build's identifier, mixed into the conditional-GET keys so a deploy can't be answered with the previous release's HTML |
+| `test/performance/explorer_payload_test.rb` | Byte + structural ceilings on the matrix frame and one expanded row — runs in the default suite |
 | `app/views/frameworks/explorer/write_status.rb` | The persistent `role="status"` toast region (updated, never replaced, so it stays announceable) |
 | `app/views/frameworks/explorer/write_status_message.rb` | One transient toast — applied (`:ok`) vs refused (`:error`), auto-dismissed by the shared `flash` controller |
 | `app/views/frameworks/explorer/draft_status.rb` | The `vN draft` pill and the Publish button as two addressable slots — streamed by every shape-changing write |

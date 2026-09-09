@@ -48,6 +48,54 @@
 <div class="bg-(--brand-color)">
 ```
 
+## Component classes for repeated chrome (NON-NEGOTIABLE above ~100 elements)
+
+Utilities are paid for **once per element**. That is the right trade almost
+everywhere, and the wrong one where a string repeats across a grid: in the
+framework explorer's edit matrix, twenty utility strings accounted for ~190 KB
+of one response (`class` was 23% of the whole frame). Where a string repeats on
+the order of hundreds of elements, define a plain CSS class in
+`app/assets/tailwind/application.css` and use its name at the call site:
+
+```css
+/* app/assets/tailwind/application.css */
+.mx-cell {
+  padding: 0.625rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-gray-100);
+  border-right: 1px solid var(--color-gray-100);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mx-cell { border-color: var(--color-gray-800); }
+}
+```
+
+```ruby
+td(id: cell_id, class: "mx-cell")   # was 74 characters of utilities, x282
+```
+
+Rules:
+
+- **Use the theme's CSS variables** (`var(--color-gray-100)`, `var(--color-primary)`)
+  rather than hex literals, so a component class still tracks `@theme`.
+- **Write the `dark:` variants as a `@media (prefers-color-scheme: dark)` block** —
+  the class carries its own variants; the call site carries none.
+- **These rules sit outside Tailwind's layers, so they BEAT a utility for the
+  same property.** Never pair a component class with a utility that sets a
+  property it declares. Put the variant in the class, or leave the whole thing
+  a utility.
+- **The class name is a literal at the call site**, so Hard-Won Lesson 12 (the
+  JIT cannot see an interpolated class name) does not apply — there is nothing
+  to interpolate.
+- **Size child glyphs from the parent** (`.explorer-kebab > svg { width: 1rem }`)
+  rather than putting `w-4 h-4` on every icon.
+- **A one-off stays a utility.** This is for repetition, not for taste.
+
+Existing examples: `.explorer-kebab` / `.explorer-cluster-btn` / `.explorer-add`
+/ `.explorer-menu-item` (#380) and the `.mx-*` matrix family (#383) — see
+[framework-explorer.md](framework-explorer.md) Hard-Won Lessons 29 and 33.
+
 ## Container Queries (built-in, no plugin needed)
 
 ```html
