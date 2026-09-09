@@ -718,6 +718,11 @@ Rules:
   drive the same controllers as before — `modal#open`, `field-editor#open`,
   `reorder-move#move`, `reorder-list#moveUp`, `suggestion-action#approve`.
   Those now mount on the ONE open menu instead of on hundreds of closed ones.
+- **Every Move item that exists can move.** The capability and category menus
+  omit a direction with no neighbour from their server-sent ids; the
+  illustration menu reads its position **from the DOM** at open time instead,
+  because `reorder-list` moves the node in place — a server flag would be stale
+  the moment the first move landed.
 - **The menu is inserted next to its trigger** (`position: fixed`, viewport
   clamped, flips above when there is no room below) — not at the root — so a
   menu item can still reach its entity by `closest(…)`. It **follows its
@@ -1477,9 +1482,13 @@ Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
 hover-cluster rule and an icon sprite — a further −22.6%) and Lesson 27 (one
 shared inline editor
 — 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
-zero). The remaining bulk is the pre-rendered kebab menus, tracked in
-[#380](https://github.com/mr-yum/growth-os/issues/380). Even so, treat
-"re-fetch the matrix" as a last resort in any new explorer feature.
+zero). The pre-rendered kebab menus went with Lesson 29, and the frame now
+carries **no Stimulus mounts at all** — so the remaining bulk is the content
+itself plus the shared editor's per-host `data-editor-*` contract (~175 KB of
+the 947 KB), which buys the zero pre-rendered forms and has no cheaper form.
+Even so, treat "re-fetch the matrix" as a last resort in any new explorer
+feature: ~950 KB of HTML per approval is still the wrong shape, and the
+surgical streams exist so it never has to happen.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
