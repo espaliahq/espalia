@@ -325,9 +325,12 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
-      page.execute_script(
-        "document.querySelector(\"button[data-reject-suggestion-id='#{exp_sugg_id}']\").click()"
-      )
+      # Through the CELL kebab specifically. A bare
+      # `button[data-reject-suggestion-id=…]` lookup would now find the FEED's
+      # Reject instead — the grid's menu items don't exist until it opens — so
+      # the test would keep passing while covering the wrong surface (#380).
+      use_explorer_menu("Expectation actions", "Reject expectation change",
+                        scope: "tr[data-capability-id='#{@cap_id}']")
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Keep the published phrasing"
       click_button_with_js_fallback "Reject suggestion", expect_no_text: "Reject suggestion"
@@ -526,7 +529,14 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       assert_selector "tr[data-capability-id='#{@cap_id}']"
 
       [ exp_sugg_id, ill_sugg_id, create_sugg_id ].each do |sid|
-        # The approve URL rides the kebab items' wrapper mount, not the button.
+        # The grid's authority gate is now the TRIGGER's dataset: a viewer who
+        # can't approve never receives the suggestion id, so the client-side
+        # builder has no Approve/Reject to compose (#380). Asserting only on
+        # menu markup would pass vacuously — none of it is rendered any more.
+        assert_no_selector "[data-menu-sid='#{sid}']", visible: :all
+        assert_no_selector "[data-menu-name-sid='#{sid}']", visible: :all
+        assert_no_selector "[data-menu-desc-sid='#{sid}']", visible: :all
+        # …and nothing leaks through the feed's machinery either.
         assert_no_selector "[data-suggestion-action-approve-url-value*='#{sid}']",
                            visible: :all
         assert_no_selector "button[data-reject-suggestion-id='#{sid}']", visible: :all

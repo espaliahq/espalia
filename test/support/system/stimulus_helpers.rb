@@ -128,7 +128,12 @@ module StimulusHelpers
       })()
     JS
     assert opened_id.present?, "the click on #{selector}[#{index}] did not open its menu"
-    assert_selector "##{opened_id}[aria-expanded='true']"
+    # visible: :all — `aria-expanded` is a STATE fact, and the trigger is a
+    # hover-revealed control that Selenium reports as not shown at `opacity: 0`.
+    # It happens to be opaque while its menu is open, but leaning on that would
+    # make every caller of this helper depend on a styling rule. The visibility
+    # that matters is the menu's, asserted next.
+    assert_selector "##{opened_id}[aria-expanded='true']", visible: :all
     assert_selector "[data-explorer-menu]", visible: true
   end
 
