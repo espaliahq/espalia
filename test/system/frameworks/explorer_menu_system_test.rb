@@ -208,6 +208,26 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
       assert_equal [ "role" ], owners.uniq
     end
 
+    # The coarse-pointer rule hides `inline` controls; a cluster with no kebab
+    # would simply lose them. Every cluster is checked, not a sampled one —
+    # this is the guard for the whole vocabulary, and `resize_to` can't flip
+    # `pointer: coarse` so no viewport test would catch a violation.
+    should "give every collapsing control a kebab to collapse into" do
+      orphans = page.evaluate_script(<<~JS)
+        [...document.querySelectorAll("[data-hover-cluster]")]
+          .filter((owner) => {
+            const scope = owner.dataset.hoverCluster;
+            const has = (kind) => owner.querySelector(`[data-cluster~="${scope}"][data-cluster~="${kind}"]`);
+            return has("inline") && !has("kebab");
+          })
+          .map((owner) => owner.dataset.hoverCluster)
+      JS
+
+      assert_empty orphans,
+                   "a cluster hides its inline controls on a coarse pointer, so it must " \
+                   "carry a kebab that offers the same actions (see CONTROL_KINDS)"
+    end
+
     should "keep a cell's cluster scoped to that cell" do
       # A cell's controls must not pop when the pointer is elsewhere in the row —
       # they answer to the cell's own scope.

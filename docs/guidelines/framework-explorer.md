@@ -687,7 +687,20 @@ Two things fall out:
   also carries the cluster's **Edit…** and **Discuss…** as menu items. A
   kebab-borne "Edit…" is not inside its editor host, so it names the host's
   frame with `data-editor-host-frame` and `field-editor#open` resolves it
-  (documented in that controller's header).
+  (documented in that controller's header). A control whose cluster has **no
+  kebab** — a level title, the org-structure renames, a pending ghost's amend
+  pencil — is marked **`standalone`** and stays visible instead: hiding it there
+  would make it unreachable on touch rather than relocating it. The invariant
+  (every `inline` control shares its cluster with a `kebab`) is pinned by
+  `explorer_menu_system_test.rb`, because `resize_to` cannot flip
+  `pointer: coarse` and no viewport test would catch a violation.
+- **A menu item that opens a modal names its focus-return target.** The item is
+  destroyed with the menu, so the dialog has no surviving invoker to hand focus
+  back to on close — every re-resolution path in `modal_controller` assumes a
+  `Kit::Dropdown`. Built items therefore carry `data-modal-focus-return="<the
+  trigger's id>"`, and closing the menu with focus still inside it returns focus
+  to the trigger (the APG menu-button contract, and what makes Tab-out land on
+  the control after the kebab).
 
 **One kebab machinery.** The grid ships a **bare trigger button** carrying only
 the ids and permission flags its menu needs;

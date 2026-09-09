@@ -33,6 +33,20 @@ module Views::Frameworks::Explorer::Concerns::HoverCluster
   # header (a level title). Each needs its own CSS pair — see application.css.
   SCOPES = %w[row cell ill cat tree hdr].freeze
 
+  # How a control behaves when the cluster collapses on a coarse pointer:
+  #
+  #   kebab       the ⋮ — stays visible and carries the rest as menu items
+  #   inline      collapses into that kebab (which MUST offer the same action)
+  #   standalone  an inline control whose cluster has NO kebab, so it has
+  #               nowhere to collapse to and stays visible instead
+  #
+  # `standalone` is not a style choice: hiding a control with no fallback makes
+  # it unreachable on touch (the level-title and org-structure renames, and the
+  # pending ghosts' amend pencil, were exactly that). The invariant — every
+  # `inline` control shares its cluster with a `kebab` — is pinned by
+  # `explorer_menu_system_test.rb`.
+  CONTROL_KINDS = %w[kebab inline standalone].freeze
+
   # @param scope [String] one of {SCOPES}
   # @return [Hash] data attributes for the entity that owns the cluster
   def hover_cluster_data(scope)
@@ -40,18 +54,21 @@ module Views::Frameworks::Explorer::Concerns::HoverCluster
   end
 
   # @param scope [String]
-  # @param kind [String] "inline" (hidden on coarse pointers — the kebab carries
-  #   its action as a menu item) or "kebab" (always visible on coarse pointers)
+  # @param kind [String] one of {CONTROL_KINDS}
   # @return [Hash] data attributes for one control in the cluster
   def cluster_control_data(scope, kind = "inline")
+    unless CONTROL_KINDS.include?(kind)
+      raise ArgumentError, "unknown cluster control kind #{kind.inspect}"
+    end
+
     { cluster: "#{assert_cluster_scope(scope)} #{kind}" }
   end
 
   # Renders the cluster's controls in the fixed order pencil · discuss · kebab.
   #
   # @param scope [String]
-  # @param pencil [Hash, nil] `{ aria_label: }` — omit when the entity's own
-  #   Turbo Frame renders the pencil (see the module comment)
+  # @param pencil [Hash, nil] `{ aria_label:, collapses: }` — omit when the
+  #   entity's own Turbo Frame renders the pencil (see the module comment)
   # @param discuss [Hash, nil] the {DiscussTrigger} anchor plus `label:`
   # @param menu [Hash, nil] `{ label:, nodes: }` for {MenuItems#render_menu_trigger}
   # @return [void]

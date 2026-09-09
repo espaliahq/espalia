@@ -45,7 +45,7 @@ class Views::Frameworks::Explorer::DepartmentNameFrame < Views::Base
     div(class: "flex flex-col #{HEADER_CLASSES}", data: hover_cluster_data("tree").merge(editor_data)) do
       div(class: "flex items-center gap-1 min-w-0", data: { editor_display: true }) do
         span(class: "truncate") { @department }
-        render_inline_editor_pencil(aria_label: "Rename department", scope: "tree")
+        render_inline_editor_pencil(aria_label: "Rename department", scope: "tree", collapses: false)
       end
     end
   end

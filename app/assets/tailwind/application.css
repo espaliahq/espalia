@@ -331,9 +331,15 @@ input[type="week"] {
 
 /* Touch devices have no hover, and a permanently-visible cluster of three
  * controls per cell would crush the text it decorates — so the cluster
- * collapses to its kebab, which carries the same actions as menu items. */
+ * collapses to its kebab, which carries the same actions as menu items.
+ *
+ * `standalone` is the escape hatch for a control whose cluster has NO kebab
+ * (a level title, the org-structure renames, a pending ghost's amend pencil):
+ * hiding it there would make it unreachable on touch rather than relocating
+ * it, so it stays visible. See Concerns::HoverCluster::CONTROL_KINDS. */
 @media (pointer: coarse) {
-  [data-cluster~="kebab"] {
+  [data-cluster~="kebab"],
+  [data-cluster~="standalone"] {
     opacity: 1;
   }
 

@@ -41,11 +41,16 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   #
   # @param aria_label [String]
   # @param scope [String] hover-cluster scope ("row", "cell", "ill", "cat")
-  def render_inline_editor_pencil(aria_label:, scope:)
+  # @param collapses [Boolean] whether this cluster's kebab carries an
+  #   "Edit …" item — false where there is no kebab (a level title, the
+  #   org-structure renames, a pending ghost), so the pencil stays reachable on
+  #   a coarse pointer instead of vanishing with nothing to replace it
+  def render_inline_editor_pencil(aria_label:, scope:, collapses: true)
     button(
       type: "button",
       class: "explorer-cluster-btn",
-      data: cluster_control_data(scope).merge(action: "field-editor#open"),
+      data: cluster_control_data(scope, collapses ? "inline" : "standalone")
+              .merge(action: "field-editor#open"),
       aria_label: aria_label
     ) do
       render_inline_editor_pencil_icon

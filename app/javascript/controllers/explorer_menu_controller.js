@@ -38,6 +38,10 @@ const MENU_CLASSES =
 
 const VIEWPORT_MARGIN = 8
 
+// Only used to mint an id for a trigger that has none, so a menu item can name
+// it as the dialog's focus-return target.
+let idSeed = 0
+
 // `position: fixed` escapes overflow clipping but NOT paint order: a fixed
 // element still composites inside the nearest ancestor that creates a stacking
 // context. The matrix's sticky capability column is `z-[2]`, so a menu opened
@@ -141,6 +145,8 @@ export default class extends BaseController {
       return
     }
     if (event.key === "Tab") {
+      // close() returns focus to the trigger, so the browser's own Tab then
+      // moves to whatever follows the kebab rather than to a detached item.
       this.close()
       return
     }
@@ -182,7 +188,19 @@ export default class extends BaseController {
     const label = trigger.getAttribute("aria-label")
     if (label) menu.setAttribute("aria-label", label)
     menu.dataset.explorerMenu = trigger.dataset.menu
-    items.forEach((item) => menu.appendChild(this.#build(item)))
+    // A menu item that opens a modal is torn down with the menu, so the dialog
+    // has no surviving invoker to hand focus back to on close (its own
+    // re-resolution paths all assume a `Kit::Dropdown`). Name the trigger as
+    // the durable return target — `modal_controller` reads this.
+    const returnId = this.#ensureId(trigger)
+    items.forEach((item) => {
+      const node = this.#build(item)
+      node.querySelectorAll?.("[role='menuitem']").forEach((el) => {
+        el.dataset.modalFocusReturn = returnId
+      })
+      if (node.matches?.("[role='menuitem']")) node.dataset.modalFocusReturn = returnId
+      menu.appendChild(node)
+    })
     this.#markResolved(menu)
 
     // Inserted next to its trigger — NOT at the root — so a menu item can still
@@ -213,7 +231,24 @@ export default class extends BaseController {
     if (focusFirst) this.#focusableItems()[0]?.focus()
   }
 
+  // Focus never dies with the menu: if it is still inside when we tear down —
+  // a Tab out, an item that opened no dialog — it goes back to the trigger, the
+  // APG menu-button contract. A menu item that moved focus somewhere deliberate
+  // (the shared editor's textarea, an open dialog) keeps it.
+  #returnFocus() {
+    if (!this.menu?.contains(document.activeElement)) return
+
+    this.openTrigger?.focus()
+  }
+
+  #ensureId(element) {
+    if (!element.id) element.id = `explorer-menu-trigger-${(idSeed += 1)}`
+
+    return element.id
+  }
+
   #teardownMenu() {
+    this.#returnFocus()
     this.#restoreStackingContext()
     this.menu?.remove()
     this.menu = null

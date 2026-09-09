@@ -63,7 +63,7 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
     div(class: "inline-flex flex-col items-start gap-1", data: hover_cluster_data("hdr").merge(editor_data)) do
       div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_title
-        render_inline_editor_pencil(aria_label: "Edit level title", scope: "hdr")
+        render_inline_editor_pencil(aria_label: "Edit level title", scope: "hdr", collapses: false)
       end
     end
   end

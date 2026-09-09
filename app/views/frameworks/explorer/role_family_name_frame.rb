@@ -56,7 +56,7 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
     div(class: "flex flex-col items-start gap-1", data: editor_data) do
       div(class: "flex items-start gap-1 min-w-0", data: { editor_display: true }) do
         plain_name
-        render_inline_editor_pencil(aria_label: "Edit role family name", scope: "tree")
+        render_inline_editor_pencil(aria_label: "Edit role family name", scope: "tree", collapses: false)
       end
     end
   end

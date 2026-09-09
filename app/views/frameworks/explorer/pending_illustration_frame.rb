@@ -113,7 +113,11 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       # approve/reject pair (and is the only control on a touch device).
       render_hover_cluster(
         scope: "ill",
-        pencil: { aria_label: @is_author ? "Amend suggestion" : "Suggest alternative" },
+        # collapses: false — this cluster's kebab exists only for an approver
+        # and carries only Approve/Reject, so the pencil has nothing to
+        # collapse into and must stay reachable on touch.
+        pencil: { aria_label: @is_author ? "Amend suggestion" : "Suggest alternative",
+                  collapses: false },
         menu: (approval_trigger_data if approvable?)
       )
     end
