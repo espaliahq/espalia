@@ -83,11 +83,13 @@ User toggles role checkbox
 PageLayout
 └── div[data-controller="framework-explorer"]
     ├── framework_header
-    │   ├── back link, framework name, version badge, draft pill + "Edit mode" badge (edit only)
-    │   └── right cluster: edit-suggest toggle + mode switcher + Publish button (edit + can_publish) + settings link
-    ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + "N Suggestions" toggle — edit only)
+    │   ├── back link, framework name, version badge, DraftStatus(:badge) + "Edit mode" badge (edit only)
+    │   └── right cluster: edit-suggest toggle + mode switcher + DraftStatus(:publish) + settings link
+    ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + Activity toggle w/ PendingCountBadge — edit only)
     ├── FieldEditorTemplate (edit only — the ONE inline-edit <form>, inert in a <template>)
+    ├── WriteStatus (edit only — the ONE role="status" toast region every write streams into, §11b)
     ├── ArchiveModal / AddCapabilityModal / AddCategoryModal / ArchiveCategoryModal (edit + can_edit_structure; data-controller="modal")
+    ├── ArchiveIllustrationModal (edit only — replaced the menu's native confirm(), §11b)
     │   (root also carries data-controller="field-editor" + "explorer-menu" in edit mode)
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
@@ -95,9 +97,9 @@ PageLayout
         │       └── department groups → family groups → role checkboxes
         ├── div (main pane)
         │   └── turbo-frame#framework-matrix
-        │       └── Matrix
+        │       └── Matrix (table#framework-matrix-table)
         │           ├── MatrixHeader (sticky thead)
-        │           └── MatrixCategoryGroup (per category)
+        │           └── MatrixCategoryGroup (per category — its OWN tbody#category-group-<id>)
         │               ├── category header row (sticky)
         │               │   ├── chevron button → matrix#toggleCategory
         │               │   ├── CategoryNameFrame (edit: inline editor; view: plain name)
@@ -442,7 +444,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   (`IllustrationFrame#actions_kebab`, per the kebab-right-most rule in
   phlex-views.md) → `Operations::Frameworks::ArchiveIllustration`: direct
   `remove_role_illustration` vs `suggest_delete("role_illustration")`, no
-  migration mapping since illustrations carry no ratings.)*
+  migration mapping since illustrations carry no ratings. It opens the
+  root-mounted `archive-illustration-modal`; the native `confirm()` the menu
+  used to fire is gone — §11b.)*
 - **Illustration kebab (⋮) → Move up / Move down** — in each illustration's ⋮
   menu in the expanded row (edit + `can_edit_structure`, list >1). Display-order
   only → **shape-preserving, applies live**. The `reorder-list` Stimulus
@@ -456,8 +460,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   scroll position survive; the menu closes with the click, so a second move
   re-opens the kebab (the trade for one reorder treatment everywhere — §11a);
   other viewers pick the order up on
-  their next interaction (feed-live / matrix-not, Lesson 21). The Operation
-  and the aggregate both refuse any list that isn't an exact permutation of
+  their next interaction (feed-live / matrix-not, Lesson 21). This was the
+  first surface to move nodes rather than refresh; §11b generalises it. The
+  Operation and the aggregate both refuse any list that isn't an exact permutation of
   that expectation × role's illustrations (a smuggled foreign id would
   silently renumber another expectation's list). Surfaces in the feed as
   `illustration_reordered` ("Reordered the E · Software Engineer
@@ -470,20 +475,22 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   the neighbour-relative move to `CategoryReordersController`, which
   re-inserts the category next to that neighbour within the full active order
   and dispatches `Operations::Frameworks::ReorderCategories` (web + MCP,
-  complete-list + permutation-validated like illustrations). On 204 the
-  button dispatches `org-structure:updated` → `matrix#refresh` (a category is
-  a contiguous *block* of rows — no DOM surgery), so neighbour ids re-render
-  fresh after every move. Graph + AR read models sort categories
+  complete-list + permutation-validated like illustrations). The response is
+  the toast stream and `reorder-move` **moves the category's `<tbody>` group
+  in place** — a category is a contiguous *block* of rows, and one `<tbody>`
+  per category is exactly what makes that block a single movable node (§11b).
+  Graph + AR read models sort categories
   nil-ordinal-LAST with a stable tiebreak, so a category added after a
-  reorder lands at the end instead of jumping to the front. Feed:
+  reorder lands at the end instead of jumping to the front (which is also why
+  an added category streams onto the **end** of the table). Feed:
   `category_reordered` ("Reordered the categories", structural group,
   framework-level anchor).
 - **Row-actions kebab (⋮) → Move up / Move down** — reorder a capability
   within its category (edit + `can_edit_structure`; items appear only for a
   **movable** neighbour — struck pending-archive rows are skipped and get no
   move items themselves). Same machinery as the category items: a
-  `reorder-move` POST to `CapabilityReordersController` → 204 →
-  `org-structure:updated` → `matrix#refresh`. The controller and
+  `reorder-move` POST to `CapabilityReordersController` → toast stream → the
+  compact row and its expanded row move in place (§11b). The controller and
   `Operations::Frameworks::ReorderCapabilities` (web + MCP) resolve the
   category and its reorderable set from the **ExplorerGraph** — draft-added
   capabilities are first-class in the ordering (Lesson 17) even though they
@@ -514,7 +521,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   reason, with **no migration mapping** (categories carry no ratings).
 - **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
   draft-open only; Publish links to the publish-review page where mappings are
-  validated before the version is cut. (Draft lifecycle: see ADR-16/17.)
+  validated before the version is cut, and is the ONE edit-mode action that
+  stays a full navigation. Both are `DraftStatus` slots with stable ids, so a
+  shape-changing write streams them (§11b). (Draft lifecycle: see ADR-16/17.)
 - **"+ Add role family" / "+ Add role"** — in the left role tree (edit +
   `can_edit_structure`): "+ Add role family" at the tree foot, "+ Add role" at
   the foot of each family's role list (the parent is implied by placement — no
@@ -540,9 +549,10 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   the entry flag. Dispatches `Operations::Frameworks::AddLevel` (web + MCP) —
   **shape-changing**: the aggregate auto-opens a draft and the level is
   deferred from the published read model until publish, so the parent role
-  stays a ghost meanwhile. The submit redirects back to the edit explorer
-  (selection preserved via `tree-scope-fields`) so the draft column, the
-  draft pill, and the flash land in one render. Duplicate ordinals are blocked
+  stays a ghost meanwhile. The submit answers the toast + draft-status stream
+  and `add-level-form` then dispatches `org-structure:updated` →
+  `matrix#refresh`: a level adds a **column to every row**, the one grid
+  change no surgical stream can express (§11b). Duplicate ordinals are blocked
   at three layers: inline in the modal as you type (taken ordinals ride the
   trigger dataset), in the Operation (ParameterError → -32602 for MCP), and in
   the aggregate (serialized against the stream).
@@ -718,11 +728,15 @@ Rules:
   drive the same controllers as before — `modal#open`, `field-editor#open`,
   `reorder-move#move`, `reorder-list#moveUp`, `suggestion-action#approve`.
   Those now mount on the ONE open menu instead of on hundreds of closed ones.
-- **Every Move item that exists can move.** The capability and category menus
-  omit a direction with no neighbour from their server-sent ids; the
-  illustration menu reads its position **from the DOM** at open time instead,
-  because `reorder-list` moves the node in place — a server flag would be stale
-  the moment the first move landed.
+- **Every Move item that exists can move, and every menu reads its own
+  position from the DOM.** All three (capability, category, illustration) find
+  their neighbours at open time — capability rows by `[data-movable]` within
+  their category's `<tbody>`, categories by sibling `<tbody data-category-group>`,
+  illustrations by the `reorder-list` items — because every reorder now moves
+  the node in place (§11b) and a server-sent neighbour id is stale the moment
+  the first move lands. The capability and category menus once carried
+  server-sent prev/next ids and could afford to, only because the whole matrix
+  re-rendered after each move.
 - **The menu is inserted next to its trigger** (`position: fixed`, viewport
   clamped, flips above when there is no room below) — not at the root — so a
   menu item can still reach its entity by `closest(…)`. It **follows its
@@ -767,6 +781,84 @@ mounts **111 → 0**, `Kit::Dropdown` mounts **38 → 0**, `<svg>` bytes
 **218,515 → ~103,000** (count rises to 1,040 because every cell now has a
 kebab, but each is a ~55-byte `<use>`). One expanded row (the widest
 capability): **362,526 → 228,000 B (−37%)**, controller mounts **70 → 0**.
+
+### 11b. One write-response contract (#381)
+
+"I changed something" used to have **seven** different outcomes in edit mode:
+a silent frame swap, a Turbo Stream append, a **full page reload** with a Rails
+flash (add capability / expectation / category / level, archive capability /
+category — 7.8 MB, scroll position and every loaded expanded row gone), a
+**native `confirm()` then a full reload** (archive illustration), a DOM move,
+or a **whole-matrix re-fetch** (reorder capability / category — ~950 KB and
+seconds of client time to move two rows). Feedback ranged from a green flash on
+a page you had just lost your place in, to nothing at all.
+
+**Every edit-mode write now answers a Turbo Stream touching exactly the rows it
+changed, plus one toast.** The rules:
+
+1. **Never redirect.** `Frameworks::{Expectations,Capabilities,Categories,
+   Levels}Controller#create`, `Capability/Category/IllustrationArchivesController`
+   and both reorder controllers answer streams. **Publish is the only edit-mode
+   action that stays a full navigation** — the review page is a deliberate
+   confirmation step.
+2. **`matrix#refresh` survives for exactly two things**: the documented
+   non-surgical suggestion-resolution fallback (§12 invariant 4), and **adding
+   a level**, which adds a *column to every row* — the one grid change no
+   surgical stream can express. Everything else is a last resort (Lesson 23).
+3. **A refused write stays in the region too** — 422 + the same toast, never a
+   redirect. Turbo's `StreamObserver` claims a turbo-stream response on
+   `turbo:before-fetch-response` whatever the status, so a 422 stream is
+   processed in place exactly like a 200 one. Losing your scroll position is
+   not an acceptable price for a typo.
+4. **The copy distinguishes applied from proposed** ("Added an expectation." vs
+   "Proposed a new expectation for review.", "Archived …" vs "Proposed
+   archiving … for review."). The editing/suggesting toggle plus the viewer's
+   authority decide which happened, and nothing else on screen says so.
+5. **Confirmation is a modal, never `confirm()`.** The illustration archive was
+   the last native dialog; it now opens the root-mounted
+   `ArchiveIllustrationModal` like every other destructive action — themed,
+   focus-managed, and with somewhere to type a reason.
+
+**The addressable units.** Streams need anchors, and the grain of the anchor is
+the grain of the update:
+
+| Unit | Anchor | Written by |
+|---|---|---|
+| Capability | `capability-row-<id>` — the compact `<tr>` | add (insert) · archive (replace) |
+| Category | `category-group-<id>` — its own `<tbody>` | add (append) · archive (remove) · reorder (move) |
+| Cell | `cell-<capability_id>-<ordinal>` — the `<td>` | author an expectation |
+| Draft status | `framework-draft-badge` / `framework-publish-action` | every shape-changing write |
+| Toast | `framework-write-status` | every write |
+
+Three consequences worth stating outright:
+
+- **One `<tbody>` per category** (`MatrixCategoryGroup` renders its own) is what
+  makes a category a single addressable, movable node. Category collapse is
+  unaffected: `matrix#toggleCategory` walks siblings from the header row, which
+  now stop at the tbody boundary instead of at the next header.
+- **An archive replaces only the compact row**, never the expanded one — that
+  would discard content the user may have loaded, and the strikethrough on a
+  hidden row is cosmetic (it re-fetches fresh on its next expand).
+- **A streamed row must be built against the same scope as the grid around it.**
+  The role/track selection and the text filter ride on every write form via
+  `tree-scope-fields` (the `formdata` event, so a selection changed after the
+  modal opened still counts), and the controllers rebuild through the shared
+  `Frameworks::ExplorerMatrix` concern — the same `MatrixDataBuilder` call the
+  page itself made. A capability the current filter hides simply gets no row
+  fragment: the toast still lands and the grid catches up on the next render.
+
+**The toast** is a persistent `role="status"` live region in the shell
+(`Views::Frameworks::Explorer::WriteStatus`), which every write **updates**
+rather than replaces — a live region re-created per message is not reliably
+announced. Messages use the app's existing flash vocabulary and auto-dismiss via
+the shared `flash` controller.
+
+**Reorder moves nodes, it does not refresh.** `reorder-move` repositions the
+capability's compact + expanded rows (which must stay adjacent — the accordion
+pairs them by capability id) or the category's `<tbody>`, and the kebab's Move
+items **read their neighbours from the DOM at open time**. A server-sent
+neighbour id is stale the moment the first in-place move lands — the rule the
+illustration menu already followed (§11a), now shared by all three.
 
 ### 12. Actionable feed entries (inline suggestion review) — the recurring pattern
 
@@ -831,7 +923,9 @@ types — they inherit it for free.
    casually: the full edit-mode matrix is several MB of HTML with thousands of
    Stimulus mounts, and re-fetching it per approval froze the tab (Hard-Won
    Lesson 23). The `suggestion:resolved` detail carries `surgical: true|false`
-   so `matrix#refresh` knows whether to skip. The **feed** then reloads off
+   so `matrix#refresh` knows whether to skip. Together with adding a level,
+   this fallback is now the ONLY thing that re-fetches the matrix (§11b) —
+   every other write streams its own rows. The **feed** then reloads off
    the existing activity broadcast (`broadcast_framework_activity`,
    replay-guarded; the actor sees their own resolution) — **preserving the
    pane's scroll position** (the scroll container lives inside the reloaded
@@ -1098,6 +1192,16 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 - **Track filter** (IC / Management / Both — hides roles, updates family state)
 - **Event dispatch** (`tree:changed` with `{roleIds, track}`, bubbles to parent)
 
+### tree_scope_fields_controller.js
+Injects the current matrix scope — `roles[]`, `track` and the text filter `q`,
+read from the browser URL `matrix_controller` keeps in sync — into a form at
+submit time via the `formdata` event. Two callers, one need: the
+department-rename editor re-renders the role-tree frame and must keep the
+checkboxes checked, and **every write that answers a surgical Turbo Stream**
+must re-render its rows against the scope the grid around them was built with
+(§11b). Submit-time, not connect-time: the selection can change after the modal
+opens.
+
 ### framework_search_controller.js
 Lives on the stats-bar search box. Debounces keystrokes (250ms, `useDebounce`)
 and dispatches the window-scoped `framework-search:changed` event with the
@@ -1192,6 +1296,17 @@ suggestion memory** that renders a later-built Approve/Reject pair terminal
 `modal#open` / `field-editor#open` / `reorder-move#move` / `reorder-list#moveUp`
 / `suggestion-action#approve`, which mount on the one open menu.
 
+### reorder_move_controller.js (edit mode only)
+The Move up / Move down menu items. POSTs the neighbour-relative move, lets
+`@rails/request.js` render the response's toast stream, then **repositions the
+node(s) in place**: a capability's compact `<tr>` plus its expanded `<tr>`
+(which must stay adjacent — the accordion pairs them by capability id), or a
+category's whole `<tbody>`. It used to answer nothing but `org-structure:updated`
+→ `matrix#refresh`, re-fetching ~950 KB of matrix — and every loaded expanded
+row with it — to change the order of two rows. A 422 answers its own stream
+(request.js only auto-renders OK responses), so a refusal still reaches the
+user. See §11b.
+
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
 
@@ -1219,6 +1334,12 @@ load armed it — and the error copy is built from `subject:` + `closeable:` by
 
 ### suggestion_action_controller.js (edit mode only)
 Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).
+
+### archive_illustration_form_controller.js (edit mode only)
+Prefills the shared archive-illustration modal from the illustration kebab's
+"Archive…" item (id + a short excerpt for the confirm sentence) and clears any
+reason left over from a previous open. The modal replaced the menu's native
+`confirm()` — see §11b.
 
 ### request_clarification_form_controller.js (edit mode only)
 Backs the shared "Start a discussion" modal (§12a). On `modal:open` it self-gates on a `discuss*` dataset key, copies the anchor (capability / illustration / level) into the form's hidden fields, fills the context line, and — when the trigger supplies `discussLevelOptions` (the capability row, which names no cell) — populates and reveals the level select. On a successful submit it reads the new suggestion id from the response's `X-Suggestion-Id` header and dispatches `suggestion:open-card`, so the author lands on the discussion they just opened; with no id it falls back to `suggestion:submitted` so the feed still refreshes.
@@ -1372,9 +1493,10 @@ re-renders the ghost frame in place (errors included: a bodyless 4xx would
 blank the frame the same way, so failures re-render the frame with the
 message surfaced).
 
-### 21. Inline resolution answers a Turbo Stream or 204 — never a bare 200
+### 21. A write answers a Turbo Stream or a 204 — never a bare 200, never a redirect
 
-Two halves of the "actionable feed entry" wiring that are easy to get wrong:
+Learned on the "actionable feed entry" wiring and since generalised to every
+edit-mode write (§11b):
 
 - **A stream or a 204, never an empty 200.** A Turbo form submit (the reject
   modal) that gets a `200` with an empty body makes Turbo Drive render the
@@ -1383,6 +1505,11 @@ Two halves of the "actionable feed entry" wiring that are easy to get wrong:
   (Turbo does nothing: the modal closes via `turbo:submit-end` and the page is
   untouched). (The approve path uses `@rails/request.js`, which doesn't
   navigate regardless.)
+- **Never a redirect either.** A redirect is a full page load of a
+  multi-megabyte explorer, and it costs the user their scroll position and
+  every expanded row they had opened — for an action as small as archiving one
+  row. That applies to *failures* too: a refused write answers 422 + the toast
+  stream, not a redirect with a flash.
 - **Feed-live, matrix-not.** The feed reloads for everyone via the activity
   broadcast, but the matrix deliberately does **not** live-reload (it would flicker
   / reset scroll for other viewers mid-edit). So an inline approve must update the
@@ -1756,6 +1883,30 @@ Two things to carry forward:
   never pass vacuously (testing.md's "an assertion a dropped click would also
   satisfy is not a test").
 
+### 32. A `<template>` parses table fragments; `<div>`-wrapping them does not
+
+Turbo Streams insert their payload by cloning a `<template>`, and the HTML
+parser has an "in template" insertion mode that switches to "in table" /
+"in row" for `tbody`/`tr`/`td` — so `<tr>` and `<td>` fragments survive a
+stream verbatim. That is what lets the write-response contract (§11b) address
+the grid at its natural grain instead of re-rendering whole regions.
+
+Two things that follow, both easy to get wrong:
+
+- **The anchor has to be an element the fragment can target.** A capability
+  had no id on its compact `<tr>` and a category had no wrapper at all, so the
+  only addressable thing was the matrix frame — which is why every structural
+  write used to redirect or refresh. Giving each category its own `<tbody>`
+  costs nothing (it is valid HTML, and `matrix#toggleCategory` walks siblings,
+  which now simply stop at the tbody boundary) and turns a contiguous block of
+  rows into one node a stream can remove and a controller can move.
+- **Insert against a row that is always present.** A new capability is
+  inserted `before` its category's "+ Add capability" row rather than
+  `append`-ed to the group, because the group's last row is what "the end of
+  this category" actually means on screen. That row exists for exactly the
+  viewers who can add a capability, so the anchor is never missing when it is
+  needed.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -1776,6 +1927,10 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > removed). The feed updates live for every edit-mode viewer (incl. the actor):
 > `PublishedState#broadcast_framework_activity` nudges a per-framework Turbo
 > stream and `context_pane_controller` reloads the feed frame on the sync signal.
+> **The header's "N pending" badge rides the same broadcast** — it sits outside
+> the pane's frame, so the pane's reload could never touch it and it kept its
+> page-load number until a full reload; header and pane now agree within one
+> broadcast (`BroadcastsFrameworkActivity#broadcast_pending_count_badge`).
 > **Recency cap + load-older:** the feed reads only the most-recent
 > `ActivityFeedQuery::STREAM_READ_LIMIT` events; when more exist *at framework
 > focus*, a "Load older activity" footer appends the next (older) batch via a
@@ -1800,8 +1955,21 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > suggestion card. **Clarifications surface too** (`clarification_requested`
 > with the question as the secondary line + an authority-gated "Resolve…"
 > action, `clarification_resolved` with the note — suggestions chip,
-> cell-anchored with the level pinned; see §12a). Still deferred (note when
-> adding): reorders. The
+> cell-anchored with the level pinned; see §12a).
+>
+> **The auto-approve chain collapses.** An edit made in editing mode by someone
+> with approval authority applies immediately, but the domain records the whole
+> trail — `EditSuggested` → `SuggestionApproved` (the command handler's own
+> `Frameworks::CommandHandler::AUTO_APPROVAL_COMMENT`) → the `*Updated` that
+> applied it. Rendered literally, the explorer's commonest action produced
+> **three** entries and buried everything else, so `ActivityFeedQuery` emits
+> only the applied-change entry. It collapses **only when that entry is in the
+> batch** (same `correlation_id`): if the applied change is an event the feed
+> doesn't surface, or has scrolled past the read cap, collapsing would delete
+> the action from the feed rather than de-duplicate it. A *human* approval keeps
+> all three entries — the comment is the only thing that separates the two. The
+> events are untouched; the suggestion stays reachable from the standalone
+> index. Still deferred (note when adding): reorders. The
 > historical `Suggestions::PanelFrame` + `FocusedSuggestionsQuery` remain for the
 > standalone suggestion index, not the pane.
 
@@ -1853,7 +2021,15 @@ line (§9).
 
 | File | Purpose |
 |------|---------|
-| `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout |
+| `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout; hosts the write-status region + the DraftStatus slots (§11b) |
+| `app/controllers/concerns/frameworks/write_response.rb` | The ONE write-response contract — toast, draft-status and row/category/cell stream builders shared by every edit-mode write (§11b) |
+| `app/controllers/concerns/frameworks/explorer_matrix.rb` | The matrix build + per-viewer flags, shared by the read actions AND every write that streams rows back |
+| `app/views/frameworks/explorer/write_status.rb` | The persistent `role="status"` toast region (updated, never replaced, so it stays announceable) |
+| `app/views/frameworks/explorer/write_status_message.rb` | One transient toast — applied (`:ok`) vs refused (`:error`), auto-dismissed by the shared `flash` controller |
+| `app/views/frameworks/explorer/draft_status.rb` | The `vN draft` pill and the Publish button as two addressable slots — streamed by every shape-changing write |
+| `app/views/frameworks/explorer/pending_count_badge.rb` | The header's "N pending" badge — replaced from the `framework_activity` broadcast so it can't lag the pane |
+| `app/views/frameworks/explorer/archive_illustration_modal.rb` | Shared archive-example modal (confirm + optional reason) — replaced the menu's native `confirm()` |
+| `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
 | `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit`; hides ghost roles/families in view mode, shows them (+ "No roles yet" + the "+ Add role" / "+ Add role family" triggers) in edit mode |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
@@ -1956,6 +2132,7 @@ line (§9).
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) + `expanded_row` / `edit_expanded_row` (one capability's lazily fetched expanded row) |
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
+| `app/contexts/frameworks/projections/broadcasts_framework_activity.rb` | The shared nudge — the pane's sync signal AND the header's pending badge, so the two agree within one broadcast |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
 | `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are inline-aware — `inline=1` (feed/grid) → surgical Turbo Stream, else 204; non-inline → redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH → `SuggestEdit`, POST → `SuggestCreate` with the edit/suggest toggle) |
@@ -1970,7 +2147,7 @@ line (§9).
 | `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
 | `app/controllers/frameworks/category_reorders_controller.rb` | Move a category before/after a visible sibling (POST → `ReorderCategories`; 204 → `org-structure:updated` refresh) |
 | `app/controllers/frameworks/capability_reorders_controller.rb` | Move a capability before/after a movable sibling in its category (POST → `ReorderCapabilities`; graph-resolved, 204 → refresh) |
-| `app/javascript/controllers/reorder_move_controller.js` | Single-move POST menu item — on success dispatches `org-structure:updated` (matrix refresh) for entities that can't be DOM-moved in place; mounts on the open menu, not on the grid |
+| `app/javascript/controllers/reorder_move_controller.js` | Single-move POST menu item — renders the response's toast stream, then moves the capability's row pair / the category's `<tbody>` in place (§11b); mounts on the open menu, not on the grid |
 | `app/javascript/controllers/reorder_list_controller.js` | Move up/down within a list — POSTs the neighbour-relative move, repositions the item's node on success (the illustrations `<ul>` keeps the mount; the buttons are menu items) |
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
@@ -1994,6 +2171,8 @@ line (§9).
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
+| `test/system/frameworks/write_response_system_test.rb` | The write-response contract (§11b) — a `window` marker proves no write reloads the page; toast, in-place insert/reorder, the archive modal, both viewports |
+| `test/support/explorer_write_stream_assertions.rb` | `assert_write_toast` / `assert_turbo_stream_action` / `assert_no_navigation` for the controller tests |
 | `test/components/kit/icon_sprite_test.rb` | Sprite symbols + the `icon` helper's `<use>` output |
 | `test/system/frameworks/inline_editor_system_test.rb` | Shared editor — keyboard, Save vs Propose per role, surfaced save errors, unsaved-change guard, no table reflow (both viewports) |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |

@@ -409,6 +409,15 @@ assert_text "Aligning"
 
 **When NOT to use:** When the dialog's text/behaviour is itself under test. Then keep `accept_confirm` and pay the flake cost knowingly (or write the assertion at the integration test layer).
 
+**Better still: don't ship the dialog.** `auto_confirm` exists because
+`data-turbo-confirm` is unavoidable in places, not because it is the right
+affordance — a native `confirm()` can't be themed or focus-managed and has
+nowhere to capture a reason. The framework explorer's illustration archive was
+the last one on that surface and is now a `Kit::Modal` like every other
+destructive action there (framework-explorer.md §11b), so its test drives a real
+dialog instead. When you're adding a destructive action, reach for the modal
+first and leave `auto_confirm` to the confirms that already exist.
+
 ## Inline-Editor Form Submits — `requestSubmit()` Over Click
 
 **Submit inline-editor forms via `form.requestSubmit()` not Capybara button click.** The inline-editor pattern (illustration save, capability rename, etc.) uses a hover-revealed Save button. On slow CI the button click is silently dropped repeatedly — even `click_with_retry`'s second attempt has been observed to drop. Invoking the form's submit method synchronously via JS bypasses pointer hit-testing entirely and Turbo's submit interceptor fires every time.
