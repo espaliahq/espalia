@@ -63,9 +63,10 @@ class Frameworks::LevelsController < ApplicationController
     if editor_request?
       render_editor_frame(graph_role(attrs[:role_id], reload: true))
     else
-      # A level adds a COLUMN to every row, so this is the one write whose grid
-      # update genuinely needs the full matrix — `add-level-form` dispatches
-      # `org-structure:updated` → matrix#refresh on success. The response itself
+      # A level adds a COLUMN to every row, so this write's grid update
+      # genuinely needs the full matrix — `add-level-form` dispatches
+      # `org-structure:updated` → matrix#refresh on success, like the role /
+      # level-code edits that also change the header. The response itself
       # carries only the toast and the (now-open) draft status, so the page is
       # never navigated away and the role tree / scroll survive.
       render_write_streams(

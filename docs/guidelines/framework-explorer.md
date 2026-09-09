@@ -551,8 +551,8 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   deferred from the published read model until publish, so the parent role
   stays a ghost meanwhile. The submit answers the toast + draft-status stream
   and `add-level-form` then dispatches `org-structure:updated` →
-  `matrix#refresh`: a level adds a **column to every row**, the one grid
-  change no surgical stream can express (§11b). Duplicate ordinals are blocked
+  `matrix#refresh`: a level adds a **column to every row**, a grid change no
+  surgical stream can express (§11b). Duplicate ordinals are blocked
   at three layers: inline in the modal as you type (taken ordinals ride the
   trigger dataset), in the Operation (ParameterError → -32602 for MCP), and in
   the aggregate (serialized against the stream).
@@ -801,10 +801,11 @@ changed, plus one toast.** The rules:
    and both reorder controllers answer streams. **Publish is the only edit-mode
    action that stays a full navigation** — the review page is a deliberate
    confirmation step.
-2. **`matrix#refresh` survives for exactly two things**: the documented
-   non-surgical suggestion-resolution fallback (§12 invariant 4), and **adding
-   a level**, which adds a *column to every row* — the one grid change no
-   surgical stream can express. Everything else is a last resort (Lesson 23).
+2. **`matrix#refresh` survives for two kinds of change only**: the documented
+   non-surgical suggestion-resolution fallback (§12 invariant 4), and the
+   **org-structure edits that change the matrix HEADER** — adding a level (a
+   column on every row), and the role / level-code edits the role kebab's
+   dialogs make. Everything else is a last resort (Lesson 23).
 3. **A refused write stays in the region too** — 422 + the same toast, never a
    redirect. Turbo's `StreamObserver` claims a turbo-stream response on
    `turbo:before-fetch-response` whatever the status, so a 422 stream is
@@ -923,9 +924,10 @@ types — they inherit it for free.
    casually: the full edit-mode matrix is several MB of HTML with thousands of
    Stimulus mounts, and re-fetching it per approval froze the tab (Hard-Won
    Lesson 23). The `suggestion:resolved` detail carries `surgical: true|false`
-   so `matrix#refresh` knows whether to skip. Together with adding a level,
-   this fallback is now the ONLY thing that re-fetches the matrix (§11b) —
-   every other write streams its own rows. The **feed** then reloads off
+   so `matrix#refresh` knows whether to skip. This fallback and the
+   header-changing org-structure edits are now the ONLY things that re-fetch
+   the matrix (§11b) — every other write streams its own rows. The **feed**
+   then reloads off
    the existing activity broadcast (`broadcast_framework_activity`,
    replay-guarded; the actor sees their own resolution) — **preserving the
    pane's scroll position** (the scroll container lives inside the reloaded

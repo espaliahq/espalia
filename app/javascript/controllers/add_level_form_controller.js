@@ -54,10 +54,11 @@ export default class extends Controller {
     if (this.hasOrdinalTarget) this.ordinalTarget.focus()
   }
 
-  // A new level adds a COLUMN to every matrix row — the one edit-mode write
-  // whose grid update genuinely needs the whole frame, so it keeps the
-  // documented `org-structure:updated` → matrix#refresh path. The response
-  // itself is a Turbo Stream (toast + draft status), so nothing navigates.
+  // A new level adds a COLUMN to every matrix row, so this write's grid update
+  // genuinely needs the whole frame — it keeps the documented
+  // `org-structure:updated` → matrix#refresh path, like the role / level-code
+  // edits that also change the header. The response itself is a Turbo Stream
+  // (toast + draft status), so nothing navigates.
   submitted(event) {
     if (!event.detail?.success) return
 
