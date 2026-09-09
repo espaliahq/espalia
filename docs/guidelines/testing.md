@@ -319,7 +319,9 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
 | `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector (the row's content loads on demand — assert on it, not on the row) |
-| `start_inline_edit(container)` | inline-editor | Opens an inline editor via its pencil, returns the revealed form |
+| `start_inline_edit(container)` | field-editor | Opens the explorer's shared inline editor via its pencil, returns the cloned form |
+| `submit_inline_edit(form, with:)` | field-editor | Sets the editor's textarea via JS and `requestSubmit()`s it |
+| `cancel_inline_edit(form)` | field-editor | Cancels an open editor via its Cancel button |
 | `click_rating_frequency(cell_selector, freq)` | (rating cell) | Clicks a frequency button, retries until ring-1 lands |
 
 ```ruby
@@ -406,19 +408,24 @@ assert_text "Aligning"
 
 ## Inline-Editor Form Submits — `requestSubmit()` Over Click
 
-**Submit inline-editor forms via `form.requestSubmit()` not Capybara button click.** The inline-editor pattern (illustration save, capability rename, etc.) uses a hover-revealed Save button. On slow CI the button click is silently dropped repeatedly — even `click_with_retry`'s second attempt has been observed to drop. Invoking the form's submit method synchronously via JS bypasses pointer hit-testing entirely and Turbo's submit interceptor fires every time:
+**Submit inline-editor forms via `form.requestSubmit()` not Capybara button click.** The inline-editor pattern (illustration save, capability rename, etc.) uses a hover-revealed Save button. On slow CI the button click is silently dropped repeatedly — even `click_with_retry`'s second attempt has been observed to drop. Invoking the form's submit method synchronously via JS bypasses pointer hit-testing entirely and Turbo's submit interceptor fires every time.
+
+**In the framework explorer, go through the two helpers rather than hand-rolling it.** There is now ONE editor for the whole explorer — the form is cloned from a `<template>` on the root when a pencil is clicked, so there is nothing to reveal by toggling classes and no per-entity `<form>` to `querySelector` before the click:
 
 ```ruby
-# WRONG — pointer click can be dropped, retry uses same mechanism
-ill_li.find("button[type='submit']", match: :first).click
-assert_text "Proactively seeks guidance"
+# WRONG — nothing to un-hide; these targets no longer exist
+page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", li)
 
-# CORRECT — synchronous form submit via JS
-page.execute_script("arguments[0].querySelector('form').requestSubmit();", ill_li)
-assert_text "Proactively seeks guidance"
+# CORRECT — open via the pencil, then set + submit through the helpers
+form = start_inline_edit(li)                       # returns the cloned [data-editor-form]
+submit_inline_edit(form, with: "New illustration text")
+assert_text "New illustration text"
+
+# CORRECT — abandoning an edit
+cancel_inline_edit(form)
 ```
 
-This is the same primitive the suite already uses for the inline-editor display↔form toggle.
+The editor's own contract is `[data-editor-action]` on the host, `[data-editor-display]` on the read-mode element, `[data-editor-input]` / `[data-editor-submit]` inside the cloned form — assert on those, never on `data-controller="inline-editor"` (which now belongs only to the assessment-cycle settings frames).
 
 ## Typing Drops Characters Too — `js_fill_in` for Assertion-Critical Values
 

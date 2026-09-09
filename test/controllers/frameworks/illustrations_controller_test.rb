@@ -228,17 +228,30 @@ class Frameworks::IllustrationsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "re-render the frame with an inline error on a blank save" do
+      sign_in @user
+      patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),
+            params: { illustration: { description: "" } }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "illustration-#{@ill_id}"
+      assert_includes response.body, "Couldn\u2019t save:"
+      assert_includes response.body, "data-editor-error"
+    end
+
     should "include the pencil affordance in the response so re-editing stays possible" do
       sign_in @user
       patch framework_illustration_path(framework_id: @framework_id, id: @ill_id),
             params: { illustration: { description: "First edit" } }
 
       assert_response :success
-      # Pencil button has data-action="inline-editor#startEdit" — if mode:
-      # is not passed as :edit the button is dropped and subsequent edits
-      # become impossible. Caught a regression in the inline-editor refactor.
-      assert_includes response.body, "inline-editor#startEdit",
+      # Pencil button has data-action="field-editor#open" — if mode: is not
+      # passed as :edit the button (and the data-editor-* host the shared editor
+      # reads) are dropped and subsequent edits become impossible.
+      assert_includes response.body, "field-editor#open",
                       "response must retain the edit affordance for the next click"
+      assert_includes response.body, "data-editor-action",
+                      "response must retain the shared editor's host data"
     end
 
     should "create 3 events (EditSuggested + SuggestionApproved + RoleIllustrationUpdated)" do

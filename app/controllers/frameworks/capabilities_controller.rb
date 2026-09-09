@@ -40,10 +40,12 @@ class Frameworks::CapabilitiesController < ApplicationController
   # inline editor submitted), routed through suggest_edit so audit + approval
   # rules are consistent. The turbo-frame response re-renders the matching
   # frame (name or description).
+  # A rejected save re-renders the frame with the message + the attempted value
+  # (422) instead of answering bodyless, which Turbo ignores (Hard-Won Lesson 26).
   def update
     authorize @framework, :suggest_edit?
     field, value = edited_field
-    return head(:unprocessable_content) unless field
+    return render_save_error(field || "name", "the text can\u2019t be blank", value) if value.blank?
 
     Operations::Frameworks::SuggestEdit.call(
       context: pundit_user,
@@ -56,36 +58,42 @@ class Frameworks::CapabilitiesController < ApplicationController
 
     render frame_for(field), layout: false
   rescue ActiveRecord::RecordNotFound
-    head :not_found
-  rescue Operations::Base::ParameterError, RuntimeError
-    head :unprocessable_content
+    render_save_error(field, "this capability no longer exists \u2014 reload the page", value)
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    render_save_error(field, e.message, value)
   end
 
   private
 
-  # The single field the inline editor submitted. Blank values are rejected
-  # for both fields — the SuggestedEdit read model requires a suggested_value,
-  # so a blank submission can't become a suggestion. Returns [field, value] or
-  # [nil, nil].
+  def render_save_error(field, message, attempted_value)
+    render frame_for(field, error: message, attempted_value: attempted_value),
+           layout: false, status: :unprocessable_content
+  end
+
+  # The single field the inline editor submitted, with its raw value. Blank
+  # values are rejected by the caller — the SuggestedEdit read model requires a
+  # suggested_value, so a blank submission can't become a suggestion.
+  # Returns [field, value]; field is nil when neither key was sent.
   def edited_field
     permitted = params.expect(capability: [ :name, :description ])
     if permitted.key?(:name)
-      permitted[:name].blank? ? [ nil, nil ] : [ "name", permitted[:name] ]
+      [ "name", permitted[:name] ]
     elsif permitted.key?(:description)
-      permitted[:description].blank? ? [ nil, nil ] : [ "description", permitted[:description] ]
+      [ "description", permitted[:description] ]
     else
       [ nil, nil ]
     end
   end
 
-  def frame_for(field)
+  def frame_for(field, error: nil, attempted_value: nil)
     # Re-resolve from a fresh graph — an auto-approved edit rewrote the
     # snapshot; in suggesting mode the value is unchanged and the pending
     # decoration carries the diff.
     common = {
       capability: graph_capability(@capability.capability_id, reload: true) || @capability,
       framework_id: @framework.framework_id, mode: :edit,
-      pending_edit_count: pending_count_for(field), pending_edit: latest_pending_edit_for(field)
+      pending_edit_count: pending_count_for(field), pending_edit: latest_pending_edit_for(field),
+      error: error, attempted_value: attempted_value
     }
     if field == "description"
       Views::Frameworks::Explorer::CapabilityDescriptionFrame.new(**common)

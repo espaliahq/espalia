@@ -25,14 +25,19 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   #   name renders as an inline diff instead of the plain value.
   # @param search_query [String, nil] active text filter — match terms are
   #   highlighted in the name (skipped when a pending-edit diff is shown).
+  # @param error [String, nil] a rejected inline save — rendered as an inline
+  #   message; the shared editor re-opens here with the attempted value
+  # @param attempted_value [String, nil] the value the rejected save carried
   def initialize(capability:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil,
-                 search_query: nil)
+                 search_query: nil, error: nil, attempted_value: nil)
     @capability = capability
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
     @search_query = search_query
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -65,20 +70,28 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine inline-flex items-start gap-1",
-        data: { controller: "inline-editor" }) do
-      div(class: "flex items-start gap-1",
-          data: { inline_editor_target: "display" }) do
+    # flex-col: the shared editor is appended after the display element, and a
+    # rejected save renders its message above it. Visually identical to a row
+    # while only the display child is present.
+    div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
+      render_field_editor_error(@error)
+      div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_name
         render_inline_editor_pencil(aria_label: "Edit capability name")
       end
-      render_inline_editor_form(
-        action: framework_capability_path(framework_id: @framework_id, id: @capability.capability_id),
-        field_name: "capability[name]",
-        current_value: inline_editor_value(@capability.name, @pending_edit),
-        rows: 2
-      )
     end
+  end
+
+  def editor_data
+    field_editor_data(
+      action: framework_capability_path(framework_id: @framework_id, id: @capability.capability_id),
+      field: "capability[name]",
+      value: @error ? @attempted_value.to_s : inline_editor_value(@capability.name, @pending_edit),
+      label: "Capability name",
+      entity: "capability",
+      rows: 2,
+      error: @error
+    )
   end
 
   def decoration

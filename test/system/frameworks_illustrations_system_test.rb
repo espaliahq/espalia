@@ -61,21 +61,10 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       assert_text "Proposes alternatives when blocked"
 
       ghost = find("turbo-frame[id='pending-suggestion-#{sid}']")
-      # Toggle the display/form classes directly (the file's established
-      # primitive) — JS-clicking the pencil races Stimulus connecting the
-      # inline-editor controller on starved CI.
-      page.execute_script(<<~JS, ghost)
-        const g = arguments[0]
-        g.querySelector("[data-inline-editor-target='display']").classList.add("hidden")
-        g.querySelector("[data-inline-editor-target='form']").classList.remove("hidden")
-      JS
-      box = ghost.find("textarea[name='suggestion[suggested_value]']", visible: true)
-      page.execute_script(<<~JS, box, "Proposes alternative solutions when blocked!")
-        const [el, value] = [arguments[0], arguments[1]]
-        el.value = value
-        el.dispatchEvent(new Event("input", { bubbles: true }))
-        el.closest("form").requestSubmit()
-      JS
+      form = start_inline_edit(ghost)
+      assert_equal "suggestion[suggested_value]",
+                   form.find("[data-editor-input]", visible: :all)[:name]
+      submit_inline_edit(form, with: "Proposes alternative solutions when blocked!")
 
       # The frame swaps in place with the amended value — before the fix
       # this rendered Turbo's "Content missing" instead.
@@ -104,33 +93,11 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
-      # The inline-editor controller is on each illustration li.
-      # Trigger startEdit via JS (simulates hover + click on the hidden edit button)
-      ill_li = find("li[data-controller='inline-editor']", match: :first)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", ill_li)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li)
-
-      # Set the textarea value via JS rather than Capybara's fill_in —
-      # Selenium has been observed dropping characters on slow CI runners
-      # when typing into rapidly-rendered fields. JS assignment is atomic.
-      page.execute_script(<<~JS, ill_li, "Proactively seeks guidance and asks clarifying questions")
-        const li = arguments[0];
-        const ta = li.querySelector("textarea[name='illustration[description]']");
-        ta.value = arguments[1];
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.dispatchEvent(new Event("change", { bubbles: true }));
-      JS
-
-      # Submit via the form's requestSubmit() rather than a Capybara button
-      # click — on slow CI runners the button click is silently dropped, but
-      # invoking the form's submit method synchronously bypasses Selenium's
-      # pointer hit-testing entirely and the data-turbo-stream response is
-      # guaranteed to fire. Target the edit form specifically — the li now also
-      # carries the hover-revealed archive form, so a bare querySelector("form")
-      # would submit that instead and trip its confirm dialog.
-      page.execute_script(
-        "arguments[0].querySelector('[data-inline-editor-target=\"form\"]').requestSubmit();", ill_li
-      )
+      # One shared editor for the whole explorer — the helper JS-dispatches the
+      # pencil and returns the cloned form (testing.md, inline-editor rule).
+      ill_li = find("li[data-editor-action*='/illustrations/']", match: :first)
+      form = start_inline_edit(ill_li)
+      submit_inline_edit(form, with: "Proactively seeks guidance and asks clarifying questions")
 
       assert_text "Proactively seeks guidance and asks clarifying questions"
       assert_no_text "Seeks guidance from tech lead"
@@ -143,16 +110,12 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
-      ill_li = find("li[data-controller='inline-editor']", match: :first)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", ill_li)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", ill_li)
+      ill_li = find("li[data-editor-action*='/illustrations/']", match: :first)
+      form = start_inline_edit(ill_li)
+      js_fill_in form.find("[data-editor-input]"), with: "This should not be saved"
 
-      textarea = ill_li.find("textarea[name='illustration[description]']")
-      js_fill_in textarea, with: "This should not be saved"
-
-      page.execute_script(
-        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", ill_li
-      )
+      # The helper asserts the editor is gone and the display is back.
+      cancel_inline_edit(form)
 
       # Edit form hidden, display mode restored — original text visible
       assert_text "Seeks guidance from tech lead"
@@ -169,7 +132,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       # The hover-revealed archive control posts a tiny confirm-guarded form.
       # Stub the confirm to true and submit it synchronously (the archive form
       # is the one in the display region — not the inline-editor edit form).
-      ill_li = find("li[data-controller='inline-editor']", match: :first)
+      ill_li = find("li[data-editor-action*='/illustrations/']", match: :first)
       auto_confirm do
         page.execute_script(
           "arguments[0].querySelector(\"form[action*='illustration_archives']\").requestSubmit();", ill_li
@@ -177,9 +140,12 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       end
 
       # Redirected back to edit mode; the removal applied live (illustrations
-      # carry no ratings, so it is shape-preserving). Re-expanding the row
-      # proves the illustration is gone, not merely collapsed.
-      assert_text "Strategic Thinking"
+      # carry no ratings, so it is shape-preserving). Sync on the flash — the
+      # only text that exists solely on the far side of the redirect (the
+      # capability name is on both pages, so waiting on it re-expands the row
+      # about to be replaced, and the fetch then races the navigation).
+      assert_text "Archived the illustration."
+      # Re-expanding the row proves the illustration is gone, not merely collapsed.
       expand_matrix_row("tr[data-capability-id]")
       assert_no_text "Seeks guidance from tech lead"
     end
@@ -223,16 +189,9 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
 
-      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
-        .find("div[data-controller='inline-editor']")
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", add_div)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
-
-      textarea = add_div.find("textarea[name='illustration[description]']")
-      js_fill_in textarea, with: "Drives cross-functional alignment"
-
-      # Submit via requestSubmit (see comment above for rationale)
-      page.execute_script("arguments[0].querySelector('form').requestSubmit();", add_div)
+      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}'] [data-editor-action]")
+      form = start_inline_edit(add_div)
+      submit_inline_edit(form, with: "Drives cross-functional alignment")
 
       # Wait for the Turbo Stream response to fully insert the new illustration.
       # On slow CI runners assert_text can read the page mid-render and only
@@ -250,17 +209,11 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
 
-      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}']")
-        .find("div[data-controller='inline-editor']")
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"display\"]').classList.add('hidden')", add_div)
-      page.execute_script("arguments[0].querySelector('[data-inline-editor-target=\"form\"]').classList.remove('hidden')", add_div)
+      add_div = find("turbo-frame[id='new-illustration-#{@eid}-#{@rid2}'] [data-editor-action]")
+      form = start_inline_edit(add_div)
+      js_fill_in form.find("[data-editor-input]"), with: "Should not be saved"
 
-      textarea = add_div.find("textarea[name='illustration[description]']")
-      js_fill_in textarea, with: "Should not be saved"
-
-      page.execute_script(
-        "arguments[0].querySelector(\"button[data-action='inline-editor#cancel']\").click();", add_div
-      )
+      cancel_inline_edit(form)
 
       assert_no_text "Should not be saved"
       assert_selector "button", text: "Add illustration"

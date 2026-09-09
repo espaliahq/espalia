@@ -2,6 +2,7 @@
 
 class FrameworksController < ApplicationController
   include Frameworks::SuggestionAuthority
+  include FrameworkEditMode
 
   before_action :set_framework, only: [ :show, :matrix, :edit, :edit_matrix, :expanded_row, :edit_expanded_row ]
 
@@ -97,6 +98,9 @@ class FrameworksController < ApplicationController
       archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
       roles: can_edit_structure ? framework_roles(graph) : [],
       search_query: resolved_search_query,
+      # The editor's Save-vs-Propose label needs the Editing/Suggesting cookie
+      # as well as the viewer's authority (#379).
+      edit_mode: framework_edit_mode,
       **viewer_matrix_flags(mode)
     )
   end

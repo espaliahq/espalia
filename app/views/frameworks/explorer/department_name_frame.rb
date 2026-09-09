@@ -41,52 +41,30 @@ class Views::Frameworks::Explorer::DepartmentNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine flex items-center gap-1 #{HEADER_CLASSES}",
-        data: { controller: "inline-editor" }) do
-      div(class: "flex items-center gap-1 min-w-0", data: { inline_editor_target: "display" }) do
+    div(class: "group/ine flex flex-col #{HEADER_CLASSES}", data: editor_data) do
+      div(class: "flex items-center gap-1 min-w-0", data: { editor_display: true }) do
         span(class: "truncate") { @department }
         render_inline_editor_pencil(aria_label: "Rename department")
       end
-      rename_form
     end
   end
 
-  def rename_form
-    form(
-      # `normal-case` so the input shows the stored value, not the uppercased
-      # header. Targets the families frame so the whole group re-renders.
-      class: "hidden w-56 max-w-[85vw] normal-case",
-      method: "post",
+  # Direct edit (a bulk relabel across the group) — no approval tier, so "Save".
+  # `normal-case` so the editor shows the stored value, not the uppercased
+  # header; `tree-scope-fields` carries the current role selection into the
+  # submit so the re-rendered tree keeps its checkboxes.
+  def editor_data
+    field_editor_data(
       action: framework_departments_path(@framework_id),
-      data: {
-        controller: "tree-scope-fields",
-        inline_editor_target: "form",
-        turbo: "true",
-        turbo_frame: "role-tree-families",
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "_method", value: "patch")
-      input(type: "hidden", name: "department[from]", value: @department)
-      input(
-        type: "text", name: "department[to]", value: @department,
-        class: "w-full text-sm border border-primary rounded px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-1 focus:ring-primary",
-        data: { inline_editor_target: "input" }
-      )
-      div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
-        ) { "Cancel" }
-      end
-    end
+      field: "department[to]",
+      value: @department.to_s,
+      label: "Department name",
+      outcome: "apply",
+      rows: 1,
+      turbo_frame: "role-tree-families",
+      form_class: "normal-case",
+      form_controller: "tree-scope-fields",
+      extra: { "department[from]" => @department }
+    )
   end
 end

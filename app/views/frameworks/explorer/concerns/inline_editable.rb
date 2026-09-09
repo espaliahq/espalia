@@ -1,30 +1,34 @@
 # frozen_string_literal: true
 
-# Shared Phlex rendering for the edit affordance on an inline-editable
-# text field (capability name, category name, expectation description).
+# Shared Phlex rendering for the explorer's inline-editable text fields.
 #
-# The display side is kept inline per-entity — the markup differs enough
-# (sticky column cell, sticky category header, cell paragraph) that a
-# shared display template would be awkward. Only the pencil button and
-# the edit <form> are extracted.
+# There is exactly ONE inline-edit form on the page — the inert
+# {Views::Frameworks::Explorer::FieldEditorTemplate} on the explorer root,
+# cloned into place by `field_editor_controller.js`. A frame therefore renders
+# **display markup plus data**: a host element carrying `data-editor-*`, an
+# inner `[data-editor-display]`, and a pencil that dispatches
+# `field-editor#open`.
 #
 # Usage (inside a view component that wraps the display text in a
-# turbo_frame_tag AND adds `data-controller="inline-editor"`):
+# turbo_frame_tag):
 #
-#   span(class: "...", data: { inline_editor_target: "display" }) do
-#     plain @name
-#     render_inline_editor_pencil(aria_label: "Edit name")
+#   div(class: "group/ine inline-flex items-start gap-1",
+#       data: field_editor_data(
+#         action: framework_capability_path(...), field: "capability[name]",
+#         value: inline_editor_value(@name, @pending_edit), label: "Capability name",
+#         entity: "capability", rows: 2, error: @error
+#       )) do
+#     div(data: { editor_display: true }) do
+#       plain @name
+#       render_inline_editor_pencil(aria_label: "Edit capability name")
+#     end
+#     render_field_editor_error(@error)
 #   end
-#   render_inline_editor_form(
-#     action: framework_capability_path(framework_id: @framework_id, id: @cap_id),
-#     field_name: "capability[name]",
-#     current_value: @name
-#   )
 #
 module Views::Frameworks::Explorer::Concerns::InlineEditable
-  # Small pencil icon button that triggers inline-editor#startEdit. Visible
-  # on hover via the `group-hover/ine` token — the caller must add
-  # `group/ine` to an ancestor element.
+  # Small pencil icon button that opens the shared editor. Visible on hover via
+  # the `group-hover/ine` token — the caller must add `group/ine` to an
+  # ancestor element.
   #
   # The class literal is intentionally not built by interpolation because
   # Tailwind's JIT scans source files and only generates CSS for the exact
@@ -41,14 +45,20 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
       class: "opacity-0 group-hover/ine:opacity-100 " \
              "group-focus-within/ine:opacity-100 focus-visible:opacity-100 " \
              "transition-opacity text-gray-400 hover:text-primary shrink-0",
-      data: { action: "inline-editor#startEdit" },
+      data: { action: "field-editor#open" },
       aria_label: aria_label
     ) do
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-          stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
-                  "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
-      end
+      render_inline_editor_pencil_icon
+    end
+  end
+
+  # The pencil glyph on its own, for hosts with their own button chrome
+  # (the illustration hover cluster).
+  def render_inline_editor_pencil_icon
+    svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
+        stroke: "currentColor", stroke_width: "2") do |s|
+      s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
+                "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
     end
   end
 
@@ -64,59 +74,68 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
     (pending_edit ? pending_edit[:suggested_value] : current_value).to_s
   end
 
-  # Renders the edit-mode form. Hidden until `inline-editor#startEdit` reveals
-  # it. Turbo handles the PATCH submission and swaps the frame on response.
+  # The `data-editor-*` contract the shared editor reads. See
+  # `field_editor_controller.js` for the full attribute list.
   #
-  # @param action [String] the form POST URL
-  # @param field_name [String] the name attribute for the textarea ("capability[name]")
-  # @param current_value [String]
-  # @param rows [Integer] textarea rows (default 2)
-  # @param width_classes [String] Tailwind width utilities for the form. Default
-  #   is a comfortable fixed width for editing a sentence in the wide left
-  #   column. A compact host (e.g. a centered level-title cell in the matrix
-  #   header) passes a narrower value so the editor stays *in place* under the
-  #   column rather than ballooning the cell and rendering offset.
-  def render_inline_editor_form(action:, field_name:, current_value:, rows: 2,
-                                width_classes: "w-80 sm:w-96 max-w-[85vw]")
-    # Give the form a fixed width so editing isn't cramped. Without it the form
-    # sits in a shrink-to-content inline-flex / flex container sized to the
-    # (often short) display text, and the textarea's `w-full` collapses to that
-    # narrow width.
-    form(
-      class: "hidden #{width_classes}",
-      method: "post",
-      action: action,
-      data: {
-        inline_editor_target: "form",
-        turbo: "true",
-        # Fire a window-scoped suggestion:submitted event after Turbo has
-        # landed the response. The context pane listens for it and reloads
-        # the suggestions panel so pending rows appear without a refresh.
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "_method", value: "patch")
-      textarea(
-        class: "w-full text-sm border border-primary rounded px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "resize-none focus:outline-none focus:ring-1 focus:ring-primary",
-        rows: rows.to_s,
-        name: field_name,
-        data: { inline_editor_target: "input" }
-      ) { current_value.to_s }
+  # @param action [String] POST/PATCH URL
+  # @param field [String] name= for the textarea ("capability[name]")
+  # @param value [String] value to seed the editor with
+  # @param label [String] accessible name for the textarea
+  # @param rows [Integer] initial textarea rows
+  # @param entity [String, nil] suggestion entity type — the client derives
+  #   Save vs Propose from the viewer's server-computed authority for its tier
+  #   plus the Editing/Suggesting mode
+  # @param outcome [String, nil] "apply" / "propose" — a FIXED outcome that
+  #   overrides `entity` (org-structure renames always apply; an amend of a
+  #   pending suggestion always proposes)
+  # @param method [String] "patch" (default) or "post"
+  # @param submit_label [String, nil] overrides the derived Save/Propose label
+  # @param turbo_frame [String, nil] data-turbo-frame for the form
+  # @param form_class [String, nil] extra classes for the form element
+  # @param form_controller [String, nil] extra Stimulus controller for the form
+  # @param extra [Hash] hidden inputs to add to the form
+  # @param placeholder [String, nil]
+  # @param error [String, nil] a save error — the editor re-opens on this host
+  #   automatically, seeded with `value` (the attempted text), so nothing typed
+  #   is lost
+  # @return [Hash] data attributes for the host element
+  def field_editor_data(action:, field:, value:, label:, rows: 3, entity: nil, outcome: nil,
+                        method: "patch", submit_label: nil, turbo_frame: nil,
+                        form_class: nil, form_controller: nil, extra: {}, placeholder: nil,
+                        error: nil)
+    {
+      editor_action: action,
+      editor_field: field,
+      editor_value: value.to_s,
+      editor_label: label,
+      editor_rows: rows.to_s,
+      editor_method: method,
+      editor_entity: entity,
+      editor_outcome: outcome,
+      editor_submit_label: submit_label,
+      editor_turbo_frame: turbo_frame,
+      editor_form_class: form_class,
+      editor_form_controller: form_controller,
+      editor_placeholder: placeholder,
+      editor_extra: (extra.presence && extra.to_json),
+      editor_error: error.presence
+    }.compact
+  end
 
-      div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
-        ) { "Cancel" }
-      end
+  # The inline "couldn't save" line a rejected save renders in the cell. The
+  # editor re-opens beneath it with the attempted text, so this is the only
+  # copy of the message on screen.
+  #
+  # @param error [String, nil]
+  def render_field_editor_error(error)
+    return if error.blank?
+
+    # data-editor-error-line: the editor clears this (and the host's
+    # data-editor-error) when the user cancels, so a failed-then-abandoned edit
+    # doesn't leave a permanent-looking alert in the grid.
+    p(class: "text-[11px] text-red-700 dark:text-red-400", role: "alert",
+      data: { editor_error_line: true }) do
+      "Couldn’t save: #{error}"
     end
   end
 end

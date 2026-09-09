@@ -26,7 +26,8 @@ class Views::Frameworks::ShowView < Views::Base
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
                  can_edit_structure: false, archive_survivors: [], roles: [],
                  current_person_id: nil, search_query: nil,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 edit_mode: :editing)
     @framework = framework
     @role_families = role_families
     @selected_role_ids = selected_role_ids
@@ -46,6 +47,7 @@ class Views::Frameworks::ShowView < Views::Base
     @current_person_id = current_person_id
     @search_query = search_query
     @approval_authority = approval_authority
+    @edit_mode = edit_mode
   end
 
   def view_template
@@ -57,6 +59,7 @@ class Views::Frameworks::ShowView < Views::Base
         explorer_layout
         structural_modals
         if @mode == :edit
+          render Views::Frameworks::Explorer::FieldEditorTemplate.new
           reject_suggestion_modal
           resolve_clarification_modal
           request_clarification_modal
@@ -153,13 +156,34 @@ class Views::Frameworks::ShowView < Views::Base
   def explorer_root_data
     controllers = [ "framework-explorer" ]
     actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
+    data = {}
     if @mode == :edit
       controllers << "modal"
+      # ONE inline editor for the whole explorer — pencils delegate to it and it
+      # clones the FieldEditorTemplate into place (#379).
+      controllers << "field-editor"
       actions << "keydown.esc@window->modal#escape"
       # A squiggle click opens a suggestion card — reveal the pane if collapsed.
       actions << "suggestion:open-card@window->framework-explorer#openContextPane"
+      actions << "turbo:frame-render->field-editor#frameRendered"
+      actions << "turbo:frame-missing->field-editor#frameMissing"
+      actions << "turbo:fetch-request-error->field-editor#fetchError"
+      actions << "framework-edit-mode:changed@window->field-editor#modeChanged"
+      actions << "field-editor:discard@window->field-editor#discard"
+      data[:field_editor_approvals_value] = editor_approvals.to_json
+      data[:field_editor_mode_value] = @edit_mode.to_s
     end
-    { controller: controllers.join(" "), action: actions.join(" ") }
+    data.merge(controller: controllers.join(" "), action: actions.join(" "))
+  end
+
+  # Whether the viewer clears each content entity's review tier — computed
+  # server-side (never guessed on the client) so the editor's Save vs Propose
+  # label states what will actually happen. Combined client-side with the
+  # Editing/Suggesting cookie, which the toggle can flip without a round trip.
+  def editor_approvals
+    Operations::Frameworks::SuggestEdit::EDITABLE_FIELDS.keys.index_with do |entity_type|
+      @approval_authority.can_approve?(entity_type)
+    end
   end
 
   private
@@ -201,6 +225,8 @@ class Views::Frameworks::ShowView < Views::Base
   # server-side by the FrameworkEditMode concern on every inline-edit
   # submission.
   def edit_suggest_toggle
+    return locked_suggesting_badge unless @approval_authority.any?
+
     div(
       class: "inline-flex items-stretch rounded-md border border-gray-200 dark:border-gray-700 " \
              "bg-gray-50 dark:bg-gray-800 p-0.5 text-sm",
@@ -215,6 +241,18 @@ class Views::Frameworks::ShowView < Views::Base
       edit_suggest_segment("suggesting", "Suggesting",
                            "Changes land as pending suggestions for review.")
     end
+  end
+
+  # A viewer who clears no review tier can never be "editing" — every change
+  # they make lands as a suggestion — so the toggle is replaced by a static
+  # label rather than offering a choice that does nothing.
+  def locked_suggesting_badge
+    span(
+      class: "inline-flex items-center rounded-md border border-gray-200 dark:border-gray-700 " \
+             "bg-gray-50 dark:bg-gray-800 px-3 py-1 text-sm font-medium " \
+             "text-gray-600 dark:text-gray-300",
+      title: "Your changes land as suggestions for a reviewer to approve."
+    ) { "Suggesting" }
   end
 
   def edit_suggest_segment(value, label, tooltip)

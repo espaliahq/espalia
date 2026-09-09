@@ -36,9 +36,8 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
 
   def view_template
     # `group/ine` so the shared inline-edit pencil reveals on hover.
-    div(class: "group/ine relative mb-1", data: { controller: "inline-editor" }) do
+    div(class: "group/ine relative mb-1", data: editor_data) do
       display
-      edit_form
     end
   end
 
@@ -52,8 +51,31 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
 
   # Text then pencil, in a flex row — the pencil sits immediately to the right of
   # the text (no flex-grow on the text), matching every inline-edit affordance.
+  # Both author and non-author submit to the same create endpoint
+  # (SetBehaviouralExpectation amends the author's own pending proposal, or
+  # records a non-author's alternative) — either way it stays a proposal, so the
+  # outcome is fixed rather than derived from authority. A full navigation
+  # (`_top`) like the "+ Add expectation" form.
+  def editor_data
+    field_editor_data(
+      action: framework_expectations_path(framework_id: @framework_id),
+      field: "behavioural_expectation[description]",
+      value: proposed_text.to_s,
+      label: @is_author ? "Amend suggestion" : "Alternative expectation",
+      outcome: "propose",
+      method: "post",
+      rows: 3,
+      submit_label: @is_author ? "Save" : "Suggest alternative",
+      turbo_frame: "_top",
+      extra: {
+        "behavioural_expectation[capability_id]" => @suggestion.parent_id,
+        "behavioural_expectation[level_ordinal]" => @level_ordinal
+      }
+    )
+  end
+
   def display
-    div(class: "flex items-start gap-1", data: { inline_editor_target: "display" }) do
+    div(class: "flex items-start gap-1", data: { editor_display: true }) do
       with_suggestion_click_affordance(@suggestion.suggestion_id) do
         span(class: "text-sm text-gray-700 dark:text-gray-300 " \
                     "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
@@ -82,43 +104,5 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
       reveal_classes: "opacity-0 group-hover/ine:opacity-100 " \
                       "group-focus-within/ine:opacity-100"
     )
-  end
-
-  # Submits to the create endpoint; SetBehaviouralExpectation amends the author's
-  # own pending proposal or records a non-author's alternative. Redirects (full
-  # navigation) like the "+ Add expectation" form, so data-turbo-frame="_top".
-  def edit_form
-    form(
-      class: "hidden mt-1",
-      method: "post",
-      action: framework_expectations_path(framework_id: @framework_id),
-      data: { inline_editor_target: "form", turbo_frame: "_top" }
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(type: "hidden", name: "behavioural_expectation[capability_id]", value: @suggestion.parent_id)
-      input(type: "hidden", name: "behavioural_expectation[level_ordinal]", value: @level_ordinal)
-
-      textarea(
-        class: "w-full text-xs border border-primary rounded px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "resize-none focus:outline-none focus:ring-1 focus:ring-primary",
-        rows: "3",
-        name: "behavioural_expectation[description]",
-        data: { inline_editor_target: "input" }
-      ) { proposed_text }
-
-      div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-        ) { @is_author ? "Save" : "Suggest alternative" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
-        ) { "Cancel" }
-      end
-    end
   end
 end

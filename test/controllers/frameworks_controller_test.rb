@@ -283,7 +283,7 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Pairs with a senior on framing the problem"
       assert_includes response.body, "Add illustration"
-      assert_includes response.body, %(data-controller="inline-editor")
+      assert_includes response.body, "data-editor-action"
     end
   end
 

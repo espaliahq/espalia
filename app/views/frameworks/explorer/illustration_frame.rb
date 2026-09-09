@@ -12,6 +12,7 @@
 #
 class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
   include Views::Frameworks::Explorer::Concerns::DiscussTrigger
 
@@ -34,10 +35,14 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
   #   the "Discuss…" modal ("Strategic Thinking · L4 · Software Engineer
   #   example"). The frame knows only the illustration, so the caller supplies
   #   it; absent, the modal simply omits the context line.
+  # @param error [String, nil] a rejected inline save — the shared editor
+  #   re-opens here with the attempted value (see CapabilityNameFrame)
+  # @param attempted_value [String, nil] the value the rejected save carried
   def initialize(illustration:, framework_id:, pending_edit_count: 0, pending_edit: nil, mode: :view,
                  can_reorder: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 discuss_context_label: nil, clarification: nil)
+                 discuss_context_label: nil, clarification: nil,
+                 error: nil, attempted_value: nil)
     @illustration = illustration
     @framework_id = framework_id
     @pending_edit_count = pending_edit_count
@@ -47,6 +52,8 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
     @approval_authority = approval_authority
     @discuss_context_label = discuss_context_label
     @clarification = clarification || { count: 0, suggestion_id: nil }
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -57,21 +64,44 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       attrs = {
         class: "group/ill relative text-xs text-gray-600 dark:text-gray-400"
       }
-      attrs[:data] = { controller: "inline-editor" } if @mode == :edit
+      attrs[:data] = editor_data if @mode == :edit
 
       li(**attrs) do
+        error_line if @mode == :edit
         display_mode
-        edit_mode if @mode == :edit
       end
     end
   end
 
   private
 
+  # Data the shared field editor clones its form from. Illustration text is
+  # tier-1 content, so Save vs Propose follows role_illustration authority.
+  def editor_data
+    field_editor_data(
+      action: framework_illustration_path(
+        framework_id: @framework_id, id: @illustration.illustration_id
+      ),
+      field: "illustration[description]",
+      value: @error ? @attempted_value.to_s : inline_editor_value(@illustration.description, @pending_edit),
+      label: "Illustration text",
+      entity: "role_illustration",
+      rows: 3,
+      form_class: "pl-2",
+      error: @error
+    )
+  end
+
+  def error_line
+    return if @error.blank?
+
+    div(class: "pl-2") { render_field_editor_error(@error) }
+  end
+
   def display_mode
     div(
       class: "flex items-start gap-1.5 pl-2",
-      data: { inline_editor_target: "display" }
+      data: { editor_display: true }
     ) do
       render_illustration_marker("bg-gray-300 dark:bg-gray-600")
       if @pending_edit
@@ -195,55 +225,10 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "opacity-0 group-hover/ill:opacity-100 " \
              "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
              "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
-      data: { action: "inline-editor#startEdit" },
+      data: { action: "field-editor#open" },
       aria_label: "Edit illustration"
     ) do
-      # Pencil icon
-      svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-          stroke: "currentColor", stroke_width: "2") do |s|
-        s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
-                  "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
-      end
-    end
-  end
-
-  def edit_mode
-    form(
-      class: "hidden pl-2",
-      method: "post",
-      action: framework_illustration_path(
-        framework_id: @framework_id,
-        id: @illustration.illustration_id
-      ),
-      data: {
-        inline_editor_target: "form",
-        turbo: "true",
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "_method", value: "patch")
-
-      textarea(
-        class: "w-full text-xs border border-primary rounded px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "resize-none focus:outline-none focus:ring-1 focus:ring-primary",
-        rows: "3",
-        name: "illustration[description]",
-        data: { inline_editor_target: "input" }
-      ) { (@pending_edit ? @pending_edit[:suggested_value] : @illustration.description).to_s }
-
-      div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
-        ) { "Cancel" }
-      end
+      render_inline_editor_pencil_icon
     end
   end
 end

@@ -200,7 +200,8 @@ class Frameworks::SuggestionsController < ApplicationController
     if inline_ghost_request?
       # A bodyless 4xx would blank the ghost's frame to "Content missing" —
       # re-render it with the error surfaced instead.
-      render_pending_ghost_frame(error: e.message, status: :unprocessable_content)
+      render_pending_ghost_frame(error: e.message, attempted_value: amendment[:suggested_value],
+                                 status: :unprocessable_content)
     elsif inline_request?
       head :unprocessable_content
     else
@@ -250,13 +251,16 @@ class Frameworks::SuggestionsController < ApplicationController
       @suggestion.target_entity_type == "role_illustration"
   end
 
-  def render_pending_ghost_frame(error: nil, status: :ok)
+  def render_pending_ghost_frame(error: nil, attempted_value: nil, status: :ok)
     render Views::Frameworks::Explorer::PendingIllustrationFrame.new(
       suggestion: @suggestion.reload,
       framework_id: @framework.framework_id,
       # amend? is author-only, so the requester is the author.
       is_author: true,
       error: error,
+      # Echo the rejected text back so the shared editor re-opens with it
+      # rather than throwing the user's typing away (#379).
+      attempted_value: attempted_value,
       # The frame swap must not drop the approval kebab (Lesson 13/16 class).
       approval_authority: framework_suggestion_approval_authority
     ), layout: false, status: status

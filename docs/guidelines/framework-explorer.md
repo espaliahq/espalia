@@ -28,9 +28,13 @@ Plumbing:
 - The four inline-edit controllers (`IllustrationsController`, `CapabilitiesController`, `CategoriesController`, `ExpectationsController`) `include FrameworkEditMode` and dispatch the shared [`Operations::Frameworks::SuggestEdit`](../../app/operations/operations/frameworks/suggest_edit.rb) (web + MCP — the `frameworks_suggest_edit` tool is the same code path), passing `mode: framework_edit_mode.to_s`. (`CapabilitiesController#update` **and** `CategoriesController#update` each handle **name or description** — whichever field the inline editor submitted — re-rendering the matching frame. Blank values are rejected as invalid input — the `SuggestedEdit` read model requires a `suggested_value`, so "clear the description" is not expressible as a suggestion.)
 - **Consecutive edits by the same author amend, they don't stack.** When the author already has a *pending* edit on the same `(entity, field)`, `SuggestEdit` routes the new value through `#amend_suggestion` (→ `SuggestionAmended`) instead of a second `#suggest_edit`. So in Suggesting mode (and for any non-authority user) a field carries **one** pending suggestion per author — the all-suggestions page and activity feed never show consecutive duplicate suggestions on the same field by the same person; the 2nd+ edit renders as a distinct "Amended a … suggestion" feed entry. (In Editing mode an authority-holder's edit auto-approves immediately, so no pending suggestion lingers to amend — each applied change is its own audit event. Different authors still produce separate pending suggestions on the same field, so the §10 "stacked edits" multi-author case is unchanged.) **The same amend-on-duplicate rule covers `behavioural_expectation` *creates*** authored via "+ Add expectation": `Operations::Frameworks::SetBehaviouralExpectation` amends the author's existing pending create for that cell instead of stacking a second proposal. Because `apply_suggested_creation` reads `proposed_attributes` but an amend only updates `suggested_value`, the amended value is folded back into the content field (`Frameworks::Aggregate::CREATE_CONTENT_FIELD`) at BOTH ends: the aggregate folds at approval so the latest value is applied, and the `PublishedState` projection folds into the read model's `proposed_attributes` at amend time so the ghost/previews display it (they render `proposed_attributes`, not `suggested_value` — before this, an amended ghost kept its original text) — and create/delete proposals are in `ActivityFeedQuery::PROPOSAL_KINDS`, so an amended create supersedes its original feed entry (only the latest stays actionable).
 - `SuggestionsController#create` (the explicit "propose a change" endpoint for full-form creates/deletes) is intentionally **not** wired to the toggle — it always submits as pending, dispatching `Operations::Frameworks::{SuggestCreate,SuggestDelete}` (web + MCP — `frameworks_suggest_create` / `frameworks_suggest_delete`). The illustration "+ Add" path is the one that forwards `framework_edit_mode` into `SuggestCreate` (`mode: "editing"` auto-applies for authority-holders; the tool's default is suggesting).
-- Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie and swaps `aria-pressed` + the caller-supplied active/inactive classes when clicked. No server round-trip on select; the cookie is picked up on the next form submission.
+- Stimulus controller [`edit_mode_toggle_controller.js`](../../app/javascript/controllers/edit_mode_toggle_controller.js) writes the cookie, swaps `aria-pressed` + the caller-supplied active/inactive classes, and dispatches the window-scoped `framework-edit-mode:changed` event so the open editor's Save/Propose label flips without a round trip. The cookie is picked up server-side on the next submission.
+- **The mode is visible at the point of action, and honest.** The shared editor's submit button reads **Save** or **Propose** — derived from the viewer's per-entity approval authority (computed server-side into `data-field-editor-approvals-value` on the explorer root, from `Frameworks::SuggestionApprovalAuthority`) AND the current mode; a proposal also tints the textarea amber. Fixed-outcome hosts override the derivation: org-structure renames always say Save (no approval tier exists), an amend of a pending suggestion always says Propose.
+- **A viewer who clears no tier gets no toggle.** "Editing" can never be true for them, so `ShowView#edit_suggest_toggle` renders a static "Suggesting" badge (with a tooltip) instead of a choice that does nothing.
 
 After a pending edit, the inline-edit controllers re-query the AR `SuggestedEdit` table and pass `pending_edit_count` into the re-rendered frame, so the amber wavy underline appears immediately in Suggesting mode — the user sees their proposal land without needing a full reload.
+
+**A rejected save is visible, and never eats the typed text.** The four endpoints re-render their own frame at **422 with a body** — a `data-editor-error` message inline in the cell plus the *attempted* value echoed back — and the shared editor re-opens on that host seeded with it. A bodyless 4xx is invisible to Turbo (Hard-Won Lesson 26).
 
 ```
 +---------------------------+----------------------------------------------+
@@ -82,7 +86,9 @@ PageLayout
     │   ├── back link, framework name, version badge, draft pill + "Edit mode" badge (edit only)
     │   └── right cluster: edit-suggest toggle + mode switcher + Publish button (edit + can_publish) + settings link
     ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + "N Suggestions" toggle — edit only)
+    ├── FieldEditorTemplate (edit only — the ONE inline-edit <form>, inert in a <template>)
     ├── ArchiveModal / AddCapabilityModal / AddCategoryModal / ArchiveCategoryModal (edit + can_edit_structure; data-controller="modal")
+    │   (root also carries data-controller="field-editor" in edit mode)
     └── explorer_layout[data-controller="matrix"]
         ├── aside[data-controller="tree"]  ← left pane (role tree)
         │   └── RoleTree
@@ -371,7 +377,7 @@ thread), revealing the pane if it was collapsed. `stopPropagation` keeps the
 click from also toggling the row / focusing the cell. Added-in-draft wiggles
 have no suggestion to open and render undecorated-for-click.
 
-**Inline editor seeds with the pending proposal.** When a field has a pending edit, opening its inline editor pre-fills the textarea with the **proposed** value (not the persisted one), so the user refines the proposal that's already shown as the diff — see the shared `inline_editable.rb#inline_editor_value(current_value, pending_edit)` helper, used by every inline-edit frame (capability name + description, category name, expectation text, illustration). The `inline_editor_controller`'s cancel restores the textarea to this server-rendered `defaultValue`, so cancel returns to the proposal too.
+**Inline editor seeds with the pending proposal.** When a field has a pending edit, the host's `data-editor-value` carries the **proposed** value (not the persisted one), so opening the editor refines the proposal that's already shown as the diff — see the shared `inline_editable.rb#inline_editor_value(current_value, pending_edit)` helper, used by every inline-edit frame (capability name + description, category name, expectation text, illustration). Cancel discards the cloned form entirely, so re-opening returns to the proposal too.
 
 ### 11. Structural editing (add / archive / publish)
 
@@ -1009,10 +1015,45 @@ Listens at window scope for:
 Also dispatches:
 - **`suggestion:navigate`** — fired by `focusSuggestion` when the user clicks a suggestion row body. Reads `data-nav-*` attributes from the clicked element and dispatches to window for `matrix_controller` to handle.
 
-### inline_editor_controller.js
-Wraps every inline-edit site (IllustrationFrame, PendingIllustrationFrame, NewIllustrationFrame, CapabilityNameFrame, CapabilityDescriptionFrame, CategoryNameFrame, CategoryDescriptionFrame, ExpectationTextFrame).
-- **Display / form toggle** — `startEdit` hides the display target and reveals the form; `cancel` restores display and resets the textarea to its `defaultValue` (the server-rendered value, which is the **pending proposal** when one exists — see §10).
-- **Post-submit signal** — on `turbo:submit-end` (bound via `data-action="turbo:submit-end->inline-editor#submitted"` on each form), dispatches a window-scoped `suggestion:submitted` event if the submission succeeded. `context_pane_controller` listens for it and reloads the suggestions panel so a just-landed pending row appears without a page refresh.
+### field_editor_controller.js (edit mode only) — ONE editor for the whole explorer
+Mounted **once** on the explorer root; every editable text ships display markup
+plus `data-editor-*` data and a pencil carrying `data-action="field-editor#open"`.
+On open it clones `FieldEditorTemplate` into the host — so editors inserted late
+(the on-demand expanded row, a frame re-render) work with no extra wiring, and
+the matrix ships **zero** pre-rendered forms/textareas (#379: 374 → 0 of each,
+485 → 111 controller mounts, −18% bytes on the seeded framework).
+
+Host contract (see the controller's header comment for the full list):
+`data-editor-action` / `-method` / `-field` / `-value` / `-rows` / `-label` /
+`-placeholder` / `-entity` / `-outcome` / `-submit-label` / `-turbo-frame` /
+`-form-class` / `-form-controller` / `-extra` (JSON hidden fields) /
+`-error`; inside it, `[data-editor-display]` is the read-mode element.
+
+- **Open / cancel** — `open` clones, fills, focuses and hides the display element
+  with an *inline* `display:none` (a `hidden` class loses to the element's own
+  `flex`/`inline-flex` — assessments.md Lesson 17). Only one editor at a time:
+  opening another confirms before discarding unsaved text.
+- **Keyboard** — Esc cancels, Cmd/Ctrl+Enter saves, the textarea auto-grows.
+- **Width** — the form is `w-full min-w-0` of its host, and the visible hint text
+  is `sr-only`, so opening one in a level column doesn't renegotiate the
+  auto-layout table's column widths (Hard-Won Lesson 27).
+- **Save vs Propose** — derived from `approvalsValue` (server-computed per-entity
+  authority) + `modeValue`, refreshed live on `framework-edit-mode:changed`.
+- **Submission is native Turbo** — the cloned form sits inside the entity's Turbo
+  Frame, so the response swaps the frame exactly as before. `submitted`
+  dispatches `suggestion:submitted` on success; `frameRendered` re-opens the
+  editor when the response carries `data-editor-error` (seeded with the attempted
+  value); `frameMissing` / `fetchError` claim transport failures and show a
+  retry message inside the still-open editor rather than letting Turbo render
+  "Content missing" over the user's work.
+- **Dirty flag** — stamps `data-editor-dirty="true"` on the root; `matrix#refresh`
+  / `updateSelection` / `updateSearch` confirm before re-fetching the matrix out
+  from under an open editor.
+
+`inline_editor_controller.js` (the old per-element display/form toggle) stays in
+place **only** for the non-explorer hosts that use `<select>` / `<input type=date>`
+rather than a textarea — the assessment-cycle settings frames. Don't add new
+explorer callers to it.
 
 ### edit_mode_toggle_controller.js (edit mode only)
 Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
@@ -1056,7 +1097,8 @@ Backs the shared reject-suggestion modal. On `modal:open` it self-gates on `reje
 | `framework-search:changed` | `framework_search_controller` | `{ query: string }` — trimmed text filter; triggers `matrix_controller#updateSearch` (window-scoped, since the search box sits outside the matrix element). See §4a. |
 | `matrix:focus-changed` | `matrix_controller` | `{ level: "framework" \| "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, expectationId: string \| null }` — always fully specified |
 | `suggestion:navigate` | `context_pane_controller` | `{ level: "category" \| "capability" \| "cell", categoryId: string \| null, capabilityId: string \| null, levelOrdinal: number \| null, suggestionId: string \| null }` — triggers `matrix_controller#navigateToEntity`. `suggestionId` (pending suggestions only) makes navigation land on the exact decorated element — the squiggle/ghost's `[data-suggestion-id]` inside the matrix frame — with a brief `.suggestion-nav-highlight` pulse; without an anchor (resolved, or the suggestion's role filtered out) it falls back to centering the cell (which gets the same pulse) or row. |
-| `suggestion:submitted` | `inline_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
+| `framework-edit-mode:changed` | `edit_mode_toggle_controller` | `{ mode: "editing" \| "suggesting" }` — the open editor's Save/Propose label + amber tint update immediately (`field-editor#modeChanged`). |
+| `suggestion:submitted` | `field_editor_controller` | `{ formAction: string }` — fired on successful `turbo:submit-end`. Triggers `context_pane_controller#onSuggestionSubmitted`, which forces the panel frame to reload so a just-landed pending row appears without a page refresh. |
 | `suggestion:open-card` | `matrix_controller#openSuggestionCard` (squiggle / ghost click) | `{ suggestionId: string }` — opens that suggestion's card in the pane (`context_pane_controller#onOpenSuggestionCard`) and reveals a collapsed pane (`framework_explorer_controller#openContextPane`). The click's purpose IS to see the card, so this is the one deliberate exception to "focus never auto-opens the pane" (Lesson 8 still governs plain focus changes). |
 | `suggestion:resolved` | `suggestion_action_controller` (approve) / `reject_suggestion_form_controller` (reject) | `{ suggestionId: string, outcome: "approved" \| "rejected", surgical: boolean }` — fired on a successful inline approve/reject (the clarification-resolve dispatch carries no detail; consumers must tolerate its absence). `surgical: true` means the response's Turbo Stream already replaced the affected frame — `matrix_controller#refresh` skips the full re-fetch and only runs as the fallback for non-surgical shapes (Hard-Won Lesson 23). The feed reloads separately via the activity broadcast (§12, Hard-Won Lesson 21). |
 
@@ -1298,12 +1340,12 @@ page-unresponsive dialog. Two rules fell out:
   `context-pane` debounces the signal into a single feed reload (~300ms)
   instead of re-fetching the 300KB+ feed once per event.
 
-The largest part of that frame is gone since Lesson 25 (the expanded rows are
-fetched on demand — 7.6 MB → 1.5 MB on the same framework); the remaining bulk
-is the pre-rendered inline-edit forms and kebab menus, tracked in
-[#379](https://github.com/mr-yum/growth-os/issues/379) and
-[#380](https://github.com/mr-yum/growth-os/issues/380). Until those land,
-treat "re-fetch the matrix" as a last resort in any new explorer feature.
+Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
+7.6 MB → 1.5 MB on the same framework) and Lesson 27 (one shared inline editor
+— 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
+zero). The remaining bulk is the pre-rendered kebab menus, tracked in
+[#380](https://github.com/mr-yum/growth-os/issues/380). Even so, treat
+"re-fetch the matrix" as a last resort in any new explorer feature.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
@@ -1394,6 +1436,95 @@ one spanning `<td>` can't yield the per-column cells. Rules that fall out:
 
 Pinned by `test/system/frameworks/lazy_expanded_row_system_test.rb` and the
 `expanded_rows` contexts in `test/controllers/frameworks_controller_test.rb`.
+
+### 26. A bodyless 4xx inside a Turbo Frame is a silent failure
+
+`FrameController#loadResponse` renders whatever comes back — success or error —
+but only `if (html)`: a `head :unprocessable_content` has no body, so Turbo does
+**nothing**. The four inline-edit endpoints answered exactly that, and the user
+clicked Save and watched nothing happen; a blank value, a stale entity, a policy
+denial and a 500 were indistinguishable.
+
+An error response from a frame-scoped submit must therefore **carry the frame**:
+re-render the same `turbo_frame_tag` with the message inline and status 422.
+Two things fall out of that:
+
+- **Echo the attempted value back.** Rendering the frame destroys whatever
+  editor was inside it, so the response has to carry the user's text
+  (`attempted_value:` → `data-editor-value`) or the swap eats their typing. The
+  shared editor re-opens on any host carrying `data-editor-error`, seeded from it.
+- **The re-render is async and NOT awaited before `turbo:submit-end`.** Hang the
+  re-open on `turbo:frame-render`, never on the submit-end handler — verified in
+  turbo-rails 2.0.23, where `formSubmissionFailedWithResponse` calls
+  `loadResponse` without awaiting it.
+
+A `submit-fallback` controller is deliberately NOT mounted on the explorer root
+for this: its `beforeFetchResponse` claims every non-stream error response with
+`preventDefault()`, which would swallow exactly these 422 frame renders. The
+editor handles its own transport failures instead (`turbo:frame-missing` /
+`turbo:fetch-request-error`), which is also the only place that can keep the
+open editor and its text.
+
+### 27. An editor inside an auto-layout table can only be as wide as its host already is
+
+The old inline-edit form was a fixed `w-80 sm:w-96`; opening one in a level
+column widened the matrix to 1,922 px and pushed later levels off-screen. The
+obvious replacement — `w-full min-w-0` — is wrong in two opposite ways at once,
+and understanding why is the whole lesson:
+
+- **A percentage width doesn't render wide.** Inside a `<td>` whose width is
+  still being negotiated, Chrome resolves `width: 100%` as shrink-to-fit, so the
+  editor collapsed to roughly its own Save/Cancel buttons (~110 px) instead of
+  filling the cell.
+- **But everything else you add DOES widen the column.** `table-layout: auto`
+  negotiates each column from its content's *intrinsic* width, so any definite
+  width, and any text with a wide min-content, leaks straight through. Three
+  measured dead ends: a visible "Applies immediately / Lands as a suggestion for
+  review" hint in the button row (+18 px per column — it is now `sr-only`);
+  pinning the form to the **cell's** inner width (+108 px, because the form's px
+  width is added to whatever else shares its flex row); and flooring the pinned
+  width at a "comfortable" 144 px (+20 px on a squeezed mobile table, where the
+  floor becomes the column's new min-content).
+
+What works is pinning the form to the **host's own pre-open width**
+(`#pinWidth`): the host already occupied exactly that much, so the negotiation
+is unchanged at every viewport, and a block-level host (an expectation cell, a
+description, an illustration) hands the editor the full cell. A shrink-to-fit
+host (a capability name, a level title) gets a narrower editor — accepted, since
+the alternative is moving the column. `LevelTitleFrame` documents the one place
+this was tried and reverted.
+
+The general rule: inside a matrix cell, **any text or definite width you add to
+an editor is a column-width change**. Put explanatory copy in `sr-only`, a
+`title`, or the button label. Pinned by
+`test/system/frameworks/org_structure_rename_system_test.rb` ("not widen the
+level column when the editor opens") and the mobile case in
+`inline_editor_system_test.rb`.
+
+### 28. Turbo's submit-end can beat its own frame render — don't drop state on it
+
+Three of the shared editor's handlers hang on Turbo's ordering, and the
+intuitive reading is wrong. In turbo-rails 2.0.23 `formSubmissionFailedWith
+Response` / `…SucceededWithResponse` call `loadResponse` **un-awaited**, while
+`turbo:submit-end` is dispatched from `FetchRequest#perform`'s `finally`. So
+`turbo:submit-end` fires *before* the frame has rendered, and before any
+`turbo:frame-missing` the response provokes.
+
+Consequences the editor has to live with:
+
+- **Never release ownership of the form in `submitted()` on failure.** Doing so
+  disarmed `frameMissing` (so a 5xx or a sign-in redirect rendered Turbo's
+  "Content missing" over the user's text after all) and, on a network drop,
+  stranded a form the controller no longer knew about — visible on screen,
+  Cancel a no-op, and a second pencil click appended a *second* editor.
+- **Re-open after a rejected save on `turbo:frame-render`, not `submit-end`** —
+  at submit-end the error frame isn't in the DOM yet.
+- **Arm transport handlers explicitly.** `turbo:frame-missing` is dispatched on
+  the frame for *any* load, so claiming it by "does this frame contain my form"
+  also swallowed the matrix's and the expanded row's own failure handling
+  (Lesson 25's sign-in-redirect recovery). Track the submitting form from
+  `turbo:submit-start` and match on identity — the same shape
+  `frame_error_controller` already uses.
 
 ## Activity feed coverage (NON-NEGOTIABLE)
 
@@ -1543,7 +1674,9 @@ line (§9).
 | `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |
 | `app/controllers/concerns/frameworks/suggestion_resolution_streams.rb` | Surgical inline approve/reject responses — Turbo Streams replacing just the affected entity's frame; nil → 204 → client full-refresh fallback (Hard-Won Lesson 23) |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
-| `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil + inline form; `inline_editor_value` seeds the box with the pending proposal |
+| `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil, the `data-editor-*` host contract (`field_editor_data`) and the inline save-error line; `inline_editor_value` seeds the editor with the pending proposal |
+| `app/views/frameworks/explorer/field_editor_template.rb` | The ONE inline-edit `<form>`, inert in a `<template>` on the explorer root — cloned into place by `field-editor` (#379) |
+| `app/javascript/controllers/field_editor_controller.js` | The shared inline editor — pencil delegation, keyboard, autogrow, Save/Propose, error re-open, dirty guard |
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
@@ -1620,11 +1753,12 @@ line (§9).
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/operations/operations/frameworks/suggest_edit.rb` | Shared web + MCP operation — framework content edits (capability/category name + description, expectation + illustration text): authority-aware auto-approve in editing mode, pending suggestion otherwise; amends the author's pending edit on a field (→ `SuggestionAmended`) instead of stacking consecutive duplicates |
 | `app/operations/operations/frameworks/{suggest_create,suggest_delete}.rb` | Shared web + MCP operations — the explicit "propose a change" endpoints (`SuggestCreate` defaults to pending, editing mode auto-applies with authority; `SuggestDelete` is always pending — the archive tools own direct-apply) |
-| `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side |
+| `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side and dispatches `framework-edit-mode:changed` so an open editor re-labels |
 | `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 4 shared structural modals + the reject-suggestion modal (Lesson 19) |
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/inline_editor_system_test.rb` | Shared editor — keyboard, Save vs Propose per role, surfaced save errors, unsaved-change guard, no table reflow (both viewports) |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
 | `test/system/frameworks/suggestion_thread_system_test.rb` | Suggestion card + thread system tests (pane + detail page) |
 | `test/models/frameworks/matrix_data_builder_test.rb` | Builder unit tests (incl. text-filter scope + counts) |

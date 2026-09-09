@@ -19,14 +19,18 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   #   name renders as an inline diff instead of the plain value.
   # @param search_query [String, nil] active text filter — match terms are
   #   highlighted in the name (skipped when a pending-edit diff is shown).
+  # @param error [String, nil] a rejected inline save (see CapabilityNameFrame)
+  # @param attempted_value [String, nil] the value the rejected save carried
   def initialize(category:, framework_id:, mode: :view, pending_edit_count: 0, pending_edit: nil,
-                 search_query: nil)
+                 search_query: nil, error: nil, attempted_value: nil)
     @category = category
     @framework_id = framework_id
     @mode = mode
     @pending_edit_count = pending_edit_count
     @pending_edit = pending_edit
     @search_query = search_query
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -58,20 +62,25 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   end
 
   def editable
-    div(class: "group/ine inline-flex items-start gap-1",
-        data: { controller: "inline-editor" }) do
-      div(class: "flex items-start gap-1",
-          data: { inline_editor_target: "display" }) do
+    div(class: "group/ine inline-flex flex-col items-start gap-1", data: editor_data) do
+      render_field_editor_error(@error)
+      div(class: "flex items-start gap-1", data: { editor_display: true }) do
         plain_name
         render_inline_editor_pencil(aria_label: "Edit category name")
       end
-      render_inline_editor_form(
-        action: framework_category_path(framework_id: @framework_id, id: @category.category_id),
-        field_name: "capability_category[name]",
-        current_value: inline_editor_value(@category.name, @pending_edit),
-        rows: 1
-      )
     end
+  end
+
+  def editor_data
+    field_editor_data(
+      action: framework_category_path(framework_id: @framework_id, id: @category.category_id),
+      field: "capability_category[name]",
+      value: @error ? @attempted_value.to_s : inline_editor_value(@category.name, @pending_edit),
+      label: "Category name",
+      entity: "capability_category",
+      rows: 1,
+      error: @error
+    )
   end
 
   def decoration

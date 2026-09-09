@@ -52,9 +52,14 @@ class Frameworks::IllustrationsController < ApplicationController
   end
 
   # PATCH /frameworks/:framework_id/illustrations/:id
+  #
+  # A rejected save re-renders THIS frame with the message and the attempted
+  # text (422) rather than answering bodyless — Turbo ignores a bodyless
+  # response, so the user saw nothing at all (Hard-Won Lesson 26).
   def update
     authorize @framework, :suggest_edit?
     new_description = params.expect(illustration: [ :description ])[:description]
+    return render_save_error("the text can\u2019t be blank", new_description) if new_description.blank?
 
     Operations::Frameworks::SuggestEdit.call(
       context: pundit_user,
@@ -84,12 +89,30 @@ class Frameworks::IllustrationsController < ApplicationController
       clarification: illustration_clarification(@illustration)
     ), layout: false
   rescue ActiveRecord::RecordNotFound
-    head :not_found
-  rescue Operations::Base::ParameterError, RuntimeError
-    head :unprocessable_content
+    render_save_error("this example no longer exists \u2014 reload the page", new_description)
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    render_save_error(e.message, new_description)
   end
 
   private
+
+  # Re-render the illustration frame carrying the error + the attempted value.
+  # Every affordance-gating flag is re-threaded (Hard-Won Lesson 13/16).
+  def render_save_error(message, attempted_value)
+    render Views::Frameworks::Explorer::IllustrationFrame.new(
+      illustration: @illustration,
+      framework_id: @framework.framework_id,
+      mode: :edit,
+      pending_edit_count: pending_edits_on_illustration,
+      pending_edit: latest_pending_edit,
+      can_reorder: can_reorder_illustrations?,
+      approval_authority: pending_edit_approval_authority,
+      discuss_context_label: illustration_discuss_context_label(@illustration),
+      clarification: illustration_clarification(@illustration),
+      error: message,
+      attempted_value: attempted_value
+    ), layout: false, status: :unprocessable_content
+  end
 
   def set_framework
     @framework = FrameworkState::Framework.find_by!(framework_id: params.expect(:framework_id))

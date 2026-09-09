@@ -11,6 +11,7 @@
 class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   include Views::Frameworks::Explorer::Concerns::ApprovalKebabItems
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
 
   # @param suggestion [FrameworkState::SuggestedEdit] kind: "create", target: role_illustration
   # @param framework_id [String] UUID of the framework
@@ -21,13 +22,17 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority] gates
   #   the inline Approve/Reject kebab (§12). Controller frame re-renders must
   #   re-thread it (Hard-Won Lesson 13/16 class).
+  # @param attempted_value [String, nil] the value a rejected amend carried —
+  #   the shared editor re-opens seeded with it so nothing typed is lost
   def initialize(suggestion:, framework_id:, is_author: false, error: nil,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
+                 attempted_value: nil)
     @suggestion = suggestion
     @framework_id = framework_id
     @is_author = is_author
     @error = error
     @approval_authority = approval_authority
+    @attempted_value = attempted_value
     @attrs = (suggestion.proposed_attributes || {}).symbolize_keys
   end
 
@@ -35,11 +40,10 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
     turbo_frame_tag("pending-suggestion-#{@suggestion.suggestion_id}") do
       li(
         class: "group/ill relative text-xs text-gray-600 dark:text-gray-400",
-        data: { controller: "inline-editor" }
+        data: editor_data
       ) do
         error_line if @error.present?
         display_mode
-        edit_mode
       end
     end
   end
@@ -47,8 +51,46 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   private
 
   def error_line
-    p(class: "pl-2 text-[11px] text-red-700 dark:text-red-400", role: "alert") do
-      "Couldn\u2019t save: #{@error}"
+    div(class: "pl-2") { render_field_editor_error(@error) }
+  end
+
+  # The author amends their own pending proposal (via the amend endpoint);
+  # anyone else submits an alternative through the illustration create endpoint.
+  # Either way the result is a pending suggestion, so the outcome is fixed —
+  # never derived from the viewer's authority.
+  def editor_data
+    common = {
+      value: @error ? @attempted_value.to_s : @attrs[:description].to_s,
+      label: @is_author ? "Amend suggestion" : "Alternative illustration",
+      outcome: "propose",
+      rows: 3,
+      form_class: "pl-2",
+      error: @error
+    }
+    if @is_author
+      field_editor_data(
+        action: amend_framework_suggestion_path(
+          framework_id: @framework_id, id: @suggestion.suggestion_id
+        ),
+        field: "suggestion[suggested_value]",
+        submit_label: "Save",
+        # inline=1 re-renders this ghost frame in place rather than taking the
+        # amend endpoint's detail-page redirect (Hard-Won Lesson 20).
+        extra: { "inline" => "1" },
+        **common
+      )
+    else
+      field_editor_data(
+        action: framework_illustrations_path(framework_id: @framework_id),
+        field: "illustration[description]",
+        method: "post",
+        submit_label: "Suggest alternative",
+        extra: {
+          "illustration[expectation_id]" => @suggestion.parent_id,
+          "illustration[role_id]" => @attrs[:role_id]
+        },
+        **common
+      )
     end
   end
 
@@ -57,7 +99,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
 
     div(
       class: "flex items-start gap-1.5 pl-2",
-      data: { inline_editor_target: "display" }
+      data: { editor_display: true }
     ) do
       # Amber marker — this entry is a pending proposal.
       render_illustration_marker("bg-amber-400")
@@ -98,102 +140,10 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       class: "opacity-0 group-hover/ill:opacity-100 " \
              "group-focus-within/ill:opacity-100 focus-visible:opacity-100 " \
              "transition-opacity text-gray-400 hover:text-primary shrink-0 mt-0.5",
-      data: { action: "inline-editor#startEdit" },
+      data: { action: "field-editor#open" },
       aria_label: @is_author ? "Amend suggestion" : "Suggest alternative"
     ) do
-      pencil_icon
-    end
-  end
-
-  def edit_mode
-    if @is_author
-      amend_form
-    else
-      alternative_form
-    end
-  end
-
-  # Author edits their pending suggestion via the amend endpoint.
-  def amend_form
-    form(
-      class: "hidden pl-2",
-      method: "post",
-      action: amend_framework_suggestion_path(
-        framework_id: @framework_id,
-        id: @suggestion.suggestion_id
-      ),
-      data: {
-        inline_editor_target: "form",
-        turbo: "true",
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "_method", value: "patch")
-      # This form lives inside the ghost's Turbo Frame — flag the submission
-      # so the amend endpoint re-renders this frame in place instead of its
-      # detail-page redirect, which contains no matching frame and renders
-      # as "Content missing" (Hard-Won Lesson 20: one endpoint, two
-      # surfaces — branch on an explicit marker).
-      input(type: "hidden", name: "inline", value: "1")
-      # amend endpoint expects suggestion[suggested_value]
-      # For create suggestions the amend updates proposed_attributes — the
-      # controller maps suggested_value back to the description field.
-      textarea_field("suggestion[suggested_value]", @attrs[:description])
-      form_buttons("Save")
-    end
-  end
-
-  # Other collaborators submit an alternative suggestion via the
-  # illustrations create endpoint (which now routes through suggest_create).
-  def alternative_form
-    form(
-      class: "hidden pl-2",
-      method: "post",
-      action: framework_illustrations_path(framework_id: @framework_id),
-      data: {
-        inline_editor_target: "form",
-        turbo: "true",
-        action: "turbo:submit-end->inline-editor#submitted"
-      }
-    ) do
-      input(type: "hidden", name: "illustration[expectation_id]", value: @suggestion.parent_id)
-      input(type: "hidden", name: "illustration[role_id]", value: @attrs[:role_id])
-      textarea_field("illustration[description]", @attrs[:description])
-      form_buttons("Suggest alternative")
-    end
-  end
-
-  def textarea_field(name, value)
-    textarea(
-      class: "w-full text-xs border border-primary rounded px-2 py-1 " \
-             "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-             "resize-none focus:outline-none focus:ring-1 focus:ring-primary",
-      rows: "3",
-      name: name,
-      data: { inline_editor_target: "input" }
-    ) { value }
-  end
-
-  def form_buttons(submit_label)
-    div(class: "flex gap-1 mt-1") do
-      button(
-        type: "submit",
-        class: "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
-      ) { submit_label }
-      button(
-        type: "button",
-        class: "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-               "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-        data: { action: "inline-editor#cancel" }
-      ) { "Cancel" }
-    end
-  end
-
-  def pencil_icon
-    svg(class: "w-3 h-3", fill: "none", viewBox: "0 0 24 24",
-        stroke: "currentColor", stroke_width: "2") do |s|
-      s.path(d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" \
-                "m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
+      render_inline_editor_pencil_icon
     end
   end
 end
