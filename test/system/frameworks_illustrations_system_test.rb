@@ -129,27 +129,16 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
-      # Archive is a confirm-guarded form submit inside the illustration's ⋮
-      # menu, which only exists once the kebab is opened (#380). Stub the
-      # confirm to true and submit synchronously.
-      open_explorer_menu("Illustration actions",
-                         scope: "li[data-editor-action*='/illustrations/']")
-      auto_confirm do
-        page.execute_script(<<~JS)
-          document.querySelector(
-            "[data-explorer-menu] form[action*='illustration_archives']"
-          ).requestSubmit();
-        JS
-      end
+      # Archive opens the shared root-mounted modal from the illustration's ⋮
+      # menu (#381 replaced the native confirm() the menu used to fire).
+      use_explorer_menu("Illustration actions", "Archive",
+                        scope: "li[data-editor-action*='/illustrations/']")
+      assert_selector "#archive-illustration-modal", visible: true
+      click_button_with_js_fallback("Archive example",
+                                    expect_text: "Archived the example.")
 
-      # Redirected back to edit mode; the removal applied live (illustrations
-      # carry no ratings, so it is shape-preserving). Sync on the flash — the
-      # only text that exists solely on the far side of the redirect (the
-      # capability name is on both pages, so waiting on it re-expands the row
-      # about to be replaced, and the fetch then races the navigation).
-      assert_text "Archived the illustration."
-      # Re-expanding the row proves the illustration is gone, not merely collapsed.
-      expand_matrix_row("tr[data-capability-id]")
+      # No navigation: the example's frame is removed in place, so the row is
+      # still expanded and the removal is visible without re-expanding.
       assert_no_text "Seeks guidance from tech lead"
     end
   end
