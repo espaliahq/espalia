@@ -9,10 +9,15 @@
 # capabilities are first-class (framework-explorer.md Lesson 17) — before
 # dispatching the shared {Operations::Frameworks::ReorderCapabilities}.
 #
-# Responds 204 — the reorder-move Stimulus controller dispatches
-# `org-structure:updated` → matrix#refresh (a capability is a compact row
-# plus its hidden expanded row, so no DOM surgery).
+# Answers the toast Turbo Stream only — `reorder-move` repositions the
+# capability's compact + expanded rows in place. It used to answer 204 and
+# dispatch `org-structure:updated` → matrix#refresh, re-fetching ~950 KB of
+# edit-mode matrix (and every loaded expanded row with it) to change the order
+# of two rows.
 class Frameworks::CapabilityReordersController < ApplicationController
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
+
   before_action :set_framework
 
   # POST /frameworks/:framework_id/capability_reorders
@@ -28,15 +33,21 @@ class Frameworks::CapabilityReordersController < ApplicationController
       }
     )
 
-    head :no_content
-  rescue Operations::Base::ParameterError, RuntimeError, ActiveRecord::RecordNotFound
-    head :unprocessable_content
+    render_write_streams([ toast_stream("Moved “#{moving_capability_name}”.") ])
+  rescue Operations::Base::ParameterError, RuntimeError, ActiveRecord::RecordNotFound => e
+    render_write_error(e.message)
   end
 
   private
 
   def reorder_params
     @reorder_params ||= params.expect(reorder: [ :capability_id, :target_id, :placement ])
+  end
+
+  # Named in the toast so a mis-click is obvious. Resolved from the graph, which
+  # includes draft-added capabilities (Hard-Won Lesson 17).
+  def moving_capability_name
+    category.capabilities.find { |c| c.capability_id == reorder_params[:capability_id] }&.name
   end
 
   def graph

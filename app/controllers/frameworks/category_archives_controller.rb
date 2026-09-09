@@ -7,6 +7,9 @@
 #
 # Restricted to edit-rights holders via FrameworkPolicy#archive_category?.
 class Frameworks::CategoryArchivesController < ApplicationController
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
+
   before_action :set_framework
   before_action :set_category
 
@@ -23,10 +26,17 @@ class Frameworks::CategoryArchivesController < ApplicationController
       }
     )
 
-    redirect_to edit_framework_path(@framework.framework_id),
-                notice: "Archived “#{@category.name}”."
+    # The category is empty by the time it can be archived, so removing its
+    # `<tbody>` group takes the whole thing off the grid. Shape-changing, so
+    # the draft pill moves with it.
+    render_write_streams(
+      [ toast_stream("Archived “#{@category.name}”."),
+        turbo_stream.remove(
+          Views::Frameworks::Explorer::MatrixCategoryGroup.group_id(@category.category_id)
+        ) ] + draft_status_streams
+    )
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+    render_write_error(e.message)
   end
 
   private
@@ -49,6 +59,6 @@ class Frameworks::CategoryArchivesController < ApplicationController
             Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
     @category = graph.capability_categories
       .find { |c| c.category_id == archive_params[:category_id] }
-    redirect_to edit_framework_path(@framework.framework_id) unless @category
+    render_write_error("that category no longer exists — reload the page") unless @category
   end
 end

@@ -63,6 +63,9 @@ class Views::Frameworks::ShowView < Views::Base
           reject_suggestion_modal
           resolve_clarification_modal
           request_clarification_modal
+          archive_illustration_modal
+          # The ONE write-feedback region every edit-mode write streams into.
+          render Views::Frameworks::Explorer::WriteStatus.new
         end
       end
     end
@@ -83,6 +86,17 @@ class Views::Frameworks::ShowView < Views::Base
   # "Resolve…" (feed entry / pane card) opens it with a required note.
   def resolve_clarification_modal
     render Views::Frameworks::Explorer::ResolveClarificationModal.new(
+      framework_id: @framework.framework_id
+    )
+  end
+
+  # Confirms an illustration archive. Replaces the native `confirm()` the
+  # expanded row used to fire — a browser dialog has no focus management, no
+  # theming, and drags the `data-turbo-confirm` flake class into every system
+  # test that touches it. Same root-mounted `modal` placement as the capability
+  # archive, so an expanded-row re-render can't destroy the open dialog.
+  def archive_illustration_modal
+    render Views::Frameworks::Explorer::ArchiveIllustrationModal.new(
       framework_id: @framework.framework_id
     )
   end
@@ -191,8 +205,7 @@ class Views::Frameworks::ShowView < Views::Base
     {
       approve: approve_framework_suggestion_path(id, ":id", inline: 1),
       capabilityReorder: framework_capability_reorders_path(framework_id: id),
-      categoryReorder: framework_category_reorders_path(framework_id: id),
-      illustrationArchive: framework_illustration_archives_path(framework_id: id)
+      categoryReorder: framework_category_reorders_path(framework_id: id)
     }
   end
 
@@ -223,7 +236,9 @@ class Views::Frameworks::ShowView < Views::Base
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
-            draft_badge if @mode == :edit && @framework.draft?
+            render Views::Frameworks::Explorer::DraftStatus.new(
+              framework: @framework, slot: :badge, visible: @mode == :edit
+            )
             edit_mode_badge if @mode == :edit
           end
         end
@@ -231,7 +246,9 @@ class Views::Frameworks::ShowView < Views::Base
         div(class: "flex items-center gap-2") do
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
-          publish_button if @mode == :edit && @framework.draft? && @can_publish
+          render Views::Frameworks::Explorer::DraftStatus.new(
+            framework: @framework, slot: :publish, visible: @mode == :edit && @can_publish
+          )
           settings_link if @is_admin
         end
       end
@@ -294,31 +311,6 @@ class Views::Frameworks::ShowView < Views::Base
   # from the blue version badge.
   def edit_mode_badge
     render Components::Kit::Badge.new("Edit mode", variant: :warning)
-  end
-
-  # Draft status pill — edit mode only, only when an unpublished draft is
-  # open. Teal to stay distinct from the blue published-version badge and
-  # the amber edit-mode badge. Drafts are the normal working state (we roll
-  # forward, always editing toward the next version), so this is an ambient
-  # status, not a warning. Never rendered in view mode — viewers must not
-  # learn a draft exists. Edit mode already requires FrameworkPolicy#edit?,
-  # so gating on @mode == :edit is sufficient.
-  def draft_badge
-    render Components::Kit::Badge.new("v#{@framework.draft_version} draft", variant: :primary)
-  end
-
-  # Publish the current draft — owner/editor only, edit mode, draft open.
-  # Sits to the right of "Exit edit mode". Links to the publish-review page
-  # where the owner/editor validates the as-we-go migration mappings before
-  # confirming — the review page is the deliberate confirmation step (no
-  # inline dialog).
-  def publish_button
-    a(
-      href: new_framework_publication_path(@framework.framework_id),
-      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
-             "bg-primary text-white hover:bg-primary/90 transition-colors",
-      title: "Review and publish v#{@framework.draft_version}"
-    ) { "Publish v#{@framework.draft_version}" }
   end
 
   # Mode switcher pill — always rendered when the user can reach edit mode,
@@ -512,12 +504,7 @@ class Views::Frameworks::ShowView < Views::Base
       title: "Toggle activity feed"
     ) do
       span(class: "font-semibold text-gray-900 dark:text-white") { "Activity" }
-      if @pending_suggestion_count.positive?
-        span(class: "inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 " \
-                    "px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200") do
-          "#{@pending_suggestion_count} pending"
-        end
-      end
+      render Views::Frameworks::Explorer::PendingCountBadge.new(count: @pending_suggestion_count)
     end
   end
 

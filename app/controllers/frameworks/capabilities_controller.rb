@@ -7,6 +7,8 @@
 #
 class Frameworks::CapabilitiesController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
 
   before_action :set_framework
   before_action :set_capability, only: [ :update ]
@@ -19,7 +21,7 @@ class Frameworks::CapabilitiesController < ApplicationController
     authorize @framework, :add_capability?
     attrs = params.expect(capability: [ :category_id, :name, :description, { role_ids: [] } ])
 
-    Operations::Frameworks::AddCapability.call(
+    result = Operations::Frameworks::AddCapability.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
@@ -29,9 +31,14 @@ class Frameworks::CapabilitiesController < ApplicationController
         role_ids: Array(attrs[:role_ids]).compact_blank
       }
     )
-    redirect_to edit_framework_path(@framework.framework_id), notice: "Added “#{attrs[:name]}”."
+
+    render_write_streams(
+      [ toast_stream("Added “#{attrs[:name]}”.") ] +
+      capability_insert_streams(result[:capability_id], attrs[:category_id]) +
+      draft_status_streams
+    )
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+    render_write_error(e.message)
   end
 
   # PATCH /frameworks/:framework_id/capabilities/:id

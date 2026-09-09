@@ -30,7 +30,7 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
       method: "post",
       class: "space-y-4",
       data: {
-        controller: "add-capability-form",
+        controller: "add-capability-form tree-scope-fields",
         action: "submit->add-capability-form#validateRoles turbo:submit-end->modal#submitted"
       }
     ) do

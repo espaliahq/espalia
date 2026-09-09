@@ -37,8 +37,13 @@ class Frameworks::StructuralAddControllerTest < ActionDispatch::IntegrationTest
       post framework_capabilities_path(framework_id: @framework_id),
            params: { capability: { category_id: @cat_id, name: "Systems Design", role_ids: [ @role_id ] } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Added/, flash[:notice])
+      # The write-response contract: a Turbo Stream inserting the new row into
+      # its category group, plus one toast — never a navigation (#381).
+      assert_write_toast("Added “Systems Design”.")
+      assert_no_navigation
+      assert_turbo_stream_action("before", "add-capability-row-#{@cat_id}")
+      # Shape-changing, so the header's draft pill has to be streamed too.
+      assert_turbo_stream_action("replace", "framework-draft-badge")
       assert framework.draft_in_progress
 
       ActsAsTenant.with_tenant(@tenant) do
@@ -54,8 +59,10 @@ class Frameworks::StructuralAddControllerTest < ActionDispatch::IntegrationTest
       post framework_capabilities_path(framework_id: @framework_id),
            params: { capability: { category_id: @cat_id, name: "X", role_ids: [ SecureRandom.uuid_v7 ] } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/unknown role/i, flash[:alert])
+      # A refused write stays in the same region rather than navigating — the
+      # user keeps their scroll position and any open expanded row.
+      assert_write_toast(/unknown role/i, status: :unprocessable_content)
+      assert_no_navigation
       assert_not framework.draft_in_progress
     end
 
@@ -75,8 +82,11 @@ class Frameworks::StructuralAddControllerTest < ActionDispatch::IntegrationTest
       post framework_categories_path(framework_id: @framework_id),
            params: { category: { name: "Delivery" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Added category/, flash[:notice])
+      assert_write_toast("Added category “Delivery”.")
+      assert_no_navigation
+      assert_turbo_stream_action("append", "framework-matrix-table")
+      # AddCategory is shape-preserving, so no draft pill to stream.
+      assert_select %(turbo-stream[target="framework-draft-badge"]), count: 0
       assert_not framework.draft_in_progress
       assert ActsAsTenant.with_tenant(@tenant) {
         FrameworkState::CapabilityCategory.exists?(framework_id: @framework_id, name: "Delivery")

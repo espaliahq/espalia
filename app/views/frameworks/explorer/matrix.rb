@@ -6,6 +6,9 @@
 # each containing expandable capability rows with level cells.
 #
 class Views::Frameworks::Explorer::Matrix < Views::Base
+  # Turbo Stream anchor for appending a newly added category's group.
+  TABLE_ID = "framework-matrix-table"
+
   # @param matrix_data [Hash] output from MatrixDataBuilder
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
@@ -57,32 +60,28 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
     # The role/track scope every on-demand expanded-row fetch appends to its
     # row's `data-expanded-src` — carried ONCE here rather than once per row
     # (Hard-Won Lesson 25).
-    table(class: "w-full border-collapse", data: { expanded_row_scope: expanded_row_scope }) do
+    table(id: TABLE_ID, class: "w-full border-collapse",
+          data: { expanded_row_scope: expanded_row_scope }) do
       render Views::Frameworks::Explorer::MatrixHeader.new(
         merged_levels: @merged_levels,
         selected_role_count: @matrix_data[:selected_roles].size,
         framework_id: @framework_id,
         mode: @mode
       )
-      tbody do
-        @categories.each_with_index do |cat_data, index|
-          render Views::Frameworks::Explorer::MatrixCategoryGroup.new(
-            category_data: cat_data,
-            merged_levels: @merged_levels,
-            selected_role_ids: @selected_role_ids,
-            framework_id: @framework_id,
-            mode: @mode,
-            current_person_id: @current_person_id,
-            search_query: @matrix_data[:search_query],
-            can_edit_structure: @can_edit_structure,
-            approval_authority: @approval_authority,
-            # Visible neighbours for the header's ↑/↓ move chevrons — a move is
-            # relative to what the viewer SEES (filters can hide categories),
-            # and the matrix re-renders after each move so these stay fresh.
-            prev_category_id: index.positive? ? @categories[index - 1][:category].category_id : nil,
-            next_category_id: @categories[index + 1]&.dig(:category)&.category_id
-          )
-        end
+      # Each group renders its own <tbody> (see MatrixCategoryGroup) — that is
+      # what makes a category addressable by a Turbo Stream and movable in place.
+      @categories.each do |cat_data|
+        render Views::Frameworks::Explorer::MatrixCategoryGroup.new(
+          category_data: cat_data,
+          merged_levels: @merged_levels,
+          selected_role_ids: @selected_role_ids,
+          framework_id: @framework_id,
+          mode: @mode,
+          current_person_id: @current_person_id,
+          search_query: @matrix_data[:search_query],
+          can_edit_structure: @can_edit_structure,
+          approval_authority: @approval_authority
+        )
       end
     end
   end

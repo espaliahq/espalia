@@ -56,8 +56,9 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   # Both author and non-author submit to the same create endpoint
   # (SetBehaviouralExpectation amends the author's own pending proposal, or
   # records a non-author's alternative) — either way it stays a proposal, so the
-  # outcome is fixed rather than derived from authority. A full navigation
-  # (`_top`) like the "+ Add expectation" form.
+  # outcome is fixed rather than derived from authority. Answers the same
+  # cell-replacing Turbo Stream as the "+ Add expectation" form, with
+  # `tree-scope-fields` carrying the grid's scope onto the re-render.
   def editor_data
     field_editor_data(
       action: framework_expectations_path(framework_id: @framework_id),
@@ -68,7 +69,7 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
       method: "post",
       rows: 3,
       submit_label: @is_author ? "Save" : "Suggest alternative",
-      turbo_frame: "_top",
+      form_controller: "tree-scope-fields",
       extra: {
         "behavioural_expectation[capability_id]" => @suggestion.parent_id,
         "behavioural_expectation[level_ordinal]" => @level_ordinal

@@ -5,9 +5,11 @@
 # always visible, opening the shared field editor and POSTing to
 # {Frameworks::ExpectationsController#create}.
 #
-# The submit is a full Turbo Drive navigation (`data-turbo-frame="_top"`) —
-# authoring is shape-changing, so the controller redirects back to the edit page
-# with the new cell rendered, matching the other structural adds.
+# The submit answers a Turbo Stream that replaces just this cell (with the
+# authored expectation, or with its pending ghost) plus the toast — so
+# authoring never costs the page. `tree-scope-fields` rides along on the form so
+# the re-rendered cell is built against the same role/track/search scope the
+# grid around it was.
 class Views::Frameworks::Explorer::NewExpectationFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::InlineEditable
 
@@ -38,7 +40,7 @@ class Views::Frameworks::Explorer::NewExpectationFrame < Views::Base
       method: "post",
       rows: 3,
       submit_label: "Add",
-      turbo_frame: "_top",
+      form_controller: "tree-scope-fields",
       placeholder: "What does good look like at this level…",
       extra: {
         "behavioural_expectation[capability_id]" => @capability_id,

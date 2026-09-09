@@ -6,6 +6,8 @@
 #
 class Frameworks::CategoriesController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
 
   before_action :set_framework
   before_action :set_category, only: [ :update ]
@@ -18,7 +20,7 @@ class Frameworks::CategoriesController < ApplicationController
     authorize @framework, :add_category?
     attrs = params.expect(category: [ :name, :description ])
 
-    Operations::Frameworks::AddCategory.call(
+    result = Operations::Frameworks::AddCategory.call(
       context: pundit_user,
       params: {
         framework_id: @framework.framework_id,
@@ -26,9 +28,15 @@ class Frameworks::CategoriesController < ApplicationController
         description: attrs[:description].presence
       }
     )
-    redirect_to edit_framework_path(@framework.framework_id), notice: "Added category “#{attrs[:name]}”."
+
+    # AddCategory is shape-preserving (it applies live), so no draft status to
+    # stream — just the new group and the toast.
+    render_write_streams(
+      [ toast_stream("Added category “#{attrs[:name]}”.") ] +
+      category_append_streams(result[:category_id])
+    )
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+    render_write_error(e.message)
   end
 
   # PATCH /frameworks/:framework_id/categories/:id

@@ -11,8 +11,10 @@
 // rule is still enforced server-side (Operation) and in the aggregate.
 //
 // Usage:
-//   <form data-controller="add-level-form tree-scope-fields"
-//         data-action="submit->add-level-form#validate turbo:submit-end->modal#submitted">
+//   <form data-controller="add-level-form"
+//         data-action="submit->add-level-form#validate
+//                      turbo:submit-end->add-level-form#submitted
+//                      turbo:submit-end->modal#submitted">
 //     <input type="hidden" data-add-level-form-target="roleId">
 //     <span data-add-level-form-target="roleName"></span>
 //     <input type="number" data-add-level-form-target="ordinal"
@@ -50,6 +52,16 @@ export default class extends Controller {
 
     event.preventDefault()
     if (this.hasOrdinalTarget) this.ordinalTarget.focus()
+  }
+
+  // A new level adds a COLUMN to every matrix row — the one edit-mode write
+  // whose grid update genuinely needs the whole frame, so it keeps the
+  // documented `org-structure:updated` → matrix#refresh path. The response
+  // itself is a Turbo Stream (toast + draft status), so nothing navigates.
+  submitted(event) {
+    if (!event.detail?.success) return
+
+    window.dispatchEvent(new CustomEvent("org-structure:updated"))
   }
 
   // private

@@ -9,7 +9,9 @@
 # - `update` — a row save from the editor (re-renders the frame), or the inline
 #   title rename from the matrix header (re-renders the title frame).
 # - `create` — a new level, from the editor's add row (re-renders the frame) or
-#   the role row's "+ level" modal (redirects back to the edit explorer).
+#   the role row's "Add level…" modal (toast + draft status Turbo Stream; the
+#   form then asks the matrix to refresh, because a level adds a COLUMN to every
+#   row — the one grid change no surgical stream can express).
 #
 # Direct org-structure edits — not the suggested-edit path. Title/code/entry
 # edits are shape-preserving (apply live); **adding is shape-changing** — the
@@ -21,6 +23,9 @@
 # convenience over the per-level Operation, like evidence multi-send; MCP
 # parity is untouched.
 class Frameworks::LevelsController < ApplicationController
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
+
   EDITOR_FRAME = "level-editor"
 
   before_action :set_framework
@@ -58,8 +63,15 @@ class Frameworks::LevelsController < ApplicationController
     if editor_request?
       render_editor_frame(graph_role(attrs[:role_id], reload: true))
     else
-      redirect_to edit_framework_path(@framework.framework_id, **selection_params),
-                  notice: "Added level “#{attrs[:title]}” (L#{attrs[:ordinal]}) to the draft."
+      # A level adds a COLUMN to every row, so this is the one write whose grid
+      # update genuinely needs the full matrix — `add-level-form` dispatches
+      # `org-structure:updated` → matrix#refresh on success. The response itself
+      # carries only the toast and the (now-open) draft status, so the page is
+      # never navigated away and the role tree / scroll survive.
+      render_write_streams(
+        [ toast_stream("Added level “#{attrs[:title]}” (L#{attrs[:ordinal]}) to the draft.") ] +
+        draft_status_streams
+      )
     end
   rescue Operations::Base::ParameterError, RuntimeError => e
     if editor_request?
@@ -70,7 +82,7 @@ class Frameworks::LevelsController < ApplicationController
 
       render_editor_frame(role, error: e.message, status: :unprocessable_content)
     else
-      redirect_to edit_framework_path(@framework.framework_id, **selection_params), alert: e.message
+      render_write_error(e.message)
     end
   end
 
@@ -145,14 +157,6 @@ class Frameworks::LevelsController < ApplicationController
       attrs[:is_entry] = permitted[:is_entry]
     end
     attrs
-  end
-
-  # The roles[]/track selection the "+ level" modal carried (injected at submit
-  # by tree-scope-fields) — threaded onto the redirect so checkboxes stay
-  # checked.
-  def selection_params
-    { roles: Array.wrap(params[:roles]).select(&:present?).presence,
-      track: params[:track].presence }.compact
   end
 
   def set_framework

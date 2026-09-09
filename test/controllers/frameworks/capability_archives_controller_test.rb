@@ -22,6 +22,15 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
       handler.add_capability_category(@framework_id, cat_id, "Thinking")
       handler.add_capability(@framework_id, @cap_id, SecureRandom.uuid_v7, cat_id, "Legacy Systems")
       handler.add_capability(@framework_id, SecureRandom.uuid_v7, @survivor_stable, cat_id, "Platform Eng")
+      # A role + level + binding so the capability actually renders a matrix row
+      # — the archive response streams that row back, and a framework with no
+      # levels renders the matrix's empty state instead.
+      rf_id = SecureRandom.uuid_v7
+      role_id = SecureRandom.uuid_v7
+      handler.add_role_family(@framework_id, rf_id, "Engineering")
+      handler.add_role(@framework_id, role_id, rf_id, "Software Engineer", "E", "ic")
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, role_id, 1, "Engineer I", "E1")
+      handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, @cap_id, role_id)
       handler.publish_version(@framework_id, "seed")
     end
   end
@@ -40,8 +49,11 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
       post_archive(@admin_user,
         { capability_id: @cap_id, reason: "Retired", mapping_type: "evolved", to_stable_id: @survivor_stable })
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Archived/, flash[:notice])
+      # The struck row + the draft pill, streamed in place — no navigation (#381).
+      assert_write_toast(/^.*Archived/)
+      assert_no_navigation
+      assert_turbo_stream_action("replace", "capability-row-#{@cap_id}")
+      assert_turbo_stream_action("replace", "framework-draft-badge")
       assert framework.draft_in_progress
 
       mapping = ActsAsTenant.with_tenant(@tenant) do
@@ -54,7 +66,7 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
     should "archive with no survivor for an archived mapping" do
       post_archive(@admin_user, { capability_id: @cap_id, reason: "Retired", mapping_type: "archived" })
 
-      assert_redirected_to edit_framework_path(@framework_id)
+      assert_write_toast
       mapping = ActsAsTenant.with_tenant(@tenant) do
         FrameworkState::MigrationMapping.find_by(framework_id: @framework_id, mapping_type: "archived")
       end
@@ -68,8 +80,9 @@ class Frameworks::CapabilityArchivesControllerTest < ActionDispatch::Integration
       post framework_capability_archives_path(framework_id: @framework_id),
            params: { archive: { capability_id: @cap_id, reason: "Retire" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Proposed archiving/, flash[:notice])
+      assert_write_toast(/Proposed archiving/)
+      assert_no_navigation
+      assert_turbo_stream_action("replace", "capability-row-#{@cap_id}")
       assert_not framework.draft_in_progress, "a proposal must not open a draft"
 
       pending = ActsAsTenant.with_tenant(@tenant) do

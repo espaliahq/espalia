@@ -38,7 +38,8 @@ class Views::Frameworks::Explorer::ArchiveModal < Views::Base
       action: framework_capability_archives_path(@framework_id),
       method: "post",
       class: "space-y-4",
-      data: { controller: "archive-form", action: "turbo:submit-end->modal#submitted" }
+      data: { controller: "archive-form tree-scope-fields",
+              action: "turbo:submit-end->modal#submitted" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "archive[capability_id]", data: { archive_form_target: "capabilityId" })

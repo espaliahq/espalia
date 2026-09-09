@@ -12,17 +12,28 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   include Views::Frameworks::Explorer::Concerns::MenuItems
   include Views::Frameworks::Explorer::Concerns::StickyColumn
 
+  # Turbo Stream anchor for the whole category — a `<tbody>`, so an archive can
+  # remove it and a reorder can move the node in place.
+  #
+  # @param category_id [String]
+  # @return [String]
+  def self.group_id(category_id) = "category-group-#{category_id}"
+
+  # Turbo Stream anchor a newly added capability's rows are inserted BEFORE —
+  # the "+ Add capability" row always sits last in its category group.
+  #
+  # @param category_id [String]
+  # @return [String]
+  def self.add_capability_row_id(category_id) = "add-capability-row-#{category_id}"
+
   # @param category_data [Hash] from MatrixDataBuilder: { category:, capabilities: [...] }
   # @param merged_levels [Array<Hash>]
   # @param selected_role_ids [Array<String>]
   # @param framework_id [String] UUID of the framework (threaded to illustration inline editors)
   # @param mode [Symbol] :view or :edit
-  # @param prev_category_id [String, nil] the visible category above (for the ↑ move chevron)
-  # @param next_category_id [String, nil] the visible category below (for the ↓ move chevron)
   def initialize(category_data:, merged_levels:, selected_role_ids:, framework_id:, mode: :view,
                  current_person_id: nil, search_query: nil, can_edit_structure: false,
-                 approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 prev_category_id: nil, next_category_id: nil)
+                 approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @category = category_data[:category]
     @capabilities = category_data[:capabilities]
     @category_pending_count = category_data[:pending_suggestion_count] || 0
@@ -37,14 +48,20 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     @search_query = search_query
     @can_edit_structure = can_edit_structure
     @approval_authority = approval_authority
-    @prev_category_id = prev_category_id
-    @next_category_id = next_category_id
   end
 
+  # ONE `<tbody>` per category (valid HTML, and what makes a category
+  # addressable): an add streams a whole group onto the table, an archive
+  # removes one, and a reorder moves the node. Category collapse is unaffected
+  # — matrix#toggleCategory walks siblings from the header row, which now stop
+  # at the tbody boundary instead of at the next header.
   def view_template
-    category_header
-    capability_rows
-    add_capability_row if @mode == :edit && @can_edit_structure
+    tbody(id: self.class.group_id(@category.category_id),
+          data: { category_group: @category.category_id }) do
+      category_header
+      capability_rows
+      add_capability_row if @mode == :edit && @can_edit_structure
+    end
   end
 
   private
@@ -58,7 +75,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # column** — the column it adds to — which the sticky left edge keeps in view
   # however far right the viewer has scrolled (#380 visual pass).
   def add_capability_row
-    tr do
+    tr(id: self.class.add_capability_row_id(@category.category_id)) do
       td(
         class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 #{STICKY_EDGE_CLASSES} " \
                "px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 min-w-[200px]"
@@ -186,19 +203,16 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   # publishes `data-category-id`).
   def category_menu_data
     data = { name: @category.name }
-    if @can_edit_structure
-      data[:prev] = @prev_category_id
-      data[:next] = @next_category_id
-    end
+    # Which Move directions exist is decided client-side from the sibling
+    # `<tbody>` groups — a server-sent neighbour id goes stale as soon as the
+    # first in-place move lands (framework-explorer.md §11a).
+    data[:move] = "1" if @can_edit_structure
     data[:archive] = "1" if @can_edit_structure && @category_archivable
     data
   end
 
   def capability_rows
-    movable = movable_capability_ids
     @capabilities.each do |cap_data|
-      cap_id = cap_data[:capability].capability_id
-      index = movable.index(cap_id)
       render Views::Frameworks::Explorer::MatrixRow.new(
         capability_data: cap_data,
         merged_levels: @merged_levels,
@@ -208,22 +222,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
         current_person_id: @current_person_id,
         search_query: @search_query,
         can_edit_structure: @can_edit_structure,
-        approval_authority: @approval_authority,
-        prev_capability_id: index&.positive? ? movable[index - 1] : nil,
-        next_capability_id: index ? movable[index + 1] : nil
+        approval_authority: @approval_authority
       )
-    end
-  end
-
-  # Rows the ↑/↓ kebab items can move or target: the visible rows minus the
-  # struck pending-archive ones (they're going away at publish — not part of
-  # the reorderable order the server validates against).
-  def movable_capability_ids
-    @capabilities.filter_map do |cap_data|
-      cap = cap_data[:capability]
-      next if pending_archive?(cap)
-
-      cap.capability_id
     end
   end
 end
