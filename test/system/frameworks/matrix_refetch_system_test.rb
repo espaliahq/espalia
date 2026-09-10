@@ -96,6 +96,21 @@ class Frameworks::MatrixRefetchSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "refresh — the non-surgical fallback" do
+    should "re-fetch every time it fires, not only the first" do
+      # `refresh` re-fetches with the axes it already has, so it always computes
+      # the src the frame is holding. Anything that skips an unchanged src turns
+      # the SECOND fire into a silent no-op — the acting user then keeps a
+      # resolved suggestion's stale inline diff, which is what the fallback is
+      # for (framework-explorer.md §12, Hard-Won Lesson 21).
+      open_explorer
+
+      2.times { fire_refresh }
+
+      assert_matrix_fetch_count 2
+    end
+  end
+
   context "the busy indicator" do
     should "cover the whole wait — the debounce window included" do
       open_explorer
@@ -165,6 +180,22 @@ class Frameworks::MatrixRefetchSystemTest < ApplicationSystemTestCase
     JS
     # Let the whole burst land before the caller reads anything back.
     sleep((role_ids.size * BURST_GAP_MS) / 1000.0)
+  end
+
+  # The window event `matrix#refresh` listens for, plus a wait for the fetch it
+  # provokes to land — the count is read after both have settled.
+  def fire_refresh
+    before = matrix_fetch_count
+    page.execute_script("window.dispatchEvent(new CustomEvent('org-structure:updated'))")
+    assert_matrix_fetch_settled(before + 1)
+  end
+
+  def assert_matrix_fetch_settled(expected)
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      sleep 0.05 until matrix_fetch_count >= expected
+    end
+  rescue Timeout::Error
+    flunk "expected #{expected} matrix fetch(es), still at #{matrix_fetch_count}"
   end
 
   def watch_busy_bar

@@ -46,6 +46,8 @@ export default class extends BaseController {
 
   connect() {
     super.connect()
+    // A Turbo Drive snapshot can restore this page with the bar mid-fetch.
+    this.#setBusy(false)
     if (this.urlSyncValue) {
       this.#listenForFrameLoad()
     }
@@ -139,6 +141,9 @@ export default class extends BaseController {
   }
 
   disconnect() {
+    // A bar left visible is captured in Turbo Drive's page snapshot and comes
+    // back as a permanent-looking stripe on the restored preview.
+    this.#setBusy(false)
     if (this._filterDebounceTimer) {
       clearTimeout(this._filterDebounceTimer)
       this._filterDebounceTimer = null
@@ -274,14 +279,20 @@ export default class extends BaseController {
     }, FILTER_DEBOUNCE_MS)
   }
 
-  // Turbo no-ops when `src` is assigned its current value, so a filter round
-  // trip back to a state already rendered would leave the busy bar up forever.
+  // Assigns the frame's `src` — ALWAYS, even when the value is unchanged.
+  //
+  // `refresh()` (the §12 non-surgical fallback, and the org-structure edits that
+  // change the matrix header) exists precisely to re-fetch with the axes it
+  // already has, so it always computes the src the frame is holding. A
+  // "skip when unchanged" guard therefore silently turns the second and every
+  // later refresh into a no-op — the acting user's grid keeps a resolved
+  // suggestion's stale inline diff, which is the one thing the fallback is for.
+  //
+  // Turbo re-fetches on a same-value assignment (setAttribute fires
+  // `attributeChangedCallback` regardless of the value, and `sourceURLChanged`
+  // clears `complete` before loading), so nothing is lost by not guarding — and
+  // an unchanged state is a 304 now (#383), which is what makes the repeat cheap.
   #applyFrameSrc(src) {
-    if (this.frameTarget.getAttribute("src") === src) {
-      this.#setBusy(false)
-      return
-    }
-
     this.#setBusy(true)
     this.frameTarget.src = src
   }
