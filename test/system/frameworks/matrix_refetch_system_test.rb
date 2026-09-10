@@ -141,6 +141,33 @@ class Frameworks::MatrixRefetchSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-matrix-target='busy']", visible: true
     end
 
+    should "dim the grid for the half of the wait Turbo can see" do
+      open_explorer
+
+      # The bar covers the whole wait; Turbo's own `busy` attribute covers the
+      # fetch, and dims the stale grid while it is in flight. Asserted by
+      # toggling the attribute rather than racing a real fetch — the claim is
+      # about the CSS rule, which is otherwise only ever checked by eye.
+      opacity = page.evaluate_script(<<~JS)
+        (() => {
+          const frame = document.querySelector("turbo-frame#framework-matrix")
+          // Freeze the transition first, or the value read back is the
+          // mid-animation one — still 1 at t=0 (the same trap
+          // explorer_menu_system_test hit reading a reveal's opacity).
+          frame.style.transition = "none"
+          const idle = getComputedStyle(frame).opacity
+          frame.setAttribute("busy", "")
+          const busy = getComputedStyle(frame).opacity
+          frame.removeAttribute("busy")
+          frame.style.transition = ""
+          return { idle, busy }
+        })()
+      JS
+      assert_equal "1", opacity["idle"]
+      assert_operator opacity["busy"].to_f, :<, 1.0,
+                      "the matrix frame should dim while Turbo has a fetch in flight"
+    end
+
     should "announce the wait to assistive technology" do
       open_explorer
 
