@@ -78,6 +78,36 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "Strategic Thinking", response.body
     end
+
+    # The title names only the focused entity; the breadcrumb names the chain
+    # it sits in — a focused capability's CATEGORY was otherwise invisible —
+    # and carries the × that clears focus (#382).
+    should "render a focus breadcrumb naming the capability's category, with a clear ×" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel",
+        focus: "capability", capability_id: @cap_id)
+
+      assert_response :success
+      assert_select "a[aria-label=?]", "Clear focus"
+      assert_match "Thinking", response.body
+    end
+
+    # The gestures that narrow this feed (category-name click, row expand,
+    # expanded-cell click) are discoverable only by accident, so the unfocused
+    # header names them — and gives the line up to the breadcrumb once focused.
+    should "name the gestures that narrow the feed, and drop the hint once focused" do
+      sign_in @admin_user
+      get framework_activity_path(@framework_id, layout: "panel")
+
+      assert_response :success
+      assert_match "Click a category name, expand a capability row", response.body
+
+      get framework_activity_path(@framework_id, layout: "panel",
+        focus: "capability", capability_id: @cap_id)
+
+      assert_response :success
+      assert_no_match "Click a category name, expand a capability row", response.body
+    end
   end
 
   context "suggestion focus (the pane card)" do

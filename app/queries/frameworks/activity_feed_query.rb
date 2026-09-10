@@ -297,15 +297,22 @@ class Frameworks::ActivityFeedQuery
   # Human-readable descriptor for the panel header — mirrors
   # {Frameworks::FocusedSuggestionsQuery#descriptor}.
   #
+  # Capability- and cell-level focus also name the CATEGORY they sit in, which
+  # the title alone never showed: the pane renders the chain as a breadcrumb
+  # ("Thinking > Strategic Thinking > L2") so the focus is legible and
+  # clearable in one place (#382).
+  #
   # @return [Hash] { level:, category_name:, capability_name:, level_label: }
   def descriptor
     case @focus
     when :category
       { level: :category, category_name: category_name_for(@category_id) }
     when :capability
-      { level: :capability, capability_name: capability_name_for(@capability_id) }
+      { level: :capability, capability_name: capability_name_for(@capability_id),
+        category_name: category_name_for(capability_to_category[@capability_id]) }
     when :cell
       { level: :cell, capability_name: capability_name_for(@capability_id),
+        category_name: category_name_for(capability_to_category[@capability_id]),
         level_label: "L#{@level_ordinal}" }
     else
       { level: :framework }

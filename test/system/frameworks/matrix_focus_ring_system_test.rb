@@ -101,6 +101,33 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "the activity pane's focus breadcrumb" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+    end
+
+    should "name the focused capability's category and clear focus from the ×" do
+      expand_matrix_row("#capability-row-#{@capability_id}")
+
+      within("#suggestion-panel") do
+        # The chain the title alone never showed — a focused capability's
+        # category — with the clear affordance beside it.
+        assert_text "Thinking"
+        assert_text "Strategic Thinking"
+        assert_selector "a[aria-label='Clear focus']"
+      end
+
+      assert_selector FOCUSED_ROW, visible: :all
+
+      click_selector_with_js_fallback("a[aria-label='Clear focus']",
+                                      expect_text: "All framework activity")
+
+      assert_no_selector FOCUSED_ROW, visible: :all
+    end
+  end
+
   private
 
   # The category name is a `role="button"` span carrying `matrix#focusCategory`;
