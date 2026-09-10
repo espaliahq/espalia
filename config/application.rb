@@ -25,7 +25,13 @@ module GrowthOs
 
     # Rack 3 downcases response header names; be explicit rather than relying
     # on that, since this runs on every response.
-    COMPRESSIBLE = lambda do |_env, _status, headers, _body|
+    COMPRESSIBLE = lambda do |_env, _status, headers, body|
+      # Rack 3 allows a body that only responds to `call` (a streamed response),
+      # and Rack::Deflater's wrapper enumerates with `each` — so compressing one
+      # raises NoMethodError when the response is consumed. Nothing streams here
+      # today; this keeps that true if something starts to.
+      next false unless body.respond_to?(:each)
+
       # Already encoded by the app (a pre-gzipped asset, a proxied response):
       # re-framing it would corrupt the encoding chain.
       next false if headers["content-encoding"] || headers["Content-Encoding"]

@@ -74,16 +74,31 @@ class ResponseCompressionTest < ActionDispatch::IntegrationTest
 
     should "never re-frame a response the app already encoded" do
       assert_not GrowthOs::Application::COMPRESSIBLE.call(
-        {}, 200, { "content-type" => "text/html", "content-encoding" => "gzip" }, nil
+        {}, 200, { "content-type" => "text/html", "content-encoding" => "gzip" }, [ "<html>" ]
+      )
+    end
+
+    should "leave a streamed, callable-only body alone" do
+      # Rack 3 allows a body that only responds to `call`; Rack::Deflater's
+      # wrapper enumerates with `each`, so compressing one raises NoMethodError
+      # when the response is consumed. Nothing streams here today — this is what
+      # keeps a future SSE endpoint from finding out the hard way.
+      streamed = Class.new { def call(stream) = stream.close }.new
+
+      assert_not streamed.respond_to?(:each), "the fixture must be callable-only"
+      assert_not GrowthOs::Application::COMPRESSIBLE.call(
+        {}, 200, { "content-type" => "text/event-stream" }, streamed
       )
     end
   end
 
   private
 
+  # An enumerable body, like every buffered Rails response — the callable-only
+  # case has its own test above.
   def compressible?(content_type, length: 100_000)
     headers = { "content-type" => content_type }
     headers["content-length"] = length.to_s if length
-    GrowthOs::Application::COMPRESSIBLE.call({}, 200, headers, nil)
+    GrowthOs::Application::COMPRESSIBLE.call({}, 200, headers, [ "body" ])
   end
 end
