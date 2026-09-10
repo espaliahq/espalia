@@ -324,6 +324,29 @@ focus; the entry's row body remains the way to jump the grid to the entity.
 
 **Panel header is focus-driven**: `FocusedSuggestionsQuery#descriptor` renders the focus title ("All framework suggestions" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers the "Show all" link. See §9 for full header/row anatomy.
 
+**Focus is visible on the grid, and legible + clearable in one place (#382).**
+Three separate gestures set focus and others clear it, so neither half can be
+left implicit:
+
+- **On the grid**: `matrix_controller#applyGridFocus` stamps `data-focused` on
+  the focused compact row, its level cells and the focused category band; the
+  ring is CSS hanging off that attribute (`.mx-row[data-focused]` and friends in
+  `application.css`), so a client-side-only state costs the grid no bytes. It is
+  diffed against the previously-stamped set and re-applied after a frame load,
+  since the swap discards the attributes with the nodes that carried them. A
+  cell's ring is `outline`, not `box-shadow`, so it composes with the row's
+  inset lines rather than replacing them — and the focused sticky capability
+  cell's rule carries the column's right-edge shadow too, since that is the same
+  property.
+- **In the pane**: the header renders the focus chain as a breadcrumb
+  ("`Thinking › Strategic Thinking › L2`") with an **×** beside it — the same
+  clear path as the worded link (`context-pane#clearFocus` →
+  `suggestion:navigate { level: "framework" }`). `ActivityFeedQuery#descriptor`
+  therefore carries `category_name` at capability and cell focus too, which the
+  title alone never showed. While nothing is focused the breadcrumb's line is
+  given over to a one-liner naming the three gestures — on screen exactly while
+  it is actionable.
+
 **Single-scope accordion**: at most one focus scope is active. Focusing a new row clears any prior cell focus. Collapsing a row clears cell focus.
 
 **Role filter layering**: role selection always applies, but only to `role_illustration` rows in the panel. Higher-level entity types (capability, category, expectation) are unaffected by the roles filter — those are framework-level constructs.
@@ -1215,7 +1238,7 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 |---------|----------|---------|---------|
 | Corner cell ("Capability") | `sticky top-0 left-0` | `z-20` | Always visible at intersection |
 | Column headers (levels) | `sticky top-0` | `z-10` | Visible when scrolling vertically |
-| Category headers | `sticky top-[41px]` | `z-[5]` | Below column headers, above data |
+| Category headers | `sticky` + `.mx-cat-row` (`top: var(--matrix-header-h)`) | `z-[5]` | Below column headers, above data |
 | Left column (capability name) | `sticky left-0` | `z-[2]` | Visible when scrolling horizontally |
 
 **Every sticky cell must be OPAQUE in both themes (NON-NEGOTIABLE).** A sticky cell is a mask — content scrolls underneath it — so a translucent background (`bg-…/NN`) or a missing one lets that content render straight through. This applies to hover and focus variants too, not just the base class. Where the design wants a tint, use the **opaque composite** (the literal hex of that tint over the surface behind it) rather than the translucent token, so the cell looks identical but actually masks; derive it by compositing in the browser, not by eye, and record the token + surface at the call site. The shared right-edge treatment and the full rationale live in [`concerns/sticky_column.rb`](../../app/views/frameworks/explorer/concerns/sticky_column.rb) — see Hard-Won Lesson 24.
@@ -1226,6 +1249,31 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 | Compact row (capability name) | `bg-white`, hover `bg-gray-50` | `dark:bg-gray-900`, hover `dark:bg-[#172131]` (= `gray-800/50` over `gray-900`) |
 | Expanded row (empty gutter) | `bg-[#fafcff]` (= `blue-50/30` over white) | `dark:bg-[#111b31]` (= `blue-900/10` over `gray-900`) |
 | Category header row | `bg-gray-100` | `dark:bg-gray-800` |
+
+**The sticky offsets are MEASURED, never constants (NON-NEGOTIABLE).** The
+matrix header's height depends on the role selection — ~41 px of code badges
+past `MatrixHeader::FULL_TITLE_THRESHOLD`, ~113 px of full level titles (with
+their rename pencils in edit mode) at or below it — and the category band's on
+whether it carries a description. `matrix_controller#publishStickyGeometry`
+measures both with a `ResizeObserver` and publishes them on the explorer root:
+
+| Variable | Measured from | Consumed by |
+|---|---|---|
+| `--matrix-header-h` | the sticky header **cell** (`thead th`) | `.mx-cat-row`'s `top`, the row's `scroll-margin-top` |
+| `--matrix-category-h` | the tallest category band `<tr>` | the row's `scroll-margin-top` |
+
+`.mx-row`'s `scroll-margin-top` is `calc(header + category + 8px)`, so
+`scrollIntoView({ block: "start" })` on expand lands the capability name just
+below the stack. Both CSS fallbacks are the old constants, so a not-yet-connected
+controller is no worse than before. Two rules for anything added here:
+
+- **Measure the sticky BOX, not its parent.** Stickiness lives on the `<th>`s,
+  and an element's rect is computed from its normal-flow position — a scrolled
+  `<thead>` reports a bottom hundreds of pixels above where its stuck cells
+  actually are. The category band's own `<tr>` IS the sticky box, so that one
+  reports correctly.
+- **Re-observe on frame load.** Both measured elements live inside the matrix
+  Turbo Frame, so every filter change replaces them.
 
 **Single scroll container.** The only scroll container is `main_pane` in `show_view.rb` (`flex-1 overflow-auto`, tagged `data-matrix-target="scrollContainer"`). The `<table>` must be rendered as a direct child of the turbo-frame inside it — do NOT wrap it in `overflow-x-auto` (or any `overflow-*`) divs. CSS `position: sticky` anchors to the nearest scrolling ancestor, so a nested overflow wrapper silently captures the anchor and breaks vertical stickiness (see Hard-Won Lesson 11).
 
@@ -1280,6 +1328,19 @@ job via `updateSearch`. See §4a.
 - **Panel navigation** (`navigateToEntity` on `suggestion:navigate` from context pane) — programmatically expands a row by capability ID, scrolls it into view, and dispatches `matrix:focus-changed`. For category-level navigation, scrolls to the category header. When the entry names a **pending suggestion**, scrolls to that suggestion's decorated element (`[data-suggestion-id]` anchor) and pulses `.suggestion-nav-highlight` on it — an expanded cell can be taller than the viewport, so cell-centering alone leaves the example off-screen; the cell/row scroll is the anchor-less fallback (the cell gets the same pulse).
 - **Resolution refresh** (`refresh` on `suggestion:resolved`) — re-fetches the matrix frame with the current filter axes so an inline approve/reject in the feed clears the now-resolved inline diff for the acting user (§12, Hard-Won Lesson 21).
 - **Squiggle → suggestion card** (`openSuggestionCard` on a decorated pending change) — stops the row/cell click and dispatches the window `suggestion:open-card` event; the context pane renders the card and a collapsed pane reveals itself (§10).
+- **Sticky geometry** (`#publishStickyGeometry` / `#observeStickyGeometry`) —
+  measures the sticky header cell and the tallest category band with a
+  `ResizeObserver` and publishes `--matrix-header-h` / `--matrix-category-h` on
+  the explorer root, re-observing on every matrix frame load. See *Sticky
+  Positioning*.
+- **Sticky-stack guard** (`#guardRowClearsStickyStack`, after
+  `#anchorCapabilityTop` settles) — asks `elementFromPoint` whether the expanded
+  row's name line is really the topmost thing at its own coordinates, and nudges
+  the scroll if the sticky header answered instead. `scrollIntoView` resolves
+  `scroll-margin` once and never retargets (#382).
+- **On-grid focus** (`#applyGridFocus`) — stamps `data-focused` on the focused
+  row / level cells / category band, diffed against the previous set and
+  re-applied on frame load and after an expanded row's content lands. See §8.
 - **URL sync** (pushState for shareability — explorer uses role/track params)
 - **Assessment URL sync** (gated behind `urlSyncValue`) — syncs `?category=` and `?capability=` to browser URL, dims sibling rows on expansion. Only active in assessment views; explorer DOM never sets this value.
 - **Shared** between explorer and assessment views — same collapse/expand logic applies
@@ -2052,6 +2113,33 @@ Turbo Frame needs the *frame's* semantics checked, not assumed; and a repeat
 fetch of an unchanged state is a 304 now, so there was nothing to save anyway.
 Pinned by `matrix_refetch_system_test.rb` ("re-fetch every time it fires").
 
+### 36. A sticky child moves; its parent's rect does not
+
+The sticky-offset work (#382) needed one number — where the matrix header's
+bottom edge actually is — and `thead.getBoundingClientRect().bottom` is the
+obvious way to ask. It is wrong, silently and only once the grid is scrolled:
+stickiness lives on the `<th>`s, and an ancestor's rect is computed from its
+own normal-flow position. Scrolled a few hundred pixels, the `<thead>` reported
+a bottom **above the top of the viewport** while its stuck cells sat exactly
+where the eye put them. Height is unaffected, so a measurement that only wants
+the height looks fine and one that wants a position quietly does not.
+
+Two things fell out of it:
+
+- **Ask the element that carries `position: sticky`.** `thead th` for the
+  header; the category band's own `<tr>` (which IS the sticky box) reports
+  correctly and needs no special case.
+- **A geometry test can pass for the wrong reason.** The first version of
+  `matrix_sticky_offsets_system_test.rb` expanded the LAST row — which
+  `scrollIntoView({ block: "start" })` cannot lift to the top, because there is
+  no content below it to scroll — so the row parked harmlessly mid-pane and the
+  test passed against the very geometry it exists to catch. It now targets a
+  middle row and asserts the grid was **not** at max scroll, so an arrangement
+  that cannot exercise the bug fails loudly instead (testing.md's "an assertion
+  a dropped click would also satisfy is not a test", in its geometric form).
+  Verified the whole file bites by reverting the fix and watching all six row
+  cases and all three band cases fail.
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -2240,7 +2328,7 @@ line (§9).
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
 | `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
-| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
+| `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + breadcrumb-with-× / gesture hint + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
 | `app/views/frameworks/activity/load_more.rb` | "Load older activity" footer (`#framework-activity-load-more`) — indication + affordance for the next batch |
 | `app/views/frameworks/activity/count.rb` | Loaded-entry count (`#framework-activity-count`) — replaced by the load-older Turbo Stream |
 | `app/views/frameworks/activity/show.turbo_stream.erb` | Load-older response — append older entries + replace the footer + the count |
@@ -2318,6 +2406,8 @@ line (§9).
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/matrix_sticky_offsets_system_test.rb` | Measured sticky offsets — expanded row + category band clear the header at 1/3/11 roles, both viewports, with a real pointer click on the row kebab |
+| `test/system/frameworks/matrix_focus_ring_system_test.rb` | On-grid focus ring (row / cell / category band) + the pane's breadcrumb × |
 | `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
 | `test/system/frameworks/write_response_system_test.rb` | The write-response contract (§11b) — a `window` marker proves no write reloads the page; toast, in-place insert/reorder, the archive modal, both viewports |
 | `test/support/explorer_write_stream_assertions.rb` | `assert_write_toast` / `assert_turbo_stream_action` / `assert_no_navigation` for the controller tests |
