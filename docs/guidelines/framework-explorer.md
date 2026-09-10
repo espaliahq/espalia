@@ -2026,6 +2026,32 @@ ETag** (`ActionController::EtagWithFlash`), so a request still carrying a
 sign-in notice keys differently from the identical one after it. Integration
 tests must land on the redirect before measuring.
 
+### 35. Turbo re-fetches a same-value `src`, so "skip when unchanged" disables refresh
+
+The filter debounce (#383) shipped with a guard that skipped assigning the
+frame's `src` when it already held that value — on the premise that Turbo
+would no-op the assignment and leave the busy bar up forever. The premise is
+wrong twice over:
+
+- `FrameElement`'s `src` setter calls `setAttribute`, and a custom element's
+  `attributeChangedCallback` fires for **any** `setAttribute`, same value or
+  not. Turbo's handler then runs `sourceURLChanged()`, which clears `complete`
+  and loads. A same-value assignment is a real fetch.
+- And `matrix#refresh` — the §12 non-surgical fallback, and the org-structure
+  edits that change the matrix header — exists precisely to re-fetch with the
+  axes it already has, so it *always* computes the src the frame is holding.
+
+Net effect: the first refresh worked (the frame starts with no `src`), Turbo
+then wrote the response URL into `src`, and **every later refresh silently did
+nothing** — a second approval left the acting user looking at the resolved
+suggestion's stale inline diff. Nothing failed, because the existing coverage
+refreshed once per test on a fresh page.
+
+Two things to carry forward: a "nothing changed, skip the work" guard on a
+Turbo Frame needs the *frame's* semantics checked, not assumed; and a repeat
+fetch of an unchanged state is a 304 now, so there was nothing to save anyway.
+Pinned by `matrix_refetch_system_test.rb` ("re-fetch every time it fires").
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
