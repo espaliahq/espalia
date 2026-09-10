@@ -518,7 +518,17 @@ input[type="week"] {
  * the sticky cell's `group-hover:` variants depend on Tailwind seeing it. */
 .mx-row {
   cursor: pointer;
-  scroll-margin-top: 5rem;
+  /* Clears the sticky stack the row scrolls under: the matrix header, the
+   * category band that sticks beneath it, and a little breathing room. Both
+   * heights are MEASURED by `matrix_controller#publishStickyGeometry` — the
+   * header is ~41 px with code badges and ~113 px with full level titles
+   * (≤ 3 roles, edit mode, where each title carries a rename pencil), so a
+   * static 5rem hid the capability name and its kebab under the header
+   * whenever the titles were showing (#382). The fallbacks are the old
+   * constants, so a not-yet-connected controller is no worse than before. */
+  scroll-margin-top: calc(
+    var(--matrix-header-h, 41px) + var(--matrix-category-h, 45px) + 8px
+  );
   transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
               background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
               border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -526,6 +536,14 @@ input[type="week"] {
 
 .mx-row:hover {
   background-color: var(--color-gray-50);
+}
+
+/* The category band, sticking immediately beneath the matrix header. `top`
+ * was `top-[41px]`, which assumed the one-line (code-badge) header and let the
+ * band slide under the taller full-titles one. `position`/`z-index` stay
+ * utilities on the row — only the measured offset lives here. */
+.mx-cat-row {
+  top: var(--matrix-header-h, 41px);
 }
 
 /* Behavioural-expectation text. Pending-edit decoration composes on top —

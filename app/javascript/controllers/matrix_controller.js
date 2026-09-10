@@ -34,6 +34,18 @@ const EXPANDED_ROW_TIMEOUT_MS = 20_000
 // enough that a single deliberate toggle still feels immediate.
 const FILTER_DEBOUNCE_MS = 300
 
+// Sticky-stack guard (#382). A nudge changes the scroll position, which can in
+// principle change the stack (a band scrolling into place), so the check
+// repeats — but only a couple of times: an unbounded loop against a layout
+// that cannot satisfy it would spin.
+const MAX_STICKY_NUDGES = 2
+const STICKY_CLEARANCE_PX = 4
+
+// "The scroll has stopped": this many consecutive frames at the same offset,
+// with a hard frame cap so a page that never settles still runs the guard once.
+const SCROLL_SETTLE_FRAMES = 3
+const SCROLL_SETTLE_MAX_FRAMES = 90
+
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
@@ -136,6 +148,20 @@ export default class extends BaseController {
     window.addEventListener("matrix:focus-changed", this._onExternalFocusChange)
     this.#setupCapabilityScrollObserver()
 
+    // The matrix header's height depends on the role selection (full level
+    // titles at <= 3 roles, code badges past it) and the category band's on
+    // its description, so both are measured rather than guessed (#382). The
+    // frame is replaced on every filter change, taking the observed nodes with
+    // it — re-observe whenever OUR frame finishes loading, and re-apply the
+    // on-grid focus ring the swap discarded.
+    this._onMatrixFrameLoad = (event) => {
+      if (this.hasFrameTarget && event.target !== this.frameTarget) return
+
+      this.#observeStickyGeometry()
+    }
+    this.element.addEventListener("turbo:frame-load", this._onMatrixFrameLoad)
+    this.#observeStickyGeometry()
+
     this.#dispatchInitialFocus()
     this.#resumeOpenPlaceholders()
   }
@@ -185,6 +211,18 @@ export default class extends BaseController {
     if (this._onExternalFocusChange) {
       window.removeEventListener("matrix:focus-changed", this._onExternalFocusChange)
       this._onExternalFocusChange = null
+    }
+    if (this._onMatrixFrameLoad) {
+      this.element.removeEventListener("turbo:frame-load", this._onMatrixFrameLoad)
+      this._onMatrixFrameLoad = null
+    }
+    if (this._stickyResizeObserver) {
+      this._stickyResizeObserver.disconnect()
+      this._stickyResizeObserver = null
+    }
+    if (this._scrollSettleRafId) {
+      cancelAnimationFrame(this._scrollSettleRafId)
+      this._scrollSettleRafId = null
     }
     clearTimeout(this._navHighlightTimer)
     super.disconnect()
@@ -437,11 +475,103 @@ export default class extends BaseController {
     // Defer to the next animation frame so the browser has applied the
     // layout change (un-hide the expanded row) before scrolling. `block:
     // "start"` aligns the compact row's top to the scrollport top; the
-    // row's `scroll-mt` leaves room for the sticky column + category
-    // headers so the capability name lands just beneath them.
+    // row's `scroll-margin-top` (computed from the MEASURED header +
+    // category-band heights, see #publishStickyGeometry) leaves room for the
+    // sticky stack so the capability name lands just beneath it.
     requestAnimationFrame(() => {
       compactRow.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" })
+      this.#afterScrollSettles(() => this.#guardRowClearsStickyStack(compactRow))
     })
+  }
+
+  // Asks the document the same question a real pointer click asks: is the
+  // row's first control actually the topmost thing at its own coordinates?
+  //
+  // `scroll-margin-top` is the right mechanism but `scrollIntoView` resolves
+  // it once and never retargets, so anything that changes the sticky stack
+  // mid-animation (a header re-measure, a concurrent frame load, a category
+  // band growing as its description wraps) lands the row short — and the
+  // answer to this question was the sticky `<th>`, which is why the row kebab
+  // could only be opened by a JS-dispatched click (#382).
+  #guardRowClearsStickyStack(compactRow, attempt = 0) {
+    if (!compactRow.isConnected || attempt > MAX_STICKY_NUDGES) return
+
+    // The name line, not the kebab: the kebab is hover-revealed, so it has no
+    // hit area to probe until the pointer is already over the row. They share
+    // the same band, so clearing one clears the other.
+    const probe = compactRow.querySelector(".mx-line") || compactRow
+    const rect = probe.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+
+    const x = Math.round(rect.left + Math.min(rect.width / 2, 24))
+    const y = Math.round(rect.top + rect.height / 2)
+    const hit = document.elementFromPoint(x, y)
+    if (hit && compactRow.contains(hit)) return
+
+    const delta = Math.ceil(this.#stickyStackBottom(compactRow) + STICKY_CLEARANCE_PX - rect.top)
+    if (delta <= 0) return
+
+    // Scrolling UP by `delta` moves the row down the viewport, out from
+    // under the stack.
+    const container = this.hasScrollContainerTarget ? this.scrollContainerTarget : null
+    if (container) container.scrollTop -= delta
+    else window.scrollBy(0, -delta)
+
+    requestAnimationFrame(() => this.#guardRowClearsStickyStack(compactRow, attempt + 1))
+  }
+
+  // Viewport y of the bottom of everything sticky above this row: the matrix
+  // header, plus the row's own category band (which sticks beneath it).
+  //
+  // Read from the header CELL, never the `<thead>`: stickiness lives on the
+  // `<th>`s, and a parent's rect is computed from its normal-flow position —
+  // so a scrolled `thead` reports a bottom hundreds of pixels above where its
+  // stuck cells actually are. (The band's own `<tr>` IS the sticky box, so it
+  // reports correctly.)
+  #stickyStackBottom(compactRow) {
+    const headerCell = this.#matrixHeaderCell()
+    const categoryId = this.#categoryIdForRow(compactRow)
+    const band = categoryId
+      ? this.categoryHeaderTargets.find(h => h.dataset.categoryId === categoryId)
+      : null
+
+    return Math.max(
+      headerCell ? headerCell.getBoundingClientRect().bottom : 0,
+      band ? band.getBoundingClientRect().bottom : 0
+    )
+  }
+
+  // The matrix header's sticky corner cell — the element whose box actually
+  // moves with the scroll, and whose height is the header row's height.
+  #matrixHeaderCell() {
+    return this.element.querySelector("thead th")
+  }
+
+  // Runs `fn` once the scroll position has held still for a few frames.
+  // `scrollend` would be tidier but is not universal, and a fixed timeout is
+  // the flaky option on a starved CI runner — the same reasoning as the
+  // renew-on-scroll suppression above.
+  #afterScrollSettles(fn) {
+    const container = this.hasScrollContainerTarget ? this.scrollContainerTarget : null
+    const read = () => (container ? container.scrollTop : window.scrollY)
+
+    let last = null
+    let still = 0
+    let frames = 0
+    const tick = () => {
+      this._scrollSettleRafId = null
+      const now = read()
+      still = now === last ? still + 1 : 0
+      last = now
+      frames += 1
+      if (still >= SCROLL_SETTLE_FRAMES || frames > SCROLL_SETTLE_MAX_FRAMES) {
+        fn()
+        return
+      }
+      this._scrollSettleRafId = requestAnimationFrame(tick)
+    }
+    if (this._scrollSettleRafId) cancelAnimationFrame(this._scrollSettleRafId)
+    this._scrollSettleRafId = requestAnimationFrame(tick)
   }
 
   // ── Category focus ── (framework explorer)
@@ -1496,6 +1626,56 @@ export default class extends BaseController {
     const v = getComputedStyle(document.documentElement).getPropertyValue("--sticky-header-h")
     const n = parseFloat(v)
     return isNaN(n) ? 0 : n
+  }
+
+  // ── Sticky geometry (framework explorer) ──
+
+  // Publishes the matrix's measured sticky heights on the explorer root so the
+  // category band's `top` and an expanding row's `scroll-margin-top` follow the
+  // header instead of guessing at it. Mirrors
+  // `category_nav_controller#publishHeaderHeight` on the assessment page.
+  //
+  // The header is ~41 px tall with compact code badges and ~113 px with full
+  // level titles (<= 3 roles selected; in edit mode each title also carries a
+  // rename pencil), so the single hard-coded 41 px / 5rem pair was wrong for
+  // exactly the case contributors spend their time in (#382).
+  #publishStickyGeometry() {
+    const headerCell = this.#matrixHeaderCell()
+    if (!headerCell) return
+
+    const headerH = Math.ceil(headerCell.getBoundingClientRect().height)
+
+    // ONE scroll-margin serves every row, and bands differ in height (a
+    // description makes one taller), so take the tallest: over-shooting lands
+    // a row a few pixels lower than it needed, under-shooting hides it.
+    const categoryH = this.categoryHeaderTargets.reduce(
+      (max, band) => Math.max(max, Math.ceil(band.getBoundingClientRect().height)), 0
+    )
+
+    if (headerH > 0) this.element.style.setProperty("--matrix-header-h", `${headerH}px`)
+    if (categoryH > 0) this.element.style.setProperty("--matrix-category-h", `${categoryH}px`)
+  }
+
+  // (Re-)observes the elements whose height the geometry is derived from. Both
+  // live inside the Turbo Frame, so every filter change replaces them — hence
+  // the re-observe on frame load rather than a one-shot in connect.
+  //
+  // No feedback loop: what the measurements drive (`top`, `scroll-margin-top`)
+  // changes neither element's size.
+  #observeStickyGeometry() {
+    if (typeof ResizeObserver === "undefined") return this.#publishStickyGeometry()
+
+    if (!this._stickyResizeObserver) {
+      this._stickyResizeObserver = new ResizeObserver(() => this.#publishStickyGeometry())
+    }
+    this._stickyResizeObserver.disconnect()
+
+    const headerCell = this.#matrixHeaderCell()
+    if (!headerCell) return
+
+    this._stickyResizeObserver.observe(headerCell)
+    this.categoryHeaderTargets.forEach(band => this._stickyResizeObserver.observe(band))
+    this.#publishStickyGeometry()
   }
 
   // Stamps `data-focused="true"` on the currently-focused capability's
