@@ -103,13 +103,16 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
     end
   end
 
+  # Icon-only, so it wraps its small glyph in a 44px box rather than shipping a
+  # 44px ×, and takes the AA-safe muted pairing — an affordance, not a
+  # decorative separator (phlex-views.md → Accessibility).
   def clear_focus_button
     return unless @clear_path
 
     a(
       href: @clear_path,
-      class: "shrink-0 leading-none px-1 rounded text-gray-400 hover:text-primary " \
-             "focus-visible:outline-2 focus-visible:outline-primary",
+      class: "shrink-0 inline-flex items-center justify-center min-w-11 min-h-11 -my-3 " \
+             "rounded text-base leading-none text-gray-600 dark:text-gray-300 hover:text-primary",
       title: "Clear focus",
       aria_label: "Clear focus",
       data: {
