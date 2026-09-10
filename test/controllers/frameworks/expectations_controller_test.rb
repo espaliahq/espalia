@@ -23,6 +23,10 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       handler.add_role_family(@framework_id, rfid, "Engineering")
       handler.add_role(@framework_id, rid, rfid, "Software Engineer", "E", "ic")
       handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 1, "E1", "E1")
+      # A second level, so the cell authored into below is a real (empty but
+      # applicable) matrix cell — the create response streams that cell back and
+      # deliberately streams nothing for a cell outside the current scope.
+      handler.add_level(@framework_id, SecureRandom.uuid_v7, rid, 2, "E2", "E2")
       handler.add_capability_category(@framework_id, cat_id, "Thinking", ordinal: 1)
       handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Strategic Thinking")
       handler.create_capability_role_binding(@framework_id, SecureRandom.uuid_v7, cap_id, rid)
@@ -85,14 +89,17 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "POST /frameworks/:framework_id/expectations" do
-    should "author an expectation on an empty cell and redirect" do
+    should "author an expectation on an empty cell and stream the cell back" do
       sign_in @user
       post framework_expectations_path(framework_id: @framework_id),
            params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2,
                                                 description: "Identifies root causes" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Added an expectation/, flash[:notice])
+      # One toast + the one cell that changed — never a navigation (#381).
+      assert_write_toast("Added an expectation.")
+      assert_no_navigation
+      assert_turbo_stream_action("replace", "cell-#{cap_id}-2")
+      assert_turbo_stream_action("replace", "framework-draft-badge")
     end
 
     should "propose (not apply) when the suggesting cookie is set" do
@@ -101,8 +108,9 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       post framework_expectations_path(framework_id: @framework_id),
            params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 2, description: "Proposed text" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Proposed a new expectation/, flash[:notice])
+      assert_write_toast("Proposed a new expectation for review.")
+      assert_no_navigation
+      assert_turbo_stream_action("replace", "cell-#{cap_id}-2")
       pending = ActsAsTenant.with_tenant(@tenant) do
         FrameworkState::SuggestedEdit.where(framework_id: @framework_id, kind: "create",
                                             target_entity_type: "behavioural_expectation", status: "pending").count
@@ -110,22 +118,22 @@ class Frameworks::ExpectationsControllerTest < ActionDispatch::IntegrationTest
       assert_equal 1, pending
     end
 
-    should "redirect with an alert on a malformed level ordinal (no silent 0)" do
+    should "surface a malformed level ordinal in the toast (no silent 0)" do
       sign_in @user
       post framework_expectations_path(framework_id: @framework_id),
            params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: "abc", description: "x" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/level must be a positive number/i, flash[:alert])
+      assert_write_toast(/level must be a positive number/i, status: :unprocessable_content)
+      assert_no_navigation
     end
 
-    should "redirect with an alert when the cell already has an expectation" do
+    should "surface a duplicate expectation in the toast" do
       sign_in @user
       post framework_expectations_path(framework_id: @framework_id),
            params: { behavioural_expectation: { capability_id: cap_id, level_ordinal: 1, description: "Dup" } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/already has an expectation/i, flash[:alert])
+      assert_write_toast(/already has an expectation/i, status: :unprocessable_content)
+      assert_no_navigation
     end
 
     should "deny non-contributor viewers" do

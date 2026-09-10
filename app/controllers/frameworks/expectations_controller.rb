@@ -8,6 +8,8 @@
 #
 class Frameworks::ExpectationsController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
 
   before_action :set_framework
   before_action :set_expectation, only: [ :update ]
@@ -18,7 +20,7 @@ class Frameworks::ExpectationsController < ApplicationController
   # cell via the matrix "+ Add expectation" affordance. Follows the suggest/
   # approve path (the Operation routes through suggest_create): applied directly
   # for an author with approval authority in editing mode, otherwise proposed as
-  # a pending suggestion. Redirects back to the edit page.
+  # a pending suggestion. Answers a Turbo Stream replacing just this cell.
   def create
     authorize @framework, :suggest_edit?
     attrs = params.expect(behavioural_expectation: [ :capability_id, :level_ordinal, :description ])
@@ -37,14 +39,22 @@ class Frameworks::ExpectationsController < ApplicationController
         mode: framework_edit_mode.to_s
       }
     )
-    notice =
+    message =
       if result[:amended] then "Updated your proposed expectation."
       elsif result[:applied] then "Added an expectation."
-      else "Proposed a new expectation."
+      else "Proposed a new expectation for review."
       end
-    redirect_to edit_framework_path(@framework.framework_id), notice: notice
+
+    # The cell is the grain: it goes from "+ Add expectation" to the rendered
+    # expectation (applied) or to its pending ghost (proposed). A direct apply
+    # is shape-changing, so the draft pill moves with it.
+    render_write_streams(
+      [ toast_stream(message) ] +
+      cell_replace_streams(attrs[:capability_id], level_ordinal) +
+      draft_status_streams
+    )
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+    render_write_error(e.message)
   end
 
   # PATCH /frameworks/:framework_id/expectations/:id

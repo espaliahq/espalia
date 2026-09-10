@@ -23,8 +23,9 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   # @param level_ordinal [Integer] the cell's level ordinal
   # @param is_author [Boolean] whether the viewer authored this proposal
   # @param approval_authority [Frameworks::SuggestionApprovalAuthority] gates
-  #   the inline Approve/Reject kebab (§12). Form submits are full navigations
-  #   (`_top`), so no controller re-threading is needed here.
+  #   the inline Approve/Reject kebab (§12). A submit from this ghost's editor
+  #   re-renders the whole CELL (Turbo Stream, §11b) rather than this frame, so
+  #   the authority is re-threaded by the matrix render, not by the controller.
   def initialize(suggestion:, framework_id:, level_ordinal:, is_author: false,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none)
     @suggestion = suggestion
@@ -56,8 +57,9 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   # Both author and non-author submit to the same create endpoint
   # (SetBehaviouralExpectation amends the author's own pending proposal, or
   # records a non-author's alternative) — either way it stays a proposal, so the
-  # outcome is fixed rather than derived from authority. A full navigation
-  # (`_top`) like the "+ Add expectation" form.
+  # outcome is fixed rather than derived from authority. Answers the same
+  # cell-replacing Turbo Stream as the "+ Add expectation" form, with
+  # `tree-scope-fields` carrying the grid's scope onto the re-render.
   def editor_data
     field_editor_data(
       action: framework_expectations_path(framework_id: @framework_id),
@@ -68,7 +70,7 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
       method: "post",
       rows: 3,
       submit_label: @is_author ? "Save" : "Suggest alternative",
-      turbo_frame: "_top",
+      form_controller: "tree-scope-fields",
       extra: {
         "behavioural_expectation[capability_id]" => @suggestion.parent_id,
         "behavioural_expectation[level_ordinal]" => @level_ordinal

@@ -25,7 +25,7 @@ class Views::Frameworks::Explorer::AddCategoryModal < Views::Base
       action: framework_categories_path(@framework_id),
       method: "post",
       class: "space-y-4",
-      data: { action: "turbo:submit-end->modal#submitted" }
+      data: { controller: "tree-scope-fields", action: "turbo:submit-end->modal#submitted" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
 

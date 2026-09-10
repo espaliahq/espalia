@@ -45,7 +45,10 @@ class Frameworks::CapabilityReordersControllerTest < ActionDispatch::Integration
            params: { reorder: { capability_id: @cap_c, target_id: @cap_a, placement: "before" } },
            as: :json
 
-      assert_response :no_content
+      # Toast only — `reorder-move` repositions the rows in place rather than
+      # re-fetching the whole matrix frame (#381).
+      assert_write_toast(/^.*Moved/)
+      assert_no_navigation
       assert_equal [ @cap_c, @cap_a, @cap_b ], graph_order
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal [ @cap_c, @cap_a, @cap_b ],

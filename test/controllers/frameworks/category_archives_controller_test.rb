@@ -37,16 +37,19 @@ class Frameworks::CategoryArchivesControllerTest < ActionDispatch::IntegrationTe
     should "archive an empty category and auto-open a draft" do
       post_archive(@admin_user, { category_id: @empty_cat, reason: "Retired" })
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Archived/, flash[:notice])
+      # The whole <tbody> group goes, plus the draft pill — no navigation (#381).
+      assert_write_toast(/Archived/)
+      assert_no_navigation
+      assert_turbo_stream_action("remove", "category-group-#{@empty_cat}")
+      assert_turbo_stream_action("replace", "framework-draft-badge")
       assert framework.draft_in_progress
     end
 
     should "surface the aggregate error when the category still holds capabilities" do
       post_archive(@admin_user, { category_id: @full_cat, reason: "Retired" })
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/active capability/i, flash[:alert])
+      assert_write_toast(/active capability/i, status: :unprocessable_content)
+      assert_no_navigation
       assert_not framework.draft_in_progress
     end
 

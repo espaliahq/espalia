@@ -7,10 +7,14 @@
 # category next to that visible neighbour within the full active order before
 # dispatching the shared {Operations::Frameworks::ReorderCategories}.
 #
-# Responds 204 — the reorder-move Stimulus controller dispatches
-# `org-structure:updated`, which the explorer layout routes to matrix#refresh,
-# so the acting user re-renders in the new order (feed updates via broadcast).
+# Answers the toast Turbo Stream only — `reorder-move` moves the category's
+# `<tbody>` group in place. It used to answer 204 and dispatch
+# `org-structure:updated` → matrix#refresh, re-fetching the whole edit-mode
+# matrix to move one block of rows.
 class Frameworks::CategoryReordersController < ApplicationController
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
+
   before_action :set_framework
 
   # POST /frameworks/:framework_id/category_reorders
@@ -22,15 +26,22 @@ class Frameworks::CategoryReordersController < ApplicationController
       params: { framework_id: @framework.framework_id, new_ordering: new_ordering }
     )
 
-    head :no_content
-  rescue Operations::Base::ParameterError, RuntimeError, ActiveRecord::RecordNotFound
-    head :unprocessable_content
+    render_write_streams([ toast_stream("Moved “#{moving_category_name}”.") ])
+  rescue Operations::Base::ParameterError, RuntimeError, ActiveRecord::RecordNotFound => e
+    render_write_error(e.message)
   end
 
   private
 
   def reorder_params
     @reorder_params ||= params.expect(reorder: [ :category_id, :target_id, :placement ])
+  end
+
+  # Named in the toast so a mis-click is obvious.
+  def moving_category_name
+    FrameworkState::CapabilityCategory.find_by(
+      framework_id: @framework.framework_id, category_id: reorder_params[:category_id]
+    )&.name
   end
 
   # Current display order of the active categories, with the moving id

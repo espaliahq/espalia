@@ -11,9 +11,10 @@
 # auto-opens a draft and the level stays deferred from the published view until
 # the next version is published — so the form says so under the submit.
 #
-# Submits to {Frameworks::LevelsController#create}, which redirects back to the
-# edit explorer (selection preserved via `tree-scope-fields`) — a full render
-# so the new draft column, the draft pill, and the flash all appear at once.
+# Submits to {Frameworks::LevelsController#create}, which answers a Turbo
+# Stream carrying the toast and the (now-open) draft status. `add-level-form`
+# then dispatches `org-structure:updated` → matrix#refresh: a level adds a
+# COLUMN to every row, the one grid change no surgical stream can express.
 class Views::Frameworks::Explorer::AddLevelModal < Views::Base
   # @param framework_id [String]
   def initialize(framework_id:)
@@ -36,8 +37,10 @@ class Views::Frameworks::Explorer::AddLevelModal < Views::Base
       method: "post",
       class: "space-y-4",
       data: {
-        controller: "add-level-form tree-scope-fields",
-        action: "submit->add-level-form#validate turbo:submit-end->modal#submitted"
+        controller: "add-level-form",
+        action: "submit->add-level-form#validate " \
+                "turbo:submit-end->add-level-form#submitted " \
+                "turbo:submit-end->modal#submitted"
       }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)

@@ -71,15 +71,19 @@ class Frameworks::LevelsControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "POST /frameworks/:framework_id/levels" do
-    should "add the level into a draft and redirect back to edit, selection preserved" do
+    should "add the level into a draft and answer the toast + draft status" do
       sign_in @user
       post framework_levels_path(framework_id: @framework_id),
            params: { level: { role_id: @role_id, ordinal: "3", title: "Software Engineer III",
                               code: "E3", is_entry: "0" },
                      roles: [ @role_id ], track: "both" }
 
-      assert_redirected_to edit_framework_path(@framework_id, roles: [ @role_id ], track: "both")
-      assert_match(/Added level/, flash[:notice])
+      # A level adds a COLUMN to every row, so the grid update stays the
+      # documented matrix#refresh (dispatched client-side) — but the response
+      # itself is a stream, so the page is never navigated away (#381).
+      assert_write_toast(/Added level/)
+      assert_no_navigation
+      assert_turbo_stream_action("replace", "framework-draft-badge")
 
       ActsAsTenant.with_tenant(@tenant) do
         # Shape-changing: draft opened, level deferred from the published read model.
@@ -88,13 +92,13 @@ class Frameworks::LevelsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "surface a duplicate ordinal as a flash alert, not a 500" do
+    should "surface a duplicate ordinal in the toast, not a 500" do
       sign_in @user
       post framework_levels_path(framework_id: @framework_id),
            params: { level: { role_id: @role_id, ordinal: "1", title: "Dup", code: "D1" } }
 
-      assert_response :redirect
-      assert_match(/already has a level at ordinal 1/, flash[:alert])
+      assert_write_toast(/already has a level at ordinal 1/, status: :unprocessable_content)
+      assert_no_navigation
     end
 
     should "deny non-contributor viewers" do

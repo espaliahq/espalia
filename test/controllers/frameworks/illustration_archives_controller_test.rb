@@ -47,8 +47,10 @@ class Frameworks::IllustrationArchivesControllerTest < ActionDispatch::Integrati
       post framework_illustration_archives_path(framework_id: @framework_id),
            params: { archive: { illustration_id: @ill_id } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Archived the illustration/, flash[:notice])
+      # The example's frame is removed in place — no navigation (#381).
+      assert_write_toast("Archived the example.")
+      assert_no_navigation
+      assert_turbo_stream_action("remove", "illustration-#{@ill_id}")
       assert_nil illustration
     end
 
@@ -58,8 +60,11 @@ class Frameworks::IllustrationArchivesControllerTest < ActionDispatch::Integrati
       post framework_illustration_archives_path(framework_id: @framework_id),
            params: { archive: { illustration_id: @ill_id } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_match(/Proposed archiving/, flash[:notice])
+      assert_write_toast("Proposed removing the example for review.")
+      assert_no_navigation
+      # A proposal leaves the example on the grid — its frame re-renders with
+      # the pending decoration rather than disappearing.
+      assert_turbo_stream_action("replace", "illustration-#{@ill_id}")
       assert_not_nil illustration, "a proposal must not remove the illustration"
 
       pending = ActsAsTenant.with_tenant(@tenant) do
@@ -79,7 +84,7 @@ class Frameworks::IllustrationArchivesControllerTest < ActionDispatch::Integrati
       assert_not_nil illustration
     end
 
-    should "redirect with an alert when the illustration belongs to another framework" do
+    should "surface a cross-framework illustration in the toast" do
       other_ill_id = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do
         other_fw = SecureRandom.uuid_v7
@@ -104,8 +109,8 @@ class Frameworks::IllustrationArchivesControllerTest < ActionDispatch::Integrati
       post framework_illustration_archives_path(framework_id: @framework_id),
            params: { archive: { illustration_id: other_ill_id } }
 
-      assert_redirected_to edit_framework_path(@framework_id)
-      assert_not_nil flash[:alert]
+      assert_write_toast(status: :unprocessable_content)
+      assert_no_navigation
       assert_not_nil ActsAsTenant.with_tenant(@tenant) {
         FrameworkState::RoleIllustration.find_by(illustration_id: other_ill_id)
       }

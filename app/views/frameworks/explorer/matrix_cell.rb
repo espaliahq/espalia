@@ -12,6 +12,14 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   include Views::Frameworks::Explorer::Concerns::MenuItems
   include Views::Frameworks::Explorer::Concerns::DiscussTrigger
 
+  # Turbo Stream anchor for one capability × level cell. Authoring an
+  # expectation replaces exactly this `<td>` — no matrix refresh.
+  #
+  # @param capability_id [String]
+  # @param ordinal [Integer]
+  # @return [String]
+  def self.cell_id(capability_id, ordinal) = "cell-#{capability_id}-#{ordinal}"
+
   # @param cell_data [Hash, nil] from MatrixDataBuilder — nil for empty cells
   # @param ordinal [Integer] the level ordinal for this column
   # @param framework_id [String] UUID — required when mode is :edit for the expectation edit URL
@@ -50,6 +58,16 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
 
   private
 
+  # The cell's Turbo Stream id — stable across the empty → filled transition
+  # authoring an expectation makes, so the create response can replace exactly
+  # this cell. nil for a not-applicable cell (no cell data, nothing to address).
+  #
+  # @return [String, nil]
+  def cell_id
+    capability_id = @cell_data && @cell_data[:capability_id]
+    capability_id && self.class.cell_id(capability_id, @ordinal)
+  end
+
   # An empty-but-applicable cell the viewer may author into. Offered to any
   # edit-mode viewer (edit mode already requires suggest rights) — the
   # Operation's suggest/approve path applies it directly for an authority-holder
@@ -65,7 +83,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # affordance — amending the existing proposal is the way to change it, like
   # every other suggestion flow. With no proposal yet, show "+ Add expectation".
   def authorable_cell
-    td(class: "px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
+    td(id: cell_id,
+       class: "px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-gray-50/40 dark:bg-gray-800/20 align-top",
        data: hover_cluster_data("cell")) do
       creates = @cell_data[:pending_expectation_creates] || []
@@ -91,8 +110,12 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
     )
   end
 
+  # `cell_id` is nil for a genuinely not-applicable cell (no cell data at all),
+  # and Phlex omits a nil attribute — so this stays addressable whenever there
+  # is anything to address.
   def empty_cell
-    td(class: "px-3 py-2.5 text-center border-b border-r border-gray-100 dark:border-gray-800 " \
+    td(id: cell_id,
+       class: "px-3 py-2.5 text-center border-b border-r border-gray-100 dark:border-gray-800 " \
               "bg-gray-50/50 dark:bg-gray-800/20 align-top") do
       span(class: "text-gray-300 dark:text-gray-600") { "\u2014" }
     end
@@ -104,7 +127,8 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # Lesson 25). Same contract as the expanded cell: an expectation AND a
   # selected bound role; an empty or not-applicable cell is not a focus target.
   def filled_cell
-    td(class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
+    td(id: cell_id,
+       class: "px-3 py-2.5 border-b border-r border-gray-100 dark:border-gray-800 align-top",
        data: cell_cluster_data.merge(focus_target_data)) do
       # One layout for both states — the kebab is conditional, the wrapper is
       # not, so the pending-edit cell can't drift from the plain cell. No

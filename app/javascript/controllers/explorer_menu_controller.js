@@ -284,7 +284,6 @@ export default class extends BaseController {
 
   #build(item) {
     if (item.group) return this.#buildGroup(item)
-    if (item.form) return this.#buildForm(item)
 
     return this.#buildItem(item)
   }
@@ -308,34 +307,6 @@ export default class extends BaseController {
     applyData(wrapper, data)
     items.forEach((item) => wrapper.appendChild(this.#build(item)))
     return wrapper
-  }
-
-  // A menu item that is really a form submit (the illustration archive, whose
-  // controller redirects to the full edit page). `_top` because the menu is
-  // built inside the illustration's Turbo Frame — without it the redirect
-  // renders "Content missing" in the expanded row and drops the flash.
-  #buildForm({ label, action, confirm, fields }) {
-    const form = document.createElement("form")
-    form.method = "post"
-    form.action = action
-    form.setAttribute("role", "none")
-    form.dataset.turbo = "true"
-    form.dataset.turboFrame = "_top"
-    if (confirm) form.dataset.turboConfirm = confirm
-    Object.entries(fields || {}).forEach(([name, value]) => {
-      const field = document.createElement("input")
-      field.type = "hidden"
-      field.name = name
-      field.value = value
-      form.appendChild(field)
-    })
-    const submit = document.createElement("button")
-    submit.type = "submit"
-    submit.setAttribute("role", "menuitem")
-    submit.className = "explorer-menu-item"
-    submit.textContent = label
-    form.appendChild(submit)
-    return form
   }
 
   // A stale menu must never offer an actionable Approve/Reject for a suggestion
@@ -428,7 +399,7 @@ const BUILDERS = {
           .map((ordinal) => ({ ordinal: Number(ordinal), label: `L${ordinal}` }))
       )
     }))
-    moveItems(items, paths.capabilityReorder, data, { capability_id: id })
+    capabilityMoveItems(items, trigger, paths.capabilityReorder, id, data)
     if (data.menuBindings) {
       items.push(modalItem("Edit roles…", "binding-editor-modal", {
         "binding-editor-capability-id": id,
@@ -491,13 +462,10 @@ const BUILDERS = {
         items.push({ label: "Move down", data: { action: "reorder-list#moveDown" } })
       }
     }
-    items.push({
-      form: true,
-      label: "Archive…",
-      action: paths.illustrationArchive,
-      confirm: "Archive this illustration?",
-      fields: { "archive[illustration_id]": id }
-    })
+    items.push(modalItem("Archive…", "archive-illustration-modal", {
+      "archive-illustration-id": id,
+      "archive-illustration-label": data.menuContext
+    }))
     return items
   },
 
@@ -509,7 +477,7 @@ const BUILDERS = {
       editItem("Edit name…", `category-name-${id}`),
       editItem("Edit description…", `category-description-${id}`)
     ]
-    moveItems(items, paths.categoryReorder, data, { category_id: id })
+    categoryMoveItems(items, trigger, paths.categoryReorder, id, data)
     if (data.menuArchive) {
       items.push(modalItem("Archive…", "archive-category-modal", {
         "archive-category-id": id,
@@ -574,22 +542,59 @@ function modalItem(label, modalId, data) {
   return { label, data: { action: "click->modal#open", "modal-target-id": modalId, ...data } }
 }
 
-function moveItems(items, url, data, body) {
-  if (data.menuPrev) {
-    items.push(moveItem("Move up", url, { ...body, target_id: data.menuPrev, placement: "before" }))
+// Move up / Move down for a capability, relative to the MOVABLE rows the viewer
+// can see inside this capability's category `<tbody>`. Position is read from the
+// DOM at open time, never from a server-sent neighbour id: `reorder-move` now
+// repositions the rows in place (no matrix refresh), so a server flag would be
+// stale from the first move onwards — the same reason the illustration menu
+// already reads its own position (§11a).
+function capabilityMoveItems(items, trigger, url, id, data) {
+  if (!data.menuMove || !id) return
+
+  const row = trigger.closest("tr[data-capability-id]")
+  const siblings = Array.from(
+    row?.closest("tbody")?.querySelectorAll("tr[data-capability-id][data-movable='true']") || []
+  )
+  pushMoveItems(items, url, "capability", id, siblings.indexOf(row), siblings, (el) =>
+    el.dataset.capabilityId
+  )
+}
+
+// The same rule for a category — siblings are the `<tbody>` groups of the table.
+function categoryMoveItems(items, trigger, url, id, data) {
+  if (!data.menuMove || !id) return
+
+  const group = trigger.closest("tbody[data-category-group]")
+  const siblings = Array.from(
+    group?.parentElement?.querySelectorAll("tbody[data-category-group]") || []
+  )
+  pushMoveItems(items, url, "category", id, siblings.indexOf(group), siblings, (el) =>
+    el.dataset.categoryGroup
+  )
+}
+
+function pushMoveItems(items, url, scope, id, index, siblings, idOf) {
+  if (index < 0) return
+
+  if (index > 0) {
+    items.push(moveItem("Move up", url, scope, id, idOf(siblings[index - 1]), "before"))
   }
-  if (data.menuNext) {
-    items.push(moveItem("Move down", url, { ...body, target_id: data.menuNext, placement: "after" }))
+  if (index < siblings.length - 1) {
+    items.push(moveItem("Move down", url, scope, id, idOf(siblings[index + 1]), "after"))
   }
 }
 
-function moveItem(label, url, reorder) {
+function moveItem(label, url, scope, id, targetId, placement) {
+  const key = scope === "category" ? "category_id" : "capability_id"
   return {
     label,
     data: {
       controller: "reorder-move",
       "reorder-move-url-value": url,
-      "reorder-move-body-value": JSON.stringify({ reorder }),
+      "reorder-move-scope-value": scope,
+      "reorder-move-body-value": JSON.stringify({
+        reorder: { [key]: id, target_id: targetId, placement }
+      }),
       action: "reorder-move#move"
     }
   }

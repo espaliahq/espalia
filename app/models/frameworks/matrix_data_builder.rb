@@ -313,6 +313,10 @@ class Frameworks::MatrixDataBuilder
 
       cells[ordinal] = {
         expectation: expectation,
+        # Also carried on the authorable placeholder above — the cell's Turbo
+        # Stream id is (capability × ordinal), so it must survive the empty →
+        # filled transition an authored expectation makes.
+        capability_id: capability.capability_id,
         illustration_count: illustrations.size,
         illustrations_by_role: illustrations_by_role,
         bound_selected_role_ids: bound_selected_role_ids,

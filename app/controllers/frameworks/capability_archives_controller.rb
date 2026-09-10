@@ -10,6 +10,8 @@
 # Restricted to suggest-rights holders via FrameworkPolicy#suggest_edit?.
 class Frameworks::CapabilityArchivesController < ApplicationController
   include FrameworkEditMode
+  include Frameworks::SuggestionAuthority
+  include Frameworks::WriteResponse
 
   before_action :set_framework
   before_action :set_capability
@@ -30,10 +32,23 @@ class Frameworks::CapabilityArchivesController < ApplicationController
       }
     )
 
-    notice = result[:archived] ? "Archived “#{@capability.name}”." : "Proposed archiving “#{@capability.name}”."
-    redirect_to edit_framework_path(@framework.framework_id), notice: notice
+    message =
+      if result[:archived]
+        "Archived “#{@capability.name}”."
+      else
+        "Proposed archiving “#{@capability.name}” for review."
+      end
+
+    # A direct archive stages the removal into a draft: the row becomes struck
+    # + "Pending archive" and the draft pill appears. A proposal only decorates
+    # the row. Either way just the compact row changes.
+    render_write_streams(
+      [ toast_stream(message) ] +
+      capability_replace_streams(@capability.capability_id) +
+      draft_status_streams
+    )
   rescue Operations::Base::ParameterError, RuntimeError => e
-    redirect_to edit_framework_path(@framework.framework_id), alert: e.message
+    render_write_error(e.message)
   end
 
   private
@@ -58,6 +73,6 @@ class Frameworks::CapabilityArchivesController < ApplicationController
             Frameworks::ExplorerGraph.rebuild(@framework.framework_id)
     @capability = graph.capability_categories.flat_map(&:capabilities)
       .find { |c| c.capability_id == archive_params[:capability_id] }
-    redirect_to edit_framework_path(@framework.framework_id) unless @capability
+    render_write_error("that capability no longer exists — reload the page") unless @capability
   end
 end

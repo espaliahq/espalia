@@ -189,6 +189,72 @@ class Frameworks::ActivityFeedQuery
     @limit ? entries.first(@limit) : entries
   end
 
+  # An edit made in **editing** mode by someone with approval authority applies
+  # immediately, but the domain still records the full trail: EditSuggested →
+  # SuggestionApproved("Auto-approved") → the *Updated event that applied it.
+  # Rendered literally, the commonest action in the explorer produced THREE feed
+  # entries ("Suggested an edit" / "Approved … Auto-approved" / "Updated an
+  # expectation"), tripling the feed's volume and burying everything else.
+  #
+  # The chain collapses to the applied-change entry alone. The events are
+  # untouched — this is presentation only, and the suggestion itself is still
+  # reachable from the standalone suggestion index.
+  #
+  # @return [Boolean] whether this event is a proposal/approval that some
+  #   applied-change entry in the same batch already narrates
+  def collapsed_auto_approval?(kind, event)
+    return false unless kind == "suggestion_approved" || PROPOSAL_KINDS.include?(kind)
+
+    auto_approved_chain_suggestion_ids.include?(data_value(event, :suggestion_id))
+  end
+
+  # Suggestion ids whose auto-approval chain is safe to collapse: the approval
+  # was made by the command handler itself (its `Auto-approved` comment is the
+  # only marker that separates it from a human review) AND the change it applied
+  # is itself an entry in this batch, sharing the request's correlation id.
+  #
+  # The second half is load-bearing: if the applied change is an event the feed
+  # does not surface, or has scrolled out of the read window, collapsing would
+  # delete the action from the feed entirely rather than de-duplicate it.
+  #
+  # @return [Set<String>]
+  def auto_approved_chain_suggestion_ids
+    @auto_approved_chain_suggestion_ids ||= begin
+      applied = applied_change_correlation_ids
+      stream_events.each_with_object(Set.new) do |event, ids|
+        next unless event.is_a?(Frameworks::Events::SuggestionApproved)
+        next unless data_value(event, :comment) == Frameworks::CommandHandler::AUTO_APPROVAL_COMMENT
+
+        correlation = correlation_id_for(event)
+        next unless correlation && applied.include?(correlation)
+
+        suggestion_id = data_value(event, :suggestion_id)
+        ids << suggestion_id if suggestion_id
+      end
+    end
+  end
+
+  # Correlation ids of the non-suggestion (i.e. applied-change) events in this
+  # batch — one per request, so an auto-approval can find the entry that will
+  # speak for it.
+  #
+  # @return [Set<String>]
+  def applied_change_correlation_ids
+    stream_events.each_with_object(Set.new) do |event, ids|
+      kind = KINDS[event.class]
+      next if kind.nil? || SUGGESTION_KINDS.include?(kind)
+
+      correlation = correlation_id_for(event)
+      ids << correlation if correlation
+    end
+  end
+
+  # @return [String, nil] the request/sync id every event of one unit of work
+  #   carries (see AuditMetadata); nil on history written before it existed
+  def correlation_id_for(event)
+    event.metadata[:correlation_id] || event.metadata["correlation_id"]
+  end
+
   # Flags every proposal entry (edit / amendment) that has been superseded by a
   # more recent proposal on the same suggestion, so the approve/reject action
   # lands only on the latest one — approving an out-of-date proposal is
@@ -251,6 +317,7 @@ class Frameworks::ActivityFeedQuery
   def build_entry(event)
     kind = KINDS[event.class]
     return nil unless kind
+    return nil if collapsed_auto_approval?(kind, event)
 
     data = event.data.with_indifferent_access
     anchor = anchor_for(kind, data)

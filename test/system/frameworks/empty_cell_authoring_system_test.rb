@@ -64,12 +64,14 @@ class Frameworks::EmptyCellAuthoringSystemTest < ApplicationSystemTestCase
       # The empty level-2 cell exposes the authoring affordance (hover-revealed).
       assert_selector "button[data-editor-display]", text: "Add expectation", visible: :all
 
-      # Open the shared editor on the cell's authoring host and submit (the form
-      # redirects on success — testing.md JS-submit).
-      form = start_inline_edit(find("[data-editor-submit-label='Add'][data-editor-turbo-frame='_top']", match: :first))
+      # Open the shared editor on the cell's authoring host and submit. The
+      # response is a Turbo Stream replacing this one cell plus the toast — the
+      # page is never navigated (#381).
+      form = start_inline_edit(find("[data-editor-submit-label='Add']", match: :first))
       submit_inline_edit(form, with: "Identifies root causes")
 
-      assert_text "Added an expectation"
+      assert_text "Added an expectation."
+      assert_text "Identifies root causes"
       assert_text(/draft/i) # a draft was auto-opened by the shape-changing add
     end
   end

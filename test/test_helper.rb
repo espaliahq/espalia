@@ -3,6 +3,7 @@
 ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
+require_relative "support/explorer_write_stream_assertions"
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger

@@ -48,7 +48,9 @@ class Frameworks::CategoryReordersControllerTest < ActionDispatch::IntegrationTe
            params: { reorder: { category_id: @cat_c, target_id: @cat_a, placement: "before" } },
            as: :json
 
-      assert_response :no_content
+      # Toast only — `reorder-move` moves the category's <tbody> in place (#381).
+      assert_write_toast(/^.*Moved/)
+      assert_no_navigation
       assert_equal [ @cat_c, @cat_a, @cat_b ], ordered_ids
     end
 
