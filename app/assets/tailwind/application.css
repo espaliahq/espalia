@@ -546,6 +546,46 @@ input[type="week"] {
   top: var(--matrix-header-h, 41px);
 }
 
+/* ── On-grid focus indication (#382) ──────────────────────────────────────
+ *
+ * Focus (category / capability / cell) is set by three different gestures and
+ * cleared by others, and the only signal was the activity pane's title.
+ * `matrix_controller#applyGridFocus` stamps `data-focused` on the focused row,
+ * cell and category band; the ring hangs off that attribute, so the grid pays
+ * no per-element bytes for a state that is only ever set client-side.
+ *
+ * The row's ring is a pair of inset lines rather than a box — a `<tr>` is not
+ * a box that `outline` or a full `ring` renders reliably around, and per-cell
+ * rings would draw a vertical line between every column.
+ */
+:root {
+  --mx-focus-ring: color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+
+.mx-row[data-focused="true"] > td {
+  box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring);
+}
+
+/* The sticky capability cell owns the column's right edge on the same
+ * property, so the focused variant has to carry both shadows. */
+.mx-row[data-focused="true"] > td.mx-sticky-edge {
+  box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring),
+              6px 0 6px -6px rgba(15, 23, 42, 0.25);
+}
+
+tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
+  box-shadow: inset 0 0 0 1px var(--mx-focus-ring);
+}
+
+/* A focused cell uses `outline`, not `box-shadow`, so it composes with the
+ * row's inset lines instead of replacing them. Scoped to the matrix's own
+ * cells — the attribute is generic, the treatment is not. */
+.mx-cell[data-focused="true"],
+.mx-exp-cell[data-focused="true"] {
+  outline: 1px solid var(--mx-focus-ring);
+  outline-offset: -1px;
+}
+
 /* Behavioural-expectation text. Pending-edit decoration composes on top —
  * that is text-decoration, which this does not set. */
 .mx-expectation {
@@ -702,6 +742,11 @@ input[type="week"] {
 
   .mx-sticky-edge {
     box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);
+  }
+
+  .mx-row[data-focused="true"] > td.mx-sticky-edge {
+    box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring),
+                6px 0 8px -6px rgba(0, 0, 0, 0.65);
   }
 
   .mx-row:hover {

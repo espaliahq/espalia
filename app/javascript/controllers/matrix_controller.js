@@ -154,10 +154,12 @@ export default class extends BaseController {
     // frame is replaced on every filter change, taking the observed nodes with
     // it — re-observe whenever OUR frame finishes loading, and re-apply the
     // on-grid focus ring the swap discarded.
+    this._focusedGridEls = []
     this._onMatrixFrameLoad = (event) => {
       if (this.hasFrameTarget && event.target !== this.frameTarget) return
 
       this.#observeStickyGeometry()
+      this.#applyGridFocus()
     }
     this.element.addEventListener("turbo:frame-load", this._onMatrixFrameLoad)
     this.#observeStickyGeometry()
@@ -1314,6 +1316,7 @@ export default class extends BaseController {
     this.#applyColumnFocus(level === "cell" ? levelOrdinal : null,
                            level === "cell" ? capabilityId : null)
     this.#applyCardFocus(capabilityStableId, level)
+    this.#applyGridFocus()
     if ((pushToUrl || replaceUrl) && this.urlSyncValue) {
       // Capability is part of the URL whenever a row is expanded — i.e.
       // for cell AND capability focus levels. For framework/category
@@ -1380,6 +1383,7 @@ export default class extends BaseController {
     // happened to land in front of.
     this._categoryFocusFromExternal = detail.level === "category"
     this.#applyCardFocus(detail.capabilityStableId || null, detail.level)
+    this.#applyGridFocus()
   }
 
   // Sets/extends the "external focus is still settling" suppression.
@@ -1676,6 +1680,51 @@ export default class extends BaseController {
     this._stickyResizeObserver.observe(headerCell)
     this.categoryHeaderTargets.forEach(band => this._stickyResizeObserver.observe(band))
     this.#publishStickyGeometry()
+  }
+
+  // ── On-grid focus indication (framework explorer) ──
+
+  // Stamps `data-focused` on the focused compact row, its focused level cells
+  // and the focused category band; the ring is CSS hanging off that attribute
+  // (see `.mx-row[data-focused]` in application.css), so a state that only ever
+  // exists client-side costs the grid no bytes.
+  //
+  // Before this, focus was set by three different gestures (category name
+  // click, row expand, expanded-cell background click), cleared by others, and
+  // visible only as the activity pane's title (#382).
+  //
+  // Diffed against the previously-stamped set so a re-focus touches only the
+  // elements that changed. Re-applied after a frame load, since the swap
+  // discards the attributes with the nodes that carried them.
+  #applyGridFocus(focus = this.currentFocus) {
+    const next = this.#gridFocusElements(focus || {})
+    const previous = this._focusedGridEls || []
+
+    previous.forEach(el => {
+      if (!next.includes(el)) delete el.dataset.focused
+    })
+    next.forEach(el => { el.dataset.focused = "true" })
+    this._focusedGridEls = next
+  }
+
+  #gridFocusElements({ level, categoryId, capabilityId, levelOrdinal }) {
+    if (level === "category") {
+      const band = this.categoryHeaderTargets.find(h => h.dataset.categoryId === categoryId)
+      return band ? [ band ] : []
+    }
+    if (level !== "capability" && level !== "cell") return []
+
+    const row = this.rowTargets.find(r => r.dataset.capabilityId === capabilityId)
+    if (!row) return []
+    if (level !== "cell" || levelOrdinal == null) return [ row ]
+
+    // Ring the compact cell AND — when the row's content has landed — the
+    // expanded one. The expanded row is fetched on demand (Hard-Won Lesson
+    // 25), so the second may not exist yet; the frame-load / re-focus paths
+    // re-run this once it does.
+    const expandedRow = this.expandedRowTargets.find(r => r.dataset.capabilityId === capabilityId)
+    const selector = `td[data-level-ordinal='${levelOrdinal}']`
+    return [ row, row.querySelector(selector), expandedRow?.querySelector(selector) ].filter(Boolean)
   }
 
   // Stamps `data-focused="true"` on the currently-focused capability's
@@ -2010,6 +2059,9 @@ export default class extends BaseController {
     // swap in the same task, so no frame paints between the two.
     loaded.classList.toggle("hidden", placeholder.classList.contains("hidden"))
     placeholder.replaceWith(loaded)
+    // Cell focus may already point at a cell inside this row — the placeholder
+    // had no cells to ring, so re-stamp now that the real ones exist.
+    this.#applyGridFocus()
     return loaded
   }
 
