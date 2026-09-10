@@ -191,17 +191,22 @@ module Frameworks::ExplorerMatrix
   # @return [Hash, nil] `{ entity_ids:, parent_ids: }`, or nil when the graph has
   #   no such capability (the builder then answers "not in scope" and we 404)
   def capability_suggestion_scope(graph, capability_id)
-    capability = graph.capability_categories
-      .flat_map(&:capabilities)
-      .find { |c| c.capability_id == capability_id }
+    category = graph.capability_categories
+      .find { |cat| cat.capabilities.any? { |c| c.capability_id == capability_id } }
+    capability = category&.capabilities&.find { |c| c.capability_id == capability_id }
     return nil unless capability
 
     expectation_ids = capability.expectations.map(&:expectation_id)
     illustration_ids = capability.expectations.flat_map { |e| e.illustrations.map(&:illustration_id) }
 
+    # The CATEGORY is in here because the row applies the grid's text filter, and
+    # in edit mode the haystack folds in the category's pending name/description
+    # (MatrixDataBuilder#searchable_text). Without it, a capability the grid
+    # matched only through its category's proposed text would 404 on expand.
+    #
     # `parent_ids` is the creates axis: a pending illustration hangs off its
     # expectation, a pending expectation off its capability.
-    { entity_ids: [ capability_id ] + expectation_ids + illustration_ids,
+    { entity_ids: [ category.category_id, capability_id ] + expectation_ids + illustration_ids,
       parent_ids: [ capability_id ] + expectation_ids }
   end
 

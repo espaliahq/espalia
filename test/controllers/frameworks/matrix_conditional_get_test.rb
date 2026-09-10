@@ -179,6 +179,27 @@ class Frameworks::MatrixConditionalGetTest < ActionDispatch::IntegrationTest
       assert_response :not_modified
     end
 
+    should "serve a row the grid matched only through its category's proposed text" do
+      # In edit mode the search haystack folds in the category's pending
+      # name/description, so a capability can be visible in the grid purely
+      # because of them. The row's own scoped suggestion read has to see the
+      # category too, or expanding it 404s on a row the user is looking at.
+      person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.suggest_edit(
+          @framework_id, SecureRandom.uuid_v7, "capability_category", @category_id,
+          "name", "Reasoning Under Uncertainty", person.id, mode: :suggesting
+        )
+      end
+
+      get edit_matrix_framework_path(@framework_id, q: "Uncertainty")
+      assert_response :success
+      assert_includes response.body, "Strategic Thinking"
+
+      get edit_expanded_row_framework_path(@framework_id, @capability_id, q: "Uncertainty")
+      assert_response :success
+    end
+
     should "not reuse one capability's row for another" do
       get expanded_row_framework_path(@framework_id, @capability_id)
       etag = response.headers["ETag"]
