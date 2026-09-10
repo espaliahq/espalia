@@ -144,11 +144,7 @@ export default class extends BaseController {
     // A bar left visible is captured in Turbo Drive's page snapshot and comes
     // back as a permanent-looking stripe on the restored preview.
     this.#setBusy(false)
-    if (this._filterDebounceTimer) {
-      clearTimeout(this._filterDebounceTimer)
-      this._filterDebounceTimer = null
-      this._pendingFilterFetch = null
-    }
+    this.#cancelPendingFilterFetch()
     if (this._frame && this._frameLoadHandler) {
       this._frame.removeEventListener("turbo:frame-load", this._frameLoadHandler)
       this._frame = null
@@ -263,6 +259,10 @@ export default class extends BaseController {
     this.#updateBrowserUrl(resolvedRoleIds, resolvedTrack, resolvedQuery)
 
     if (!debounce) {
+      // An immediate fetch supersedes anything the debounce is holding — it
+      // reads the same axes back, so letting the timer fire would just repeat
+      // the request 300ms later.
+      this.#cancelPendingFilterFetch()
       this.#applyFrameSrc(url.toString())
       return
     }
@@ -273,6 +273,7 @@ export default class extends BaseController {
     this._pendingFilterFetch = url.toString()
     clearTimeout(this._filterDebounceTimer)
     this._filterDebounceTimer = setTimeout(() => {
+      this._filterDebounceTimer = null
       const src = this._pendingFilterFetch
       this._pendingFilterFetch = null
       if (src) this.#applyFrameSrc(src)
@@ -295,6 +296,12 @@ export default class extends BaseController {
   #applyFrameSrc(src) {
     this.#setBusy(true)
     this.frameTarget.src = src
+  }
+
+  #cancelPendingFilterFetch() {
+    clearTimeout(this._filterDebounceTimer)
+    this._filterDebounceTimer = null
+    this._pendingFilterFetch = null
   }
 
   #setBusy(busy) {
