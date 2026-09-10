@@ -82,14 +82,27 @@ class Frameworks::MatrixRefetchSystemTest < ApplicationSystemTestCase
     should "push the browser URL immediately, ahead of the debounced fetch" do
       open_explorer
 
-      toggle_roles_off([ @role_ids.first ])
+      # Both readings are taken in the SAME task as the click, so no wall-clock
+      # time passes between them and the debounce cannot have fired: the address
+      # bar (and the axis read-back the next filter change depends on) must
+      # never lag the controls, however long the fetch is deferred. Reading them
+      # over separate Selenium round trips would race the 300ms window on a
+      # starved runner and fail for no defect.
+      state = page.evaluate_script(<<~JS, @role_ids.first)
+        (() => {
+          const cb = document.querySelector(`input[data-role-id="${arguments[0]}"]`)
+          cb.checked = false
+          cb.dispatchEvent(new Event("change", { bubbles: true }))
+          return {
+            roles: new URL(window.location).searchParams.getAll("roles[]"),
+            fetches: performance.getEntriesByType("resource")
+              .filter((e) => e.name.includes("/matrix")).length
+          }
+        })()
+      JS
 
-      # Read synchronously, inside the debounce window: the address bar (and the
-      # axis read-back the next filter change depends on) must never lag the
-      # controls, however long the fetch is deferred.
-      remaining = page.evaluate_script("new URL(window.location).searchParams.getAll('roles[]')")
-      assert_equal @role_ids.drop(1).sort, remaining.sort
-      assert_equal 0, matrix_fetch_count, "the fetch should still be pending"
+      assert_equal @role_ids.drop(1).sort, state["roles"].sort
+      assert_equal 0, state["fetches"], "the fetch should still be pending"
 
       assert_no_text expectation_text(1)
       assert_matrix_fetch_count 1
