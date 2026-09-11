@@ -1717,7 +1717,11 @@ export default class extends BaseController {
   // exactly the case contributors spend their time in (#382).
   #publishStickyGeometry() {
     const headerCell = this.#matrixHeaderCell()
-    if (!headerCell) return
+    // No table at all — the empty state, or a search that matched nothing.
+    // Drop BOTH variables rather than leaving the last grid's spacing behind:
+    // whatever renders next re-measures on frame load, and until it does the
+    // CSS fallbacks are a truer answer than a stale measurement.
+    if (!headerCell) return this.#clearStickyGeometry()
 
     const headerH = Math.ceil(headerCell.getBoundingClientRect().height)
 
@@ -1728,17 +1732,22 @@ export default class extends BaseController {
       (max, band) => Math.max(max, Math.ceil(band.getBoundingClientRect().height)), 0
     )
 
-    if (headerH > 0) this.element.style.setProperty("--matrix-header-h", `${headerH}px`)
+    // Each is set only when it was actually measured, and cleared otherwise —
+    // a category-less render (every category filtered out by the search) must
+    // not keep the previous grid's band height, or the variable quietly means
+    // "the last non-zero measurement" instead of "the current one".
+    this.#setStickyVariable("--matrix-header-h", headerH)
+    this.#setStickyVariable("--matrix-category-h", categoryH)
+  }
 
-    // Cleared rather than left standing when there is nothing to measure (a
-    // search that matches no category, an empty matrix) — otherwise the
-    // variable quietly means "the last non-zero measurement" and the next
-    // render inherits a height from a grid that is no longer on screen.
-    if (categoryH > 0) {
-      this.element.style.setProperty("--matrix-category-h", `${categoryH}px`)
-    } else {
-      this.element.style.removeProperty("--matrix-category-h")
-    }
+  #setStickyVariable(name, pixels) {
+    if (pixels > 0) this.element.style.setProperty(name, `${pixels}px`)
+    else this.element.style.removeProperty(name)
+  }
+
+  #clearStickyGeometry() {
+    this.element.style.removeProperty("--matrix-header-h")
+    this.element.style.removeProperty("--matrix-category-h")
   }
 
   // (Re-)observes the elements whose height the geometry is derived from. Both

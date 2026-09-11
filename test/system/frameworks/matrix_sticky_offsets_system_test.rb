@@ -172,7 +172,41 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # The variables describe the grid on screen. A search that filters every
+  # capability out leaves no table to measure, and keeping the last grid's
+  # numbers makes them mean "the most recent non-empty render" instead.
+  context "when a search leaves no grid to measure" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit edit_framework_path(@framework_id, roles: @role_ids.first(1))
+      assert_text "Edit mode"
+    end
+
+    should "drop the measured sticky variables, falling back to the CSS defaults" do
+      assert_operator measured_sticky_variables.compact_blank.size, :==, 2,
+                      "expected both variables to be measured before the search"
+
+      # By selector, not by label: the filter box carries an `aria-label` and no
+      # `<label>`/name/id, and Capybara's field locator does not read ARIA.
+      js_fill_in "[data-framework-search-target='input']", with: "zzz-matches-nothing"
+      assert_text "No capabilities match"
+
+      assert_empty measured_sticky_variables.compact_blank,
+                   "the previous grid's spacing outlived the grid it described"
+    end
+  end
+
   private
+
+  def measured_sticky_variables
+    page.evaluate_script(<<~JS)
+      (() => {
+        const root = document.querySelector("[data-controller~='matrix']");
+        return [ "--matrix-header-h", "--matrix-category-h" ]
+          .map((name) => root.style.getPropertyValue(name).trim());
+      })()
+    JS
+  end
 
   def seed_framework(handler)
     family_id = SecureRandom.uuid_v7
