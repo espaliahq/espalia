@@ -169,7 +169,14 @@ class Views::Frameworks::ShowView < Views::Base
   # modal (the actionable feed).
   def explorer_root_data
     controllers = [ "framework-explorer" ]
-    actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
+    actions = [
+      "tree:changed->framework-explorer#updateRoleCount",
+      # Both panes are overlays on a narrow viewport; Esc is the keyboard
+      # counterpart of tapping outside one (#384). The handler stands down
+      # while a modal or a kebab menu is open — those own Esc first.
+      "keydown.esc@window->framework-explorer#closeOverlayPanes",
+      "resize@window->framework-explorer#viewportChanged"
+    ]
     data = {}
     if @mode == :edit
       controllers << "modal"
@@ -532,12 +539,21 @@ class Views::Frameworks::ShowView < Views::Base
 
   # ── Explorer Layout ──
 
+  # The explorer fills whatever viewport is left under the page chrome. The
+  # offset used to be a guessed `12rem`, which only ever matched the desktop
+  # header: once the header wraps (narrow viewports, #384) it is half the
+  # screen tall and the explorer hung far below the fold. It is MEASURED
+  # instead — `framework-explorer#publishLayoutOffset` writes
+  # `--explorer-offset` from the layout's own distance to the top of the
+  # document, so the sum is exactly the viewport at every width and the page
+  # itself never scrolls. `dvh`, so a mobile URL bar doesn't steal the bottom.
   def explorer_layout
     div(
-      class: "relative flex -mx-6 -mb-6 h-[calc(100vh-12rem)] " \
+      class: "relative flex -mx-6 -mb-6 h-[calc(100dvh_-_var(--explorer-offset,12rem))] " \
              "border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "matrix",
+        framework_explorer_target: "layout",
         matrix_base_path_value: matrix_base_path,
         action: "tree:changed->matrix#updateSelection " \
                 "framework-search:changed@window->matrix#updateSearch " \
@@ -627,9 +643,17 @@ class Views::Frameworks::ShowView < Views::Base
     # Edit mode only — view mode omits the pane entirely
     # (FrameworksController hides pending-suggestion indicators from the
     # grid too, so viewers see only published state).
+    #
+    # `max-lg:hidden` mirrors the role tree: below `lg` the pane is a
+    # slide-over the Activity toggle opens, not an inline column. It used to
+    # take 320 of a 375 px viewport and leave the matrix a 55 px sliver (#384).
+    # Closing it is the same vocabulary as the role tree — tap outside, Esc,
+    # or the pane's own × (narrow only; desktop closes with the toggle).
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden",
+             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
+             "max-lg:hidden",
+      aria_label: "Framework activity",
       data: {
         framework_explorer_target: "contextPane",
         controller: "context-pane",
@@ -642,6 +666,8 @@ class Views::Frameworks::ShowView < Views::Base
                 "suggestion:open-card@window->context-pane#onOpenSuggestionCard "
       }
     ) do
+      context_pane_mobile_bar
+
       # Live sync: any framework activity event broadcasts a replace of the
       # signal element below; the context-pane controller observes it and
       # reloads the feed frame for every edit-mode viewer (incl. the actor).
@@ -660,6 +686,30 @@ class Views::Frameworks::ShowView < Views::Base
       ) do
         div(class: "p-6 text-center text-gray-600 dark:text-gray-300 text-sm") do
           p { "Loading activity\u2026" }
+        end
+      end
+    end
+  end
+
+  # The slide-over's own title + close control. `lg:hidden`, because on
+  # desktop the pane is a column with no chrome of its own and the Activity
+  # stat toggles it — an overlay needs a dismissal that is visible while it
+  # covers the grid (an outside tap is discoverable only once you know it).
+  def context_pane_mobile_bar
+    div(class: "lg:hidden flex items-center justify-between gap-2 border-b " \
+               "border-gray-200 dark:border-gray-700 px-3 py-2") do
+      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
+      button(
+        type: "button",
+        class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
+               "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 " \
+               "cursor-pointer",
+        aria_label: "Close activity feed",
+        data: { action: "framework-explorer#toggleContextPane" }
+      ) do
+        svg(class: "w-5 h-5", fill: "none", viewBox: "0 0 24 24",
+            stroke: "currentColor", stroke_width: "2", aria_hidden: "true") do |sv|
+          sv.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M6 18L18 6M6 6l12 12")
         end
       end
     end
