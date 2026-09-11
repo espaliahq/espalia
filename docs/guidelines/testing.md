@@ -316,7 +316,8 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 |--------|-----------|-------|
 | `open_dropdown(scope:)` | dropdown | Opens a dropdown menu |
 | `toggle_sidebar(scope:)` | sidebar | Opens the mobile sidebar drawer |
-| `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane |
+| `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane (an overlay below `lg`, an inline column above it) |
+| `toggle_context_pane(scope:)` | framework-explorer | Opens the framework explorer activity pane — same two shapes; below `lg` it starts CLOSED, so this opens it rather than closing it |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
 | `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector (the row's content loads on demand — assert on it, not on the row) |
 | `start_inline_edit(container)` | field-editor | Opens the explorer's shared inline editor via its pencil, returns the cloned form |

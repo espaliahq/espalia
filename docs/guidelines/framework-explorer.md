@@ -353,7 +353,7 @@ left implicit:
 
 **Server-side filtering**: `Frameworks::FocusedSuggestionsQuery` walks eager-loaded framework associations once and builds in-memory `Set`s of in-scope IDs (category / capability / expectation / illustration). No denormalized columns or migrations on `framework_suggested_edits`. The framework read model is small enough (100-200 capabilities) that in-memory resolution is cheap.
 
-**Pane default visibility**: in edit mode the pane is open by default — contributors are usually here *because* of the suggestion feed. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "N Suggestions" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default.
+**Pane default visibility**: in edit mode the pane is open by default **on desktop** — contributors are usually here *because* of the suggestion feed. **Below `lg` it is a slide-over that starts closed** (§7): there it would otherwise take 320 of a 375 px viewport. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "Activity" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default on desktop.
 
 ### 9. Context Pane Row Presentation
 
@@ -1221,14 +1221,42 @@ the detail page render the same `Views::Frameworks::Suggestions::Thread`.
 
 ### 7. Responsive Behaviour
 
-| Viewport | Role Tree | Matrix | Toggle Button |
-|----------|-----------|--------|---------------|
-| Desktop (≥ 1024px) | Inline left pane | Adjacent to tree | Visible, toggles inline |
-| Mobile (< 1024px) | Hidden, fixed overlay on toggle | Full width | Visible, opens overlay |
+**Both side panes are overlays below `lg`; only the matrix ever scrolls
+horizontally.** Edit mode originally had no responsive contract at all — it
+added a second `w-80` column rendered open, which at 375 px left the matrix a
+55 px sliver and pushed the document to 825 px wide (issue #384).
 
-The toggle button is the **role count stat** in the header ("4 Roles" with a chevron). It serves double duty: displaying information and providing the toggle affordance.
+| Viewport | Role tree (view + edit) | Activity pane (edit only) | Matrix |
+|----------|-------------------------|---------------------------|--------|
+| Desktop (≥ 1024px) | Inline left pane, open | Inline right pane, **open by default** | Between them |
+| Mobile (< 1024px) | `max-lg:hidden`; fixed overlay on toggle, left-anchored | `max-lg:hidden`; fixed overlay on toggle, right-anchored, with its own title bar + × | **Full width** |
 
-Mobile overlay closes on click-outside via `useClickOutside` from stimulus-use.
+Both toggles are header stats doing double duty: the **role count** ("4 Roles"
+with a chevron) and the **Activity** stat (with its pending-count badge). Each
+carries `aria-expanded`.
+
+An overlay pane closes on an outside tap (`useClickOutside`), on Esc
+(`framework-explorer#closeOverlayPanes`, which stands down while a modal or an
+open menu owns Esc), and — for the activity pane — on its own `lg:hidden` ×.
+A strip of the grid always stays visible beside an open overlay: it is both the
+cue that something is covered and the target for the tap that uncovers it.
+
+**The layout's height is measured, not guessed.** `h-[calc(100dvh -
+var(--explorer-offset, 12rem))]`; the shell controller writes
+`--explorer-offset` from the layout's own distance to the top of the document
+and re-publishes it whenever the chrome resizes (a `ResizeObserver` on the
+header) or the window does. The old constant `12rem` only ever described the
+desktop header — once it wraps on a phone it is twice that, and the grid hung
+below the fold with its sticky header off-screen.
+
+**The phone is a review surface, not an authoring one.** Everything a reviewer
+needs — the feed, its actionable entries, the suggestion card, and the reject /
+resolve / discuss modals — fits 375 px. The authoring affordances are still
+present (the `pointer-coarse` rule in §11a already collapses each cluster to
+its kebab), but the structural modals are rendered server-side for every edit-
+mode viewer regardless of viewport: the server cannot know the viewport, and
+the role-pane flows (add role, add level, edit levels) are reachable on a phone
+through the overlay, so gating them on width would remove working functionality.
 
 ## Sticky Positioning
 
@@ -1281,9 +1309,21 @@ controller is no worse than before. Two rules for anything added here:
 
 ### framework_explorer_controller.js
 - **Role pane toggle** (desktop: inline show/hide, mobile: fixed overlay)
-- **Click-outside close** on mobile (via `useClickOutside`)
+- **Activity (context) pane toggle** — same two modes; below `lg` a
+  right-anchored fixed overlay, closed by default (§7)
+- **Click-outside close** on mobile for BOTH panes (via `useClickOutside`). One
+  `clickOutside` callback serves both registrations — stimulus-use has no
+  per-element callback name — so it re-checks containment itself rather than
+  trusting which one fired, and registers each element only once.
+- **Esc close** (`closeOverlayPanes`) — narrow viewports only, and only when no
+  modal overlay and no open `[role="menu"]` is present
+- **`--explorer-offset`** — measures the chrome above the explorer
+  (`ResizeObserver` on the header + `resize@window`) so the layout is exactly
+  the leftover viewport (§7)
+- **Breakpoint crossing** (`viewportChanged`) — strips an overlay's inline
+  styles and resets each pane to its default for the new width
 - **Role count update** when tree selection changes
-- **Toggle affordance** (chevron rotation, active state styling)
+- **Toggle affordance** (chevron rotation, active state styling, `aria-expanded`)
 
 ### tree_controller.js
 - **Checkbox management** (role toggle, family bulk toggle, indeterminate state)
@@ -2140,6 +2180,49 @@ Two things fell out of it:
   Verified the whole file bites by reverting the fix and watching all six row
   cases and all three band cases fail.
 
+### 37. A closed `Kit::Dropdown` still matches `[role="menu"]`
+
+Esc on a narrow viewport closes whichever pane is covering the grid, but must
+stand down while a modal or an open menu owns it — so the guard asked
+`document.querySelector("[role='menu']")`. It never let Esc through: a
+`Kit::Dropdown` renders its menu **present and `hidden`**, and the role tree
+ships one per role, so the selector matched on every edit-mode page and
+disarmed the handler completely. `:not(.hidden)` is the whole fix, and it is
+also why the delegated grid menus (§11a — built on open, removed on close) are
+not the shape that bites: a widget that is *absent* when closed cannot be
+mistaken for an open one.
+
+The general rule: **"is one of these open?" is a question about state, not
+presence.** Any guard written as a bare presence check has to be read against
+how each matching widget represents "closed".
+
+### 38. Selenium scrolls bottom-aligned before it acts, so a short scrollport puts a tall row back under the sticky header
+
+`matrix_sticky_offsets_system_test.rb` deliberately ends in a REAL pointer
+click on the row kebab — a JS dispatch cannot see the row sitting under the
+sticky header, which is the bug it exists to catch (#382). It started failing
+at 375 px the moment the explorer stopped guessing its height (#384): the
+scrollport became the honest ~440 px of leftover viewport instead of a 620 px
+box hanging below the fold, and an 11-role row no longer fits in it.
+
+WebDriver "scrolls an element into view" **aligned to the bottom** of the
+scrollport before a hover or a click. Hovering the tall `<tr>` therefore
+dragged its top — where the kebab is — back up under the header, and the click
+was intercepted by the sticky `<th>`. The geometry assertions just above it had
+all passed; the scroll happened after them.
+
+Two things to carry forward:
+
+- **Selenium's pre-action scroll is test machinery, not user behaviour.** A real
+  pointer hover scrolls nothing. Re-establish the resting position between the
+  hover and the click.
+- **Do it through the mechanism under test**, not with a raw offset:
+  `scrollIntoView({ block: "start" })` honours the row's `scroll-margin-top`,
+  which is the measured `--matrix-header-h` + `--matrix-category-h`. A wrong
+  measurement still parks the kebab under the header and the test still fails,
+  so the repair does not blunt it.
+
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -2358,7 +2441,7 @@ line (§9).
 | `app/javascript/controllers/reject_suggestion_form_controller.js` | Prefills the reject modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12) |
 | `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
 | `app/javascript/controllers/framework_activity_controller.js` | Client-side filter-chip toggling of visible entry groups |
-| `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
+| `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, both pane toggles (inline column / slide-over per breakpoint), the measured `--explorer-offset`, role count (§7) |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync + activity-sync-signal observer (live reload) |
@@ -2406,6 +2489,7 @@ line (§9).
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/mobile_edit_mode_system_test.rb` | Edit mode at 375×812 vs 1400×1400 — no sideways page scroll, header controls on screen, the pane as slide-over vs inline column, reviewing from the overlay (§7) |
 | `test/system/frameworks/matrix_sticky_offsets_system_test.rb` | Measured sticky offsets — expanded row + category band clear the header at 1/3/11 roles, both viewports, with a real pointer click on the row kebab |
 | `test/system/frameworks/matrix_focus_ring_system_test.rb` | On-grid focus ring (row / cell / category band) + the pane's breadcrumb × |
 | `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
