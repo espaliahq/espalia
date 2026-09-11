@@ -106,10 +106,13 @@ PageLayout
         │               │   └── CategoryDescriptionFrame (edit: inline editor; "Add a description…" when blank)
         │               ├── MatrixRow (per capability)
         │               │   ├── compact row (click → matrix#toggleRow)
-        │               │   │   ├── CapabilityNameFrame (edit: inline editor) + archive kebab (hover)
+        │               │   │   ├── CapabilityNameFrame (edit: inline editor)
+        │               │   │   │       + row hover cluster: pencil · discuss · ⋮ (§11a)
         │               │   │   ├── CapabilityDescriptionFrame (edit: inline editor; "Add a description…" when blank)
         │               │   │   └── MatrixCell × N
-        │               │   │       └── ExpectationTextFrame (edit: inline editor)
+        │               │   │       ├── ExpectationTextFrame (edit: inline editor)
+        │               │   │       └── NewExpectationFrame / PendingExpectationFrame
+        │               │   │           (edit: author an empty cell, or its pending ghost)
         │               │   └── ExpandedRow (hidden PLACEHOLDER; content fetched on first expand)
         │               │       └── expanded td (click → matrix#focusCell)
         │               │           ├── IllustrationFrame (edit: pencil + inline editor)
@@ -117,7 +120,8 @@ PageLayout
         │               │           └── NewIllustrationFrame ("+ Add"; edit mode only)
         │               └── "+ Add capability" row (edit + can_edit_structure → opens AddCapabilityModal)
         └── aside[data-controller="context-pane"]  ← right pane (edit mode only)
-            └── turbo-frame#suggestion-panel (Suggestions::PanelFrame)
+            └── turbo-frame#suggestion-panel (Activity::PanelFrame — the
+                activity feed; Activity::SuggestionCardFrame at suggestion focus)
 ```
 
 ### Data Flow
@@ -298,9 +302,11 @@ This enables bookmarking, sharing, and browser back/forward. The server reads ro
 
 ### 8. Focus Context (Context Pane)
 
-**Edit mode only.** The context pane does not render in view mode — viewers see no "N Suggestions" toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
+**Edit mode only.** The context pane does not render in view mode — viewers see no **Activity** toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
 
-The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
+The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the standalone suggestion index (`?layout=panel`) — see *Activity feed coverage* and §9.
+
+It narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
 
 | Level | Trigger | Clear |
 |-------|---------|-------|
@@ -322,7 +328,7 @@ like every other level. Opening the card deliberately does NOT navigate the
 matrix — a `matrix:focus-changed` dispatch would immediately overwrite the
 focus; the entry's row body remains the way to jump the grid to the entity.
 
-**Panel header is focus-driven**: `FocusedSuggestionsQuery#descriptor` renders the focus title ("All framework suggestions" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers the "Show all" link. See §9 for full header/row anatomy.
+**Panel header is focus-driven**: `ActivityFeedQuery#descriptor` renders the focus title ("All framework activity" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers both the × on the breadcrumb and the worded "← Show all framework activity" link. A top-right "All suggestions" link breaks out of the frame (`data-turbo-frame="_top"`) to the standalone review index. The row-presentation principles are in §9.
 
 **Focus is visible on the grid, and legible + clearable in one place (#382).**
 Three separate gestures set focus and others clear it, so neither half can be
@@ -355,11 +361,13 @@ left implicit:
 
 **Pane default visibility**: in edit mode the pane is open by default **on desktop** — contributors are usually here *because* of the suggestion feed. **Below `lg` it is a slide-over that starts closed** (§7): there it would otherwise take 320 of a 375 px viewport. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "Activity" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default on desktop.
 
-### 9. Context Pane Row Presentation
+### 9. Suggestion Row Presentation
 
-Each suggestion row in the panel must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
+Each suggestion row must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
 
-**Panel header** (rendered by `PanelFrame#header`):
+> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **standalone suggestion index** (`?layout=panel`), which is the only caller left since the context pane became the activity feed. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under *Activity feed coverage*.
+
+**Panel header** (rendered by `Suggestions::PanelFrame#header`):
 - **Focus title** — derived from `FocusedSuggestionsQuery#descriptor`:
   - `:framework` → "All framework suggestions"
   - `:category` → "`<Category>` — category"
@@ -710,16 +718,23 @@ a ghost role contributes no columns in view mode.
   `RoleFamilyUpdated` per family, so it shows as N department entries in the
   activity feed.
 
-**Shared modals under one `modal` controller.** Archive(-capability),
-add-capability, add-category, and archive-category are four embedded `Kit::Modal`s
-on the explorer root, all driven by a single `modal` Stimulus controller. Each
-trigger names its overlay via `data-modal-target-id="<overlay id>"`; the
-controller opens that overlay (falling back to the lone overlay when a page has
-only one — so the assessment evidence / delegation modals are unchanged). Feature
-controllers prefill from the `modal:open` event's `dataset`: `add_capability_form`
-(category id/name), `archive_form` (capability id/name, needs-mapping, hides self
-from survivors), `mapping_form` (toggles the survivor select by mapping type),
-`archive_category_form` (category id/name — no mapping).
+**Shared modals under one `modal` controller.** Every dialog in edit mode is an
+embedded `Kit::Modal` on the explorer **root**, and one `modal` Stimulus
+controller drives all of them. Root-mounted for every edit-mode viewer:
+reject-suggestion (§12), resolve-clarification and request-clarification (§12a),
+and archive-illustration (§11b). Root-mounted for `can_edit_structure` holders:
+archive(-capability), add-capability, add-category, archive-category,
+binding-editor, level-editor, and the role-family / role / level dialogs
+(each in both `:new` and `:edit` shape). Each trigger names its overlay via
+`data-modal-target-id="<overlay id>"`; the controller opens that overlay
+(falling back to the lone overlay when a page has only one — so the assessment
+evidence / delegation modals are unchanged). Feature controllers prefill from
+the `modal:open` event's `dataset`: `add_capability_form` (category id/name),
+`archive_form` (capability id/name, needs-mapping, hides self from survivors),
+`mapping_form` (toggles the survivor select by mapping type),
+`archive_category_form` (category id/name — no mapping),
+`archive_illustration_form` (illustration id + excerpt), and the clarification /
+reject / role / level form controllers listed in the Stimulus table.
 
 These modals hold unsaved input (names, descriptions, migration mappings,
 reject reasons), so outside-click dismissal is **off** — the explorer root's
