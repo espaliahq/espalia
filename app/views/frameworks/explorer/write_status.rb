@@ -29,7 +29,11 @@ class Views::Frameworks::Explorer::WriteStatus < Views::Base
       # notification bell and account menu, and at `top-16` over the framework
       # header's Publish button — for four seconds, every time. The explorer's
       # bottom-right is the only corner holding nothing but content.
-      class: "fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+      # `left-4` only below `sm`: at 375 px a message is wider than the gap to
+      # the left edge, so without a left bound it runs off-screen (#384). On
+      # `sm` and up the region stays right-anchored and shrink-to-fit.
+      class: "fixed bottom-4 right-4 max-sm:left-4 z-50 flex flex-col items-end " \
+             "gap-2 pointer-events-none"
     ) { }
   end
 end

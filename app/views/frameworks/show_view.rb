@@ -223,16 +223,26 @@ class Views::Frameworks::ShowView < Views::Base
 
   # ── Header ──
 
+  # The page chrome above the explorer. Everything here WRAPS rather than
+  # overflows: at 375 px the mode toggle, "Exit edit mode", Publish and
+  # Settings together are ~480 px wide, so on one non-wrapping row they ran
+  # off-screen and the whole document scrolled sideways to 825 px (#384).
+  # Tagged as the `chrome` target so the controller can measure its height and
+  # give the explorer below it exactly the leftover viewport.
   def framework_header
-    div(class: "mb-4") do
-      div(class: "flex items-center justify-between") do
-        div do
+    div(class: "mb-4", data: { framework_explorer_target: "chrome" }) do
+      div(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-2") do
+        div(class: "min-w-0 max-sm:w-full") do
           a(href: frameworks_path,
             class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary mb-2 inline-block") do
             plain "\u2190 Frameworks"
           end
-          div(class: "flex items-center gap-3") do
-            h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @framework.name }
+          # The badges wrap under the title on a narrow viewport instead of
+          # squeezing it — the name used to break over four lines beside them.
+          div(class: "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1") do
+            h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold " \
+                      "text-gray-900 dark:text-white",
+               title: @framework.name) { @framework.name }
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
@@ -243,7 +253,7 @@ class Views::Frameworks::ShowView < Views::Base
           end
         end
 
-        div(class: "flex items-center gap-2") do
+        div(class: "flex flex-wrap items-center gap-2") do
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
           render Views::Frameworks::Explorer::DraftStatus.new(
@@ -295,7 +305,10 @@ class Views::Frameworks::ShowView < Views::Base
   def edit_suggest_segment(value, label, tooltip)
     button(
       type: "button",
-      class: "inline-flex items-center rounded px-3 py-1 font-medium transition-colors",
+      # Tighter gutters below `sm`: at 375 px the toggle and "Exit edit mode"
+      # miss sharing a wrapped row by 2 px, which costs a whole 48 px band of
+      # an already tall mobile header (#384).
+      class: "inline-flex items-center rounded px-2 sm:px-3 py-1 font-medium transition-colors",
       data: {
         action: "edit-mode-toggle#select",
         edit_mode_toggle_target: "#{value}Button",
@@ -373,7 +386,9 @@ class Views::Frameworks::ShowView < Views::Base
           d: "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
         )
       end
-      plain "Settings"
+      # Icon-only below `sm` — the label is the last thing in the header cluster
+      # worth a line of its own on a phone. `sr-only` keeps the accessible name.
+      span(class: "max-sm:sr-only") { "Settings" }
     end
   end
 
@@ -585,9 +600,13 @@ class Views::Frameworks::ShowView < Views::Base
     end
   end
 
+  # The ONLY horizontally scrolling box on the page. `min-w-0` is load-bearing
+  # even beside `overflow-auto`: it states outright that the grid's intrinsic
+  # width must never push the flex row — and therefore the document — wider
+  # than the viewport (#384).
   def main_pane
     div(
-      class: "flex-1 overflow-auto bg-white dark:bg-gray-900",
+      class: "flex-1 min-w-0 overflow-auto bg-white dark:bg-gray-900",
       data: { matrix_target: "scrollContainer" }
     ) do
       turbo_frame_tag("framework-matrix", data: { matrix_target: "frame" }) do
