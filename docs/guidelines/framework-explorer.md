@@ -1814,23 +1814,35 @@ page-unresponsive dialog. Two rules fell out:
   `context-pane` debounces the signal into a single feed reload (~300ms)
   instead of re-fetching the 300KB+ feed once per event.
 
-Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
-7.6 MB → 1.5 MB on the same framework), Lesson 29 (delegated kebabs, a CSS
-hover-cluster rule and an icon sprite — a further −22.6%), Lesson 27 (one
-shared inline editor
-— 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
-zero) and Lesson 33 (the repeated utility strings as component classes —
-1,030,352 → 907,516 B, class-attribute bytes −52%). The pre-rendered kebab
-menus went with Lesson 29, and the frame now
-carries **no Stimulus mounts at all** — so the remaining bulk is the content
-itself plus the shared editor's per-host `data-editor-*` contract (~175 KB),
-which buys the zero pre-rendered forms and has no cheaper form. **On the wire
-it is 55 KB**, gzipped (#383), and a filter toggled back to a state the browser
-holds is a 304.
-Even so, treat "re-fetch the matrix" as a last resort in any new explorer
-feature: ~900 KB of HTML per approval is still the wrong shape, and the
-surgical streams exist so it never has to happen. `test/performance/
-explorer_payload_test.rb` now fails when any of this grows back.
+**Most of that frame is gone.** The 2026-09-07 edit-mode review turned into a
+run of changes that each took a bite out of it. All figures are
+`GET /frameworks/<me&u>/edit/matrix?track=both`, signed in, on the seeded me&u
+framework (~38 capabilities, 11 roles × 8 levels, ~995 illustrations) — but
+each row was measured against **its own merge-base**, so they describe steps,
+not a single arithmetic chain:
+
+| Step | What it removed | Edit-matrix frame |
+|---|---|---|
+| baseline (pre-#378) | — | **7,615,168 B** (gzip 311 KB) · 3,338 controller mounts · 3,206 `<form>` · 2,356 `<textarea>` · 888 `Kit::Dropdown` · 50,146 DOM nodes; one role toggle ≈8 s click→idle |
+| [#378](https://github.com/mr-yum/growth-os/pull/386) — expanded rows fetched on demand (Lesson 25) | the hidden expanded rows: **81%** of the payload | 1,460,574 B (gzip 95 KB) · 485 mounts · ≈1.2 s |
+| [#379](https://github.com/mr-yum/growth-os/pull/387) — one shared inline editor (Lessons 26–28) | 374 `<form>` + 374 `<textarea>` + their mounts | 1,222,619 B · 111 mounts |
+| [#380](https://github.com/mr-yum/growth-os/pull/388) — delegated kebabs, one hover cluster, an icon sprite (Lessons 29–31) | 38 dropdowns, 758 inline `<svg>` glyph definitions | ≈947,000 B · **0 mounts** |
+| [#381](https://github.com/mr-yum/growth-os/pull/389) — one write-response contract (§11b) | full-page reloads and whole-matrix re-fetches per write | frame unchanged; a write costs ~11 KB of stream instead of a 1,161,871 B reload |
+| [#383](https://github.com/mr-yum/growth-os/pull/393) — one fetch per burst, a 304 for a repeat, component classes (Lesson 33) | 52% of the `class` bytes; 4 of every 5 fetches in a filter burst | **907,516 B**, **54,656 B gzipped** · a repeat filter state is a 304 |
+
+End to end: **7.6 MB → 907 KB uncompressed, 311 KB → 55 KB on the wire, 3,338
+Stimulus mounts → 0.** ([#382](https://github.com/mr-yum/growth-os/pull/398)
+and [#384](https://github.com/mr-yum/growth-os/pull/400) close the same review
+set — measured sticky offsets / on-grid focus, and the phone layout — and
+change no payload.)
+
+The remaining bulk is the content itself plus the shared editor's per-host
+`data-editor-*` contract (~175 KB), which buys the zero pre-rendered forms and
+has no cheaper form. Even so, treat "re-fetch the matrix" as a last resort in
+any new explorer feature: ~900 KB of HTML per approval is still the wrong
+shape, and the surgical streams exist so it never has to happen.
+`test/performance/explorer_payload_test.rb` now fails when any of this grows
+back.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
