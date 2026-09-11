@@ -143,8 +143,8 @@ When a capability is archived during a draft, people may have ratings against it
 
 | Mapping type | Meaning | Rating behaviour |
 |-------------|---------|-----------------|
-| **same** | Capability unchanged (just re-affirming) | Ratings carry forward |
-| **evolved** | Capability broadened or narrowed | Ratings carry forward; reassessment likely flagged |
+| **same** | Capability unchanged (just re-affirming) | Ratings carry forward (same merge rule as `evolved` if the survivor is already rated) |
+| **evolved** | Capability broadened or narrowed, or absorbed into an existing one | Ratings carry forward; reassessment likely flagged. Where the person already rated the survivor at the same level, the survivor's rating wins and the absorbed one is dropped |
 | **split** | Capability split into multiple new ones | Ratings blanked; reassessment required |
 | **archived** | Capability retired with no replacement | Ratings surface for relink or dismiss |
 | **new** | Brand new capability (no predecessor) | Starts blank |

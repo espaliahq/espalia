@@ -770,6 +770,88 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
         assert_equal "capability_archived", rating.reassessment_reason
       end
     end
+
+    # Regression: an `evolved` mapping onto a capability that already existed in
+    # the previous version. The person rated both at the same cycle/level, so a
+    # plain re-key violates `idx_assessment_ratings_cycle_person_cap_level` and
+    # 500'd the publish. The survivor's own rating must win; the absorbed row
+    # goes away; non-colliding rows still migrate and are flagged.
+    should "merge into the survivor's existing rating when both were rated at the same level" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Colliding pair at level 1.
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 1,
+          self_rated_frequency: "some", manager_rated_frequency: "consistent")
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @to_stable_id, level_ordinal: 1,
+          self_rated_frequency: "consistent")
+        # Non-colliding retiring row at level 2.
+        create(:assessment_level_rating, tenant: @tenant,
+          person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @from_stable_id, level_ordinal: 2,
+          self_rated_frequency: "occasional")
+      end
+
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+          framework_id: @framework_id, old_version: 1, new_version: 2,
+          mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                        mapping_type: "evolved", requires_reassessment: true } ])
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_empty AssessmentLevelRating.where(capability_stable_id: @from_stable_id),
+          "every retiring row should be re-keyed or merged away"
+
+        survivor_rows = AssessmentLevelRating.where(capability_stable_id: @to_stable_id).order(:level_ordinal)
+        assert_equal [ 1, 2 ], survivor_rows.pluck(:level_ordinal)
+
+        merged = survivor_rows.first
+        assert_equal "consistent", merged.self_rated_frequency, "survivor's own rating wins the merge"
+        assert_nil merged.manager_rated_frequency, "absorbed row's values must not leak into the survivor"
+        assert_equal "flagged", merged.migration_status
+        assert_equal "expectations_evolved", merged.reassessment_reason
+
+        moved = survivor_rows.last
+        assert_equal "occasional", moved.self_rated_frequency
+        assert_equal "flagged", moved.migration_status
+      end
+    end
+
+    should "leave a frozen cycle's colliding pair untouched while merging the in-progress cycle" do
+      aligned_cycle_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle, :closed, tenant: @tenant, cycle_id: aligned_cycle_id,
+          framework_id: @framework_id, framework_version: 1)
+        AssessmentCycleProgress.create!(tenant: @tenant, cycle_id: aligned_cycle_id,
+          person_id: @person_id, status: "aligned", aligned_at: Time.current)
+        [ aligned_cycle_id, @cycle_id ].each do |cycle_id|
+          create(:assessment_level_rating, tenant: @tenant,
+            person_id: @person_id, framework_id: @framework_id, cycle_id: cycle_id,
+            capability_stable_id: @from_stable_id, level_ordinal: 1, self_rated_frequency: "some")
+          create(:assessment_level_rating, tenant: @tenant,
+            person_id: @person_id, framework_id: @framework_id, cycle_id: cycle_id,
+            capability_stable_id: @to_stable_id, level_ordinal: 1, self_rated_frequency: "consistent")
+        end
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "same", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        frozen = AssessmentLevelRating.where(cycle_id: aligned_cycle_id).order(:capability_stable_id)
+        assert_equal [ @from_stable_id, @to_stable_id ].sort, frozen.pluck(:capability_stable_id),
+          "aligned cycle keeps both rows as-at-completion"
+
+        live = AssessmentLevelRating.where(cycle_id: @cycle_id)
+        assert_equal [ @to_stable_id ], live.pluck(:capability_stable_id)
+        assert_equal "consistent", live.first.self_rated_frequency
+      end
+    end
   end
 
   context "per-side completion tracking" do
