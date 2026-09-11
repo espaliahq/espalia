@@ -174,6 +174,37 @@ class Frameworks::MobileEditModeSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
     end
 
+    should "move focus into the overlay and hand it back to the toggle" do
+      toggle_context_pane
+      assert_text "All framework activity"
+      assert page.evaluate_script(
+        "document.querySelector(\"[data-framework-explorer-target='contextPane']\")" \
+        ".contains(document.activeElement)"
+      ), "focus stayed on the grid the overlay is covering"
+
+      press_escape
+
+      assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
+      assert_equal "contextPaneToggle", page.evaluate_script(
+        "document.activeElement.dataset.frameworkExplorerTarget"
+      )
+    end
+
+    # A tall chrome (200% zoom, a very small window) must not be able to leave
+    # the grid with no height at all — the page scrolls instead.
+    should "keep the grid a usable height even if the chrome claims the viewport" do
+      page.execute_script(<<~JS)
+        document.querySelector("[data-controller~='framework-explorer']")
+          .style.setProperty("--explorer-offset", "5000px");
+      JS
+
+      height = page.evaluate_script(
+        "Math.round(document.querySelector(\"[data-framework-explorer-target='layout']\")" \
+        ".getBoundingClientRect().height)"
+      )
+      assert_operator height, :>, 200, "the explorer collapsed to nothing"
+    end
+
     # The phone is a REVIEW surface: reading the feed and acting on it is the
     # whole point of the pane being reachable at all.
     should "review a pending clarification from the overlay" do
@@ -192,6 +223,12 @@ class Frameworks::MobileEditModeSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
       assert_selector "#resolve-clarification-modal", visible: true
+
+      # Every modal is mounted on the explorer ROOT, so a tap inside the dialog
+      # is "outside the pane" — the pane must stand down while one is open, or
+      # the reviewer's feed closes behind the dialog they opened from it.
+      dispatch_click("#resolve-clarification-modal [data-modal-target='panel']")
+      assert_selector "[data-framework-explorer-target='contextPane']", visible: true
       # The dialog itself has to fit the phone, not just open on it.
       modal = page.evaluate_script(<<~JS)
         (() => {

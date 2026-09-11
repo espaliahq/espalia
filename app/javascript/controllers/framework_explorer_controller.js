@@ -126,21 +126,17 @@ export default class extends BaseController {
   // owns Esc while it is open — closing the pane underneath one would pull the
   // rug out from a dialog the user is still in.
   closeOverlayPanes() {
-    if (!this.isMobile) return
-    if (document.querySelector("[data-modal-target='overlay']:not(.hidden)")) return
-    // `:not(.hidden)` matters: a `Kit::Dropdown` renders its menu closed-but-
-    // present, so a bare `[role='menu']` matches on every edit-mode page and
-    // disarms this entirely.
-    if (document.querySelector("[role='menu']:not(.hidden)")) return
+    if (!this.isMobile || this.#somethingElseIsOpen()) return
 
     if (this.rolePaneOpen && this.hasRolePaneTarget) {
       this.#closeRolePane()
       this.#updateToggleAffordance()
       if (this.hasRolePaneToggleTarget) this.rolePaneToggleTarget.focus()
     } else if (this.contextPaneOpen && this.hasContextPaneTarget) {
+      // #closeContextPane returns focus to the toggle itself when it was
+      // inside the pane, which it is after an Esc.
       this.#closeContextPane()
       this.#updateContextToggleAffordance()
-      if (this.hasContextPaneToggleTarget) this.contextPaneToggleTarget.focus()
     }
   }
 
@@ -183,6 +179,18 @@ export default class extends BaseController {
 
   // private
 
+  // Is a modal or a menu currently open on top of the panes? Both own their
+  // own dismissal, so a pane must not act on an Esc or an outside click while
+  // one is up. `:not(.hidden)` matters for the menu: a `Kit::Dropdown` renders
+  // its menu closed-but-present, so a bare `[role='menu']` matches on every
+  // edit-mode page and disarms the guard entirely (Hard-Won Lesson 37).
+  #somethingElseIsOpen() {
+    return Boolean(
+      document.querySelector("[data-modal-target='overlay']:not(.hidden)") ||
+      document.querySelector("[role='menu']:not(.hidden)")
+    )
+  }
+
   #observeChrome() {
     if (!this.hasChromeTarget || typeof ResizeObserver === "undefined") return
 
@@ -201,6 +209,11 @@ export default class extends BaseController {
 
     if (pane.contains(event.target)) return
     if (event.target.closest(`[data-action*='${action}']`)) return
+    // Same hand-off rule as Esc. Every modal lives on the explorer ROOT, not
+    // inside the pane, so without this the first tap inside a Reject / Resolve
+    // / Add-level dialog reads as "outside the pane" and quietly closes the
+    // feed the reviewer opened it from.
+    if (this.#somethingElseIsOpen()) return
 
     if (isRole) {
       this.#closeRolePane()
@@ -238,6 +251,13 @@ export default class extends BaseController {
       // (Hard-Won Lesson 3).
       Object.assign(this.contextPaneTarget.style, this.#overlayStyle("20rem", { right: "0" }))
       this.#watchOutsideClicks(this.contextPaneTarget)
+      // The overlay covers the grid, so keyboard focus has to follow it in —
+      // otherwise Tab walks straight into the matrix controls underneath with
+      // nothing to say the panel was left. Focus returns to the toggle on
+      // every close path below. Containment is deliberately NOT claimed: the
+      // pane stays a landmark, not a dialog.
+      this.contextPaneTarget.tabIndex = -1
+      this.contextPaneTarget.focus({ preventScroll: true })
     } else {
       this.contextPaneTarget.classList.remove("hidden")
       this.contextPaneTarget.classList.add("flex")
@@ -247,7 +267,9 @@ export default class extends BaseController {
   #closeContextPane() {
     this.contextPaneOpen = false
     if (this.isMobile) {
+      const held = this.contextPaneTarget.contains(document.activeElement)
       this.contextPaneTarget.removeAttribute("style")
+      if (held && this.hasContextPaneToggleTarget) this.contextPaneToggleTarget.focus()
     } else {
       this.contextPaneTarget.classList.add("hidden")
       this.contextPaneTarget.classList.remove("flex")

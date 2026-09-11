@@ -547,10 +547,17 @@ class Views::Frameworks::ShowView < Views::Base
   # `--explorer-offset` from the layout's own distance to the top of the
   # document, so the sum is exactly the viewport at every width and the page
   # itself never scrolls. `dvh`, so a mobile URL bar doesn't steal the bottom.
+  #
+  # The `min-h-80` floor is the guard against a measurement that eats the whole
+  # viewport: at 200% zoom (WCAG 1.4.4) the CSS viewport is ~406 px tall and
+  # the wrapped chrome can exceed it, at which point the calc clamps to zero
+  # and the grid — the page's entire content — has no height at all. With the
+  # floor the page scrolls instead, which is the old constant's failure mode
+  # and a recoverable one.
   def explorer_layout
     div(
       class: "relative flex -mx-6 -mb-6 h-[calc(100dvh_-_var(--explorer-offset,12rem))] " \
-             "border-t border-gray-200 dark:border-gray-700",
+             "min-h-80 border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "matrix",
         framework_explorer_target: "layout",

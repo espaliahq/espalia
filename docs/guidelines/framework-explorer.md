@@ -1236,10 +1236,30 @@ with a chevron) and the **Activity** stat (with its pending-count badge). Each
 carries `aria-expanded`.
 
 An overlay pane closes on an outside tap (`useClickOutside`), on Esc
-(`framework-explorer#closeOverlayPanes`, which stands down while a modal or an
-open menu owns Esc), and — for the activity pane — on its own `lg:hidden` ×.
-A strip of the grid always stays visible beside an open overlay: it is both the
-cue that something is covered and the target for the tap that uncovers it.
+(`framework-explorer#closeOverlayPanes`), and — for the activity pane — on its
+own `lg:hidden` ×. A strip of the grid always stays visible beside an open
+overlay: it is both the cue that something is covered and the target for the
+tap that uncovers it.
+
+**Both dismissals stand down while a modal or an open menu is up**
+(`#somethingElseIsOpen`). This matters more for the tap than for Esc: every
+modal is mounted on the explorer ROOT (Lesson 19), so it is *outside* the pane
+— without the guard the first tap inside a Reject / Resolve / Add-level dialog
+reads as an outside click and quietly closes the feed the reviewer opened it
+from.
+
+**Opening the activity overlay moves focus into it**, and closing it by any
+path hands focus back to the Activity toggle — the overlay covers the grid, so
+Tab must not walk into controls the user can no longer see. Focus *containment*
+is deliberately not claimed: the pane stays an `aria-label`led landmark rather
+than a `role="dialog"`, and the role tree (unchanged here) behaves as it always
+has.
+
+**The height has a floor** (`min-h-80`). `--explorer-offset` is measured, so a
+chrome taller than the viewport — reachable at 200% zoom, where the CSS
+viewport is ~406 px — would otherwise clamp the calc to zero and leave the grid
+with no height at all. With the floor the page scrolls instead: the old
+constant's failure mode, and a recoverable one.
 
 **The layout's height is measured, not guessed.** `h-[calc(100dvh -
 var(--explorer-offset, 12rem))]`; the shell controller writes
@@ -1315,8 +1335,11 @@ controller is no worse than before. Two rules for anything added here:
   `clickOutside` callback serves both registrations — stimulus-use has no
   per-element callback name — so it re-checks containment itself rather than
   trusting which one fired, and registers each element only once.
-- **Esc close** (`closeOverlayPanes`) — narrow viewports only, and only when no
-  modal overlay and no open `[role="menu"]` is present
+- **Esc close** (`closeOverlayPanes`) — narrow viewports only. Both it and the
+  outside-tap path gate on `#somethingElseIsOpen` (no open modal overlay, no
+  open `[role="menu"]`)
+- **Focus hand-off** for the activity overlay — into the pane on open, back to
+  the Activity toggle on every close
 - **`--explorer-offset`** — measures the chrome above the explorer
   (`ResizeObserver` on the header + `resize@window`) so the layout is exactly
   the leftover viewport (§7)
