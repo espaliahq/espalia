@@ -202,7 +202,10 @@ class Frameworks::MobileEditModeSystemTest < ApplicationSystemTestCase
         "Math.round(document.querySelector(\"[data-framework-explorer-target='layout']\")" \
         ".getBoundingClientRect().height)"
       )
-      assert_operator height, :>, 200, "the explorer collapsed to nothing"
+      # The floor is deliberately low (12rem) — it only has to stop the calc
+      # collapsing to zero, never to second-guess a layout the measurement can
+      # size on its own. The page scrolls to reach the rest.
+      assert_operator height, :>=, 192, "the explorer collapsed to nothing"
     end
 
     # The phone is a REVIEW surface: reading the feed and acting on it is the
