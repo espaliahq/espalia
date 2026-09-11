@@ -53,7 +53,7 @@ module Views::Frameworks::Explorer::Concerns::DiscussTrigger
       type: "button",
       aria: { label: label },
       title: label,
-      class: "explorer-cluster-btn p-0.5",
+      class: "explorer-discuss",
       data: cluster_control_data(scope).merge(discuss_trigger_data(**anchor))
     ) { discuss_icon }
   end
@@ -69,6 +69,6 @@ module Views::Frameworks::Explorer::Concerns::DiscussTrigger
   # Speech bubble — the same content-language glyph the open-clarification
   # indicator uses, so "ask" and "there's a question here" read as one family.
   def discuss_icon
-    icon("discuss", class: "w-3.5 h-3.5")
+    icon("discuss")
   end
 end

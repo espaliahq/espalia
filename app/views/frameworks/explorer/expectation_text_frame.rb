@@ -51,7 +51,7 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
     # Truncating expectation text loses critical behavioural nuance, and
     # the cell width plus the viewer's horizontal scroll are already doing
     # the width-budget negotiation.
-    base = "text-sm text-gray-700 dark:text-gray-300"
+    base = "mx-expectation"
     if @pending_edit
       p(class: base) do
         render_inline_diff(original: @expectation.description, pending_edit: @pending_edit)
@@ -68,9 +68,9 @@ class Views::Frameworks::Explorer::ExpectationTextFrame < Views::Base
   end
 
   def editable
-    div(class: "relative", data: editor_data) do
+    div(data: editor_data) do
       render_field_editor_error(@error)
-      div(class: "flex items-start gap-1", data: { editor_display: true }) do
+      div(class: "mx-line", data: { editor_display: true }) do
         plain_text
         render_inline_editor_pencil(aria_label: "Edit expectation text", scope: "cell")
       end

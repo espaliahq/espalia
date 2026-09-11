@@ -96,8 +96,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
   # illustration text rendered through it (issue #371).
   def gutter_cell
     td(class: "sticky left-0 z-[2] bg-[#fafcff] dark:bg-[#111b31] " \
-              "#{STICKY_EDGE_CLASSES} " \
-              "border-b border-r border-gray-100 dark:border-gray-800") { }
+              "#{STICKY_EDGE_CLASSES} mx-exp-gutter") { }
   end
 
   # One cell spanning every level column: the loading line, and the shared
@@ -107,8 +106,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
   def placeholder_cell
     td(
       colspan: [ @merged_levels.size, 1 ].max,
-      class: "px-3 py-3 border-b border-gray-100 dark:border-gray-800 " \
-             "bg-blue-50/30 dark:bg-blue-900/10 align-top text-xs"
+      class: "mx-exp-placeholder"
     ) do
       p(class: "text-gray-600 dark:text-gray-300", data: { expanded_row_state: "loading" }) do
         "Loading examples…"
@@ -128,17 +126,14 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
     # An authorable placeholder (empty-but-applicable cell) has no expectation,
     # so there are no illustrations to show — render the blank expanded td.
     if cell_data.nil? || cell_data[:expectation].nil? || cell_data[:bound_selected_role_ids].blank?
-      td(class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-                "bg-blue-50/30 dark:bg-blue-900/10 align-top") { }
+      td(class: "mx-exp-cell") { }
       return
     end
 
     expectation = cell_data[:expectation]
 
     td(
-      class: "px-3 py-2 border-b border-r border-gray-100 dark:border-gray-800 " \
-             "bg-blue-50/30 dark:bg-blue-900/10 align-top cursor-pointer " \
-             "hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors",
+      class: "mx-exp-cell mx-exp-cell--focusable",
       data: {
         action: "click->matrix#focusCell",
         capability_id: @capability.capability_id,

@@ -79,7 +79,7 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   end
 
   def display
-    div(class: "flex items-start gap-1", data: { editor_display: true }) do
+    div(class: "mx-line", data: { editor_display: true }) do
       with_suggestion_click_affordance(@suggestion.suggestion_id) do
         span(class: "text-sm text-gray-700 dark:text-gray-300 " \
                     "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }

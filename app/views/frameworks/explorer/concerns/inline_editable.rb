@@ -60,7 +60,7 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   # The pencil glyph on its own, for hosts with their own button chrome
   # (the illustration hover cluster).
   def render_inline_editor_pencil_icon
-    icon("pencil", class: "w-3 h-3")
+    icon("pencil")
   end
 
   # The value to pre-fill the inline editor with. When a pending suggested edit

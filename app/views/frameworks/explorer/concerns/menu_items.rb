@@ -46,7 +46,7 @@ module Views::Frameworks::Explorer::Concerns::MenuItems
               .merge(menu.transform_keys { |key| :"menu_#{key}" })
               .compact
     ) do
-      icon("kebab", class: "w-4 h-4")
+      icon("kebab")
     end
   end
 

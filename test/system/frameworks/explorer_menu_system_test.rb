@@ -228,6 +228,40 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
                    "carry a kebab that offers the same actions (see CONTROL_KINDS)"
     end
 
+    should "size every cluster glyph, whether the control sizes it or the call site does" do
+      # #383 moved the sizing of the grid's glyphs onto the control that holds
+      # them (`.explorer-kebab > svg`), so those call sites pass no class. A
+      # control OUTSIDE that family — the role tree's Kit::Dropdown kebab — has
+      # no such rule and must keep its own; dropping its class there rendered a
+      # default-sized SVG that swallowed the tree row, and no unit test could
+      # see it (the sizes live in CSS).
+      sizes = page.evaluate_script(<<~JS)
+        (() => {
+          const read = (selector) => {
+            const svg = document.querySelector(selector);
+            if (!svg) return null;
+            const box = svg.getBoundingClientRect();
+            return [ Math.round(box.width), Math.round(box.height) ];
+          };
+          return {
+            kebab: read("button.explorer-kebab svg"),
+            discuss: read("button.explorer-discuss svg"),
+            pencil: read("button.explorer-cluster-btn svg"),
+            add: read("button.explorer-add svg"),
+            tree: read("[data-tree-target='role'] [aria-haspopup='true'] svg")
+          };
+        })()
+      JS
+
+      sizes.each do |name, box|
+        assert box, "expected a #{name} glyph in the edit-mode grid"
+        width, height = box
+        assert_equal width, height, "#{name} glyph should be square, got #{width}x#{height}"
+        assert_includes 10..20, width,
+                        "#{name} glyph is #{width}px — an unsized <svg> renders far larger"
+      end
+    end
+
     should "keep a cell's cluster scoped to that cell" do
       # A cell's controls must not pop when the pointer is elsewhere in the row —
       # they answer to the cell's own scope.

@@ -14,8 +14,7 @@ class Components::Kit::SubmitFallbackMessage < Components::Base
   # "something went wrong here" panel outside this component's live region —
   # the evidence modal's frame-load error — share one definition instead of
   # retyping the class string.
-  PANEL_CLASSES = "p-2 rounded-md bg-red-50 dark:bg-red-900/20 " \
-                  "border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300"
+  PANEL_CLASSES = "kit-alert-panel"
 
   # @param classes [String] positioning/sizing utilities for the host surface
   def initialize(classes: "")

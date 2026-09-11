@@ -85,10 +85,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
     div(class: "flex flex-wrap justify-center gap-1") do
       role_codes.each do |rc|
         span(
-          class: "inline-flex items-center rounded-full px-2 py-0.5 " \
-                 "text-[10px] font-medium bg-gray-200 dark:bg-gray-700 " \
-                 "text-gray-600 dark:text-gray-300 " \
-                 "#{suggestion_text_classes(added_in_draft: rc[:added_in_draft])}".strip,
+          class: "mx-badge #{suggestion_text_classes(added_in_draft: rc[:added_in_draft])}".strip,
           title: [ rc[:level_title], draft_change_title(rc[:added_in_draft]) ].compact.join(" — ")
         ) { rc[:level_code] }
       end

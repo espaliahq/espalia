@@ -90,7 +90,7 @@ module Views::Frameworks::Explorer::Concerns::HoverCluster
   # @return [void]
   def render_add_affordance(label, **data)
     button(type: "button", class: "explorer-add", data: data) do
-      icon("plus", class: "w-3 h-3")
+      icon("plus")
       span { label }
     end
   end

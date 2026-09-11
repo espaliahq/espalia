@@ -11,10 +11,30 @@ module Frameworks::SuggestionAuthority
 
   # @return [Frameworks::SuggestionApprovalAuthority]
   def framework_suggestion_approval_authority
+    tenant_admin = current_user&.global_admin? || current_tenant_user&.admin? || false
+
     Frameworks::SuggestionApprovalAuthority.for(
       framework_id: @framework.framework_id,
       person: current_person,
-      tenant_admin: current_user&.global_admin? || current_tenant_user&.admin? || false
+      tenant_admin: tenant_admin,
+      # An admin clears every tier without holding a role, and so does the
+      # policy — nothing in the request would read these, and Ruby would
+      # evaluate the argument anyway. Loading them here would add a query to the
+      # commonest editor persona in a change whose point is removing them.
+      collaborator_roles: tenant_admin ? nil : framework_collaborator_roles
+    )
+  end
+
+  # The viewer's collaborator roles on `@framework`, loaded once per request and
+  # shared with everything that asks — the authority above, and (via Pundit's
+  # per-record policy cache) the policy's own `edit?` / `edit_structure?` /
+  # `publish?`. Each of those was a separate `EXISTS` for rows a person holds a
+  # handful of (#383).
+  #
+  # @return [Frameworks::CollaboratorRoles]
+  def framework_collaborator_roles
+    @framework_collaborator_roles ||= Frameworks::CollaboratorRoles.load(
+      framework_id: @framework.framework_id, person_id: current_person&.id
     )
   end
 end
