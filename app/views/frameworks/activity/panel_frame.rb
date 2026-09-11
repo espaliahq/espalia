@@ -11,6 +11,9 @@
 class Views::Frameworks::Activity::PanelFrame < Views::Base
   include Phlex::Rails::Helpers::TurboFrameTag
 
+  # The focus chain ("Category › Capability › L2").
+  BREADCRUMB_ID = "framework-activity-focus-breadcrumb"
+
   # @param framework [FrameworkState::Framework]
   # @param entries [Array<Frameworks::ActivityFeedQuery::Entry>] reverse-chronological
   # @param focus_descriptor [Hash] { level:, category_name:, capability_name:, level_label: }
@@ -93,7 +96,10 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
     return if segments.empty?
 
     div(class: "mt-1 flex items-start gap-1 text-[11px] text-gray-600 dark:text-gray-300") do
-      div(class: "min-w-0 flex-1") do
+      # Stable id so a test can assert the ordered chain rather than the
+      # presence of a name — "Thinking" is a substring of "Strategic Thinking",
+      # so a substring check proves nothing about the category segment.
+      div(id: BREADCRUMB_ID, class: "min-w-0 flex-1") do
         segments.each_with_index do |segment, index|
           span(class: "text-gray-400 dark:text-gray-500", aria: { hidden: "true" }) { " › " } if index.positive?
           span { segment }

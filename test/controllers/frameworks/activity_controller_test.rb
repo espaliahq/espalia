@@ -89,7 +89,10 @@ class Frameworks::ActivityControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select "a[aria-label=?]", "Clear focus"
-      assert_match "Thinking", response.body
+      # The ORDERED chain, not a name: "Thinking" on its own is a substring of
+      # "Strategic Thinking", so it would pass with the category segment gone.
+      breadcrumb = css_select("##{Views::Frameworks::Activity::PanelFrame::BREADCRUMB_ID}").first
+      assert_equal "Thinking › Strategic Thinking", breadcrumb.text.squish
     end
 
     # The gestures that narrow this feed (category-name click, row expand,

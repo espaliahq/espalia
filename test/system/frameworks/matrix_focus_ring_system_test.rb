@@ -139,9 +139,10 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
 
       within("#suggestion-panel") do
         # The chain the title alone never showed — a focused capability's
-        # category — with the clear affordance beside it.
-        assert_text "Thinking"
-        assert_text "Strategic Thinking"
+        # category — with the clear affordance beside it. Asserted whole and in
+        # order: "Thinking" alone is a substring of the capability's own name.
+        assert_selector "#framework-activity-focus-breadcrumb",
+                        text: "Thinking › Strategic Thinking"
         assert_selector "a[aria-label='Clear focus']"
       end
 
@@ -160,10 +161,21 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
   # JS-dispatch it, per testing.md's rule for Stimulus-action elements.
   def focus_category
     wait_for_stimulus "matrix"
+    # The band lives inside the matrix Turbo Frame, and "Edit mode" in the
+    # header does not prove the frame's content has landed — without this wait
+    # a slow runner turns a missing element into an opaque Selenium
+    # JavascriptError instead of a Capybara timeout.
+    assert_selector category_focus_selector, visible: :all
     page.execute_script(<<~JS, @category_id)
       const id = arguments[0];
-      document.querySelector(`[data-action*='matrix#focusCategory'][data-category-id='${id}']`).click();
+      const el = document.querySelector(`[data-action*='matrix#focusCategory'][data-category-id='${id}']`);
+      if (!el) throw new Error(`no category band for ${id}`);
+      el.click();
     JS
+  end
+
+  def category_focus_selector
+    "[data-action*='matrix#focusCategory'][data-category-id='#{@category_id}']"
   end
 
   def assert_ring_painted(selector)
