@@ -215,6 +215,14 @@ export default class extends BaseController {
     // feed the reviewer opened it from.
     if (this.#somethingElseIsOpen()) return
 
+    // The dismissal consumes the tap. `useClickOutside` listens on `window` in
+    // the CAPTURE phase and does not stop the event, so without this the tap
+    // that closes the overlay carries on to whatever it landed on — the strip
+    // of grid left visible beside the pane is exactly the matrix, so dismissing
+    // the feed also expanded a capability row under it.
+    event.stopPropagation()
+    event.preventDefault()
+
     if (isRole) {
       this.#closeRolePane()
       this.#updateToggleAffordance()
@@ -224,10 +232,26 @@ export default class extends BaseController {
     }
   }
 
+  // One overlay at a time. Both are `z-index: 30` fixed panels, so a second
+  // one opened over the first just buries it: invisible, still "open", and
+  // still the pane Esc closes first.
+  #closeOtherOverlay(which) {
+    if (!this.isMobile) return
+
+    if (which === "role" && this.hasContextPaneTarget && this.contextPaneOpen) {
+      this.#closeContextPane()
+      this.#updateContextToggleAffordance()
+    } else if (which === "context" && this.hasRolePaneTarget && this.rolePaneOpen) {
+      this.#closeRolePane()
+      this.#updateToggleAffordance()
+    }
+  }
+
   #openRolePane() {
     this.rolePaneOpen = true
 
     if (this.isMobile) {
+      this.#closeOtherOverlay("role")
       Object.assign(this.rolePaneTarget.style, this.#overlayStyle("18rem", { left: "0" }))
       this.#watchOutsideClicks(this.rolePaneTarget)
     } else {
@@ -246,6 +270,7 @@ export default class extends BaseController {
 
   #openContextPane() {
     if (this.isMobile) {
+      this.#closeOtherOverlay("context")
       // Inline styles, not classes: the pane carries `max-lg:hidden`, and a
       // variant beats any plain `display` utility we could add at this width
       // (Hard-Won Lesson 3).

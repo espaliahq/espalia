@@ -154,6 +154,31 @@ class Frameworks::MobileEditModeSystemTest < ApplicationSystemTestCase
       assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
     end
 
+    # The strip of grid left beside the overlay is the dismissal target — and
+    # it is also the matrix, whose rows expand on click. The tap that closes
+    # the pane must not also act on what it landed on.
+    should "not act on the grid with the tap that dismisses the overlay" do
+      toggle_context_pane
+      assert_text "All framework activity"
+
+      dispatch_click("tr[data-matrix-target='row']")
+
+      assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
+      assert_no_selector "tr[data-matrix-target='expandedRow']", visible: true
+    end
+
+    # Both overlays are z-30 fixed panels: a second one opened over the first
+    # buries it — invisible, still "open", and still what Esc closes first.
+    should "keep the two overlays mutually exclusive" do
+      toggle_role_pane
+      assert_selector "[data-framework-explorer-target='rolePane']", visible: true
+
+      toggle_context_pane
+
+      assert_selector "[data-framework-explorer-target='contextPane']", visible: true
+      assert_no_selector "[data-framework-explorer-target='rolePane']", visible: true
+    end
+
     should "close the overlay with Esc" do
       toggle_context_pane
       assert_text "All framework activity"

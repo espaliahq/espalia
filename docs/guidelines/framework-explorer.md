@@ -1241,6 +1241,18 @@ own `lg:hidden` ×. A strip of the grid always stays visible beside an open
 overlay: it is both the cue that something is covered and the target for the
 tap that uncovers it.
 
+**The dismissing tap is consumed.** `useClickOutside` listens on `window` in
+the *capture* phase and does not stop the event, so the tap that closes an
+overlay used to carry on to whatever it landed on — and the strip left visible
+beside the pane is the matrix, so dismissing the feed also expanded a
+capability row under it. `#closeIfOutside` stops propagation when it actually
+closes something.
+
+**Only one overlay is open at a time.** Both are `z-index: 30` fixed panels, so
+a second one opened over the first just buries it — invisible, still "open",
+and still the pane Esc closes first. Opening either closes the other
+(`#closeOtherOverlay`).
+
 **Both dismissals stand down while a modal or an open menu is up**
 (`#somethingElseIsOpen`). This matters more for the tap than for Esc: every
 modal is mounted on the explorer ROOT (Lesson 19), so it is *outside* the pane
