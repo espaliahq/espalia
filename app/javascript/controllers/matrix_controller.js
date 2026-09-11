@@ -46,6 +46,10 @@ const STICKY_CLEARANCE_PX = 4
 const SCROLL_SETTLE_FRAMES = 3
 const SCROLL_SETTLE_MAX_FRAMES = 90
 
+// The user taking over. A `scroll` event cannot serve here — the programmatic
+// smooth scroll fires it too — so these are the INTENT events instead.
+const USER_SCROLL_INTENT_EVENTS = [ "wheel", "touchstart", "keydown" ]
+
 export default class extends BaseController {
   static targets = ["frame", "row", "expandedRow",
                      "categoryHeader", "rowChevron", "categoryChevron",
@@ -165,6 +169,7 @@ export default class extends BaseController {
     this.#observeStickyGeometry()
 
     this.#dispatchInitialFocus()
+    this.#hydrateExplorerFocusRing()
     this.#resumeOpenPlaceholders()
   }
 
@@ -222,9 +227,10 @@ export default class extends BaseController {
       this._stickyResizeObserver.disconnect()
       this._stickyResizeObserver = null
     }
-    if (this._scrollSettleRafId) {
-      cancelAnimationFrame(this._scrollSettleRafId)
-      this._scrollSettleRafId = null
+    this.#cancelScrollSettle()
+    if (this._stickyGuardRafId) {
+      cancelAnimationFrame(this._stickyGuardRafId)
+      this._stickyGuardRafId = null
     }
     clearTimeout(this._navHighlightTimer)
     super.disconnect()
@@ -496,6 +502,7 @@ export default class extends BaseController {
   // answer to this question was the sticky `<th>`, which is why the row kebab
   // could only be opened by a JS-dispatched click (#382).
   #guardRowClearsStickyStack(compactRow, attempt = 0) {
+    this._stickyGuardRafId = null
     if (!compactRow.isConnected || attempt > MAX_STICKY_NUDGES) return
 
     // The name line, not the kebab: the kebab is hover-revealed, so it has no
@@ -519,7 +526,9 @@ export default class extends BaseController {
     if (container) container.scrollTop -= delta
     else window.scrollBy(0, -delta)
 
-    requestAnimationFrame(() => this.#guardRowClearsStickyStack(compactRow, attempt + 1))
+    this._stickyGuardRafId = requestAnimationFrame(
+      () => this.#guardRowClearsStickyStack(compactRow, attempt + 1)
+    )
   }
 
   // Viewport y of the bottom of everything sticky above this row: the matrix
@@ -553,9 +562,25 @@ export default class extends BaseController {
   // `scrollend` would be tidier but is not universal, and a fixed timeout is
   // the flaky option on a starved CI runner — the same reasoning as the
   // renew-on-scroll suppression above.
+  //
+  // ABORTS on the first sign the user has taken over (wheel, touch, key). A
+  // poller cannot tell "the programmatic scroll finished" from "the user
+  // scrolled somewhere else and paused", and the caller's only move is to
+  // scroll the viewport — so without this, scrolling away from a row you just
+  // expanded yanks you back to it. (`_sawUserScroll` is no help: it listens on
+  // `window`, and the explorer scrolls its own container.)
   #afterScrollSettles(fn) {
     const container = this.hasScrollContainerTarget ? this.scrollContainerTarget : null
     const read = () => (container ? container.scrollTop : window.scrollY)
+
+    this.#cancelScrollSettle()
+
+    const abort = () => this.#cancelScrollSettle()
+    this._scrollSettleAbort = abort
+    USER_SCROLL_INTENT_EVENTS.forEach(name => {
+      if (container) container.addEventListener(name, abort, { passive: true })
+      window.addEventListener(name, abort, { passive: true })
+    })
 
     let last = null
     let still = 0
@@ -567,13 +592,31 @@ export default class extends BaseController {
       last = now
       frames += 1
       if (still >= SCROLL_SETTLE_FRAMES || frames > SCROLL_SETTLE_MAX_FRAMES) {
+        this.#cancelScrollSettle({ keepPending: true })
         fn()
         return
       }
       this._scrollSettleRafId = requestAnimationFrame(tick)
     }
-    if (this._scrollSettleRafId) cancelAnimationFrame(this._scrollSettleRafId)
     this._scrollSettleRafId = requestAnimationFrame(tick)
+  }
+
+  // Stops a pending settle poll and releases its abort listeners.
+  // `keepPending` is for the poll that is completing normally — it has already
+  // cleared its own rAF and is about to call `fn`.
+  #cancelScrollSettle({ keepPending = false } = {}) {
+    if (!keepPending && this._scrollSettleRafId) {
+      cancelAnimationFrame(this._scrollSettleRafId)
+      this._scrollSettleRafId = null
+    }
+    if (!this._scrollSettleAbort) return
+
+    const container = this.hasScrollContainerTarget ? this.scrollContainerTarget : null
+    USER_SCROLL_INTENT_EVENTS.forEach(name => {
+      if (container) container.removeEventListener(name, this._scrollSettleAbort)
+      window.removeEventListener(name, this._scrollSettleAbort)
+    })
+    this._scrollSettleAbort = null
   }
 
   // ── Category focus ── (framework explorer)
@@ -1632,6 +1675,35 @@ export default class extends BaseController {
     return isNaN(n) ? 0 : n
   }
 
+  // Rings the row / band a deep link already focused. The explorer's focus
+  // params are hydrated by `context_pane_controller` (which owns that half of
+  // the URL), so `#dispatchInitialFocus` — assessment-only — leaves
+  // `currentFocus` at framework level and the grid unmarked: the pane would
+  // show "Thinking › Strategic Thinking" with a clear ×, and nothing on the
+  // grid to clear.
+  //
+  // Deliberately does NOT dispatch `matrix:focus-changed` or touch the URL:
+  // the pane is hydrating from the same params in the same breath, and a
+  // dispatch would only race it.
+  #hydrateExplorerFocusRing() {
+    if (this.urlSyncValue) return
+
+    const params = new URL(window.location).searchParams
+    const level = params.get("focus")
+    if (!level || level === "framework") return
+
+    const ordinal = params.get("level_ordinal")
+    this.currentFocus = {
+      level,
+      categoryId: params.get("category_id"),
+      capabilityId: params.get("capability_id"),
+      capabilityStableId: null,
+      levelOrdinal: ordinal == null ? null : parseInt(ordinal, 10),
+      expectationId: null
+    }
+    this.#applyGridFocus()
+  }
+
   // ── Sticky geometry (framework explorer) ──
 
   // Publishes the matrix's measured sticky heights on the explorer root so the
@@ -1657,7 +1729,16 @@ export default class extends BaseController {
     )
 
     if (headerH > 0) this.element.style.setProperty("--matrix-header-h", `${headerH}px`)
-    if (categoryH > 0) this.element.style.setProperty("--matrix-category-h", `${categoryH}px`)
+
+    // Cleared rather than left standing when there is nothing to measure (a
+    // search that matches no category, an empty matrix) — otherwise the
+    // variable quietly means "the last non-zero measurement" and the next
+    // render inherits a height from a grid that is no longer on screen.
+    if (categoryH > 0) {
+      this.element.style.setProperty("--matrix-category-h", `${categoryH}px`)
+    } else {
+      this.element.style.removeProperty("--matrix-category-h")
+    }
   }
 
   // (Re-)observes the elements whose height the geometry is derived from. Both

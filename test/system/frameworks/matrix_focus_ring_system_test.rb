@@ -86,7 +86,10 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
 
         assert_selector "#capability-row-#{@capability_id}[data-focused='true']", visible: :all
         assert_no_selector FOCUSED_BAND, visible: :all
-        assert_ring_painted "#{FOCUSED_ROW} > td"
+        # A LEVEL cell, not the row's first `<td>`: the sticky capability cell
+        # carries `.mx-sticky-edge`'s own box-shadow unconditionally, so probing
+        # it would report a ring whether or not one is drawn.
+        assert_ring_painted "#{FOCUSED_ROW} > td.mx-cell"
       end
 
       should "clear the ring when focus returns to the framework" do
@@ -98,6 +101,29 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
 
         assert_no_selector FOCUSED_BAND, visible: :all
       end
+    end
+  end
+
+  # The explorer's focus params are hydrated by the context pane, which owns
+  # that half of the URL — so without an explorer-side read the pane would show
+  # a breadcrumb and a clear × for a focus the grid never marked.
+  context "a focus deep link" do
+    setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
+
+    should "ring the capability it points at, and name it in the pane" do
+      visit edit_framework_path(@framework_id, focus: "capability",
+                                               capability_id: @capability_id)
+      assert_text "Edit mode"
+
+      assert_selector "#capability-row-#{@capability_id}[data-focused='true']", visible: :all
+      within("#suggestion-panel") { assert_selector "a[aria-label='Clear focus']" }
+    end
+
+    should "ring the category it points at" do
+      visit edit_framework_path(@framework_id, focus: "category", category_id: @category_id)
+      assert_text "Edit mode"
+
+      assert_selector FOCUSED_BAND, visible: :all
     end
   end
 
@@ -148,7 +174,10 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
       })()
     JS
 
-    assert shadow.present? && shadow != "none",
+    # The ring is drawn `inset`; the sticky column's edge shadow (the only other
+    # box-shadow in the grid) is not — so "has a shadow" is not the question,
+    # "has an inset one" is.
+    assert shadow.present? && shadow.include?("inset"),
            "expected #{selector} to carry the focus ring, got #{shadow.inspect}"
   end
 end
