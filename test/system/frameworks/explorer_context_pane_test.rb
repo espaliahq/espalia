@@ -236,7 +236,18 @@ class Frameworks::ExplorerContextPaneTest < ApplicationSystemTestCase
       # the show-all click can fire while the pane still reads "All framework
       # activity", which is also its post-click signal — so a dropped click
       # would look like a successful clear.
-      within("#suggestion-panel") { assert_text "Strategic Thinking" }
+      #
+      # The capability's name alone is NOT that signal: every feed entry
+      # carries it on its context line ("Thinking · Strategic Thinking · L2"),
+      # so it is already on screen at framework scope. On a starved runner this
+      # let the click fire against the unnarrowed pane and the JS-fallback
+      # guard rejected the disarmed signal (CI, #384). Assert the two things
+      # only the NARROWED pane renders: its clear-focus link, and the absence
+      # of the framework-scope title.
+      within("#suggestion-panel") do
+        assert_link "Show all framework activity"
+        assert_no_text "All framework activity"
+      end
 
       # Show-all clears focus via a Turbo Frame navigation — JS-fallback the
       # click so a starved-CI pointer drop doesn't leave the pane focused.
