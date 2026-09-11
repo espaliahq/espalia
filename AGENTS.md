@@ -375,6 +375,7 @@ test/
 ## Behaviours and practices
 
 - Commit messages: Please use conventional commits and keep them concise. Tell us what value was created in the commit, not a catalog of changes.
+- **Handing one GitHub issue to an agent (or picking one up solo)? Follow [docs/guidelines/issue-delivery.md](docs/guidelines/issue-delivery.md).** It is the delivery contract around the work itself — claim the issue, branch from the stated base, commit per change, test + visual pass, precommit, `/code-review`, PR body, then CI and the CodeRabbit threads — and it exists so an unsupervised run lands the same way every time.
 - Always update relevant documentation if functionality diverges from what is documented.
 - *CRITICAL* Commit per discrete change, creating a stacked commit, in *one* PR. Stack commits, do not stack PRs. 
 - *CRITICAL* **Commit each discrete change as soon as it is complete and verified — *before* starting the next separable piece of work**, even within a single task or session. Do not let two separable changes accumulate uncommitted in the working tree: splitting them apart after the fact is error-prone and sometimes infeasible once they touch the same files/lines. The moment you finish a working, tested unit and the next thing is separable, commit first, then continue (if you're on the default branch, create a feature branch before the first commit). If a request implies several separable changes, plan the commit boundaries up front and land each one before moving on, rather than batching everything into a single end-of-task commit.
