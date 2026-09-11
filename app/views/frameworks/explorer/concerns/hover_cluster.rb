@@ -9,7 +9,8 @@
 # different moments as the pointer moved across one row.
 #
 # Now an entity's row / cell / item carries `data-hover-cluster="<scope>"` and
-# every control in its cluster carries `data-cluster="<scope> inline|kebab"`.
+# every control in its cluster carries `data-cluster="<scope> <kind>"`, where
+# kind is one of `inline` / `kebab` / `standalone` (see CONTROL_KINDS).
 # One CSS rule set in `app/assets/tailwind/application.css` pairs them, so:
 #
 # - hovering (or focusing into) the entity reveals its WHOLE cluster at once;

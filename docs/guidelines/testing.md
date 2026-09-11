@@ -327,7 +327,7 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `submit_inline_edit(form, with:)` | field-editor | Sets the editor's textarea via JS and `requestSubmit()`s it |
 | `cancel_inline_edit(form)` | field-editor | Cancels an open editor via its Cancel button |
 | `open_pill_popover(cell_selector)` | dropdown | Opens an assessment rating pill's popover (JS-click fallback if the pointer click is dropped) |
-| `click_rating_frequency(cell_selector, freq)` | (rating cell) | Opens the popover and picks a frequency, retrying until the ring lands |
+| `click_rating_frequency(cell_selector, freq)` | (rating cell) | Opens the popover and picks a frequency, retrying until the pill's trigger reads that phrase (deliberately not a ring/selected class — the assertion survives styling changes) |
 | `toggle_activity_pane` | activity-pane | Opens/closes the **assessment** activity sidebar by invoking the controller method directly (not the explorer's pane — that's `toggle_context_pane`) |
 
 ```ruby

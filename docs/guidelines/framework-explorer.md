@@ -304,7 +304,7 @@ This enables bookmarking, sharing, and browser back/forward. The server reads ro
 
 **Edit mode only.** The context pane does not render in view mode — viewers see no **Activity** toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
 
-The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the standalone suggestion index (`?layout=panel`) — see *Activity feed coverage* and §9.
+The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the suggestions index's panel response (`GET /frameworks/:id/suggestions?layout=panel`) — the pane's own frame carries `layout=panel` too, so the **path** is what tells the two apart, not the param. See *Activity feed coverage* and §9.
 
 It narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
 
@@ -365,7 +365,7 @@ left implicit:
 
 Each suggestion row must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
 
-> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **standalone suggestion index** (`?layout=panel`), which is the only caller left since the context pane became the activity feed. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under *Activity feed coverage*.
+> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **suggestions index's panel response** (`GET /frameworks/:id/suggestions?layout=panel`, i.e. `SuggestionsController#render_panel`), the only caller left since the context pane became the activity feed. Grep by that path, not by `layout=panel`: the activity frame sends the same param. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under *Activity feed coverage*.
 
 **Panel header** (rendered by `Suggestions::PanelFrame#header`):
 - **Focus title** — derived from `FocusedSuggestionsQuery#descriptor`:
@@ -670,7 +670,9 @@ a ghost role contributes no columns in view mode.
 - **Org-structure inline renames** — hover-pencil inline editors on the
   **role-family name** and **role name** in the left role tree
   (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree` when
-  `mode == :edit`) and on each per-role **level title** in the matrix header
+  `mode == :edit` — currently *without* the `can_edit_structure` check its
+  neighbours carry, so a suggest-only viewer sees pencils whose save the
+  policy refuses: #401) and on each per-role **level title** in the matrix header
   (`LevelTitleFrame`, rendered by `MatrixHeader#full_title_badges`). These use
   the shared `InlineEditable` pencil/form helpers but — unlike capability /
   category text — are **direct edits, NOT the suggested-edit path**: org
@@ -724,8 +726,9 @@ controller drives all of them. Root-mounted for every edit-mode viewer:
 reject-suggestion (§12), resolve-clarification and request-clarification (§12a),
 and archive-illustration (§11b). Root-mounted for `can_edit_structure` holders:
 archive(-capability), add-capability, add-category, archive-category,
-binding-editor, level-editor, and the role-family / role / level dialogs
-(each in both `:new` and `:edit` shape). Each trigger names its overlay via
+binding-editor, level-editor, add-level, and the role-family and role dialogs
+(each rendered twice, in `:new` and `:edit` shape) — eleven overlays in
+`ShowView#structural_modals`. Each trigger names its overlay via
 `data-modal-target-id="<overlay id>"`; the controller opens that overlay
 (falling back to the lone overlay when a page has only one — so the assessment
 evidence / delegation modals are unchanged). Feature controllers prefill from
@@ -763,7 +766,7 @@ repeats each of them thousands of times.
 **pencil · discuss · kebab**, and reveal *together* on hover or focus-within of
 the entity's own **row / cell / item** — never on the text span. The entity
 carries `data-hover-cluster="<scope>"` and every control in its cluster carries
-`data-cluster="<scope> inline|kebab"`; one CSS rule set in
+`data-cluster="<scope> <kind>"`, kind ∈ `inline | kebab | standalone`; one CSS rule set in
 `app/assets/tailwind/application.css` pairs them. Scopes: `row` · `cell` ·
 `ill` · `cat` (the grid) + `tree` · `hdr` (the role pane, the level titles).
 The owner is the **row / cell / item**, never the text: the role tree's rename
@@ -1790,9 +1793,9 @@ Turbo JavaScript source bundled by turbo-rails 2.0.23, not assumed):
 Field report ("a few times I have had an error — quit or wait for growthOS to
 respond"): every inline approve/reject dispatched `suggestion:resolved` →
 `matrix#refresh`, a full re-fetch of the edit-mode matrix frame. On the real
-me&u framework that frame measures **~6.7 MB of HTML with ~3,300 Stimulus
-controller mounts, ~3,200 forms and ~2,400 textareas** (every cell pre-renders
-its hidden inline-edit form) — each swap costs seconds of main-thread parse +
+me&u framework that frame measured **7,615,168 B of HTML with 3,338 Stimulus
+controller mounts, 3,206 forms and 2,356 textareas** (every cell pre-rendered
+its hidden inline-edit form — the baseline row of the table below) — each swap costs seconds of main-thread parse +
 controller teardown/connect, and consecutive approvals overlap into Chrome's
 page-unresponsive dialog. Two rules fell out:
 
@@ -2412,7 +2415,7 @@ line (§9).
 | `app/views/frameworks/explorer/archive_illustration_modal.rb` | Shared archive-example modal (confirm + optional reason) — replaced the menu's native `confirm()` |
 | `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
-| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame. `RoleFamilyNameFrame` / `RoleNameFrame` (inline rename) follow `mode` alone; the per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows need `mode == :edit` **and** `can_edit_structure`. Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
+| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame. The per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows need `mode == :edit` **and** `can_edit_structure`; `RoleFamilyNameFrame` / `RoleNameFrame` (inline rename) currently follow `mode` alone — a **known divergence** from the `edit_structure?` policy bar those PATCHes enforce, so a suggest-only viewer is shown pencils their save will be refused (#401). Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
 | `app/views/frameworks/explorer/add_role_modal.rb` | Shared role modal — `:new` ("+ Add role" trigger, family implied, POST → `AddRole`) or `:edit` (role-row kebab, PATCH via id template → `UpdateRole`) |
@@ -2475,7 +2478,7 @@ line (§9).
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
-| `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — reached ONLY by `SuggestionsController`'s `?layout=panel` response, never the context pane (§9) |
+| `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — reached ONLY by `SuggestionsController#render_panel` (`GET …/suggestions?layout=panel`), never the context pane (§9) |
 | `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + breadcrumb-with-× / gesture hint + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
 | `app/views/frameworks/activity/load_more.rb` | "Load older activity" footer (`#framework-activity-load-more`) — indication + affordance for the next batch |
 | `app/views/frameworks/activity/count.rb` | Loaded-entry count (`#framework-activity-count`) — replaced by the load-older Turbo Stream |
@@ -2513,7 +2516,7 @@ line (§9).
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync + activity-sync-signal observer (live reload) |
 | `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
 | `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor`. Names entities from the read model **supplemented by the creating event in the window** (so draft-added capabilities/expectations — deferred from the read model — are still named in "Added a capability" / binding entries), and pins the **level** on expectation entries ("Capability · L`n`") |
-| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter behind the suggestions index's `?layout=panel` response — not the context pane (§9) |
+| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter behind `SuggestionsController#render_panel` — not the context pane, which uses `ActivityFeedQuery` (§9) |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) + `expanded_row` / `edit_expanded_row` (one capability's lazily fetched expanded row) |
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); at suggestion focus renders the card instead (`#render_suggestion_card` + `#sibling_discussions` + `#discussion_permalink`, §8/§12a/§13); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
