@@ -319,14 +319,16 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 | `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane (an overlay below `lg`, an inline column above it) |
 | `toggle_context_pane(scope:)` | framework-explorer | Opens the framework explorer activity pane — same two shapes; below `lg` it starts CLOSED, so this opens it rather than closing it |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
-| `expand_matrix_row(selector, scope:)` | matrix | Expands a matrix row by capability selector (the row's content loads on demand — assert on it, not on the row) |
+| `expand_matrix_row(selector, scope:, await_content:)` | matrix | Expands a matrix row by capability selector. The row's content is fetched on first expand, so the helper waits for the loaded row by default — assert on its content, not on the row; pass `await_content: false` only when the load itself is what's under test |
 | `start_inline_edit(container)` | field-editor | Opens the explorer's shared inline editor via its pencil, returns the cloned form |
 | `open_explorer_menu(label, scope:, index:)` | explorer-menu | Opens one of the explorer grid's delegated kebab menus by its trigger's aria-label (the menu does not exist until then) |
 | `click_explorer_menu_item(label, expect_text:)` | explorer-menu | Clicks an item of the OPEN explorer menu by its leading text |
 | `use_explorer_menu(label, item, …)` | explorer-menu | The two above in one call |
 | `submit_inline_edit(form, with:)` | field-editor | Sets the editor's textarea via JS and `requestSubmit()`s it |
 | `cancel_inline_edit(form)` | field-editor | Cancels an open editor via its Cancel button |
-| `click_rating_frequency(cell_selector, freq)` | (rating cell) | Clicks a frequency button, retries until ring-1 lands |
+| `open_pill_popover(cell_selector)` | dropdown | Opens an assessment rating pill's popover (JS-click fallback if the pointer click is dropped) |
+| `click_rating_frequency(cell_selector, freq)` | (rating cell) | Opens the popover and picks a frequency, retrying until the ring lands |
+| `toggle_activity_pane` | activity-pane | Opens/closes the **assessment** activity sidebar by invoking the controller method directly (not the explorer's pane — that's `toggle_context_pane`) |
 
 ```ruby
 # WRONG — bare Capybara click can be silently lost on CI
