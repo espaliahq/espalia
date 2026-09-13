@@ -864,25 +864,43 @@ class PersonDevelopment::Projections::CurrentAssessmentTest < ActiveSupport::Tes
       end
     end
 
-    should "treat a same mapping (no survivor) and a self-mapping as no-ops" do
+    should "leave rows alone for a same mapping, which carries no survivor" do
       ActsAsTenant.with_tenant(@tenant) do
         rate(@from_stable_id, 1, self_rated_frequency: "some")
-        rate(@from_stable_id, 2, self_rated_frequency: "consistent")
       end
 
       assert_nothing_raised do
         emit(PersonDevelopment::Events::FrameworkVersionMigrated,
           framework_id: @framework_id, old_version: 1, new_version: 2,
           mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
-                        mapping_type: "same", requires_reassessment: false },
-                      { from_stable_id: @from_stable_id, to_stable_id: @from_stable_id,
-                        mapping_type: "evolved", requires_reassessment: true } ])
+                        mapping_type: "same", requires_reassessment: false } ])
       end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        row = AssessmentLevelRating.find_by(capability_stable_id: @from_stable_id)
+        assert_equal "some", row.self_rated_frequency
+        assert_equal "not_flagged", row.migration_status
+      end
+    end
+
+    # Historical payload shape (the operation now rejects it). Must replay
+    # exactly as the pre-merge code did: no re-key, rows kept, flag applied.
+    should "only flag rows for a self-mapping, never delete or re-key them" do
+      ActsAsTenant.with_tenant(@tenant) do
+        rate(@from_stable_id, 1, self_rated_frequency: "some")
+        rate(@from_stable_id, 2, self_rated_frequency: "consistent")
+      end
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @from_stable_id,
+                      mapping_type: "evolved", requires_reassessment: true } ])
 
       ActsAsTenant.with_tenant(@tenant) do
         rows = AssessmentLevelRating.where(capability_stable_id: @from_stable_id).order(:level_ordinal)
         assert_equal %w[some consistent], rows.pluck(:self_rated_frequency)
-        assert_equal %w[not_flagged not_flagged], rows.pluck(:migration_status)
+        assert_equal %w[flagged flagged], rows.pluck(:migration_status)
+        assert_equal %w[expectations_evolved expectations_evolved], rows.pluck(:reassessment_reason)
       end
     end
   end

@@ -165,7 +165,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   #   survivor is already rated at the same cycle/level the rows are merged —
   #   see `rekey_ratings`.
   # * `same` → carries no survivor (the operation forbids one), so the rows
-  #   stay under their stable id. A self-mapping is likewise a no-op.
+  #   stay under their stable id. A self-mapping (rejected by the operation
+  #   today, but possible in history) re-keys nothing and only flags — exactly
+  #   what the pre-merge code did, so replay of any persisted event is
+  #   unchanged.
   # * `archived` / `split` → leave the row pointing at the archived
   #   `from_stable_id` and flag it via `migration_status`. The matrix
   #   builder filters archived capabilities, so the row is invisible
@@ -202,9 +205,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       case mapping[:mapping_type]
       when "same", "evolved"
         to_stable_id = mapping[:to_stable_id]
-        next if to_stable_id.nil? || to_stable_id == mapping[:from_stable_id]
+        next if to_stable_id.nil?
 
-        rekey_ratings(scope, to_stable_id)
+        rekey_ratings(scope, to_stable_id) unless to_stable_id == mapping[:from_stable_id]
         if mapping[:requires_reassessment]
           scope.rewhere(capability_stable_id: to_stable_id)
             .where(migration_status: "not_flagged")
