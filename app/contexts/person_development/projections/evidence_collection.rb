@@ -104,16 +104,18 @@ class PersonDevelopment::Projections::EvidenceCollection
         person_id: person_id, framework_id: framework_id,
         capability_stable_id: mapping[:from_stable_id]
       )
-      touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
-
       case mapping[:mapping_type]
       when "same", "evolved"
         to_stable_id = mapping[:to_stable_id]
         next if to_stable_id.nil? || to_stable_id == mapping[:from_stable_id]
 
+        # Only mappings that actually touch links feed the withdrawal pass,
+        # so a no-op mapping never sweeps up an unrelated link-less item.
+        touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         rekey_links(link_scope, to_stable_id, timestamp)
         item_scope.update_all(capability_stable_id: to_stable_id)
       when "archived", "split"
+        touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         link_scope.where(link_status: "active").update_all(
           link_status: "removed",
           removed_at: timestamp,
