@@ -127,6 +127,31 @@ class Frameworks::MatrixFocusRingSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # The ring lives on nodes inside the matrix Turbo Frame, so every re-fetch
+  # (a filter change, a resolution fallback) discards it with them;
+  # `matrix_controller` re-applies it on `turbo:frame-load`. Pinned here rather
+  # than left to the deep-link cases, which only cover the initial hydration.
+  context "after the matrix frame reloads" do
+    setup do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      visit edit_framework_path(@framework_id)
+      assert_text "Edit mode"
+    end
+
+    should "re-apply the ring the reload discarded" do
+      focus_category
+      assert_selector FOCUSED_BAND, visible: :all
+
+      # A text filter re-fetches the frame; the result banner only exists in
+      # the replaced content, so it proves the swap happened.
+      js_fill_in "input[type='search']", with: "Strategic"
+      assert_text "Showing 1 of 1"
+
+      assert_selector FOCUSED_BAND, visible: :all
+      assert_ring_painted "#{FOCUSED_BAND} > td"
+    end
+  end
+
   context "the activity pane's focus breadcrumb" do
     setup do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
