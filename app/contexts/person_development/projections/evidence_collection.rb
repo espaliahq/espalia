@@ -81,12 +81,14 @@ class PersonDevelopment::Projections::EvidenceCollection
   end
 
   # Applies the migration mappings to this person's evidence rows AND their
-  # links. `same`/`evolved` re-key both the item's origin column and the
-  # matching link rows onto the survivor; `archived`/`split` remove the
-  # matching link rows (the underlying capability is gone, so the evidence
-  # has nowhere to live there). An item is withdrawn only when it has NO
-  # remaining active links after the pass — multi-link items that still
-  # have a home survive. `new` is a no-op (no predecessor evidence).
+  # links. `evolved` re-keys both the item's origin column and the matching
+  # link rows onto the survivor (merging where the item is already linked
+  # there — see `rekey_links`); `same` carries no survivor and is a no-op, as
+  # is a self-mapping; `archived`/`split` remove the matching link rows (the
+  # underlying capability is gone, so the evidence has nowhere to live
+  # there). An item is withdrawn only when it has NO remaining active links
+  # after the pass — multi-link items that still have a home survive. `new`
+  # is a no-op (no predecessor evidence).
   def handle_framework_version_migrated(event)
     person_id = event.metadata[:person_id]
     framework_id = event.data[:framework_id]
@@ -106,8 +108,11 @@ class PersonDevelopment::Projections::EvidenceCollection
 
       case mapping[:mapping_type]
       when "same", "evolved"
-        rekey_links(link_scope, mapping[:to_stable_id], timestamp)
-        item_scope.update_all(capability_stable_id: mapping[:to_stable_id])
+        to_stable_id = mapping[:to_stable_id]
+        next if to_stable_id.nil? || to_stable_id == mapping[:from_stable_id]
+
+        rekey_links(link_scope, to_stable_id, timestamp)
+        item_scope.update_all(capability_stable_id: to_stable_id)
       when "archived", "split"
         link_scope.where(link_status: "active").update_all(
           link_status: "removed",
@@ -122,27 +127,27 @@ class PersonDevelopment::Projections::EvidenceCollection
     withdraw_items_without_active_links(touched_evidence_ids.uniq, timestamp)
   end
 
-  # After a migration pass that may have removed link rows, withdraw any
-  # touched item that has been left with zero active links.
   # Moves every link in `scope` (links anchored on the retiring capability)
-  # onto `to_stable_id`, merging where the same evidence item is already
-  # linked to the survivor at the same level.
+  # onto `to_stable_id`, except where the same evidence item already has a
+  # link to the survivor at that level — `idx_evidence_links_natural_key` is
+  # unique on (evidence_id, capability_stable_id, level_ordinal) regardless of
+  # `link_status`, so those cannot be re-keyed.
   #
-  # `idx_evidence_links_natural_key` is unique on (evidence_id,
-  # capability_stable_id, level_ordinal) regardless of `link_status`, so a
-  # colliding link cannot simply be re-keyed. The survivor's link already says
-  # everything the retiring one did, so the retiring link is closed with
-  # `removal_reason: "framework_migration_merged"` (mirroring the
-  # archived/split branch) and left pointing at the retiring stable id. The
-  # item keeps its active survivor link, so `withdraw_items_without_active_links`
-  # leaves it alone. Remaining links are re-keyed with a single UPDATE.
+  # Non-colliding links are re-keyed in one UPDATE (NOT EXISTS); whatever is
+  # still active under the retiring id is by construction the colliding set.
+  # For each: if the survivor link is itself removed, it is revived with the
+  # retiring link's provenance (the retiring link was the item's live anchor,
+  # and `upsert_link` revives the same way), then the retiring link is closed
+  # as `framework_migration_merged`, mirroring the archived/split branch. The
+  # item always keeps exactly one active link at the survivor, so
+  # `withdraw_items_without_active_links` leaves it alone.
   #
   # @param scope [ActiveRecord::Relation<EvidenceLink>] links under the
   #   retiring capability for this person/framework
   # @param to_stable_id [String] survivor capability stable id
   # @param timestamp [Time] migration time, stamped on merged links
   def rekey_links(scope, to_stable_id, timestamp)
-    colliding = scope.where(<<~SQL.squish, to_stable_id)
+    scope.where.not(<<~SQL.squish, to_stable_id).update_all(capability_stable_id: to_stable_id)
       EXISTS (
         SELECT 1 FROM evidence_links survivor
         WHERE survivor.evidence_id = evidence_links.evidence_id
@@ -150,14 +155,26 @@ class PersonDevelopment::Projections::EvidenceCollection
           AND survivor.capability_stable_id = ?
       )
     SQL
-    colliding.where(link_status: "active").update_all(
-      link_status: "removed",
-      removed_at: timestamp,
-      removal_reason: "framework_migration_merged"
-    )
-    scope.where.not(id: colliding.select(:id)).update_all(capability_stable_id: to_stable_id)
+
+    scope.active.find_each do |retiring|
+      survivor = EvidenceLink.find_by!(
+        evidence_id: retiring.evidence_id, level_ordinal: retiring.level_ordinal,
+        capability_stable_id: to_stable_id
+      )
+      unless survivor.link_status == "active"
+        survivor.update!(
+          link_status: "active",
+          linked_by_id: retiring.linked_by_id, linked_at: retiring.linked_at, valence: retiring.valence,
+          removed_at: nil, removed_by_id: nil, removal_reason: nil
+        )
+      end
+      retiring.update!(link_status: "removed", removed_at: timestamp,
+                       removal_reason: "framework_migration_merged")
+    end
   end
 
+  # After a migration pass that may have removed link rows, withdraw any
+  # touched item that has been left with zero active links.
   def withdraw_items_without_active_links(evidence_ids, timestamp)
     return if evidence_ids.empty?
 

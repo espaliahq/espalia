@@ -160,16 +160,12 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Applies the migration mappings carried on `FrameworkVersionMigrated`
   # to this person's rating rows for the migrated framework.
   #
-  # * `same` / `evolved` → re-key the row to the survivor's `to_stable_id`.
-  #   `evolved` with `requires_reassessment: true` also gets the
-  #   `migration_status` flag. The survivor may be a capability that already
-  #   existed in the previous version (the "absorbed into another capability"
-  #   case), so this person may hold ratings under BOTH stable ids for the
-  #   same cycle and level. The unique index
-  #   `idx_assessment_ratings_cycle_person_cap_level` forbids re-keying those
-  #   rows, so they are **merged**: the survivor's own rating wins and the
-  #   absorbed row is deleted. (Incident: a production publish 500'd on this
-  #   collision; see `rekey_ratings`.)
+  # * `evolved` → re-key the row to the survivor's `to_stable_id`; with
+  #   `requires_reassessment: true` the survivor's rows are flagged. Where the
+  #   survivor is already rated at the same cycle/level the rows are merged —
+  #   see `rekey_ratings`.
+  # * `same` → carries no survivor (the operation forbids one), so the rows
+  #   stay under their stable id. A self-mapping is likewise a no-op.
   # * `archived` / `split` → leave the row pointing at the archived
   #   `from_stable_id` and flag it via `migration_status`. The matrix
   #   builder filters archived capabilities, so the row is invisible
@@ -204,18 +200,15 @@ class PersonDevelopment::Projections::CurrentAssessment
       scope = scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
 
       case mapping[:mapping_type]
-      when "same"
-        rekey_ratings(scope, mapping[:to_stable_id])
-      when "evolved"
-        rekey_ratings(scope, mapping[:to_stable_id])
+      when "same", "evolved"
+        to_stable_id = mapping[:to_stable_id]
+        next if to_stable_id.nil? || to_stable_id == mapping[:from_stable_id]
+
+        rekey_ratings(scope, to_stable_id)
         if mapping[:requires_reassessment]
-          flag_scope = AssessmentLevelRating
-            .where(person_id: person_id, framework_id: framework_id,
-                   capability_stable_id: mapping[:to_stable_id],
-                   migration_status: "not_flagged")
-          flag_scope = flag_scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
-          flag_scope.update_all(migration_status: "flagged",
-                                reassessment_reason: "expectations_evolved")
+          scope.rewhere(capability_stable_id: to_stable_id)
+            .where(migration_status: "not_flagged")
+            .update_all(migration_status: "flagged", reassessment_reason: "expectations_evolved")
         end
       when "archived"
         scope.where(migration_status: "not_flagged")
@@ -232,21 +225,28 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   # Moves every rating in `scope` (rows keyed by the retiring capability) onto
-  # `to_stable_id`, merging where the survivor already holds a rating for the
-  # same cycle and level.
+  # `to_stable_id`, except where the survivor already holds a rating for the
+  # same cycle and level — `idx_assessment_ratings_cycle_person_cap_level`
+  # forbids two rows there.
   #
-  # Merge rule — **the survivor's own rating wins**: it was made against the
-  # capability that continues to exist, so it is the least surprising record
-  # to keep. The absorbed row is deleted first; the remaining rows are then
-  # re-keyed with a single UPDATE. Both statements run against the same lazy
-  # scope, so `scope`'s own filters (frozen cycles excluded) apply to both.
+  # Merge rule — **nothing is lost**: the survivor's own row stays as it is
+  # and the absorbed row stays under the retiring stable id, flagged
+  # `capability_merged`, exactly as `archived`/`split` rows are. Both are
+  # then invisible in the matrix (archived capabilities are filtered) until
+  # the relink/dismiss UI surfaces them. This also keeps the read model
+  # aligned with the aggregate, which never re-keys its rating maps.
+  #
+  # Two statements: re-key the non-colliding rows (NOT EXISTS), after which
+  # whatever is still under the retiring id is by construction the colliding
+  # set, flagged with a plain UPDATE. Both run against the same lazy scope,
+  # so its frozen-cycle exclusion applies to both.
   #
   # @param scope [ActiveRecord::Relation<AssessmentLevelRating>] rows under the
   #   retiring capability, already filtered for this person/framework and
   #   with frozen cycles excluded
   # @param to_stable_id [String] survivor capability stable id
   def rekey_ratings(scope, to_stable_id)
-    scope.where(<<~SQL.squish, to_stable_id).delete_all
+    scope.where.not(<<~SQL.squish, to_stable_id).update_all(capability_stable_id: to_stable_id)
       EXISTS (
         SELECT 1 FROM assessment_level_ratings survivor
         WHERE survivor.person_id = assessment_level_ratings.person_id
@@ -256,7 +256,8 @@ class PersonDevelopment::Projections::CurrentAssessment
           AND survivor.capability_stable_id = ?
       )
     SQL
-    scope.update_all(capability_stable_id: to_stable_id)
+    scope.where(migration_status: "not_flagged")
+      .update_all(migration_status: "flagged", reassessment_reason: "capability_merged")
   end
 
   # Cycle ids this person has aligned (completed) — their rating rows are

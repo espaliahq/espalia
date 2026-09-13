@@ -62,8 +62,12 @@ class Frameworks::SyncHandlers::FrameworkVersionMigrationSync
     new_version  = event.data[:version]
     old_version  = new_version - 1
 
+    # Definition order (mapping_id is a UUID v7): when two retiring
+    # capabilities map onto one survivor, the first-defined one is re-keyed and
+    # the later one merges — deterministic across publishes and rebuilds.
     mappings = FrameworkState::MigrationMapping
       .where(framework_id: framework_id, published_version: new_version)
+      .order(:mapping_id)
       .to_a
 
     return if mappings.empty?
