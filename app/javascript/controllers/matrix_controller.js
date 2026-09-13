@@ -1764,8 +1764,11 @@ export default class extends BaseController {
     }
     this._stickyResizeObserver.disconnect()
 
+    // A frame with no table (empty state, no-match search) must not keep the
+    // previous grid's measurements on the root — the same clearing
+    // #publishStickyGeometry does when it finds nothing to measure.
     const headerCell = this.#matrixHeaderCell()
-    if (!headerCell) return
+    if (!headerCell) return this.#clearStickyGeometry()
 
     this._stickyResizeObserver.observe(headerCell)
     this.categoryHeaderTargets.forEach(band => this._stickyResizeObserver.observe(band))
