@@ -103,6 +103,20 @@ class Frameworks::PublishVersionJobTest < ActiveJob::TestCase
     end
   end
 
+  context "a request whose framework row is gone" do
+    should "still close the request rather than leave it running" do
+      publication = request_publication
+      ActsAsTenant.with_tenant(@tenant) { FrameworkState::Framework.where(framework_id: @framework_id).delete_all }
+
+      assert_raises(ActiveRecord::RecordNotFound) { Frameworks::PublishVersionJob.perform_now(publication) }
+
+      publication.reload
+      assert publication.failed?
+      assert_not_nil publication.finished_at
+      assert_equal "Publishing Framework v2 failed", latest_notification.inbox_title
+    end
+  end
+
   context "a request that is no longer queued" do
     should "do nothing" do
       publication = request_publication(status: :running)

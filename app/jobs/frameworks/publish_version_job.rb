@@ -30,11 +30,12 @@ class Frameworks::PublishVersionJob < ApplicationJob
     return unless claim(publication)
 
     ActsAsTenant.with_tenant(publication.tenant) do
-      requester = publication.requested_by
-      framework = FrameworkState::Framework.find_by!(framework_id: publication.framework_id)
+      requester = framework = nil
       unexpected = nil
 
       begin
+        requester = publication.requested_by
+        framework = FrameworkState::Framework.find_by!(framework_id: publication.framework_id)
         publish(framework, requester)
         publication.update!(status: :succeeded, published_version: framework.reload.current_published_version)
       rescue Pundit::NotAuthorizedError
@@ -49,7 +50,7 @@ class Frameworks::PublishVersionJob < ApplicationJob
         publication.update_columns(finished_at: Time.current, updated_at: Time.current)
       end
 
-      notify(publication, framework, requester)
+      notify(publication, framework, requester || publication.requested_by)
       raise unexpected if unexpected
     end
   end
@@ -81,7 +82,7 @@ class Frameworks::PublishVersionJob < ApplicationJob
     FrameworkPublishedNotifier.with(
       tenant_id: publication.tenant_id,
       framework_id: publication.framework_id,
-      framework_name: framework.name,
+      framework_name: framework&.name || "Framework",
       version: publication.draft_version,
       succeeded: publication.succeeded?,
       error: publication.error_message
