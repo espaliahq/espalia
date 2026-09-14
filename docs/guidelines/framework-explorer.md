@@ -778,7 +778,29 @@ belongs to the entity's own Turbo Frame (a capability name, a category name, an
 expectation text — the frame re-render has to carry it, and the shared editor
 resolves its host by `closest("[data-editor-action]")`) is rendered by that
 frame via `render_inline_editor_pencil(scope:)` immediately before the cluster.
-Two things fall out:
+
+**`opacity: 0` still takes layout width — so where the text is tight, the
+cluster must come out of the flow.** The grid can afford in-flow controls; the
+role tree could not. In an 18 rem pane a role row's name box is ~190 px, and the
+solo pill (~44 px) + rename pencil (~20 px) + ⋮ (~28 px) took half of it while
+being invisible, so nearly every real name — "Analytics Engineer", "Commercial
+Finance", "Product Management" — wrapped onto two lines and the tree became a
+wall of them (reported from the field). The tree's rows therefore put the name
+in a `relative flex-1 min-w-0` box and its controls in an absolutely-positioned
+`.tree-actions` cluster over that box's right edge. Consequences:
+
+- The name gets the row's whole width and is **never truncated** — `break-words`
+  stays the fallback for a name longer than any pane would hold, and the pane is
+  sized (below) so it is rarely reached.
+- The cluster paints an **opaque mask** matching the row's hover background, but
+  only under the conditions that reveal it (`:hover` / `:focus-within`, and the
+  pane background on `pointer-coarse`). Painted unconditionally it would blank
+  the tail of a name whose controls are invisible.
+- A tree pencil is now **outside** its name frame, so it names the frame with
+  `data-editor-host-frame` — the same escape hatch a kebab's "Edit…" uses. It
+  also survives that frame's PATCH re-render for free.
+
+Two more things fall out of the cluster rule itself:
 
 - **No interpolated Tailwind token, so Hard-Won Lesson 12 can't bite here** —
   there is no class name to build, only a scope name.
@@ -1246,8 +1268,17 @@ added a second `w-80` column rendered open, which at 375 px left the matrix a
 
 | Viewport | Role tree (view + edit) | Activity pane (edit only) | Matrix |
 |----------|-------------------------|---------------------------|--------|
-| Desktop (≥ 1024px) | Inline left pane, open | Inline right pane, **open by default** | Between them |
-| Mobile (< 1024px) | `max-lg:hidden`; fixed overlay on toggle, left-anchored | `max-lg:hidden`; fixed overlay on toggle, right-anchored, with its own title bar + × | **Full width** |
+| Desktop (≥ 1024px) | Inline left pane (`w-76` = 19 rem), open | Inline right pane (`w-80`), **open by default** | Between them |
+| Mobile (< 1024px) | `max-lg:hidden`; fixed overlay on toggle, left-anchored, `min(24rem, 100vw - 3rem)` | `max-lg:hidden`; fixed overlay on toggle, right-anchored, with its own title bar + × | **Full width** |
+
+**The tree pane is sized from the names it has to hold.** At `w-72` a family's
+name box was 175.4 px against a longest name of 171.6 px ("Software
+Engineering") — under 4 px of headroom, which is why anything else claiming a
+pixel wrapped the tree. `w-76` puts the family box at 191.4 px and the role box
+at 207 px (~20 px and ~36 px clear of the seeded framework's longest names), for
+16 px of the matrix's 1,112 at 1400 wide. The overlay is wider still
+(24 rem, capped at the viewport minus the tap strip): it shares the width with
+nothing, so its boxes are 214 px / 230 px.
 
 Both toggles are header stats doing double duty: the **role count** ("4 Roles"
 with a chevron) and the **Activity** stat (with its pending-count badge). Each
@@ -2462,6 +2493,7 @@ line (§9).
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
 | `app/views/frameworks/explorer/concerns/menu_items.rb` | The grid's kebab triggers — `render_menu_trigger` + `approval_menu_data`; the menu itself is built client-side (§11a, #380) |
 | `app/views/frameworks/explorer/concerns/hover_cluster.rb` | The ONE hover-cluster rule (scopes + `render_hover_cluster`) and the ONE add affordance (`render_add_affordance`) (§11a) |
+| `.tree-actions` (in `app/assets/tailwind/application.css`) | The role tree's floating row-action cluster — out of flow so it reserves no name width, masked only while revealed (§11a) |
 | `app/views/frameworks/explorer/concerns/kebab_chrome.rb` | Shared ⋮ chrome for the remaining `Kit::Dropdown` kebab (the role tree) |
 | `app/views/frameworks/explorer/concerns/sticky_column.rb` | Shared sticky capability-column styling + the NON-NEGOTIABLE opacity invariant and its current composites (Hard-Won Lesson 24, issue #371) |
 | `app/views/frameworks/explorer/concerns/pending_archive.rb` | The ONE definition of "staged for archive in the open draft" (`pending_archive?`) + `STRIKETHROUGH_CLASSES`, shared by `MatrixRow` / `MatrixCategoryGroup` / `ExpandedRow` (§11) |
@@ -2559,6 +2591,7 @@ line (§9).
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
 | `test/system/frameworks/mobile_edit_mode_system_test.rb` | Edit mode at 375×812 vs 1400×1400 — no sideways page scroll, header controls on screen, the pane as slide-over vs inline column, reviewing from the overlay (§7) |
+| `test/system/frameworks/role_tree_layout_system_test.rb` | The tree's row layout — every role/family name on ONE line at both viewports and in both modes, the hover cluster reserving no width, the pencil/solo/⋮ still reachable (§7, §11a) |
 | `test/system/frameworks/matrix_sticky_offsets_system_test.rb` | Measured sticky offsets — expanded row + category band clear the header at 1/3/11 roles, both viewports, with a real pointer click on the row kebab |
 | `test/system/frameworks/matrix_focus_ring_system_test.rb` | On-grid focus ring (row / cell / category band) + the pane's breadcrumb × |
 | `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
