@@ -52,6 +52,10 @@ class Operations::Frameworks::DefineMigrationMapping < Operations::Base
 
   # @return [Hash] { framework_id:, mapping_id:, from_stable_id:, to_stable_id:, mapping_type: }
   def perform
+    if params[:to_stable_id] == params[:from_stable_id]
+      raise ParameterError, "a capability cannot be its own survivor (to_stable_id must differ from from_stable_id)"
+    end
+
     mapping_id = params[:mapping_id].presence || SecureRandom.uuid_v7
 
     Frameworks::CommandHandler.new.define_migration_mapping(

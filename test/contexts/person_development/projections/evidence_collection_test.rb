@@ -387,6 +387,97 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       end
     end
 
+    # Regression: `same`/`evolved` onto a survivor the item is ALREADY linked
+    # to at the same level. `idx_evidence_links_natural_key` forbids re-keying
+    # the retiring link, so it is closed as merged and the survivor link stays.
+    should "merge a link into the survivor's existing link instead of duplicating it" do
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: @ev_id, capability_stable_id: @to_stable_id, level_ordinal: 3,
+        linked_by_id: @author.id, rationale: nil)
+      # A second item linked only to the retiring capability still re-keys.
+      other_id = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: other_id, capability_stable_id: @from_stable_id, level_ordinal: 3,
+        source: "self", evidence_type: "project_outcome", custom_type_label: nil,
+        title: "Only on retiring", content: "y", external_reference: nil,
+        author_id: @author.id)
+
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+          framework_id: @framework_id, old_version: 1, new_version: 2,
+          mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                        mapping_type: "evolved", requires_reassessment: true } ])
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal "active", item.link_status, "item keeps its surviving link"
+        assert_equal @to_stable_id, item.capability_stable_id
+
+        assert_equal [ [ @to_stable_id, 3 ] ],
+          EvidenceLink.active.where(evidence_id: @ev_id).pluck(:capability_stable_id, :level_ordinal)
+        merged = EvidenceLink.find_by(evidence_id: @ev_id, capability_stable_id: @from_stable_id)
+        assert_equal "removed", merged.link_status
+        assert_equal "framework_migration_merged", merged.removal_reason
+        assert_not_nil merged.removed_at
+
+        assert_equal [ [ @to_stable_id, 3 ] ],
+          EvidenceLink.active.where(evidence_id: other_id).pluck(:capability_stable_id, :level_ordinal),
+          "non-colliding link is still re-keyed"
+      end
+    end
+
+    # The survivor link exists but was REMOVED earlier. The retiring link is the
+    # item's only live anchor, so the survivor link is revived rather than the
+    # item being withdrawn as orphaned.
+    should "revive a removed survivor link instead of orphaning the item" do
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: @ev_id, capability_stable_id: @to_stable_id, level_ordinal: 3,
+        linked_by_id: @author.id, rationale: nil)
+      emit(PersonDevelopment::Events::EvidenceLinkRemoved,
+        evidence_id: @ev_id, capability_stable_id: @to_stable_id, level_ordinal: 3,
+        removed_by_id: @author.id, reason: "oops")
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "evolved", requires_reassessment: true } ])
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal "active", item.link_status, "item must not be withdrawn"
+        assert_equal @to_stable_id, item.capability_stable_id
+
+        survivor = EvidenceLink.find_by(evidence_id: @ev_id, capability_stable_id: @to_stable_id)
+        assert_equal "active", survivor.link_status
+        assert_nil survivor.removal_reason
+        assert_equal @author.id, survivor.linked_by_id
+
+        retiring = EvidenceLink.find_by(evidence_id: @ev_id, capability_stable_id: @from_stable_id)
+        assert_equal "removed", retiring.link_status
+        assert_equal "framework_migration_merged", retiring.removal_reason
+      end
+    end
+
+    should "treat a same mapping (no survivor) and a self-mapping as no-ops" do
+      assert_nothing_raised do
+        emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+          framework_id: @framework_id, old_version: 1, new_version: 2,
+          mappings: [ { from_stable_id: @from_stable_id, to_stable_id: nil,
+                        mapping_type: "same", requires_reassessment: false },
+                      { from_stable_id: @from_stable_id, to_stable_id: @from_stable_id,
+                        mapping_type: "evolved", requires_reassessment: true } ])
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(@ev_id)
+        assert_equal "active", item.link_status
+        assert_equal @from_stable_id, item.capability_stable_id
+        assert_equal [ [ @from_stable_id, 3 ] ],
+          EvidenceLink.active.where(evidence_id: @ev_id).pluck(:capability_stable_id, :level_ordinal)
+      end
+    end
+
     should "keep a multi-link item active when only one of its links is archived" do
       survivor_stable_id = SecureRandom.uuid_v7
       emit(PersonDevelopment::Events::EvidenceLinkAdded,
