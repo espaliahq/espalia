@@ -13,7 +13,7 @@
 #
 class Views::Assessments::FrequencyBar < Views::Base
   FREQUENCY_CONFIG = {
-    "none"       => { label: "None", long_label: "None",         width: "w-1/12", bg: "bg-gray-300 dark:bg-gray-600" },
+    "none"       => { label: "Not yet", long_label: "Not yet",   width: "w-1/12", bg: "bg-gray-300 dark:bg-gray-600" },
     "some"       => { label: "Some", long_label: "Some times",   width: "w-3/12", bg: "bg-amber-300 dark:bg-amber-700" },
     "occasional" => { label: "Most", long_label: "Most times",   width: "w-6/12", bg: "bg-blue-300 dark:bg-blue-700" },
     "consistent" => { label: "Con.", long_label: "Consistently", width: "w-full", bg: "bg-green-300 dark:bg-green-700" }

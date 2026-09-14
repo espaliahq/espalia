@@ -199,7 +199,7 @@ These apply to the framework explorer's read-only matrix view. The assessment vi
 
 ### Rating input — four-button FrequencySelector
 
-The assessment view uses a four-button `FrequencySelector`: `None` / `Some` / `Most` / `Consistently`. Clicking the currently-selected button clears the rating (untoggle). The selector is replaced with a read-only `FrequencyBar` when `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`).
+The assessment view rates through the inline `FrequencyPill` (popover options `Not yet` / `Some of the time` / `Most of the time` / `Consistently`; the legacy four-button `FrequencySelector` carries the same labels). Clicking the currently-selected button clears the rating (untoggle). The selector is replaced with a read-only `FrequencyBar` when `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`).
 
 ### LevelChip heatmap
 

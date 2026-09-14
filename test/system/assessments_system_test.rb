@@ -1402,6 +1402,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "the lowest rating" do
+    # "Not yet", never "None"/"Never" (issue #391) — on the popover option,
+    # the pill, the chip's accessible name and the live-status announcement.
+    # Both viewports: the pill sits in the expectation sentence, which wraps
+    # differently at 375px.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+      should "read Not yet on every surface (#{name})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+        click_rating_frequency("#rating-#{@cap1_stable}-2", "Not yet")
+
+        within("#rating-#{@cap1_stable}-2") do
+          assert_selector "button[aria-haspopup='menu']", text: "Not yet"
+          assert_no_text "Never"
+          assert_no_text "None"
+        end
+        assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet']"
+        assert_selector "#assessment-live-status",
+          text: "Rated not yet — Critical Thinking, E2", visible: :all
+      end
+    end
+  end
+
   context "responsive behaviour" do
     should "show scoring panel as hero card on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

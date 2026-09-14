@@ -20,7 +20,14 @@
 # FrequencyPill.
 #
 # Each entry carries the rating's display phrase ("Most of the
-# time") plus class names for three intensities:
+# time") plus class names for three intensities. The bottom of the
+# scale is deliberately "Not yet", not "None"/"Never": the domain value
+# stays `none` (events, read models, MCP enum), but the surface word
+# frames the lowest rating as a starting point rather than a verdict —
+# the "Feedback / Evidence" relabel convention (assessments.md).
+# The label and phrase share the same text so pill, chip, aria text and
+# the live-status announcement carry one vocabulary.
+#
 # - `chip_bg`  — solid fill for the level chip
 # - `pill_bg`  — softer fill for the inline pill (sits next to body text)
 # - `dot`      — small marker for the divergent-secondary line
@@ -30,8 +37,8 @@
 module Views::Assessments::FrequencyPalette
   CONFIG = {
     "none" => {
-      label:    "None",
-      phrase:   "Never",
+      label:    "Not yet",
+      phrase:   "Not yet",
       chip_bg:  "bg-red-500 dark:bg-red-400",
       chip_carried: "bg-red-300 dark:bg-red-300",
       chip_carried_border: "border-dashed border-red-600 dark:border-red-500",

@@ -6,7 +6,7 @@
 #
 class Views::Assessments::FrequencySelector < Views::Base
   FREQUENCIES = [
-    { value: "none", short_label: "None", long_label: "None",
+    { value: "none", short_label: "Not yet", long_label: "Not yet",
       bg: "bg-gray-200 dark:bg-gray-600",
       text: "text-gray-700 dark:text-gray-200", ring: "ring-gray-400 dark:ring-gray-500" },
     { value: "some", short_label: "Some", long_label: "Some times",

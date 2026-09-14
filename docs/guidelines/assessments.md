@@ -360,10 +360,12 @@ The four rating values share a single palette across every surface — inline pi
 
 | Enum | Sentence phrase | Compact label | Hue |
 |------|----|----|----|
-| `none` | Never | None | red |
+| `none` | Not yet | Not yet | red |
 | `some` | Some of the time | Some | yellow |
 | `occasional` | Most of the time | Most | green |
 | `consistent` | Consistently | Consistently | blue |
+
+The bottom of the scale reads **"Not yet"** on every surface — never "None" or "Never". "None" reads as a verdict ("you never do this") and discourages honest self-rating on a capability a person is still growing into; "Not yet" scores identically but frames the lowest rating as a starting point. Same split as the Feedback / Evidence relabel above: the domain value `none` (events, commands, read models, DB columns, the MCP `frequency` enum) is untouched. Label and phrase are the same two words so the pill, the chip's aria text, the divergence line, the activity feed and the live-status announcement ("Rated not yet — …") carry one vocabulary.
 
 Ordering is carried by **chip position** (E1…E8 left→right) and the **text label**, NOT by a single-axis colour gradient — so blue marking the top "Consistently" tier reads as a distinct band rather than "even greener than green". The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"); the compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
 

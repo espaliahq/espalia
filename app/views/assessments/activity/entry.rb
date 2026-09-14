@@ -69,8 +69,10 @@ class Views::Assessments::Activity::Entry < Views::Base
     "reporting_manager_recorded" => "authority"
   }.freeze
 
+  # Surface labels for the domain frequency values — "Not yet" for `none`,
+  # never "None" (see FrequencyPalette).
   FREQUENCY_LABEL = {
-    "none"        => "None",
+    "none"        => "Not yet",
     "some"        => "Some",
     "occasional"  => "Most",
     "consistent"  => "Consistently"
