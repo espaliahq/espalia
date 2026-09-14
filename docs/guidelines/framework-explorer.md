@@ -604,6 +604,25 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   validated before the version is cut, and is the ONE edit-mode action that
   stays a full navigation. Both are `DraftStatus` slots with stable ids, so a
   shape-changing write streams them (§11b). (Draft lifecycle: see ADR-16/17.)
+  - **Publishing runs in the background.** Confirming on the review page
+    records a `FrameworkPublication` and enqueues `Frameworks::PublishVersionJob`
+    (the per-person migration of ratings/evidence/comments does not fit a web
+    request). While a row is queued/running the Publish slot renders a
+    **disabled "Publishing vN…" button** (`DraftStatus publishing: true`,
+    read from `FrameworkPublication.in_flight_for?` by the controller — never
+    by the view) and the review page's confirm is disabled too; a second POST
+    is refused by the partial unique index, not just the UI. The requester gets
+    a `framework_published` notification with the outcome, and a success
+    broadcasts both `DraftStatus` slots empty over the `framework_activity`
+    stream so an open explorer drops the pill and button. The review page also
+    shows the last attempt's failure message for this draft.
+  - **Publish-review mappings are ONE form.** Every retiring capability's row
+    (type + survivor) posts together to `MigrationMappingsController#create`
+    as `migration_mappings[<i>][…]`; unchanged rows emit no event, rows still
+    missing a survivor are left unsaved and named in the flash. The per-row
+    "Save mapping" it replaced reloaded the page and dropped the other rows'
+    unsaved selections (#399). Each row is its own `mapping-form` Stimulus
+    scope (a `div`, not a `form`) so the survivor toggle stays per row.
 - **"+ Add role family" / "+ Add role"** — in the left role tree (edit +
   `can_edit_structure`): "+ Add role family" at the tree foot, "+ Add role" at
   the foot of each family's role list (the parent is implied by placement — no
