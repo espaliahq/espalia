@@ -55,9 +55,7 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
       select "Archived — no replacement", from: "Mapping"
     end
 
-    click_button "Save mappings"
-
-    assert_text "Saved 2 mappings."
+    click_button_with_js_fallback("Save mappings", expect_text: "Saved 2 mappings.")
     assert_no_text "Needs a mapping"
     assert_equal 2, mappings.count
     assert_equal "evolved", mappings.find_by(from_stable_id: @legacy_stable_id).mapping_type
@@ -80,9 +78,7 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
     within(find("div[data-controller='mapping-form']", text: "Old Tools")) do
       select "Archived — no replacement", from: "Mapping"
     end
-    click_button "Save mappings"
-
-    assert_text "Saved 1 mapping."
+    click_button_with_js_fallback("Save mappings", expect_text: "Saved 1 mapping.")
     assert_no_text "Still needs a survivor"
     assert_selector "span", text: "Needs a mapping", count: 1
     assert_equal 1, mappings.count
@@ -92,8 +88,8 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
     sign_in_as(@admin_user)
     visit new_framework_publication_path(@framework_id)
 
-    click_button "Confirm & publish v2"
-    assert_text "Add a migration mapping before publishing: Legacy Systems and Old Tools."
+    click_button_with_js_fallback("Confirm & publish v2",
+      expect_text: "Add a migration mapping before publishing: Legacy Systems and Old Tools.")
 
     within(find("div[data-controller='mapping-form']", text: "Legacy Systems")) do
       select "Archived — no replacement", from: "Mapping"
@@ -101,11 +97,9 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
     within(find("div[data-controller='mapping-form']", text: "Old Tools")) do
       select "Archived — no replacement", from: "Mapping"
     end
-    click_button "Save mappings"
-    assert_text "Saved 2 mappings."
+    click_button_with_js_fallback("Save mappings", expect_text: "Saved 2 mappings.")
 
-    click_button "Confirm & publish v2"
-    assert_text "Publishing v2 in the background"
+    click_button_with_js_fallback("Confirm & publish v2", expect_text: "Publishing v2 in the background")
     assert_button "Publishing v2…", disabled: true
 
     # Coming back to the review page while the job is queued shows the state
