@@ -58,17 +58,36 @@ class Frameworks::FrameworkRenameSystemTest < ApplicationSystemTestCase
     end
 
     # The frame is shrink-to-fit, so without the floor the editor would open
-    # only as wide as the short current name.
+    # only as wide as the short current name. The heading is measured BEFORE
+    # the editor opens — the editor hides it, so it would read 0 afterwards.
     should "open a roomy editor on desktop even for a short name" do
       sign_in_as(@owner_user)
       visit edit_framework_path(@framework_id)
-      assert_selector "h1", text: "Test Framework"
+      heading_width = find("h1", text: "Test Framework").evaluate_script("this.getBoundingClientRect().width")
 
       form = start_inline_edit(host_selector)
-      heading_width = find("h1", visible: :all).evaluate_script("this.getBoundingClientRect().width")
       form_width = form.evaluate_script("this.getBoundingClientRect().width")
       assert_operator form_width, :>=, 384, "editor should be at least 24rem wide on desktop"
       assert_operator form_width, :>, heading_width, "the floor must beat the pinned heading width"
+      cancel_inline_edit(form)
+    end
+
+    # Below sm the frame goes full-width instead (a 24rem floor would overflow
+    # a phone), so a short name still gets the whole line.
+    should "open a full-width editor on mobile even for a short name" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@owner_user)
+      visit edit_framework_path(@framework_id)
+      heading_width = find("h1", text: "Test Framework").evaluate_script("this.getBoundingClientRect().width")
+
+      form = start_inline_edit(host_selector)
+      form_width = form.evaluate_script("this.getBoundingClientRect().width")
+      assert_operator form_width, :>, heading_width, "the editor must not pin to the short name's width"
+      assert_operator form_width, :>=, 300, "the editor should span the phone's content width"
+      # The test window's 375px includes the scrollbar, so compare against the
+      # document's own client width rather than a literal.
+      assert_equal page.evaluate_script("document.documentElement.clientWidth"),
+                   page.evaluate_script("document.documentElement.scrollWidth"), "no sideways overflow"
       cancel_inline_edit(form)
     end
 

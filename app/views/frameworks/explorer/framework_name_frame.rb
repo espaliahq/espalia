@@ -40,7 +40,7 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   end
 
   def view_template
-    turbo_frame_tag("framework-name-#{@framework_id}", class: "min-w-0 max-w-full") do
+    turbo_frame_tag("framework-name-#{@framework_id}", class: "min-w-0 max-w-full max-sm:w-full") do
       if editable?
         editable
       else
@@ -65,7 +65,8 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   # pre-open width (Lesson 27) — would open as wide as the CURRENT name: a
   # sliver for a short one, which is exactly the rename that matters. The
   # `sm:` floor on the form (see #editor_data) gives it room; below `sm` the
-  # column is full-width already and the pinned width is the whole line.
+  # frame itself goes full-width (the badges already wrap under the name
+  # there), so the pinned width is the whole line.
   # The pencil is `standalone`: the header has no kebab for it to collapse
   # into on a coarse pointer, so it stays visible there instead.
   def editable

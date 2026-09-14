@@ -31,7 +31,9 @@ class Frameworks::NamesController < ApplicationController
     )
 
     render_name_frame(result[:name])
-  rescue Operations::Base::ParameterError, RuntimeError => e
+  rescue Operations::Base::ParameterError => e
+    # Only input rejections render inline — like the other direct-edit
+    # controllers. Anything else is a bug and must reach the exception path.
     render_save_error(e.message, attempted)
   end
 
