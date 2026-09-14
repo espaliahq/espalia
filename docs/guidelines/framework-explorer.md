@@ -2319,6 +2319,38 @@ Two things to carry forward:
   so the repair does not blunt it.
 
 
+### 39. `pointer-events` inherits, so gating a cluster disarms the menu inside it
+
+Floating the role tree's hover controls over the name (§11a) put an invisible
+but still-hittable button on top of the text: on a coarse pointer at `lg` and
+up — a touch laptop, where nothing reveals the cluster on approach — a tap on a
+long name's tail fires `solo`. The obvious fix is to make `pointer-events`
+track each control's reveal instead of the cluster's presence.
+
+The obvious *implementation* of that fix breaks the kebab. `pointer-events`
+inherits, and `Kit::Dropdown`'s menu is a DOM **descendant** of its trigger even
+though `strategy: :fixed` paints it somewhere else entirely — so
+`pointer-events: none` on the cluster's children reached the open menu and every
+item in it. Visibly open, completely inert. Two things made it easy to miss:
+
+- **A JS-dispatched click still opens it**, so every test that drives the menu
+  that way passed. Only `edit_mode_system_test`'s `elementFromPoint` probe saw
+  it — and that probe is not "is the menu on top?", it is "would a real click
+  land on this item?", which an inert element fails for a completely different
+  reason than the clipping it was written for.
+- **The real gesture loses the hover it depends on.** The menu is positioned
+  outside the row, so moving the pointer onto an item drops the row's `:hover`
+  and re-disarms everything mid-gesture. Hovering the trigger to open it proves
+  nothing about clicking an item.
+
+So an open menu arms itself (`[role="menu"]`), and so does the trigger holding
+it open (`[aria-expanded="true"]`, the same hook the shared cluster rule already
+uses to keep an open kebab visible). The general rule: **when you gate
+`pointer-events` on a container, enumerate the popups that live inside it** —
+a fixed/absolute popup is not outside the subtree just because it is outside
+the box.
+
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared

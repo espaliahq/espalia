@@ -378,8 +378,42 @@ input[type="week"] {
   pointer-events: none;
 }
 
+/* A control is clickable only while it is actually shown. The cluster sits OVER
+ * the name now, so a hidden-but-hittable button is a tap on the name's tail
+ * firing `solo` — reachable in practice on a coarse pointer at `lg` and up (a
+ * touch laptop), where nothing reveals the cluster on approach. `pointer-events`
+ * therefore tracks each control's own reveal condition, not the cluster's
+ * presence. Keyboard focus is unaffected by `pointer-events`. */
 .tree-actions > * {
+  pointer-events: none;
+}
+
+[data-hover-cluster="tree"]:hover .tree-actions > *,
+[data-hover-cluster="tree"]:focus-within .tree-actions > * {
   pointer-events: auto;
+}
+
+/* `pointer-events` INHERITS, so gating the cluster's children disarms whole
+ * subtrees — including the kebab's menu, which is a DOM descendant of its
+ * trigger even though `strategy: :fixed` paints it elsewhere. An open menu
+ * therefore arms itself: it is positioned outside the row, so reaching for an
+ * item drops the row's `:hover` and everything in it would go inert
+ * mid-gesture. So does the trigger holding it open, or the second click that
+ * closes it lands on nothing. */
+.tree-actions [role="menu"],
+.tree-actions [aria-expanded="true"] {
+  pointer-events: auto;
+}
+
+/* On a coarse pointer only the controls the reveal rules show are hittable —
+ * the kebab and any `standalone`. The solo pill is hover-only by design (its
+ * own tip says "hover a role and click Solo"), so there it stays both
+ * invisible and inert rather than invisible and armed. */
+@media (pointer: coarse) {
+  .tree-actions [data-cluster~="kebab"],
+  .tree-actions [data-cluster~="standalone"] {
+    pointer-events: auto;
+  }
 }
 
 /* The mask. Matches the row's own hover background so the cluster reads as part

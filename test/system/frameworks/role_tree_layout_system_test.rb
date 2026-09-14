@@ -116,6 +116,42 @@ class Frameworks::RoleTreeLayoutSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # The cluster sits OVER the name, so a hidden control that is still hittable
+    # turns a tap on a long name's tail into a `solo` (or an archive).
+    should "make the hidden controls inert, not merely invisible" do
+      hittable = page.evaluate_script(<<~JS)
+        [...document.querySelectorAll("[data-tree-target='role'] .tree-actions > *")]
+          .filter((el) => getComputedStyle(el).pointerEvents !== "none")
+          .map((el) => el.getAttribute("aria-label") || el.textContent.trim())
+      JS
+      assert_empty hittable,
+                   "these controls are invisible but still take clicks over the name"
+    end
+
+    # `pointer-events` inherits, so gating the cluster disarmed the kebab's menu
+    # too — visibly open and completely inert, because the menu is `fixed`
+    # OUTSIDE the row and the row's `:hover` is gone the moment you reach for
+    # an item.
+    should "keep an open kebab menu hittable once the pointer leaves the row" do
+      page.execute_script(<<~JS)
+        document.querySelector("[data-tree-target='role'] [aria-label='Role actions']").click();
+      JS
+      assert_selector "[role='menu']", visible: true, text: "Edit role…"
+
+      # No hover anywhere — a JS-dispatched open leaves the row un-hovered,
+      # which is exactly the state the pointer ends up in over a menu item.
+      inert = page.evaluate_script(<<~JS)
+        (() => {
+          const menu = document.querySelector(".tree-actions [role='menu']:not(.hidden)");
+          if (!menu) return ["no open menu inside the cluster"];
+          return [...menu.querySelectorAll("[role='menuitem']")]
+            .filter((item) => getComputedStyle(item).pointerEvents === "none")
+            .map((item) => item.textContent.trim());
+        })()
+      JS
+      assert_empty inert, "these menu items are visible but cannot be clicked"
+    end
+
     # Floating them must not put them out of reach.
     should "keep the rename pencil, the solo pill and the kebab usable" do
       assert_selector "[data-tree-target='role'] button[aria-label='Edit role name']", visible: :all
@@ -131,14 +167,20 @@ class Frameworks::RoleTreeLayoutSystemTest < ApplicationSystemTestCase
         ).focus();
       JS
       page.document.synchronize(Capybara.default_max_wait_time) do
-        opacity = page.evaluate_script(<<~JS)
-          getComputedStyle(document.querySelector(
-            "[data-tree-target='role'] button[aria-label='Edit role name']"
-          )).opacity
+        shown = page.evaluate_script(<<~JS)
+          (() => {
+            const row = document.querySelector("[data-tree-target='role']");
+            return [...row.querySelectorAll(".tree-actions > *")].map((el) => {
+              const s = getComputedStyle(el);
+              return { opacity: s.opacity, pointerEvents: s.pointerEvents };
+            });
+          })()
         JS
-        unless opacity.to_f == 1.0
+        # Focus-within reveals the WHOLE cluster and re-arms it — the solo pill
+        # included, or a keyboard lands on a transparent button that still acts.
+        unless shown.all? { |c| c["opacity"].to_f == 1.0 && c["pointerEvents"] != "none" }
           raise Capybara::ExpectationNotMet,
-                "the cluster stayed hidden (opacity #{opacity}) when a keyboard focused into the row"
+                "focusing into the row left part of its cluster hidden or inert: #{shown}"
         end
       end
 

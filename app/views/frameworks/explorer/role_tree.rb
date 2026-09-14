@@ -358,7 +358,11 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
 
           button(
             type: "button",
-            class: "opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 text-xs rounded-sm " \
+            # Focus reveals it too, or a keyboard user tabs to a transparent
+            # button that still fires `tree#solo` — the same pair
+            # `family_edit_trigger` carries.
+            class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
+                   "focus-visible:opacity-100 shrink-0 px-1.5 py-0.5 text-xs rounded-sm " \
                    "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
                    "hover:bg-primary/20 hover:text-primary transition-opacity",
             data: { action: "tree#solo", role_id: role.role_id },
