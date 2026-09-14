@@ -197,9 +197,9 @@ These apply to the framework explorer's read-only matrix view. The assessment vi
 | Category threshold | `nil` on category | No indicator (inherits framework default) |
 | Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
 
-### Rating input — four-button FrequencySelector
+### Rating input — the inline FrequencyPill
 
-The assessment view rates through the inline `FrequencyPill` (popover options `Not yet` / `Some of the time` / `Most of the time` / `Consistently`; the legacy four-button `FrequencySelector` carries the same labels). Clicking the currently-selected button clears the rating (untoggle). The selector is replaced with a read-only `FrequencyBar` when `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`).
+The assessment view rates through the inline `FrequencyPill`: a popover with the four options `Not yet` / `Some of the time` / `Most of the time` / `Consistently` plus an explicit "Clear rating" item (re-picking the shown value on a carried-forward rating *confirms* it; see [assessments.md — Carried-rating affordance](../guidelines/assessments.md#lifecycle)). When `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`) the pill renders as a static coloured span — same colour and phrase, no popover.
 
 ### LevelChip heatmap
 
@@ -248,7 +248,7 @@ The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that de
 | `:manager` | `manager_scoring` | "Alex is …" (first name of assessee) |
 | `:alignment` | `aligned_scoring` | "Alex is …" |
 
-`HeroSummary` uses the primary scoring's `performance_state`, `performance_ratio`, `promotion_readiness`, and `capability_contributions` to render the verdict + middle band + bottom-line. Secondary perspectives surface as small divergence dots on `LevelChip`s — see [assessments.md — Level chip coloring](../guidelines/assessments.md#level-chip-coloring). The full per-perspective `FrequencyBar`s live inside `CapabilityCardExpansion`, where the user has space for the comparison.
+`HeroSummary` uses the primary scoring's `performance_state`, `performance_ratio`, `promotion_readiness`, and `capability_contributions` to render the verdict + middle band + bottom-line. Secondary perspectives surface as small divergence dots on `LevelChip`s — see [assessments.md — Level chip coloring](../guidelines/assessments.md#level-chip-coloring). The full per-perspective values live inside `CapabilityCardExpansion` as `SecondaryRatingLine`s, where the user has space for the comparison.
 
 In `:self` context the data layer scrubs manager + aligned fields entirely before any view sees them; see [assessments.md — Self-assessment privacy](../guidelines/assessments.md#self-assessment-privacy).
 
@@ -259,6 +259,6 @@ Divergence between perspectives appears at two levels:
 | Surface | Indicator | Detail shown |
 |---|---|---|
 | `LevelChip` (in the level strip) | 2px amber dot when primary ≠ any secondary | None — dot is the only signal at strip level |
-| `CapabilityCardExpansion` | One `FrequencyBar` per secondary perspective | Label (`Self` / `Mgr` / `Agreed`) + colored strip + value |
+| `CapabilityCardExpansion` | One `SecondaryRatingLine` per *divergent* secondary perspective | Coloured dot + "`Self` / `Mgr` / `Agreed` rating: «phrase»" |
 
 **Design rationale:** Divergence is shown by an explicit secondary value (not just an "X ≠ Y" indicator) because disagreements are conversation opportunities. In the alignment context, both original positions (self + manager) are shown alongside the aligned value so the starting points stay visible.

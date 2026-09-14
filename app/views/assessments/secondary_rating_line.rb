@@ -4,9 +4,9 @@
 #
 #   ○ Self rating: Most of the time
 #
-# Replaces the previous {FrequencyBar} for the secondary slot. The bar
-# duplicated the value visually (label + filled bar + label) and ate
-# vertical space; a single text line with a colour-coded dot is
+# Replaces the filled progress bar that used to sit in the secondary
+# slot — it duplicated the value visually (label + filled bar + label)
+# and ate vertical space; a single text line with a colour-coded dot is
 # enough to read the value AND signal divergence.
 #
 # Returns nothing when the secondary frequency is absent or equal to

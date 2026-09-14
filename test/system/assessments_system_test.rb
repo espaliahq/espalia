@@ -707,7 +707,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   context "scroll stability on rating" do
     should "not jump scroll position when a rating is submitted" do
       # ?capability= focuses the third (Execution) card so the
-      # expansion panel renders the FrequencySelector buttons.
+      # expansion panel renders the rating pill.
       visit assessment_path(@assignment, capability: @cap3_stable)
       assert_selector "#scoring-panel"
 
@@ -1031,10 +1031,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "rate a capability and see scoring update" do
       # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level (level 2 here).
+      # rating pill for the person's level (level 2 here).
       visit assessment_path(@assignment, capability: @cap1_stable)
 
-      # The expansion panel shows the FrequencySelector for the person's level.
       # Person is at level 2, so rating-#{stable}-2 is in the expansion panel.
       click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
@@ -1097,7 +1096,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "update capability contribution when rating a frequency" do
       # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level (level 2 here).
+      # rating pill for the person's level (level 2 here).
       visit assessment_path(@assignment, capability: @cap1_stable)
       assert_selector "#scoring-panel"
 
