@@ -40,7 +40,13 @@ class FrameworkPublication < ApplicationRecord
   validates :draft_version, presence: true
 
   scope :in_flight, -> { where(finished_at: nil) }
-  scope :stale, -> { in_flight.where(created_at: ...STALE_AFTER.ago) }
+  # Abandoned: queued but never claimed, or claimed but never finished, each
+  # measured from its own timestamp — so a row a worker has just claimed is
+  # never reaped from under it.
+  scope :stale, -> {
+    in_flight.where(status: statuses[:queued], created_at: ...STALE_AFTER.ago)
+      .or(in_flight.where(status: statuses[:running], started_at: ...STALE_AFTER.ago))
+  }
 
   # @param framework_id [String]
   # @return [Boolean] whether a publish of this framework is queued or running

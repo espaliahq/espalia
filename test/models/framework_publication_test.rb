@@ -44,10 +44,11 @@ class FrameworkPublicationTest < ActiveSupport::TestCase
 
   context ".reap_stale!" do
     should "close an unfinished row older than the stale window and nothing else" do
-      abandoned = publication(status: :running, created_at: (FrameworkPublication::STALE_AFTER + 1.minute).ago)
+      abandoned = publication(status: :running, created_at: 4.hours.ago,
+        started_at: (FrameworkPublication::STALE_AFTER + 1.minute).ago)
       other = ActsAsTenant.with_tenant(@tenant) do
         create(:framework_publication, tenant: @tenant, requested_by: @tenant_user, status: :running,
-          created_at: 3.hours.ago)
+          created_at: 3.hours.ago, started_at: 3.hours.ago)
       end
 
       assert_equal 1, FrameworkPublication.reap_stale!(@framework_id)
@@ -60,10 +61,18 @@ class FrameworkPublicationTest < ActiveSupport::TestCase
     end
 
     should "leave a recent unfinished row alone" do
-      recent = publication(status: :running)
+      recent = publication(status: :running, started_at: Time.current)
 
       assert_equal 0, FrameworkPublication.reap_stale!(@framework_id)
       assert recent.reload.in_flight?
+    end
+
+    should "measure a running row from when it was claimed, not when it was requested" do
+      long_queued_then_claimed = publication(status: :running,
+        created_at: (FrameworkPublication::STALE_AFTER + 1.hour).ago, started_at: 1.minute.ago)
+
+      assert_equal 0, FrameworkPublication.reap_stale!(@framework_id)
+      assert long_queued_then_claimed.reload.in_flight?
     end
   end
 

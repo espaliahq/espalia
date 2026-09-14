@@ -60,7 +60,7 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
     should "reap an abandoned request and accept a new one" do
       ActsAsTenant.with_tenant(@tenant) do
         stale = create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 1,
-          requested_by: @admin_tu, status: :running, created_at: 3.hours.ago)
+          requested_by: @admin_tu, status: :queued, created_at: 3.hours.ago)
 
         result = request_publish
 
@@ -68,6 +68,20 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
         assert_not_nil stale.finished_at
         assert_match(/abandoned/, stale.error_message)
         assert FrameworkPublication.find(result[:publication_id]).queued?
+      end
+    end
+
+    should "close the request and refuse when the job cannot be queued" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::PublishVersionJob.stub(:perform_later, ->(*) { raise ActiveJob::EnqueueError, "queue down" }) do
+          error = assert_raises(RuntimeError) { request_publish }
+          assert_match(/could not queue/i, error.message)
+        end
+
+        publication = FrameworkPublication.find_by!(framework_id: @framework_id)
+        assert publication.failed?
+        assert_not_nil publication.finished_at
+        assert_not FrameworkPublication.in_flight_for?(@framework_id), "a second request must be possible"
       end
     end
 
