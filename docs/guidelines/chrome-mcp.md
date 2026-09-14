@@ -227,6 +227,14 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   `list_network_requests` / `get_network_request`, or a signed-in
   `curl -w '%{size_download}'` from the app container, which is also what the
   payload numbers in framework-explorer.md's Lesson 23 were taken with.
+- **`handle_dialog` can accept a `data-turbo-confirm` dialog and still lose the
+  submit.** Seen on the assessment "Start alignment" button: `click` →
+  `handle_dialog(accept)` reported success twice, yet no POST ever left the
+  browser (`list_network_requests` showed none) — the same
+  confirm-vs-automation race testing.md's `auto_confirm` exists for. Do what
+  that helper does: `evaluate_script` `window.confirm = () => true`, then
+  dispatch the button's own `.click()`, and prove the write landed (the
+  live-status region, a status pill, or the network log) before screenshotting.
 - **Seeded tenant state persists across sessions.** The `me&u` seed tenant
   accumulates assessment state (cycles, ratings, evidence, alignment) as you
   drive flows. A verification run that assumes a clean slate (an unrated

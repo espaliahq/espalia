@@ -56,6 +56,11 @@ Capture the desktop pass first; do a mobile pass for anything responsive.
 - `wait_for(text: [...])` to sync on a destination before asserting/clicking.
   Beware CSS `text-transform`: an `uppercase`-styled element reports UPPERCASE
   text — match the rendered case.
+- **A `data-turbo-confirm` button can swallow its submit under `handle_dialog`.**
+  If `click` + `handle_dialog(accept)` "succeeds" but nothing changes, check
+  `list_network_requests` for the POST; when it is missing, stub
+  `window.confirm = () => true` via `evaluate_script` and dispatch the
+  button's `.click()`, then confirm the write landed before capturing.
 - **Click the real path** (links/buttons), don't `navigate_page` straight to
   destinations — direct navigation hides bugs (e.g. the lazy-Turbo-Frame
   "Content missing" trap).
