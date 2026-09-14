@@ -9,10 +9,9 @@
 # A framework rename is a **direct edit** (not the suggested-edit path), like
 # the org-structure renames in §11 of framework-explorer.md: no pending
 # decoration, no Editing/Suggesting interaction, the editor always says "Save".
-# It is narrower than those, though — gated by `FrameworkPolicy#rename?`
-# (tenant admin or framework owner), threaded in as `can_rename`. Without it
-# the frame renders the plain heading, so an editor's header is byte-for-byte
-# what it was before renaming existed.
+# The pencil renders in :edit mode for a viewer with `can_rename`
+# (`FrameworkPolicy#rename?`, see authorization.md); everyone else gets the
+# plain heading, byte-for-byte what it was before renaming existed.
 #
 # The editor host is a `<div>` around the heading rather than the heading
 # itself: the shared editor appends its cloned `<form>` to the host, and a
@@ -23,13 +22,11 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::HoverCluster
   include Views::Frameworks::Explorer::Concerns::InlineEditable
 
-  HEADING_CLASSES = "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold text-gray-900 dark:text-white"
-
   # @param framework_id [String]
   # @param name [String] the current name
   # @param mode [Symbol] :view or :edit
-  # @param can_rename [Boolean] FrameworkPolicy#rename? for the viewer — the
-  #   pencil renders only in :edit mode AND with this true
+  # @param can_rename [Boolean] FrameworkPolicy#rename? for the viewer; the
+  #   frame owns the mode gate (like its sibling frames), so pass the raw flag
   # @param error [String, nil] a rejected inline save (Hard-Won Lesson 26 — the
   #   422 must carry the frame, the message, and the attempted text)
   # @param attempted_value [String, nil] the value the rejected save carried
@@ -59,7 +56,8 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   end
 
   def heading
-    h1(class: HEADING_CLASSES, title: @name) { @name }
+    h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold text-gray-900 dark:text-white",
+       title: @name) { @name }
   end
 
   # The heading keeps its width (the shared editor pins the form to the host's
@@ -69,7 +67,9 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   def editable
     div(class: "flex min-w-0 max-w-full flex-col items-start gap-1",
         data: hover_cluster_data("hdr").merge(editor_data)) do
-      div(class: "flex min-w-0 max-w-full items-center gap-2", data: { editor_display: true }) do
+      # Pencil hugs the text (phlex-views.md, inline-edit affordances); centred
+      # rather than top-aligned because a 2xl heading is far taller than the glyph.
+      div(class: "flex min-w-0 max-w-full items-center gap-1", data: { editor_display: true }) do
         heading
         render_inline_editor_pencil(aria_label: "Edit framework name", scope: "hdr", collapses: false)
       end

@@ -7,12 +7,9 @@ require "application_system_test_case"
 # live, with no pending decoration — but gated narrower: tenant admin or
 # framework OWNER. An editor sees the heading with no pencil.
 class Frameworks::FrameworkRenameSystemTest < ApplicationSystemTestCase
-  DESKTOP_SIZE = [ 1400, 1400 ].freeze
-  MOBILE_SIZE  = [ 375, 812 ].freeze
-
+  # DESKTOP_SIZE / MOBILE_SIZE and the desktop reset in setup come from
+  # ApplicationSystemTestCase.
   setup do
-    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
-
     @tenant = FactoryBot.create(:tenant)
     @owner_user = FactoryBot.create(:user, password: "password123")
     @editor_user = FactoryBot.create(:user, password: "password123")

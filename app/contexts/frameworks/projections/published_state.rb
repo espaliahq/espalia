@@ -358,8 +358,10 @@ class Frameworks::Projections::PublishedState
   # Not in skip_during_rebuild?: the publish-time rebuild keeps the Framework
   # row (only its children are destroyed), and re-applying the rename to it is
   # an idempotent update, so replaying it is harmless and keeps the rule simple.
+  # Unguarded like the versioning handlers — a missing row here is a corrupted
+  # store, and a silent skip would leave the read model on the OLD name.
   def handle_framework_renamed(event)
-    find_framework(event)&.update!(name: event.data[:name])
+    find_framework(event).update!(name: event.data[:name])
   end
 
   def handle_role_family_added(event)

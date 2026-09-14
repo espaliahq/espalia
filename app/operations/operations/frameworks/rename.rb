@@ -7,9 +7,8 @@
 # framework payloads.
 #
 # A direct edit (not the suggested-edit path), gated by FrameworkPolicy#rename?
-# — tenant admin or framework OWNER. Narrower than the org-structure renames'
-# edit-rights bar because the name is the framework's identity, not content an
-# editor curates. An unchanged name is a no-op (no event, no feed entry).
+# (tenant admin or framework owner — see authorization.md for why that bar).
+# An unchanged name is a no-op (no event, no feed entry).
 #
 # Write — :mcp_client (reversible, changes no permissions).
 class Operations::Frameworks::Rename < Operations::Base
