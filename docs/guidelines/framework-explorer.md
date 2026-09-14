@@ -83,7 +83,8 @@ User toggles role checkbox
 PageLayout
 └── div[data-controller="framework-explorer"]
     ├── framework_header
-    │   ├── back link, framework name, version badge, DraftStatus(:badge) + "Edit mode" badge (edit only)
+    │   ├── back link, FrameworkNameFrame (the h1; rename pencil for admin / owner, edit only),
+    │   │   version badge, DraftStatus(:badge) + "Edit mode" badge (edit only)
     │   └── right cluster: edit-suggest toggle + mode switcher + DraftStatus(:publish) + settings link
     ├── stats_bar (role count toggle, levels, capabilities; "+ Add category" + Activity toggle w/ PendingCountBadge — edit only)
     ├── FieldEditorTemplate (edit only — the ONE inline-edit <form>, inert in a <template>)
@@ -719,6 +720,24 @@ a ghost role contributes no columns in view mode.
   per-role `level_id` in each `role_codes` entry so the editor targets one
   specific level. The inline pencils are **rename-only** — code / track / the
   entry flag are edited via the role-row kebab's dialogs (see §11).
+- **Framework rename** — the header's `<h1>` is a `FrameworkNameFrame` with the
+  same hover-pencil inline editor (#405). The same *shape* as the org-structure
+  renames — a direct, shape-preserving edit that PATCHes a thin controller
+  (`Frameworks::NamesController`, `PATCH /frameworks/:id/name`) dispatching
+  `Operations::Frameworks::Rename` (web + MCP `frameworks_rename`), applied
+  live with no draft — but a **narrower bar**: `FrameworkPolicy#rename?` is
+  tenant admin **or framework owner**, because the name is the framework's
+  identity across the index, cycles, assessments and MCP payloads, not content
+  an editor curates. The controller threads `can_rename` and the pencil renders
+  only in edit mode with it; everyone else (and view mode) gets the plain
+  heading. The editor host is a `<div>` around the `<h1>`, not the heading —
+  the shared editor appends its `<form>` to the host and a form isn't phrasing
+  content. Unlike the org-structure controllers, a rejected save answers **422
+  with the frame** (message + attempted value, Lesson 26). The aggregate
+  no-ops on an unchanged name (no event, no feed entry) and strips whitespace.
+  The `<title>` catches up on the next full navigation. Feed:
+  `framework_renamed` ("Renamed the framework to “…”", edits group,
+  framework-level anchor).
 - **Role-family edit dialog** — a hover "edit" trigger on each family row opens
   the shared `RoleFamilyEditModal` (name + description + **department**),
   *alongside* the inline name pencil (kept for quick renames). Gated on
@@ -2413,7 +2432,8 @@ the first content type; the feed covers the **whole framework lifecycle**.
 > issues the request; a live broadcast reload resets to the most-recent batch.
 > Role-family / role / **level adds** now surface too (structural group,
 > framework-level anchor; the level entry names its role — "Added L4 to EM ·
-> Engineering Manager"). Collaborator entries name the person they concern
+> Engineering Manager"), as does the **framework rename** (`framework_renamed`,
+> edits group, framework-level anchor, naming the new name). Collaborator entries name the person they concern
 > ("Added Cora Puddleduck as editor" — `collaborator_name` resolved from the
 > event's person_id, falling back to the anonymous phrasing for unresolvable
 > history). Illustration entries — suggestions AND direct edits — locate their
@@ -2509,6 +2529,7 @@ line (§9).
 | `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
 | `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame. The per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows need `mode == :edit` **and** `can_edit_structure`; `RoleFamilyNameFrame` / `RoleNameFrame` (inline rename) currently follow `mode` alone — a **known divergence** from the `edit_structure?` policy bar those PATCHes enforce, so a suggest-only viewer is shown pencils their save will be refused (#401). Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
+| `app/views/frameworks/explorer/framework_name_frame.rb` | The header `<h1>` + edit-mode inline rename editor for an admin / owner (`can_rename`; direct edit, no suggestion path; 422-with-frame on a rejected save) |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
 | `app/views/frameworks/explorer/add_role_modal.rb` | Shared role modal — `:new` ("+ Add role" trigger, family implied, POST → `AddRole`) or `:edit` (role-row kebab, PATCH via id template → `UpdateRole`) |
@@ -2624,6 +2645,7 @@ line (§9).
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
+| `app/controllers/frameworks/names_controller.rb` | `PATCH /frameworks/:framework_id/name` — rename the framework from the header pencil → `Operations::Frameworks::Rename`; re-renders the name frame (422 + frame + attempted value on a rejected save). Direct edit, admin / owner only |
 | `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` answers the write-response contract — the `level-editor` frame from the levels editor, else toast + draft-status streams, with `add-level-form` firing `org-structure:updated` because a level adds a column, §11b). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
@@ -2643,11 +2665,12 @@ line (§9).
 | `app/operations/operations/frameworks/reorder_categories.rb` | Shared web + MCP operation — reorder the active capability categories (complete-list, permutation-validated, shape-preserving). |
 | `app/operations/operations/frameworks/reorder_capabilities.rb` | Shared web + MCP operation — reorder one category's capabilities (graph-validated so draft-added ones are included; shape-preserving). |
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
+| `app/operations/operations/frameworks/rename.rb` | Shared web + MCP operation — rename the framework (shape-preserving, live; tenant admin or owner via `FrameworkPolicy#rename?`; blank rejected at the boundary, unchanged is a no-op). |
 | `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code + entry flag for MCP). `update_level` takes `is_entry` as a `:boolean` parameter (`false` counts as supplied) under `requires_any_of :title, :code, :is_entry`. |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
 | `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state (error + Retry in place of a stuck "Loading…" or Turbo's "Content missing") — self-binds its five listeners in `connect()`; on the explorer it rides the binding-/level-editor modal bodies (audit issue #365) |
 | `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — message built from `subject:` + `closeable:`, Retry, and a Close for modals |
-| `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` / `update_role_family?` / `update_role?` / `update_level?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) |
+| `app/policies/framework_policy.rb` | `edit?` (suggest bar, edit route) · `edit_structure?` / `add_capability?` / `add_category?` / `archive_capability?` / `update_role_family?` / `update_role?` / `update_level?` (edit-rights bar) · `publish?` / `define_migration_mapping?` (publish bar) · `rename?` (admin / owner — the manage-collaborators bar) |
 | `app/controllers/concerns/framework_edit_mode.rb` | Reads the `framework_edit_mode` cookie → `:editing` or `:suggesting` |
 | `app/operations/operations/frameworks/suggest_edit.rb` | Shared web + MCP operation — framework content edits (capability/category name + description, expectation + illustration text): authority-aware auto-approve in editing mode, pending suggestion otherwise; amends the author's pending edit on a field (→ `SuggestionAmended`) instead of stacking consecutive duplicates |
 | `app/operations/operations/frameworks/{suggest_create,suggest_delete}.rb` | Shared web + MCP operations — the explicit "propose a change" endpoints (`SuggestCreate` defaults to pending, editing mode auto-applies with authority; `SuggestDelete` is always pending — the archive tools own direct-apply) |
@@ -2664,6 +2687,7 @@ line (§9).
 | `test/system/frameworks/write_response_system_test.rb` | The write-response contract (§11b) — a `window` marker proves no write reloads the page; toast, in-place insert/reorder, the archive modal, both viewports |
 | `test/support/explorer_write_stream_assertions.rb` | `assert_write_toast` / `assert_turbo_stream_action` / `assert_no_navigation` for the controller tests |
 | `test/components/kit/icon_sprite_test.rb` | Sprite symbols + the `icon` helper's `<use>` output |
+| `test/system/frameworks/framework_rename_system_test.rb` | Header rename — owner renames at both viewports and sees the index follow, blank name keeps the typed text behind an inline error, editor and view mode get no pencil |
 | `test/system/frameworks/inline_editor_system_test.rb` | Shared editor — keyboard, Save vs Propose per role, surfaced save errors, unsaved-change guard, no table reflow (both viewports) |
 | `test/system/frameworks/explorer_context_pane_test.rb` | Focus context system tests (edit mode) |
 | `test/system/frameworks/suggestion_thread_system_test.rb` | Suggestion card + thread system tests (pane + detail page) |
