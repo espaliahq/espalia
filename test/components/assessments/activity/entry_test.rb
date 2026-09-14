@@ -77,4 +77,11 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Ada withdrew feedback on Critical Thinking · L2"
     end
   end
+
+  context "self_rated" do
+    should "label the lowest rating Not yet on the secondary line" do
+      html = render_entry(kind: "self_rated", payload: { frequency: "none" })
+      assert_includes html, "Not yet"
+    end
+  end
 end

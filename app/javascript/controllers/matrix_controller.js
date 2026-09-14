@@ -1862,7 +1862,7 @@ export default class extends BaseController {
     if (!this.hasColTarget) return
 
     // Pick widths in pixels. Focused col widens to 32rem; siblings keep
-    // the default 240px so the FrequencySelector's four buttons still
+    // the default 240px so the rating control still
     // fit on a single row in non-focused cells. The fix is "additive":
     // focused gets wider, siblings stay the same width they had before
     // any cell was focused.
@@ -1894,7 +1894,7 @@ export default class extends BaseController {
       if (levelOrdinal == null) {
         // Default state: clear inline overrides so Tailwind's `w-full`
         // and the browser's default `table-layout: auto` drive sizing.
-        // Auto-layout uses the FrequencySelector's intrinsic width as
+        // Auto-layout uses the rating control's intrinsic width as
         // each column's min, so cells stay wide enough for the rating
         // buttons regardless of how many levels the role has.
         table.style.width = ""
@@ -1918,7 +1918,7 @@ export default class extends BaseController {
     // ordinal differs from the focused one — column-wide, regardless of
     // capability — because col widths are global to the column and all
     // cells in shrunken columns share the same density tweaks (see
-    // FrequencySelector wrap behaviour).
+    // rating-control wrap behaviour).
     //
     // `data-focused="true"` is narrower: it lands ONLY on cells that
     // match BOTH the focused level ordinal AND the focused capability.
