@@ -89,6 +89,34 @@ class Operations::Frameworks::DefineMigrationMappingsTest < ActiveSupport::TestC
       end
     end
 
+    should "edit the existing mapping for a capability when the mapping_id is omitted" do
+      ActsAsTenant.with_tenant(@tenant) do
+        save([ { from_stable_id: @legacy, mapping_type: "evolved", to_stable_id: @survivor } ])
+        mapping_id = mappings.first.mapping_id
+
+        result = save([ { from_stable_id: @legacy, mapping_type: "archived" } ])
+
+        assert_equal 1, result[:saved]
+        assert_equal [ mapping_id ], mappings.pluck(:mapping_id), "no duplicate row"
+        assert_equal "archived", mappings.first.mapping_type
+
+        assert_equal 1, save([ { from_stable_id: @legacy, mapping_type: "archived" } ])[:skipped]
+      end
+    end
+
+    should "refuse a mapping_id that belongs to a different capability" do
+      ActsAsTenant.with_tenant(@tenant) do
+        save([ { from_stable_id: @legacy, mapping_type: "archived" } ])
+        mapping_id = mappings.first.mapping_id
+
+        error = assert_raises(Operations::Base::ParameterError) do
+          save([ { from_stable_id: @tools, mapping_type: "archived", mapping_id: mapping_id } ])
+        end
+        assert_match(/different capability/, error.message)
+        assert_equal [ @legacy ], mappings.pluck(:from_stable_id)
+      end
+    end
+
     should "refuse the whole batch when a row breaks a rule, saving nothing" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do

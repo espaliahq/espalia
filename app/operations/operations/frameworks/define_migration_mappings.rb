@@ -75,6 +75,9 @@ class Operations::Frameworks::DefineMigrationMappings < Operations::Base
 
   def validate_row!(row)
     raise ParameterError, "each mapping needs a from_stable_id" if row[:from_stable_id].blank?
+    if row[:mapping_id].present? && (owner = persisted_by_id[row[:mapping_id]]) && owner.from_stable_id != row[:from_stable_id]
+      raise ParameterError, "mapping_id #{row[:mapping_id]} belongs to a different capability"
+    end
     return if undecided?(row)
 
     unless SINGLE::MAPPING_TYPES.include?(row[:mapping_type])
@@ -95,16 +98,23 @@ class Operations::Frameworks::DefineMigrationMappings < Operations::Base
   def incomplete?(row) = survivor_required?(row) && row[:to_stable_id].blank?
 
   def unchanged?(row)
-    existing = row[:mapping_id].present? && persisted[row[:mapping_id]]
+    existing = existing_for(row)
     existing.present? &&
       existing.mapping_type == row[:mapping_type] &&
       existing.to_stable_id == row[:to_stable_id].presence
   end
 
+  # The persisted mapping this row edits: by mapping_id when given, else the
+  # one already recorded for the same retiring capability — a retiring
+  # capability has one mapping, so an omitted id must edit, not duplicate.
+  def existing_for(row)
+    (row[:mapping_id].present? && persisted_by_id[row[:mapping_id]]) || persisted_by_source[row[:from_stable_id]]
+  end
+
   def define(row)
     Frameworks::CommandHandler.new.define_migration_mapping(
       framework.framework_id,
-      row[:mapping_id].presence || SecureRandom.uuid_v7,
+      existing_for(row)&.mapping_id || SecureRandom.uuid_v7,
       row[:from_stable_id],
       row[:to_stable_id].presence,
       row[:mapping_type],
@@ -114,8 +124,12 @@ class Operations::Frameworks::DefineMigrationMappings < Operations::Base
   end
 
   def persisted
-    @persisted ||= FrameworkState::MigrationMapping.for_draft(framework).index_by(&:mapping_id)
+    @persisted ||= FrameworkState::MigrationMapping.for_draft(framework).to_a
   end
+
+  def persisted_by_id = @persisted_by_id ||= persisted.index_by(&:mapping_id)
+
+  def persisted_by_source = @persisted_by_source ||= persisted.index_by(&:from_stable_id)
 
   # Retiring capabilities pre-date the draft, so their names are in the
   # published read model.
