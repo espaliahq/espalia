@@ -138,7 +138,7 @@ class Frameworks::ExplorerGraphBuilder
       .sort_by { |(_cid, data), index| [ data[:ordinal] || Float::INFINITY, index ] }
       .map do |(cap_id, data), _index|
         status = data[:status]
-        pending_archive = pending_archive?(data)
+        pending_archive = pending_archive?(cap_id, data)
         # Keep the published-world status for view-mode consumers — a
         # capability archived inside an open draft is still "active" from
         # the published view's perspective until publish rebuilds.
@@ -159,13 +159,15 @@ class Frameworks::ExplorerGraphBuilder
       end
   end
 
-  def pending_archive?(capability_data)
+  # Archived inside the CURRENT draft, and pre-existing it. A capability
+  # archived in an earlier version is plain archived (it must not resurface,
+  # struck through, in every later draft); one created and archived within
+  # the same draft is not visible in the published view at all.
+  def pending_archive?(capability_id, capability_data)
     return false unless @aggregate.draft_in_progress
     return false unless capability_data[:status] == :archived
+    return false unless @aggregate.draft_archived_capability_ids.include?(capability_id)
 
-    # Archived inside the current draft is only "pending" if the capability
-    # pre-existed the draft — otherwise it's just a create-then-archive and
-    # isn't visible in the published view at all.
     !@aggregate.added_during_draft.include?(capability_data[:stable_id])
   end
 

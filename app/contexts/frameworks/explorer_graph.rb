@@ -17,7 +17,9 @@ module Frameworks::ExplorerGraph
   # backwards-incompatible way. Lazy rebuild on mismatch makes the bump a
   # zero-downtime operation; running `rebuild_all!` as a deploy step
   # refreshes all rows.
-  FORMAT_VERSION = 1
+  # 2: pending_archive derives from the draft's own archives, not from every
+  #    archived capability (stored snapshots re-derive it on next load).
+  FORMAT_VERSION = 2
 
   module_function
 
