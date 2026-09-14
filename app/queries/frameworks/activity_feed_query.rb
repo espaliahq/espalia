@@ -40,13 +40,14 @@ class Frameworks::ActivityFeedQuery
   PROPOSAL_KINDS = %w[suggestion_edit suggestion_create suggestion_delete suggestion_amended].freeze
 
   # Event class → feed kind string. Drives both which events become feed
-  # entries and the kind the view renders. Events not in this map (e.g.
-  # FrameworkCreated, ScoringThresholdsConfigured) are deliberately out of
-  # scope; org-structure *renames* (RoleFamilyUpdated / RoleUpdated /
-  # LevelUpdated), *adds* (RoleFamilyAdded / RoleAdded / LevelAdded) and
-  # *reorders* (RoleIllustrationReordered / CapabilityCategoryReordered /
-  # CapabilityReordered) are covered.
+  # entries and the kind the view renders. FrameworkCreated and
+  # ScoringThresholdsConfigured are deliberately out of scope; the framework
+  # *rename* (FrameworkRenamed), org-structure *renames* (RoleFamilyUpdated /
+  # RoleUpdated / LevelUpdated), *adds* (RoleFamilyAdded / RoleAdded /
+  # LevelAdded) and *reorders* (RoleIllustrationReordered /
+  # CapabilityCategoryReordered / CapabilityReordered) are covered.
   KINDS = {
+    Frameworks::Events::FrameworkRenamed           => "framework_renamed",
     Frameworks::Events::EditSuggested              => "suggestion_edit",
     Frameworks::Events::EntityCreationSuggested    => "suggestion_create",
     Frameworks::Events::EntityDeletionSuggested    => "suggestion_delete",
@@ -463,9 +464,9 @@ class Frameworks::ActivityFeedQuery
     when "illustration_updated", "illustration_removed"
       from_capability(expectation_to_capability[illustration_to_expectation[data[:illustration_id]]])
     else
-      # draft_opened, version_published, migration_mapping_defined,
-      # collaborator_*, category_reordered (touches every category) —
-      # framework-level, no matrix anchor.
+      # framework_renamed, draft_opened, version_published,
+      # migration_mapping_defined, collaborator_*, category_reordered (touches
+      # every category) — framework-level, no matrix anchor.
       empty_anchor
     end
   end

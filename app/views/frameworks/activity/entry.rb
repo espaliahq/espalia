@@ -44,6 +44,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_updated"      => "bg-indigo-500",
     "illustration_removed"      => "bg-gray-400",
     "illustration_reordered"    => "bg-indigo-500",
+    "framework_renamed"         => "bg-indigo-500",
     "role_family_updated"       => "bg-indigo-500",
     "role_updated"              => "bg-indigo-500",
     "level_updated"             => "bg-indigo-500",
@@ -77,6 +78,10 @@ class Views::Frameworks::Activity::Entry < Views::Base
     "illustration_updated"      => "edits",
     "illustration_removed"      => "edits",
     "illustration_reordered"    => "edits",
+    # A framework rename is the same class of action as the org-structure
+    # renames (a framework-level anchor in the edits group), not a lifecycle
+    # transition like draft / publish / migration.
+    "framework_renamed"         => "edits",
     "role_family_updated"       => "edits",
     "role_updated"              => "edits",
     "level_updated"             => "edits",
@@ -377,6 +382,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "illustration_updated" then "Updated an illustration"
     when "illustration_removed" then "Removed an illustration"
     when "illustration_reordered" then illustration_reordered_summary
+    when "framework_renamed"   then "Renamed the framework to \u201C#{payload_value(:name)}\u201D"
     when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
     when "role_updated"        then org_update_summary("role", name: "name", code: "code", track: "track")
     when "level_updated"       then org_update_summary("level", title: "title", code: "code")
