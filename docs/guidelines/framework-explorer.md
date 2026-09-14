@@ -604,25 +604,36 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   validated before the version is cut, and is the ONE edit-mode action that
   stays a full navigation. Both are `DraftStatus` slots with stable ids, so a
   shape-changing write streams them (§11b). (Draft lifecycle: see ADR-16/17.)
-  - **Publishing runs in the background.** Confirming on the review page
-    records a `FrameworkPublication` and enqueues `Frameworks::PublishVersionJob`
-    (the per-person migration of ratings/evidence/comments does not fit a web
-    request). While a row is queued/running the Publish slot renders a
-    **disabled "Publishing vN…" button** (`DraftStatus publishing: true`,
-    read from `FrameworkPublication.in_flight_for?` by the controller — never
-    by the view) and the review page's confirm is disabled too; a second POST
-    is refused by the partial unique index, not just the UI. The requester gets
-    a `framework_published` notification with the outcome, and a success
-    broadcasts both `DraftStatus` slots empty over the `framework_activity`
-    stream so an open explorer drops the pill and button. The review page also
-    shows the last attempt's failure message for this draft.
+  - **Publishing runs in the background.** `Operations::Frameworks::PublishVersion`
+    now *requests* a publish: it checks the ADR-17 gate, records a
+    `FrameworkPublication` and enqueues `Frameworks::PublishVersionJob` (the
+    per-person migration of ratings/evidence/comments does not fit a web
+    request). The review page's confirm and an MCP agent's in-app approval
+    both dispatch that one operation, so they share the lock. While a row is
+    unfinished the Publish slot renders a **disabled "Publishing vN…" button**
+    (`DraftStatus publishing: true`, read from
+    `FrameworkPublication.in_flight_for?` by the controller — never by the
+    view) and the review page's confirm is disabled too; a second request is
+    refused by the partial unique index (`finished_at IS NULL`), not just the
+    UI, and a row abandoned by a dead worker is reaped after
+    `FrameworkPublication::STALE_AFTER`. The requester gets a
+    `framework_published` notification with the outcome. The
+    `FrameworkVersionPublished` event's projection broadcasts both
+    `DraftStatus` slots empty over the `framework_activity` stream
+    (`broadcast_draft_status_cleared`), so an open explorer drops the pill and
+    button whoever published. The review page shows the last attempt's failure
+    message for this draft. Edits made to the draft between the request and
+    the job running are published with it — the job re-checks the gate, so a
+    newly retired capability without a mapping fails the publish and says so.
   - **Publish-review mappings are ONE form.** Every retiring capability's row
     (type + survivor) posts together to `MigrationMappingsController#create`
-    as `migration_mappings[<i>][…]`; unchanged rows emit no event, rows still
-    missing a survivor are left unsaved and named in the flash. The per-row
-    "Save mapping" it replaced reloaded the page and dropped the other rows'
-    unsaved selections (#399). Each row is its own `mapping-form` Stimulus
-    scope (a `div`, not a `form`) so the survivor toggle stays per row.
+    as `migration_mappings[<i>][…]` → `Operations::Frameworks::DefineMigrationMappings`,
+    one atomic write (`CommandHandler#batch`): unchanged rows emit no event,
+    an undecided row (blank type) is left alone, rows still missing a survivor
+    are left unsaved and named in the flash. The per-row "Save mapping" it
+    replaced reloaded the page and dropped the other rows' unsaved selections
+    (#399). Each row is its own `mapping-form` Stimulus scope (a `div`, not a
+    `form`) so the survivor toggle stays per row.
 - **"+ Add role family" / "+ Add role"** — in the left role tree (edit +
   `can_edit_structure`): "+ Add role family" at the tree foot, "+ Add role" at
   the foot of each family's role list (the parent is implied by placement — no
@@ -2539,7 +2550,7 @@ line (§9).
 | `app/views/frameworks/explorer/archive_category_modal.rb` | Shared archive-category modal (confirm + optional reason; no migration mapping) — opened by the header kebab |
 | `app/views/frameworks/explorer/binding_editor_modal.rb` | Shared "Edit roles" modal (embedded) — body is the `binding-editor` Turbo Frame; opened by the row kebab. Same `frame-error` + `Kit::FrameLoadError` wiring as the level-editor modal (audit issue #365) — the frame-failure machinery is documented in [assessments.md](assessments.md)'s Stimulus controllers table, where it was extracted from the evidence modal |
 | `app/views/frameworks/explorer/binding_editor_frame.rb` | Binding-editor frame body — lists role bindings (weight + Remove) + add-role form; re-renders in place on each action |
-| `app/views/frameworks/publication_review_view.rb` | Publish-review page — validate/override migration mappings, then cut the version |
+| `app/views/frameworks/publication_review_view.rb` | Publish-review page — one form for every retiring capability's mapping, the latest publish request's state, and the confirm that requests the background publish |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
 | `app/views/frameworks/explorer/concerns/menu_items.rb` | The grid's kebab triggers — `render_menu_trigger` + `approval_menu_data`; the menu itself is built client-side (§11a, #380) |
@@ -2620,8 +2631,12 @@ line (§9).
 | `app/controllers/frameworks/capability_reorders_controller.rb` | Move a capability before/after a movable sibling in its category (POST → `ReorderCapabilities`; graph-resolved, toast stream → `reorder-move` moves the row pair in place — §11b) |
 | `app/javascript/controllers/reorder_move_controller.js` | Single-move POST menu item — renders the response's toast stream, then moves the capability's row pair / the category's `<tbody>` in place (§11b); mounts on the open menu, not on the grid |
 | `app/javascript/controllers/reorder_list_controller.js` | Move up/down within a list — POSTs the neighbour-relative move, repositions the item's node on success (the illustrations `<ul>` keeps the mount; the buttons are menu items) |
-| `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`) + publish the draft (`create` → `PublishVersion`) |
-| `app/controllers/frameworks/migration_mappings_controller.rb` | Define/override a migration mapping on the publish-review page (POST → `DefineMigrationMapping`) |
+| `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`, via `Frameworks::RetiringCapabilitiesQuery`) + request the publish (`create` → `PublishVersion`, which records a `FrameworkPublication` and enqueues the job) |
+| `app/controllers/frameworks/migration_mappings_controller.rb` | Save every migration mapping on the publish-review page in one submit (POST → `DefineMigrationMappings`) |
+| `app/operations/operations/frameworks/define_migration_mappings.rb` | Batch mapping save shared by the review page and MCP — triages unchanged / undecided / incomplete rows, writes the rest atomically |
+| `app/queries/frameworks/retiring_capabilities_query.rb` | Retiring capabilities + their mappings from the edit-mode graph — the review page's rows and the publish request's gate |
+| `app/models/framework_publication.rb` | A publish request and its outcome; one unfinished row per framework holds the in-flight lock |
+| `app/jobs/frameworks/publish_version_job.rb` | Runs the publish as the requester, records the outcome, notifies them (`FrameworkPublishedNotifier`) |
 | `app/operations/operations/frameworks/{add_capability,add_category,archive_capability,archive_category,archive_illustration,define_migration_mapping,publish_version}.rb` | Shared web + MCP operations for structural edits / publish (§11). `archive_capability`/`archive_illustration` are toggle+authority-driven (direct vs suggestion). |
 | `app/operations/operations/frameworks/{add,update,remove}_capability_role_binding.rb` | Shared web + MCP binding operations — add/remove (shape-changing, draft) and weight/tolerance update (shape-preserving). |
 | `app/operations/operations/frameworks/reorder_illustrations.rb` | Shared web + MCP operation — reorder one expectation × role's illustrations (complete-list, permutation-validated, shape-preserving). |
