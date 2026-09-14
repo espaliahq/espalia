@@ -707,7 +707,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   context "scroll stability on rating" do
     should "not jump scroll position when a rating is submitted" do
       # ?capability= focuses the third (Execution) card so the
-      # expansion panel renders the FrequencySelector buttons.
+      # expansion panel renders the rating pill.
       visit assessment_path(@assignment, capability: @cap3_stable)
       assert_selector "#scoring-panel"
 
@@ -1031,10 +1031,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "rate a capability and see scoring update" do
       # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level (level 2 here).
+      # rating pill for the person's level (level 2 here).
       visit assessment_path(@assignment, capability: @cap1_stable)
 
-      # The expansion panel shows the FrequencySelector for the person's level.
       # Person is at level 2, so rating-#{stable}-2 is in the expansion panel.
       click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
 
@@ -1097,7 +1096,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     should "update capability contribution when rating a frequency" do
       # ?capability= focuses the card so the expansion panel renders the
-      # FrequencySelector for the person's level (level 2 here).
+      # rating pill for the person's level (level 2 here).
       visit assessment_path(@assignment, capability: @cap1_stable)
       assert_selector "#scoring-panel"
 
@@ -1398,6 +1397,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       within("#assessment-status-pill") do
         assert_text "Assessment Complete"
         assert_no_text "In Progress"
+      end
+    end
+  end
+
+  context "the lowest rating" do
+    # "Not yet", never "None"/"Never" (issue #391) — on the popover option,
+    # the pill, the chip's accessible name and the live-status announcement.
+    # Both viewports: the pill sits in the expectation sentence, which wraps
+    # differently at 375px.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+      should "read Not yet on every surface (#{name})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+        # The helper itself asserts the popover option and the pill trigger
+        # both read "Not yet"; what's left is the chip's accessible name and
+        # the announcement.
+        click_rating_frequency("#rating-#{@cap1_stable}-2", "Not yet")
+
+        # Composed after "rated", a bare "not yet" would read as "not yet
+        # rated" — the opposite state — so both carry the spoken form.
+        assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet demonstrated']"
+        assert_selector "#assessment-live-status",
+          text: "Rated not yet demonstrated — Critical Thinking, E2", visible: :all
       end
     end
   end

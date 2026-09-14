@@ -69,13 +69,6 @@ class Views::Assessments::Activity::Entry < Views::Base
     "reporting_manager_recorded" => "authority"
   }.freeze
 
-  FREQUENCY_LABEL = {
-    "none"        => "None",
-    "some"        => "Some",
-    "occasional"  => "Most",
-    "consistent"  => "Consistently"
-  }.freeze
-
   # @param entry [Assessments::ActivityFeedQuery::Entry]
   def initialize(entry:)
     @entry = entry
@@ -410,9 +403,12 @@ class Views::Assessments::Activity::Entry < Views::Base
     prev_label ? "#{new_label} (was #{prev_label})" : new_label
   end
 
+  # Compact label from the ONE frequency vocabulary (FrequencyPalette), so
+  # the feed can't drift from the pill. `config_for` rather than `label_for`:
+  # a cleared rating has no frequency and must stay nil, not "Unrated".
   def frequency_label
     freq = payload_value(:frequency) || payload_value(:aligned_frequency)
-    FREQUENCY_LABEL[freq] || freq
+    Views::Assessments::FrequencyPalette.config_for(freq)&.dig(:label) || freq
   end
 
   def payload_value(key)

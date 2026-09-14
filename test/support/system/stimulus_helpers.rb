@@ -834,7 +834,7 @@ module StimulusHelpers
 
   # Picks a frequency on the inline pill (open popover → click option).
   # Substring match — callers pass "Some" / "Most" / "Consistently" /
-  # "Never" and we find the popover option whose phrase contains it.
+  # "Not yet" and we find the popover option whose phrase contains it.
   # Falls back to a synchronous form.requestSubmit if the Capybara
   # pointer click is silently dropped on a starved CI runner.
   #

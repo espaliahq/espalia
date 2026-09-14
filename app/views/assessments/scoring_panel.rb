@@ -4,7 +4,6 @@
 #
 # Multi-perspective display: shows the primary perspective's score prominently
 # with compact secondary bars for other perspectives (self, manager, agreed).
-# Mirrors the visual language of AssessmentCell's FrequencyBar for consistency.
 #
 # Three-tier performance signal:
 # 1. Below expectations (< meeting_expectation_threshold) — performance concern
@@ -111,7 +110,7 @@ class Views::Assessments::ScoringPanel < Views::Base
   end
 
   # Compact bar showing a secondary perspective's performance ratio.
-  # Mirrors FrequencyBar visual pattern: label, colored strip, percentage.
+  # Label, colored strip, percentage.
   #
   # @param label [String] "Self", "Mgr", or "Agreed"
   # @param scoring [Hash] scoring output for the perspective

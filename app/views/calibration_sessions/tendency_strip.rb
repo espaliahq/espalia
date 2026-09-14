@@ -172,7 +172,9 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     total = counts.values.sum
     return span(class: "text-gray-600 dark:text-gray-300") { "—" } if total.zero?
 
-    summary = CONFIG.map { |freq, config| "#{config[:label]} #{counts[freq]}" }.join(", ")
+    # Count first: "3 Not yet" reads as three ratings of Not yet, where
+    # "Not yet 3" reads as not-yet-three.
+    summary = CONFIG.map { |freq, config| "#{counts[freq]} #{config[:label]}" }.join(", ")
     div(class: "flex items-center gap-2") do
       div(class: "flex h-2.5 w-28 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800",
           role: "img", aria: { label: "Rating distribution: #{summary}" }, title: summary) do

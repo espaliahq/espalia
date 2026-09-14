@@ -227,7 +227,7 @@ Each capability gets its own bordered card inside its category section:
 │ ── Expansion panel for the focused level ────────────────│
 │   E3 · Senior Software Engineer                            │
 │   Expectation text for E3 …                                │
-│   [None] [Some] [Most] [Consistently]                      │
+│   Demonstrates: [Not yet ▾]   ○ Self rating: Some of the time│
 │   EXAMPLES (illustrations for this level)                  │
 │   EVIDENCE  +                                              │
 │   COMMENTS  +                                              │
@@ -360,10 +360,12 @@ The four rating values share a single palette across every surface — inline pi
 
 | Enum | Sentence phrase | Compact label | Hue |
 |------|----|----|----|
-| `none` | Never | None | red |
+| `none` | Not yet | Not yet | red |
 | `some` | Some of the time | Some | yellow |
 | `occasional` | Most of the time | Most | green |
 | `consistent` | Consistently | Consistently | blue |
+
+The bottom of the scale reads **"Not yet"** on every surface — never "None" or "Never". "None" reads as a verdict ("you never do this") and discourages honest self-rating on a capability a person is still growing into; "Not yet" scores identically but frames the lowest rating as a starting point. Same split as the Feedback / Evidence relabel above: the domain value `none` (events, commands, read models, DB columns, the MCP `frequency` enum) is untouched. The pill, the divergence line and the activity feed all show those two words. Sentences that **compose** the phrase after a verb are the one exception: "rated not yet" means the opposite of what it says, so the chip's accessible name and the live-status announcement use the palette's `spoken` form — "rated not yet demonstrated" (`FrequencyPalette.spoken_for`). Same rule for the calibration distribution summary, which puts the count first ("3 Not yet", not "Not yet 3").
 
 Ordering is carried by **chip position** (E1…E8 left→right) and the **text label**, NOT by a single-axis colour gradient — so blue marking the top "Consistently" tier reads as a distinct band rather than "even greener than green". The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"); the compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
 
@@ -391,7 +393,7 @@ A divergent secondary perspective renders as a single line below the pill:
 ○ Self rated: some of the time
 ```
 
-— a coloured dot from the same palette plus a sentence. Replaces the previous `FrequencyBar` (filled progress bar that duplicated the text label).
+— a coloured dot from the same palette plus a sentence. Replaces the filled progress bar that used to duplicate the text label.
 
 **Rendering rules:**
 - Only perspectives the viewer is permitted to see appear. `MatrixDataBuilder` scrubs manager + aligned frequencies when `context == :self`, so a self-viewer never even receives the data.
@@ -887,7 +889,6 @@ only the actor hears their own confirmation.
 | `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=` for focus; accumulating `levels[<stable_id>]` map for per-capability rendered level), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
 | `category_nav_controller.js` | Publishes `--sticky-header-h` via `getBoundingClientRect().height` + `Math.ceil` + `ResizeObserver`. Smooth-scrolls to category sections on chip click. Updates the active chip on scroll (suppressed for 900ms after a chip click — see *Category navigation*). |
 | `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param merge before reload. |
-| `frequency_selector_controller.js` | Optimistic UI on rating button click. Form action lives in the view, not the controller. |
 | `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. |
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
@@ -1158,8 +1159,6 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/views/assessments/frequency_palette.rb` | Shared 4-state colour palette + sentence phrases for pill / chip / dot |
 | `app/views/assessments/frequency_pill.rb` | Inline rating pill (interactive popover or static coloured span) |
 | `app/views/assessments/secondary_rating_line.rb` | Divergent-perspective sentence with a colour-coded dot |
-| `app/views/assessments/frequency_selector.rb` | Four-button rating control (context determines POST endpoint) |
-| `app/views/assessments/frequency_bar.rb` | Read-only secondary rating bar with divergence dot |
 | `app/views/assessments/rating_error.rb` | Rating error flash partial |
 | **Activity feed** | |
 | `app/views/assessments/activity/feed.rb` | Right sidebar — entry list, filter chips, focus mode toggle |
@@ -1197,7 +1196,6 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `app/javascript/controllers/matrix_controller.js` | Chip-click focus, smooth-scroll, URL sync, sibling dimming (shared with framework explorer) |
 | `app/javascript/controllers/category_nav_controller.js` | `--sticky-header-h` publish, chip-click scroll, active-chip detection on scroll |
 | `app/javascript/controllers/assessment_sync_controller.js` | ActionCable sync, self-submit suppression, dual-frame reload, focus-param merge |
-| `app/javascript/controllers/frequency_selector_controller.js` | Optimistic frequency button UI |
 | `app/javascript/controllers/activity_feed_controller.js` | Focus-narrowing on `matrix:focus-changed` |
 | `app/javascript/controllers/continue_assessing_controller.js` | Bottom-line CTA — dispatches focus-unrated event |
 | `app/javascript/controllers/modal_controller.js` | Generic `Kit::Modal` open/close/Esc; opt-in outside-click dismissal (`dismissOnOutsideClick`, default off); dispatches `modal:open` |
