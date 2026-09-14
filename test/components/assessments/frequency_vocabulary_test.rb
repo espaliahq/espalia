@@ -16,6 +16,11 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
       assert_equal "Not yet", Palette.label_for("none")
       assert_equal "Not yet", Palette.phrase_for("none")
     end
+
+    should "compose the none rating after a verb without inverting it" do
+      assert_equal "not yet demonstrated", Palette.spoken_for("none")
+      assert_equal "most of the time", Palette.spoken_for("occasional")
+    end
   end
 
   context "frozen FrequencyPill" do
@@ -30,13 +35,13 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
   end
 
   context "LevelChip" do
-    should "describe a none rating as rated not yet" do
+    should "describe a none rating as rated not yet demonstrated" do
       html = Views::Assessments::LevelChip.new(
         cell_data: { current_frequency: "none" },
         capability_stable_id: SecureRandom.uuid_v7, ordinal: 2, person_level: 2,
         level_code: "E2"
       ).call
-      assert_includes html, "rated not yet"
+      assert_includes html, "rated not yet demonstrated"
     end
   end
 

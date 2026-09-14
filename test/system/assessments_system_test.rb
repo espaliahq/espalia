@@ -1418,9 +1418,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         # the announcement.
         click_rating_frequency("#rating-#{@cap1_stable}-2", "Not yet")
 
-        assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet']"
+        # Composed after "rated", a bare "not yet" would read as "not yet
+        # rated" — the opposite state — so both carry the spoken form.
+        assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet demonstrated']"
         assert_selector "#assessment-live-status",
-          text: "Rated not yet — Critical Thinking, E2", visible: :all
+          text: "Rated not yet demonstrated — Critical Thinking, E2", visible: :all
       end
     end
   end

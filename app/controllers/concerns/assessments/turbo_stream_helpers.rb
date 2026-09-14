@@ -40,8 +40,8 @@ module Assessments::TurboStreamHelpers
     capability_name = ERB::Util.html_escape(cap_data[:capability].name)
     text =
       if frequency.present?
-        phrase = Views::Assessments::FrequencyPalette.phrase_for(frequency)
-        "#{verb} #{phrase.downcase} — #{capability_name}, #{level_code}"
+        spoken = Views::Assessments::FrequencyPalette.spoken_for(frequency)
+        "#{verb} #{spoken} — #{capability_name}, #{level_code}"
       else
         cleared = verb == "Agreed" ? "Agreement" : "Rating"
         "#{cleared} cleared — #{capability_name}, #{level_code}"

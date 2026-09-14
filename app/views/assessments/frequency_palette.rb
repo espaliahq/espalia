@@ -28,7 +28,11 @@
 # `phrase` is the sentence form (pill, secondary line, aria text, the
 # live-status announcement); `label` is the compact form (feed secondary
 # line, calibration distribution summary). They may coincide, as they do
-# for `none` and `consistent`, but nothing depends on it.
+# for `none` and `consistent`, but nothing depends on it. `spoken` is an
+# optional override for sentences that COMPOSE the phrase after a verb
+# ("rated …" in the chip's accessible name, the live-status
+# announcement): "rated not yet" means the opposite of what it says, so
+# `none` composes as "rated not yet demonstrated".
 #
 # - `chip_bg`  — solid fill for the level chip
 # - `pill_bg`  — softer fill for the inline pill (sits next to body text)
@@ -41,6 +45,7 @@ module Views::Assessments::FrequencyPalette
     "none" => {
       label:    "Not yet",
       phrase:   "Not yet",
+      spoken:   "not yet demonstrated",
       chip_bg:  "bg-red-500 dark:bg-red-400",
       chip_carried: "bg-red-300 dark:bg-red-300",
       chip_carried_border: "border-dashed border-red-600 dark:border-red-500",
@@ -117,5 +122,12 @@ module Views::Assessments::FrequencyPalette
   # Compact label for tight spaces ("Most", "Consistently").
   def label_for(frequency)
     config_for(frequency)&.dig(:label) || "Unrated"
+  end
+
+  # Lowercase form for composing after a verb ("rated most of the time",
+  # "rated not yet demonstrated"). Falls back to the phrase, so only a
+  # rating whose phrase misreads after "rated" needs a `spoken` entry.
+  def spoken_for(frequency)
+    config_for(frequency)&.dig(:spoken) || phrase_for(frequency).downcase
   end
 end

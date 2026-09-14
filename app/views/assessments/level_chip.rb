@@ -192,7 +192,7 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def humanise_frequency(freq)
-    Views::Assessments::FrequencyPalette.phrase_for(freq).downcase
+    Views::Assessments::FrequencyPalette.spoken_for(freq)
   end
 
   # Base chip background:
