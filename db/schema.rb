@@ -390,7 +390,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_14_000001) do
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
     t.index ["framework_id", "created_at"], name: "index_framework_publications_on_framework_id_and_created_at"
-    t.index ["framework_id"], name: "idx_framework_publications_one_in_flight", unique: true, where: "(status = ANY (ARRAY[0, 1]))"
+    t.index ["framework_id"], name: "idx_framework_publications_one_in_flight", unique: true, where: "(finished_at IS NULL)"
     t.index ["requested_by_id"], name: "index_framework_publications_on_requested_by_id"
     t.index ["tenant_id"], name: "index_framework_publications_on_tenant_id"
   end

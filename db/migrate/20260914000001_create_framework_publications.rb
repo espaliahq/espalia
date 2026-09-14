@@ -24,9 +24,10 @@ class CreateFrameworkPublications < ActiveRecord::Migration[8.1]
     end
 
     add_index :framework_publications, [ :framework_id, :created_at ]
-    # status 0 = queued, 1 = running (see FrameworkPublication#status).
+    # "In flight" is "not finished yet" — every terminal transition stamps
+    # finished_at, so the lock needs no knowledge of the status values.
     add_index :framework_publications, :framework_id,
-              unique: true, where: "status IN (0, 1)",
+              unique: true, where: "finished_at IS NULL",
               name: "idx_framework_publications_one_in_flight"
   end
 end

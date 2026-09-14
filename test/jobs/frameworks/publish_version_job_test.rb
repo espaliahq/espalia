@@ -29,68 +29,89 @@ class Frameworks::PublishVersionJobTest < ActiveJob::TestCase
     end
   end
 
-  should "publish the draft, record the outcome and notify the requester" do
-    publication = request_publication
-
-    Frameworks::PublishVersionJob.perform_now(publication)
-
-    publication.reload
-    assert publication.succeeded?
-    assert_equal 2, publication.published_version
-    assert_not_nil publication.finished_at
-    assert_equal 2, framework.current_published_version
-    assert_not framework.draft_in_progress
-
-    notification = Noticed::Notification.where(recipient: @user).order(:created_at).last
-    assert_not_nil notification
-    assert_equal "Eng v2 is live", notification.inbox_title
-    assert_not FrameworkPublication.in_flight_for?(@framework_id)
+  def latest_notification
+    Noticed::Notification.where(recipient: @user).order(:created_at).last
   end
 
-  should "record a domain refusal as failed and tell the requester why" do
-    ActsAsTenant.with_tenant(@tenant) do
-      # Retire a pre-draft capability without a mapping: the publish gate (ADR-17) refuses.
-      handler = Frameworks::CommandHandler.new
-      handler.publish_version(@framework_id, "seed") # close the empty draft (v2)
-      cat_id = SecureRandom.uuid_v7
-      cap_id = SecureRandom.uuid_v7
-      handler.start_draft(@framework_id, 3, "seed")
-      handler.add_capability_category(@framework_id, cat_id, "Thinking")
-      handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Legacy")
-      handler.publish_version(@framework_id, "seed") # v3 with the capability
-      handler.archive_capability(@framework_id, cap_id, reason: "x") # auto-opens v4, unmapped
+  context "a queued request" do
+    should "publish the draft, record the outcome and notify the requester" do
+      publication = request_publication
+
+      Frameworks::PublishVersionJob.perform_now(publication)
+
+      publication.reload
+      assert publication.succeeded?
+      assert_equal 2, publication.published_version
+      assert_not_nil publication.finished_at
+      assert_equal 2, framework.current_published_version
+      assert_not framework.draft_in_progress
+      assert_equal "Eng v2 is live", latest_notification.inbox_title
+      assert_not FrameworkPublication.in_flight_for?(@framework_id)
     end
-    publication = request_publication(draft_version: 4)
 
-    Frameworks::PublishVersionJob.perform_now(publication)
+    should "record a domain refusal as failed and tell the requester why" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Retire a pre-draft capability without a mapping: the publish gate (ADR-17) refuses.
+        handler = Frameworks::CommandHandler.new
+        handler.publish_version(@framework_id, "seed") # close the empty draft (v2)
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        handler.start_draft(@framework_id, 3, "seed")
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
+        handler.add_capability(@framework_id, cap_id, SecureRandom.uuid_v7, cat_id, "Legacy")
+        handler.publish_version(@framework_id, "seed") # v3 with the capability
+        handler.archive_capability(@framework_id, cap_id, reason: "x") # auto-opens v4, unmapped
+      end
+      publication = request_publication(draft_version: 4)
 
-    publication.reload
-    assert publication.failed?
-    assert_match(/mapping/i, publication.error_message)
-    assert framework.draft_in_progress, "nothing was published"
+      Frameworks::PublishVersionJob.perform_now(publication)
 
-    notification = Noticed::Notification.where(recipient: @user).order(:created_at).last
-    assert_equal "Publishing Eng v4 failed", notification.inbox_title
-    assert_match(/mapping/i, notification.inbox_body)
+      publication.reload
+      assert publication.failed?
+      assert_not_nil publication.finished_at
+      assert_match(/mapping/i, publication.error_message)
+      assert framework.draft_in_progress, "nothing was published"
+      assert_equal "Publishing Eng v4 failed", latest_notification.inbox_title
+      assert_match(/mapping/i, latest_notification.inbox_body)
+    end
+
+    should "refuse, in plain words, a requester who has lost publish rights" do
+      ActsAsTenant.with_tenant(@tenant) { @tenant_user.update!(role: :member) }
+      publication = request_publication
+
+      Frameworks::PublishVersionJob.perform_now(publication)
+
+      publication.reload
+      assert publication.failed?
+      assert_equal "You no longer have permission to publish this framework.", publication.error_message
+      assert framework.draft_in_progress
+      assert_match(/no longer have permission/, latest_notification.inbox_body)
+    end
+
+    should "close the request, notify and re-raise on an unexpected error" do
+      publication = request_publication
+      Frameworks::CommandHandler.stub(:new, ->(*) { raise ActiveRecord::StatementInvalid, "PG::QueryCanceled" }) do
+        assert_raises(ActiveRecord::StatementInvalid) { Frameworks::PublishVersionJob.perform_now(publication) }
+      end
+
+      publication.reload
+      assert publication.failed?
+      assert_not_nil publication.finished_at, "the lock must be released"
+      assert_match(/has been logged/, publication.error_message)
+      assert_not FrameworkPublication.in_flight_for?(@framework_id)
+      assert_equal "Publishing Eng v2 failed", latest_notification.inbox_title
+    end
   end
 
-  should "refuse to run as a requester who has lost publish rights" do
-    ActsAsTenant.with_tenant(@tenant) { @tenant_user.update!(role: :member) }
-    publication = request_publication
+  context "a request that is no longer queued" do
+    should "do nothing" do
+      publication = request_publication(status: :running)
 
-    Frameworks::PublishVersionJob.perform_now(publication)
+      Frameworks::PublishVersionJob.perform_now(publication)
 
-    publication.reload
-    assert publication.failed?
-    assert framework.draft_in_progress
-  end
-
-  should "do nothing for a request that is no longer queued" do
-    publication = request_publication(status: :failed)
-
-    Frameworks::PublishVersionJob.perform_now(publication)
-
-    assert publication.reload.failed?
-    assert framework.draft_in_progress
+      assert publication.reload.running?
+      assert framework.draft_in_progress
+      assert_nil latest_notification
+    end
   end
 end
