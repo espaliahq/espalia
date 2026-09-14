@@ -77,6 +77,12 @@ class NotificationType
       description: "The background enrollment you started has completed, with its enrolled/skipped outcome.",
       defaults: { in_app: true, slack: false, email: false }
     ),
+    framework_published: Definition.new(
+      key: :framework_published,
+      label: "Framework publish finished",
+      description: "The framework version you asked to publish went live, or the publish was refused.",
+      defaults: { in_app: true, slack: false, email: false }
+    ),
     rating_revisit_requested: Definition.new(
       key: :rating_revisit_requested,
       label: "Calibration asked you to revisit a rating",

@@ -91,15 +91,16 @@ module Frameworks::WriteResponse
       ),
       turbo_stream.replace(
         Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
-        draft_status_html(framework, :publish, visible: can_publish)
+        draft_status_html(framework, :publish, visible: can_publish,
+                          publishing: FrameworkPublication.in_flight_for?(framework.framework_id))
       )
     ]
   end
 
-  def draft_status_html(framework, slot, visible:)
+  def draft_status_html(framework, slot, visible:, publishing: false)
     render_to_string(
       Views::Frameworks::Explorer::DraftStatus.new(
-        framework: framework, slot: slot, visible: visible
+        framework: framework, slot: slot, visible: visible, publishing: publishing
       ),
       layout: false
     )

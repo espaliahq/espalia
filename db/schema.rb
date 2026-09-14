@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_28_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_14_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -374,6 +374,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_28_000002) do
     t.index ["framework_id", "published_version"], name: "idx_on_framework_id_published_version_db5c09f0b2"
     t.index ["mapping_id"], name: "index_framework_migration_mappings_on_mapping_id", unique: true
     t.index ["tenant_id"], name: "index_framework_migration_mappings_on_tenant_id"
+  end
+
+  create_table "framework_publications", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "draft_version", null: false
+    t.text "error_message"
+    t.datetime "finished_at"
+    t.uuid "framework_id", null: false
+    t.string "job_id"
+    t.integer "published_version"
+    t.uuid "requested_by_id", null: false
+    t.datetime "started_at"
+    t.integer "status", default: 0, null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["framework_id", "created_at"], name: "index_framework_publications_on_framework_id_and_created_at"
+    t.index ["framework_id"], name: "idx_framework_publications_one_in_flight", unique: true, where: "(status = ANY (ARRAY[0, 1]))"
+    t.index ["requested_by_id"], name: "index_framework_publications_on_requested_by_id"
+    t.index ["tenant_id"], name: "index_framework_publications_on_tenant_id"
   end
 
   create_table "framework_role_families", id: :uuid, default: nil, force: :cascade do |t|
@@ -752,6 +771,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_28_000002) do
   add_foreign_key "framework_explorer_graphs", "tenants"
   add_foreign_key "framework_levels", "tenants"
   add_foreign_key "framework_migration_mappings", "tenants"
+  add_foreign_key "framework_publications", "tenant_users", column: "requested_by_id"
+  add_foreign_key "framework_publications", "tenants"
   add_foreign_key "framework_role_families", "tenants"
   add_foreign_key "framework_role_illustrations", "tenants"
   add_foreign_key "framework_roles", "tenants"

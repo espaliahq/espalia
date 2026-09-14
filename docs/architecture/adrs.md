@@ -187,6 +187,8 @@ The aggregate tracks pending-mapping debt via `@archives_needing_mapping` (popul
 
 **Update (PR following #119):** `AssessmentCycles::SyncHandlers::FrameworkVersionRollSync` advances each open cycle's `latest_framework_version` on every publish so the cycle row expresses the full version range (`framework_version` lower bound, `latest_framework_version` upper bound). The "immutable for the lifetime of the cycle" framing on `CycleDefined` predated this work — only the `framework_version` (define-time) is immutable; the cycle's effective range moves with framework publishes while it's open.
 
+**Update (2026-09-14, background publish):** `publish_version` now runs in `Frameworks::PublishVersionJob`. The web `create` action pre-checks the ADR-17 gate (so a missing mapping is an immediate flash, not a failure notification later), records a `FrameworkPublication` (plain ActiveRecord coordination state — one in-flight row per framework via a partial unique index) and enqueues the job, which runs `Operations::Frameworks::PublishVersion` under the requester's rebuilt `AuthorizationContext` so revoked rights are refused at run time. The outcome is written back to the record and delivered as a `framework_published` notification. The operation's `:in_app` approval is unchanged: MCP agents still hand off to the review page.
+
 ## ADR-18: Event attribution — two layers (provenance metadata + domain payload)
 
 **Decision:** Every event carries attribution at two distinct layers.

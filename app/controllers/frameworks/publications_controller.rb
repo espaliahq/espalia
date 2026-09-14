@@ -1,19 +1,24 @@
 # frozen_string_literal: true
 
-# Publishes the current draft of a framework as a new version.
+# Requests publication of a framework's current draft.
 #
-# The web is the in-app confirmation surface for the otherwise :in_app
-# {Operations::Frameworks::PublishVersion}, so it dispatches the operation
-# directly (behind a Turbo confirm dialog in the explorer header). Restricted
-# to owners / editors and tenant admins via FrameworkPolicy#publish?.
+# Publishing migrates every assigned person's ratings, evidence and comments
+# onto the new version, which does not fit in a web request, so `create`
+# records a {FrameworkPublication} and enqueues {Frameworks::PublishVersionJob};
+# the job runs the otherwise :in_app {Operations::Frameworks::PublishVersion}
+# as the requester. The web is the confirmation surface: `new` is the review
+# page where the migration mappings are checked before anything is enqueued.
+# Restricted to owners / editors and tenant admins via FrameworkPolicy#publish?.
 class Frameworks::PublicationsController < ApplicationController
   before_action :set_framework
+  before_action :require_draft
 
   # GET /frameworks/:framework_id/publication/new
   #
   # Publish-review screen: a draft summary plus every capability being retired
   # with its (editable) migration mapping, so the owner/editor validates the
-  # as-we-go choices before confirming.
+  # as-we-go choices before confirming. Also reports the latest publish request
+  # for this draft — in flight, or why the last one failed.
   def new
     authorize @framework, :publish?
 
@@ -21,6 +26,7 @@ class Frameworks::PublicationsController < ApplicationController
       framework: @framework,
       retiring: retiring_capabilities,
       survivors: survivor_candidates,
+      publication: latest_publication,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a }
@@ -28,19 +34,34 @@ class Frameworks::PublicationsController < ApplicationController
   end
 
   # POST /frameworks/:framework_id/publication
+  #
+  # The publish gate the aggregate enforces (ADR-17) is checked here first so a
+  # missing mapping is an immediate answer, not a failure notification minutes
+  # later. The partial unique index on framework_publications refuses a second
+  # in-flight request even when two submits race across web processes.
   def create
     authorize @framework, :publish?
 
-    result = Operations::Frameworks::PublishVersion.call(
-      context: pundit_user,
-      params: { framework_id: @framework.framework_id }
+    unmapped = retiring_capabilities.select { |entry| entry[:mapping].nil? }.map { |entry| entry[:capability].name }
+    if unmapped.any?
+      return redirect_to new_framework_publication_path(@framework.framework_id),
+                         alert: "Add a migration mapping before publishing: #{unmapped.to_sentence}."
+    end
+
+    publication = FrameworkPublication.create!(
+      tenant: ActsAsTenant.current_tenant,
+      framework_id: @framework.framework_id,
+      draft_version: @framework.draft_version,
+      requested_by: current_tenant_user
     )
+    Frameworks::PublishVersionJob.perform_later(publication)
 
     redirect_to edit_framework_path(@framework.framework_id),
-                notice: "Published v#{result[:published_version]}."
-  rescue RuntimeError => e
+                notice: "Publishing v#{@framework.draft_version} in the background — " \
+                        "you'll be notified when it's live."
+  rescue ActiveRecord::RecordNotUnique
     redirect_to edit_framework_path(@framework.framework_id),
-                alert: e.message
+                alert: "v#{@framework.draft_version} is already being published."
   end
 
   private
@@ -51,16 +72,30 @@ class Frameworks::PublicationsController < ApplicationController
     redirect_to frameworks_path
   end
 
+  # Nothing to review or publish without a draft — say so immediately rather
+  # than rendering "Publish v" or queueing a job that can only fail.
+  def require_draft
+    return if performed? || @framework.draft?
+
+    redirect_to edit_framework_path(@framework.framework_id), alert: "No draft in progress."
+  end
+
+  def latest_publication
+    FrameworkPublication.latest_for(@framework.framework_id, @framework.draft_version)
+  end
+
   # Capabilities staged for archive in the current draft that existed before
   # it (added-in-draft archives need no migration). Each is paired with its
   # current mapping, if one was recorded as-we-go. Sourced from the edit-mode
   # graph (the archive is deferred from the published read model during draft).
   def retiring_capabilities
-    mappings = mappings_by_from_stable_id
+    @retiring_capabilities ||= begin
+      mappings = mappings_by_from_stable_id
 
-    graph_capabilities
-      .select { |c| c.pending_archive && !c.added_in_draft }
-      .map { |c| { capability: c, mapping: mappings[c.stable_id] } }
+      graph_capabilities
+        .select { |c| c.pending_archive && !c.added_in_draft }
+        .map { |c| { capability: c, mapping: mappings[c.stable_id] } }
+    end
   end
 
   # All capability nodes from the edit-mode graph, loaded once per request.
