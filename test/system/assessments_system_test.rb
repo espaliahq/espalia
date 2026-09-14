@@ -1413,13 +1413,11 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         visit assessment_path(@assignment)
         assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
+        # The helper itself asserts the popover option and the pill trigger
+        # both read "Not yet"; what's left is the chip's accessible name and
+        # the announcement.
         click_rating_frequency("#rating-#{@cap1_stable}-2", "Not yet")
 
-        within("#rating-#{@cap1_stable}-2") do
-          assert_selector "button[aria-haspopup='menu']", text: "Not yet"
-          assert_no_text "Never"
-          assert_no_text "None"
-        end
         assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet']"
         assert_selector "#assessment-live-status",
           text: "Rated not yet — Critical Thinking, E2", visible: :all

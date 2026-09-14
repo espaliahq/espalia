@@ -25,8 +25,10 @@
 # stays `none` (events, read models, MCP enum), but the surface word
 # frames the lowest rating as a starting point rather than a verdict —
 # the "Feedback / Evidence" relabel convention (assessments.md).
-# The label and phrase share the same text so pill, chip, aria text and
-# the live-status announcement carry one vocabulary.
+# `phrase` is the sentence form (pill, secondary line, aria text, the
+# live-status announcement); `label` is the compact form (feed secondary
+# line, calibration distribution summary). They may coincide, as they do
+# for `none` and `consistent`, but nothing depends on it.
 #
 # - `chip_bg`  — solid fill for the level chip
 # - `pill_bg`  — softer fill for the inline pill (sits next to body text)

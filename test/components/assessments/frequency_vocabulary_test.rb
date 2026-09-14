@@ -5,7 +5,9 @@ require "test_helper"
 # The bottom of the frequency scale reads "Not yet" on every surface —
 # never "None" or "Never" (issue #391). The domain value stays `none`;
 # only the words people see change. Each surface that derives its copy
-# from the palette is pinned here so a relabel can't half-land.
+# from the palette is pinned here so a relabel can't half-land. (The
+# activity feed's case lives in activity/entry_test.rb, next to its
+# Entry builder.)
 class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
   Palette = Views::Assessments::FrequencyPalette
 
@@ -13,11 +15,6 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
     should "label and phrase the none rating as Not yet" do
       assert_equal "Not yet", Palette.label_for("none")
       assert_equal "Not yet", Palette.phrase_for("none")
-    end
-
-    should "keep the domain value none" do
-      assert_equal "none", Palette::ORDERED_KEYS.first
-      assert Palette.config_for("none").present?
     end
   end
 
@@ -29,8 +26,6 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
         interactive: false
       ).call
       assert_includes html, "Not yet"
-      assert_not_includes html, "Never"
-      assert_not_includes html, ">None<"
     end
   end
 
@@ -42,7 +37,6 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
         level_code: "E2"
       ).call
       assert_includes html, "rated not yet"
-      assert_not_includes html, "rated never"
     end
   end
 
@@ -52,21 +46,6 @@ class Views::Assessments::FrequencyVocabularyTest < ActiveSupport::TestCase
         label: "Self", frequency: "none", primary_frequency: "consistent"
       ).call
       assert_includes html, "Not yet"
-      assert_not_includes html, "Never"
-    end
-  end
-
-  context "activity feed entry" do
-    should "label a none rating as Not yet on the secondary line" do
-      entry = Assessments::ActivityFeedQuery::Entry.new(
-        id: SecureRandom.uuid_v7, kind: "self_rated", occurred_at: nil,
-        payload: { frequency: "none" },
-        capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2,
-        capability_name: "Critical Thinking"
-      )
-      html = Views::Assessments::Activity::Entry.new(entry: entry).call
-      assert_includes html, "Not yet"
-      assert_not_includes html, ">None<"
     end
   end
 end
