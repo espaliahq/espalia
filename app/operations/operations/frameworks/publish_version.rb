@@ -46,7 +46,7 @@ class Operations::Frameworks::PublishVersion < Operations::Base
       draft_version: framework.draft_version,
       requested_by: context.tenant_user
     )
-    Frameworks::PublishVersionJob.perform_later(publication)
+    enqueue!(publication)
 
     {
       framework_id: framework.framework_id,
@@ -59,6 +59,26 @@ class Operations::Frameworks::PublishVersion < Operations::Base
   end
 
   private
+
+  # A request that never reached the queue must not sit unfinished holding
+  # the lock: close it and tell the caller to try again.
+  def enqueue!(publication)
+    job = Frameworks::PublishVersionJob.perform_later(publication)
+    return if job.respond_to?(:successfully_enqueued?) ? job.successfully_enqueued? : job
+
+    fail_to_enqueue!(publication, "the job was not enqueued")
+  rescue ActiveJob::EnqueueError, StandardError => e
+    raise if e.is_a?(RuntimeError) && e.message.start_with?("Could not queue")
+
+    fail_to_enqueue!(publication, "#{e.class}: #{e.message}")
+  end
+
+  def fail_to_enqueue!(publication, detail)
+    Rails.logger.error("[PublishVersion] enqueue failed for #{publication.id}: #{detail}")
+    publication.update!(status: :failed, finished_at: Time.current,
+                        error_message: "The publish could not be queued; please try again.")
+    raise "Could not queue the publish; please try again."
+  end
 
   def framework
     @framework ||= FrameworkState::Framework.find_by!(framework_id: params[:framework_id])
