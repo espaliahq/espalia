@@ -255,9 +255,32 @@ module StimulusHelpers
     # ONE controller drives every editor, on the explorer root — wait for it to
     # connect before dispatching, or the click has no handler.
     assert_selector "[data-controller~='field-editor'][data-connected]", visible: :all, match: :first
-    page.execute_script(
-      "arguments[0].querySelector(\"[data-action*='field-editor#open']\").click();", host
-    )
+    # The pencil is usually inside its host, but not always: the role tree's
+    # pencils sit in the row's floating action cluster (outside the name frame,
+    # so they reserve no width) and name their host with
+    # `data-editor-host-frame` — the same escape hatch a kebab's "Edit…" uses.
+    dispatched = page.evaluate_script(<<~JS, host)
+      (() => {
+        const host = arguments[0];
+        let pencil = host.querySelector("[data-action*='field-editor#open']");
+        if (!pencil) {
+          const frame = host.closest("turbo-frame");
+          if (frame) {
+            pencil = document.querySelector(
+              `[data-editor-host-frame="${frame.id}"][data-action*="field-editor#open"]`
+            );
+          }
+        }
+        if (!pencil) return false;
+        pencil.click();
+        return true;
+      })()
+    JS
+    unless dispatched
+      raise Capybara::ExpectationNotMet,
+            "note: JS recovery \u2014 no `field-editor#open` pencil for this host, " \
+            "inside it or naming its frame with data-editor-host-frame"
+    end
     host.find("[data-editor-form]", visible: true)
   end
 
