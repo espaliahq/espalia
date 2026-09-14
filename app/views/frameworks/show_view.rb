@@ -169,7 +169,14 @@ class Views::Frameworks::ShowView < Views::Base
   # modal (the actionable feed).
   def explorer_root_data
     controllers = [ "framework-explorer" ]
-    actions = [ "tree:changed->framework-explorer#updateRoleCount" ]
+    actions = [
+      "tree:changed->framework-explorer#updateRoleCount",
+      # Both panes are overlays on a narrow viewport; Esc is the keyboard
+      # counterpart of tapping outside one (#384). The handler stands down
+      # while a modal or a kebab menu is open — those own Esc first.
+      "keydown.esc@window->framework-explorer#closeOverlayPanes",
+      "resize@window->framework-explorer#viewportChanged"
+    ]
     data = {}
     if @mode == :edit
       controllers << "modal"
@@ -223,16 +230,26 @@ class Views::Frameworks::ShowView < Views::Base
 
   # ── Header ──
 
+  # The page chrome above the explorer. Everything here WRAPS rather than
+  # overflows: at 375 px the mode toggle, "Exit edit mode", Publish and
+  # Settings together are ~480 px wide, so on one non-wrapping row they ran
+  # off-screen and the whole document scrolled sideways to 825 px (#384).
+  # Tagged as the `chrome` target so the controller can measure its height and
+  # give the explorer below it exactly the leftover viewport.
   def framework_header
-    div(class: "mb-4") do
-      div(class: "flex items-center justify-between") do
-        div do
+    div(class: "mb-4", data: { framework_explorer_target: "chrome" }) do
+      div(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-2") do
+        div(class: "min-w-0 max-sm:w-full") do
           a(href: frameworks_path,
             class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary mb-2 inline-block") do
             plain "\u2190 Frameworks"
           end
-          div(class: "flex items-center gap-3") do
-            h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @framework.name }
+          # The badges wrap under the title on a narrow viewport instead of
+          # squeezing it — the name used to break over four lines beside them.
+          div(class: "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1") do
+            h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold " \
+                      "text-gray-900 dark:text-white",
+               title: @framework.name) { @framework.name }
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )
@@ -243,7 +260,7 @@ class Views::Frameworks::ShowView < Views::Base
           end
         end
 
-        div(class: "flex items-center gap-2") do
+        div(class: "flex flex-wrap items-center gap-2") do
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
           render Views::Frameworks::Explorer::DraftStatus.new(
@@ -295,7 +312,10 @@ class Views::Frameworks::ShowView < Views::Base
   def edit_suggest_segment(value, label, tooltip)
     button(
       type: "button",
-      class: "inline-flex items-center rounded px-3 py-1 font-medium transition-colors",
+      # Tighter gutters below `sm`: at 375 px the toggle and "Exit edit mode"
+      # miss sharing a wrapped row by 2 px, which costs a whole 48 px band of
+      # an already tall mobile header (#384).
+      class: "inline-flex items-center rounded px-2 sm:px-3 py-1 font-medium transition-colors",
       data: {
         action: "edit-mode-toggle#select",
         edit_mode_toggle_target: "#{value}Button",
@@ -373,7 +393,9 @@ class Views::Frameworks::ShowView < Views::Base
           d: "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
         )
       end
-      plain "Settings"
+      # Icon-only below `sm` — the label is the last thing in the header cluster
+      # worth a line of its own on a phone. `sr-only` keeps the accessible name.
+      span(class: "max-sm:sr-only") { "Settings" }
     end
   end
 
@@ -517,12 +539,30 @@ class Views::Frameworks::ShowView < Views::Base
 
   # ── Explorer Layout ──
 
+  # The explorer fills whatever viewport is left under the page chrome. The
+  # offset used to be a guessed `12rem`, which only ever matched the desktop
+  # header: once the header wraps (narrow viewports, #384) it is half the
+  # screen tall and the explorer hung far below the fold. It is MEASURED
+  # instead — `framework-explorer#publishLayoutOffset` writes
+  # `--explorer-offset` from the layout's own distance to the top of the
+  # document, so the sum is exactly the viewport at every width and the page
+  # itself never scrolls. `dvh`, so a mobile URL bar doesn't steal the bottom.
+  #
+  # The `min-h-48` floor is the guard against a measurement that eats the whole
+  # viewport: at 200% zoom (WCAG 1.4.4) the CSS viewport is ~406 px tall and
+  # the wrapped chrome can exceed it, at which point the calc clamps to zero
+  # and the grid — the page's entire content — has no height at all. With the
+  # floor the page scrolls instead, which is the old constant's failure mode
+  # and a recoverable one. Kept deliberately low (12rem): a floor that binds at
+  # ordinary sizes would be a second guess at the layout, which is the thing
+  # the measurement exists to stop.
   def explorer_layout
     div(
-      class: "relative flex -mx-6 -mb-6 h-[calc(100vh-12rem)] " \
-             "border-t border-gray-200 dark:border-gray-700",
+      class: "relative flex -mx-6 -mb-6 h-[calc(100dvh_-_var(--explorer-offset,12rem))] " \
+             "min-h-48 border-t border-gray-200 dark:border-gray-700",
       data: {
         controller: "matrix",
+        framework_explorer_target: "layout",
         matrix_base_path_value: matrix_base_path,
         action: "tree:changed->matrix#updateSelection " \
                 "framework-search:changed@window->matrix#updateSearch " \
@@ -564,9 +604,15 @@ class Views::Frameworks::ShowView < Views::Base
     end
   end
 
+  # `w-76` (19 rem), not `w-72`: the seeded framework's longest names measure
+  # 171.6 px ("Software Engineering") and 171.2 px ("Engineering Manager") at
+  # `text-sm`, and a family row's name box was 175.4 px — under 4 px of
+  # headroom, which is what made the tree wrap the moment anything else claimed
+  # a pixel. 19 rem puts the family box at 191 px and the role box at 207 px,
+  # ~20 px clear. The matrix pays 16 px of 1,112 at 1400 wide (#384 follow-up).
   def left_pane
     aside(
-      class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
+      class: "w-76 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
              "max-lg:hidden",
       data: {
@@ -585,9 +631,13 @@ class Views::Frameworks::ShowView < Views::Base
     end
   end
 
+  # The ONLY horizontally scrolling box on the page. `min-w-0` is load-bearing
+  # even beside `overflow-auto`: it states outright that the grid's intrinsic
+  # width must never push the flex row — and therefore the document — wider
+  # than the viewport (#384).
   def main_pane
     div(
-      class: "flex-1 overflow-auto bg-white dark:bg-gray-900",
+      class: "flex-1 min-w-0 overflow-auto bg-white dark:bg-gray-900",
       data: { matrix_target: "scrollContainer" }
     ) do
       turbo_frame_tag("framework-matrix", data: { matrix_target: "frame" }) do
@@ -608,9 +658,17 @@ class Views::Frameworks::ShowView < Views::Base
     # Edit mode only — view mode omits the pane entirely
     # (FrameworksController hides pending-suggestion indicators from the
     # grid too, so viewers see only published state).
+    #
+    # `max-lg:hidden` mirrors the role tree: below `lg` the pane is a
+    # slide-over the Activity toggle opens, not an inline column. It used to
+    # take 320 of a 375 px viewport and leave the matrix a 55 px sliver (#384).
+    # Closing it is the same vocabulary as the role tree — tap outside, Esc,
+    # or the pane's own × (narrow only; desktop closes with the toggle).
     aside(
       class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden",
+             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
+             "max-lg:hidden",
+      aria_label: "Framework activity",
       data: {
         framework_explorer_target: "contextPane",
         controller: "context-pane",
@@ -623,6 +681,8 @@ class Views::Frameworks::ShowView < Views::Base
                 "suggestion:open-card@window->context-pane#onOpenSuggestionCard "
       }
     ) do
+      context_pane_mobile_bar
+
       # Live sync: any framework activity event broadcasts a replace of the
       # signal element below; the context-pane controller observes it and
       # reloads the feed frame for every edit-mode viewer (incl. the actor).
@@ -641,6 +701,30 @@ class Views::Frameworks::ShowView < Views::Base
       ) do
         div(class: "p-6 text-center text-gray-600 dark:text-gray-300 text-sm") do
           p { "Loading activity\u2026" }
+        end
+      end
+    end
+  end
+
+  # The slide-over's own title + close control. `lg:hidden`, because on
+  # desktop the pane is a column with no chrome of its own and the Activity
+  # stat toggles it — an overlay needs a dismissal that is visible while it
+  # covers the grid (an outside tap is discoverable only once you know it).
+  def context_pane_mobile_bar
+    div(class: "lg:hidden flex items-center justify-between gap-2 border-b " \
+               "border-gray-200 dark:border-gray-700 px-3 py-2") do
+      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
+      button(
+        type: "button",
+        class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
+               "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 " \
+               "cursor-pointer",
+        aria_label: "Close activity feed",
+        data: { action: "framework-explorer#toggleContextPane" }
+      ) do
+        svg(class: "w-5 h-5", fill: "none", viewBox: "0 0 24 24",
+            stroke: "currentColor", stroke_width: "2", aria_hidden: "true") do |sv|
+          sv.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M6 18L18 6M6 6l12 12")
         end
       end
     end

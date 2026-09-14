@@ -1337,9 +1337,11 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       assert_text "Edit mode"
 
-      # The glyph rides the matrix cell at every breakpoint (the matrix is
-      # full-width on narrow; the pane keeps its fixed column).
+      # The glyph rides the matrix cell at every breakpoint — the matrix is
+      # full-width on narrow because the pane is a slide-over there (#384), so
+      # the feed (and its Resolve…) is behind the Activity toggle.
       assert_selector "[data-glyph='clarification']", visible: :all
+      toggle_context_pane
       assert_text "Asked for clarification"
 
       click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"

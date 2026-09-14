@@ -64,6 +64,21 @@ Capture the desktop pass first; do a mobile pass for anything responsive.
   report.
 - Use `evaluate_script` for cheap structural checks (computed styles, hidden
   state, scroll dimensions) instead of screenshotting to answer DOM questions.
+- **`hover()` cannot reveal a hover-hidden control.** Headless-shell reports
+  `hover: none` / `any-hover: none` / `pointer: none` (neither fine nor
+  coarse), and Tailwind v4 wraps every `hover:` / `group-hover:` utility in
+  `@media (hover: hover)` — so those rules never apply, however you resize.
+  Hand-written `:hover` CSS (e.g. the explorer's `[data-hover-cluster]` rule)
+  does still work. Never report "the control is missing" from a hover +
+  screenshot: assert it with `evaluate_script`, or dispatch a JS click at it
+  and report what happened. `emulate` with a touch viewport
+  (`viewport: "375x812x2,mobile,touch"`) is the way to flip `pointer: coarse`;
+  nothing flips `hover` to `hover`.
+- **Don't size a page with `performance.getEntriesByType("navigation")[0]`.**
+  A Turbo Drive visit replaces the body without a document navigation, so that
+  entry keeps describing the tab's *first* document — same `name`, same
+  `transferSize`, every time. Measure a document from the network request
+  (`list_network_requests` / `get_network_request`) instead.
 - Seeded tenant state persists across sessions — do not assume a clean slate.
   If the flow needs fresh state and the caller gave a reset command, run it;
   otherwise report the stale state you found.

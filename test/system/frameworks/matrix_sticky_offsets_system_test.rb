@@ -113,7 +113,7 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
           page.driver.browser.manage.window.resize_to(*viewport[:size])
           visit edit_framework_path(@framework_id, roles: @role_ids.first(role_count))
           assert_text "Edit mode"
-          close_context_pane if viewport[:name] == "mobile"
+          assert_context_pane_collapsed if viewport[:name] == "mobile"
         end
 
         should "land the expanded row's name and kebab clear of the sticky stack, clickable" do
@@ -259,21 +259,30 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
   def click_row_kebab_for_real
     row = find(target_row_selector)
     row.hover
+    # Selenium scrolls an element into view before acting on it, aligned to the
+    # BOTTOM of the scrollport — so hovering a tall `<tr>` drags its top (where
+    # the kebab is) back up under the sticky header. That is test machinery, not
+    # user behaviour: a real pointer hover scrolls nothing. Restore the resting
+    # position before the click, through the very mechanism under test —
+    # `scrollIntoView({ block: "start" })` honours the row's `scroll-margin-top`,
+    # which is the measured `--matrix-header-h` + `--matrix-category-h`. A wrong
+    # measurement still parks the kebab under the header and still fails here.
+    # (It only started mattering once the explorer stopped guessing its own
+    # height: on a phone the scrollport is the leftover viewport, #384, which is
+    # shorter than a tall 11-role row.)
+    page.execute_script("arguments[0].scrollIntoView({ block: 'start' });", row)
     # rubocop:disable SystemTests/FlakeProneClick
     row.find("button[aria-label='Capability actions']").click
     # rubocop:enable SystemTests/FlakeProneClick
   end
 
-  # At 375 px the activity pane is a fixed `w-80` flex sibling, so the grid is
-  # left a ~40 px sliver and every probe lands in the pane instead of the row.
-  # That layout is issue #384's (edit mode on mobile); the sticky geometry this
-  # test owns is vertical, so close the pane — as a phone user would — and
-  # measure the grid.
-  def close_context_pane
+  # The activity pane used to be an inline `w-80` sibling at 375 px, leaving the
+  # grid a ~40 px sliver that swallowed every probe — this helper clicked it
+  # shut first. Since #384 the pane is a slide-over that starts closed below
+  # `lg`, so the collapse is the page's own doing; all that is left is to state
+  # the precondition the vertical geometry below is measured under.
+  def assert_context_pane_collapsed
     wait_for_stimulus "framework-explorer"
-    page.execute_script(<<~JS)
-      document.querySelector("[data-framework-explorer-target='contextPaneToggle']").click();
-    JS
     assert_no_selector "[data-framework-explorer-target='contextPane']", visible: true
   end
 

@@ -230,7 +230,8 @@ input[type="week"] {
  * popped in at different moments as the pointer crossed a single row.
  *
  * Now the entity that OWNS a cluster carries `data-hover-cluster="<scope>"`
- * and each control in it carries `data-cluster-scope="<scope>"` — so a whole
+ * and each control in it carries `data-cluster="<scope> <kind>"`, where kind is
+ * inline | kebab | standalone (Concerns::HoverCluster) — so a whole
  * cluster reveals at once, a nested scope (a cell inside a row) still reveals
  * independently, and there is no interpolated Tailwind token for the JIT to
  * miss (Hard-Won Lesson 12). Scopes: row · cell · ill · cat · tree · hdr.
@@ -348,6 +349,99 @@ input[type="week"] {
 
   [data-cluster~="inline"] {
     display: none;
+  }
+}
+
+/* The role tree's floating row actions (#384 follow-up).
+ *
+ * §11a's own trap, one pane to the left: a hover control in the row's flow
+ * reserves its width even at `opacity: 0`. In an 18rem tree that was the solo
+ * pill (~44 px), the rename pencil (~20 px) and the ⋮ (~28 px) taken off a
+ * ~190 px slot, so almost every real role name — "Analytics Engineer",
+ * "Commercial Finance", "Product Management" — wrapped onto two lines and the
+ * tree became a wall.
+ *
+ * The controls sit in an absolutely-positioned cluster over the right edge of
+ * the name's box instead, so the name gets the row's whole width. Each control
+ * keeps its OWN reveal (the `data-cluster` rule above, or `group-hover`), which
+ * is why the mask below is keyed to the same conditions rather than painted
+ * unconditionally: an always-on background would blank the tail of a name whose
+ * controls are invisible. */
+.tree-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-left: 0.5rem;
+  pointer-events: none;
+}
+
+/* A control is clickable only while it is actually shown. The cluster sits OVER
+ * the name now, so a hidden-but-hittable button is a tap on the name's tail
+ * firing `solo` — reachable in practice on a coarse pointer at `lg` and up (a
+ * touch laptop), where nothing reveals the cluster on approach. `pointer-events`
+ * therefore tracks each control's own reveal condition, not the cluster's
+ * presence. Keyboard focus is unaffected by `pointer-events`. */
+.tree-actions > * {
+  pointer-events: none;
+}
+
+[data-hover-cluster="tree"]:hover .tree-actions > *,
+[data-hover-cluster="tree"]:focus-within .tree-actions > * {
+  pointer-events: auto;
+}
+
+/* `pointer-events` INHERITS, so gating the cluster's children disarms whole
+ * subtrees — including the kebab's menu, which is a DOM descendant of its
+ * trigger even though `strategy: :fixed` paints it elsewhere. An open menu
+ * therefore arms itself: it is positioned outside the row, so reaching for an
+ * item drops the row's `:hover` and everything in it would go inert
+ * mid-gesture. So does the trigger holding it open, or the second click that
+ * closes it lands on nothing. */
+.tree-actions [role="menu"],
+.tree-actions [aria-expanded="true"] {
+  pointer-events: auto;
+}
+
+/* On a coarse pointer only the controls the reveal rules show are hittable —
+ * the kebab and any `standalone`. The solo pill is hover-only by design (its
+ * own tip says "hover a role and click Solo"), so there it stays both
+ * invisible and inert rather than invisible and armed. */
+@media (pointer: coarse) {
+  .tree-actions [data-cluster~="kebab"],
+  .tree-actions [data-cluster~="standalone"] {
+    pointer-events: auto;
+  }
+}
+
+/* The mask. Matches the row's own hover background so the cluster reads as part
+ * of it, and only while something is actually shown there. */
+[data-hover-cluster="tree"]:hover .tree-actions,
+[data-hover-cluster="tree"]:focus-within .tree-actions {
+  background-color: var(--color-gray-100);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-hover-cluster="tree"]:hover .tree-actions,
+  [data-hover-cluster="tree"]:focus-within .tree-actions {
+    background-color: var(--color-gray-800);
+  }
+}
+
+/* Touch has no hover, and the coarse-pointer rule above keeps the kebab and the
+ * `standalone` pencil permanently visible — so the mask has to be the PANE's
+ * background there, not the row's hover tint. */
+@media (pointer: coarse) {
+  .tree-actions {
+    background-color: var(--color-white);
+  }
+}
+
+@media (pointer: coarse) and (prefers-color-scheme: dark) {
+  .tree-actions {
+    background-color: var(--color-gray-900);
   }
 }
 

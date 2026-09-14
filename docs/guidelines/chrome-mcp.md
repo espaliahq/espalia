@@ -186,12 +186,47 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   watcher), or run `bin/rails tailwindcss:build` after adding/editing views
   before judging screenshots.
 - **`resize_page` alone never activates `pointer-coarse:`.** Resizing to a
-  phone-sized viewport changes only CSS dimensions — the `pointer`/`hover`
-  media features stay "fine/hover", so Tailwind `pointer-coarse:` affordances
-  (e.g. always-visible kebab triggers) won't show. To verify touch-only
-  behaviour, use `emulate` with a touch viewport string
+  phone-sized viewport changes only CSS dimensions — the `pointer` media
+  feature does not move, so Tailwind `pointer-coarse:` affordances (e.g.
+  always-visible kebab triggers) won't show. To verify touch-only behaviour,
+  use `emulate` with a touch viewport string
   (`viewport: "375x812x2,mobile,touch"`), which flips
   `matchMedia('(pointer: coarse)')` to true.
+- **Headless-shell reports `hover: none` — so a hover-revealed control never
+  appears under `hover()`.** Measured on the `chrome-debug` container
+  (Chrome 151 headless-shell): `hover: none`, `any-hover: none`, and
+  `pointer: none` — *neither* `fine` nor `coarse`, so a `pointer-fine:` rule
+  is as inert as a `pointer-coarse:` one. The trap is that the CSS `:hover`
+  *pseudo-class* still matches perfectly well; what doesn't match is the
+  **media query Tailwind v4 wraps every `hover:` / `group-hover:` utility in**
+  — the built stylesheet emits one `@media (hover:hover){…}` block holding all
+  of them. So `hover()` over a pencil, kebab or "Discuss" bubble that is
+  revealed by a Tailwind hover utility changes nothing on screen, and a
+  screenshot taken after it "proves" the control is missing. Two consequences:
+  - **Verify the reveal structurally, not visually** — `evaluate_script` the
+    computed style / `matches(':hover')` state, or dispatch a JS click
+    (`el.click()`) straight at the control and check what it did. The system
+    tests are the place that pins hover behaviour anyway (testing.md's
+    JS-dispatch helpers exist for the same reason).
+  - **Hand-written `:hover` CSS is unaffected.** The explorer's hover-cluster
+    rule (`[data-hover-cluster="row"]:hover [data-cluster~="row"]`, §11a of
+    framework-explorer.md) is plain CSS in `application.css`, outside any
+    media query, so it *does* respond to `hover()`. Which mechanism a control
+    uses decides whether the browser pass can see it — check before concluding
+    the UI is broken.
+  There is no `emulate` string that reports `hover: hover` on headless-shell,
+  so the desktop reveal has no visual-pass verification path at all; the touch
+  collapse does, via the `pointer: coarse` emulation above.
+- **`performance.getEntriesByType("navigation")[0]` is stale after a Turbo
+  Drive visit.** Turbo replaces the body without a document navigation, so the
+  entry keeps describing whichever URL the tab loaded first — its `name`,
+  `transferSize` and `decodedBodySize` all belong to that document, not the
+  one on screen. Reading it after clicking through the app silently measures
+  the wrong page (and reports the same bytes for every subsequent
+  measurement). To size a document, read the **network request** instead —
+  `list_network_requests` / `get_network_request`, or a signed-in
+  `curl -w '%{size_download}'` from the app container, which is also what the
+  payload numbers in framework-explorer.md's Lesson 23 were taken with.
 - **Seeded tenant state persists across sessions.** The `me&u` seed tenant
   accumulates assessment state (cycles, ratings, evidence, alignment) as you
   drive flows. A verification run that assumes a clean slate (an unrated

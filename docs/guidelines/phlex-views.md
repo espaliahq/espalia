@@ -154,7 +154,10 @@ rules, both non-negotiable:
   highest-frequency direct affordance (typically the pencil) earns a standalone
   spot. A hover cluster that accumulates one standalone button per action also
   permanently reserves row width (`opacity-0` still occupies layout) and
-  crushes the text it decorates — the role tree learned this the hard way.
+  crushes the text it decorates — the role tree learned this the hard way, and
+  then learned the second half: **where the text is tight, take the cluster out
+  of the flow entirely** and float it over the row's right edge, masked only
+  while it is revealed (framework-explorer.md §11a).
 
 Use a shared trigger rather than hand-rolling the ⋮ glyph, and make sure the
 trigger stays visible on `pointer-coarse` so touch devices aren't left with an

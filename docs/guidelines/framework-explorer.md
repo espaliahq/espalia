@@ -106,10 +106,13 @@ PageLayout
         │               │   └── CategoryDescriptionFrame (edit: inline editor; "Add a description…" when blank)
         │               ├── MatrixRow (per capability)
         │               │   ├── compact row (click → matrix#toggleRow)
-        │               │   │   ├── CapabilityNameFrame (edit: inline editor) + archive kebab (hover)
+        │               │   │   ├── CapabilityNameFrame (edit: inline editor)
+        │               │   │   │       + row hover cluster: pencil · discuss · ⋮ (§11a)
         │               │   │   ├── CapabilityDescriptionFrame (edit: inline editor; "Add a description…" when blank)
         │               │   │   └── MatrixCell × N
-        │               │   │       └── ExpectationTextFrame (edit: inline editor)
+        │               │   │       ├── ExpectationTextFrame (edit: inline editor)
+        │               │   │       └── NewExpectationFrame / PendingExpectationFrame
+        │               │   │           (edit: author an empty cell, or its pending ghost)
         │               │   └── ExpandedRow (hidden PLACEHOLDER; content fetched on first expand)
         │               │       └── expanded td (click → matrix#focusCell)
         │               │           ├── IllustrationFrame (edit: pencil + inline editor)
@@ -117,7 +120,8 @@ PageLayout
         │               │           └── NewIllustrationFrame ("+ Add"; edit mode only)
         │               └── "+ Add capability" row (edit + can_edit_structure → opens AddCapabilityModal)
         └── aside[data-controller="context-pane"]  ← right pane (edit mode only)
-            └── turbo-frame#suggestion-panel (Suggestions::PanelFrame)
+            └── turbo-frame#suggestion-panel (Activity::PanelFrame — the
+                activity feed; Activity::SuggestionCardFrame at suggestion focus)
 ```
 
 ### Data Flow
@@ -298,9 +302,11 @@ This enables bookmarking, sharing, and browser back/forward. The server reads ro
 
 ### 8. Focus Context (Context Pane)
 
-**Edit mode only.** The context pane does not render in view mode — viewers see no "N Suggestions" toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
+**Edit mode only.** The context pane does not render in view mode — viewers see no **Activity** toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
 
-The right-hand context pane (`#suggestion-panel` Turbo Frame) narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
+The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the suggestions index's panel response (`GET /frameworks/:id/suggestions?layout=panel`) — the pane's own frame carries `layout=panel` too, so the **path** is what tells the two apart, not the param. See *Activity feed coverage* and §9.
+
+It narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
 
 | Level | Trigger | Clear |
 |-------|---------|-------|
@@ -322,7 +328,7 @@ like every other level. Opening the card deliberately does NOT navigate the
 matrix — a `matrix:focus-changed` dispatch would immediately overwrite the
 focus; the entry's row body remains the way to jump the grid to the entity.
 
-**Panel header is focus-driven**: `FocusedSuggestionsQuery#descriptor` renders the focus title ("All framework suggestions" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers the "Show all" link. See §9 for full header/row anatomy.
+**Panel header is focus-driven**: `ActivityFeedQuery#descriptor` renders the focus title ("All framework activity" / "`<Category>` — category" / capability / "`<Capability>` × L`<n>`") and the server-rendered `clear_path` powers both the × on the breadcrumb and the worded "← Show all framework activity" link. A top-right "All suggestions" link breaks out of the frame (`data-turbo-frame="_top"`) to the standalone review index. The row-presentation principles are in §9.
 
 **Focus is visible on the grid, and legible + clearable in one place (#382).**
 Three separate gestures set focus and others clear it, so neither half can be
@@ -353,13 +359,15 @@ left implicit:
 
 **Server-side filtering**: `Frameworks::FocusedSuggestionsQuery` walks eager-loaded framework associations once and builds in-memory `Set`s of in-scope IDs (category / capability / expectation / illustration). No denormalized columns or migrations on `framework_suggested_edits`. The framework read model is small enough (100-200 capabilities) that in-memory resolution is cheap.
 
-**Pane default visibility**: in edit mode the pane is open by default — contributors are usually here *because* of the suggestion feed. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "N Suggestions" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default.
+**Pane default visibility**: in edit mode the pane is open by default **on desktop** — contributors are usually here *because* of the suggestion feed. **Below `lg` it is a slide-over that starts closed** (§7): there it would otherwise take 320 of a 375 px viewport. Within edit mode, focus actions still never auto-close or re-open the pane; the user can collapse it with the "Activity" toggle and it stays collapsed until they reopen. The no-auto-open rule remains valid inside the mode (focus is an invisible background state until visible); it no longer needs to justify a closed default on desktop. **One deliberate exception on every viewport**: clicking a pending-change squiggle, a ghost, or a clarification glyph opens that suggestion's card via `suggestion:open-card`, and `framework-explorer#openContextPane` reveals a closed pane to show it — on a phone that means the slide-over opens. The click's whole purpose is to see the card; ordinary focus changes (row expand, category or cell click) still never open the pane (see the event contract).
 
-### 9. Context Pane Row Presentation
+### 9. Suggestion Row Presentation
 
-Each suggestion row in the panel must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
+Each suggestion row must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
 
-**Panel header** (rendered by `PanelFrame#header`):
+> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **suggestions index's panel response** (`GET /frameworks/:id/suggestions?layout=panel`, i.e. `SuggestionsController#render_panel`), the only caller left since the context pane became the activity feed. Grep by that path, not by `layout=panel`: the activity frame sends the same param. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under *Activity feed coverage*.
+
+**Panel header** (rendered by `Suggestions::PanelFrame#header`):
 - **Focus title** — derived from `FocusedSuggestionsQuery#descriptor`:
   - `:framework` → "All framework suggestions"
   - `:category` → "`<Category>` — category"
@@ -662,7 +670,9 @@ a ghost role contributes no columns in view mode.
 - **Org-structure inline renames** — hover-pencil inline editors on the
   **role-family name** and **role name** in the left role tree
   (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree` when
-  `mode == :edit`) and on each per-role **level title** in the matrix header
+  `mode == :edit` — currently *without* the `can_edit_structure` check its
+  neighbours carry, so a suggest-only viewer sees pencils whose save the
+  policy refuses: #401) and on each per-role **level title** in the matrix header
   (`LevelTitleFrame`, rendered by `MatrixHeader#full_title_badges`). These use
   the shared `InlineEditable` pencil/form helpers but — unlike capability /
   category text — are **direct edits, NOT the suggested-edit path**: org
@@ -710,16 +720,24 @@ a ghost role contributes no columns in view mode.
   `RoleFamilyUpdated` per family, so it shows as N department entries in the
   activity feed.
 
-**Shared modals under one `modal` controller.** Archive(-capability),
-add-capability, add-category, and archive-category are four embedded `Kit::Modal`s
-on the explorer root, all driven by a single `modal` Stimulus controller. Each
-trigger names its overlay via `data-modal-target-id="<overlay id>"`; the
-controller opens that overlay (falling back to the lone overlay when a page has
-only one — so the assessment evidence / delegation modals are unchanged). Feature
-controllers prefill from the `modal:open` event's `dataset`: `add_capability_form`
-(category id/name), `archive_form` (capability id/name, needs-mapping, hides self
-from survivors), `mapping_form` (toggles the survivor select by mapping type),
-`archive_category_form` (category id/name — no mapping).
+**Shared modals under one `modal` controller.** Every dialog in edit mode is an
+embedded `Kit::Modal` on the explorer **root**, and one `modal` Stimulus
+controller drives all of them. Root-mounted for every edit-mode viewer:
+reject-suggestion (§12), resolve-clarification and request-clarification (§12a),
+and archive-illustration (§11b). Root-mounted for `can_edit_structure` holders:
+archive(-capability), add-capability, add-category, archive-category,
+binding-editor, level-editor, add-level, and the role-family and role dialogs
+(each rendered twice, in `:new` and `:edit` shape) — eleven overlays in
+`ShowView#structural_modals`. Each trigger names its overlay via
+`data-modal-target-id="<overlay id>"`; the controller opens that overlay
+(falling back to the lone overlay when a page has only one — so the assessment
+evidence / delegation modals are unchanged). Feature controllers prefill from
+the `modal:open` event's `dataset`: `add_capability_form` (category id/name),
+`archive_form` (capability id/name, needs-mapping, hides self from survivors),
+`mapping_form` (toggles the survivor select by mapping type),
+`archive_category_form` (category id/name — no mapping),
+`archive_illustration_form` (illustration id + excerpt), and the clarification /
+reject / role / level form controllers listed in the Stimulus table.
 
 These modals hold unsaved input (names, descriptions, migration mappings,
 reject reasons), so outside-click dismissal is **off** — the explorer root's
@@ -748,7 +766,7 @@ repeats each of them thousands of times.
 **pencil · discuss · kebab**, and reveal *together* on hover or focus-within of
 the entity's own **row / cell / item** — never on the text span. The entity
 carries `data-hover-cluster="<scope>"` and every control in its cluster carries
-`data-cluster="<scope> inline|kebab"`; one CSS rule set in
+`data-cluster="<scope> <kind>"`, kind ∈ `inline | kebab | standalone`; one CSS rule set in
 `app/assets/tailwind/application.css` pairs them. Scopes: `row` · `cell` ·
 `ill` · `cat` (the grid) + `tree` · `hdr` (the role pane, the level titles).
 The owner is the **row / cell / item**, never the text: the role tree's rename
@@ -760,7 +778,29 @@ belongs to the entity's own Turbo Frame (a capability name, a category name, an
 expectation text — the frame re-render has to carry it, and the shared editor
 resolves its host by `closest("[data-editor-action]")`) is rendered by that
 frame via `render_inline_editor_pencil(scope:)` immediately before the cluster.
-Two things fall out:
+
+**`opacity: 0` still takes layout width — so where the text is tight, the
+cluster must come out of the flow.** The grid can afford in-flow controls; the
+role tree could not. In an 18 rem pane a role row's name box is ~190 px, and the
+solo pill (~44 px) + rename pencil (~20 px) + ⋮ (~28 px) took half of it while
+being invisible, so nearly every real name — "Analytics Engineer", "Commercial
+Finance", "Product Management" — wrapped onto two lines and the tree became a
+wall of them (reported from the field). The tree's rows therefore put the name
+in a `relative flex-1 min-w-0` box and its controls in an absolutely-positioned
+`.tree-actions` cluster over that box's right edge. Consequences:
+
+- The name gets the row's whole width and is **never truncated** — `break-words`
+  stays the fallback for a name longer than any pane would hold, and the pane is
+  sized (below) so it is rarely reached.
+- The cluster paints an **opaque mask** matching the row's hover background, but
+  only under the conditions that reveal it (`:hover` / `:focus-within`, and the
+  pane background on `pointer-coarse`). Painted unconditionally it would blank
+  the tail of a name whose controls are invisible.
+- A tree pencil is now **outside** its name frame, so it names the frame with
+  `data-editor-host-frame` — the same escape hatch a kebab's "Edit…" uses. It
+  also survives that frame's PATCH re-render for free.
+
+Two more things fall out of the cluster rule itself:
 
 - **No interpolated Tailwind token, so Hard-Won Lesson 12 can't bite here** —
   there is no class name to build, only a scope name.
@@ -1221,14 +1261,83 @@ the detail page render the same `Views::Frameworks::Suggestions::Thread`.
 
 ### 7. Responsive Behaviour
 
-| Viewport | Role Tree | Matrix | Toggle Button |
-|----------|-----------|--------|---------------|
-| Desktop (≥ 1024px) | Inline left pane | Adjacent to tree | Visible, toggles inline |
-| Mobile (< 1024px) | Hidden, fixed overlay on toggle | Full width | Visible, opens overlay |
+**Both side panes are overlays below `lg`; only the matrix ever scrolls
+horizontally.** Edit mode originally had no responsive contract at all — it
+added a second `w-80` column rendered open, which at 375 px left the matrix a
+55 px sliver and pushed the document to 825 px wide (issue #384).
 
-The toggle button is the **role count stat** in the header ("4 Roles" with a chevron). It serves double duty: displaying information and providing the toggle affordance.
+| Viewport | Role tree (view + edit) | Activity pane (edit only) | Matrix |
+|----------|-------------------------|---------------------------|--------|
+| Desktop (≥ 1024px) | Inline left pane (`w-76` = 19 rem), open | Inline right pane (`w-80`), **open by default** | Between them |
+| Mobile (< 1024px) | `max-lg:hidden`; fixed overlay on toggle, left-anchored, `min(24rem, 100vw - 3rem)` | `max-lg:hidden`; fixed overlay on toggle, right-anchored, with its own title bar + × | **Full width** |
 
-Mobile overlay closes on click-outside via `useClickOutside` from stimulus-use.
+**The tree pane is sized from the names it has to hold.** At `w-72` a family's
+name box was 175.4 px against a longest name of 171.6 px ("Software
+Engineering") — under 4 px of headroom, which is why anything else claiming a
+pixel wrapped the tree. `w-76` puts the family box at 191.4 px and the role box
+at 207 px (~20 px and ~36 px clear of the seeded framework's longest names), for
+16 px of the matrix's 1,112 at 1400 wide. The overlay is wider still
+(24 rem, capped at the viewport minus the tap strip): it shares the width with
+nothing, so its boxes are 214 px / 230 px.
+
+Both toggles are header stats doing double duty: the **role count** ("4 Roles"
+with a chevron) and the **Activity** stat (with its pending-count badge). Each
+carries `aria-expanded`.
+
+An overlay pane closes on an outside tap (`useClickOutside`), on Esc
+(`framework-explorer#closeOverlayPanes`), and — for the activity pane — on its
+own `lg:hidden` ×. A strip of the grid always stays visible beside an open
+overlay: it is both the cue that something is covered and the target for the
+tap that uncovers it.
+
+**The dismissing tap is consumed.** `useClickOutside` listens on `window` in
+the *capture* phase and does not stop the event, so the tap that closes an
+overlay used to carry on to whatever it landed on — and the strip left visible
+beside the pane is the matrix, so dismissing the feed also expanded a
+capability row under it. `#closeIfOutside` stops propagation when it actually
+closes something.
+
+**Only one overlay is open at a time.** Both are `z-index: 30` fixed panels, so
+a second one opened over the first just buries it — invisible, still "open",
+and still the pane Esc closes first. Opening either closes the other
+(`#closeOtherOverlay`).
+
+**Both dismissals stand down while a modal or an open menu is up**
+(`#somethingElseIsOpen`). This matters more for the tap than for Esc: every
+modal is mounted on the explorer ROOT (Lesson 19), so it is *outside* the pane
+— without the guard the first tap inside a Reject / Resolve / Add-level dialog
+reads as an outside click and quietly closes the feed the reviewer opened it
+from.
+
+**Opening the activity overlay moves focus into it**, and closing it by any
+path hands focus back to the Activity toggle — the overlay covers the grid, so
+Tab must not walk into controls the user can no longer see. Focus *containment*
+is deliberately not claimed: the pane stays an `aria-label`led landmark rather
+than a `role="dialog"`, and the role tree (unchanged here) behaves as it always
+has.
+
+**The height has a floor** (`min-h-80`). `--explorer-offset` is measured, so a
+chrome taller than the viewport — reachable at 200% zoom, where the CSS
+viewport is ~406 px — would otherwise clamp the calc to zero and leave the grid
+with no height at all. With the floor the page scrolls instead: the old
+constant's failure mode, and a recoverable one.
+
+**The layout's height is measured, not guessed.** `h-[calc(100dvh -
+var(--explorer-offset, 12rem))]`; the shell controller writes
+`--explorer-offset` from the layout's own distance to the top of the document
+and re-publishes it whenever the chrome resizes (a `ResizeObserver` on the
+header) or the window does. The old constant `12rem` only ever described the
+desktop header — once it wraps on a phone it is twice that, and the grid hung
+below the fold with its sticky header off-screen.
+
+**The phone is a review surface, not an authoring one.** Everything a reviewer
+needs — the feed, its actionable entries, the suggestion card, and the reject /
+resolve / discuss modals — fits 375 px. The authoring affordances are still
+present (the `pointer-coarse` rule in §11a already collapses each cluster to
+its kebab), but the structural modals are rendered server-side for every edit-
+mode viewer regardless of viewport: the server cannot know the viewport, and
+the role-pane flows (add role, add level, edit levels) are reachable on a phone
+through the overlay, so gating them on width would remove working functionality.
 
 ## Sticky Positioning
 
@@ -1281,9 +1390,24 @@ controller is no worse than before. Two rules for anything added here:
 
 ### framework_explorer_controller.js
 - **Role pane toggle** (desktop: inline show/hide, mobile: fixed overlay)
-- **Click-outside close** on mobile (via `useClickOutside`)
+- **Activity (context) pane toggle** — same two modes; below `lg` a
+  right-anchored fixed overlay, closed by default (§7)
+- **Click-outside close** on mobile for BOTH panes (via `useClickOutside`). One
+  `clickOutside` callback serves both registrations — stimulus-use has no
+  per-element callback name — so it re-checks containment itself rather than
+  trusting which one fired, and registers each element only once.
+- **Esc close** (`closeOverlayPanes`) — narrow viewports only. Both it and the
+  outside-tap path gate on `#somethingElseIsOpen` (no open modal overlay, no
+  open `[role="menu"]`)
+- **Focus hand-off** for the activity overlay — into the pane on open, back to
+  the Activity toggle on every close
+- **`--explorer-offset`** — measures the chrome above the explorer
+  (`ResizeObserver` on the header + `resize@window`) so the layout is exactly
+  the leftover viewport (§7)
+- **Breakpoint crossing** (`viewportChanged`) — strips an overlay's inline
+  styles and resets each pane to its default for the new width
 - **Role count update** when tree selection changes
-- **Toggle affordance** (chevron rotation, active state styling)
+- **Toggle affordance** (chevron rotation, active state styling, `aria-expanded`)
 
 ### tree_controller.js
 - **Checkbox management** (role toggle, family bulk toggle, indeterminate state)
@@ -1700,9 +1824,9 @@ Turbo JavaScript source bundled by turbo-rails 2.0.23, not assumed):
 Field report ("a few times I have had an error — quit or wait for growthOS to
 respond"): every inline approve/reject dispatched `suggestion:resolved` →
 `matrix#refresh`, a full re-fetch of the edit-mode matrix frame. On the real
-me&u framework that frame measures **~6.7 MB of HTML with ~3,300 Stimulus
-controller mounts, ~3,200 forms and ~2,400 textareas** (every cell pre-renders
-its hidden inline-edit form) — each swap costs seconds of main-thread parse +
+me&u framework that frame measured **7,615,168 B of HTML with 3,338 Stimulus
+controller mounts, 3,206 forms and 2,356 textareas** (every cell pre-rendered
+its hidden inline-edit form — the baseline row of the table below) — each swap costs seconds of main-thread parse +
 controller teardown/connect, and consecutive approvals overlap into Chrome's
 page-unresponsive dialog. Two rules fell out:
 
@@ -1724,23 +1848,35 @@ page-unresponsive dialog. Two rules fell out:
   `context-pane` debounces the signal into a single feed reload (~300ms)
   instead of re-fetching the 300KB+ feed once per event.
 
-Most of that frame is gone since Lesson 25 (expanded rows fetched on demand —
-7.6 MB → 1.5 MB on the same framework), Lesson 29 (delegated kebabs, a CSS
-hover-cluster rule and an icon sprite — a further −22.6%), Lesson 27 (one
-shared inline editor
-— 1.5 MB → 1.2 MB, and 374 forms / 374 textareas / 374 of the mounts down to
-zero) and Lesson 33 (the repeated utility strings as component classes —
-1,030,352 → 907,516 B, class-attribute bytes −52%). The pre-rendered kebab
-menus went with Lesson 29, and the frame now
-carries **no Stimulus mounts at all** — so the remaining bulk is the content
-itself plus the shared editor's per-host `data-editor-*` contract (~175 KB),
-which buys the zero pre-rendered forms and has no cheaper form. **On the wire
-it is 55 KB**, gzipped (#383), and a filter toggled back to a state the browser
-holds is a 304.
-Even so, treat "re-fetch the matrix" as a last resort in any new explorer
-feature: ~900 KB of HTML per approval is still the wrong shape, and the
-surgical streams exist so it never has to happen. `test/performance/
-explorer_payload_test.rb` now fails when any of this grows back.
+**Most of that frame is gone.** The 2026-09-07 edit-mode review turned into a
+run of changes that each took a bite out of it. All figures are
+`GET /frameworks/<me&u>/edit/matrix?track=both`, signed in, on the seeded me&u
+framework (~38 capabilities, 11 roles × 8 levels, ~995 illustrations) — but
+each row was measured against **its own merge-base**, so they describe steps,
+not a single arithmetic chain:
+
+| Step | What it removed | Edit-matrix frame |
+|---|---|---|
+| baseline (pre-#378) | — | **7,615,168 B** (gzip 311 KB) · 3,338 controller mounts · 3,206 `<form>` · 2,356 `<textarea>` · 888 `Kit::Dropdown` · 50,146 DOM nodes; one role toggle ≈8 s click→idle |
+| [#378](https://github.com/mr-yum/growth-os/pull/386) — expanded rows fetched on demand (Lesson 25) | the hidden expanded rows: **81%** of the payload | 1,460,574 B (gzip 95 KB) · 485 mounts · ≈1.2 s |
+| [#379](https://github.com/mr-yum/growth-os/pull/387) — one shared inline editor (Lessons 26–28) | 374 `<form>` + 374 `<textarea>` + their mounts | 1,222,619 B · 111 mounts |
+| [#380](https://github.com/mr-yum/growth-os/pull/388) — delegated kebabs, one hover cluster, an icon sprite (Lessons 29–31) | 38 dropdowns, 758 inline `<svg>` glyph definitions | ≈947,000 B · **0 mounts** |
+| [#381](https://github.com/mr-yum/growth-os/pull/389) — one write-response contract (§11b) | full-page reloads and whole-matrix re-fetches per write | frame unchanged; a write costs ~11 KB of stream instead of a 1,161,871 B reload |
+| [#383](https://github.com/mr-yum/growth-os/pull/393) — one fetch per burst, a 304 for a repeat, component classes (Lesson 33) | 52% of the `class` bytes; 4 of every 5 fetches in a filter burst | **907,516 B**, **54,656 B gzipped** · a repeat filter state is a 304 |
+
+End to end: **7.6 MB → 907 KB uncompressed, 311 KB → 55 KB on the wire, 3,338
+Stimulus mounts → 0.** ([#382](https://github.com/mr-yum/growth-os/pull/398)
+and [#384](https://github.com/mr-yum/growth-os/pull/400) close the same review
+set — measured sticky offsets / on-grid focus, and the phone layout — and
+change no payload.)
+
+The remaining bulk is the content itself plus the shared editor's per-host
+`data-editor-*` contract (~175 KB), which buys the zero pre-rendered forms and
+has no cheaper form. Even so, treat "re-fetch the matrix" as a last resort in
+any new explorer feature: ~900 KB of HTML per approval is still the wrong
+shape, and the surgical streams exist so it never has to happen.
+`test/performance/explorer_payload_test.rb` now fails when any of this grows
+back.
 
 ### 24. A translucent background on a sticky cell is a hole, not a tint
 
@@ -2140,6 +2276,81 @@ Two things fell out of it:
   Verified the whole file bites by reverting the fix and watching all six row
   cases and all three band cases fail.
 
+### 37. A closed `Kit::Dropdown` still matches `[role="menu"]`
+
+Esc on a narrow viewport closes whichever pane is covering the grid, but must
+stand down while a modal or an open menu owns it — so the guard asked
+`document.querySelector("[role='menu']")`. It never let Esc through: a
+`Kit::Dropdown` renders its menu **present and `hidden`**, and the role tree
+ships one per role, so the selector matched on every edit-mode page and
+disarmed the handler completely. `:not(.hidden)` is the whole fix, and it is
+also why the delegated grid menus (§11a — built on open, removed on close) are
+not the shape that bites: a widget that is *absent* when closed cannot be
+mistaken for an open one.
+
+The general rule: **"is one of these open?" is a question about state, not
+presence.** Any guard written as a bare presence check has to be read against
+how each matching widget represents "closed".
+
+### 38. Selenium scrolls bottom-aligned before it acts, so a short scrollport puts a tall row back under the sticky header
+
+`matrix_sticky_offsets_system_test.rb` deliberately ends in a REAL pointer
+click on the row kebab — a JS dispatch cannot see the row sitting under the
+sticky header, which is the bug it exists to catch (#382). It started failing
+at 375 px the moment the explorer stopped guessing its height (#384): the
+scrollport became the honest ~440 px of leftover viewport instead of a 620 px
+box hanging below the fold, and an 11-role row no longer fits in it.
+
+WebDriver "scrolls an element into view" **aligned to the bottom** of the
+scrollport before a hover or a click. Hovering the tall `<tr>` therefore
+dragged its top — where the kebab is — back up under the header, and the click
+was intercepted by the sticky `<th>`. The geometry assertions just above it had
+all passed; the scroll happened after them.
+
+Two things to carry forward:
+
+- **Selenium's pre-action scroll is test machinery, not user behaviour.** A real
+  pointer hover scrolls nothing. Re-establish the resting position between the
+  hover and the click.
+- **Do it through the mechanism under test**, not with a raw offset:
+  `scrollIntoView({ block: "start" })` honours the row's `scroll-margin-top`,
+  which is the measured `--matrix-header-h` + `--matrix-category-h`. A wrong
+  measurement still parks the kebab under the header and the test still fails,
+  so the repair does not blunt it.
+
+
+### 39. `pointer-events` inherits, so gating a cluster disarms the menu inside it
+
+Floating the role tree's hover controls over the name (§11a) put an invisible
+but still-hittable button on top of the text: on a coarse pointer at `lg` and
+up — a touch laptop, where nothing reveals the cluster on approach — a tap on a
+long name's tail fires `solo`. The obvious fix is to make `pointer-events`
+track each control's reveal instead of the cluster's presence.
+
+The obvious *implementation* of that fix breaks the kebab. `pointer-events`
+inherits, and `Kit::Dropdown`'s menu is a DOM **descendant** of its trigger even
+though `strategy: :fixed` paints it somewhere else entirely — so
+`pointer-events: none` on the cluster's children reached the open menu and every
+item in it. Visibly open, completely inert. Two things made it easy to miss:
+
+- **A JS-dispatched click still opens it**, so every test that drives the menu
+  that way passed. Only `edit_mode_system_test`'s `elementFromPoint` probe saw
+  it — and that probe is not "is the menu on top?", it is "would a real click
+  land on this item?", which an inert element fails for a completely different
+  reason than the clipping it was written for.
+- **The real gesture loses the hover it depends on.** The menu is positioned
+  outside the row, so moving the pointer onto an item drops the row's `:hover`
+  and re-disarms everything mid-gesture. Hovering the trigger to open it proves
+  nothing about clicking an item.
+
+So an open menu arms itself (`[role="menu"]`), and so does the trigger holding
+it open (`[aria-expanded="true"]`, the same hook the shared cluster rule already
+uses to keep an open kebab visible). The general rule: **when you gate
+`pointer-events` on a container, enumerate the popups that live inside it** —
+a fixed/absolute popup is not outside the subtree just because it is outside
+the box.
+
+
 ## Activity feed coverage (NON-NEGOTIABLE)
 
 The context pane is the framework's **activity feed** — its audit trail and shared
@@ -2267,14 +2478,14 @@ line (§9).
 | `app/views/frameworks/explorer/archive_illustration_modal.rb` | Shared archive-example modal (confirm + optional reason) — replaced the menu's native `confirm()` |
 | `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
-| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame; renders `RoleFamilyNameFrame` + `RoleNameFrame` for inline rename + the per-family edit-dialog trigger when `mode == :edit`; hides ghost roles/families in view mode, shows them (+ "No roles yet" + the "+ Add role" / "+ Add role family" triggers) in edit mode |
+| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; family list wrapped in the `role-tree-families` Turbo Frame. The per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows need `mode == :edit` **and** `can_edit_structure`; `RoleFamilyNameFrame` / `RoleNameFrame` (inline rename) currently follow `mode` alone — a **known divergence** from the `edit_structure?` policy bar those PATCHes enforce, so a suggest-only viewer is shown pencils their save will be refused (#401). Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
 | `app/views/frameworks/explorer/add_role_modal.rb` | Shared role modal — `:new` ("+ Add role" trigger, family implied, POST → `AddRole`) or `:edit` (role-row kebab, PATCH via id template → `UpdateRole`) |
 | `app/views/frameworks/explorer/level_editor_modal.rb` | Shared "Edit levels" modal (embedded) — body is the `level-editor` Turbo Frame; opened by the role-row kebab. Carries the shared `frame-error` controller + `Kit::FrameLoadError` block (audit issue #365): an un-handled `turbo:frame-missing` otherwise renders Turbo's own "Content missing" into the editor, with no retry |
 | `app/views/frameworks/explorer/level_editor_frame.rb` | Levels-editor frame body — per-row title/code saves, radio-with-clear entry flag, add row with in-frame errors; re-renders in place |
 | `app/javascript/controllers/level_editor_form_controller.js` | Points the level-editor frame at the clicked role on `modal:open`; fires `org-structure:updated` after in-frame saves |
-| `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + tooltip copy — "not visible in the published view yet", derived from published-level presence |
+| `app/views/frameworks/explorer/concerns/ghost_entities.rb` | Ghost predicates (`published_role?` / `ghost_role?` / `ghost_role_family?`) + the `role_ghost_title` / `role_family_ghost_title` tooltips ("Not in the published framework yet — appears once it has published levels"), derived from published-level presence |
 | `app/javascript/controllers/add_role_form_controller.js` | Prefills the role modal from its trigger (`:new` — family id + clears; `:edit` — action template + name/code/track); fires `org-structure:updated` after an edit; selection rides along via `tree-scope-fields` |
 | `app/operations/operations/frameworks/{add_role_family,add_role}.rb` | Shared web + MCP operations — org-structure adds (shape-preserving, live; new entity is a ghost until publish) |
 | `app/operations/operations/frameworks/add_level.rb` | Shared web + MCP operation — add a level (shape-changing: auto-opens a draft, deferred until publish; guards duplicate ordinals against the graph) |
@@ -2282,7 +2493,7 @@ line (§9).
 | `app/javascript/controllers/add_level_form_controller.js` | Prefills the add-level modal from the role kebab's "Add level…" trigger (role id/name + next free ordinal); selection rides along via `tree-scope-fields` |
 | `app/views/frameworks/explorer/department_name_frame.rb` | Department group header; inline-renameable in edit mode → bulk relabel of every family in the group |
 | `app/javascript/controllers/role_family_edit_form_controller.js` | Prefills the role-family dialog from the trigger dataset (`:edit` fills, `:new` clears); copies the current `roles[]`/`track` selection from the URL so the re-rendered tree stays checked |
-| `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current `roles[]`/`track` selection into a form at submit (`formdata` event) — used by the department-rename inline editor |
+| `app/javascript/controllers/tree_scope_fields_controller.js` | Injects the current matrix scope — `roles[]`, `track` and the text filter `q` — into a form at submit (`formdata` event): the department-rename editor, plus every structural modal and add-affordance whose surgical stream must re-render rows against the grid's scope (§11b) |
 | `app/operations/operations/frameworks/rename_department.rb` | Shared web + MCP operation — bulk-rename a department across its role families (fans out to `UpdateRoleFamily`; blank target ungroups) |
 | `app/controllers/frameworks/departments_controller.rb` | `PATCH /frameworks/:id/departments` — dispatch `RenameDepartment`, re-render the `role-tree-families` frame |
 | `app/controllers/concerns/frameworks/role_tree_families_frame.rb` | Shared `role-tree-families` frame render (selection-preserving), used by the role-family + department controllers |
@@ -2314,11 +2525,15 @@ line (§9).
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
 | `app/views/frameworks/explorer/concerns/menu_items.rb` | The grid's kebab triggers — `render_menu_trigger` + `approval_menu_data`; the menu itself is built client-side (§11a, #380) |
 | `app/views/frameworks/explorer/concerns/hover_cluster.rb` | The ONE hover-cluster rule (scopes + `render_hover_cluster`) and the ONE add affordance (`render_add_affordance`) (§11a) |
+| `.tree-actions` (in `app/assets/tailwind/application.css`) | The role tree's floating row-action cluster — out of flow so it reserves no name width, masked only while revealed (§11a) |
 | `app/views/frameworks/explorer/concerns/kebab_chrome.rb` | Shared ⋮ chrome for the remaining `Kit::Dropdown` kebab (the role tree) |
+| `app/views/frameworks/explorer/concerns/sticky_column.rb` | Shared sticky capability-column styling + the NON-NEGOTIABLE opacity invariant and its current composites (Hard-Won Lesson 24, issue #371) |
+| `app/views/frameworks/explorer/concerns/pending_archive.rb` | The ONE definition of "staged for archive in the open draft" (`pending_archive?`) + `STRIKETHROUGH_CLASSES`, shared by `MatrixRow` / `MatrixCategoryGroup` / `ExpandedRow` (§11) |
 | `app/javascript/controllers/explorer_menu_controller.js` | ONE delegated kebab-menu controller for the whole grid (§11a) |
 | `app/components/kit/icon_sprite.rb` | The ONE `<symbol>` set, rendered per page by `Kit::PageLayout`; call sites use `icon(name, class:)` |
 | `app/components/helpers/icon_helpers.rb` | `icon("pencil", class: …)` → `<svg><use href="#icon-pencil">` |
 | `app/controllers/concerns/frameworks/suggestion_authority.rb` | Resolves the viewer's `SuggestionApprovalAuthority` for controllers whose frame responses carry approval kebabs |
+| `app/controllers/concerns/frameworks/illustration_frame_context.rb` | Re-threads the discussion context (comment glyph + "Discuss…" context line) any controller swapping a single `IllustrationFrame` must supply, or the swap silently drops it (Lesson 13/16 class) |
 | `app/controllers/concerns/frameworks/suggestion_resolution_streams.rb` | Surgical inline approve/reject responses — Turbo Streams replacing just the affected entity's frame; nil → 204 → client full-refresh fallback (Hard-Won Lesson 23) |
 | `app/views/frameworks/explorer/concerns/search_highlight.rb` | Phlex `<mark>` highlighting of search-match terms (§4a) — safe, token-AND, overlap-merged |
 | `app/views/frameworks/explorer/concerns/inline_editable.rb` | Shared Phlex helpers for the edit pencil, the `data-editor-*` host contract (`field_editor_data`) and the inline save-error line; `inline_editor_value` seeds the editor with the pending proposal |
@@ -2327,7 +2542,7 @@ line (§9).
 | `app/views/frameworks/suggestions/inline_indicator.rb` | Amber "N pending" count pill (used in matrix cells) |
 | `app/models/frameworks/matrix_data_builder.rb` | Data transformation (merge levels, filter capabilities, keep empty categories in edit mode, per-field `latest_by_field` pending-edit descriptors) |
 | `app/models/frameworks/suggestion_diff.rb` | Grapheme-level inline diff between original and proposed text; fallback on density threshold |
-| `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — retained for the standalone suggestion index, no longer the context pane |
+| `app/views/frameworks/suggestions/panel_frame.rb` | (Legacy) suggestion-only panel content — reached ONLY by `SuggestionsController#render_panel` (`GET …/suggestions?layout=panel`), never the context pane (§9) |
 | `app/views/frameworks/activity/panel_frame.rb` | Context pane Turbo Frame content — activity feed (focus header + breadcrumb-with-× / gesture hint + count + "Show all" clear link + filter chips + entry list + load-older footer + empty state) |
 | `app/views/frameworks/activity/load_more.rb` | "Load older activity" footer (`#framework-activity-load-more`) — indication + affordance for the next batch |
 | `app/views/frameworks/activity/count.rb` | Loaded-entry count (`#framework-activity-count`) — replaced by the load-older Turbo Stream |
@@ -2338,6 +2553,7 @@ line (§9).
 | `app/models/frameworks/suggestion_approval_authority.rb` | Per-viewer approval authority value object — computed once, gates the actionable feed (§12) |
 | `app/operations/operations/frameworks/{approve,reject,amend,withdraw}_suggestion.rb` | Shared web + MCP suggestion-lifecycle operations (§12) |
 | `app/operations/operations/frameworks/{request,resolve}_clarification.rb` | Shared web + MCP clarification operations — the non-proposal suggestion kind (§12a) |
+| `app/views/frameworks/activity/suggestion_actions.rb` | The §12 Approve / Reject affordance pair — inline approve + the reject-modal dataset contract, shared by the feed entry and the pane card so they can't drift |
 | `app/views/frameworks/activity/clarification_actions.rb` | The "Resolve…" affordance on a pending clarification (feed entry + pane card) — opens the resolve modal (§12a) |
 | `app/views/frameworks/explorer/resolve_clarification_modal.rb` | Shared resolve-clarification modal (required note) — explorer root, edit mode (§12a) |
 | `app/javascript/controllers/resolve_clarification_form_controller.js` | Prefills the resolve modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12a) |
@@ -2358,15 +2574,15 @@ line (§9).
 | `app/javascript/controllers/reject_suggestion_form_controller.js` | Prefills the reject modal from the trigger dataset; dispatches `suggestion:resolved` on success (§12) |
 | `app/views/frameworks/activity/filter_chips.rb` | All / Suggestions / Edits / Structural / Lifecycle / Collaborators (client-side filter) |
 | `app/javascript/controllers/framework_activity_controller.js` | Client-side filter-chip toggling of visible entry groups |
-| `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, pane toggle, role count |
+| `app/javascript/controllers/framework_explorer_controller.js` | Layout shell, both pane toggles (inline column / slide-over per breakpoint), the measured `--explorer-offset`, role count (§7) |
 | `app/javascript/controllers/tree_controller.js` | Role selection, solo mode, track filter |
 | `app/javascript/controllers/matrix_controller.js` | Turbo Frame updates, row/category expansion, cell + category focus dispatch (shared with assessment) |
 | `app/javascript/controllers/context_pane_controller.js` | Right-pane frame src + focus URL sync + activity-sync-signal observer (live reload) |
 | `app/javascript/controllers/framework_search_controller.js` | Stats-bar text filter — debounced input → `framework-search:changed` (§4a) |
 | `app/queries/frameworks/activity_feed_query.rb` | Reads the framework RES stream → reverse-chronological anchored activity entries; focus narrowing + `descriptor`. Names entities from the read model **supplemented by the creating event in the window** (so draft-added capabilities/expectations — deferred from the read model — are still named in "Added a capability" / binding entries), and pins the **level** on expectation entries ("Capability · L`n`") |
-| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter for the standalone suggestion index |
+| `app/queries/frameworks/focused_suggestions_query.rb` | In-memory scope filter behind `SuggestionsController#render_panel` — not the context pane, which uses `ActivityFeedQuery` (§9) |
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) + `expanded_row` / `edit_expanded_row` (one capability's lazily fetched expanded row) |
-| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); Turbo Stream branch serves the load-older batches |
+| `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); at suggestion focus renders the card instead (`#render_suggestion_card` + `#sibling_discussions` + `#discussion_permalink`, §8/§12a/§13); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
 | `app/contexts/frameworks/projections/broadcasts_framework_activity.rb` | The shared nudge — the pane's sync signal AND the header's pending badge, so the two agree within one broadcast |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
@@ -2378,7 +2594,7 @@ line (§9).
 | `app/controllers/frameworks/capability_archives_controller.rb` | Archive a capability from the row kebab (POST → `ArchiveCapability`) |
 | `app/controllers/frameworks/capability_bindings_controller.rb` | Binding editor — index (frame) / create / update / destroy → `{Add,Update,Remove}CapabilityRoleBinding`, re-rendering the frame |
 | `app/controllers/frameworks/category_archives_controller.rb` | Archive an empty category from the header kebab (POST → `ArchiveCategory`) |
-| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` redirects to the edit explorer, selection preserved). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
+| `app/controllers/frameworks/{role_families,roles,levels}_controller.rb` | Direct (PATCH) edits of role family / role / level from the tree + header → `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`; all three also serve POST creates from the add modals → `{AddRoleFamily,AddRole,AddLevel}` (`role_families`/`roles` re-render the `role-tree-families` frame; `levels` answers the write-response contract — the `level-editor` frame from the levels editor, else toast + draft-status streams, with `add-level-form` firing `org-structure:updated` because a level adds a column, §11b). `role_families` serves both the inline rename (re-renders the name frame) and the edit dialog (forwards changed fields only, re-renders the `role-tree-families` frame on the `Turbo-Frame` header). Direct edit, not the suggest path. |
 | `app/controllers/frameworks/illustration_archives_controller.rb` | Archive an illustration from the expanded-row control (POST → `ArchiveIllustration`) |
 | `app/controllers/frameworks/illustration_reorders_controller.rb` | Move an illustration before/after a sibling (POST → `ReorderIllustrations`; 204, client moves the DOM node) |
 | `app/controllers/frameworks/category_reorders_controller.rb` | Move a category before/after a visible sibling (POST → `ReorderCategories`; toast stream → `reorder-move` moves the category's `<tbody>` in place — §11b) |
@@ -2393,7 +2609,7 @@ line (§9).
 | `app/operations/operations/frameworks/reorder_categories.rb` | Shared web + MCP operation — reorder the active capability categories (complete-list, permutation-validated, shape-preserving). |
 | `app/operations/operations/frameworks/reorder_capabilities.rb` | Shared web + MCP operation — reorder one category's capabilities (graph-validated so draft-added ones are included; shape-preserving). |
 | `app/operations/operations/frameworks/set_behavioural_expectation.rb` | Shared web + MCP operation — author an expectation in an empty cell via the suggest/approve path (`suggest_create`: direct-apply with authority in editing mode, else a pending suggestion); guards against a duplicate at the same level. |
-| `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code for MCP). `update_level` defers `is_entry` (no Boolean param support in `Operations::Base` yet). |
+| `app/operations/operations/frameworks/{update_role_family,update_role,update_level}.rb` | Shared web + MCP operations — direct, shape-preserving org-structure renames (and role code/track, level code + entry flag for MCP). `update_level` takes `is_entry` as a `:boolean` parameter (`false` counts as supplied) under `requires_any_of :title, :code, :is_entry`. |
 | `app/javascript/controllers/binding_editor_form_controller.js` | Points the binding-editor Turbo Frame at the clicked capability on `modal:open` |
 | `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state (error + Retry in place of a stuck "Loading…" or Turbo's "Content missing") — self-binds its five listeners in `connect()`; on the explorer it rides the binding-/level-editor modal bodies (audit issue #365) |
 | `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — message built from `subject:` + `closeable:`, Retry, and a Close for modals |
@@ -2402,10 +2618,12 @@ line (§9).
 | `app/operations/operations/frameworks/suggest_edit.rb` | Shared web + MCP operation — framework content edits (capability/category name + description, expectation + illustration text): authority-aware auto-approve in editing mode, pending suggestion otherwise; amends the author's pending edit on a field (→ `SuggestionAmended`) instead of stacking consecutive duplicates |
 | `app/operations/operations/frameworks/{suggest_create,suggest_delete}.rb` | Shared web + MCP operations — the explicit "propose a change" endpoints (`SuggestCreate` defaults to pending, editing mode auto-applies with authority; `SuggestDelete` is always pending — the archive tools own direct-apply) |
 | `app/javascript/controllers/edit_mode_toggle_controller.js` | Segmented Editing/Suggesting toggle; writes the cookie client-side and dispatches `framework-edit-mode:changed` so an open editor re-labels |
-| `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback) — hosts the 4 shared structural modals + the reject-suggestion modal (Lesson 19) |
+| `app/javascript/controllers/modal_controller.js` | Generic modal; opens the overlay named by `data-modal-target-id` (lone-overlay fallback), APG focus trap, `data-modal-dirty-guard` Esc confirm — hosts every root-mounted explorer overlay: the eleven structural modals plus reject-suggestion, request- and resolve-clarification, and archive-illustration (Lesson 19) |
 | `app/javascript/controllers/{add_capability_form,archive_form,mapping_form,archive_category_form}_controller.js` | Prefill the shared structural modals from the `modal:open` trigger dataset (§11) |
 | `test/system/framework_explorer_system_test.rb` | System tests (desktop + mobile) |
 | `test/system/frameworks/edit_mode_system_test.rb` | Edit vs view mode UI differences |
+| `test/system/frameworks/mobile_edit_mode_system_test.rb` | Edit mode at 375×812 vs 1400×1400 — no sideways page scroll, header controls on screen, the pane as slide-over vs inline column, reviewing from the overlay (§7) |
+| `test/system/frameworks/role_tree_layout_system_test.rb` | The tree's row layout — every role/family name on ONE line at both viewports and in both modes, the hover cluster reserving no width, the pencil/solo/⋮ still reachable (§7, §11a) |
 | `test/system/frameworks/matrix_sticky_offsets_system_test.rb` | Measured sticky offsets — expanded row + category band clear the header at 1/3/11 roles, both viewports, with a real pointer click on the row kebab |
 | `test/system/frameworks/matrix_focus_ring_system_test.rb` | On-grid focus ring (row / cell / category band) + the pane's breadcrumb × |
 | `test/system/frameworks/explorer_menu_system_test.rb` | Delegated kebab menus + the one hover-cluster rule (§11a) — ARIA, Esc/outside close, keyboard reveal, coarse-pointer collapse |
