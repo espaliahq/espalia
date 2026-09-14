@@ -72,6 +72,22 @@ class Operations::Frameworks::DefineMigrationMappingTest < ActiveSupport::TestCa
   end
 
   context "validation" do
+    # A self-mapping would make every rating its own "survivor" downstream; the
+    # projections skip it defensively, but the intent is wrong so refuse it.
+    should "reject a capability mapped onto itself" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          Operations::Frameworks::DefineMigrationMapping.call(
+            context: @admin_ctx,
+            params: { framework_id: @framework_id, from_stable_id: @from, to_stable_id: @from,
+                      mapping_type: "evolved" }
+          )
+        end
+        assert_match(/own survivor/i, error.message)
+        assert_equal 0, mappings.count
+      end
+    end
+
     should "reject an evolved mapping with no surviving capability" do
       ActsAsTenant.with_tenant(@tenant) do
         error = assert_raises(Operations::Base::ParameterError) do

@@ -160,9 +160,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Applies the migration mappings carried on `FrameworkVersionMigrated`
   # to this person's rating rows for the migrated framework.
   #
-  # * `same` / `evolved` → re-key the row to the survivor's `to_stable_id`.
-  #   `evolved` with `requires_reassessment: true` also gets the
-  #   `migration_status` flag.
+  # * `evolved` → re-key the row to the survivor's `to_stable_id`; with
+  #   `requires_reassessment: true` the survivor's rows are flagged. Where the
+  #   survivor is already rated at the same cycle/level the rows are merged —
+  #   see `rekey_ratings`.
+  # * `same` → carries no survivor (the operation forbids one), so the rows
+  #   stay under their stable id. A self-mapping (rejected by the operation
+  #   today, but possible in history) re-keys nothing and only flags — exactly
+  #   what the pre-merge code did, so replay of any persisted event is
+  #   unchanged.
   # * `archived` / `split` → leave the row pointing at the archived
   #   `from_stable_id` and flag it via `migration_status`. The matrix
   #   builder filters archived capabilities, so the row is invisible
@@ -180,6 +186,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Idempotent: never downgrades an existing flag (the
   # `WHERE migration_status = 'not_flagged'` clause). Re-keying an
   # already-re-keyed row is a no-op (the WHERE clause won't match).
+  #
+  # No `CODE_VERSION` bump for the merge: a colliding publish could never
+  # commit before (the unique violation rolled the whole transaction back), so
+  # no persisted `FrameworkVersionMigrated` event replays differently.
   def handle_framework_version_migrated(event)
     person_id = event.metadata[:person_id]
     framework_id = event.data[:framework_id]
@@ -193,18 +203,15 @@ class PersonDevelopment::Projections::CurrentAssessment
       scope = scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
 
       case mapping[:mapping_type]
-      when "same"
-        scope.update_all(capability_stable_id: mapping[:to_stable_id])
-      when "evolved"
-        scope.update_all(capability_stable_id: mapping[:to_stable_id])
+      when "same", "evolved"
+        to_stable_id = mapping[:to_stable_id]
+        next if to_stable_id.nil?
+
+        rekey_ratings(scope, to_stable_id) unless to_stable_id == mapping[:from_stable_id]
         if mapping[:requires_reassessment]
-          flag_scope = AssessmentLevelRating
-            .where(person_id: person_id, framework_id: framework_id,
-                   capability_stable_id: mapping[:to_stable_id],
-                   migration_status: "not_flagged")
-          flag_scope = flag_scope.where.not(cycle_id: frozen_cycle_ids) if frozen_cycle_ids.any?
-          flag_scope.update_all(migration_status: "flagged",
-                                reassessment_reason: "expectations_evolved")
+          scope.rewhere(capability_stable_id: to_stable_id)
+            .where(migration_status: "not_flagged")
+            .update_all(migration_status: "flagged", reassessment_reason: "expectations_evolved")
         end
       when "archived"
         scope.where(migration_status: "not_flagged")
@@ -218,6 +225,42 @@ class PersonDevelopment::Projections::CurrentAssessment
         # No predecessor data on this stream — nothing to migrate.
       end
     end
+  end
+
+  # Moves every rating in `scope` (rows keyed by the retiring capability) onto
+  # `to_stable_id`, except where the survivor already holds a rating for the
+  # same cycle and level — `idx_assessment_ratings_cycle_person_cap_level`
+  # forbids two rows there.
+  #
+  # Merge rule — **nothing is lost**: the survivor's own row stays as it is
+  # and the absorbed row stays under the retiring stable id, flagged
+  # `capability_merged`, exactly as `archived`/`split` rows are. Both are
+  # then invisible in the matrix (archived capabilities are filtered) until
+  # the relink/dismiss UI surfaces them. This also keeps the read model
+  # aligned with the aggregate, which never re-keys its rating maps.
+  #
+  # Two statements: re-key the non-colliding rows (NOT EXISTS), after which
+  # whatever is still under the retiring id is by construction the colliding
+  # set, flagged with a plain UPDATE. Both run against the same lazy scope,
+  # so its frozen-cycle exclusion applies to both.
+  #
+  # @param scope [ActiveRecord::Relation<AssessmentLevelRating>] rows under the
+  #   retiring capability, already filtered for this person/framework and
+  #   with frozen cycles excluded
+  # @param to_stable_id [String] survivor capability stable id
+  def rekey_ratings(scope, to_stable_id)
+    scope.where.not(<<~SQL.squish, to_stable_id).update_all(capability_stable_id: to_stable_id)
+      EXISTS (
+        SELECT 1 FROM assessment_level_ratings survivor
+        WHERE survivor.person_id = assessment_level_ratings.person_id
+          AND survivor.framework_id = assessment_level_ratings.framework_id
+          AND survivor.cycle_id = assessment_level_ratings.cycle_id
+          AND survivor.level_ordinal = assessment_level_ratings.level_ordinal
+          AND survivor.capability_stable_id = ?
+      )
+    SQL
+    scope.where(migration_status: "not_flagged")
+      .update_all(migration_status: "flagged", reassessment_reason: "capability_merged")
   end
 
   # Cycle ids this person has aligned (completed) — their rating rows are
