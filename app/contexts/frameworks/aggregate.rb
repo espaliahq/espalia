@@ -101,6 +101,27 @@ class Frameworks::Aggregate
     }))
   end
 
+  # Renames the framework. Shape-preserving — applies live, no draft needed.
+  #
+  # Silently no-ops when the (stripped) name is unchanged, so a redundant
+  # submit — a re-saved editor, an MCP agent re-sending the same value — leaves
+  # no event and no activity-feed entry behind.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param name [String] the new display name
+  # @raise [RuntimeError] if the framework is not created or the name is blank
+  def rename(framework_id, name)
+    ensure_created!
+    new_name = name.to_s.strip
+    raise "Framework name can't be blank" if new_name.empty?
+    return if new_name == @name
+
+    apply(Frameworks::Events::FrameworkRenamed.new(data: {
+      framework_id: framework_id,
+      name: new_name
+    }))
+  end
+
   # Adds a role family to the framework.
   #
   # @param framework_id [String] UUID of the framework
@@ -1315,6 +1336,14 @@ class Frameworks::Aggregate
     @framework_id = event.data[:framework_id]
     @name = event.data[:name]
     @status = :created
+  end
+
+  # Load-bearing, not cosmetic: Repository#snapshot_after rebuilds the
+  # ExplorerGraph from aggregate state after every mutating command, so a
+  # stale @name here would ship the OLD name into the graph (Hard-Won
+  # Lesson 15 in framework-explorer.md).
+  on Frameworks::Events::FrameworkRenamed do |event|
+    @name = event.data[:name]
   end
 
   on Frameworks::Events::RoleFamilyAdded do |event|

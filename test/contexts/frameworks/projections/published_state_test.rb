@@ -30,6 +30,30 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "FrameworkRenamed" do
+    should "update the Framework read model's name" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+
+      within_tenant do
+        assert_equal "Design Career Path", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+      end
+    end
+
+    should "survive the publish-time rebuild (not skipped, idempotent)" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+
+      assert_not @projection.send(:skip_during_rebuild?,
+                                  Frameworks::Events::FrameworkRenamed.new(data: { framework_id: @framework_id, name: "x" }))
+      # Re-applying the same event is a no-op update, so a replay can't diverge.
+      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+      within_tenant do
+        assert_equal "Design Career Path", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+      end
+    end
+  end
+
   context "RoleFamilyAdded" do
     should "create a RoleFamily read model" do
       rfid = SecureRandom.uuid_v7
@@ -831,6 +855,8 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
 
       append_and_project(Frameworks::Events::FrameworkCreated,
         framework_id: @framework_id, name: "me&u 2025")
+      append_and_project(Frameworks::Events::FrameworkRenamed,
+        framework_id: @framework_id, name: "me&u Career Paths")
       append_and_project(Frameworks::Events::RoleFamilyAdded,
         framework_id: @framework_id, role_family_id: rfid, name: "Engineering")
       append_and_project(Frameworks::Events::RoleAdded,
@@ -859,6 +885,9 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       before_snapshot = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
       assert_equal 1, before_snapshot[:frameworks].size
       assert_equal 1, before_snapshot[:illustrations].size
+      within_tenant do
+        assert_equal "me&u Career Paths", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+      end
 
       Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
       within_tenant do
