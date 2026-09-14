@@ -1482,6 +1482,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_rename",
+        "description" => "Rename a framework (tenant admin or framework owner only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "name"         => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[framework_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "frameworks_rename_department",
         "description" => "Rename a department grouping across all its role families (owner/editor/lead only).",
         "inputSchema" => {
