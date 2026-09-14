@@ -63,12 +63,13 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
 
   # The publish is already running in the background: same footprint as the
   # button so the header doesn't jump, but a real disabled control (not a link
-  # styled dead) so keyboard and screen-reader users get the state too.
+  # styled dead) so keyboard and screen-reader users get the state too. Opaque
+  # neutral surface — the label is the only thing saying a publish is in flight.
   def publishing_button
     button(
       type: "button", disabled: true, aria_disabled: "true",
       class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
-             "bg-primary/60 text-white cursor-not-allowed",
+             "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 cursor-not-allowed",
       title: "v#{@framework.draft_version} is being published — you'll be notified when it's live"
     ) { "Publishing v#{@framework.draft_version}…" }
   end

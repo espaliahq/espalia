@@ -52,6 +52,34 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "Needs a mapping"
     end
 
+    should "not list a capability that was archived in an earlier version" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        cat_id = SecureRandom.uuid_v7
+        cap_id = SecureRandom.uuid_v7
+        stable_id = SecureRandom.uuid_v7
+        handler.add_capability_category(@framework_id, cat_id, "Thinking")
+        handler.add_capability(@framework_id, cap_id, stable_id, cat_id, "Legacy Systems")
+        handler.publish_version(@framework_id, "seed")                 # v1
+        handler.archive_capability(@framework_id, cap_id, reason: "x") # auto-opens v2
+        handler.define_migration_mapping(@framework_id, SecureRandom.uuid_v7, stable_id, nil, "archived")
+        handler.publish_version(@framework_id, "seed")                 # v2: the archive is live
+        handler.start_draft(@framework_id, 3, "seed")
+      end
+
+      sign_in @admin_user
+      get new_framework_publication_path(framework_id: @framework_id)
+
+      assert_response :success
+      assert_includes response.body, "No capabilities are being retired"
+      assert_not_includes response.body, "Legacy Systems"
+
+      # …and the gate does not block v3 on the v2 archive either.
+      assert_enqueued_with(job: Frameworks::PublishVersionJob) do
+        post framework_publication_path(framework_id: @framework_id)
+      end
+    end
+
     should "redirect non-publisher members" do
       sign_in @member_user
       get new_framework_publication_path(framework_id: @framework_id)
@@ -103,7 +131,7 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
       assert_no_enqueued_jobs(only: Frameworks::PublishVersionJob) do
         post framework_publication_path(framework_id: @framework_id)
       end
-      assert_redirected_to edit_framework_path(@framework_id)
+      assert_redirected_to new_framework_publication_path(@framework_id)
       assert_equal "v1 is already being published.", flash[:alert]
       assert_equal 1, ActsAsTenant.with_tenant(@tenant) { FrameworkPublication.where(framework_id: @framework_id).count }
     end
@@ -171,7 +199,7 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
     should "show why the last attempt failed" do
       ActsAsTenant.with_tenant(@tenant) do
         create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 1,
-          status: :failed, error_message: "Publish gate: capability needs a mapping.")
+          status: :failed, finished_at: 1.minute.ago, error_message: "Publish gate: capability needs a mapping.")
       end
 
       sign_in @admin_user
@@ -179,6 +207,19 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
 
       assert_includes response.body, "The last publish attempt failed:"
       assert_includes response.body, "capability needs a mapping"
+      assert_includes response.body, "Confirm &amp; publish v1"
+    end
+
+    should "not report a finished failure as still publishing" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 1,
+          status: :failed, finished_at: 1.minute.ago, error_message: "x")
+      end
+
+      sign_in @admin_user
+      get new_framework_publication_path(framework_id: @framework_id)
+
+      assert_no_match(/<strong>Publishing v1…/, response.body)
       assert_includes response.body, "Confirm &amp; publish v1"
     end
   end

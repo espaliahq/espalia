@@ -2,11 +2,12 @@
 
 require "test_helper"
 
-# End-to-end check that the PublishVersion Operation routes through to the
-# real command handler: the bootstrap v1 draft publishes, the read model's
-# version advances and the draft clears, and publishing again (no draft)
-# raises. Also pins the policy gate — a plain tenant member is denied.
+# The PublishVersion Operation *requests* a publish: it checks the gate up
+# front, records a FrameworkPublication and enqueues the job. The publish
+# itself is covered by Frameworks::PublishVersionJobTest.
 class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @tenant = create(:tenant)
     @admin_user = create(:user)
@@ -28,39 +29,59 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
     FrameworkState::Framework.find_by!(framework_id: @framework_id)
   end
 
+  def request_publish(ctx = @admin_ctx)
+    Operations::Frameworks::PublishVersion.call(context: ctx, params: { framework_id: @framework_id })
+  end
+
   context "as a tenant admin" do
-    should "publish the bootstrap v1 draft and advance the version" do
+    should "record the request and enqueue the job without publishing yet" do
       ActsAsTenant.with_tenant(@tenant) do
-        assert framework.draft_in_progress
-        assert_equal 0, framework.current_published_version
+        result = nil
+        assert_enqueued_with(job: Frameworks::PublishVersionJob) { result = request_publish }
 
-        result = Operations::Frameworks::PublishVersion.call(
-          context: @admin_ctx, params: { framework_id: @framework_id }
-        )
+        assert_equal "queued", result[:status]
+        assert_equal 1, result[:draft_version]
+        publication = FrameworkPublication.find(result[:publication_id])
+        assert publication.queued?
+        assert_equal @admin_tu, publication.requested_by
+        assert framework.draft_in_progress, "publishing happens in the job"
+      end
+    end
 
-        assert_equal @framework_id, result[:framework_id]
-        assert_equal 1, result[:published_version]
-        assert_equal 1, framework.current_published_version
-        assert_not framework.draft_in_progress
+    should "refuse while a request is already in flight" do
+      ActsAsTenant.with_tenant(@tenant) do
+        request_publish
+        error = assert_raises(RuntimeError) { request_publish }
+        assert_equal "v1 is already being published.", error.message
+        assert_equal 1, FrameworkPublication.where(framework_id: @framework_id).count
+      end
+    end
+
+    should "reap an abandoned request and accept a new one" do
+      ActsAsTenant.with_tenant(@tenant) do
+        stale = create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 1,
+          requested_by: @admin_tu, status: :running, created_at: 3.hours.ago)
+
+        result = request_publish
+
+        assert stale.reload.failed?
+        assert_not_nil stale.finished_at
+        assert_match(/abandoned/, stale.error_message)
+        assert FrameworkPublication.find(result[:publication_id]).queued?
       end
     end
 
     should "raise when there is no draft in progress" do
       ActsAsTenant.with_tenant(@tenant) do
-        Operations::Frameworks::PublishVersion.call(
-          context: @admin_ctx, params: { framework_id: @framework_id }
-        )
+        Frameworks::CommandHandler.new.publish_version(@framework_id, "seed")
 
-        error = assert_raises(RuntimeError) do
-          Operations::Frameworks::PublishVersion.call(
-            context: @admin_ctx, params: { framework_id: @framework_id }
-          )
-        end
+        error = assert_raises(RuntimeError) { request_publish }
         assert_match(/no draft/i, error.message)
+        assert_no_enqueued_jobs(only: Frameworks::PublishVersionJob)
       end
     end
 
-    should "refuse to publish while an archived capability lacks a migration mapping" do
+    should "refuse while an archived capability lacks a migration mapping" do
       ActsAsTenant.with_tenant(@tenant) do
         handler = Frameworks::CommandHandler.new
         cat_id = SecureRandom.uuid_v7
@@ -70,12 +91,9 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
         handler.publish_version(@framework_id, "seed")                 # v1; cap pre-draft
         handler.archive_capability(@framework_id, cap_id, reason: "x") # auto-opens v2, no mapping
 
-        error = assert_raises(RuntimeError) do
-          Operations::Frameworks::PublishVersion.call(
-            context: @admin_ctx, params: { framework_id: @framework_id }
-          )
-        end
-        assert_match(/lack migration mappings/i, error.message)
+        error = assert_raises(RuntimeError) { request_publish }
+        assert_equal "Add a migration mapping before publishing: Legacy.", error.message
+        assert_empty FrameworkPublication.where(framework_id: @framework_id)
       end
     end
   end
@@ -83,11 +101,7 @@ class Operations::Frameworks::PublishVersionTest < ActiveSupport::TestCase
   context "as a plain tenant member" do
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do
-        assert_raises(Pundit::NotAuthorizedError) do
-          Operations::Frameworks::PublishVersion.call(
-            context: @member_ctx, params: { framework_id: @framework_id }
-          )
-        end
+        assert_raises(Pundit::NotAuthorizedError) { request_publish(@member_ctx) }
       end
     end
   end
