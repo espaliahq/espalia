@@ -177,16 +177,14 @@ class FrameworkPolicy < ApplicationPolicy
     tenant_admin? || (person.present? && can_manage_collaborators?)
   end
 
-  # Rename the framework. The same bar as #manage_collaborators? — tenant
-  # admins and framework **owners** — because the name is the framework's
-  # identity across every surface (index, cycles, assessments, MCP), not a
-  # piece of content an editor or lead curates. A shape-preserving direct
-  # edit, not the suggested-edit path.
+  # Rename the framework. Deliberately the SAME bar as #manage_collaborators?
+  # — tenant admins and framework **owners** — because the name is the
+  # framework's identity across every surface (index, cycles, assessments,
+  # MCP), not content an editor or lead curates. Delegated, not restated, so
+  # the two can't drift.
   #
   # @return [Boolean]
-  def rename?
-    tenant_admin? || (person.present? && can_manage_collaborators?)
-  end
+  def rename? = manage_collaborators?
 
   private
 
