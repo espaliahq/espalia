@@ -29,12 +29,13 @@ class Frameworks::RetiringCapabilitiesQuery
   end
 
   # Capabilities that will exist post-publish — survivor candidates for
-  # evolved/split mappings.
+  # evolved/split mappings. Neither the retiring ones nor those archived in
+  # an earlier version (still in the graph, but gone from the published view).
   #
   # @return [Array<Hash>] `{ name:, stable_id: }`, sorted by name
   def survivors
     graph_capabilities
-      .reject(&:pending_archive)
+      .reject { |c| c.pending_archive || c.status == "archived" }
       .map { |c| { name: c.name, stable_id: c.stable_id } }
       .sort_by { |c| c[:name] }
   end
