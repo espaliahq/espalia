@@ -352,6 +352,65 @@ input[type="week"] {
   }
 }
 
+/* The role tree's floating row actions (#384 follow-up).
+ *
+ * §11a's own trap, one pane to the left: a hover control in the row's flow
+ * reserves its width even at `opacity: 0`. In an 18rem tree that was the solo
+ * pill (~44 px), the rename pencil (~20 px) and the ⋮ (~28 px) taken off a
+ * ~190 px slot, so almost every real role name — "Analytics Engineer",
+ * "Commercial Finance", "Product Management" — wrapped onto two lines and the
+ * tree became a wall.
+ *
+ * The controls sit in an absolutely-positioned cluster over the right edge of
+ * the name's box instead, so the name gets the row's whole width. Each control
+ * keeps its OWN reveal (the `data-cluster` rule above, or `group-hover`), which
+ * is why the mask below is keyed to the same conditions rather than painted
+ * unconditionally: an always-on background would blank the tail of a name whose
+ * controls are invisible. */
+.tree-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-left: 0.5rem;
+  pointer-events: none;
+}
+
+.tree-actions > * {
+  pointer-events: auto;
+}
+
+/* The mask. Matches the row's own hover background so the cluster reads as part
+ * of it, and only while something is actually shown there. */
+[data-hover-cluster="tree"]:hover .tree-actions,
+[data-hover-cluster="tree"]:focus-within .tree-actions {
+  background-color: var(--color-gray-100);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-hover-cluster="tree"]:hover .tree-actions,
+  [data-hover-cluster="tree"]:focus-within .tree-actions {
+    background-color: var(--color-gray-800);
+  }
+}
+
+/* Touch has no hover, and the coarse-pointer rule above keeps the kebab and the
+ * `standalone` pencil permanently visible — so the mask has to be the PANE's
+ * background there, not the row's hover tint. */
+@media (pointer: coarse) {
+  .tree-actions {
+    background-color: var(--color-white);
+  }
+}
+
+@media (pointer: coarse) and (prefers-color-scheme: dark) {
+  .tree-actions {
+    background-color: var(--color-gray-900);
+  }
+}
+
 /* Framework explorer — the ONE "add" treatment (#380).
  *
  * "+ Add capability" was a plain footer row, "+ Add expectation" a hover-only

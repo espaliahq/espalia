@@ -45,12 +45,18 @@ module Views::Frameworks::Explorer::Concerns::InlineEditable
   #   "Edit …" item — false where there is no kebab (a level title, the
   #   org-structure renames, a pending ghost), so the pencil stays reachable on
   #   a coarse pointer instead of vanishing with nothing to replace it
-  def render_inline_editor_pencil(aria_label:, scope:, collapses: true)
+  # @param host_frame [String, nil] the id of the host's Turbo Frame, for a
+  #   pencil rendered OUTSIDE that frame. The editor resolves its host with
+  #   `closest("[data-editor-action]")` first and falls back to this — the role
+  #   tree needs it because its pencils sit in the row's floating action
+  #   cluster, not inside the name frame (a hover control inside the row's flow
+  #   reserves width even at `opacity: 0`, which is what crushed the names).
+  def render_inline_editor_pencil(aria_label:, scope:, collapses: true, host_frame: nil)
     button(
       type: "button",
       class: "explorer-cluster-btn",
       data: cluster_control_data(scope, collapses ? "inline" : "standalone")
-              .merge(action: "field-editor#open"),
+              .merge({ action: "field-editor#open", editor_host_frame: host_frame }.compact),
       aria_label: aria_label
     ) do
       render_inline_editor_pencil_icon

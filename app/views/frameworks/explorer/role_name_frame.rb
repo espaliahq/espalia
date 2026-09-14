@@ -41,25 +41,27 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
 
   private
 
+  # Never truncated — a role name the reader cannot finish is worse than a tall
+  # row. `break-words` is the fallback for a genuinely long one; the row is
+  # sized (pane width + a floating action cluster that reserves nothing) so
+  # every name in a real framework fits on one line and the fallback is rare.
   def plain_name
     ghost = ghost_role?(@role)
     span(
-      # line-clamp, never single-line truncate: after the checkbox + reserved
-      # hover controls the name gets ~100px in the w-72 pane, so `truncate`
-      # clipped most real role names to a few characters. Two lines fit any
-      # sane name; the tooltip is the recovery beyond that.
-      class: "text-sm text-gray-600 dark:text-gray-400 line-clamp-2 break-words " \
+      class: "text-sm text-gray-600 dark:text-gray-400 break-words " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
       title: (ghost ? role_ghost_title : @role.name)
     ) { @role.name }
   end
 
+  # The pencil is NOT rendered here — it lives in the row's floating action
+  # cluster and names this frame with `data-editor-host-frame`. Inside the
+  # frame it sat in the row's flow and reserved ~20 px of the name's width even
+  # while invisible; outside it, it also survives this frame's PATCH re-render
+  # for free.
   def editable
-    div(class: "flex flex-col items-start gap-1", data: editor_data) do
-      div(class: "mx-line min-w-0", data: { editor_display: true }) do
-        plain_name
-        render_inline_editor_pencil(aria_label: "Edit role name", scope: "tree", collapses: false)
-      end
+    div(class: "flex flex-col items-start gap-1 min-w-0", data: editor_data) do
+      div(class: "min-w-0", data: { editor_display: true }) { plain_name }
     end
   end
 

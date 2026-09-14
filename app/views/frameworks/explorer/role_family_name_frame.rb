@@ -41,23 +41,22 @@ class Views::Frameworks::Explorer::RoleFamilyNameFrame < Views::Base
 
   private
 
+  # Never truncated — same rule as RoleNameFrame: `break-words` is the fallback
+  # for a genuinely long name, and the row is sized so it is rarely reached.
   def plain_name
     ghost = ghost_role_family?(@role_family)
     span(
-      # line-clamp, not single-line truncate — same rationale as RoleNameFrame:
-      # the narrow tree pane clipped real family names to a few characters.
-      class: "text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-2 break-words " \
+      class: "text-sm font-medium text-gray-700 dark:text-gray-300 break-words " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
       title: (ghost ? role_family_ghost_title : @role_family.name)
     ) { @role_family.name }
   end
 
+  # The pencil lives in the row's floating action cluster, not here — see
+  # RoleNameFrame#editable for why.
   def editable
-    div(class: "flex flex-col items-start gap-1", data: editor_data) do
-      div(class: "flex items-start gap-1 min-w-0", data: { editor_display: true }) do
-        plain_name
-        render_inline_editor_pencil(aria_label: "Edit role family name", scope: "tree", collapses: false)
-      end
+    div(class: "flex flex-col items-start gap-1 min-w-0", data: editor_data) do
+      div(class: "min-w-0", data: { editor_display: true }) { plain_name }
     end
   end
 

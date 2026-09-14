@@ -16,6 +16,10 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # denser padding).
   include Views::Frameworks::Explorer::Concerns::KebabChrome
   include Views::Frameworks::Explorer::Concerns::HoverCluster
+  # The rename pencils are rendered by the ROW (into its floating action
+  # cluster), not by the name frames, so the tree needs the pencil helper —
+  # and the concern's own comment predicted this exact NoMethodError.
+  include Views::Frameworks::Explorer::Concerns::InlineEditable
 
   TRACK_OPTIONS = [
     { value: "both", label: "All" },
@@ -213,13 +217,27 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           data: { action: "change->tree#toggleFamily", family_id: role_family.role_family_id, tree_target: "familyCheckbox" }
         )
 
-        render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
-          role_family: role_family, framework_id: @framework_id, mode: @mode
-        )
+        # The name owns the row's spare width; its hover controls float over the
+        # right edge of THIS box rather than sitting in the row's flow, so they
+        # reserve nothing (§11a's own trap — `opacity-0` still takes layout
+        # width). The count stays inline and always visible, to the right of the
+        # cluster's box, so it is never masked.
+        name_slot do
+          render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
+            role_family: role_family, framework_id: @framework_id, mode: @mode
+          )
+          if @mode == :edit
+            div(class: "tree-actions") do
+              render_inline_editor_pencil(
+                aria_label: "Edit role family name", scope: "tree", collapses: false,
+                host_frame: "role-family-name-#{role_family.role_family_id}"
+              )
+              family_edit_trigger(role_family) if @can_edit_structure
+            end
+          end
+        end
 
-        family_edit_trigger(role_family) if @mode == :edit && @can_edit_structure
-
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
+        span(class: "shrink-0 text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
       end
 
       # Roles
@@ -321,21 +339,43 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         data: { action: "change->tree#toggleRole", role_id: role.role_id }
       )
 
-      render Views::Frameworks::Explorer::RoleNameFrame.new(
-        role: role, framework_id: @framework_id, mode: @mode
-      )
+      # Same arrangement as the family row: the name takes the width, its
+      # controls float over the right edge and reserve none of it. In edit mode
+      # the reserved cluster (solo pill + pencil + ⋮) was ~90 px of a ~190 px
+      # slot, which is what wrapped almost every real role name onto two lines.
+      name_slot do
+        render Views::Frameworks::Explorer::RoleNameFrame.new(
+          role: role, framework_id: @framework_id, mode: @mode
+        )
 
-      button(
-        type: "button",
-        class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
-               "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-               "hover:bg-primary/20 hover:text-primary transition-opacity",
-        data: { action: "tree#solo", role_id: role.role_id },
-        title: "Solo — focus on this role only"
-      ) { "solo" }
+        div(class: "tree-actions") do
+          if @mode == :edit
+            render_inline_editor_pencil(
+              aria_label: "Edit role name", scope: "tree", collapses: false,
+              host_frame: "role-name-#{role.role_id}"
+            )
+          end
 
-      role_actions_kebab(role) if @mode == :edit && @can_edit_structure
+          button(
+            type: "button",
+            class: "opacity-0 group-hover:opacity-100 shrink-0 px-1.5 py-0.5 text-xs rounded-sm " \
+                   "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
+                   "hover:bg-primary/20 hover:text-primary transition-opacity",
+            data: { action: "tree#solo", role_id: role.role_id },
+            title: "Solo — focus on this role only"
+          ) { "solo" }
+
+          role_actions_kebab(role) if @mode == :edit && @can_edit_structure
+        end
+      end
     end
+  end
+
+  # The row's name area: a positioning context the name fills and the row's
+  # hover controls float over. Everything after it in the row (a family's role
+  # count) stays inline and unmasked.
+  def name_slot(&block)
+    div(class: "relative flex-1 min-w-0 flex items-center", &block)
   end
 
   # Role-row actions kebab (⋮) — the scalable home for the role's actions, so
