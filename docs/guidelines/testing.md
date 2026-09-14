@@ -316,8 +316,8 @@ Available helpers (defined in `test/support/system/stimulus_helpers.rb`):
 |--------|-----------|-------|
 | `open_dropdown(scope:)` | dropdown | Opens a dropdown menu |
 | `toggle_sidebar(scope:)` | sidebar | Opens the mobile sidebar drawer |
-| `toggle_role_pane(scope:)` | framework-explorer | Opens the framework explorer role pane (an overlay below `lg`, an inline column above it) |
-| `toggle_context_pane(scope:)` | framework-explorer | Opens the framework explorer activity pane — same two shapes; below `lg` it starts CLOSED, so this opens it rather than closing it |
+| `toggle_role_pane(scope:)` | framework-explorer | Toggles the framework explorer role pane (an overlay below `lg`, an inline column above it) — it starts open on desktop, so there a call closes it |
+| `toggle_context_pane(scope:)` | framework-explorer | Toggles the framework explorer activity pane — same two shapes; open by default on desktop (a call closes it), CLOSED by default below `lg` (a call opens it) |
 | `toggle_panel(scope:)` | panel | Opens a panel (e.g. scoring panel) |
 | `expand_matrix_row(selector, scope:, await_content:)` | matrix | Expands a matrix row by capability selector. The row's content is fetched on first expand, so the helper waits for the loaded row by default — assert on its content, not on the row; pass `await_content: false` only when the load itself is what's under test |
 | `start_inline_edit(container)` | field-editor | Opens the explorer's shared inline editor via its pencil, returns the cloned form |

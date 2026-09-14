@@ -90,7 +90,7 @@ or reset seed data underneath it, and don't start a second browser driver.
 
 An issue body carrying the problem, the measurements or reproduction, the files
 in play, the acceptance criteria, and the intended approach; plus the base
-branch if it isn't `main`. If any of that is missing, the first commit is
+branch if it isn't `main`. If any of that is missing, the first action is
 usually a comment on the issue pinning down what you assumed.
 
 ## The final report

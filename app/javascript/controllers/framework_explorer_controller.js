@@ -152,6 +152,9 @@ export default class extends BaseController {
     if (this.hasRolePaneTarget) {
       this.rolePaneTarget.removeAttribute("style")
       this.rolePaneOpen = !this.isMobile
+      if (this.isMobile) {
+        this.#rescueFocusFrom(this.rolePaneTarget, this.hasRolePaneToggleTarget ? this.rolePaneToggleTarget : null)
+      }
       this.#updateToggleAffordance()
     }
     if (this.hasContextPaneTarget) {
@@ -159,8 +162,23 @@ export default class extends BaseController {
       this.contextPaneTarget.classList.remove("hidden")
       this.contextPaneTarget.classList.add("flex")
       this.contextPaneOpen = !this.isMobile
+      if (this.isMobile) {
+        this.#rescueFocusFrom(this.contextPaneTarget,
+          this.hasContextPaneToggleTarget ? this.contextPaneToggleTarget : null)
+      }
       this.#updateContextToggleAffordance()
     }
+  }
+
+  // Crossing below `lg` hides a pane through `max-lg:hidden` without any
+  // close call — so keyboard focus that was inside it would be stranded on a
+  // hidden element. Hand it to the pane's toggle, the same place Esc and an
+  // outside tap leave it.
+  #rescueFocusFrom(pane, toggle) {
+    if (!pane.contains(document.activeElement)) return
+
+    if (toggle) toggle.focus()
+    else document.activeElement.blur()
   }
 
   // Measures how much viewport the page chrome above the explorer consumes and
