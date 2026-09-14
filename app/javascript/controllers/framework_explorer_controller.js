@@ -270,7 +270,10 @@ export default class extends BaseController {
 
     if (this.isMobile) {
       this.#closeOtherOverlay("role")
-      Object.assign(this.rolePaneTarget.style, this.#overlayStyle("18rem", { left: "0" }))
+      // Wider than its desktop column: the overlay has no matrix to share with,
+      // so the tree takes the viewport minus the tap strip and its names get
+      // the most room they will ever have.
+      Object.assign(this.rolePaneTarget.style, this.#overlayStyle("24rem", { left: "0" }))
       this.#watchOutsideClicks(this.rolePaneTarget)
     } else {
       this.rolePaneTarget.removeAttribute("style")

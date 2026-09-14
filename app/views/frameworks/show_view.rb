@@ -604,9 +604,15 @@ class Views::Frameworks::ShowView < Views::Base
     end
   end
 
+  # `w-76` (19 rem), not `w-72`: the seeded framework's longest names measure
+  # 171.6 px ("Software Engineering") and 171.2 px ("Engineering Manager") at
+  # `text-sm`, and a family row's name box was 175.4 px — under 4 px of
+  # headroom, which is what made the tree wrap the moment anything else claimed
+  # a pixel. 19 rem puts the family box at 191 px and the role box at 207 px,
+  # ~20 px clear. The matrix pays 16 px of 1,112 at 1400 wide (#384 follow-up).
   def left_pane
     aside(
-      class: "w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
+      class: "w-76 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
              "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
              "max-lg:hidden",
       data: {
