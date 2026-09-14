@@ -43,7 +43,9 @@ class Frameworks::NamesController < ApplicationController
       framework_id: @framework.framework_id,
       name: name,
       mode: :edit,
-      can_rename: true,
+      # Just authorized above — pass the policy's answer, not a literal, so
+      # the re-render and the page render take identical inputs.
+      can_rename: policy(@framework).rename?,
       error: error,
       attempted_value: attempted_value
     ), layout: false, status: (error ? :unprocessable_content : :ok)

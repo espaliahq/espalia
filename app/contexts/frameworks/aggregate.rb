@@ -114,7 +114,9 @@ class Frameworks::Aggregate
     ensure_created!
     new_name = name.to_s.strip
     raise "Framework name can't be blank" if new_name.empty?
-    return if new_name == @name
+    # #create stores the name verbatim, so compare stripped-to-stripped or a
+    # framework seeded with padding would "rename" on every untouched save.
+    return if new_name == @name.to_s.strip
 
     apply(Frameworks::Events::FrameworkRenamed.new(data: {
       framework_id: framework_id,

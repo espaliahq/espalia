@@ -69,6 +69,16 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_equal before, @aggregate.unpublished_events.to_a.length
       assert_equal "Engineering Growth", @aggregate.name
     end
+
+    should "no-op when only the stored name's padding differs (create stores it verbatim)" do
+      padded = Frameworks::Aggregate.new
+      padded.create(@framework_id, "  Padded  ")
+      before = padded.unpublished_events.to_a.length
+
+      padded.rename(@framework_id, "Padded")
+
+      assert_equal before, padded.unpublished_events.to_a.length
+    end
   end
 
   # ── Role Families ──

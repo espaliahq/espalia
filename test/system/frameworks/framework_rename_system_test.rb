@@ -57,6 +57,21 @@ class Frameworks::FrameworkRenameSystemTest < ApplicationSystemTestCase
       assert_no_text "Test Framework"
     end
 
+    # The frame is shrink-to-fit, so without the floor the editor would open
+    # only as wide as the short current name.
+    should "open a roomy editor on desktop even for a short name" do
+      sign_in_as(@owner_user)
+      visit edit_framework_path(@framework_id)
+      assert_selector "h1", text: "Test Framework"
+
+      form = start_inline_edit(host_selector)
+      heading_width = find("h1", visible: :all).evaluate_script("this.getBoundingClientRect().width")
+      form_width = form.evaluate_script("this.getBoundingClientRect().width")
+      assert_operator form_width, :>=, 384, "editor should be at least 24rem wide on desktop"
+      assert_operator form_width, :>, heading_width, "the floor must beat the pinned heading width"
+      cancel_inline_edit(form)
+    end
+
     should "rename from the header pencil on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       sign_in_as(@owner_user)

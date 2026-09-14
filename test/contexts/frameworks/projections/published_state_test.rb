@@ -40,16 +40,21 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       end
     end
 
-    should "survive the publish-time rebuild (not skipped, idempotent)" do
-      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
-      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+    should "keep the latest name through the publish-time rebuild (replayed, not skipped)" do
+      # The publish handler re-reads the whole stream, so the events must be
+      # appended (not just handled) for the rebuild to see them.
+      append_and_project(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+      append_and_project(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design v1 name")
+      append_and_project(Frameworks::Events::DraftVersionStarted,
+                         framework_id: @framework_id, target_version: 1, started_by: "system")
+      append_and_project(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+      append_and_project(Frameworks::Events::FrameworkVersionPublished,
+                         framework_id: @framework_id, version: 1, published_by: "tester")
 
-      assert_not @projection.send(:skip_during_rebuild?,
-                                  Frameworks::Events::FrameworkRenamed.new(data: { framework_id: @framework_id, name: "x" }))
-      # Re-applying the same event is a no-op update, so a replay can't diverge.
-      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
       within_tenant do
-        assert_equal "Design Career Path", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+        framework = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal "Design Career Path", framework.name
+        assert_equal 1, framework.current_published_version
       end
     end
   end

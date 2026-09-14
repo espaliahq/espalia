@@ -60,8 +60,12 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
        title: @name) { @name }
   end
 
-  # The heading keeps its width (the shared editor pins the form to the host's
-  # pre-open width — Lesson 27 — so a block-level host hands it the full line).
+  # The frame is a shrink-to-fit item of the header's wrap row (the badges
+  # hug the name), so the shared editor — which pins the form to the host's
+  # pre-open width (Lesson 27) — would open as wide as the CURRENT name: a
+  # sliver for a short one, which is exactly the rename that matters. The
+  # `sm:` floor on the form (see #editor_data) gives it room; below `sm` the
+  # column is full-width already and the pinned width is the whole line.
   # The pencil is `standalone`: the header has no kebab for it to collapse
   # into on a coarse pointer, so it stays visible there instead.
   def editable
@@ -88,6 +92,9 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
       label: "Framework name",
       outcome: "apply",
       rows: 1,
+      # A floor, not a table column (Lesson 27 forbids floors only there): the
+      # header row wraps, so a wider editor pushes nothing off-screen.
+      form_class: "sm:min-w-96",
       error: @error
     )
   end
