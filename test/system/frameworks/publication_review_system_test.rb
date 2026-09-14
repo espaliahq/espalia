@@ -65,12 +65,27 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
 
     # Both rows come back showing what was saved.
     within(find("div[data-controller='mapping-form']", text: "Legacy Systems")) do
-      assert_select_value "Mapping", "evolved"
-      assert_select_value "Survivor", "Modern Platforms"
+      assert_select "Mapping", selected: "Evolved — into a survivor"
+      assert_select "Survivor", selected: "Modern Platforms"
     end
     within(find("div[data-controller='mapping-form']", text: "Old Tools")) do
-      assert_select_value "Mapping", "archived"
+      assert_select "Mapping", selected: "Archived — no replacement"
     end
+  end
+
+  should "leave a row the user has not decided alone" do
+    sign_in_as(@admin_user)
+    visit new_framework_publication_path(@framework_id)
+
+    within(find("div[data-controller='mapping-form']", text: "Old Tools")) do
+      select "Archived — no replacement", from: "Mapping"
+    end
+    click_button "Save mappings"
+
+    assert_text "Saved 1 mapping."
+    assert_no_text "Still needs a survivor"
+    assert_selector "span", text: "Needs a mapping", count: 1
+    assert_equal 1, mappings.count
   end
 
   should "refuse to publish while a row still needs a mapping, then publish in the background once mapped" do
@@ -102,14 +117,5 @@ class Frameworks::PublicationReviewSystemTest < ApplicationSystemTestCase
     perform_enqueued_jobs(only: Frameworks::PublishVersionJob)
     visit edit_framework_path(@framework_id)
     assert_no_text "v2 draft"
-  end
-
-  private
-
-  # The selected option's visible text or value for a labelled select.
-  def assert_select_value(label, expected)
-    selected = find_field(label).find("option[selected]", visible: :all) rescue nil
-    value = selected ? selected.text.presence || selected.value : find_field(label).value
-    assert_includes [ selected&.text, selected&.value, value ].compact, expected
   end
 end

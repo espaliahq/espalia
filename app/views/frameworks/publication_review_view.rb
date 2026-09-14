@@ -42,7 +42,7 @@ class Views::Frameworks::PublicationReviewView < Views::Base
 
   private
 
-  def publishing? = @publication&.in_flight? || false
+  def publishing? = @publication&.in_flight?
 
   def header
     div do
@@ -61,19 +61,22 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   end
 
   # What the background publish is doing, or why the last attempt was refused.
-  # Both are facts the requester would otherwise only learn from the bell.
+  # Both are facts the requester would otherwise only learn from the bell. A
+  # succeeded request means the draft is gone and this page is not reached.
   def publication_status
-    return unless @publication
-    return if @publication.succeeded? # the draft is gone; the page won't normally be reached
+    return unless publishing? || @publication&.failed?
 
     if publishing?
       div(role: "status",
-          class: "rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-gray-800 dark:text-gray-100") do
+          class: "rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 " \
+                 "px-4 py-3 text-sm text-gray-800 dark:text-gray-100") do
         strong { "Publishing v#{@framework.draft_version}… " }
-        plain "Requested #{time_ago(@publication.created_at)} by #{@publication.requester&.name || 'a teammate'}. " \
+        plain "Requested "
+        local_time_ago(@publication.created_at)
+        plain " by #{@publication.requester&.name || 'a teammate'}. " \
               "Ratings, evidence and comments are being migrated; you'll be notified when it's live."
       end
-    elsif @publication.failed?
+    else
       div(role: "alert",
           class: "rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3 " \
                  "text-sm text-red-800 dark:text-red-100") do
@@ -82,10 +85,6 @@ class Views::Frameworks::PublicationReviewView < Views::Base
         plain " Fix the mappings below and publish again."
       end
     end
-  end
-
-  def time_ago(time)
-    "#{view_context.time_ago_in_words(time)} ago"
   end
 
   def retiring_section
@@ -133,7 +132,8 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     prefix = "migration_mappings[#{index}]"
     div(
       class: "rounded-md border #{mapping ? 'border-gray-200 dark:border-gray-700' : 'border-amber-300 dark:border-amber-700'} p-4",
-      data: { controller: "mapping-form" }
+      data: { controller: "mapping-form",
+              mapping_form_survivor_types_value: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.to_json }
     ) do
       div(class: "flex items-center justify-between") do
         span(class: "font-medium text-gray-900 dark:text-white") { capability.name }
@@ -143,7 +143,6 @@ class Views::Frameworks::PublicationReviewView < Views::Base
       end
       input(type: "hidden", name: "#{prefix}[from_stable_id]", value: capability.stable_id)
       input(type: "hidden", name: "#{prefix}[mapping_id]", value: mapping&.mapping_id)
-      input(type: "hidden", name: "#{prefix}[name]", value: capability.name)
       div(class: "mt-3 flex flex-wrap items-end gap-3") do
         type_select(mapping, prefix, capability)
         survivor_select(mapping, prefix, capability)
@@ -159,6 +158,9 @@ class Views::Frameworks::PublicationReviewView < Views::Base
         id: id, name: "#{prefix}[mapping_type]", class: field_classes,
         data: { mapping_form_target: "type", action: "change->mapping-form#typeChanged" }
       ) do
+        # An undecided row submits blank and is left alone by the save — it must
+        # not default to the first type and then be reported as incomplete.
+        option(value: "", selected: mapping.nil?) { "— choose —" } if mapping.nil?
         MAPPING_TYPES.each do |value, text|
           option(value: value, selected: mapping&.mapping_type == value) { text }
         end
@@ -193,8 +195,8 @@ class Views::Frameworks::PublicationReviewView < Views::Base
       if publishing?
         button(
           type: "button", disabled: true, aria_disabled: "true",
-          class: "inline-flex items-center rounded-md bg-primary/60 px-4 py-2 text-sm font-semibold " \
-                 "text-white cursor-not-allowed"
+          class: "inline-flex items-center rounded-md px-4 py-2 text-sm font-semibold cursor-not-allowed " \
+                 "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
         ) { "Publishing v#{@framework.draft_version}…" }
       else
         button(

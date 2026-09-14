@@ -13,13 +13,19 @@ class Frameworks::MigrationMappingsControllerTest < ActionDispatch::IntegrationT
       create(:tenant_user, tenant: @tenant, user: @member_user, role: :member)
 
       @framework_id = SecureRandom.uuid_v7
+      @from = SecureRandom.uuid_v7
+      @other_from = SecureRandom.uuid_v7
+      @to = SecureRandom.uuid_v7
       handler = Frameworks::CommandHandler.new
+      cat_id = SecureRandom.uuid_v7
       handler.create_framework(@framework_id, "Eng")
+      handler.add_capability_category(@framework_id, cat_id, "Thinking")
+      handler.add_capability(@framework_id, SecureRandom.uuid_v7, @from, cat_id, "Legacy Systems")
+      handler.add_capability(@framework_id, SecureRandom.uuid_v7, @other_from, cat_id, "Old Tools")
+      handler.add_capability(@framework_id, SecureRandom.uuid_v7, @to, cat_id, "Modern Platforms")
       handler.publish_version(@framework_id, "seed")     # v1
       handler.start_draft(@framework_id, 2, "seed")      # open draft to map into
     end
-    @from = SecureRandom.uuid_v7
-    @to = SecureRandom.uuid_v7
   end
 
   def mappings
@@ -32,11 +38,10 @@ class Frameworks::MigrationMappingsControllerTest < ActionDispatch::IntegrationT
 
   context "POST /frameworks/:framework_id/migration_mappings" do
     should "save every changed row in one submit and return to the review page" do
-      other_from = SecureRandom.uuid_v7
       sign_in @admin_user
       post framework_migration_mappings_path(framework_id: @framework_id),
-           params: rows({ from_stable_id: @from, mapping_type: "evolved", to_stable_id: @to, name: "A" },
-                        { from_stable_id: other_from, mapping_type: "archived", to_stable_id: "", name: "B" })
+           params: rows({ from_stable_id: @from, mapping_type: "evolved", to_stable_id: @to },
+                        { from_stable_id: @other_from, mapping_type: "archived", to_stable_id: "" })
 
       assert_redirected_to new_framework_publication_path(@framework_id)
       assert_equal "Saved 2 mappings.", flash[:notice]
@@ -63,25 +68,27 @@ class Frameworks::MigrationMappingsControllerTest < ActionDispatch::IntegrationT
       assert_nil mappings.first.to_stable_id
     end
 
-    # A row still waiting on a survivor must not block the others, nor be saved
-    # half-done: it is left alone and named.
-    should "save the complete rows and name the ones still needing a survivor" do
-      other_from = SecureRandom.uuid_v7
+    # An undecided row (no type chosen) is left alone; a row still waiting on
+    # a survivor is left unsaved and named — neither blocks the others.
+    should "save the complete rows, ignore undecided ones and name the incomplete ones" do
+      third = SecureRandom.uuid_v7
       sign_in @admin_user
       post framework_migration_mappings_path(framework_id: @framework_id),
-           params: rows({ from_stable_id: @from, mapping_type: "evolved", to_stable_id: "", name: "Legacy Systems" },
-                        { from_stable_id: other_from, mapping_type: "archived", to_stable_id: "", name: "Old Tools" })
+           params: rows({ from_stable_id: @from, mapping_type: "evolved", to_stable_id: "" },
+                        { from_stable_id: @other_from, mapping_type: "archived", to_stable_id: "" },
+                        { from_stable_id: third, mapping_type: "", to_stable_id: "" })
 
       assert_redirected_to new_framework_publication_path(@framework_id)
       assert_equal "Saved 1 mapping.", flash[:notice]
       assert_equal "Still needs a survivor: Legacy Systems.", flash[:alert]
-      assert_equal [ other_from ], mappings.pluck(:from_stable_id)
+      assert_equal [ @other_from ], mappings.pluck(:from_stable_id)
     end
 
-    should "flash the operation's refusal for a self-mapping" do
+    should "flash the operation's refusal and save nothing" do
       sign_in @admin_user
       post framework_migration_mappings_path(framework_id: @framework_id),
-           params: rows({ from_stable_id: @from, mapping_type: "evolved", to_stable_id: @from })
+           params: rows({ from_stable_id: @other_from, mapping_type: "archived" },
+                        { from_stable_id: @from, mapping_type: "evolved", to_stable_id: @from })
 
       assert_redirected_to new_framework_publication_path(@framework_id)
       assert_match(/own survivor/, flash[:alert])
