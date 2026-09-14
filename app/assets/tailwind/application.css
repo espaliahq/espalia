@@ -518,7 +518,17 @@ input[type="week"] {
  * the sticky cell's `group-hover:` variants depend on Tailwind seeing it. */
 .mx-row {
   cursor: pointer;
-  scroll-margin-top: 5rem;
+  /* Clears the sticky stack the row scrolls under: the matrix header, the
+   * category band that sticks beneath it, and a little breathing room. Both
+   * heights are MEASURED by `matrix_controller#publishStickyGeometry` — the
+   * header is ~41 px with code badges and ~113 px with full level titles
+   * (≤ 3 roles, edit mode, where each title carries a rename pencil), so a
+   * static 5rem hid the capability name and its kebab under the header
+   * whenever the titles were showing (#382). The fallbacks are the old
+   * constants, so a not-yet-connected controller is no worse than before. */
+  scroll-margin-top: calc(
+    var(--matrix-header-h, 41px) + var(--matrix-category-h, 45px) + 8px
+  );
   transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
               background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
               border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -526,6 +536,54 @@ input[type="week"] {
 
 .mx-row:hover {
   background-color: var(--color-gray-50);
+}
+
+/* The category band, sticking immediately beneath the matrix header. `top`
+ * was `top-[41px]`, which assumed the one-line (code-badge) header and let the
+ * band slide under the taller full-titles one. `position`/`z-index` stay
+ * utilities on the row — only the measured offset lives here. */
+.mx-cat-row {
+  top: var(--matrix-header-h, 41px);
+}
+
+/* ── On-grid focus indication (#382) ──────────────────────────────────────
+ *
+ * Focus (category / capability / cell) is set by three different gestures and
+ * cleared by others, and the only signal was the activity pane's title.
+ * `matrix_controller#applyGridFocus` stamps `data-focused` on the focused row,
+ * cell and category band; the ring hangs off that attribute, so the grid pays
+ * no per-element bytes for a state that is only ever set client-side.
+ *
+ * The row's ring is a pair of inset lines rather than a box — a `<tr>` is not
+ * a box that `outline` or a full `ring` renders reliably around, and per-cell
+ * rings would draw a vertical line between every column.
+ */
+:root {
+  --mx-focus-ring: color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+
+.mx-row[data-focused="true"] > td {
+  box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring);
+}
+
+/* The sticky capability cell owns the column's right edge on the same
+ * property, so the focused variant has to carry both shadows. */
+.mx-row[data-focused="true"] > td.mx-sticky-edge {
+  box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring),
+              6px 0 6px -6px rgba(15, 23, 42, 0.25);
+}
+
+tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
+  box-shadow: inset 0 0 0 1px var(--mx-focus-ring);
+}
+
+/* A focused cell uses `outline`, not `box-shadow`, so it composes with the
+ * row's inset lines instead of replacing them. Scoped to the matrix's own
+ * cells — the attribute is generic, the treatment is not. */
+.mx-cell[data-focused="true"],
+.mx-exp-cell[data-focused="true"] {
+  outline: 1px solid var(--mx-focus-ring);
+  outline-offset: -1px;
 }
 
 /* Behavioural-expectation text. Pending-edit decoration composes on top —
@@ -684,6 +742,11 @@ input[type="week"] {
 
   .mx-sticky-edge {
     box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);
+  }
+
+  .mx-row[data-focused="true"] > td.mx-sticky-edge {
+    box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring),
+                6px 0 8px -6px rgba(0, 0, 0, 0.65);
   }
 
   .mx-row:hover {

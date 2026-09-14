@@ -94,8 +94,12 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def category_header
     col_count = @merged_levels.size + 1 # +1 for capability name column
 
+    # `top` is measured, not guessed: `matrix_controller` publishes the header's
+    # real height as `--matrix-header-h` and `.mx-cat-row` reads it, so the band
+    # sticks immediately beneath a one-line code-badge header AND beneath the
+    # ~113 px full-titles header edit mode renders at ≤ 3 roles (#382).
     tr(
-      class: "sticky top-[41px] z-[5]",
+      class: "sticky mx-cat-row z-[5]",
       data: {
         matrix_target: "categoryHeader",
         category_id: @category.category_id
