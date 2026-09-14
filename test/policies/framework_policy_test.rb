@@ -410,6 +410,50 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "rename?" do
+    setup do
+      @other_user = create(:user)
+      @other_person = ActsAsTenant.with_tenant(@tenant) do
+        p = create(:person, tenant: @tenant, email: @other_user.email)
+        create(:tenant_user, tenant: @tenant, user: @other_user, person: p, role: :member)
+        p
+      end
+    end
+
+    should "permit a tenant admin without an owner role" do
+      admin = create(:user)
+      tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: admin, role: :admin)
+      end
+      ctx = AuthorizationContext.new(user: admin, tenant_user: tu, person: nil)
+      assert FrameworkPolicy.new(ctx, @framework).rename?
+    end
+
+    should "permit a framework owner who is only a tenant member" do
+      collaborate_as("owner")
+      assert other_policy.rename?
+    end
+
+    should "deny a framework collaborator with editor role only" do
+      collaborate_as("editor")
+      assert_not other_policy.rename?
+    end
+
+    should "deny a scoped lead" do
+      collaborate_as("role_family_lead")
+      assert_not other_policy.rename?
+    end
+
+    should "deny a tenant member with no collaborator role" do
+      assert_not other_policy.rename?
+    end
+
+    should "deny a non-member" do
+      ctx = AuthorizationContext.new(user: create(:user), tenant_user: nil, person: nil)
+      assert_not FrameworkPolicy.new(ctx, @framework).rename?
+    end
+  end
+
   context "with no tenant membership" do
     setup do
       @user = create(:user)
@@ -437,6 +481,26 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
   end
 
   private
+
+  # rename? helpers — @other_user / @other_person are set by that context's setup.
+  def collaborate_as(role)
+    ActsAsTenant.with_tenant(@tenant) do
+      create(:framework_collaborator,
+             tenant: @tenant,
+             framework_id: @framework.framework_id,
+             person_id: @other_person.id,
+             role: role)
+    end
+  end
+
+  def other_policy
+    ctx = AuthorizationContext.new(
+      user: @other_user,
+      tenant_user: @other_person.tenant_user,
+      person: @other_person
+    )
+    FrameworkPolicy.new(ctx, @framework)
+  end
 
   def policy
     FrameworkPolicy.new(@ctx, @framework)

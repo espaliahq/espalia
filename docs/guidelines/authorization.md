@@ -60,16 +60,21 @@ end
 
 Granular, scoped roles on `FrameworkState::Collaborator`. A person can hold **multiple roles** on the same framework — permissions are the **union** of all held roles (additive, never subtractive).
 
-| Role | Scope | Structural | Content | Bindings | Manage Collab | See Drafts | Suggest | Comment |
-|------|-------|-----------|---------|----------|---------------|-----------|---------|---------|
-| `owner` | Framework-wide | Y | Y | Y | Y | Y | Y | Y |
-| `editor` | Framework-wide | Y | Y | Y | N | Y | Y | Y |
-| `role_family_lead` | Role family | Y | Y | For family | Within family | Y | Y | Y |
-| `role_lead` | Role | Y | Y | For role | Within role | Y | Y | Y |
-| `capability_category_lead` | Category | Y | Y | N | Within category | Y | Y | Y |
-| `capability_lead` | Capability | Y | Y | N | Within capability | Y | Y | Y |
-| `collaborator` | Framework-wide | N | N | N | N | Y | Y | Y |
-| `viewer` | Published only | N | N | N | N | N | N | N |
+| Role | Scope | Structural | Content | Bindings | Manage Collab | Rename | See Drafts | Suggest | Comment |
+|------|-------|-----------|---------|----------|---------------|--------|-----------|---------|---------|
+| `owner` | Framework-wide | Y | Y | Y | Y | Y | Y | Y | Y |
+| `editor` | Framework-wide | Y | Y | Y | N | N | Y | Y | Y |
+| `role_family_lead` | Role family | Y | Y | For family | Within family | N | Y | Y | Y |
+| `role_lead` | Role | Y | Y | For role | Within role | N | Y | Y | Y |
+| `capability_category_lead` | Category | Y | Y | N | Within category | N | Y | Y | Y |
+| `capability_lead` | Capability | Y | Y | N | Within capability | N | Y | Y | Y |
+| `collaborator` | Framework-wide | N | N | N | N | N | Y | Y | Y |
+| `viewer` | Published only | N | N | N | N | N | N | N | N |
+
+**Rename** (`FrameworkPolicy#rename?`) is the framework's *identity*, not its
+content, so it sits on the manage-collaborators bar — tenant admin or framework
+owner — rather than the edit-rights bar the org-structure renames use. Like
+those, it is a direct, shape-preserving edit (no suggestion path).
 
 **Scope types:** `nil` (framework-wide), `role_family`, `role`, `capability_category`, `capability` — stored as `scope_type` + `scope_id` on the collaborator record.
 
