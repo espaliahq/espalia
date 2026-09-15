@@ -34,7 +34,10 @@ links the ICO, the SVG, the Apple touch icon and the manifest, and declares a
 else `Tenant::DEFAULT_NAV_BG_COLOR` / `_DARK` (`Tenant.browser_theme_color`).
 The manifest is a static [`public/manifest.json`](../../public/manifest.json)
 (nothing in it is per-request, so it costs no Rails request); its `theme_color`
-is the same default. The service worker is deliberately not enabled (nothing
+is the app default — an installed app's splash and title bar are therefore
+GrowthOS teal even for a themed tenant, a known trade-off of keeping it static.
+It lists only PNGs: Chromium's manifest icon fetcher has no SVG decoder, so an
+SVG entry it selects yields a blank tile. The service worker is deliberately not enabled (nothing
 needs offline or push yet).
 
 **The links are versioned.** Production serves `public/` with a one-year

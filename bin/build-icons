@@ -41,15 +41,19 @@ const write = (name, buf) => { fs.writeFileSync(out + name, buf); console.log(na
 // Favicon: tight crop (~4% padding) so 16/32 px spend their pixels on the mark.
 const favicon = svg({ span: 730, semantic: true });
 write("icon.svg", favicon);
-pngToIco([16, 32, 48].map((s) => png(favicon, s))).then((ico) => write("favicon.ico", ico));
+pngToIco([16, 32, 48].map((s) => png(favicon, s)))
+  .then((ico) => write("favicon.ico", ico))
+  .catch((err) => { console.error("favicon.ico NOT written — public/ is now half-regenerated:", err); process.exitCode = 1; });
 
 // PWA "any" icons: transparent, ~10% padding.
 const any = svg({ span: 840 });
 write("icon.png", png(any, 512));
 write("icon-192.png", png(any, 192));
 
-// PWA maskable: opaque, mark inside the 80% safe zone (~60% of the tile).
-write("icon-maskable-512.png", png(svg({ span: 1120, bg: "#ffffff" }), 512));
+// PWA maskable: opaque, mark inside the 80% safe-zone circle. The mark's
+// farthest point from the centre is the leaf tip, ~474 units out, so the
+// tile's half-span × 0.8 must exceed that: 1200 → 480.
+write("icon-maskable-512.png", png(svg({ span: 1200, bg: "#ffffff" }), 512));
 
 // Apple touch icon: opaque (iOS paints black behind transparency), ~72% mark.
 write("apple-touch-icon.png", png(svg({ span: 935, bg: "#ffffff" }), 180));

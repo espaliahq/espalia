@@ -12,9 +12,9 @@ class Tenant < ApplicationRecord
   HEX_COLOR_FORMAT = /\A#[0-9a-fA-F]{6}\z/
 
   # The navbar colours the app ships with (`--color-nav-bg` in
-  # app/assets/tailwind/application.css). Also the browser `theme-color`
-  # and the web-app manifest's `theme_color`, so the chrome around the page
-  # matches the navbar — see docs/guidelines/app-icons.md.
+  # app/assets/tailwind/application.css). Also the fallback browser
+  # `theme-color`, and the `theme_color` of the (static, so never per-tenant)
+  # web-app manifest — see docs/guidelines/app-icons.md.
   DEFAULT_NAV_BG_COLOR = "#32c8c8"
   DEFAULT_NAV_BG_COLOR_DARK = "#1a1a2e"
 

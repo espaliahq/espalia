@@ -65,10 +65,14 @@ class AppIconsTest < ActionDispatch::IntegrationTest
       assert_match Tenant::HEX_COLOR_FORMAT, manifest["background_color"]
     end
 
-    should "reference icons that exist, including a maskable one" do
+    should "reference PNG icons that exist at the sizes it claims, including a maskable one" do
       icons = JSON.parse(response.body).fetch("icons")
 
-      icons.each { |icon| assert_public_file icon["src"] }
+      icons.each do |icon|
+        assert_equal "image/png", icon["type"], "#{icon['src']}: manifest icons must be PNG (Chromium can't decode SVG here)"
+        assert_public_file icon["src"]
+        assert_equal icon["sizes"], png_dimensions(icon["src"]), "#{icon['src']} is not the size the manifest claims"
+      end
       assert icons.any? { |icon| icon["purpose"] == "maskable" }, "no maskable icon"
       assert icons.any? { |icon| icon["sizes"] == "512x512" && icon["purpose"].nil? }, "no 512px any-purpose icon"
     end
@@ -96,6 +100,13 @@ class AppIconsTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  # "WxH" from a PNG's IHDR chunk — enough to catch a raster that was not
+  # regenerated at the size the manifest advertises.
+  def png_dimensions(href)
+    header = Rails.root.join("public", href.delete_prefix("/")).binread(24)
+    header.unpack("@16N2").join("x")
+  end
 
   def assert_public_file(href)
     path = Rails.root.join("public", href.delete_prefix("/").sub(/\?.*\z/, ""))
