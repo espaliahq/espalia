@@ -170,7 +170,9 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   notes above.
 - `fill_form` fills multiple fields in one call (faster, fewer turns) — use it
   for the login form.
-- `wait_for(text: [...])` to sync on the destination before asserting/clicking.
+- `wait_for(text: [...])` to sync on the destination before asserting/clicking
+  — except on the edit-mode explorer, where it returns the oversized tree too;
+  poll with `evaluate_script` there.
 - **`list_console_messages(types: ["error"])` after interactions** — surfaces
   JS/Turbo errors a snapshot won't show (this is how the Turbo-frame bug below
   was confirmed).

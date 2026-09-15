@@ -61,8 +61,9 @@ Capture the desktop pass first; do a mobile pass for anything responsive.
   with `evaluate_script`, and use `take_screenshot` for evidence. The sign-in
   page and the frameworks index are small enough to snapshot.
 - `fill_form` fills multiple fields in one call — use it for login.
-- `wait_for(text: [...])` to sync on a destination before asserting/clicking.
-  Beware CSS `text-transform`: an `uppercase`-styled element reports UPPERCASE
+- `wait_for(text: [...])` to sync on a destination before asserting/clicking
+  — never on the edit-mode explorer (see above); poll with `evaluate_script`
+  there. Beware CSS `text-transform`: an `uppercase`-styled element reports UPPERCASE
   text — match the rendered case.
 - **A `data-turbo-confirm` button can swallow its submit under `handle_dialog`.**
   If `click` + `handle_dialog(accept)` "succeeds" but nothing changes, check
