@@ -57,10 +57,12 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
    Comma-separated for multiple projections.
 3. Trigger the deploy. Predeploy script:
    - Runs migrations.
-   - Sees `REBUILD_ON_DEPLOY`, runs `events:projections:rebuild[<name>]` for each (against the new image). This stamps `projection_versions`.
+   - Sees `REBUILD_ON_DEPLOY`, runs `events:projections:rebuild_if_stale[<name>]` for each (against the new image): a rebuild only when the stamped version is behind `CODE_VERSION`. This stamps `projection_versions`.
    - Runs `events:projections:verify` — passes.
    - Traffic swaps.
-4. **Remove the env var** after deploy succeeds. Otherwise the next deploy will re-rebuild the same projection unnecessarily.
+4. **Remove the env var** after deploy succeeds (it lives in the `growthos-shared` env group on Render). A forgotten variable is inert once the stamp is current, but keep the group honest.
+
+**The rebuild is a visible outage window.** Predeploy runs against the production database while the previous release is still serving traffic, and a rebuild starts by truncating the projection's tables. For `person_development/current_assessment` that is every rating, assignment and progress row: for the one to two minutes the replay takes, every assessment in the app reads as empty, then fills back in. Schedule a deploy that rebuilds accordingly, and never leave the variable set — it was once left for four deploys and each one blanked assessments (2026-09-15).
 
 ### Path B — two-stage deploy (large rebuilds)
 
