@@ -52,9 +52,18 @@ Capture the desktop pass first; do a mobile pass for anything responsive.
   `navigate_page` alone errors with "No page selected."
 - Prefer `take_snapshot` to find elements; uids are per-snapshot, so
   re-snapshot after every navigation before clicking anything.
+- **NEVER `take_snapshot` or `wait_for` on the edit-mode explorer
+  (`/frameworks/:id/edit`).** Either returns a ~190 K-character tree that ends
+  your session mid-flow ("Prompt is too long"). On that page, locate and
+  inspect with `evaluate_script` returning short strings or small JSON, click
+  with `el.click()` from a script (headless reports `hover: none`, so
+  hover-revealed controls never appear to `hover()` anyway), poll for state
+  with `evaluate_script`, and use `take_screenshot` for evidence. The sign-in
+  page and the frameworks index are small enough to snapshot.
 - `fill_form` fills multiple fields in one call — use it for login.
-- `wait_for(text: [...])` to sync on a destination before asserting/clicking.
-  Beware CSS `text-transform`: an `uppercase`-styled element reports UPPERCASE
+- `wait_for(text: [...])` to sync on a destination before asserting/clicking
+  — never on the edit-mode explorer (see above); poll with `evaluate_script`
+  there. Beware CSS `text-transform`: an `uppercase`-styled element reports UPPERCASE
   text — match the rendered case.
 - **A `data-turbo-confirm` button can swallow its submit under `handle_dialog`.**
   If `click` + `handle_dialog(accept)` "succeeds" but nothing changes, check

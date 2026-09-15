@@ -37,6 +37,18 @@ Practical notes:
   go to X, click Y, screenshot both viewports"). For exploratory bug repro,
   where the driver must notice something unexpected and adapt, pass
   `model: "sonnet"` on the Agent call.
+- **The edit-mode explorer overflows the driver's context — on ANY model,
+  through `take_snapshot` AND `wait_for`.** One snapshot of `/frameworks/:id/edit`
+  on the seeded framework is a ~190 K-character accessibility tree; the Haiku
+  driver died on its second one ("Prompt is too long") before taking a single
+  screenshot, and `wait_for` returns the same tree in its own result, so a
+  "safe" text sync blows the budget just as surely. For that page, tell the
+  driver up front: never `take_snapshot` or `wait_for` there; find, inspect and
+  click with `evaluate_script` returning small strings/JSON (`el.click()` for
+  hover-revealed controls, since headless reports `hover: none`), poll for
+  state with `evaluate_script`, and use `take_screenshot` for evidence. Pass
+  `model: "sonnet"` for headroom. The sign-in page and the frameworks index are
+  small enough to snapshot.
 - **One driver at a time.** `chrome-debug` is a single shared browser — never
   run two driving agents concurrently.
 - **Inline driving is still fine for trivial checks** — a single
@@ -153,10 +165,14 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   `navigate_page` first errors with *"No page selected."*
 - **Prefer `take_snapshot` over `take_screenshot`** — the snapshot lists elements
   with `uid`s you pass to `click`/`fill`. Re-snapshot after every navigation;
-  uids are per-snapshot.
+  uids are per-snapshot. **Except on the edit-mode explorer**, where a snapshot
+  (and a `wait_for`) is large enough to end the session — see the delegation
+  notes above.
 - `fill_form` fills multiple fields in one call (faster, fewer turns) — use it
   for the login form.
-- `wait_for(text: [...])` to sync on the destination before asserting/clicking.
+- `wait_for(text: [...])` to sync on the destination before asserting/clicking
+  — except on the edit-mode explorer, where it returns the oversized tree too;
+  poll with `evaluate_script` there.
 - **`list_console_messages(types: ["error"])` after interactions** — surfaces
   JS/Turbo errors a snapshot won't show (this is how the Turbo-frame bug below
   was confirmed).
