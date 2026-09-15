@@ -60,3 +60,43 @@ class ProjectionsRebuildIfStaleTaskTest < ActiveSupport::TestCase
     assert_not marker_exists?
   end
 end
+
+# Path B's stamp promotion: after an out-of-band rebuild on the shipped handler
+# code, the stamp is moved to the version the bump PR will declare, so its
+# predeploy verifies without a second rebuild.
+class ProjectionsMarkRebuiltTaskTest < ActiveSupport::TestCase
+  PROJECTION = PersonDevelopment::Projections::CurrentAssessment
+
+  setup do
+    Rails.application.load_tasks if Rake::Task.tasks.empty?
+    Rake::Task["events:projections:mark_rebuilt"].reenable
+  end
+
+  def mark(*args)
+    out, = capture_io { Rake::Task["events:projections:mark_rebuilt"].invoke(*args) }
+    Rake::Task["events:projections:mark_rebuilt"].reenable
+    out
+  end
+
+  should "stamp the current CODE_VERSION when no version is given" do
+    mark(PROJECTION::PROJECTION_NAME)
+    assert_equal PROJECTION::CODE_VERSION, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version
+  end
+
+  should "promote the stamp to an explicit later version" do
+    ProjectionVersion.stamp!(PROJECTION)
+    target = PROJECTION::CODE_VERSION + 1
+
+    out = mark(PROJECTION::PROJECTION_NAME, target.to_s)
+
+    assert_match(/version #{target}/, out)
+    assert_equal target, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version
+  end
+
+  should "refuse to move a stamp backwards" do
+    ProjectionVersion.stamp!(PROJECTION)
+
+    assert_raises(SystemExit) { mark(PROJECTION::PROJECTION_NAME, (PROJECTION::CODE_VERSION - 1).to_s) }
+    assert_equal PROJECTION::CODE_VERSION, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version
+  end
+end

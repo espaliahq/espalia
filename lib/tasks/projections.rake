@@ -14,6 +14,7 @@
 #   bin/rails "events:projections:rebuild[frameworks/published_state,<tenant_id>]"
 #   bin/rails "events:projections:rebuild_if_stale[frameworks/published_state]"   # what predeploy runs
 #   bin/rails "events:projections:mark_rebuilt[frameworks/published_state]"
+#   bin/rails "events:projections:mark_rebuilt[frameworks/published_state,4]"  # Path B promotion
 #
 # The registry lives in `lib/projections/registry.rb` so the rake task,
 # tests, and predeploy guard share a single source of truth. Sync
@@ -128,11 +129,23 @@ namespace :events do
       end
     end
 
-    desc "Manually stamp a projection at its current CODE_VERSION without rebuilding (escape valve)."
-    task :mark_rebuilt, [ :name ] => :environment do |_, args|
-      name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>]" }
+    # The optional version is the runbook's Path B promotion: an out-of-band
+    # rebuild on the shipped (unbumped) handler code already holds the state
+    # the coming CODE_VERSION describes, so stamping that version up front
+    # lets the bump deploy pass `verify` without a second rebuild.
+    desc "Stamp a projection as rebuilt at its CODE_VERSION, or at an explicit version, without rebuilding (escape valve)."
+    task :mark_rebuilt, %i[name version] => :environment do |_, args|
+      name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>,[<version>]]" }
       klass = Projections::Registry.fetch(name)
-      row = ProjectionVersion.stamp!(klass)
+      version = args[:version].present? ? Integer(args[:version]) : klass::CODE_VERSION
+      current = ProjectionVersion.find_by(name: name)&.version
+      if current && version < current
+        abort "Refusing to stamp #{name} at #{version}: already at #{current} (stamps only move forward)."
+      end
+
+      row = ProjectionVersion.upsert(
+        { name: name, version: version, applied_at: Time.current }, unique_by: :name
+      ) && ProjectionVersion.find(name)
       puts "Stamped #{name} as rebuilt at version #{row.version} (#{row.applied_at})."
       puts "NOTE: this is an escape valve — only use it when you have verifiably rebuilt the projection by other means."
     end

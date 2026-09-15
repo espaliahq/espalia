@@ -73,11 +73,15 @@ Use when the rebuild won't fit in predeploy's window (Render's default is genero
    ```bash
    bin/rails "events:projections:rebuild[<name>]"
    ```
-   This stamps `projection_versions` at the current (still-old) version. Live events between code-swap and rebuild-complete get projected by the new code; replay reapplies them idempotently.
-3. **PR 2**: bump `CODE_VERSION`. Predeploy fails because the stamped row is still at the old version.
-4. Set `REBUILD_ON_DEPLOY=<name>` for this deploy. Predeploy re-runs the rebuild (against the new image), restamps to the new version, passes.
+   This stamps `projection_versions` at the current (still-old) version. Live events between code-swap and rebuild-complete get projected by the new code; replay reapplies them idempotently. This is the one rebuild — and the one outage window — Path B costs.
+3. **Promote the stamp** to the version PR 2 will declare, in the same shell:
+   ```bash
+   bin/rails "events:projections:mark_rebuilt[<name>,<new CODE_VERSION>]"
+   ```
+   The rebuilt state was produced by the handler code PR 2 ships, so it *is* that version's state; the stamp just says so before the constant catches up. Stamps only move forward, so a typo cannot regress one.
+4. **PR 2**: bump `CODE_VERSION` to the promoted value. Predeploy's `verify` sees stamp == code and passes. Do **not** set `REBUILD_ON_DEPLOY` — with the stamp promoted, `rebuild_if_stale` would skip anyway, but leaving the variable off keeps the env group honest.
 
-You can also reach this state via `mark_rebuilt` if you've rebuilt out-of-band, but prefer a real rebuild for safety.
+Skipping step 3 is safe but expensive: PR 2's predeploy would then find the stamp behind and run the whole rebuild again inside the deploy window — the second outage Path B exists to avoid.
 
 ### Path C — surgical single-tenant rebuild
 
