@@ -199,6 +199,9 @@ Rails.application.routes.draw do
     # Bulk department rename — keyed by the label in the body (no id), so a
     # singular resource (PATCH /frameworks/:framework_id/departments).
     resource :departments, only: [ :update ], controller: "frameworks/departments"
+    # The framework's own name — one per framework, so a singular resource
+    # (PATCH /frameworks/:framework_id/name) from the header's inline editor.
+    resource :name, only: [ :update ], controller: "frameworks/names"
     resources :roles,         only: [ :create, :update ], controller: "frameworks/roles"
     resources :levels,        only: [ :index, :create, :update ], controller: "frameworks/levels"
     resources :expectations, only: [ :create, :update ], controller: "frameworks/expectations"

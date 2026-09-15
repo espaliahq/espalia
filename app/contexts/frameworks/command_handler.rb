@@ -47,6 +47,16 @@ class Frameworks::CommandHandler
     end
   end
 
+  # Renames a framework. Shape-preserving — applies live, no draft needed.
+  #
+  # @param framework_id [String] UUID of the framework
+  # @param name [String] the new display name
+  def rename_framework(framework_id, name)
+    @repository.with_framework(framework_id) do |framework|
+      framework.rename(framework_id, name)
+    end
+  end
+
   # Adds a role family to a framework.
   #
   # @param framework_id [String] UUID of the framework

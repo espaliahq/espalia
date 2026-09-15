@@ -44,6 +44,7 @@ class Frameworks::Projections::PublishedState
   def self.handled_events
     [
       Frameworks::Events::FrameworkCreated,
+      Frameworks::Events::FrameworkRenamed,
       Frameworks::Events::RoleFamilyAdded,
       Frameworks::Events::RoleFamilyUpdated,
       Frameworks::Events::RoleAdded,
@@ -128,6 +129,7 @@ class Frameworks::Projections::PublishedState
     case event
     # ── Meta / versioning — always live ──
     when Frameworks::Events::FrameworkCreated then handle_framework_created(event)
+    when Frameworks::Events::FrameworkRenamed then handle_framework_renamed(event)
     when Frameworks::Events::DraftVersionStarted then handle_draft_version_started(event)
     when Frameworks::Events::FrameworkVersionPublished then handle_framework_version_published(event)
     when Frameworks::Events::MigrationMappingDefined then handle_migration_mapping_defined(event)
@@ -351,6 +353,15 @@ class Frameworks::Projections::PublishedState
       current_published_version: 0,
       draft_in_progress: false
     )
+  end
+
+  # Not in skip_during_rebuild?: the publish-time rebuild keeps the Framework
+  # row (only its children are destroyed), and re-applying the rename to it is
+  # an idempotent update, so replaying it is harmless and keeps the rule simple.
+  # Unguarded like the versioning handlers — a missing row here is a corrupted
+  # store, and a silent skip would leave the read model on the OLD name.
+  def handle_framework_renamed(event)
+    find_framework(event).update!(name: event.data[:name])
   end
 
   def handle_role_family_added(event)

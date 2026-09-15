@@ -41,6 +41,7 @@ Every framework change falls into one of two categories. The distinction matters
 Changes that **don't alter the rating grid** — the set of capabilities and level ordinals that assessments depend on. These apply instantly to the published view, with or without a draft in progress.
 
 Examples:
+- Renaming the framework itself (tenant admin or owner — the header's inline pencil)
 - Renaming a role family, role, or capability category
 - Rewording a capability description
 - Updating a behavioural expectation's text (the description changes, but the "slot" in the grid stays)

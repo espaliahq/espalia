@@ -122,6 +122,9 @@ class FrameworksController < ApplicationController
       publishing: mode == :edit && fw_policy.publish? && FrameworkPublication.in_flight_for?(@framework.framework_id),
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
+      # The header's rename pencil — admin / owner only; the frame itself
+      # renders it in edit mode only, like the org-structure rename frames.
+      can_rename: fw_policy.rename?,
       archive_survivors: can_edit_structure ? archive_survivors(graph) : [],
       roles: can_edit_structure ? framework_roles(graph) : [],
       search_query: resolved_search_query,

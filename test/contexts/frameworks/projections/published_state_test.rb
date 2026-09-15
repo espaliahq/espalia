@@ -30,6 +30,35 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
     end
   end
 
+  context "FrameworkRenamed" do
+    should "update the Framework read model's name" do
+      emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+      emit(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+
+      within_tenant do
+        assert_equal "Design Career Path", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+      end
+    end
+
+    should "keep the latest name through the publish-time rebuild (replayed, not skipped)" do
+      # The publish handler re-reads the whole stream, so the events must be
+      # appended (not just handled) for the rebuild to see them.
+      append_and_project(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+      append_and_project(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design v1 name")
+      append_and_project(Frameworks::Events::DraftVersionStarted,
+                         framework_id: @framework_id, target_version: 1, started_by: "system")
+      append_and_project(Frameworks::Events::FrameworkRenamed, framework_id: @framework_id, name: "Design Career Path")
+      append_and_project(Frameworks::Events::FrameworkVersionPublished,
+                         framework_id: @framework_id, version: 1, published_by: "tester")
+
+      within_tenant do
+        framework = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal "Design Career Path", framework.name
+        assert_equal 1, framework.current_published_version
+      end
+    end
+  end
+
   context "RoleFamilyAdded" do
     should "create a RoleFamily read model" do
       rfid = SecureRandom.uuid_v7
@@ -831,6 +860,8 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
 
       append_and_project(Frameworks::Events::FrameworkCreated,
         framework_id: @framework_id, name: "me&u 2025")
+      append_and_project(Frameworks::Events::FrameworkRenamed,
+        framework_id: @framework_id, name: "me&u Career Paths")
       append_and_project(Frameworks::Events::RoleFamilyAdded,
         framework_id: @framework_id, role_family_id: rfid, name: "Engineering")
       append_and_project(Frameworks::Events::RoleAdded,
@@ -859,6 +890,9 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       before_snapshot = snapshot_read_models(Frameworks::Projections::PublishedState, @tenant)
       assert_equal 1, before_snapshot[:frameworks].size
       assert_equal 1, before_snapshot[:illustrations].size
+      within_tenant do
+        assert_equal "me&u Career Paths", FrameworkState::Framework.find_by(framework_id: @framework_id).name
+      end
 
       Frameworks::Projections::PublishedState.reset!(tenant: @tenant)
       within_tenant do

@@ -349,7 +349,10 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
     end
   end
 
-  context "manage_collaborators?" do
+  # The two owner-gated predicates share one fixture and one permission matrix
+  # (admin / owner / editor / scoped lead / member / non-member) — they are
+  # meant to be the same bar, so they are tested by the same cases.
+  context "owner-gated actions (manage_collaborators? and rename?)" do
     setup do
       @other_user = create(:user)
       @other_person = ActsAsTenant.with_tenant(@tenant) do
@@ -366,47 +369,36 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
       end
       ctx = AuthorizationContext.new(user: admin, tenant_user: tu, person: nil)
       assert FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+      assert FrameworkPolicy.new(ctx, @framework).rename?
     end
 
     should "permit a framework owner who is only a tenant member" do
-      ActsAsTenant.with_tenant(@tenant) do
-        create(:framework_collaborator,
-               tenant: @tenant,
-               framework_id: @framework.framework_id,
-               person_id: @other_person.id,
-               role: "owner")
-      end
-      ctx = AuthorizationContext.new(
-        user: @other_user,
-        tenant_user: @other_person.tenant_user,
-        person: @other_person
-      )
-      assert FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+      collaborate_as("owner")
+      assert other_policy.manage_collaborators?
+      assert other_policy.rename?
     end
 
     should "deny a framework collaborator with editor role only" do
-      ActsAsTenant.with_tenant(@tenant) do
-        create(:framework_collaborator,
-               tenant: @tenant,
-               framework_id: @framework.framework_id,
-               person_id: @other_person.id,
-               role: "editor")
-      end
-      ctx = AuthorizationContext.new(
-        user: @other_user,
-        tenant_user: @other_person.tenant_user,
-        person: @other_person
-      )
-      assert_not FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+      collaborate_as("editor")
+      assert_not other_policy.manage_collaborators?
+      assert_not other_policy.rename?
+    end
+
+    should "deny a scoped lead" do
+      collaborate_as("role_family_lead")
+      assert_not other_policy.manage_collaborators?
+      assert_not other_policy.rename?
     end
 
     should "deny a tenant member with no collaborator role" do
-      ctx = AuthorizationContext.new(
-        user: @other_user,
-        tenant_user: @other_person.tenant_user,
-        person: @other_person
-      )
+      assert_not other_policy.manage_collaborators?
+      assert_not other_policy.rename?
+    end
+
+    should "deny a non-member" do
+      ctx = AuthorizationContext.new(user: create(:user), tenant_user: nil, person: nil)
       assert_not FrameworkPolicy.new(ctx, @framework).manage_collaborators?
+      assert_not FrameworkPolicy.new(ctx, @framework).rename?
     end
   end
 
@@ -437,6 +429,26 @@ class FrameworkPolicyTest < ActiveSupport::TestCase
   end
 
   private
+
+  # Owner-gated-action helpers — @other_user / @other_person come from that context's setup.
+  def collaborate_as(role)
+    ActsAsTenant.with_tenant(@tenant) do
+      create(:framework_collaborator,
+             tenant: @tenant,
+             framework_id: @framework.framework_id,
+             person_id: @other_person.id,
+             role: role)
+    end
+  end
+
+  def other_policy
+    ctx = AuthorizationContext.new(
+      user: @other_user,
+      tenant_user: @other_person.tenant_user,
+      person: @other_person
+    )
+    FrameworkPolicy.new(ctx, @framework)
+  end
 
   def policy
     FrameworkPolicy.new(@ctx, @framework)

@@ -9,6 +9,44 @@ class Frameworks::CommandHandlerTest < ActiveSupport::TestCase
     @event_store = Rails.configuration.event_store
   end
 
+  context "#rename_framework" do
+    should "publish FrameworkRenamed and move the name in BOTH the read model and the graph snapshot" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Engineering Growth")
+        handler.publish_version(@framework_id, "seed")
+
+        handler.rename_framework(@framework_id, "Engineering Career Path")
+
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        event = @event_store.read.stream(stream).to_a.last
+        assert_kind_of Frameworks::Events::FrameworkRenamed, event
+        assert_equal "Engineering Career Path", event.data[:name]
+
+        read_model = FrameworkState::Framework.find_by(framework_id: @framework_id)
+        assert_equal "Engineering Career Path", read_model.name
+        assert_not read_model.draft_in_progress, "a rename is shape-preserving and opens no draft"
+
+        # The snapshot is rebuilt from aggregate state after every command, so
+        # this is what proves the aggregate's on-handler updates @name.
+        assert_equal "Engineering Career Path", Frameworks::ExplorerGraph.load(@framework_id).name
+      end
+    end
+
+    should "publish nothing when the name is unchanged" do
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = Frameworks::CommandHandler.new
+        handler.create_framework(@framework_id, "Engineering Growth")
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        before = @event_store.read.stream(stream).to_a.length
+
+        handler.rename_framework(@framework_id, "Engineering Growth")
+
+        assert_equal before, @event_store.read.stream(stream).to_a.length
+      end
+    end
+  end
+
   context "#create_framework" do
     should "publish FrameworkCreated + bootstrap DraftVersionStarted and create read model" do
       ActsAsTenant.with_tenant(@tenant) do

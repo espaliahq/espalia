@@ -53,6 +53,13 @@ class Frameworks::ExplorerGraphBuilderTest < ActiveSupport::TestCase
       assert_nil @graph.draft_version
     end
 
+    should "carry the renamed name after a rename (the on-handler feeds the snapshot)" do
+      @aggregate.rename(@framework_id, "Engineering Career Path")
+
+      graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+      assert_equal "Engineering Career Path", graph.name
+    end
+
     should "nest role_families → roles → levels sorted by ordinal" do
       assert_equal 1, @graph.role_families.length
       rf = @graph.role_families.first

@@ -35,6 +35,52 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
     end
   end
 
+  # ── Rename ──
+
+  context "#rename" do
+    should "apply FrameworkRenamed with the stripped name and update #name" do
+      @aggregate.rename(@framework_id, "  Engineering Career Path  ")
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of Frameworks::Events::FrameworkRenamed, event
+      assert_equal @framework_id, event.data[:framework_id]
+      assert_equal "Engineering Career Path", event.data[:name]
+      assert_equal "Engineering Career Path", @aggregate.name
+    end
+
+    should "raise before the framework is created" do
+      err = assert_raises(RuntimeError) do
+        Frameworks::Aggregate.new.rename(SecureRandom.uuid_v7, "Anything")
+      end
+      assert_match(/not yet created/, err.message)
+    end
+
+    should "raise on a blank name" do
+      err = assert_raises(RuntimeError) do
+        @aggregate.rename(@framework_id, "   ")
+      end
+      assert_match(/blank/, err.message)
+    end
+
+    should "no-op (no event) when the name is unchanged" do
+      before = @aggregate.unpublished_events.to_a.length
+      @aggregate.rename(@framework_id, " Engineering Growth ")
+
+      assert_equal before, @aggregate.unpublished_events.to_a.length
+      assert_equal "Engineering Growth", @aggregate.name
+    end
+
+    should "no-op when only the stored name's padding differs (create stores it verbatim)" do
+      padded = Frameworks::Aggregate.new
+      padded.create(@framework_id, "  Padded  ")
+      before = padded.unpublished_events.to_a.length
+
+      padded.rename(@framework_id, "Padded")
+
+      assert_equal before, padded.unpublished_events.to_a.length
+    end
+  end
+
   # ── Role Families ──
 
   context "#add_role_family" do
@@ -942,6 +988,13 @@ class Frameworks::AggregateTest < ActiveSupport::TestCase
       assert_nothing_raised do
         @fresh.update_role_family(@framework_id, @rfid, name: "Updated")
       end
+    end
+
+    should "rename succeeds" do
+      assert_nothing_raised do
+        @fresh.rename(@framework_id, "Renamed")
+      end
+      assert_not @fresh.draft_in_progress
     end
 
     should "update_role succeeds" do

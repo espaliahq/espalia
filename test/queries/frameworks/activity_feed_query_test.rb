@@ -427,6 +427,21 @@ class Frameworks::ActivityFeedQueryTest < ActiveSupport::TestCase
   end
 
   context "org-structure renames" do
+    should "emit a framework-level framework_renamed entry in the edits group" do
+      append(Frameworks::Events::FrameworkRenamed,
+        data: { name: "Engineering Career Path" },
+        actor_id: @actor.id)
+
+      entry = entries.find { |e| e.kind == "framework_renamed" }
+      assert entry
+      assert_nil entry.capability_id, "a framework rename carries no matrix anchor"
+      assert_nil entry.category_id
+      assert_equal "Ada Author", entry.actor_name
+      assert_equal "Engineering Career Path", entry.payload[:name]
+      assert_equal "edits", Views::Frameworks::Activity::Entry::KIND_GROUP[entry.kind]
+      assert Views::Frameworks::Activity::Entry::KIND_DOT.key?(entry.kind)
+    end
+
     should "emit a framework-level role_family_updated entry in the edits group" do
       append(Frameworks::Events::RoleFamilyUpdated,
         data: { role_family_id: SecureRandom.uuid_v7, name: "Platform Engineering" },

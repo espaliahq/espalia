@@ -24,6 +24,11 @@ class Views::Frameworks::Activity::EntryTest < ActiveSupport::TestCase
   end
 
   context "org-structure update summaries" do
+    should "name the new name for a framework rename" do
+      assert_includes render_entry(kind: "framework_renamed", payload: { name: "Engineering Career Path" }),
+                      "Renamed the framework to \u201CEngineering Career Path\u201D"
+    end
+
     should "name the field for a role-family rename" do
       assert_includes render_entry(kind: "role_family_updated", payload: { name: "Platform" }),
                       "Updated a role family&#39;s name"

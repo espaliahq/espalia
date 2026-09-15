@@ -24,7 +24,7 @@ class Views::Frameworks::ShowView < Views::Base
   def initialize(framework:, role_families:, selected_role_ids:, track_filter:,
                  matrix_data:, user: nil, current_tenant: nil, tenants: [], is_admin: false,
                  pending_suggestion_count: 0, mode: :view, can_edit: false, can_publish: false,
-                 can_edit_structure: false, archive_survivors: [], roles: [],
+                 can_edit_structure: false, can_rename: false, archive_survivors: [], roles: [],
                  current_person_id: nil, search_query: nil,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
                  edit_mode: :editing, publishing: false)
@@ -43,6 +43,7 @@ class Views::Frameworks::ShowView < Views::Base
     @can_edit = can_edit
     @can_publish = can_publish
     @can_edit_structure = can_edit_structure
+    @can_rename = can_rename
     @archive_survivors = archive_survivors
     @roles = roles
     @current_person_id = current_person_id
@@ -248,9 +249,12 @@ class Views::Frameworks::ShowView < Views::Base
           # The badges wrap under the title on a narrow viewport instead of
           # squeezing it — the name used to break over four lines beside them.
           div(class: "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1") do
-            h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold " \
-                      "text-gray-900 dark:text-white",
-               title: @framework.name) { @framework.name }
+            # The <h1>, plus the inline rename pencil for an admin / owner in
+            # edit mode (a direct edit — framework-explorer.md §11).
+            render Views::Frameworks::Explorer::FrameworkNameFrame.new(
+              framework_id: @framework.framework_id, name: @framework.name,
+              mode: @mode, can_rename: @can_rename
+            )
             render Components::Kit::Badge.new(
               "v#{@framework.current_published_version}", variant: :info
             )

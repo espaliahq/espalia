@@ -87,6 +87,13 @@ Events are classified along two axes (see ADR-16):
     shape-changing parent skip silently if the parent isn't yet materialised,
     and are re-applied by the publish-time rebuild.
 
+Shape-preserving — framework (editorial / live):
+  FrameworkRenamed { framework_id, name }
+    Direct edit via `rename` (no suggestion path); tenant admin or owner
+    (FrameworkPolicy#rename?). The aggregate no-ops on an unchanged name.
+    Its on-handler must update @name — the ExplorerGraph snapshot is rebuilt
+    from aggregate state after every command.
+
 Shape-preserving — roles and levels (editorial / live):
   RoleFamilyAdded { id, name, description }
   RoleFamilyUpdated { id, name?, description? }
