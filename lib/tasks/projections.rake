@@ -123,6 +123,12 @@ namespace :events do
       if applied == klass::CODE_VERSION
         puts "#{name} is already at CODE_VERSION #{applied} — skipping rebuild " \
              "(run events:projections:rebuild[#{name}] to force one)."
+      elsif applied && applied > klass::CODE_VERSION
+        # A promoted stamp on an image whose constant has not caught up yet
+        # (Path B, or a rollback): rebuilding would restamp the LOWER version
+        # and undo the promotion. Leave it; `verify` reports the mismatch.
+        puts "#{name} is stamped at #{applied}, ahead of this image's CODE_VERSION #{klass::CODE_VERSION} — " \
+             "skipping rebuild so the promotion is kept."
       else
         puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
         Rake::Task["events:projections:rebuild"].invoke(name)
@@ -138,14 +144,14 @@ namespace :events do
       name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>,[<version>]]" }
       klass = Projections::Registry.fetch(name)
       version = args[:version].present? ? Integer(args[:version]) : klass::CODE_VERSION
-      current = ProjectionVersion.find_by(name: name)&.version
-      if current && version < current
-        abort "Refusing to stamp #{name} at #{version}: already at #{current} (stamps only move forward)."
+      abort "Version must be a non-negative integer, got #{version}." if version.negative?
+
+      # Forward-only and atomic: a concurrent lower promotion cannot win.
+      row = ProjectionVersion.promote!(name, version)
+      if row.version > version
+        abort "Refusing to stamp #{name} at #{version}: already at #{row.version} (stamps only move forward)."
       end
 
-      row = ProjectionVersion.upsert(
-        { name: name, version: version, applied_at: Time.current }, unique_by: :name
-      ) && ProjectionVersion.find(name)
       puts "Stamped #{name} as rebuilt at version #{row.version} (#{row.applied_at})."
       puts "NOTE: this is an escape valve — only use it when you have verifiably rebuilt the projection by other means."
     end

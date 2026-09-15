@@ -30,4 +30,29 @@ class ProjectionVersion < ApplicationRecord
     )
     find(projection_class::PROJECTION_NAME)
   end
+
+  # Moves a projection's stamp forward to `version` — never backwards — in one
+  # statement, so two concurrent promotions cannot leave the lower one in
+  # place. Used by the runbook's Path B to declare an out-of-band rebuild as
+  # the version the coming CODE_VERSION bump will carry.
+  #
+  # @param name [String] a `PROJECTION_NAME`
+  # @param version [Integer] non-negative target version
+  # @return [ProjectionVersion] the row as it stands after the call
+  # @raise [ArgumentError] for a negative version
+  def self.promote!(name, version)
+    raise ArgumentError, "version must be a non-negative integer, got #{version.inspect}" unless
+      version.is_a?(Integer) && version >= 0
+
+    upsert(
+      { name: name, version: version, applied_at: Time.current },
+      unique_by: :name,
+      on_duplicate: Arel.sql(<<~SQL.squish)
+        version = GREATEST(projection_versions.version, EXCLUDED.version),
+        applied_at = CASE WHEN EXCLUDED.version > projection_versions.version
+                          THEN EXCLUDED.applied_at ELSE projection_versions.applied_at END
+      SQL
+    )
+    find(name)
+  end
 end

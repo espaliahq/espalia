@@ -51,6 +51,17 @@ class ProjectionsRebuildIfStaleTaskTest < ActiveSupport::TestCase
     assert_equal PROJECTION::CODE_VERSION, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version
   end
 
+  should "leave a stamp that is ahead of this image's CODE_VERSION alone" do
+    ProjectionVersion.promote!(PROJECTION::PROJECTION_NAME, PROJECTION::CODE_VERSION + 1)
+
+    out = run_task
+
+    assert_match(/ahead of this image/, out)
+    assert marker_exists?, "no truncate"
+    assert_equal PROJECTION::CODE_VERSION + 1, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version,
+      "the promotion must survive"
+  end
+
   should "rebuild a projection that was never stamped" do
     ProjectionVersion.where(name: PROJECTION::PROJECTION_NAME).delete_all
 
@@ -91,6 +102,11 @@ class ProjectionsMarkRebuiltTaskTest < ActiveSupport::TestCase
 
     assert_match(/version #{target}/, out)
     assert_equal target, ProjectionVersion.find(PROJECTION::PROJECTION_NAME).version
+  end
+
+  should "reject a negative version" do
+    assert_raises(SystemExit) { mark(PROJECTION::PROJECTION_NAME, "-1") }
+    assert_nil ProjectionVersion.find_by(name: PROJECTION::PROJECTION_NAME)
   end
 
   should "refuse to move a stamp backwards" do
