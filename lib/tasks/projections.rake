@@ -12,7 +12,9 @@
 #   bin/rails events:projections:verify
 #   bin/rails "events:projections:rebuild[frameworks/published_state]"
 #   bin/rails "events:projections:rebuild[frameworks/published_state,<tenant_id>]"
+#   bin/rails "events:projections:rebuild_if_stale[frameworks/published_state]"   # what predeploy runs
 #   bin/rails "events:projections:mark_rebuilt[frameworks/published_state]"
+#   bin/rails "events:projections:mark_rebuilt[frameworks/published_state,4]"  # Path B promotion
 #
 # The registry lives in `lib/projections/registry.rb` so the rake task,
 # tests, and predeploy guard share a single source of truth. Sync
@@ -83,34 +85,82 @@ namespace :events do
       tenants = single_tenant ? [ Tenant.find(args[:tenant_id]) ] : Tenant.all.to_a
       abort "No tenants to rebuild." if tenants.empty?
 
-      total_applied = 0
-      tenants.each do |tenant|
-        ActsAsTenant.with_tenant(tenant) do
-          puts "[#{tenant.id}] resetting #{name}…"
-          klass.reset!(tenant: tenant)
+      # One lock from first reset to final restamp: a promotion cannot slip
+      # in between and be overwritten (see ProjectionVersion.with_operation_lock).
+      ProjectionVersion.with_operation_lock(name) do
+        total_applied = 0
+        tenants.each do |tenant|
+          ActsAsTenant.with_tenant(tenant) do
+            puts "[#{tenant.id}] resetting #{name}…"
+            klass.reset!(tenant: tenant)
 
-          puts "[#{tenant.id}] replaying…"
-          applied = Projections::Replayer.replay(projection_class: klass, tenant: tenant)
-          total_applied += applied
-          puts "[#{tenant.id}] done — #{applied} events"
+            puts "[#{tenant.id}] replaying…"
+            applied = Projections::Replayer.replay(projection_class: klass, tenant: tenant)
+            total_applied += applied
+            puts "[#{tenant.id}] done — #{applied} events"
+          end
         end
-      end
 
-      if single_tenant
-        # Surgical rebuild — does NOT stamp the global version row.
-        puts "Single-tenant rebuild complete (#{total_applied} events). projection_versions row unchanged."
-      else
-        ProjectionVersion.stamp!(klass)
-        puts "All-tenants rebuild complete (#{total_applied} events). " \
-             "projection_versions[#{name}] = #{klass::CODE_VERSION}."
+        if single_tenant
+          # Surgical rebuild — does NOT stamp the global version row.
+          puts "Single-tenant rebuild complete (#{total_applied} events). projection_versions row unchanged."
+        else
+          ProjectionVersion.stamp!(klass)
+          puts "All-tenants rebuild complete (#{total_applied} events). " \
+               "projection_versions[#{name}] = #{klass::CODE_VERSION}."
+        end
       end
     end
 
-    desc "Manually stamp a projection at its current CODE_VERSION without rebuilding (escape valve)."
-    task :mark_rebuilt, [ :name ] => :environment do |_, args|
-      name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>]" }
+    # What the predeploy hook runs for each REBUILD_ON_DEPLOY name. A rebuild
+    # truncates the projection's live tables and replays them while the
+    # previous release is still serving traffic, so every needless rebuild is
+    # a minute or two of empty assessments in production. A variable left set
+    # after its deploy (the runbook says to remove it; it was once forgotten
+    # for four deploys) must therefore be inert once the stamp is current.
+    desc "Rebuild a projection only if its stamped version is behind CODE_VERSION (predeploy)."
+    task :rebuild_if_stale, [ :name ] => :environment do |_, args|
+      name = args.fetch(:name) { abort "Usage: events:projections:rebuild_if_stale[<name>]" }
       klass = Projections::Registry.fetch(name)
-      row = ProjectionVersion.stamp!(klass)
+
+      # Check and rebuild under the same lock, so the stamp read here is the
+      # one the rebuild (or a concurrent promotion) actually acts on.
+      ProjectionVersion.with_operation_lock(name) do
+        applied = ProjectionVersion.find_by(name: name)&.version
+
+        if applied == klass::CODE_VERSION
+          puts "#{name} is already at CODE_VERSION #{applied} — skipping rebuild " \
+               "(run events:projections:rebuild[#{name}] to force one)."
+        elsif applied && applied > klass::CODE_VERSION
+          # A promoted stamp on an image whose constant has not caught up yet
+          # (Path B, or a rollback): rebuilding would restamp the LOWER version
+          # and undo the promotion. Leave it; `verify` reports the mismatch.
+          puts "#{name} is stamped at #{applied}, ahead of this image's CODE_VERSION #{klass::CODE_VERSION} — " \
+               "skipping rebuild so the promotion is kept."
+        else
+          puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
+          Rake::Task["events:projections:rebuild"].invoke(name)
+        end
+      end
+    end
+
+    # The optional version is the runbook's Path B promotion: an out-of-band
+    # rebuild on the shipped (unbumped) handler code already holds the state
+    # the coming CODE_VERSION describes, so stamping that version up front
+    # lets the bump deploy pass `verify` without a second rebuild.
+    desc "Stamp a projection as rebuilt at its CODE_VERSION, or at an explicit version, without rebuilding (escape valve)."
+    task :mark_rebuilt, %i[name version] => :environment do |_, args|
+      name = args.fetch(:name) { abort "Usage: events:projections:mark_rebuilt[<name>,[<version>]]" }
+      klass = Projections::Registry.fetch(name)
+      version = args[:version].present? ? Integer(args[:version]) : klass::CODE_VERSION
+      abort "Version must be a non-negative integer, got #{version}." if version.negative?
+
+      # Forward-only and atomic: a concurrent lower promotion cannot win.
+      row = ProjectionVersion.promote!(name, version)
+      if row.version > version
+        abort "Refusing to stamp #{name} at #{version}: already at #{row.version} (stamps only move forward)."
+      end
+
       puts "Stamped #{name} as rebuilt at version #{row.version} (#{row.applied_at})."
       puts "NOTE: this is an escape valve — only use it when you have verifiably rebuilt the projection by other means."
     end

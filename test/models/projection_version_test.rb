@@ -55,4 +55,49 @@ class ProjectionVersionTest < ActiveSupport::TestCase
     Object.send(:remove_const, name) if Object.const_defined?(name)
     Object.const_set(name, value)
   end
+
+  context ".promote!" do
+    should "create a missing stamp and move an existing one forward only" do
+      row = ProjectionVersion.promote!("some/projection", 3)
+      assert_equal 3, row.version
+
+      assert_equal 5, ProjectionVersion.promote!("some/projection", 5).version
+      assert_equal 5, ProjectionVersion.promote!("some/projection", 4).version, "a lower write cannot regress the stamp"
+    end
+
+    should "keep applied_at from the write that actually moved the stamp" do
+      ProjectionVersion.promote!("some/projection", 5)
+      moved_at = ProjectionVersion.find("some/projection").applied_at
+
+      travel 1.hour do
+        assert_equal moved_at.to_i, ProjectionVersion.promote!("some/projection", 4).applied_at.to_i
+      end
+    end
+
+    should "hold the projection's advisory lock while a stamp operation runs" do
+      key = ProjectionVersion.lock_key("some/projection")
+      # Transactional tests share one connection across threads, so a real
+      # second session needs its own PG connection.
+      cfg = ActiveRecord::Base.connection_db_config.configuration_hash
+      other = PG.connect({ dbname: cfg[:database], user: cfg[:username], password: cfg[:password],
+                           host: cfg[:host], port: cfg[:port] }.compact)
+      try_lock = lambda do
+        got = other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0) == "t"
+        other.exec("SELECT pg_advisory_unlock(#{key})") if got
+        got
+      end
+
+      ProjectionVersion.with_operation_lock("some/projection") do
+        assert_equal false, try_lock.call, "another session must wait while the operation runs"
+      end
+      assert_equal true, try_lock.call, "the lock is released afterwards"
+    ensure
+      other&.close
+    end
+
+    should "reject a negative or non-integer version" do
+      assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", -1) }
+      assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", "5") }
+    end
+  end
 end
