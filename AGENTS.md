@@ -48,6 +48,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Authorization / permissions | @docs/guidelines/authorization.md |
 | Tests | @docs/guidelines/testing.md |
 | Visual verification (Chrome MCP) — mandatory for front-end changes | @docs/guidelines/chrome-mcp.md |
+| Favicon / app icon / web manifest | @docs/guidelines/app-icons.md |
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |

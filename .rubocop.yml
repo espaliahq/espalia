@@ -12,6 +12,11 @@ require:
   - ./lib/rubocop/cop/system_tests/flake_prone_click.rb
   - ./lib/rubocop/cop/growth_os/controllers_must_use_operations.rb
 
+AllCops:
+  Exclude:
+    # A node script (the app-icon generator), not Ruby — see docs/guidelines/app-icons.md.
+    - "bin/build-icons"
+
 SystemTests/FlakeProneClick:
   Enabled: true
   Include:
