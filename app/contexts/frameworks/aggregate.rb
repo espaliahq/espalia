@@ -57,6 +57,9 @@ class Frameworks::Aggregate
     # Distinct from `@added_during_draft` (stable_ids, for archive-mapping).
     @draft_added_level_ids = Set.new
     @draft_added_capability_ids = Set.new
+    # Capability ids archived within the open draft — the explorer's
+    # "pending archive" set. Reset with the other draft bookkeeping.
+    @draft_archived_capability_ids = Set.new
     @draft_added_binding_ids = Set.new
     @draft_added_expectation_ids = Set.new
   end
@@ -69,7 +72,7 @@ class Frameworks::Aggregate
               :capability_categories, :capabilities, :bindings,
               :expectations, :illustrations, :current_version,
               :draft_in_progress, :draft_version, :added_during_draft,
-              :draft_added_level_ids, :draft_added_capability_ids,
+              :draft_added_level_ids, :draft_added_capability_ids, :draft_archived_capability_ids,
               :draft_added_binding_ids, :draft_added_expectation_ids,
               :families_with_event_department
 
@@ -1436,6 +1439,9 @@ class Frameworks::Aggregate
     cap = @capabilities[event.data[:capability_id]]
     cap[:status] = :archived
     stable_id = cap[:stable_id]
+    # "Pending archive" in the explorer is an archive made in THIS draft; a
+    # capability archived in an earlier version is simply archived.
+    @draft_archived_capability_ids << event.data[:capability_id] if @draft_in_progress
     # Require a migration mapping unless the capability was also added in
     # this same draft (in which case there's nothing from the previous
     # published version to migrate).
@@ -1526,6 +1532,7 @@ class Frameworks::Aggregate
     @archives_needing_mapping = Set.new
     @draft_added_level_ids = Set.new
     @draft_added_capability_ids = Set.new
+    @draft_archived_capability_ids = Set.new
     @draft_added_binding_ids = Set.new
     @draft_added_expectation_ids = Set.new
   end
@@ -1539,6 +1546,7 @@ class Frameworks::Aggregate
     @archives_needing_mapping = Set.new
     @draft_added_level_ids = Set.new
     @draft_added_capability_ids = Set.new
+    @draft_archived_capability_ids = Set.new
     @draft_added_binding_ids = Set.new
     @draft_added_expectation_ids = Set.new
   end

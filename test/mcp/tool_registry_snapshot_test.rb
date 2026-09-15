@@ -1282,6 +1282,37 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_define_migration_mappings",
+        "description" => "Save migration mappings for several retiring capabilities in one atomic write; " \
+          "unchanged rows are skipped and rows still needing a survivor are reported (owner/editor only).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" },
+            "mappings" => {
+              "type" => "array",
+              "items" => {
+                "type" => "object",
+                "properties" => {
+                  "from_stable_id" => { "type" => "string" },
+                  "mapping_type" => { "type" => "string", "enum" => %w[same evolved split archived new] },
+                  "to_stable_id" => { "type" => "string" },
+                  "mapping_id" => { "type" => "string" }
+                },
+                "required" => [ "from_stable_id" ]
+              }
+            }
+          },
+          "required" => %w[framework_id mappings],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "frameworks_delete_suggestion_comment",
         "description" => "Delete a comment on a framework suggestion's thread (soft delete — preserves reply chains; author or tenant admin).",
         "inputSchema" => {
@@ -1351,7 +1382,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_publish_version",
-        "description" => "Publish the current draft as a new framework version (owner/editor only).",
+        "description" => "Request publication of the current draft as a new framework version; " \
+          "runs in the background and notifies the requester (owner/editor only).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

@@ -179,6 +179,28 @@ class Frameworks::ExplorerGraphBuilderTest < ActiveSupport::TestCase
     end
   end
 
+  # Regression: every archived capability used to read as pending whenever a
+  # draft was open, so capabilities retired in v2 resurfaced struck-through —
+  # and as "retiring, needs a mapping" — in v3, v4, …
+  context "#build in a later draft, after an archive was published" do
+    setup do
+      @aggregate.start_draft(@framework_id, 2, "author@example.com")
+      @aggregate.archive_capability(@framework_id, @capability_id, reason: "test")
+      stable_id = @aggregate.capabilities[@capability_id][:stable_id]
+      @aggregate.define_migration_mapping(@framework_id, SecureRandom.uuid_v7, stable_id, nil, "archived")
+      @aggregate.publish_version(@framework_id, "author@example.com")
+      @aggregate.start_draft(@framework_id, 3, "author@example.com")
+      @graph = Frameworks::ExplorerGraphBuilder.new(@aggregate).build
+    end
+
+    should "report the capability as archived, not pending archive" do
+      cap = @graph.capability_categories.first.capabilities.find { |c| c.capability_id == @capability_id }
+      assert cap
+      assert_equal "archived", cap.status
+      assert_not cap.pending_archive
+    end
+  end
+
   context "#build when capability is added-then-archived in same draft" do
     setup do
       @aggregate.start_draft(@framework_id, 2, "author@example.com")

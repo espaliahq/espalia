@@ -31,6 +31,35 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
     Rails.logger.warn("[#{self.class.name}] Activity broadcast failed: #{e.message}")
   end
 
+  # A published version closes the draft, so every open explorer must drop
+  # the `vN draft` pill and the Publish button — both sit outside every Turbo
+  # Frame. Rendered hidden (`visible: false`) so the replacement is the same
+  # empty anchor for every viewer regardless of their rights or of a draft
+  # re-opened in the meantime; whoever published, the header stops lying.
+  #
+  # @param framework_id [String, nil] no-op when nil
+  def broadcast_draft_status_cleared(framework_id)
+    return if Projections::Replayer.replay_mode?
+    return unless framework_id
+
+    framework = FrameworkState::Framework.find_by(framework_id: framework_id)
+    return unless framework
+
+    { badge: Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
+      publish: Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID }.each do |slot, target|
+      Turbo::StreamsChannel.broadcast_replace_to(
+        "framework_activity", framework_id,
+        target: target,
+        html: ApplicationController.render(
+          Views::Frameworks::Explorer::DraftStatus.new(framework: framework, slot: slot, visible: false),
+          layout: false
+        )
+      )
+    end
+  rescue => e
+    Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
+  end
+
   # The header badge lives OUTSIDE the context pane's Turbo Frame, so the pane's
   # reload could never update it — it kept its page-load value until a full
   # reload (a suggestion landed, the feed showed it, the badge still said 6).

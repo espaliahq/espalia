@@ -7,6 +7,8 @@ require "application_system_test_case"
 # mode badge in the header, mode switcher, context pane open by default,
 # inline-edit hosts + add-illustration frames visible only in edit.
 class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
+  include ActiveJob::TestHelper
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user, password: "password123")
@@ -353,14 +355,21 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         visit edit_framework_path(@framework_id)
         assert_text "v2 draft"
 
-        # Publish now routes to the review page (no archived caps here), then
-        # the owner confirms.
+        # Publish routes to the review page (no archived caps here), then the
+        # owner confirms. The publish itself runs in a background job, so the
+        # header immediately shows the disabled "Publishing" state instead of
+        # a second Publish button.
         click_link_with_js_fallback("Publish v2", expect_text: "No capabilities are being retired")
-        click_button_with_js_fallback("Confirm & publish v2", expect_text: "Published v2")
+        click_button_with_js_fallback("Confirm & publish v2", expect_text: "Publishing v2 in the background")
+        assert_text "v2 draft"
+        assert_button "Publishing v2…", disabled: true
+        assert_no_link "Publish v2"
 
-        # Draft is published: the flash confirms, the draft pill is gone.
-        assert_text "Published v2"
+        # Once the job has run, a reload shows the draft gone.
+        perform_enqueued_jobs(only: Frameworks::PublishVersionJob)
+        visit edit_framework_path(@framework_id)
         assert_no_text "v2 draft"
+        assert_no_button "Publishing v2…"
       end
     end
   end

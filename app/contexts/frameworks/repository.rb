@@ -23,7 +23,9 @@ class Frameworks::Repository
     Frameworks::Events::SuggestionCommentDeleted,
     # Clarifications propose no content — the graph carries none of their state.
     Frameworks::Events::ClarificationRequested,
-    Frameworks::Events::ClarificationResolved
+    Frameworks::Events::ClarificationResolved,
+    # Migration mappings live in their own read model; the graph never reads them.
+    Frameworks::Events::MigrationMappingDefined
   ].freeze
 
   # The active batch is execution-state-local (per thread/fiber), NOT

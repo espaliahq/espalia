@@ -27,8 +27,9 @@ class Views::Frameworks::ShowView < Views::Base
                  can_edit_structure: false, archive_survivors: [], roles: [],
                  current_person_id: nil, search_query: nil,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 edit_mode: :editing)
+                 edit_mode: :editing, publishing: false)
     @framework = framework
+    @publishing = publishing
     @role_families = role_families
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
@@ -264,7 +265,8 @@ class Views::Frameworks::ShowView < Views::Base
           edit_suggest_toggle if @mode == :edit
           mode_switcher if @can_edit
           render Views::Frameworks::Explorer::DraftStatus.new(
-            framework: @framework, slot: :publish, visible: @mode == :edit && @can_publish
+            framework: @framework, slot: :publish, visible: @mode == :edit && @can_publish,
+            publishing: @publishing
           )
           settings_link if @is_admin
         end

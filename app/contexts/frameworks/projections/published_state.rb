@@ -846,7 +846,9 @@ class Frameworks::Projections::PublishedState
   def broadcast_framework_activity(event)
     return unless Frameworks::ActivityFeedQuery::KINDS.key?(event.class)
 
-    broadcast_framework_activity_signal(framework_id_for_broadcast(event))
+    framework_id = framework_id_for_broadcast(event)
+    broadcast_framework_activity_signal(framework_id)
+    broadcast_draft_status_cleared(framework_id) if event.is_a?(Frameworks::Events::FrameworkVersionPublished)
   end
 
   # Resolved-suggestion events (approve/reject/withdraw/amend) carry no

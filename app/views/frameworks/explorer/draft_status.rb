@@ -19,10 +19,14 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   # @param visible [Boolean] whether this viewer sees the slot at all — edit
   #   mode for the pill, edit mode + publish rights for the button. A hidden
   #   slot still renders its (empty) anchor so a later stream can find it.
-  def initialize(framework:, slot:, visible: true)
+  # @param publishing [Boolean] a publish of this draft is queued or running
+  #   ({FrameworkPublication.in_flight_for?}) — the button renders disabled so
+  #   nobody requests it twice.
+  def initialize(framework:, slot:, visible: true, publishing: false)
     @framework = framework
     @slot = slot
     @visible = visible
+    @publishing = publishing
   end
 
   def view_template
@@ -47,11 +51,26 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   # validated before the version is cut — the deliberate confirmation step, and
   # the ONE edit-mode action that stays a full navigation.
   def publish_button
+    return publishing_button if @publishing
+
     a(
       href: new_framework_publication_path(@framework.framework_id),
       class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
              "bg-primary text-white hover:bg-primary/90 transition-colors",
       title: "Review and publish v#{@framework.draft_version}"
     ) { "Publish v#{@framework.draft_version}" }
+  end
+
+  # The publish is already running in the background: same footprint as the
+  # button so the header doesn't jump, but a real disabled control (not a link
+  # styled dead) so keyboard and screen-reader users get the state too. Opaque
+  # neutral surface — the label is the only thing saying a publish is in flight.
+  def publishing_button
+    button(
+      type: "button", disabled: true, aria_disabled: "true",
+      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
+             "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 cursor-not-allowed",
+      title: "v#{@framework.draft_version} is being published — you'll be notified when it's live"
+    ) { "Publishing v#{@framework.draft_version}…" }
   end
 end
