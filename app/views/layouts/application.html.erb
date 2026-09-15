@@ -4,7 +4,9 @@
     <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), "GrowthOS"].compact.join(" · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Growth Os">
+    <meta name="application-name" content="GrowthOS">
+    <meta name="theme-color" content="#32c8c8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1a1a2e" media="(prefers-color-scheme: dark)">
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
@@ -18,12 +20,11 @@
       <link href="<%= current_tenant.google_font_url %>" rel="stylesheet" data-turbo-track="reload">
     <% end %>
 
-    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
-    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
-
-    <link rel="icon" href="/icon.png" type="image/png">
+    <%# App icon set — regenerate from public/icon.svg, see docs/guidelines/app-icons.md %>
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/icon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
 
     <%# Tailwind CSS compiled output %>
     <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
