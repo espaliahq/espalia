@@ -85,26 +85,30 @@ namespace :events do
       tenants = single_tenant ? [ Tenant.find(args[:tenant_id]) ] : Tenant.all.to_a
       abort "No tenants to rebuild." if tenants.empty?
 
-      total_applied = 0
-      tenants.each do |tenant|
-        ActsAsTenant.with_tenant(tenant) do
-          puts "[#{tenant.id}] resetting #{name}…"
-          klass.reset!(tenant: tenant)
+      # One lock from first reset to final restamp: a promotion cannot slip
+      # in between and be overwritten (see ProjectionVersion.with_operation_lock).
+      ProjectionVersion.with_operation_lock(name) do
+        total_applied = 0
+        tenants.each do |tenant|
+          ActsAsTenant.with_tenant(tenant) do
+            puts "[#{tenant.id}] resetting #{name}…"
+            klass.reset!(tenant: tenant)
 
-          puts "[#{tenant.id}] replaying…"
-          applied = Projections::Replayer.replay(projection_class: klass, tenant: tenant)
-          total_applied += applied
-          puts "[#{tenant.id}] done — #{applied} events"
+            puts "[#{tenant.id}] replaying…"
+            applied = Projections::Replayer.replay(projection_class: klass, tenant: tenant)
+            total_applied += applied
+            puts "[#{tenant.id}] done — #{applied} events"
+          end
         end
-      end
 
-      if single_tenant
-        # Surgical rebuild — does NOT stamp the global version row.
-        puts "Single-tenant rebuild complete (#{total_applied} events). projection_versions row unchanged."
-      else
-        ProjectionVersion.stamp!(klass)
-        puts "All-tenants rebuild complete (#{total_applied} events). " \
-             "projection_versions[#{name}] = #{klass::CODE_VERSION}."
+        if single_tenant
+          # Surgical rebuild — does NOT stamp the global version row.
+          puts "Single-tenant rebuild complete (#{total_applied} events). projection_versions row unchanged."
+        else
+          ProjectionVersion.stamp!(klass)
+          puts "All-tenants rebuild complete (#{total_applied} events). " \
+               "projection_versions[#{name}] = #{klass::CODE_VERSION}."
+        end
       end
     end
 
@@ -118,20 +122,25 @@ namespace :events do
     task :rebuild_if_stale, [ :name ] => :environment do |_, args|
       name = args.fetch(:name) { abort "Usage: events:projections:rebuild_if_stale[<name>]" }
       klass = Projections::Registry.fetch(name)
-      applied = ProjectionVersion.find_by(name: name)&.version
 
-      if applied == klass::CODE_VERSION
-        puts "#{name} is already at CODE_VERSION #{applied} — skipping rebuild " \
-             "(run events:projections:rebuild[#{name}] to force one)."
-      elsif applied && applied > klass::CODE_VERSION
-        # A promoted stamp on an image whose constant has not caught up yet
-        # (Path B, or a rollback): rebuilding would restamp the LOWER version
-        # and undo the promotion. Leave it; `verify` reports the mismatch.
-        puts "#{name} is stamped at #{applied}, ahead of this image's CODE_VERSION #{klass::CODE_VERSION} — " \
-             "skipping rebuild so the promotion is kept."
-      else
-        puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
-        Rake::Task["events:projections:rebuild"].invoke(name)
+      # Check and rebuild under the same lock, so the stamp read here is the
+      # one the rebuild (or a concurrent promotion) actually acts on.
+      ProjectionVersion.with_operation_lock(name) do
+        applied = ProjectionVersion.find_by(name: name)&.version
+
+        if applied == klass::CODE_VERSION
+          puts "#{name} is already at CODE_VERSION #{applied} — skipping rebuild " \
+               "(run events:projections:rebuild[#{name}] to force one)."
+        elsif applied && applied > klass::CODE_VERSION
+          # A promoted stamp on an image whose constant has not caught up yet
+          # (Path B, or a rollback): rebuilding would restamp the LOWER version
+          # and undo the promotion. Leave it; `verify` reports the mismatch.
+          puts "#{name} is stamped at #{applied}, ahead of this image's CODE_VERSION #{klass::CODE_VERSION} — " \
+               "skipping rebuild so the promotion is kept."
+        else
+          puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
+          Rake::Task["events:projections:rebuild"].invoke(name)
+        end
       end
     end
 

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "zlib"
+
 # Records the last `CODE_VERSION` at which each replayable projection was
 # globally rebuilt. The predeploy guard (`events:projections:verify`) compares
 # this against the projection class's current `CODE_VERSION` constant to fail
@@ -31,6 +33,32 @@ class ProjectionVersion < ApplicationRecord
     find(projection_class::PROJECTION_NAME)
   end
 
+  # Serialises every operation that reads or writes a projection's stamp — a
+  # rebuild (reset, replay, restamp), the predeploy stale check that decides
+  # whether to rebuild, and a Path B promotion — on one session-level
+  # Postgres advisory lock per projection. Without it a promotion landing
+  # between a rebuild's stale check and its final `stamp!` is silently
+  # overwritten by the lower version. Session-level (not transactional) so a
+  # multi-minute replay is not wrapped in one transaction; the lock is
+  # reentrant within a session, so a task may take it around a nested one.
+  #
+  # @param name [String] a `PROJECTION_NAME`
+  # @yield while the lock is held
+  # @return [Object] the block's value
+  def self.with_operation_lock(name)
+    key = lock_key(name)
+    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_lock(?)", key ]))
+    yield
+  ensure
+    connection.select_value(sanitize_sql_array([ "SELECT pg_advisory_unlock(?)", key ]))
+  end
+
+  # @param name [String]
+  # @return [Integer] a stable 32-bit key for the advisory lock
+  def self.lock_key(name)
+    Zlib.crc32("projection_versions:#{name}")
+  end
+
   # Moves a projection's stamp forward to `version` — never backwards — in one
   # statement, so two concurrent promotions cannot leave the lower one in
   # place. Used by the runbook's Path B to declare an out-of-band rebuild as
@@ -44,15 +72,17 @@ class ProjectionVersion < ApplicationRecord
     raise ArgumentError, "version must be a non-negative integer, got #{version.inspect}" unless
       version.is_a?(Integer) && version >= 0
 
-    upsert(
-      { name: name, version: version, applied_at: Time.current },
-      unique_by: :name,
-      on_duplicate: Arel.sql(<<~SQL.squish)
-        version = GREATEST(projection_versions.version, EXCLUDED.version),
-        applied_at = CASE WHEN EXCLUDED.version > projection_versions.version
-                          THEN EXCLUDED.applied_at ELSE projection_versions.applied_at END
-      SQL
-    )
-    find(name)
+    with_operation_lock(name) do
+      upsert(
+        { name: name, version: version, applied_at: Time.current },
+        unique_by: :name,
+        on_duplicate: Arel.sql(<<~SQL.squish)
+          version = GREATEST(projection_versions.version, EXCLUDED.version),
+          applied_at = CASE WHEN EXCLUDED.version > projection_versions.version
+                            THEN EXCLUDED.applied_at ELSE projection_versions.applied_at END
+        SQL
+      )
+      find(name)
+    end
   end
 end

@@ -74,6 +74,27 @@ class ProjectionVersionTest < ActiveSupport::TestCase
       end
     end
 
+    should "hold the projection's advisory lock while a stamp operation runs" do
+      key = ProjectionVersion.lock_key("some/projection")
+      # Transactional tests share one connection across threads, so a real
+      # second session needs its own PG connection.
+      cfg = ActiveRecord::Base.connection_db_config.configuration_hash
+      other = PG.connect({ dbname: cfg[:database], user: cfg[:username], password: cfg[:password],
+                           host: cfg[:host], port: cfg[:port] }.compact)
+      try_lock = lambda do
+        got = other.exec("SELECT pg_try_advisory_lock(#{key})").getvalue(0, 0) == "t"
+        other.exec("SELECT pg_advisory_unlock(#{key})") if got
+        got
+      end
+
+      ProjectionVersion.with_operation_lock("some/projection") do
+        assert_equal false, try_lock.call, "another session must wait while the operation runs"
+      end
+      assert_equal true, try_lock.call, "the lock is released afterwards"
+    ensure
+      other&.close
+    end
+
     should "reject a negative or non-integer version" do
       assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", -1) }
       assert_raises(ArgumentError) { ProjectionVersion.promote!("some/projection", "5") }
