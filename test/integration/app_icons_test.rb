@@ -8,41 +8,59 @@ require "test_helper"
 # tab icon, a default home-screen tile), so the check has to live here.
 # See docs/guidelines/app-icons.md.
 class AppIconsTest < ActionDispatch::IntegrationTest
+  include Devise::Test::IntegrationHelpers
+
+  context "the layout head for a themed tenant" do
+    setup do
+      @tenant = create(:tenant, nav_bg_color: "#123456", nav_bg_color_dark: "#654321")
+      user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: user, role: :member) }
+      sign_in user
+      get root_path
+    end
+
+    should "paint the browser chrome in the tenant's navbar colours" do
+      assert_response :success
+      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: light)'][content='#123456']"
+      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: dark)'][content='#654321']"
+    end
+  end
+
   context "the layout head" do
     setup { get new_user_session_path }
 
-    should "link the icon set and the manifest" do
+    should "link the icon set and the manifest, and ship every file it links" do
       assert_response :success
       assert_select "link[rel='icon'][href='/favicon.ico']"
       assert_select "link[rel='icon'][href='/icon.svg'][type='image/svg+xml']"
       assert_select "link[rel='apple-touch-icon'][href='/apple-touch-icon.png']"
       assert_select "link[rel='manifest'][href='/manifest.json']"
-    end
 
-    should "declare a theme colour per colour scheme" do
-      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: light)']"
-      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: dark)']"
-      assert_select "meta[name='application-name'][content='GrowthOS']"
-    end
-
-    should "ship every file the head links to" do
-      css_select("link[rel='icon'], link[rel='apple-touch-icon']").each do |link|
+      css_select("link[rel='icon'], link[rel='apple-touch-icon'], link[rel='manifest']").each do |link|
         assert_public_file link["href"]
       end
+    end
+
+    should "declare the default theme colour per colour scheme when no tenant is active" do
+      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: light)']" \
+                    "[content='#{Tenant::DEFAULT_NAV_BG_COLOR}']"
+      assert_select "meta[name='theme-color'][media='(prefers-color-scheme: dark)']" \
+                    "[content='#{Tenant::DEFAULT_NAV_BG_COLOR_DARK}']"
+      assert_select "meta[name='application-name'][content='GrowthOS']"
     end
   end
 
   context "GET /manifest.json" do
-    setup { get pwa_manifest_path(format: :json) }
+    setup { get "/manifest.json" }
 
-    should "describe the installable app" do
+    should "describe the installable app in the brand colour" do
       assert_response :success
       manifest = JSON.parse(response.body)
 
       assert_equal "GrowthOS", manifest["name"]
       assert_equal "standalone", manifest["display"]
-      assert_match(/\A#[0-9a-f]{6}\z/, manifest["theme_color"])
-      assert_match(/\A#[0-9a-f]{6}\z/, manifest["background_color"])
+      assert_equal Tenant::DEFAULT_NAV_BG_COLOR, manifest["theme_color"]
+      assert_match Tenant::HEX_COLOR_FORMAT, manifest["background_color"]
     end
 
     should "reference icons that exist, including a maskable one" do
@@ -55,12 +73,18 @@ class AppIconsTest < ActionDispatch::IntegrationTest
   end
 
   context "the SVG mark" do
-    should "carry an accessible name and description" do
-      svg = Rails.root.join("public/icon.svg").read
+    setup { @svg = Rails.root.join("public/icon.svg").read }
 
-      assert_includes svg, 'role="img"'
-      assert_match(%r{<title id="[^"]+">GrowthOS</title>}, svg)
-      assert_match(%r{<desc id="[^"]+">.+</desc>}, svg)
+    should "carry an accessible name and description" do
+      assert_includes @svg, 'role="img"'
+      assert_match(%r{<title id="[^"]+">GrowthOS</title>}, @svg)
+      assert_match(%r{<desc id="[^"]+">.+</desc>}, @svg)
+    end
+
+    should "be painted in the same teal the navbar and manifest use" do
+      # COLOR in bin/build-icons is a literal (it's a node script) — this is what
+      # keeps it in step with Tenant::DEFAULT_NAV_BG_COLOR.
+      assert_includes @svg, %(fill="#{Tenant::DEFAULT_NAV_BG_COLOR}")
     end
   end
 

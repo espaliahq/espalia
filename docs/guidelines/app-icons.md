@@ -19,18 +19,28 @@ Every file is generated — never hand-edit a PNG.
 
 | File | Used by | Shape |
 |---|---|---|
-| `public/favicon.ico` | Legacy tab icon, bookmarks, Windows | 16 + 32 + 48 px, tight crop (~4% padding) so the small sizes spend their pixels on the mark |
-| `public/icon.svg` | Modern tab icon (`type="image/svg+xml"`), manifest `sizes="any"` | Same tight crop, transparent |
-| `public/icon.png` / `public/icon-192.png` | Manifest `purpose: any` (512 / 192) | Transparent, ~10% padding |
-| `public/icon-maskable-512.png` | Manifest `purpose: maskable` — Android adaptive icons, which crop to a circle / squircle | Opaque white, mark inside the 80% safe zone |
-| `public/apple-touch-icon.png` | iOS home screen (180 px) | Opaque white — iOS paints black behind transparency |
+| `public/favicon.ico` | Legacy tab icon, bookmarks, Windows | 16 + 32 + 48 px, tight crop |
+| `public/icon.svg` | Modern tab icon (`type="image/svg+xml"`), manifest `sizes="any"` | Tight crop, transparent |
+| `public/icon.png` / `public/icon-192.png` | Manifest `purpose: any` (512 / 192) | Transparent, padded |
+| `public/icon-maskable-512.png` | Manifest `purpose: maskable` — Android adaptive icons, which crop to a circle / squircle | Opaque, mark inside the safe zone |
+| `public/apple-touch-icon.png` | iOS home screen (180 px) | Opaque — iOS paints black behind transparency |
+
+The exact crops, and why each is what it is, are comments beside the constants
+in `bin/build-icons`.
 
 The `<head>` in [`app/views/layouts/application.html.erb`](../../app/views/layouts/application.html.erb)
 links the ICO, the SVG, the Apple touch icon and the manifest, and declares a
-`theme-color` per colour scheme (`--color-nav-bg` light / dark). The manifest
-lives at [`app/views/pwa/manifest.json.erb`](../../app/views/pwa/manifest.json.erb)
-and is served by Rails' built-in `rails/pwa#manifest`; the service worker is
-deliberately not enabled (nothing needs offline or push yet).
+`theme-color` per colour scheme — the tenant's navbar colour when one is set,
+else `Tenant::DEFAULT_NAV_BG_COLOR` / `_DARK` (`Tenant.browser_theme_color`).
+The manifest is a static [`public/manifest.json`](../../public/manifest.json)
+(nothing in it is per-request, so it costs no Rails request); its `theme_color`
+is the same default. The service worker is deliberately not enabled (nothing
+needs offline or push yet).
+
+**Three places must agree on the brand teal**: the `--color-primary` /
+`--color-nav-bg` tokens in `application.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
+and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins the
+last two to each other and to the manifest.
 
 ## Regenerating
 
@@ -45,8 +55,7 @@ NODE_PATH=tmp/icon-build/node_modules bin/build-icons
 
 Then eyeball the outputs (`Read` the PNGs, or open them from the IDE) — in
 particular the 16 px face of the ICO, which is where a mark stops reading
-first. `test/integration/app_icons_test.rb` pins the head links, the manifest,
-and that every referenced file exists.
+first.
 
 ## Changing the mark
 
