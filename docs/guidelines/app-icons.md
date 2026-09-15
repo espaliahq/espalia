@@ -37,6 +37,14 @@ The manifest is a static [`public/manifest.json`](../../public/manifest.json)
 is the same default. The service worker is deliberately not enabled (nothing
 needs offline or push yet).
 
+**The links are versioned.** Production serves `public/` with a one-year
+`cache-control`, so the layout links every icon and the manifest through
+`AppIconsHelper#app_icon_path`, which appends `?v=<digest of the icon files>`
+— regenerate the set and every returning browser refetches it. Two things it
+cannot reach: a browser's own unsolicited `GET /favicon.ico`, and the icon
+URLs inside the manifest (installed home-screen tiles refresh on the
+platform's own schedule regardless).
+
 **Three places must agree on the brand teal**: the `--color-primary` /
 `--color-nav-bg` tokens in `application.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
 and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins the

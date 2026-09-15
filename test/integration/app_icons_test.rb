@@ -29,12 +29,14 @@ class AppIconsTest < ActionDispatch::IntegrationTest
   context "the layout head" do
     setup { get new_user_session_path }
 
-    should "link the icon set and the manifest, and ship every file it links" do
+    should "link the icon set and the manifest, versioned, and ship every file it links" do
       assert_response :success
-      assert_select "link[rel='icon'][href='/favicon.ico']"
-      assert_select "link[rel='icon'][href='/icon.svg'][type='image/svg+xml']"
-      assert_select "link[rel='apple-touch-icon'][href='/apple-touch-icon.png']"
-      assert_select "link[rel='manifest'][href='/manifest.json']"
+      v = AppIconsHelper.version
+      assert_match(/\A\h{8}\z/, v)
+      assert_select "link[rel='icon'][href='/favicon.ico?v=#{v}']"
+      assert_select "link[rel='icon'][href='/icon.svg?v=#{v}'][type='image/svg+xml']"
+      assert_select "link[rel='apple-touch-icon'][href='/apple-touch-icon.png?v=#{v}']"
+      assert_select "link[rel='manifest'][href='/manifest.json?v=#{v}']"
 
       css_select("link[rel='icon'], link[rel='apple-touch-icon'], link[rel='manifest']").each do |link|
         assert_public_file link["href"]
@@ -83,15 +85,20 @@ class AppIconsTest < ActionDispatch::IntegrationTest
 
     should "be painted in the same teal the navbar and manifest use" do
       # COLOR in bin/build-icons is a literal (it's a node script) — this is what
-      # keeps it in step with Tenant::DEFAULT_NAV_BG_COLOR.
+      # keeps it in step with Tenant::DEFAULT_NAV_BG_COLOR, and the CSS tokens
+      # are literals too, so pin those to the same constant here.
       assert_includes @svg, %(fill="#{Tenant::DEFAULT_NAV_BG_COLOR}")
+
+      css = Rails.root.join("app/assets/tailwind/application.css").read
+      assert_includes css, "--color-nav-bg: #{Tenant::DEFAULT_NAV_BG_COLOR};"
+      assert_includes css, "--color-nav-bg: #{Tenant::DEFAULT_NAV_BG_COLOR_DARK};"
     end
   end
 
   private
 
   def assert_public_file(href)
-    path = Rails.root.join("public", href.delete_prefix("/"))
+    path = Rails.root.join("public", href.delete_prefix("/").sub(/\?.*\z/, ""))
     assert path.file?, "#{href} is linked but public/#{href.delete_prefix('/')} does not exist"
   end
 end
