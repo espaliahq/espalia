@@ -42,15 +42,20 @@ log "step 2: done"
 #    image BEFORE the verify gate, so a version bump can ship in one deploy.
 #    Risk: rebuild duration becomes part of the predeploy window. For very
 #    large rebuilds, use the two-stage path documented in the runbook.
+#
+#    A rebuild truncates the projection's live tables while the previous
+#    release is still serving, so it only runs when the stamped version is
+#    behind CODE_VERSION: a variable forgotten after its deploy stays inert
+#    instead of blanking assessments for a minute on every deploy.
 if [ -n "$REBUILD_ON_DEPLOY" ]; then
   log "step 3: REBUILD_ON_DEPLOY=$REBUILD_ON_DEPLOY"
   IFS=',' read -ra names <<< "$REBUILD_ON_DEPLOY"
   for name in "${names[@]}"; do
     name="${name// /}"  # strip whitespace
     [ -z "$name" ] && continue  # skip empty entries from stray commas
-    log "  rebuild: $name"
-    rake "events:projections:rebuild[$name]"
-    log "  rebuild: $name done"
+    log "  rebuild if stale: $name"
+    rake "events:projections:rebuild_if_stale[$name]"
+    log "  rebuild if stale: $name done"
   done
   log "step 3: done"
 else

@@ -12,6 +12,7 @@
 #   bin/rails events:projections:verify
 #   bin/rails "events:projections:rebuild[frameworks/published_state]"
 #   bin/rails "events:projections:rebuild[frameworks/published_state,<tenant_id>]"
+#   bin/rails "events:projections:rebuild_if_stale[frameworks/published_state]"   # what predeploy runs
 #   bin/rails "events:projections:mark_rebuilt[frameworks/published_state]"
 #
 # The registry lives in `lib/projections/registry.rb` so the rake task,
@@ -103,6 +104,27 @@ namespace :events do
         ProjectionVersion.stamp!(klass)
         puts "All-tenants rebuild complete (#{total_applied} events). " \
              "projection_versions[#{name}] = #{klass::CODE_VERSION}."
+      end
+    end
+
+    # What the predeploy hook runs for each REBUILD_ON_DEPLOY name. A rebuild
+    # truncates the projection's live tables and replays them while the
+    # previous release is still serving traffic, so every needless rebuild is
+    # a minute or two of empty assessments in production. A variable left set
+    # after its deploy (the runbook says to remove it; it was once forgotten
+    # for four deploys) must therefore be inert once the stamp is current.
+    desc "Rebuild a projection only if its stamped version is behind CODE_VERSION (predeploy)."
+    task :rebuild_if_stale, [ :name ] => :environment do |_, args|
+      name = args.fetch(:name) { abort "Usage: events:projections:rebuild_if_stale[<name>]" }
+      klass = Projections::Registry.fetch(name)
+      applied = ProjectionVersion.find_by(name: name)&.version
+
+      if applied == klass::CODE_VERSION
+        puts "#{name} is already at CODE_VERSION #{applied} — skipping rebuild " \
+             "(run events:projections:rebuild[#{name}] to force one)."
+      else
+        puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
+        Rake::Task["events:projections:rebuild"].invoke(name)
       end
     end
 
