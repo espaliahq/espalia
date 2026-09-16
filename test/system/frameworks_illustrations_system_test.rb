@@ -131,7 +131,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
 
       # Archive opens the shared root-mounted modal from the illustration's ⋮
       # menu (#381 replaced the native confirm() the menu used to fire).
-      use_explorer_menu("Illustration actions", "Archive",
+      use_explorer_menu("Example actions", "Archive",
                         scope: "li[data-editor-action*='/illustrations/']")
       assert_selector "#archive-illustration-modal", visible: true
       click_button_with_js_fallback("Archive example",
@@ -164,14 +164,14 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       end
     end
 
-    should "show Add illustration button when no illustrations exist for a role" do
+    should "show Add example button when no illustrations exist for a role" do
       visit edit_framework_path(@framework_id)
 
       # Expand the capability row using the matrix helper (retries on dropped clicks)
       expand_matrix_row("tr[data-capability-id]")
 
       assert_selector "turbo-frame[id^='new-illustration-#{@eid}-']", visible: true
-      assert_selector "button", text: "Add illustration"
+      assert_selector "button", text: "Add example"
     end
 
     should "allow adding a new illustration for a role that had none" do
@@ -191,7 +191,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       # Capybara to inspect the full DOM tree, including any visually-clipped
       # nodes during the Turbo append.
       assert_selector "li", text: "Drives cross-functional alignment", visible: :all
-      assert_selector "button", text: "Add illustration"
+      assert_selector "button", text: "Add example"
     end
 
     should "cancel adding and restore the Add button without saving" do
@@ -208,7 +208,7 @@ class FrameworksIllustrationsSystemTest < ApplicationSystemTestCase
       cancel_inline_edit(form)
 
       assert_no_text "Should not be saved"
-      assert_selector "button", text: "Add illustration"
+      assert_selector "button", text: "Add example"
     end
   end
 end

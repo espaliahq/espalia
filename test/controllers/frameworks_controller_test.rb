@@ -283,7 +283,7 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, %(data-loaded="true")
       assert_includes response.body, %(data-capability-id="#{@capability.capability_id}")
       # View mode: no edit affordances in the loaded row.
-      assert_not_includes response.body, "Add illustration"
+      assert_not_includes response.body, "Add example"
     end
 
     should "scope the illustrations to the requested roles" do
@@ -331,7 +331,7 @@ class FrameworksControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_includes response.body, "Pairs with a senior on framing the problem"
-      assert_includes response.body, "Add illustration"
+      assert_includes response.body, "Add example"
       assert_includes response.body, "data-editor-action"
     end
   end

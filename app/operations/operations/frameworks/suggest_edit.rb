@@ -19,7 +19,7 @@
 # (FrameworkPolicy#suggest_edit?); the direct-apply decision is the
 # aggregate's `can_approve?`, driven by the mode + the author's authority.
 class Operations::Frameworks::SuggestEdit < Operations::Base
-  description "Edit framework content (capability/category name or description, expectation or illustration text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal."
+  description "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal."
   category :write
   approval :mcp_client
 
@@ -126,7 +126,7 @@ class Operations::Frameworks::SuggestEdit < Operations::Base
     return if EDITABLE_FIELDS.fetch(params[:entity_type]).include?(params[:field])
 
     raise Operations::Base::ParameterError,
-          "#{params[:entity_type]} has no editable #{params[:field]} field"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} has no editable #{params[:field]} field"
   end
 
   # A suggested value can never be blank — the SuggestedEdit read model
@@ -147,7 +147,7 @@ class Operations::Frameworks::SuggestEdit < Operations::Base
     return if graph_entity_ids.include?(params[:entity_id])
 
     raise ActiveRecord::RecordNotFound,
-          "#{params[:entity_type]} #{params[:entity_id]} not found in this framework"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} #{params[:entity_id]} not found in this framework"
   end
 
   def graph_entity_ids

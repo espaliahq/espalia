@@ -19,7 +19,7 @@
 # Write — :mcp_client (a pending proposal, or a creation the author could make
 # via the direct add tools anyway).
 class Operations::Frameworks::SuggestCreate < Operations::Base
-  description "Propose creating a framework entity (illustration, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode."
+  description "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode."
   category :write
   approval :mcp_client
 

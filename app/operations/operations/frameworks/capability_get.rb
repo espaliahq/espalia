@@ -8,7 +8,7 @@
 #
 # Read-only; scoped by acts_as_tenant and FrameworkPolicy#show?.
 class Operations::Frameworks::CapabilityGet < Operations::Base
-  description "Fetch one capability's full detail: bindings, expectations per level, illustrations. " \
+  description "Fetch one capability's full detail: bindings, expectations per level, examples (the illustrations key). " \
               "Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
   category :read
   approval :none

@@ -16,7 +16,7 @@
 # Write — :mcp_client (a pending proposal; nothing is removed until a
 # reviewer approves, and a capability archive is still draft-gated after that).
 class Operations::Frameworks::SuggestDelete < Operations::Base
-  description "Propose deleting a framework entity (capability or illustration) as a pending suggestion — nothing is removed until a reviewer approves."
+  description "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves."
   category :write
   approval :mcp_client
 
@@ -70,7 +70,7 @@ class Operations::Frameworks::SuggestDelete < Operations::Base
     return if ids.include?(params[:entity_id])
 
     raise ActiveRecord::RecordNotFound,
-          "#{params[:entity_type]} #{params[:entity_id]} not found in this framework"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} #{params[:entity_id]} not found in this framework"
   end
 
   # One pending deletion per author per entity (the aggregate enforces the
@@ -83,7 +83,7 @@ class Operations::Frameworks::SuggestDelete < Operations::Base
                     .exists?
 
     raise Operations::Base::ParameterError,
-          "You have already proposed deleting this #{params[:entity_type]}"
+          "You have already proposed deleting this #{Frameworks::EntityLabels.humanized(params[:entity_type])}"
   end
 
   def author_id

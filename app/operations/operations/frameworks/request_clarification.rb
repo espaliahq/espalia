@@ -18,7 +18,7 @@
 # Write — :mcp_client, on the suggest bar like every other suggestion create.
 class Operations::Frameworks::RequestClarification < Operations::Base
   description "Ask for clarification of a capability, one of its level expectations, or a role " \
-              "illustration — opens a discussion, proposes nothing."
+              "example (illustration) — opens a discussion, proposes nothing."
   category :write
   approval :mcp_client
 
@@ -33,7 +33,7 @@ class Operations::Frameworks::RequestClarification < Operations::Base
   }
   parameter :illustration_id, String,  required: false, allow_blank: false, schema: {
     type: "string",
-    description: "A role illustration to anchor on — the most specific target, and its " \
+    description: "An example (role illustration) to anchor on — the most specific target, and its " \
                  "level is taken from the owning expectation. Required unless capability_id is given."
   }
   requires_any_of :capability_id, :illustration_id
@@ -114,7 +114,7 @@ class Operations::Frameworks::RequestClarification < Operations::Base
     @illustration = graph_expectations.flat_map(&:illustrations)
       .find { |i| i.illustration_id == params[:illustration_id] } ||
       raise(ActiveRecord::RecordNotFound,
-            "illustration #{params[:illustration_id]} not found in this framework")
+            "example #{params[:illustration_id]} not found in this framework")
   end
 
   def graph_expectations

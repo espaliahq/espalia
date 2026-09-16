@@ -157,7 +157,7 @@ if meandu_tenant
           handler.suggest_delete(
             framework.framework_id, SecureRandom.uuid_v7,
             "role_illustration", second_illustration.illustration_id,
-            author_id: admin_author_id, rationale: "Redundant with first illustration",
+            author_id: admin_author_id, rationale: "Redundant with first example",
             mode: :suggesting
           )
         end

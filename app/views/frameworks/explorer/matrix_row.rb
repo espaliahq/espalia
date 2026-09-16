@@ -187,7 +187,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   end
 
   # The mode-specific path for this row's content (edit mode renders the inline
-  # editors, ghosts and "+ Add illustration"). Deliberately WITHOUT the role/
+  # editors, ghosts and "+ Add example"). Deliberately WITHOUT the role/
   # track query: that rides once on the table, not once per row — at 100 roles ×
   # 150 capabilities a per-row copy is ~700 KB of attribute text.
   def expanded_src

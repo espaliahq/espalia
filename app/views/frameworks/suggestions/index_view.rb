@@ -25,20 +25,14 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   }.freeze
 
   TIER_LABELS = {
-    1 => "Tier 1 — Illustrations",
+    1 => "Tier 1 — Examples",
     2 => "Tier 2 — Descriptions",
     3 => "Tier 3 — Behavioural expectations"
   }.freeze
 
-  ENTITY_TYPE_LABELS = {
-    "role_illustration" => "Illustration",
-    "behavioural_expectation" => "Expectation",
-    "capability" => "Capability",
-    "capability_category" => "Category",
-    "role" => "Role",
-    "role_family" => "Role family",
-    "level" => "Level"
-  }.freeze
+  # The one definition lives in Frameworks::EntityLabels — the same map backs
+  # the aggregate's and the Operations' user-facing error messages.
+  ENTITY_TYPE_LABELS = Frameworks::EntityLabels::LABELS
 
   # @param framework [FrameworkState::Framework]
   # @param suggestions [Array<FrameworkState::SuggestedEdit>]

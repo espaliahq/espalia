@@ -378,9 +378,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "binding_updated"     then binding_role ? "Updated the #{binding_role} binding" : "Updated a capability-role binding"
     when "binding_removed"     then binding_role ? "Unbound #{binding_role}" : "Removed a capability-role binding"
     when "expectation_updated" then "Updated an expectation"
-    when "illustration_added"  then "Added an illustration"
-    when "illustration_updated" then "Updated an illustration"
-    when "illustration_removed" then "Removed an illustration"
+    when "illustration_added"  then "Added an example"
+    when "illustration_updated" then "Updated an example"
+    when "illustration_removed" then "Removed an example"
     when "illustration_reordered" then illustration_reordered_summary
     when "framework_renamed"   then "Renamed the framework to \u201C#{payload_value(:name)}\u201D"
     when "role_family_updated" then org_update_summary("role family", name: "name", description: "description", department: "department")
@@ -430,7 +430,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
   # resolved a label (the anchor context line locates the capability).
   def illustration_reordered_summary
     role = payload_value(:reorder_role_label).to_s.strip.presence
-    role ? "Reordered the #{role} illustrations" : "Reordered illustrations"
+    role ? "Reordered the #{role} examples" : "Reordered examples"
   end
 
   # Summary for a direct org-structure edit (role family / role / level) that
@@ -457,14 +457,14 @@ class Views::Frameworks::Activity::Entry < Views::Base
   end
 
   # Entity word for suggestion summaries — the human label of the suggestion's
-  # target entity type (e.g. "Capability", "Illustration"), lowercased so it
+  # target entity type (e.g. "Capability", "Example"), lowercased so it
   # reads inline.
   def entity_word
     type = payload_value(:suggestion_entity_type)
     ENTITY_TYPE_LABELS.fetch(type, type.to_s.humanize.presence || "change").downcase
   end
 
-  # "an illustration suggestion", not "a illustration suggestion".
+  # "an example suggestion", not "a example suggestion".
   def articled_entity_word
     word = entity_word
     "#{word.match?(/\A[aeiou]/) ? 'an' : 'a'} #{word}"

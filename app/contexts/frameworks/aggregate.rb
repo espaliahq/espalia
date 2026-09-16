@@ -619,7 +619,7 @@ class Frameworks::Aggregate
     ensure_created!
     raise "Expectation #{expectation_id} not found" unless @expectations.key?(expectation_id)
     raise "Role #{role_id} not found" unless @roles.key?(role_id)
-    raise "Illustration #{illustration_id} already exists" if @illustrations.key?(illustration_id)
+    raise "Example #{illustration_id} already exists" if @illustrations.key?(illustration_id)
 
     apply(Frameworks::Events::RoleIllustrationAdded.new(data: {
       framework_id: framework_id,
@@ -641,7 +641,7 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if illustration does not exist
   def update_role_illustration(framework_id, illustration_id, new_description, rationale:)
     ensure_created!
-    raise "Illustration #{illustration_id} not found" unless @illustrations.key?(illustration_id)
+    raise "Example #{illustration_id} not found" unless @illustrations.key?(illustration_id)
 
     apply(Frameworks::Events::RoleIllustrationUpdated.new(data: {
       framework_id: framework_id,
@@ -659,7 +659,7 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if illustration does not exist
   def remove_role_illustration(framework_id, illustration_id, reason:)
     ensure_created!
-    raise "Illustration #{illustration_id} not found" unless @illustrations.key?(illustration_id)
+    raise "Example #{illustration_id} not found" unless @illustrations.key?(illustration_id)
 
     apply(Frameworks::Events::RoleIllustrationRemoved.new(data: {
       framework_id: framework_id,
@@ -688,7 +688,7 @@ class Frameworks::Aggregate
       .select { |_iid, d| d[:expectation_id] == expectation_id && d[:role_id] == role_id }
       .keys
     unless new_ordering.sort == current_ids.sort
-      raise "New ordering must be a permutation of the #{current_ids.size} illustration id(s) " \
+      raise "New ordering must be a permutation of the #{current_ids.size} example id(s) " \
             "for expectation #{expectation_id} and role #{role_id}"
     end
 
@@ -935,7 +935,7 @@ class Frameworks::Aggregate
     ensure_created!
     raise "Suggestion #{suggestion_id} already exists" if @pending_edits.key?(suggestion_id)
     unless CLARIFIABLE_ENTITY_TYPES.include?(target_entity_type)
-      raise "Clarifications anchor on an expectation, capability, or illustration, not #{target_entity_type}"
+      raise "Clarifications anchor on an expectation, capability, or example, not #{target_entity_type}"
     end
     raise_unless_entity_exists!(target_entity_type, target_entity_id)
     raise "Clarification rationale cannot be blank" if rationale.to_s.strip.empty?
@@ -1820,7 +1820,7 @@ class Frameworks::Aggregate
   def raise_unless_entity_exists!(entity_type, entity_id)
     case entity_type
     when "role_illustration"
-      raise "Illustration #{entity_id} not found" unless @illustrations.key?(entity_id)
+      raise "Example #{entity_id} not found" unless @illustrations.key?(entity_id)
     when "behavioural_expectation"
       raise "Expectation #{entity_id} not found" unless @expectations.key?(entity_id)
     when "capability"
@@ -1905,7 +1905,7 @@ class Frameworks::Aggregate
   def raise_unless_deletable!(entity_type)
     return if DELETABLE_ENTITY_TYPES.include?(entity_type)
 
-    raise "Cannot suggest deletion for #{entity_type} — no delete command available"
+    raise "Cannot suggest deletion for #{Frameworks::EntityLabels.humanized(entity_type)} — no delete command available"
   end
 
   # An author may hold at most one pending deletion per entity — a delete is
@@ -1921,7 +1921,7 @@ class Frameworks::Aggregate
         s[:author_id] == author_id
     end
 
-    raise "You have already proposed deleting #{entity_type} #{entity_id}"
+    raise "You have already proposed deleting #{Frameworks::EntityLabels.humanized(entity_type)} #{entity_id}"
   end
 
   # Dispatches the matching add_* command for an approved creation suggestion.

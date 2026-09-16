@@ -1129,7 +1129,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       # Reorder is a kebab item everywhere now (#380); the second illustration
       # is the one that can move up.
-      use_explorer_menu("Illustration actions", "Move up", index: 1)
+      use_explorer_menu("Example actions", "Move up", index: 1)
 
       # The reorder-list controller repositions the frame only after the
       # server answers 204, so DOM order flipping proves the round trip.
@@ -1154,12 +1154,12 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
 
-      open_explorer_menu("Illustration actions", index: 0)
+      open_explorer_menu("Example actions", index: 0)
       assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
       assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
       press_escape
 
-      open_explorer_menu("Illustration actions", index: 1)
+      open_explorer_menu("Example actions", index: 1)
       assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
       assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
     end
@@ -1173,12 +1173,12 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Beta second illustration"
 
-      use_explorer_menu("Illustration actions", "Move up", index: 1)
+      use_explorer_menu("Example actions", "Move up", index: 1)
       assert_selector "ul[id^='illustrations-'] turbo-frame:first-of-type",
                       text: "Beta second illustration"
 
       # The moved item is now first — its menu offers Move down only.
-      open_explorer_menu("Illustration actions", index: 0)
+      open_explorer_menu("Example actions", index: 0)
       assert_no_selector "[data-explorer-menu] [role='menuitem']", text: "Move up"
       assert_selector "[data-explorer-menu] [role='menuitem']", text: "Move down"
     end
@@ -1253,7 +1253,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       expand_matrix_row("tr[data-capability-id]")
       assert_text "Seeks guidance from tech lead"
 
-      open_kebab "Illustration actions"
+      open_kebab "Example actions"
       click_menu_item "Discuss…", expect_text: "Start a discussion"
       assert_selector "#request-clarification-modal", visible: true
       assert_text "Strategic Thinking · L1 · Software Engineer example"

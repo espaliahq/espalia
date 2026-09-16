@@ -69,9 +69,9 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
       assert_text ILLUSTRATION
       assert_selector LOADED_ROW, visible: true
       assert_no_selector PLACEHOLDER, visible: :all
-      # Edit-mode content rides along: the "+ Add illustration" affordance and
+      # Edit-mode content rides along: the "+ Add example" affordance and
       # the illustration's own inline editor.
-      assert_text "Add illustration"
+      assert_text "Add example"
       assert_selector "#illustration-#{@ill_id} [data-editor-action]", visible: :all
     end
 
@@ -140,7 +140,7 @@ class Frameworks::LazyExpandedRowSystemTest < ApplicationSystemTestCase
       assert_text ILLUSTRATION
       assert_selector LOADED_ROW, visible: true
       # View mode carries no edit affordances into the loaded row either.
-      assert_no_text "Add illustration"
+      assert_no_text "Add example"
     end
   end
 end

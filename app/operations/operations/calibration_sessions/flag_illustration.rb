@@ -15,7 +15,7 @@
 class Operations::CalibrationSessions::FlagIllustration < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
 
-  description "Flag one role illustration (example) as unclear from a live calibration session — raises a framework clarification anchored on the illustration."
+  description "Flag one example (role illustration) as unclear from a live calibration session — raises a framework clarification anchored on the example."
   category :write
   approval :mcp_client
 

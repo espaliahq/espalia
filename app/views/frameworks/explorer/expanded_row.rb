@@ -2,7 +2,7 @@
 
 # The expanded row under a capability — one `<tr>` holding, per level column,
 # the illustrations for each selected bound role (plus the pending ghosts and
-# the "+ Add illustration" affordance in edit mode).
+# the "+ Add example" affordance in edit mode).
 #
 # Rendered in two states:
 #
@@ -17,7 +17,7 @@
 #
 # Why on demand: the expanded rows were 81% of the edit-mode matrix payload
 # (6.2 of 7.6 MB on the real me&u framework — 850 illustration frames, 1,131
-# "+ Add illustration" frames, each with its own form and Stimulus mount) even
+# "+ Add example" frames, each with its own form and Stimulus mount) even
 # though the accordion only ever shows one at a time. See
 # docs/guidelines/framework-explorer.md, Hard-Won Lesson 23 and the lazy-row
 # lesson that follows it.

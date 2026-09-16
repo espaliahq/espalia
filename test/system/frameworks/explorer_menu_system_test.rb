@@ -298,9 +298,9 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
 
     should "render every add affordance in the one dashed-ghost treatment" do
       expand_matrix_row("tr[data-capability-id]")
-      assert_text "Add illustration"
+      assert_text "Add example"
 
-      [ "Add capability", "Add illustration" ].each do |label|
+      [ "Add capability", "Add example" ].each do |label|
         assert_selector "button.explorer-add", text: label
       end
     end
