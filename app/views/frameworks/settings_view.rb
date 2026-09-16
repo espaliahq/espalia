@@ -11,9 +11,12 @@ class Views::Frameworks::SettingsView < Views::Base
     {
       key: :mastery_threshold,
       label: "Mastery Threshold",
-      description: "The performance ratio a person must reach to be considered 'mastering' their " \
-                   "current level. Higher values require stronger over-performance. Blocked " \
-                   "capabilities prevent mastery regardless of score.",
+      description: "The score at which a person is considered to be mastering their level — well " \
+                   "on the way to the next one. With the default cap scores run from 0 to 200: 1.00 " \
+                   "is meeting every expectation at the assessed level, 2.00 is demonstrating the " \
+                   "next level in full (each extra level the cap allows adds another 100), " \
+                   "so #{'%.2f' % PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD} is halfway. " \
+                   "Blocked capabilities prevent mastery regardless of score.",
       type: :decimal,
       step: "0.01",
       min: "0.01"
@@ -21,8 +24,10 @@ class Views::Frameworks::SettingsView < Views::Base
     {
       key: :meeting_expectation_threshold,
       label: "Meeting Expectations Threshold",
-      description: "The minimum performance ratio to be considered 'meeting expectations'. " \
-                   "Also used as the score gate for promotion readiness at the next level.",
+      description: "The minimum score to be considered 'meeting expectations' (1.00 is every " \
+                   "capability consistent at the assessed level). The next level must clear the same " \
+                   "bar for promotion readiness. Must sit above the underperforming threshold and " \
+                   "below the mastery threshold.",
       type: :decimal,
       step: "0.01",
       min: "0.01"
@@ -30,10 +35,9 @@ class Views::Frameworks::SettingsView < Views::Base
     {
       key: :underperforming_threshold,
       label: "Underperforming Threshold",
-      description: "The performance ratio below which a person is classified as " \
-                   "'underperforming' rather than 'progressing'. Between this value and " \
-                   "the meeting threshold the person is considered to be progressing toward " \
-                   "their current level.",
+      description: "The score below which a person is classified as 'underperforming' rather " \
+                   "than 'progressing'. Between this value and the meeting threshold the person " \
+                   "is considered to be progressing toward their current level.",
       type: :decimal,
       step: "0.01",
       min: "0.01"
@@ -41,9 +45,9 @@ class Views::Frameworks::SettingsView < Views::Base
     {
       key: :overperformance_cap,
       label: "Over-performance Cap",
-      description: "How many levels above a person's assigned level contribute to their score. " \
-                   "Ratings beyond this cap are visible but don't inflate the score. " \
-                   "Set to 0 to ignore all above-level ratings.",
+      description: "How many levels above a person's assessed level contribute to their score — " \
+                   "each level adds up to 100 points. Ratings beyond this cap are visible but " \
+                   "don't inflate the score. Set to 0 to ignore all above-level ratings.",
       type: :integer,
       step: "1",
       min: "0"
@@ -52,8 +56,12 @@ class Views::Frameworks::SettingsView < Views::Base
       key: :deficit_threshold,
       label: "Deficit Threshold",
       description: "The weighted deficit above which a capability is flagged as 'blocked'. " \
-                   "Blocked capabilities prevent meeting-expectations and mastery verdicts. " \
-                   "Set to 0 to make every capability mandatory (any gap blocks).",
+                   "At #{'%.2f' % PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD} a 'not yet' " \
+                   "at the assessed level blocks, while 'some' and 'most of " \
+                   "the time' can be made up by strength elsewhere. Blocked capabilities prevent " \
+                   "meeting-expectations and mastery verdicts. Set to 0 to make every capability " \
+                   "required: any gap blocks, and nothing above the level counts until it is " \
+                   "consistent.",
       type: :decimal,
       step: "0.01",
       min: "0"

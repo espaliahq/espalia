@@ -138,7 +138,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         assert_text "Rate yourself to see your score"
         assert_text "Score unlocks at 1"
         assert_no_text "Below expectations"
-        assert_no_text "Baseline coverage at"
+        assert_no_text "demonstrated"
       end
     end
 
@@ -161,6 +161,55 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         assert_no_text "GAP TO E3"
         # State label sits beside it.
         assert_text(/UNDERPERFORMING AT E2|PROGRESSING TOWARD E2/)
+      end
+    end
+
+    should "show the score bar pinned at the top of the ladder at both viewports" do
+      # This role's ladder ends at E2, so a fully consistent E2 is the top of
+      # the ladder: the bar is a single 0–100 segment and the copy says so.
+      ActsAsTenant.with_tenant(@tenant) do
+        pd_handler = PersonDevelopment::CommandHandler.new
+        [ @cap1_stable, @cap2_stable, @cap3_stable ].each do |stable_id|
+          pd_handler.rate_self(@person.id, @framework_id, stable_id,
+                               level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
+        end
+      end
+
+      [ DESKTOP_SIZE, MOBILE_SIZE ].each do |size|
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#scoring-panel"
+
+        within("#scoring-panel") do
+          assert_selector "#hero-score-bar [role='progressbar'][aria-valuemax='100'][aria-valuenow='100']"
+          assert_text "100% · E2"
+          assert_no_text "200%"
+          assert_text "100% of E2 demonstrated · no level above E2."
+          assert_text "You're meeting E2 expectations — the top of the ladder."
+          # Tailwind's `tracking-wide uppercase` re-cases the panel labels.
+          assert_text "MEETING E2 · TOP OF THE LADDER"
+        end
+
+        # The bar must never push the document sideways or sit over the
+        # headline — below `sm` the header stacks (found by the visual pass).
+        assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
+               "the hero must not make the page scroll sideways at #{size.join('x')}"
+        overlap = page.evaluate_script(<<~JS)
+          (() => {
+            const h = document.querySelector("#scoring-panel h2").getBoundingClientRect();
+            const b = document.querySelector("#hero-score-bar").getBoundingClientRect();
+            return h.right > b.left && b.right > h.left && h.bottom > b.top && b.bottom > h.top;
+          })()
+        JS
+        assert_not overlap, "the score bar must not overlap the headline at #{size.join('x')}"
+        clipped = page.evaluate_script(<<~JS)
+          (() => {
+            const card = document.querySelector("#scoring-panel").getBoundingClientRect();
+            const bar = document.querySelector("#hero-score-bar").getBoundingClientRect();
+            return bar.right > card.right - 8;
+          })()
+        JS
+        assert_not clipped, "the score bar's last tick must stay inside the card at #{size.join('x')}"
       end
     end
 

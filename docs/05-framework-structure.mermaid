@@ -22,9 +22,9 @@ flowchart TB
         end
 
         subgraph Bindings["CapabilityRoleBinding (scoping + weighting)"]
-            B1["C1 → Engineer: weight=1.0, must_have"]
-            B2["C1 → EM: weight=1.2, must_have"]
-            B3["C1 → PM: weight=1.5, must_have"]
+            B1["C1 → Engineer: weight=1.0, tolerance=0 (Required)"]
+            B2["C1 → EM: weight=1.2, tolerance=0 (Required)"]
+            B3["C1 → PM: weight=1.5, tolerance=nil (inherits)"]
             B4["C4 → Engineer: weight=1.5, flexible"]
             B5["C4 → EM: weight=0.8, flexible"]
             B6["C4 → PM: NOT BOUND"]

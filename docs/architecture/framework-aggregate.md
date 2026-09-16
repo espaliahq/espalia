@@ -48,7 +48,7 @@ All projection tables have `tenant_id` and `acts_as_tenant :tenant`.
 #                   mastery_threshold (decimal, nil = no gate),
 #                   meeting_expectation_threshold (decimal, nil = default 0.9),
 #                   overperformance_cap (integer, default 1),
-#                   deficit_threshold (decimal, default 1.0)
+#                   deficit_threshold (decimal, nil = system default 0.75)
 # framework_role_families: id, tenant_id, framework_id, name, description
 # framework_roles: id, tenant_id, role_family_id, name, code, track
 # framework_levels: id, tenant_id, role_id, ordinal, title, code, is_entry

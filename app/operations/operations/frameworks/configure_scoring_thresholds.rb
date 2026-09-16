@@ -35,6 +35,7 @@ class Operations::Frameworks::ConfigureScoringThresholds < Operations::Base
   #   "system default applies" for that threshold.
   def perform
     validate_ranges!
+    validate_ordering!
 
     Frameworks::CommandHandler.new.configure_scoring_thresholds(
       framework.framework_id,
@@ -44,16 +45,15 @@ class Operations::Frameworks::ConfigureScoringThresholds < Operations::Base
       # meeting_expectation_threshold, so that's the parameter name.
       promotion_score_threshold: decimal(:meeting_expectation_threshold),
       underperforming_threshold: decimal(:underperforming_threshold),
-      # overperformance_cap and deficit_threshold are NOT NULL on the read
-      # model, so "revert to system default" writes the default value itself
-      # rather than nil (nil would fail the projection's numericality
-      # validation — previously a latent 500 when the web form was cleared).
+      # overperformance_cap is NOT NULL on the read model, so "revert to
+      # system default" writes the default value itself rather than nil.
       overperformance_cap: integer_or_default(
         :overperformance_cap, PersonDevelopment::Scoring::DEFAULT_OVERPERFORMANCE_CAP
       ),
-      deficit_threshold: decimal_or_default(
-        :deficit_threshold, PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
-      )
+      # nil = system default, like the three ratio thresholds — so a default
+      # that moves with the code moves for every framework that never chose
+      # a value, and a replay reproduces exactly what the event says.
+      deficit_threshold: decimal(:deficit_threshold)
     )
 
     stored = framework.reload
@@ -88,17 +88,27 @@ class Operations::Frameworks::ConfigureScoringThresholds < Operations::Base
           "overperformance_cap must be between #{CAP_RANGE.min} and #{CAP_RANGE.max}"
   end
 
+  # The state machine evaluates underperforming → meeting → mastery in a fixed
+  # order, so an inverted configuration silently produces nonsense states.
+  # Resolve each omitted value to its default first — that is what the
+  # engine will run with.
+  def validate_ordering!
+    return if PersonDevelopment::Scoring.thresholds_ordered?(
+      underperforming: params[:underperforming_threshold],
+      meeting: params[:meeting_expectation_threshold],
+      mastery: params[:mastery_threshold]
+    )
+
+    raise Operations::Base::ParameterError,
+          "thresholds must be ordered underperforming < meeting_expectation < mastery " \
+          "(omitted values take their defaults)"
+  end
+
   # Store decimals as BigDecimal so the event payload round-trips without
   # float artefacts (0.1 + 0.2 class of noise) into the decimal column.
   def decimal(key)
     value = params[key]
     value.nil? ? nil : BigDecimal(value.to_s)
-  end
-
-  # For NOT-NULL read-model columns: an omitted value writes the system
-  # default itself instead of nil.
-  def decimal_or_default(key, default)
-    decimal(key) || BigDecimal(default.to_s)
   end
 
   def integer_or_default(key, default)

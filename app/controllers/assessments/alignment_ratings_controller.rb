@@ -172,8 +172,6 @@ class Assessments::AlignmentRatingsController < ApplicationController
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
             merged_levels: matrix_data[:merged_levels],
-            mastery_threshold: matrix_data[:mastery_threshold],
-            meeting_expectation_threshold: matrix_data[:meeting_expectation_threshold],
             assessment_id: @assignment.id,
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,

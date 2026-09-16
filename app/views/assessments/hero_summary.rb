@@ -24,6 +24,17 @@ class Views::Assessments::HeroSummary < Views::Base
   # met we show a neutral coverage-progress hero instead.
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
+  # The number and the bar take their colour from the performance STATE, not
+  # the raw score, so a 150% held at "progressing" by a blocked capability
+  # reads amber like its verdict rather than purple like its number.
+  TONE_TEXT = {
+    red: "text-red-700 dark:text-red-400",
+    amber: "text-amber-700 dark:text-amber-400",
+    green: "text-green-700 dark:text-green-400",
+    purple: "text-purple-600 dark:text-purple-400"
+  }.freeze
+  TONE_BAR = { red: "bg-red-500", amber: "bg-amber-500", green: "bg-green-500", purple: "bg-purple-500" }.freeze
+
   # @param scoring [Hash] effective scoring
   # @param self_scoring [Hash, nil]
   # @param manager_scoring [Hash, nil]
@@ -31,8 +42,6 @@ class Views::Assessments::HeroSummary < Views::Base
   # @param categories [Array<Hash>]
   # @param person_level [Integer]
   # @param merged_levels [Array<Hash>]
-  # @param mastery_threshold [Float]
-  # @param meeting_expectation_threshold [Float]
   # @param assessment_id [String]
   # @param context [Symbol]
   # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
@@ -50,7 +59,6 @@ class Views::Assessments::HeroSummary < Views::Base
   #   lines) and in the activity feed; the glanceable surface reads as one
   #   formal outcome. Only consulted in :alignment context.
   def initialize(scoring:, categories:, person_level:, merged_levels:,
-                 mastery_threshold:, meeting_expectation_threshold:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  assessee_name: nil, viewer_can_rate: true, alignment_locked: false)
@@ -62,8 +70,6 @@ class Views::Assessments::HeroSummary < Views::Base
     @categories = categories
     @person_level = person_level
     @merged_levels = merged_levels
-    @mastery_threshold = mastery_threshold
-    @meeting_expectation_threshold = meeting_expectation_threshold
     @assessment_id = assessment_id
     @context = context
     @assessee_name = assessee_name
@@ -77,9 +83,10 @@ class Views::Assessments::HeroSummary < Views::Base
         class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
                "bg-white dark:bg-gray-900 overflow-hidden",
         data: { performance_pct: (ratio * 100).round(0) }) do
-      if coverage_unlocked?
+      if current_level_total.zero?
+        unscorable_header
+      elsif coverage_unlocked?
         hero_header
-        middle_band
       else
         priming_header
       end
@@ -109,23 +116,30 @@ class Views::Assessments::HeroSummary < Views::Base
   # Renders a single state-driven panel (not two competing
   # strengths/lift columns). The performance state picks the
   # headline + tone; the capability list is the evidence for it.
+  #
+  # Lives in the header's LEFT column, under the gloss, so it sits beside
+  # the number + bar rather than below the whole row — a full-width band
+  # under the taller right column left a blank block beside the headline.
   def middle_band
     config = state_panel_config
     return unless config && config[:items].any?
 
     div(class: "hero-collapsible") do
       div do
-        div(class: "px-5 pb-5") { state_panel(config) }
+        div(class: "pt-3") { state_panel(config) }
       end
     end
   end
 
   def header_row
     ratio = primary_scoring[:performance_ratio] || 0.0
-    pct = (ratio * 100).round(0)
+    pct = percent(ratio)
     target = next_unrated_capability
 
-    div(class: "flex items-start justify-between gap-4") do
+    # Below `sm` the headline stacks above the number + bar (which then
+    # share one row); side by side, the 176px bar left the headline a
+    # one-word-per-line column and pushed the document past the viewport.
+    div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6") do
       div(class: "min-w-0 flex-1") do
         # Headline + actions on one line — "Continue" used to sit on a
         # third row, and the promotion pill on a fourth. Inline-baseline
@@ -141,13 +155,27 @@ class Views::Assessments::HeroSummary < Views::Base
         # as they fit; flex-wrap drops the secondaries below on narrow
         # viewports rather than the previous fixed two-line stack.
         gloss_and_secondaries
+        middle_band
       end
-      div(class: "text-right shrink-0") do
-        # "of expected" caption + progress bar are redundant with the
-        # explicit percent — the bar duplicates the number it sits next
-        # to. Dropping both shaves ~30 px of vertical chrome.
-        span(class: "text-4xl font-bold leading-none #{performance_color(ratio)}") { "#{pct}%" }
-        secondary_percents
+      div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
+        span(class: "text-4xl font-bold leading-none #{performance_color}") { "#{pct}%" }
+        div(class: "text-right") do
+          score_bar(ratio)
+          secondary_percents
+        end
+      end
+    end
+  end
+
+  # ── Unscorable (no expectations at the assessed level) ──
+  #
+  # A level whose expectations are not published yet has nothing to score;
+  # the engine returns 0.0 and would otherwise read as a red "Below".
+  def unscorable_header
+    div(class: "px-5 py-4") do
+      h2(class: "text-xl font-bold text-gray-900 dark:text-white") { "Nothing to score at #{current_code} yet" }
+      p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") do
+        "No behavioural expectations are defined at #{current_code} for this role, so there is no score to show."
       end
     end
   end
@@ -286,7 +314,7 @@ class Views::Assessments::HeroSummary < Views::Base
     current_level_rated.to_f / current_level_total
   end
 
-  # Compact one-row gloss: "Baseline coverage at 107% of E3 expectations. · Self: Below expectations"
+  # Compact one-row gloss: "94% of E3 demonstrated · 38% of the way to E4. · Self: Below expectations"
   # On narrow viewports the secondary chunk wraps to a second line.
   def gloss_and_secondaries
     secondaries = diverging_secondary_verdicts
@@ -316,8 +344,6 @@ class Views::Assessments::HeroSummary < Views::Base
     caps_by_id = @categories.flat_map { |c| c[:capabilities] }
                             .index_by { |cap| cap[:capability].stable_id }
     sorted = contributions.sort_by { |_, v| -v }
-    current_code = level_code(@person_level)
-    next_code = level_code(@person_level + 1)
 
     next_level_contributions = primary_scoring[:capability_contributions_at_next_level] || {}
     sorted_next = next_level_contributions.sort_by { |_, v| -v }
@@ -338,17 +364,12 @@ class Views::Assessments::HeroSummary < Views::Base
         accent: "text-amber-700 dark:text-amber-300",
         caps: caps_by_id }
     when :performing
-      # Above the meeting bar but not yet mastering. The path to
-      # mastery is overperformance — rating consistent at L+1 (or
-      # beyond) is what actually pushes the ratio past 1.15.
-      # Surface capabilities by their NEXT-LEVEL contribution, not
-      # current: a capability at +0.0 current is meeting today, but
-      # if its L+1 is unrated (contribution -1.0 there) it's the
-      # real gap to mastering. Top of ladder falls back to current.
-      gap_items = next_level_contributions.any? ? sorted_next.last(3).reverse : sorted.last(3).reverse
-      { state_label: "Performing at #{current_code}",
-        list_label: "Gap to mastering",
-        items: gap_items,
+      # Meeting the current bar, below the mastery waypoint. The gap that
+      # matters is at L+1 — a capability at +0.0 current is meeting today;
+      # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
+      { state_label: "Performing at #{current_code} · #{progress_label}",
+        list_label: next_code ? "Gap to #{next_code}" : "Gap to #{current_code}",
+        items: next_level_contributions.any? ? sorted_next.last(3).reverse : sorted.last(3).reverse,
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
@@ -360,18 +381,26 @@ class Views::Assessments::HeroSummary < Views::Base
         accent: "text-green-700 dark:text-green-300",
         caps: caps_by_id }
     when :mastering
-      # Already mastering current — the meaningful question is what's
-      # still in the way of promotion. Surface the capabilities with
-      # the weakest contribution AT the next level (blocked ones
-      # first when they exist).
+      # Past the halfway waypoint — the meaningful question is what is
+      # still in the way of promotion. Surface the capabilities with the
+      # weakest contribution AT the next level (blocked ones first).
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
       blocked_items = blocked.first(3).map { |sid| [ sid, next_level_contributions[sid] || 0.0 ] }
       items = blocked_items.any? ? blocked_items : sorted_next.last(3).reverse
-      { state_label: "Mastering #{current_code}",
-        list_label: next_code ? "Gap to promotion to #{next_code}" : "Top contributors",
+      { state_label: "Mastering #{current_code} · #{progress_label}",
+        list_label: next_code ? "Gap to #{next_code}" : "Top contributors",
         items: items.any? ? items : sorted.first(3),
         border: "border-purple-300 dark:border-purple-700",
         accent: "text-purple-700 dark:text-purple-300",
+        caps: caps_by_id }
+    when :top_of_ladder
+      # No band above this level to progress into — show what carries the
+      # score rather than a gap nobody can close.
+      { state_label: "Meeting #{current_code} · top of the ladder",
+        list_label: "Strongest at #{current_code}",
+        items: sorted.first(3),
+        border: "border-blue-300 dark:border-blue-700",
+        accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     else # unknown state
       { state_label: "Performing at #{current_code}",
@@ -390,7 +419,7 @@ class Views::Assessments::HeroSummary < Views::Base
         # row — without it the span grows to fit its content and pushes
         # the sibling delta past the panel's right edge (visible as
         # the deltas being cut off on mobile).
-        span(class: "min-w-0 truncate text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
+        span(class: "min-w-0 text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
           config[:state_label]
         end
         span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider shrink-0") do
@@ -457,7 +486,7 @@ class Views::Assessments::HeroSummary < Views::Base
     readiness = primary_scoring[:promotion_readiness]
     return unless readiness
 
-    next_label = level_code(@person_level + 1) || "L#{@person_level + 1}"
+    next_label = next_code || "the next level"
 
     if readiness[:eligible]
       span(class: "text-xs font-medium px-2 py-1 rounded-md " \
@@ -489,23 +518,91 @@ class Views::Assessments::HeroSummary < Views::Base
   # ── Verdict helpers ──
 
   def verdict_headline
-    ratio = primary_scoring[:performance_ratio] || 0.0
-    if primary_scoring[:mastering]
-      "#{subject} exceeding expectations."
-    elsif primary_scoring[:meeting_expectations]
-      "#{subject} tracking on target."
-    elsif ratio >= 0.8
-      "#{subject} almost there — close to meeting expectations."
+    case primary_scoring[:performance_state]
+    when :eligible
+      "#{subject} demonstrating #{next_code || 'next-level'} expectations — promotion ready."
+    when :mastering
+      "#{subject} well on the way to #{next_code}."
+    when :top_of_ladder
+      "#{subject} meeting #{current_code} expectations — the top of the ladder."
+    when :performing
+      "#{subject} meeting #{current_code} expectations."
+    when :progressing
+      blocked = (primary_scoring[:capability_statuses] || {}).values.count(:blocked)
+      if blocked.positive?
+        "#{subject} held back at #{current_code} by #{blocked} blocked #{'capability'.pluralize(blocked)}."
+      else
+        "#{subject} close to #{current_code} expectations."
+      end
     else
-      "Below expectations — focus areas highlighted below."
+      "Below #{current_code} expectations — focus areas highlighted below."
     end
   end
 
+  # The score's parts in one line — "94% of E3 demonstrated · 38% of the
+  # way to E4 · 5% missing below E3" — so the headline number never has to
+  # be reverse-engineered.
   def verdict_gloss
-    ratio = primary_scoring[:performance_ratio] || 0.0
-    pct = (ratio * 100).round(0)
-    level_code = @merged_levels.find { |l| l[:ordinal] == @person_level }&.dig(:level_code) || "L#{@person_level}"
-    "Baseline coverage at #{pct}% of #{level_code} expectations."
+    components = primary_scoring[:components] || {}
+
+    parts = [ "#{percent(components[:current])}% of #{current_code} demonstrated" ]
+    parts.concat(next_band_phrases) if next_level? && components[:next].to_f.positive?
+    parts << "#{percent(1.0 - components[:prior].to_f)}% missing below #{current_code}" if components[:prior].to_f < 1.0
+    parts << "no level above #{current_code}" unless next_level?
+    "#{parts.join(' · ')}."
+  end
+
+  # "38% of the way to E4" — the next-band component, used by the panel
+  # headlines that point at the next level.
+  def progress_label
+    return "no level above" unless next_level?
+
+    next_band_phrases.join(" · ")
+  end
+
+  # The next-band component as level-by-level copy. With the default cap it
+  # is one phrase ("38% of the way to E4"); with a wider cap a whole band
+  # reads "E4 demonstrated in full" and the remainder names the level after.
+  def next_band_phrases
+    nxt = (primary_scoring[:components] || {})[:next].to_f
+    whole = [ nxt.floor, levels_above.size ].min
+    phrases = whole.positive? ? [ "#{code_above(whole - 1)} demonstrated in full" ] : []
+    remainder = nxt - whole
+    if levels_above[whole] && (remainder.positive? || phrases.empty?)
+      phrases << "#{percent(remainder)}% of the way to #{code_above(whole)}"
+    end
+    phrases
+  end
+
+  def percent(value)
+    (value.to_f * 100).round(0)
+  end
+
+  # ── Level codes ──
+  #
+  # The assessed level's code and the levels above it — what every piece of
+  # copy names. `levels_above` is the view's one source for "is there a band
+  # above": the same role ladder the engine scores, in order, so a gap in
+  # the ordinals cannot make the copy and the number disagree.
+  def current_code
+    @current_code ||= level_code(@person_level) || "L#{@person_level}"
+  end
+
+  def levels_above
+    @levels_above ||= @merged_levels.select { |l| l[:ordinal] > @person_level }.sort_by { |l| l[:ordinal] }
+  end
+
+  def next_code
+    levels_above.first&.dig(:level_code)
+  end
+
+  # The code of the level `index` steps above the assessed one.
+  def code_above(index)
+    levels_above[index]&.dig(:level_code) || "+#{index + 1}"
+  end
+
+  def next_level?
+    levels_above.any?
   end
 
   # Self view → "You're". Manager / alignment views → "<First name> is",
@@ -579,12 +676,13 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def short_verdict(scoring)
-    ratio = scoring[:performance_ratio] || 0.0
-    return "Mastering" if scoring[:mastering]
-    return "Meeting expectations" if scoring[:meeting_expectations]
-    return "Almost there" if ratio >= 0.8
-
-    "Below expectations"
+    case scoring[:performance_state]
+    when :eligible then "Promotion ready"
+    when :mastering then "Mastering"
+    when :performing, :top_of_ladder then "Meeting expectations"
+    when :progressing then "Almost there"
+    else "Below expectations"
+    end
   end
 
   def primary_scoring
@@ -597,15 +695,67 @@ class Views::Assessments::HeroSummary < Views::Base
       end
   end
 
-  def performance_color(ratio)
-    if ratio >= @mastery_threshold
-      "text-purple-600 dark:text-purple-400"
-    elsif ratio >= @meeting_expectation_threshold
-      "text-green-700 dark:text-green-400"
-    elsif ratio >= 0.8
-      "text-amber-700 dark:text-amber-400"
-    else
-      "text-red-700 dark:text-red-400"
+  def performance_color
+    TONE_TEXT.fetch(tone)
+  end
+
+  def performance_bar_color
+    TONE_BAR.fetch(tone)
+  end
+
+  def tone
+    case primary_scoring[:performance_state]
+    when :eligible, :mastering then :purple
+    when :performing, :top_of_ladder then :green
+    when :progressing then :amber
+    else :red
     end
+  end
+
+  # ── Score bar ──
+
+  # The scale made visible: the left half is the assessed level (0–100),
+  # the right half the next one (100–200), with the level codes as tick
+  # labels — so the number explains itself before any copy does. At the
+  # top of the ladder there is no next band, so the bar is a single
+  # 0–100 segment.
+  def score_bar(ratio)
+    bands = score_bands
+    max = 100 * (1 + bands)
+    pct = percent(ratio)
+    fill = ([ pct, max ].min.to_f / max * 100).round(1)
+    label = if bands.positive?
+      "#{pct}% — 100% is #{current_code} expectations, #{max}% is #{code_above(bands - 1)}"
+    else
+      "#{pct}% — 100% is #{current_code} expectations, the top of the ladder"
+    end
+
+    # 144px beside the number fits a 375px card; 176px clipped the last tick.
+    div(id: "hero-score-bar", class: "mt-2 w-36 sm:w-44 ml-auto") do
+      div(class: "relative h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden",
+          role: "progressbar",
+          aria: { valuenow: [ pct, max ].min, valuemin: 0, valuemax: max, label: label }) do
+        div(class: "h-full rounded-full #{performance_bar_color}", style: "width: #{fill}%") { }
+        (1..bands).each do |i|
+          span(class: "absolute inset-y-0 w-0.5 bg-white dark:bg-gray-900",
+               style: "left: #{(100.0 * i / (bands + 1)).round(2)}%", aria: { hidden: "true" }) { }
+        end
+      end
+      div(class: "mt-1 flex justify-between text-[10px] text-gray-600 dark:text-gray-300 tabular-nums",
+          aria: { hidden: "true" }) do
+        span { "0" }
+        span { "100% · #{current_code}" }
+        (1..bands).each { |i| span { "#{100 * (i + 1)}% · #{code_above(i - 1)}" } }
+      end
+    end
+  end
+
+  # How many levels above the assessed one the bar runs through — the
+  # engine's `bands_above` (the ladder above, windowed by the cap), so a
+  # framework with a cap of 2 gets a 0–300 bar rather than a clamped 0–200.
+  def score_bands
+    return 0 unless next_level?
+
+    (primary_scoring.dig(:components, :bands_above) || 1).to_i.clamp(1, levels_above.size)
   end
 end

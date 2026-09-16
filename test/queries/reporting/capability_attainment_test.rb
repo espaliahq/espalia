@@ -34,6 +34,15 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
     bind(@cap2, @engineer)
     bind(@cap3, @designer)
 
+    # Every rated cell sits on a behavioural expectation, as in real data —
+    # the engine normalises each level's band over the cells that have one.
+    [ @cap1, @cap2, @cap3 ].each do |cap|
+      (1..3).each do |ordinal|
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: ordinal)
+      end
+    end
+
     @cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id, status: "open")
   end
 

@@ -116,10 +116,10 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
            capability_stable_id: @cap_b.stable_id, level_ordinal: 3,
            self_rated_frequency: "consistent")
 
-    # 5/6: levels 1–2 assumed consistent on both caps, L3 met on cap_a,
-    # unmet on cap_b — the hero's arithmetic. Under :effective the self
+    # Half the L3 band: met on cap_a, unmet on cap_b — the hero's own
+    # level-independent arithmetic (ADR-21). Under :effective the self
     # rating would fill cap_b's L3 and this reads 100.
-    assert_equal 83, dot_for(@r1)[:pct],
+    assert_equal 50, dot_for(@r1)[:pct],
                  "the room calibrates raters; the assessee's private input stays out"
   end
 

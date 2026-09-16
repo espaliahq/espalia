@@ -73,7 +73,7 @@ class CalibrationSessions::CohortScores
     engine = engine_for(person_id)
     contributions = bindings_for(enrollment[person_id][1]).filter_map do |binding|
       capability = binding.capability
-      next unless expectation_cells.include?([ capability.capability_id, dot[:ordinal] ])
+      next unless expectation_cells.include?([ capability.stable_id, dot[:ordinal] ])
 
       { stable_id: capability.stable_id, name: capability.name,
         delta: engine.raw_contribution(binding).round(1) }
@@ -164,7 +164,8 @@ class CalibrationSessions::CohortScores
         bindings: bindings_for(role_id),
         categories: categories,
         person_level: ordinal,
-        all_level_ordinals: all_level_ordinals,
+        all_level_ordinals: ladder_for(role_id),
+        expectation_cells: expectation_cells,
         perspective: :manager_only,
         thresholds: thresholds
       )
@@ -188,8 +189,9 @@ class CalibrationSessions::CohortScores
   def eligible_stable_ids(role_id, ordinal)
     @eligible_stable_ids ||= {}
     @eligible_stable_ids[[ role_id, ordinal ]] ||= bindings_for(role_id)
-      .select { |binding| expectation_cells.include?([ binding.capability_id, ordinal ]) }
-      .to_set { |binding| binding.capability.stable_id }
+      .map { |binding| binding.capability.stable_id }
+      .select { |stable_id| expectation_cells.include?([ stable_id, ordinal ]) }
+      .to_set
   end
 
   # [rated, carried] counts over the person's ELIGIBLE at-level cells.
@@ -218,18 +220,23 @@ class CalibrationSessions::CohortScores
       .where(framework_id: @session.framework_id).to_a
   end
 
+  # Every (capability_stable_id, level_ordinal) cell with an expectation in
+  # the framework — the coverage denominator AND the engine's band shape,
+  # from the one query the assessment hero's numbers rest on.
   def expectation_cells
-    @expectation_cells ||= FrameworkState::BehaviouralExpectation
-      .joins(capability: :category)
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
-      .pluck(:capability_id, :level_ordinal).to_set
+    @expectation_cells ||= FrameworkState::BehaviouralExpectation.stable_cells(
+      FrameworkState::Capability.joins(:category)
+        .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
+        .pluck(:capability_id)
+    )
   end
 
-  def all_level_ordinals
-    @all_level_ordinals ||= FrameworkState::Level
-      .joins(role: :role_family)
-      .where(framework_role_families: { framework_id: @session.framework_id })
-      .distinct.pluck(:ordinal).sort
+  # The ROLE's ladder, as the assessment hero scores it — not the framework's
+  # union of ordinals. A manager ladder that stops at L7 must read as the top
+  # of the ladder here too, and its prior bucket must pool the same levels.
+  def ladder_for(role_id)
+    @ladder_for ||= {}
+    @ladder_for[role_id] ||= FrameworkState::Level.where(role_id: role_id).pluck(:ordinal).sort
   end
 
   def framework

@@ -2,7 +2,9 @@
 
 require "test_helper"
 
-# Unit tests for PersonDevelopment::Scoring.
+# Unit tests for PersonDevelopment::Scoring — the level-independent scale
+# (ADR-21): 1.0 = meeting the assessed level, 2.0 = demonstrating the next
+# level in full.
 #
 # Uses plain Ruby structs to avoid database dependency — the Scoring class
 # is deliberately pure Ruby.
@@ -24,7 +26,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   CAP_A = "cap-a"
   CAP_B = "cap-b"
   CAT_1 = "cat-1"
-  CAT_2 = "cat-2"
+
+  # An aligned rating for CAP_A (or the given capability) at a level.
+  def rated(level, frequency, cap: CAP_A)
+    Rating.new(capability_stable_id: cap, level_ordinal: level,
+      aligned_frequency: frequency, manager_rated_frequency: nil, self_rated_frequency: nil)
+  end
 
   # Builds a simple single-capability scorer.
   #
@@ -36,10 +43,11 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # @param category_deficit_threshold [Numeric, nil]
   # @param thresholds [Hash]
   def build_scorer(person_level:, all_levels:, ratings: [], weight: 1.0,
-                   deficit_threshold: nil, category_deficit_threshold: nil, thresholds: {})
+                   deficit_threshold: nil, category_deficit_threshold: nil,
+                   overperformance_cap: nil, expectation_cells: nil, thresholds: {})
     cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
     binding = BindingStub.new(capability_id: "bid", weight: weight,
-      deficit_threshold: deficit_threshold, overperformance_cap: nil, capability: cap)
+      deficit_threshold: deficit_threshold, overperformance_cap: overperformance_cap, capability: cap)
     category = CategoryStub.new(category_id: CAT_1,
       deficit_threshold: category_deficit_threshold, overperformance_cap: nil)
 
@@ -49,8 +57,44 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       categories: [ category ],
       person_level: person_level,
       all_level_ordinals: all_levels,
+      expectation_cells: expectation_cells,
       thresholds: thresholds
     )
+  end
+
+  # Two capabilities in one category, with per-binding tolerances.
+  def build_pair(person_level:, all_levels:, ratings:, tolerance_a: nil, tolerance_b: nil,
+                 weight_a: 1.0, weight_b: 1.0, category_deficit_threshold: nil, thresholds: {})
+    cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+    cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
+    binding_a = BindingStub.new(capability_id: "bid-a", weight: weight_a,
+      deficit_threshold: tolerance_a, overperformance_cap: nil, capability: cap_a)
+    binding_b = BindingStub.new(capability_id: "bid-b", weight: weight_b,
+      deficit_threshold: tolerance_b, overperformance_cap: nil, capability: cap_b)
+    category = CategoryStub.new(category_id: CAT_1,
+      deficit_threshold: category_deficit_threshold, overperformance_cap: nil)
+
+    PersonDevelopment::Scoring.new(
+      level_ratings: ratings,
+      bindings: [ binding_a, binding_b ],
+      categories: [ category ],
+      person_level: person_level,
+      all_level_ordinals: all_levels,
+      expectation_cells: nil,
+      thresholds: thresholds
+    )
+  end
+
+  # ── Defaults ──
+
+  context "defaults" do
+    should "put the mastery waypoint halfway to the next level" do
+      assert_equal 1.50, PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD
+    end
+
+    should "block on a current-level 'not yet' but not on 'some of the time'" do
+      assert_equal 0.75, PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
+    end
   end
 
   # ── Effective frequency fallback chain ──
@@ -61,9 +105,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         aligned_frequency: "consistent", manager_rated_frequency: "some",
         self_rated_frequency: "occasional")
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ], ratings: [ r ])
-      # aligned=consistent → 1.0; expected=1.0 → contribution 0 at L3
-      # L1, L2 unrated but <=3 → default 1.0; contribution 0 each
-      assert_equal 0.0, scorer.performance_ratio - 1.0
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
     end
 
     should "fall back to manager_rated_frequency when no alignment" do
@@ -71,9 +113,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         aligned_frequency: nil, manager_rated_frequency: "occasional",
         self_rated_frequency: "consistent")
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      # occasional=0.5, expected=1.0 → contribution -0.5 * 1.0 = -0.5
-      # baseline = 1 level * weight 1.0 = 1.0
-      assert_in_delta(-0.5, scorer.performance_ratio - 1.0, 0.01)
+      assert_in_delta(0.5, scorer.performance_ratio, 0.001)
     end
 
     should "fall back to self_rated_frequency when no manager rating" do
@@ -81,89 +121,248 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         aligned_frequency: nil, manager_rated_frequency: nil,
         self_rated_frequency: "some")
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      # some=0.25, expected=1.0 → contribution -0.75
-      assert_in_delta(0.25, scorer.performance_ratio, 0.01)
+      assert_in_delta(0.25, scorer.performance_ratio, 0.001)
     end
 
-    should "treat 'none' as 0.0 frequency, overriding default for below-level" do
-      # Person at L3, L2 rated "none" → overrides default 1.0 assumption
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 2,
-        aligned_frequency: nil, manager_rated_frequency: nil, self_rated_frequency: "none")
-      scorer = build_scorer(person_level: 3, all_levels: [ 2, 3 ], ratings: [ r ])
-      # L2: none=0.0, expected=1.0 → contribution -1.0
-      # L3: unrated at current → 0.0, expected=1.0 → contribution -1.0
-      # baseline = 2 * 1.0 = 2.0; ratio = (-2.0 + 2.0) / 2.0 = 0.0
-      assert_in_delta(0.0, scorer.performance_ratio, 0.01)
+    should "assume consistent for unrated levels below the assessed level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ], ratings: [ rated(3, "consistent") ])
+      assert_in_delta(1.0, scorer.components[:prior], 0.001)
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
     end
 
-    should "default to 1.0 for levels below person_level when unrated" do
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2 ], ratings: [])
-      # Levels 1-2 (below person_level=3) default consistent → contribution 0
-      # No level at person_level itself → ratio = 1.0
-      assert_in_delta(1.0, scorer.performance_ratio, 0.01)
+    should "treat 'none' as 0.0, overriding the below-level default" do
+      # L2 rated "none" pulls the pooled prior attainment down.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ],
+        ratings: [ rated(2, "none"), rated(3, "consistent") ])
+      assert_in_delta(0.5, scorer.components[:prior], 0.001)
+      assert_in_delta(0.5, scorer.performance_ratio, 0.001)
     end
 
-    should "default to 0.0 at current level when unrated" do
+    should "default to 0.0 at the assessed level when unrated" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [])
-      # Level 3 = person_level, unrated → default 0.0, expected 1.0 → contribution -1.0
-      # baseline = 1 * 1.0 = 1.0; ratio = (−1.0 + 1.0) / 1.0 = 0.0
-      assert_in_delta(0.0, scorer.performance_ratio, 0.01)
+      assert_in_delta(0.0, scorer.performance_ratio, 0.001)
     end
 
-    should "default to 0.0 for levels > person_level when unrated" do
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
-      # Levels 1-2: default 1.0 (consistent, expected) → contribution 0
-      # Level 3: unrated at current level → 0.0, expected 1.0 → contribution -1.0
-      # Level 4: default 0.0, expected 0.0 → contribution 0
-      # baseline = 3 * 1.0 = 3.0; ratio = (−1.0 + 3.0) / 3.0 = 0.67
-      assert_in_delta(2.0 / 3.0, scorer.performance_ratio, 0.01)
+    should "default to 0.0 above the assessed level when unrated" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ rated(3, "consistent") ])
+      assert_in_delta(0.0, scorer.components[:next], 0.001)
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
     end
   end
 
-  # ── Contribution formula ──
+  # ── The scale ──
 
-  context "scoring formula" do
-    should "produce positive contribution when exceeding expectations" do
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
+  context "the scale" do
+    should "read 1.0 for consistent at the assessed level at EVERY level of the ladder" do
+      [ 1, 3, 5, 7, 8 ].each do |level|
+        scorer = build_scorer(person_level: level, all_levels: (1..8).to_a, ratings: [ rated(level, "consistent") ])
+        assert_in_delta(1.0, scorer.performance_ratio, 0.001, "level #{level}")
+      end
+    end
+
+    should "read 2.0 for the next level demonstrated in full, at every level" do
+      [ 1, 3, 5, 7 ].each do |level|
+        scorer = build_scorer(person_level: level, all_levels: (1..8).to_a,
+          ratings: [ rated(level, "consistent"), rated(level + 1, "consistent") ])
+        assert_in_delta(2.0, scorer.performance_ratio, 0.001, "level #{level}")
+      end
+    end
+
+    should "read 1.5 for 'most of the time' at the next level, 1.25 for 'some'" do
+      half = build_scorer(person_level: 3, all_levels: (1..8).to_a,
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
+      quarter = build_scorer(person_level: 3, all_levels: (1..8).to_a,
+        ratings: [ rated(3, "consistent"), rated(4, "some") ])
+      assert_in_delta(1.5, half.performance_ratio, 0.001)
+      assert_in_delta(1.25, quarter.performance_ratio, 0.001)
+    end
+
+    should "read 1.5 when half the capabilities are consistent at the next level" do
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+      assert_in_delta(1.5, scorer.performance_ratio, 0.001)
+    end
+
+    should "weight the next band by binding weight" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], weight_a: 2.0, weight_b: 1.0, ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+      # A carries 2/3 of the band and is consistent above → next = 0.667
+      assert_in_delta(1.0 + 2.0 / 3.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "weight the current band by binding weight" do
+      scorer = build_pair(person_level: 1, all_levels: [ 1 ], weight_a: 2.0, weight_b: 1.0, ratings: [
+        rated(1, "occasional"), rated(1, "consistent", cap: CAP_B)
+      ])
+      # (2 × 0.5 + 1 × 1.0) / 3
+      assert_in_delta(2.0 / 3.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "pin the score at 1.0 at the top of the ladder" do
+      scorer = build_scorer(person_level: 8, all_levels: (1..8).to_a, ratings: [ rated(8, "consistent") ])
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+      assert_not scorer.has_next_level?
+    end
+
+    should "pool prior levels into one bucket rather than one per level" do
+      # The prior bucket is ONE band's worth, averaged over every prior
+      # level — so one "none" at L2 costs half of it with two prior levels
+      # and a quarter with four (deliberate: the bucket, not the ladder,
+      # is what the score is normalised over).
+      at_three = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ],
+        ratings: [ rated(2, "none"), rated(3, "consistent") ])
+      at_five = build_scorer(person_level: 5, all_levels: [ 1, 2, 3, 4, 5 ],
+        ratings: [ rated(2, "none"), rated(5, "consistent") ])
+      assert_in_delta(0.5, at_three.performance_ratio, 0.001)
+      assert_in_delta(0.75, at_five.performance_ratio, 0.001)
+    end
+
+    should "floor the score at zero" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 2, 3 ], ratings: [ rated(2, "none") ])
+      assert_in_delta(0.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "be unscorable (0.0) when no capability carries an expectation at the assessed level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ],
+        expectation_cells: [ [ CAP_A, 1 ], [ CAP_A, 2 ] ])
+      assert_in_delta(0.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "expose the components the copy names" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
+      assert_equal({ prior: 1.0, current: 1.0, next: 0.5, score: 1.5, bands_above: 1 }, scorer.components)
+    end
+
+    should "score the assessed level identically to performance_ratio_at_level(person_level)" do
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [
+        rated(2, "some"), rated(3, "occasional"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B), rated(4, "some", cap: CAP_B)
+      ])
+      assert_in_delta(scorer.performance_ratio, scorer.performance_ratio_at_level(3), 0.0001)
+    end
+  end
+
+  # ── The progression gate ──
+
+  context "the progression gate" do
+    should "discount a flexible capability's next-level credit by its current-level frequency" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
+      # 0.5 at L3 + 0.5 × 1.0 at L4
+      assert_in_delta(0.5, scorer.components[:next], 0.001)
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "give a mandatory capability no next-level credit until it is consistent at its level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], deficit_threshold: 0,
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
+      assert_in_delta(0.0, scorer.components[:next], 0.001)
+      assert_in_delta(0.5, scorer.performance_ratio, 0.001)
+    end
+
+    should "block a mandatory capability below the bar even when consistent above it" do
+      # With a multiplicative gate this netted to zero and was never blocked.
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], deficit_threshold: 0,
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
+      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+    end
+
+    should "give an unrated current level no next-level credit at all" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], ratings: [ rated(4, "consistent") ])
+      assert_in_delta(0.0, scorer.performance_ratio, 0.001)
+      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+    end
+
+    should "chain the gate along the levels for a cap of 2" do
+      consistent = build_scorer(person_level: 3, all_levels: [ 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(3, "consistent"), rated(4, "consistent"), rated(5, "consistent") ])
+      gap_at_four = build_scorer(person_level: 3, all_levels: [ 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(3, "consistent"), rated(4, "none"), rated(5, "consistent") ])
+      assert_in_delta(3.0, consistent.performance_ratio, 0.001)
+      assert_in_delta(1.0, gap_at_four.performance_ratio, 0.001)
+    end
+
+    should "still allow making up across capabilities" do
+      # A consistent at L3 and L4, B "most of the time" at L3: +1.0 − 0.5.
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "occasional", cap: CAP_B)
+      ])
+      assert_in_delta(1.25, scorer.performance_ratio, 0.001)
+      assert_equal :performing, scorer.performance_state
+    end
+  end
+
+  # ── The ladder ──
+
+  context "the ladder" do
+    should "treat the next ORDINAL in the ladder as the next level, not person_level + 1" do
+      # Levels [1, 2, 3, 5] — ordinal 4 was never authored.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 5 ],
+        ratings: [ rated(3, "consistent"), rated(5, "consistent") ])
+      assert_equal 5, scorer.next_level_ordinal
+      assert scorer.has_next_level?
+      assert_in_delta(2.0, scorer.performance_ratio, 0.001)
+      assert scorer.promotion_readiness[:eligible]
+    end
+
+    should "not let a level with no expectation gate the credit above it" do
+      # A senior-only capability: expectations start at L4. Rated consistent
+      # there while assessed at L3, it earns its L4 credit in full.
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        expectation_cells: [ [ CAP_A, 4 ] ], ratings: [ rated(4, "consistent") ])
+      assert_in_delta(1.0, scorer.components[:next], 0.001)
+    end
+
+    should "report how many bands above can carry credit" do
+      cap_two = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(3, "consistent") ])
+      near_top = build_scorer(person_level: 4, all_levels: [ 1, 2, 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(4, "consistent") ])
+      assert_equal 2, cap_two.components[:bands_above]
+      assert_equal 1, near_top.components[:bands_above]
+    end
+  end
+
+  # ── Over-performance cap and expectation coverage ──
+
+  context "cap and coverage" do
+    should "ignore ratings beyond the cap window" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4, 5 ],
+        ratings: [ rated(3, "consistent"), rated(5, "consistent") ])
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+      assert_equal :above_cap, scorer.capability_statuses[CAP_A]
+    end
+
+    should "pin the score at 1.0 with a cap of 0" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], overperformance_cap: 0,
+        ratings: [ rated(3, "consistent"), rated(4, "consistent") ])
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "normalise the next band over the capabilities that have an expectation there" do
+      ratings = [ rated(3, "consistent"), rated(4, "consistent"), rated(3, "consistent", cap: CAP_B) ]
+      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
+      bindings = [
+        BindingStub.new(capability_id: "a", weight: 1.0, deficit_threshold: nil, overperformance_cap: nil, capability: cap_a),
+        BindingStub.new(capability_id: "b", weight: 1.0, deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
       ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # L1-2: default 1.0, L3: rated consistent, L4: rated consistent vs expected 0.0 → +1.0
-      # baseline = 3 * 1.0 = 3.0
-      assert_in_delta(4.0 / 3.0, scorer.performance_ratio, 0.01)
-    end
+      category = CategoryStub.new(category_id: CAT_1, deficit_threshold: nil, overperformance_cap: nil)
+      build = ->(cells) do
+        PersonDevelopment::Scoring.new(level_ratings: ratings, bindings: bindings, categories: [ category ],
+          person_level: 3, all_level_ordinals: [ 3, 4 ], expectation_cells: cells)
+      end
 
-    should "produce negative contribution when below expectations" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      # some=0.25, expected=1.0 → contribution -0.75
-      assert_in_delta(0.25, scorer.performance_ratio, 0.01)
-    end
-
-    should "weight contributions by binding weight" do
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 2.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 1,
-        aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: [ r ],
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 1,
-        all_level_ordinals: [ 1 ]
-      )
-      # occasional=0.5, expected=1.0 → contribution -0.5 * 2.0 = -1.0
-      # baseline = 1 * 2.0 = 2.0 → ratio = 1.0 / 2.0 = 0.5
-      assert_in_delta(0.5, scorer.performance_ratio, 0.01)
+      # B has no expectation at L4 → the L4 band is A alone → 2.0
+      assert_in_delta(2.0, build.call([ [ CAP_A, 3 ], [ CAP_A, 4 ], [ CAP_B, 3 ] ]).performance_ratio, 0.001)
+      # nil = every cell exists → B owes its share of the L4 band → 1.5
+      assert_in_delta(1.5, build.call(nil).performance_ratio, 0.001)
     end
   end
 
@@ -171,9 +370,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   context "#category_results" do
     should "pass when pool >= -category deficit_threshold" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ],
         category_deficit_threshold: 0.5)
       result = scorer.category_results[CAT_1]
       assert result[:pass]
@@ -181,378 +378,161 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "fail when net contribution exceeds category deficit_threshold" do
-      # Category deficit_threshold=0 (must balance).
-      # Capability rated "some" → raw = -0.75 → net = -0.75
-      # -0.75 >= 0 → false → fails
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "some") ],
         category_deficit_threshold: 0)
-      result = scorer.category_results[CAT_1]
-      assert_not result[:pass]
+      assert_not scorer.category_results[CAT_1][:pass]
     end
 
-    should "use framework default when category deficit_threshold is nil" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      # some=0.25, expected=1.0 → pool = -0.75; framework default threshold=1.0
-      # -0.75 >= -1.0 → passes
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+    should "use the framework default when category deficit_threshold is nil" do
+      # "most of the time" → pool −0.5; framework default 0.75 → passes
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "occasional") ],
         category_deficit_threshold: nil)
-      result = scorer.category_results[CAT_1]
-      assert result[:pass]
+      assert scorer.category_results[CAT_1][:pass]
     end
 
-    should "fail when pool passes but a capability is blocked" do
-      # Two capabilities in same category, deficit_threshold=0 (must balance).
-      # cap_a rated "some" at L3 → raw = -0.75; deficit at L3 = 0.75 > 0 → :blocked
-      # cap_b rated consistent at L3 AND L4 → raw = 0 + 1.0 = +1.0
-      # net = -0.75 + 1.0 = +0.25 >= 0 → pool passes, but blocked cap fails category
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_a)
-      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: 0, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding_a, binding_b ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 3, 4 ]
-      )
+    should "fail when the pool passes but a capability is blocked" do
+      # cap_a "some" at L3 → −0.75, blocked at category tolerance 0;
+      # cap_b consistent at L3 and L4 → +1.0; pool +0.25 passes on its own.
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], category_deficit_threshold: 0, ratings: [
+        rated(3, "some"),
+        rated(3, "consistent", cap: CAP_B), rated(4, "consistent", cap: CAP_B)
+      ])
       result = scorer.category_results[CAT_1]
       assert_not result[:pass]
       assert_in_delta(0.25, result[:pool], 0.01)
     end
 
-    should "pass when pool passes and no capabilities are blocked" do
-      # Two capabilities in same category, deficit_threshold=0 (must balance).
-      # Both rated consistent at L3 → no deficit → no blocking
-      # net pool = 0.0 >= 0 → passes
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_a)
-      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: 0, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding_a, binding_b ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 3 ]
-      )
+    should "pass when the pool passes and no capabilities are blocked" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3 ], category_deficit_threshold: 0, ratings: [
+        rated(3, "consistent"), rated(3, "consistent", cap: CAP_B)
+      ])
       result = scorer.category_results[CAT_1]
       assert result[:pass]
       assert_in_delta(0.0, result[:pool], 0.01)
     end
   end
 
-  # ── Mastery ──
+  # ── Verdicts ──
 
   context "#meeting_expectations?" do
-    should "return true when rated consistent at current level" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+    should "return true when rated consistent at the assessed level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ])
       assert scorer.meeting_expectations?
     end
 
-    should "return false when performance_ratio < 1.0" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      # ratio = 0.5 < 1.0
+    should "return false below the meeting threshold" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "occasional") ])
       assert_not scorer.meeting_expectations?
     end
   end
 
   context "#mastering?" do
-    should "default to 1.15 threshold when no mastery_threshold configured" do
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ])
-      # unrated → default 1.0 → ratio 1.0; 1.0 < 1.15 → not mastering
-      assert_not scorer.mastering?
+    should "default to the halfway waypoint (1.5)" do
+      half = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
+      quarter = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "some") ])
+      assert half.mastering?
+      assert_not quarter.mastering?
     end
 
-    should "return true when performance_ratio meets explicit threshold" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+    should "honour an explicit mastery threshold" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ],
         thresholds: { mastery_threshold: 0.8 })
-      assert scorer.mastering?  # consistent → ratio 1.0 >= 0.8
-    end
-
-    should "return false when performance_ratio below threshold" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
-        thresholds: { mastery_threshold: 0.8 })
-      # ratio = 0.25 < 0.8
-      assert_not scorer.mastering?
-    end
-
-    should "return true when exceeding default 1.15 threshold" do
-      # Rate consistent at current level and above to exceed expectations
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # L1-2 default 1.0 (contribution 0), L3 consistent (contribution 0),
-      # L4 1.0 vs expected 0.0 → +1.0
-      # baseline = 3 * 1.0 = 3.0; ratio = 4.0 / 3.0 = 1.33 >= 1.15
       assert scorer.mastering?
+    end
+
+    should "never be true for a person with a blocked capability" do
+      scorer = build_pair(person_level: 3, all_levels: [ 2, 3, 4 ], tolerance_b: 0, ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "occasional", cap: CAP_B), rated(4, "consistent", cap: CAP_B)
+      ])
+      # 1.0 + 0.5 current, next = (1.0 + 0) / 2 → 1.25; B blocked
+      assert_not scorer.mastering?
+      assert_equal :blocked, scorer.capability_statuses[CAP_B]
     end
   end
 
-  # Builds a scorer where the performance_ratio lands at exactly the
-  # requested value by tuning a single-capability single-level rating.
-  # Frequency mapping: none=0.0, some=0.25, occasional=0.5, consistent=1.0.
-  # With one binding at L3 and person_level=3, ratio == frequency value.
-  # Top-level (not nested in a context) so Shoulda's instance_exec can find it.
-  def scorer_with_ratio(ratio, **kwargs)
-    freq = case ratio
-    when 0.0  then "none"
-    when 0.25 then "some"
-    when 0.5  then "occasional"
-    when 1.0  then "consistent"
-    else raise ArgumentError, "ratio #{ratio} not mappable to a single frequency"
-    end
-    r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-      aligned_frequency: freq, manager_rated_frequency: nil, self_rated_frequency: nil)
-    build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ], **kwargs)
+  # ── Performance state ──
+
+  # A single-capability scorer at L3 with a next level available.
+  def scorer_with_current(frequency, next_frequency: nil, **kwargs)
+    ratings = [ rated(3, frequency) ]
+    ratings << rated(4, next_frequency) if next_frequency
+    build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings, **kwargs)
   end
 
   context "#performance_state" do
-    # ── Transition: underperforming ↔ progressing (at underperforming_threshold) ──
-
-    should "return :underperforming when ratio is just below underperforming_threshold" do
-      scorer = scorer_with_ratio(0.5, thresholds: { underperforming_threshold: 0.51 })
-      # ratio 0.5 < threshold 0.51
+    should "return :underperforming just below underperforming_threshold" do
+      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 0.51 })
       assert_equal :underperforming, scorer.performance_state
     end
 
     should "return :progressing exactly at underperforming_threshold" do
-      scorer = scorer_with_ratio(0.5, thresholds: { underperforming_threshold: 0.5 })
-      # ratio 0.5, NOT < 0.5 → past the boundary
+      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 0.5 })
       assert_equal :progressing, scorer.performance_state
     end
 
-    should "return :underperforming with the default 0.80 threshold and 0.5 ratio" do
-      scorer = scorer_with_ratio(0.5)  # default underperforming_threshold = 0.80
-      assert_equal :underperforming, scorer.performance_state
+    should "return :underperforming for 'most of the time' at the default 0.80 threshold" do
+      assert_equal :underperforming, scorer_with_current("occasional").performance_state
     end
 
-    # ── Transition: progressing ↔ performing (at meeting_expectation_threshold) ──
-
     should "return :progressing just below meeting_expectation_threshold" do
-      # Configure thresholds so ratio 0.5 lands in the progressing band.
-      scorer = scorer_with_ratio(0.5,
+      scorer = scorer_with_current("occasional",
         thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.6 })
       assert_equal :progressing, scorer.performance_state
     end
 
     should "return :performing exactly at meeting_expectation_threshold" do
-      scorer = scorer_with_ratio(0.5,
-        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.5,
-                      mastery_threshold: 0.6 })
-      # ratio 0.5 == meeting (not < meeting), not eligible (max level), not >= mastery
-      scorer = build_scorer(person_level: 1, all_levels: [ 1 ],
-        ratings: [ Rating.new(capability_stable_id: CAP_A, level_ordinal: 1,
-          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil) ],
-        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.5,
-                      mastery_threshold: 0.6 })
-      # person_level=1 == max, no next-level eligibility possible
+      scorer = scorer_with_current("occasional",
+        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.5, mastery_threshold: 0.6 })
       assert_equal :performing, scorer.performance_state
     end
 
-    # ── Transition: performing ↔ mastering (at mastery_threshold) ──
-    # These tests use person_level=1, all_levels=[1] so there's no next
-    # level — that way :eligible can't fire and we can isolate
-    # performing vs mastering cleanly.
-
-    should "return :performing just below mastery_threshold" do
-      scorer = scorer_with_ratio(1.0, thresholds: { mastery_threshold: 1.15 })
-      # ratio 1.0, mastery 1.15 → performing, no next level
-      assert_equal :performing, scorer.performance_state
+    should "return :performing below the mastery waypoint" do
+      assert_equal :performing, scorer_with_current("consistent", next_frequency: "some").performance_state
     end
 
-    should "return :mastering exactly at mastery_threshold" do
-      scorer = scorer_with_ratio(1.0, thresholds: { mastery_threshold: 1.0 })
-      # ratio 1.0 >= mastery 1.0, no next level → mastering
+    should "return :mastering at the mastery waypoint when not yet eligible" do
+      scorer = scorer_with_current("consistent", next_frequency: "occasional")
+      assert_in_delta(1.5, scorer.performance_ratio, 0.001)
       assert_equal :mastering, scorer.performance_state
+      assert_not scorer.promotion_readiness[:eligible]
     end
-
-    should "default :performing at ratio 1.10 (the 110% scenario)" do
-      # Build a fixture where current ratio is ~1.10 — alex's reported case.
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      # L1, L2 default consistent (contrib 0), L3 consistent (contrib 0),
-      # L4 occasional 0.5 vs expected 0 = +0.5
-      # baseline = 3 ; ratio = 3.5/3 ≈ 1.167  — too high.
-      # Use "some" 0.25 at L4 instead: raw = 0.25; ratio = 3.25/3 ≈ 1.083
-      ratings[1] = Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      # Need ratio ~1.10 — use occasional? raw = 0.5 → 1.167. Some 0.25 → 1.083.
-      # That's close enough for the boundary check — 1.083 sits in performing.
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      assert_in_delta(1.083, scorer.performance_ratio, 0.005)
-      # The whole point of this test: at this ratio the user wants
-      # :performing (Gap to mastering), NOT :progressing or anything
-      # next-level focused. Verify state lands on :performing.
-      assert_equal :performing, scorer.performance_state
-    end
-
-    # ── Transition: eligible takes precedence over mastering ──
 
     should "return :eligible when next-level expectations are met (precedence over mastering)" do
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # ratio at L+1 = 1.0 >= 0.95 (meeting) → eligible
+      scorer = scorer_with_current("consistent", next_frequency: "consistent")
       assert_equal :eligible, scorer.performance_state
     end
 
-    should "return :mastering when ratio >= mastery AND next-level NOT met" do
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      # L4 some=0.25 contribution at current = +0.25 → ratio 3.25/3 ≈ 1.083
-      # That's < mastery 1.15 → would be :performing. Need higher current ratio.
-      # Add over-performance: L4 consistent (1.0) → contribution 1.0 → ratio 4/3 ≈ 1.33
-      ratings[1] = Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      # But now L4 is consistent → eligible would fire. Need overperformance_cap to
-      # exclude L4 from current-level ratio, OR raise mastery threshold.
-      # Simpler: use a higher mastery threshold so :mastering requires more.
-      # Actually the cleanest: use a tighter underperforming_threshold at next
-      # level so eligible is harder. But thresholds are global.
-      #
-      # Approach: build a 2-capability fixture where one is consistent at next
-      # (boosting current ratio) and one is BLOCKED at next (preventing eligible).
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      b_a = BindingStub.new(capability_id: "ba", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_a)
-      b_b = BindingStub.new(capability_id: "bb", weight: 1.0,
-        deficit_threshold: 0.5, overperformance_cap: nil, capability: cap_b)
-      cat = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-      ratings = [
-        # CAP_A: consistent everywhere up to L4 — pulls current ratio high
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        # CAP_B: rated none everywhere — blocks at L4
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 4,
-          aligned_frequency: "none", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings, bindings: [ b_a, b_b ], categories: [ cat ],
-        person_level: 3, all_level_ordinals: [ 1, 2, 3, 4 ]
-      )
-      # Current ratio: each cap contributes 0 at L1, L2, L3 (consistent vs 1.0)
-      # CAP_A at L4 = +1.0; CAP_B at L4 = +0.0 (none vs expected 0 since above level)
-      # raw = 1.0 ; baseline = 6 (2 caps * 3 levels) ; ratio = 7/6 ≈ 1.17 >= mastery
-      # CAP_B blocked at L4? deficit at L4 = -1.0 (none vs 1.0); threshold 0.5 → blocked
-      # promotion_readiness.eligible = false (blocked at next)
-      assert_equal :mastering, scorer.performance_state
+    should "downgrade a meeting score to :progressing when any capability is blocked" do
+      # A consistent at L3 and L4 lifts the score to 1.0; B "not yet" at L3 is blocked.
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "none", cap: CAP_B)
+      ])
+      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+      assert_equal :progressing, scorer.performance_state
     end
 
-    # ── Blocked-capability downgrade ──
-
-    should "downgrade :performing to :progressing when any capability is blocked" do
-      # Build a high-ratio fixture (would normally be :performing) plus
-      # a blocked cap (deficit beyond threshold at current level).
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      b_a = BindingStub.new(capability_id: "ba", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_a)
-      b_b = BindingStub.new(capability_id: "bb", weight: 1.0,
-        deficit_threshold: 0.5, overperformance_cap: nil, capability: cap_b)
-      cat = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "none", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings, bindings: [ b_a, b_b ], categories: [ cat ],
-        person_level: 3, all_level_ordinals: [ 3 ]
-      )
-      # CAP_A consistent (contrib 0), CAP_B none (contrib -1.0)
-      # raw = -1.0 ; baseline = 2 ; ratio = 1/2 = 0.5 → underperforming.
-      # So this fixture actually falls into underperforming first. Good
-      # to verify, but doesn't isolate the blocked downgrade.
-      assert_equal :underperforming, scorer.performance_state
-    end
-
-    # ── Top of ladder: no eligible possible ──
-
-    should "stay :mastering at the top of the level ladder when no next exists" do
-      scorer = scorer_with_ratio(1.0,
-        thresholds: { mastery_threshold: 1.0 })
-      # person_level=3 == max in [3]. Eligible can't fire, mastery 1.0
-      assert_equal :mastering, scorer.performance_state
+    should "return :top_of_ladder when meeting at the highest level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ], ratings: [ rated(3, "consistent") ])
+      assert_equal :top_of_ladder, scorer.performance_state
       assert_not scorer.has_next_level?
     end
 
-    should "stay :performing at the top of the level ladder below mastery" do
-      scorer = scorer_with_ratio(1.0)  # default mastery 1.15
-      assert_equal :performing, scorer.performance_state
+    should "still report the current-level bar at the top of the ladder" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ], ratings: [ rated(3, "occasional") ])
+      assert_equal :underperforming, scorer.performance_state
     end
   end
 
   context "#has_next_level? and #next_level_contribution" do
     should "return true and a next-level contribution when not at the top" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ r ])
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ rated(3, "consistent") ])
       assert scorer.has_next_level?
       binding_obj = scorer.instance_variable_get(:@bindings).first
-      # At L4: L1, L2, L3 contribute 0 (consistent vs expected 1.0),
-      #        L4 unrated → 0.0 vs expected 1.0 = -1.0
+      # At L4: L1–L3 contribute 0, L4 unrated → −1.0
       assert_in_delta(-1.0, scorer.next_level_contribution(binding_obj), 0.01)
     end
 
@@ -566,36 +546,23 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   context "#agreed_level_for" do
     should "return the highest level_ordinal where effective_frequency is consistent" do
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # Levels 1, 2 default to 1.0 (consistent); level 3 aligned consistent; level 4 occasional
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
       assert_equal 3, scorer.agreed_level_for(CAP_A)
     end
 
     should "return nil when no level has consistent effective_frequency" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 2, all_levels: [ 3 ], ratings: [ r ])
+      scorer = build_scorer(person_level: 2, all_levels: [ 3 ], ratings: [ rated(3, "some") ])
       assert_nil scorer.agreed_level_for(CAP_A)
     end
   end
 
-  # ── Column header scoring (performance_ratio_at_level) ──
+  # ── Level scoring (one formula for every reference level) ──
 
   context "#performance_ratio_at_level" do
     should "score identically for unrated and explicitly consistent at levels below current" do
-      # Person is L3. At L1 (below current), unrated should default to consistent.
-      # Explicitly rating L1 as consistent should produce the same score.
       scorer_unrated = build_scorer(person_level: 3, all_levels: [ 1 ], ratings: [])
-      scorer_rated = build_scorer(person_level: 3, all_levels: [ 1 ], ratings: [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 1,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ])
+      scorer_rated = build_scorer(person_level: 3, all_levels: [ 1 ], ratings: [ rated(1, "consistent") ])
 
       assert_in_delta(
         scorer_rated.performance_ratio_at_level(1),
@@ -604,179 +571,94 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         "Unrated below current level should score the same as explicitly consistent"
       )
     end
+
+    should "treat the assessed level as a prior level when scoring the next one" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
+      # At L4: prior = 0.5 (L3), current = 1.0 → 0.5
+      assert_in_delta(0.5, scorer.performance_ratio_at_level(4), 0.001)
+    end
   end
 
   # ── Level verdict (unified column header + promotion code path) ──
 
   context "#level_verdict" do
-    should "return :meeting when ratio meets threshold and no blocked capabilities" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+    should "return :meeting when the score meets threshold and no blocked capabilities" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ])
       assert_equal :meeting, scorer.level_verdict(3)
     end
 
-    should "return :mastering when ratio meets mastery threshold and no blocked capabilities" do
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: ratings)
-      # ratio = 4/3 = 1.33 >= 1.15 mastery threshold
+    should "return :mastering when the score meets the mastery threshold" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "consistent") ])
       assert_equal :mastering, scorer.level_verdict(3)
     end
 
-    should "return :below when ratio meets threshold but a capability is blocked" do
-      # deficit_threshold=0 (mandatory) + unrated at reference level → blocked
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      # mandatory capability (deficit_threshold=0) — unrated will block
-      binding_a = BindingStub.new(capability_id: "bid-a", weight: 0.5,
-        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)
-      # non-mandatory capability rated consistent — lifts overall ratio
-      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.5,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      # cap_a unrated at L3: deficit = 1.0 * 0.5 = 0.5 > 0.0 threshold → blocked
-      # Overall ratio still high enough from cap_b → but verdict should be :below
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings, bindings: [ binding_a, binding_b ],
-        categories: [ category ], person_level: 3, all_level_ordinals: [ 3 ]
-      )
+    should "return :below when the score meets threshold but a capability is blocked" do
+      # A mandatory capability (tolerance 0, weight 0.5) unrated at L3 blocks;
+      # B (weight 1.5) consistent lifts the score to 0.75 ≥ a 0.7 threshold.
+      scorer = build_pair(person_level: 3, all_levels: [ 3 ], tolerance_a: 0.0,
+        weight_a: 0.5, weight_b: 1.5, thresholds: { meeting_expectation_threshold: 0.7 },
+        ratings: [ rated(3, "consistent", cap: CAP_B) ])
+      assert_in_delta(0.75, scorer.performance_ratio, 0.001)
       assert_equal :below, scorer.level_verdict(3)
+    end
+
+    should "agree with the hero's verdict at the assessed level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
+      assert scorer.mastering?
+      assert_equal :mastering, scorer.level_verdict(3)
     end
   end
 
   # ── Promotion readiness ──
 
   context "#promotion_readiness" do
-    should "block at next level when consistent there but unrated at current level" do
-      # When evaluating promotion to L4: L3 is unrated (deficit -1.0), L4 is at
-      # expectations (0.0). Total contribution = -1.0, deficit > 0 → blocked.
-      # You must demonstrate at your current level to be promotable.
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)  # mandatory (no deficit)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: [ r ],
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 1, 2, 3, 4 ],
-        thresholds: { meeting_expectation_threshold: 0.7 }
-      )
+    should "block at the next level when consistent there but unrated at the current level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], deficit_threshold: 0.0,
+        ratings: [ rated(4, "consistent") ], thresholds: { meeting_expectation_threshold: 0.7 })
       result = scorer.promotion_readiness
       assert_not result[:eligible]
       assert_includes result[:blocked_at_next_level], CAP_A
     end
 
-    should "be eligible when consistent at both current and next level" do
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 1, 2, 3, 4 ],
-        thresholds: { meeting_expectation_threshold: 0.7 }
-      )
+    should "be eligible when consistent at both the current and next level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], deficit_threshold: 0.0,
+        ratings: [ rated(3, "consistent"), rated(4, "consistent") ])
       result = scorer.promotion_readiness
       assert result[:eligible]
       assert_empty result[:blocked_at_next_level]
     end
 
-    should "not be eligible when deficit_threshold=0 cap is not rated at next level" do
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: 0.0, overperformance_cap: nil, capability: cap)  # mandatory (no deficit)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
+    should "require the same share of the next band at every level" do
+      [ 1, 3, 5, 7 ].each do |level|
+        scorer = build_scorer(person_level: level, all_levels: (1..8).to_a,
+          ratings: [ rated(level, "consistent"), rated(level + 1, "occasional") ])
+        assert_not scorer.promotion_readiness[:eligible], "level #{level}"
+        assert_in_delta(0.5, scorer.performance_ratio_at_level(level + 1), 0.001, "level #{level}")
+      end
+    end
 
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: [],
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 1, 2, 3, 4 ]
-      )
+    should "not be eligible when a mandatory capability is not rated at the next level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], deficit_threshold: 0.0,
+        ratings: [ rated(3, "consistent") ])
       result = scorer.promotion_readiness
       assert_not result[:eligible]
       assert_includes result[:blocked_at_next_level], CAP_A
     end
 
-    should "block standard capabilities when contribution deficit exceeds threshold at next level" do
-      # Unrated at L3 and L4: contribution = -1.0 + -1.0 = -2.0.
-      # Default threshold = 1.0, deficit 2.0 > 1.0 → blocked.
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: [],
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 1, 2, 3, 4 ]
-      )
-      result = scorer.promotion_readiness
-      assert_includes result[:blocked_at_next_level], CAP_A
+    should "block a flexible capability whose deficit at the next level exceeds the tolerance" do
+      # Unrated at L3 and L4: −1.0 −1.0 at L4 → deficit 2.0 > 0.75.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
+      assert_includes scorer.promotion_readiness[:blocked_at_next_level], CAP_A
     end
 
-    should "not block standard capabilities when contribution deficit is within threshold" do
-      # Rated occasional at L3 and L4: freq=0.5 each
-      # L3 contribution = (0.5 - 1.0) * 1.0 = -0.5
-      # L4 contribution = (0.5 - 1.0) * 1.0 = -0.5
-      # Total = -1.0, deficit = 1.0, threshold = 1.0 → 1.0 > 1.0 = false → not blocked
-      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "occasional", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 1, 2, 3, 4 ]
-      )
-      result = scorer.promotion_readiness
-      assert_empty result[:blocked_at_next_level]
+    should "not block a flexible capability whose deficit at the next level is within the tolerance" do
+      # Consistent at L3, "most of the time" at L4 → deficit 0.5 ≤ 0.75.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
+      assert_empty scorer.promotion_readiness[:blocked_at_next_level]
     end
   end
 
@@ -784,17 +666,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   context "block_reasons" do
     should "return empty hash when no capabilities are blocked" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ])
       assert_empty scorer.block_reasons
     end
 
     should "return reason for a blocked capability" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil)
-      # some=0.25, contribution = (0.25 - 1.0) * 1.0 = -0.75, deficit=0.75, threshold=0
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "some") ],
         deficit_threshold: 0)
       reasons = scorer.block_reasons
       assert_includes reasons.keys, CAP_A
@@ -803,84 +680,28 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "return reason with max allowed when threshold is non-zero" do
-      r = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-        aligned_frequency: "none", manager_rated_frequency: nil, self_rated_frequency: nil)
-      # none=0.0, weight=2.0, contribution = (0.0 - 1.0) * 2.0 = -2.0, deficit=2.0, threshold=1.0
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ],
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "none") ],
         weight: 2.0, deficit_threshold: 1.0)
       reasons = scorer.block_reasons
       assert_includes reasons[CAP_A], "Below expectations by 2.0 points"
       assert_includes reasons[CAP_A], "max allowed: 1.0"
     end
 
-    should "not block when over-performance at higher level offsets gap" do
-      # Unrated at L3 (person level) → contribution at L3 = (0.0 - 1.0) * 1.0 = -1.0
-      # Consistent at L4 → contribution at L4 = (1.0 - 0.0) * 1.0 = +1.0
-      # Total contribution = 0.0, deficit = 0.0, threshold=0 → NOT blocked
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], ratings: ratings,
-        deficit_threshold: 0)
+    should "let a flexible capability's gated next-level credit close its own gap" do
+      # "most of the time" at L3 (−0.5) + 0.5 × consistent at L4 (+0.5) → no deficit.
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       assert_empty scorer.block_reasons
       assert_not_equal :blocked, scorer.capability_statuses[CAP_A]
     end
 
     should "not include non-blocked capabilities" do
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
-      binding_a = BindingStub.new(capability_id: "bid-a", weight: 1.0,
-        deficit_threshold: 0, overperformance_cap: nil, capability: cap_a)
-      binding_b = BindingStub.new(capability_id: "bid-b", weight: 1.0,
-        deficit_threshold: nil, overperformance_cap: nil, capability: cap_b)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
-          aligned_frequency: "some", manager_rated_frequency: nil, self_rated_frequency: nil),
-        Rating.new(capability_stable_id: CAP_B, level_ordinal: 3,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding_a, binding_b ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 3 ]
-      )
+      scorer = build_pair(person_level: 3, all_levels: [ 3 ], tolerance_a: 0, tolerance_b: 0, ratings: [
+        rated(3, "some"), rated(3, "consistent", cap: CAP_B)
+      ])
       reasons = scorer.block_reasons
       assert_includes reasons.keys, CAP_A
       assert_not_includes reasons.keys, CAP_B
-    end
-
-    should "block when over-performance is capped and gap remains" do
-      # Unrated at L3 (person level) → contribution at L3 = -1.0
-      # Consistent at L4 → within cap (default 1), contributes +1.0 → total = 0.0
-      # Consistent at L5 → beyond cap, contributes 0 → still total = 0.0
-      # But if overperformance_cap=0, L4 is beyond cap → total = -1.0 → blocked
-      cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
-      binding = BindingStub.new(capability_id: "bid", weight: 1.0,
-        deficit_threshold: 0, overperformance_cap: 0, capability: cap_a)
-      category = CategoryStub.new(category_id: CAT_1,
-        deficit_threshold: nil, overperformance_cap: nil)
-
-      ratings = [
-        Rating.new(capability_stable_id: CAP_A, level_ordinal: 4,
-          aligned_frequency: "consistent", manager_rated_frequency: nil, self_rated_frequency: nil)
-      ]
-
-      scorer = PersonDevelopment::Scoring.new(
-        level_ratings: ratings,
-        bindings: [ binding ],
-        categories: [ category ],
-        person_level: 3,
-        all_level_ordinals: [ 3, 4 ]
-      )
-      assert_equal :blocked, scorer.capability_statuses[CAP_A]
-      assert_includes scorer.block_reasons.keys, CAP_A
     end
   end
 end

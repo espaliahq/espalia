@@ -12,7 +12,7 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
   # @param assessment_id [String, nil] UUID
   # @param assessee_name [String, nil] full name of the assessee — used
   #   by the hero verdict to address the person in third person (e.g.
-  #   "Alex is tracking on target") in manager and alignment views.
+  #   "Alex is meeting E3 expectations.") in manager and alignment views.
   #   Nil in self view, where the hero uses "You're …" copy.
   # @param viewer_is_manager [Boolean] viewer is the manager-side party —
   #   orders the alignment secondary percentages viewer-first.
@@ -40,8 +40,6 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         categories: @matrix_data[:categories],
         person_level: @matrix_data[:person_level],
         merged_levels: @matrix_data[:merged_levels],
-        mastery_threshold: @matrix_data[:mastery_threshold],
-        meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
         assessment_id: @assessment_id,
         context: @context,
         viewer_is_manager: @viewer_is_manager,

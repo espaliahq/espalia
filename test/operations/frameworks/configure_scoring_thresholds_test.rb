@@ -66,21 +66,24 @@ class Operations::Frameworks::ConfigureScoringThresholdsTest < ActiveSupport::Te
       end
     end
 
-    should "write the system defaults for omitted cap and deficit (NOT NULL columns)" do
+    should "revert an omitted cap to its default and an omitted deficit to nil (system default)" do
       ActsAsTenant.with_tenant(@tenant) do
         configure(@admin_ctx, {
           framework_id: @framework_id, overperformance_cap: 3, deficit_threshold: 2.5
         })
 
-        # A follow-up call omitting both reverts them to the system defaults
-        # by writing the default values (nil would fail the read model's
-        # numericality validation — the old latent 500 on a cleared form).
+        # A follow-up call omitting both reverts them: the cap column is NOT
+        # NULL so the default value itself is written; the tolerance stores
+        # nil, so the engine's default applies and can move with the code.
         result = configure(@admin_ctx, { framework_id: @framework_id })
 
         assert_equal PersonDevelopment::Scoring::DEFAULT_OVERPERFORMANCE_CAP,
                      result[:overperformance_cap]
+        assert_nil result[:deficit_threshold]
+        assert_nil framework.deficit_threshold
         assert_equal PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD,
-                     framework.deficit_threshold.to_f
+                     framework.scoring_thresholds[:deficit_threshold] ||
+                       PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
       end
     end
 
@@ -110,6 +113,27 @@ class Operations::Frameworks::ConfigureScoringThresholdsTest < ActiveSupport::Te
           configure(@admin_ctx, { framework_id: @framework_id, mastery_threshold: "high" })
         end
         assert_match(/mastery_threshold must be a Numeric/, error.message)
+      end
+    end
+  end
+
+  context "threshold ordering" do
+    should "reject thresholds that are not ordered underperforming < meeting < mastery" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          configure(@admin_ctx, { framework_id: @framework_id,
+                                  mastery_threshold: 0.9, meeting_expectation_threshold: 0.95 })
+        end
+        assert_match(/ordered underperforming < meeting_expectation < mastery/, error.message)
+      end
+    end
+
+    should "check the order against the defaults an omitted threshold falls back to" do
+      # underperforming omitted → 0.80; a meeting threshold below it is inverted.
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(Operations::Base::ParameterError) do
+          configure(@admin_ctx, { framework_id: @framework_id, meeting_expectation_threshold: 0.7 })
+        end
       end
     end
   end

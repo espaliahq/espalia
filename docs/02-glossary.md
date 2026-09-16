@@ -36,7 +36,7 @@ UUID linking the "same" concept across framework versions. When a capability evo
 ### CapabilityRoleBinding
 Ties a capability to a role. Two critical properties:
 - **weight** (decimal): How much this capability counts toward composite scoring for this role.
-- **requirement_type** (`must_have` | `flexible`): `must_have` gates performance and promotion. `flexible` allows trade-offs (e.g. front-end vs back-end depth).
+- **individual_tolerance** (projected as `deficit_threshold`; nil = inherit category/framework): how much weighted deficit the capability may carry before it is *blocked*. `0` marks it **Required** — any gap blocks, and nothing rated above the level counts until the level itself is consistent. A positive tolerance allows trade-offs (e.g. front-end vs back-end depth). Replaces the retired `requirement_type` (`must_have` | `flexible`).
 
 This entity IS the capability scoping mechanism. No category-level scope exists. A capability bound to many roles is de facto org-wide; bound to one is role-specific.
 
