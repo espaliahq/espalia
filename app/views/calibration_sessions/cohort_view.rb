@@ -167,11 +167,14 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end
   end
 
+  # The label at the axis end hangs left of its line — centred it would
+  # overhang the track and force a sideways scrollbar under every chart.
   def reference_line(pct, label)
+    at_end = pct >= AXIS_MAX_PCT
     span(class: "absolute top-2 bottom-1 w-px bg-gray-300 dark:bg-gray-600",
          style: "left: #{position_pct(pct)}%") do
-      span(class: "absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap " \
-                  "text-[10px] text-gray-600 dark:text-gray-300") do
+      span(class: "absolute -top-4 whitespace-nowrap text-[10px] text-gray-600 dark:text-gray-300 " \
+                  "#{at_end ? 'right-0' : 'left-1/2 -translate-x-1/2'}") do
         label
       end
     end

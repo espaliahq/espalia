@@ -189,6 +189,27 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
           # Tailwind's `tracking-wide uppercase` re-cases the panel labels.
           assert_text "MEETING E2 · TOP OF THE LADDER"
         end
+
+        # The bar must never push the document sideways or sit over the
+        # headline — below `sm` the header stacks (found by the visual pass).
+        assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
+               "the hero must not make the page scroll sideways at #{size.join('x')}"
+        overlap = page.evaluate_script(<<~JS)
+          (() => {
+            const h = document.querySelector("#scoring-panel h2").getBoundingClientRect();
+            const b = document.querySelector("#hero-score-bar").getBoundingClientRect();
+            return h.right > b.left && b.right > h.left && h.bottom > b.top && b.bottom > h.top;
+          })()
+        JS
+        assert_not overlap, "the score bar must not overlap the headline at #{size.join('x')}"
+        clipped = page.evaluate_script(<<~JS)
+          (() => {
+            const card = document.querySelector("#scoring-panel").getBoundingClientRect();
+            const bar = document.querySelector("#hero-score-bar").getBoundingClientRect();
+            return bar.right > card.right - 8;
+          })()
+        JS
+        assert_not clipped, "the score bar's last tick must stay inside the card at #{size.join('x')}"
       end
     end
 

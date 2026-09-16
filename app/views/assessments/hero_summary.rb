@@ -130,7 +130,10 @@ class Views::Assessments::HeroSummary < Views::Base
     pct = (ratio * 100).round(0)
     target = next_unrated_capability
 
-    div(class: "flex items-start justify-between gap-4") do
+    # Below `sm` the headline stacks above the number + bar (which then
+    # share one row); side by side, the 176px bar left the headline a
+    # one-word-per-line column and pushed the document past the viewport.
+    div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do
       div(class: "min-w-0 flex-1") do
         # Headline + actions on one line — "Continue" used to sit on a
         # third row, and the promotion pill on a fourth. Inline-baseline
@@ -147,10 +150,12 @@ class Views::Assessments::HeroSummary < Views::Base
         # viewports rather than the previous fixed two-line stack.
         gloss_and_secondaries
       end
-      div(class: "text-right shrink-0") do
-        span(class: "text-4xl font-bold leading-none #{performance_color(ratio)}") { "#{pct}%" }
-        score_bar(ratio)
-        secondary_percents
+      div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
+        span(class: "text-4xl font-bold leading-none #{performance_color}") { "#{pct}%" }
+        div(class: "text-right") do
+          score_bar(ratio)
+          secondary_percents
+        end
       end
     end
   end
@@ -396,7 +401,7 @@ class Views::Assessments::HeroSummary < Views::Base
         # row — without it the span grows to fit its content and pushes
         # the sibling delta past the panel's right edge (visible as
         # the deltas being cut off on mobile).
-        span(class: "min-w-0 truncate text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
+        span(class: "min-w-0 text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
           config[:state_label]
         end
         span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider shrink-0") do
@@ -638,27 +643,41 @@ class Views::Assessments::HeroSummary < Views::Base
       end
   end
 
-  def performance_color(ratio)
-    if ratio >= @mastery_threshold
-      "text-purple-600 dark:text-purple-400"
-    elsif ratio >= @meeting_expectation_threshold
-      "text-green-700 dark:text-green-400"
-    elsif ratio >= @underperforming_threshold
-      "text-amber-700 dark:text-amber-400"
-    else
-      "text-red-700 dark:text-red-400"
+  # The number and the bar take their colour from the STATE, not the raw
+  # score, so a 150% held at "progressing" by a blocked capability reads
+  # amber like its verdict rather than purple like its number. The
+  # thresholds only decide the tone when a scoring hash carries no state.
+  TONE_TEXT = {
+    red: "text-red-700 dark:text-red-400",
+    amber: "text-amber-700 dark:text-amber-400",
+    green: "text-green-700 dark:text-green-400",
+    purple: "text-purple-600 dark:text-purple-400"
+  }.freeze
+  TONE_BAR = { red: "bg-red-500", amber: "bg-amber-500", green: "bg-green-500", purple: "bg-purple-500" }.freeze
+
+  def performance_color
+    TONE_TEXT.fetch(tone)
+  end
+
+  def performance_bar_color
+    TONE_BAR.fetch(tone)
+  end
+
+  def tone
+    case primary_scoring[:performance_state]
+    when :eligible, :mastering then :purple
+    when :performing, :top_of_ladder then :green
+    when :progressing then :amber
+    when :underperforming then :red
+    else tone_from_score(primary_scoring[:performance_ratio] || 0.0)
     end
   end
 
-  def performance_bar_color(ratio)
-    if ratio >= @mastery_threshold
-      "bg-purple-500"
-    elsif ratio >= @meeting_expectation_threshold
-      "bg-green-500"
-    elsif ratio >= @underperforming_threshold
-      "bg-amber-500"
-    else
-      "bg-red-500"
+  def tone_from_score(ratio)
+    if ratio >= @mastery_threshold then :purple
+    elsif ratio >= @meeting_expectation_threshold then :green
+    elsif ratio >= @underperforming_threshold then :amber
+    else :red
     end
   end
 
@@ -678,11 +697,12 @@ class Views::Assessments::HeroSummary < Views::Base
     label = next_code ? "#{pct}% — 100% is #{current_code} expectations, 200% is #{next_code}" :
                         "#{pct}% — 100% is #{current_code} expectations, the top of the ladder"
 
-    div(id: "hero-score-bar", class: "mt-2 w-44 ml-auto") do
+    # 144px beside the number fits a 375px card; 176px clipped the last tick.
+    div(id: "hero-score-bar", class: "mt-2 w-36 sm:w-44 ml-auto") do
       div(class: "relative h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden",
           role: "progressbar",
           aria: { valuenow: pct, valuemin: 0, valuemax: max, label: label }) do
-        div(class: "h-full rounded-full #{performance_bar_color(ratio)}", style: "width: #{fill}%") { }
+        div(class: "h-full rounded-full #{performance_bar_color}", style: "width: #{fill}%") { }
         if next_code
           span(class: "absolute inset-y-0 left-1/2 w-0.5 bg-white dark:bg-gray-900", aria: { hidden: "true" }) { }
         end
