@@ -132,6 +132,13 @@ against other rows and — because a capability nobody has rated at the next
 level always scores exactly `-1.0` there — showed three identical numbers
 that ranked nothing (#418).
 
+**Ties break on the assessed level.** Nothing is rated at the next level
+until someone starts working there, so a whole "Gap to E4" list sitting at
+0% of E4 is the common case rather than an edge one. Among capabilities
+equally unshown above, the one weakest at the level the person is standing
+on leads — it has the furthest to go, and the order is then deterministic
+rather than whatever the hash happened to hold.
+
 **A capability with no expectation at that level is left out**, rather than
 sinking to the bottom of the list on a zero it could never avoid. Before
 the change a capability with no expectation at the assessed level appeared

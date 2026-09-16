@@ -336,12 +336,22 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   # Three rows, weakest first — the shape every "Gap to …" list takes.
+  #
+  # Ties are broken on the assessed level, because they are common and not
+  # incidental: nothing is rated at the next level until someone starts
+  # working there, so a whole gap list can sit at 0% of it. Among
+  # capabilities equally unshown above, the one weakest at the level the
+  # person is standing on has the furthest to go, so it leads.
   def weakest(scores, limit = 3)
-    scores.sort_by { |_, score| score[:score].to_f }.first(limit)
+    scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid) ] }.first(limit)
   end
 
   def strongest(scores, limit = 3)
-    scores.sort_by { |_, score| -score[:score].to_f }.first(limit)
+    scores.sort_by { |sid, score| [ -score[:score].to_f, -assessed_score(sid) ] }.first(limit)
+  end
+
+  def assessed_score(stable_id)
+    scores_here.dig(stable_id, :score).to_f
   end
 
   def state_panel_config

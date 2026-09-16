@@ -33,16 +33,17 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   # #418: the rows used to print a weight-unit delta — "-1.0" for every
   # capability nobody had rated at the next level, so three rows ranked
   # nothing and the number could not be read against an expectation.
-  def render_gap_list(next_scores:, state: :mastering)
+  def render_gap_list(next_scores:, state: :mastering, here_scores: nil)
     capabilities = CAPS.each_with_index.map do |name, i|
       { capability: CAP.new(stable_id: "cap-#{i}", name: name),
         cells: { 3 => { current_frequency: "consistent" } } }
     end
+    here_scores ||= CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }
     scoring = {
       performance_ratio: 1.62,
       components: { prior: 1.0, current: 1.0, next: 0.62, score: 1.62, bands_above: 1 },
       performance_state: state,
-      capability_scores: scored(CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }),
+      capability_scores: scored(here_scores),
       capability_scores_at_next_level: scored(next_scores),
       promotion_readiness: nil
     }
@@ -137,6 +138,19 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       # Weakest first: DevSecOps (0%), Quality First (25%), Strategic (50%).
       assert_operator html.index("DevSecOps"), :<, html.index("Quality First")
       assert_operator html.index("Quality First"), :<, html.index("Strategic Thinking")
+    end
+
+    should "break a tie on the level the person is standing on" do
+      # Nothing is rated at the next level until someone starts working
+      # there, so a whole gap list sitting at 0% of it is the common case,
+      # not an edge one. The capability weakest at E3 has furthest to go.
+      html = render_gap_list(
+        next_scores: { "cap-0" => 0.0, "cap-1" => 0.0, "cap-2" => 0.0 },
+        here_scores: { "cap-0" => 1.0, "cap-1" => 0.6, "cap-2" => 0.9 }
+      )
+
+      assert_operator html.index("Quality First"), :<, html.index("DevSecOps")
+      assert_operator html.index("DevSecOps"), :<, html.index("Strategic Thinking")
     end
 
     should "leave out a capability with no expectation at that level" do
