@@ -215,8 +215,33 @@ class PersonDevelopment::Scoring
   def capability_components(binding)
     @capability_components ||= {}
     @capability_components[binding.capability.stable_id] ||=
-      components_over([ binding ], @person_level)
-        .merge(scorable: cell?(binding.capability.stable_id, @person_level))
+      capability_components_at(binding, @person_level)
+  end
+
+  # Every capability's score evaluated at one reference level, with the
+  # state vocabulary applied to it — the same components as
+  # {#capability_components}, at a level the person is not standing on.
+  #
+  # The hero's "Gap to E4" list reads this: what share of E4 each
+  # capability already shows, on the scale every other surface uses. A
+  # capability with no expectation at that level is `scorable: false` —
+  # it owes nothing there, so a gap list must leave it out rather than
+  # rank its unavoidable 0 as the worst thing on the page.
+  #
+  # `eligible` is deliberately not considered: a single capability
+  # "clearing the level above the one being described" is not a reading
+  # this list has any use for.
+  #
+  # @param reference_level [Integer]
+  # @return [Hash{String => Hash}] stable_id => components + :scorable + :state
+  def capability_scores_at(reference_level)
+    @capability_scores_at ||= {}
+    @capability_scores_at[reference_level] ||= @bindings.to_h do |binding|
+      sid = binding.capability.stable_id
+      components = capability_components_at(binding, reference_level)
+      blocked = capability_statuses(reference_level: reference_level)[sid] == :blocked
+      [ sid, components.merge(state: state_for(components[:score], blocked: blocked, eligible: false)) ]
+    end
   end
 
   # The state vocabulary applied to one capability: its own score against
@@ -428,6 +453,14 @@ class PersonDevelopment::Scoring
   private
 
   # ── Core computation ──
+
+  # One binding's components at one reference level. `scorable` is false
+  # when it carries no expectation there.
+  def capability_components_at(binding, reference_level)
+    components_over([ binding ], reference_level)
+      .merge(scorable: cell?(binding.capability.stable_id, reference_level))
+  end
+
 
   # The three components (and their sum) evaluated with +reference_level+
   # as the assessed level, over every binding.
