@@ -145,7 +145,9 @@ class Assessments::ScoreSummary
   def categories_payload
     matrix_data[:categories].map do |cat_data|
       category = cat_data[:category]
-      components = scoring.dig(:category_scores, category.category_id) || {}
+      # Every category the builder returns has at least one bound
+      # capability (it drops the rest), so it always has components.
+      components = scoring.fetch(:category_scores).fetch(category.category_id)
       counts = category_rated_count(cat_data, @context)
       {
         id: category.category_id,
