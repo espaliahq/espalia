@@ -16,8 +16,7 @@
 # by {Assessments::ScoreSummary} from the same builder the web renders, so
 # an agent reads the number the person sees.
 class Operations::Assessments::Get < Operations::Base
-  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, " \
-              "and their score on the 0-200 scale (100 = meeting their level, 200 = promotion ready) with a per-category breakdown."
+  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number."
   category :read
   approval :none
 

@@ -9,12 +9,21 @@
 # anything itself.
 #
 # Percentages are whole numbers, because that is the scale's own unit:
-# 100 is meeting the assessed level's expectations, 200 is demonstrating
-# the next level's in full.
+# 100 is meeting the assessed level's expectations, and a further 100 per
+# band the over-performance cap allows above it.
+#
+# **The screen's honesty gates travel with the number.** Every altitude
+# reports `scored:`, and when it is false the numbers are nil with an
+# `unscored_reason` — the payload equivalent of the hero's "Rate yourself
+# to see your score", the category header's "score unlocks at 2" and a
+# card's "Not rated". Without them an agent would read 12% off an
+# assessment the person has not started and report it as a verdict.
 class Assessments::ScoreSummary
   # The coverage count the category header and the chip bar use — the ONE
   # definition, so an agent's "4 of 9 rated" matches the screen's.
   include Views::Assessments::Concerns::RatedCount
+
+  COVERAGE_UNLOCK_THRESHOLD = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
 
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager or :alignment — the viewer's
@@ -27,13 +36,19 @@ class Assessments::ScoreSummary
   # @return [Hash] `{ scale:, score:, state:, components:, thresholds:,
   #   promotion_ready:, blocked:, categories: }`
   def overall
+    return unscorable_overall unless scorable_assignment?
+
+    scored = overall_scored?
     {
       scale: scale,
-      score: percent(scoring[:components][:score]),
-      state: scoring[:performance_state].to_s,
-      components: components_payload(scoring[:components]),
+      scored: scored,
+      unscored_reason: scored ? nil : "coverage_below_threshold",
+      score: scored ? percent(scoring[:components][:score]) : nil,
+      state: scored ? scoring[:performance_state].to_s : nil,
+      components: scored ? components_payload(scoring[:components]) : nil,
+      coverage: overall_coverage,
       thresholds: thresholds_payload,
-      promotion_ready: scoring.dig(:promotion_readiness, :eligible) || false,
+      promotion_ready: scored && (scoring.dig(:promotion_readiness, :eligible) || false),
       blocked: blocked_payload,
       categories: categories_payload
     }
@@ -44,18 +59,25 @@ class Assessments::ScoreSummary
   # @param stable_id [String]
   # @return [Hash, nil] nil when the capability isn't bound to the role
   def capability(stable_id)
+    return nil unless scorable_assignment?
+
     components = scoring.dig(:capability_scores, stable_id)
     return nil unless components
 
+    # Two separate silences, and the card distinguishes them: no
+    # expectation at the assessed level ("No expectation at E3") is not
+    # the same as an expectation nobody has rated yet ("Not rated").
+    # Either way there is no verdict to report.
+    reason = capability_unscored_reason(stable_id, components)
     {
       scale: scale,
-      score: components[:scorable] ? percent(components[:score]) : nil,
-      # No expectation at the assessed level means no verdict either — the
-      # card says "No expectation at E3" rather than calling someone
-      # underperforming at something nobody asked of them.
-      state: components[:scorable] ? components[:state].to_s : nil,
-      components: components_payload(components),
+      scored: reason.nil?,
+      unscored_reason: reason,
+      score: reason ? nil : percent(components[:score]),
+      state: reason ? nil : components[:state].to_s,
+      components: reason ? nil : components_payload(components),
       has_expectation_at_assessed_level: components[:scorable],
+      rated_at_assessed_level: capability_rated?(stable_id),
       blocked: scoring[:capability_statuses]&.dig(stable_id) == :blocked,
       block_reason: scoring.dig(:block_reasons, stable_id)
     }
@@ -63,11 +85,80 @@ class Assessments::ScoreSummary
 
   private
 
+  # An assignment's role and level are optional associations — a role
+  # archived in a draft leaves the assignment pointing at nothing. The
+  # assessment page's own lookups are strict, so there is nothing to fall
+  # back to; the payload says so instead of raising through the read tool.
+  def scorable_assignment?
+    role.present? && level.present?
+  end
+
+  def role
+    @role ||= FrameworkState::Role.find_by(role_id: @assignment.role_id)
+  end
+
+  def level
+    @level ||= FrameworkState::Level.find_by(level_id: @assignment.level_id)
+  end
+
+  def unscorable_overall
+    {
+      scale: nil, scored: false, unscored_reason: "assignment_structure_unavailable",
+      score: nil, state: nil, components: nil, coverage: nil,
+      thresholds: thresholds_payload, promotion_ready: false, blocked: [], categories: []
+    }
+  end
+
+  # The hero's rule: below half the assessed-level cells rated there is no
+  # score, with alignment exempt (individual ratings are frozen by then and
+  # coverage is high by construction) and a role with no cells never stuck.
+  def overall_scored?
+    return true if @context == :alignment
+
+    counts = overall_counts
+    return true if counts[:total].zero?
+
+    counts[:rated] >= (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+  end
+
+  def overall_counts
+    @overall_counts ||= matrix_data[:categories]
+      .map { |cat| category_rated_count(cat, @context) }
+      .reduce({ rated: 0, total: 0 }) { |a, c| { rated: a[:rated] + c[:rated], total: a[:total] + c[:total] } }
+  end
+
+  def overall_coverage
+    counts = overall_counts
+    {
+      rated_at_assessed_level: counts[:rated],
+      total_at_assessed_level: counts[:total],
+      unlocks_at: (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+    }
+  end
+
+  def capability_unscored_reason(stable_id, components)
+    return "no_expectation_at_assessed_level" unless components[:scorable]
+    return "not_rated_at_assessed_level" unless capability_rated?(stable_id)
+
+    nil
+  end
+
+  # Whether the viewer's own perspective has rated this capability at the
+  # assessed level — `scorable` only says an expectation exists there.
+  def capability_rated?(stable_id)
+    frequency_key = Views::Assessments::Concerns::RatedCount::CONTEXT_FREQUENCY_KEYS
+      .fetch(@context, :current_frequency)
+    matrix_data[:categories].flat_map { |c| c[:capabilities] }
+      .find { |cap| cap[:capability].stable_id == stable_id }
+      &.dig(:cells, matrix_data[:person_level], frequency_key)
+      .present?
+  end
+
   def matrix_data
     @matrix_data ||= Assessments::MatrixDataBuilder.new(
       framework: @assignment.framework,
-      role: FrameworkState::Role.find_by!(role_id: @assignment.role_id),
-      level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
+      role: role,
+      level: level,
       person_id: @assignment.person_id,
       cycle_id: @assignment.current_open_cycle&.cycle_id,
       categories: eager_loaded_categories,
@@ -145,15 +236,18 @@ class Assessments::ScoreSummary
   end
 
   # The framework's own bands, so a client can name a state without
-  # hard-coding 80/95/150 — a tenant can move any of them.
+  # hard-coding 80/95/150 — a tenant can move any of them. Read straight
+  # off the framework rather than the builder's output, so an assignment
+  # that cannot be scored at all still reports what the bands are.
   def thresholds_payload
+    framework = @assignment.framework
     {
-      underperforming: percent(
-        @assignment.framework.underperforming_threshold&.to_f ||
-          PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD
-      ),
-      meeting: percent(matrix_data[:meeting_expectation_threshold]),
-      mastering: percent(matrix_data[:mastery_threshold])
+      underperforming: percent(framework.underperforming_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD),
+      meeting: percent(framework.meeting_expectation_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD),
+      mastering: percent(framework.mastery_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD)
     }
   end
 
@@ -170,16 +264,29 @@ class Assessments::ScoreSummary
       # capability (it drops the rest), so it always has components.
       components = scoring.fetch(:category_scores).fetch(category.category_id)
       counts = category_rated_count(cat_data, @context)
+      reason = category_unscored_reason(components, counts)
       {
         id: category.category_id,
         name: category.name,
-        score: components[:scorable] ? percent(components[:score]) : nil,
-        state: components[:scorable] ? components[:state].to_s : nil,
-        components: components_payload(components),
+        scored: reason.nil?,
+        unscored_reason: reason,
+        score: reason ? nil : percent(components[:score]),
+        state: reason ? nil : components[:state].to_s,
+        components: reason ? nil : components_payload(components),
         rated_at_assessed_level: counts[:rated],
-        total_at_assessed_level: counts[:total]
+        total_at_assessed_level: counts[:total],
+        unlocks_at: (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
       }
     end
+  end
+
+  # The category header's own gate, in fields.
+  def category_unscored_reason(components, counts)
+    return "no_expectation_at_assessed_level" unless components[:scorable]
+    return nil if counts[:total].zero?
+    return nil if counts[:rated] >= (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+
+    "coverage_below_threshold"
   end
 
   def capability_names

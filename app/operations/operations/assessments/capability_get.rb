@@ -16,9 +16,7 @@
 # a `score:` key — this capability's own number on the level-independent
 # scale (ADR-21), the same one its card shows.
 class Operations::Assessments::CapabilityGet < Operations::Base
-  description "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), " \
-              "and the capability's own score on the 0-200 scale. " \
-              "Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
+  description "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
   category :read
   approval :none
 

@@ -147,6 +147,23 @@ needs and a screen does not:
 - **The thresholds are the framework's, not assumed.** A tenant can move
   any of the three bands, so `thresholds:` ships with the score rather
   than leaving a client to hard-code 80/95/150.
+- **The screen's honesty gates travel too.** Every altitude reports
+  `scored:`, and when it is false the numbers are nil with an
+  `unscored_reason` — `coverage_below_threshold` (the hero's "Rate
+  yourself to see your score" and the category header's "score unlocks at
+  2"), `not_rated_at_assessed_level` (a card's "Not rated"),
+  `no_expectation_at_assessed_level`, or
+  `assignment_structure_unavailable` when the assignment's role or level
+  record is gone. Alignment is exempt from the coverage gate exactly as
+  the hero is. Without this an agent reads a number off an assessment
+  nobody has started and reports it as a verdict — the failure the whole
+  surface exists to avoid.
+
+Note the ceiling is **not** fixed at 200: the over-performance cap decides
+how many bands sit above the assessed level, so a cap of 2 tops out at 300.
+And 200 is not promotion readiness — that is evaluated separately at the
+next level and needs the meeting threshold plus no blocked capability. The
+tool descriptions say "level-independent scale" for both reasons.
 
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
