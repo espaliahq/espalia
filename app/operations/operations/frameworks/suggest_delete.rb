@@ -70,7 +70,7 @@ class Operations::Frameworks::SuggestDelete < Operations::Base
     return if ids.include?(params[:entity_id])
 
     raise ActiveRecord::RecordNotFound,
-          "#{params[:entity_type]} #{params[:entity_id]} not found in this framework"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} #{params[:entity_id]} not found in this framework"
   end
 
   # One pending deletion per author per entity (the aggregate enforces the
@@ -83,7 +83,7 @@ class Operations::Frameworks::SuggestDelete < Operations::Base
                     .exists?
 
     raise Operations::Base::ParameterError,
-          "You have already proposed deleting this #{params[:entity_type]}"
+          "You have already proposed deleting this #{Frameworks::EntityLabels.humanized(params[:entity_type])}"
   end
 
   def author_id

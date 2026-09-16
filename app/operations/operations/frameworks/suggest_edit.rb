@@ -126,7 +126,7 @@ class Operations::Frameworks::SuggestEdit < Operations::Base
     return if EDITABLE_FIELDS.fetch(params[:entity_type]).include?(params[:field])
 
     raise Operations::Base::ParameterError,
-          "#{params[:entity_type]} has no editable #{params[:field]} field"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} has no editable #{params[:field]} field"
   end
 
   # A suggested value can never be blank — the SuggestedEdit read model
@@ -147,7 +147,7 @@ class Operations::Frameworks::SuggestEdit < Operations::Base
     return if graph_entity_ids.include?(params[:entity_id])
 
     raise ActiveRecord::RecordNotFound,
-          "#{params[:entity_type]} #{params[:entity_id]} not found in this framework"
+          "#{Frameworks::EntityLabels.for(params[:entity_type])} #{params[:entity_id]} not found in this framework"
   end
 
   def graph_entity_ids

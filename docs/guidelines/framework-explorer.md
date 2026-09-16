@@ -20,7 +20,13 @@ This document captures the design decisions, interaction patterns, and hard-won 
 > `calibration_sessions_flag_illustration`). Same split as the assessment
 > surface's "Feedback / Evidence" relabel ([assessments.md](assessments.md)):
 > when you add a surface, label it "example", keep the identifier
-> "illustration". Never use the two interchangeably in copy.
+> "illustration". Never use the two interchangeably in copy. The one
+> mapping from an entity type to the word a person reads is
+> `Frameworks::EntityLabels` — used by the suggestion badges AND by the
+> aggregate's and Operations' error messages, which reach flash alerts, so
+> a failed write can never leak the raw `role_illustration` identifier. The
+> deliberate exception is a message naming an *invalid* value a caller
+> supplied ("Unknown entity type: x") — echo the identifier there.
 
 ## Overview
 
@@ -2536,6 +2542,7 @@ line (§9).
 | `app/views/frameworks/show_view.rb` | Three-pane shell, stats bar, layout; hosts the write-status region + the DraftStatus slots (§11b) |
 | `app/controllers/concerns/frameworks/write_response.rb` | The ONE write-response contract — toast, draft-status and row/category/cell stream builders shared by every edit-mode write (§11b) |
 | `app/controllers/concerns/frameworks/explorer_matrix.rb` | The matrix build + per-viewer flags, shared by the read actions AND every write that streams rows back; also the conditional-GET key and the expanded row's single-capability path (#383) |
+| `app/models/frameworks/entity_labels.rb` | The ONE entity-type → user-facing word map (`role_illustration` → "Example") — suggestion badges plus every aggregate / Operation error message that reaches a flash |
 | `app/models/frameworks/collaborator_roles.rb` | One viewer's collaborator roles on one framework, loaded once and answered in memory |
 | `config/initializers/release_id.rb` | The running build's identifier, mixed into the conditional-GET keys so a deploy can't be answered with the previous release's HTML |
 | `test/performance/explorer_payload_test.rb` | Byte + structural ceilings on the matrix frame and one expanded row — runs in the default suite |

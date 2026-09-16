@@ -1891,7 +1891,7 @@ class Frameworks::Aggregate
   def raise_unless_deletable!(entity_type)
     return if DELETABLE_ENTITY_TYPES.include?(entity_type)
 
-    raise "Cannot suggest deletion for #{entity_type} — no delete command available"
+    raise "Cannot suggest deletion for #{Frameworks::EntityLabels.humanized(entity_type)} — no delete command available"
   end
 
   # An author may hold at most one pending deletion per entity — a delete is
@@ -1907,7 +1907,7 @@ class Frameworks::Aggregate
         s[:author_id] == author_id
     end
 
-    raise "You have already proposed deleting #{entity_type} #{entity_id}"
+    raise "You have already proposed deleting #{Frameworks::EntityLabels.humanized(entity_type)} #{entity_id}"
   end
 
   # Dispatches the matching add_* command for an approved creation suggestion.
