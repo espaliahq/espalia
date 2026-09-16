@@ -423,6 +423,14 @@ class Assessments::MatrixDataBuilder
       result[:capability_contributions] = bindings.to_h do |b|
         [ b.capability.stable_id, scoring.raw_contribution(b) ]
       end
+      # The same scale at the two lower altitudes — one card, one category —
+      # so every surface reads the same number and vocabulary.
+      result[:capability_scores] = bindings.to_h do |b|
+        [ b.capability.stable_id, scoring.capability_components(b).merge(state: scoring.capability_state(b)) ]
+      end
+      result[:category_scores] = bindings.map { |b| b.capability.category_id }.uniq.to_h do |category_id|
+        [ category_id, scoring.category_components(category_id).merge(state: scoring.category_state(category_id)) ]
+      end
 
       # Next-level contributions power the "Gap to mastering" /
       # "Gap to promotion" panels in the hero — they show which
