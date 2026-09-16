@@ -230,3 +230,23 @@ Shipped in PRs #139, #140, #141, #142.
 - Bulk enrollment moved to a background job — seeding volume made inline enrollment a request-timeout class.
 
 **Amendment (post-ship):** completion signals mean *vetted this cycle*. The per-side Complete chips, "Ready to align" cue, and header "Assessment Complete" pill count only human-owned cells (`Assessments::LevelCoverage` excludes `*_rating_source: "seeded"`; `CurrentAssessment` CODE_VERSION 7 retro-cleared stamps earned by seeds alone). A side whose values are entirely carried reads **"To confirm"** (dashed amber chip). The hero/score still count carried values — data vs work-state, deliberately asymmetric.
+
+## ADR-21: Level-independent scoring scale (100 = the assessed level, 200 = the next level)
+
+**Decision:** The assessment score is a single scale read the same way at every level of every role: **1.0 = meeting the assessed level** (every bound capability consistent there, weighted), **1.5 = halfway to the next level**, **2.0 = demonstrating the next level in full — promotion ready**. Below 1.0 the number is the share of the assessed level demonstrated.
+
+- **Bands, not ladders.** `score = current + next + (prior − 1)`, each part normalised over the capabilities that carry a behavioural expectation at that level (`expectation_cells`). Prior levels pool into one bucket the size of a single band.
+- **A per-binding progression gate.** Credit above the assessed level is discounted per capability by that capability's own current-level frequency — multiplicative for a flexible binding, a step for a Required one (resolved tolerance 0). Making up *across* capabilities stays allowed; the per-capability deficit threshold and the category gates bound it.
+- **The cap is a window of levels** (default 1 → a 2.0 ceiling); gated credit is monotone along the chain, so the window is also the most a capability can earn.
+- **Defaults**: mastery 1.50 (the halfway waypoint, previously 1.15), deficit tolerance 0.75 (previously 1.0 — a value the gate could never exceed), meeting 0.95 and underperforming 0.80 unchanged but now level-independent. Ordering `underperforming < meeting < mastery` is validated by the Operation and the aggregate.
+- **New state** `:top_of_ladder` for a meeting score with no level above.
+
+**Why:** The previous ratio divided by the weight of every level up to the person's, with unrated past levels assumed consistent. That padding made the same number mean different things at different levels: the ceiling collapsed from 200% at L1 to 114% at L7 (mastery at 1.15 was unreachable at L7 and at the top), the 95% meeting bar tolerated a 5% band deficit at L1 but 35% at L7, and the promotion gate needed 95% of the next band at L1 but 65% at L7 (a seeded L7 read "Eligible for promotion" at 111% while demonstrating 65% of L8). The blocking gate never fired at its default, `mastering?` and `level_verdict` could disagree on one page, and the calibration cohort view compared people at different levels on an axis that meant nothing across them.
+
+The gate exists because without one, next-level credit masks current-level gaps within the same capability — the seeded L2 engineer at 68% of L2 read 118% ungated. "Consistent at L+1 but most of the time at L" on one capability is rater noise in a cumulative framework, not strength. The mandatory case is a step because a multiplicative gate lets a Required capability at "most of the time" with "consistently" above net to zero, never block, and defeat the one rule written for it.
+
+**Consequences:**
+- Nothing persists a score, verdict or state; every surface re-renders on read, closed cycles included (the ADR-16 precedent for live threshold changes). Production had no configured ratio thresholds at cut-over (checked read-only, 2026-09-16); the deficit default moved with a migration on the NOT NULL column.
+- Mastery on the new scale means "more than halfway to the next level"; the label is a display concern (a tenant-configurable word is a follow-up, #415).
+- The hero, settings copy and the calibration cohort axis read the new scale (#412); capability and category altitudes (#413) and the in-surface explanation (#414) follow.
+- The state-word thresholds keep their names; tests that pinned the old arithmetic (1.33, 1.083) were rewritten around the scale's invariants (1.0 / 1.5 / 2.0 at every level).

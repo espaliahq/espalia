@@ -1,8 +1,22 @@
 # Scoring Model — PersonDevelopment::Scoring
 
-> Read this when: working on assessment scoring, capability matrix display, performance verdicts, promotion readiness, the heatmap, or the scoring panel UI.
+> Read this when: working on assessment scoring, capability matrix display, performance verdicts, promotion readiness, the calibration cohort view, or the hero summary.
 
-Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read models.
+Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read models. The design record is [ADR-21](adrs.md); the user-facing framing lives in [assessments.md](../guidelines/assessments.md).
+
+---
+
+## The scale
+
+One level-independent scale, read the same way at every level of every role:
+
+| Score | Meaning |
+|---|---|
+| **1.00** | Meeting the assessed level — every bound capability consistent there (weighted) |
+| **1.50** | Halfway to the next level |
+| **2.00** | Demonstrating the next level in full — promotion ready |
+
+Below 1.0 the number is the share of the assessed level demonstrated. The hero renders it as a percentage on a two-segment bar (0–100 the assessed level, 100–200 the next).
 
 ---
 
@@ -10,31 +24,50 @@ Pure Ruby class (no ActiveRecord). Instantiated on demand from projection read m
 
 ```
 FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
-DEFAULT_MASTERY_THRESHOLD = 1.15
+DEFAULT_MASTERY_THRESHOLD             = 1.50   # halfway to the next level
 DEFAULT_MEETING_EXPECTATION_THRESHOLD = 0.95
-DEFAULT_UNDERPERFORMING_THRESHOLD = 0.80
-DEFAULT_OVERPERFORMANCE_CAP = 1
-DEFAULT_DEFICIT_THRESHOLD = 1.0
+DEFAULT_UNDERPERFORMING_THRESHOLD     = 0.80
+DEFAULT_OVERPERFORMANCE_CAP           = 1
+DEFAULT_DEFICIT_THRESHOLD             = 0.75   # a current-level "not yet" blocks
 
-effective_frequency(capability_stable_id, level_ordinal):
-  aligned_frequency  → manager_rated_frequency  → self_rated_frequency
-  → default: 1.0 if level_ordinal < person_level (assume consistent for past levels)
-             0.0 if level_ordinal >= person_level (current level and above must be explicitly assessed)
-  note: person_level is the cycle's ASSESSED level (the enrollment snapshot
-        resolved by Assessments::MatrixDataBuilder), NOT the person's live
-        assignment level — so a promotion never silently re-scores a completed
-        cycle. See ADR-19.
+f(b, o) = effective frequency of capability b at level o
+  aligned_frequency → manager_rated_frequency → self_rated_frequency
+  → default: 1.0 if o < person_level (assume consistent for past levels)
+             0.0 if o >= person_level (the assessed level and above must be rated)
+  person_level is the cycle's ASSESSED level (the enrollment snapshot), not
+  the person's live assignment level — see ADR-19.
 
-contribution_at_level = (effective_frequency − expected_at_level) × weight
-  where expected_at_level = level_ordinal <= person_level ? 1.0 : 0.0
+band(o) = Σ weight over bindings that carry a behavioural expectation at level o
 
-raw_contribution(capability) = Σ contribution_at_level across ALL level ordinals
+prior   = Σ_{o < L} Σ_b weight·f(b,o) / Σ_{o < L} band(o)     (1.0 when no prior levels)
+current = Σ_b weight·f(b,L) / band(L)
+next    = Σ_{k ≤ cap} Σ_b weight·gate(b,k)·f(b,L+k) / band(L+k)
 
-baseline_score = Σ (count_levels_at_or_below_person_level × weight) per binding
-
-performance_ratio = (raw_score + baseline_score) / baseline_score
-  → 1.0 = exactly at expectations; > 1.0 = exceeding; < 1.0 = below
+score   = max(0, current + next + (prior − 1))
 ```
+
+Three things the arithmetic is built around:
+
+- **Bands are normalised over the cells that carry an expectation.** A capability with no expectation at L+1 neither earns nor owes next-level credit. Every engine construction passes the cell set (`expectation_cells:`); the assessment builder derives it from the cells the matrix renders, the reporting and calibration queries from `BehaviouralExpectation`.
+- **Prior levels pool into one bucket.** A deficit rated below the assessed level subtracts from the score, but the *number* of prior levels never enters the denominator. That padding is what made the previous ratio level-dependent (an L7 ceiling of 114%, a promotion gate needing 65% of the next band at L7 versus 95% at L1).
+- **Weight is the unit everywhere.** A 2× capability is 2/band of every level it has an expectation at.
+
+`performance_ratio` is `performance_ratio_at_level(person_level)` — one formula, so the hero, the level chips and promotion readiness cannot disagree. `components` exposes `{ prior:, current:, next:, score: }` for the hero copy ("94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3").
+
+---
+
+## The progression gate
+
+Credit above the assessed level is discounted **per capability** by how consistently that same capability is shown at the assessed level, so a capability cannot make up a gap at its own level with a rating above it:
+
+| Binding | Gate | Effect |
+|---|---|---|
+| flexible (resolved tolerance > 0) | `f(b, L)` — multiplicative | "most of the time" at L with "consistently" at L+1 earns half the next-level credit |
+| mandatory (resolved tolerance 0 — the "Required" badge) | `1 if f(b, L) ≥ 1.0 else 0` — step | nothing above the level counts until the level itself is consistent |
+
+For a cap of 2 or more the factor chains along the levels (credit at L+2 is gated by L and by L+1).
+
+Making up **across** capabilities stays allowed — that is what the weighted average is — bounded by the per-capability deficit threshold (blocking) and the category gates. The mandatory case is a step because with a multiplicative gate a mandatory capability at "most of the time" with "consistently" above nets to zero, is never blocked, and the one rule written for it is defeated.
 
 ---
 
@@ -42,23 +75,25 @@ performance_ratio = (raw_score + baseline_score) / baseline_score
 
 Resolved per capability: `binding.overperformance_cap || category.overperformance_cap || framework.overperformance_cap` (default 1).
 
-Ordinals beyond `reference_level + cap` contribute 0 to the score.
+A window of levels: ordinals beyond `reference_level + cap` contribute 0. Because gated credit is monotone along the chain, the window is also the most a capability can earn — cap 1 → a 2.0 ceiling, cap 2 → 3.0, cap 0 → 1.0. A capability's share of a band is structural (it has an expectation there); a binding capped below the framework's cap holds its share at 0.
 
 ---
 
-## Deficit Threshold
+## Deficit Threshold (blocking)
 
-Resolved per capability: `binding.deficit_threshold || category.deficit_threshold || framework.deficit_threshold` (default 1.0).
+Resolved per capability: `binding.deficit_threshold || category.deficit_threshold || framework.deficit_threshold` (default 0.75).
 
 ```
-contribution = Σ (effective_frequency − expected_at_level) × weight
-               across all ordinals ≤ reference_level + overperformance_cap
-deficit = max(0, −contribution)
+contribution = Σ (f − expected) × weight across capped ordinals,
+               with above-level credit gated as above
+deficit      = max(0, −contribution)
 
 Verdict gate: deficit > deficit_threshold → capability is :blocked
 ```
 
-Over-performance at higher levels can offset gaps at the reference level, subject to `overperformance_cap`. With the default cap of 1, a person rated "consistent" one level above their assigned level contributes positively and reduces the deficit. Setting `overperformance_cap` to 0 disables any above-level offset — only ordinals at or below the reference level count.
+At the default 0.75 a current-level "not yet" (deficit 1.0) blocks; "some" and "most of the time" can be made up by strength elsewhere. At the previous default of 1.0 the gate could never fire — a capability's current-level deficit maxes out at exactly 1.0. Tolerance 0 marks the capability mandatory: any gap blocks, and the step gate applies.
+
+The framework-wide value lives on `framework_states.deficit_threshold` (NOT NULL, database default 0.75 since migration `20260916000001`); a framework that never configured thresholds carries the column default, not an event.
 
 ---
 
@@ -73,159 +108,123 @@ Over-performance at higher levels can offset gaps at the reference level, subjec
 
 ---
 
-## Three Symmetric Verdicts
+## Verdicts
 
-All verdicts combine a score ratio check with a blocking gate. The `level_verdict(reference_level)` method is the single code path used by column headers, promotion readiness, and the sidebar status — ensuring consistency across the UI.
+`level_verdict(reference_level)` is the single code path used by column chips, promotion readiness and the hero:
 
 ```
 level_verdict(reference_level):
-  ratio = performance_ratio_at_level(reference_level)
+  score = performance_ratio_at_level(reference_level)
   has_blocked = any capability :blocked at reference_level
 
-  :mastering  if ratio >= mastery_threshold AND NOT has_blocked
-  :meeting    if ratio >= meeting_expectation_threshold AND NOT has_blocked
+  :mastering  if score >= mastery_threshold AND NOT has_blocked
+  :meeting    if score >= meeting_expectation_threshold AND NOT has_blocked
   :below      otherwise
 
 meeting_expectations? = performance_ratio >= meeting_expectation_threshold AND NOT has_blocked
-  → Uses performance_ratio (effective_frequency defaults unrated below person_level to 1.0)
-  → NOT the same as level_verdict — level_verdict uses performance_ratio_at_level which
-    treats unrated at/above person_level as 0.0 via explicit_frequency
-  → meeting_expectation_threshold defaults to 0.95 (95% of expectations)
-  → Frameworks can override via meeting_expectation_threshold on framework_states
-
-mastering? = performance_ratio >= mastery_threshold AND NOT has_blocked
-  → Same scoring path as meeting_expectations?, different threshold
-  → Defaults to 1.15 (15% above expectations). Always returns boolean.
-  → Frameworks can override via mastery_threshold on framework_states
-
-agreed_level = max(level_ordinal where effective_frequency == "consistent")
-  ← derived, never stored
+mastering?            = performance_ratio >= mastery_threshold AND NOT has_blocked
+agreed_level          = max(level_ordinal where effective_frequency == "consistent") — derived, never stored
 ```
 
 ---
 
 ## Performance State Machine
 
-`Scoring#performance_state` returns a single symbol that drives the hero summary's narrative panel. The vocabulary is chosen so the UI always points at the **next milestone** — never one already cleared.
+`Scoring#performance_state` returns a single symbol that drives the hero. The vocabulary is chosen so the hero always points at the **next milestone** — never one already cleared.
 
 ```ruby
-:underperforming  performance_ratio < underperforming_threshold (default 0.80)
-                  → next milestone is the current-level meeting bar
-:progressing      underperforming_threshold ≤ ratio < meeting_threshold
+:underperforming  score < underperforming_threshold (default 0.80)
+                  → the milestone is the current level's bar
+:progressing      underperforming_threshold ≤ score < meeting_threshold
                   OR any capability blocked
-                  → next milestone is still the current-level meeting bar;
-                    a blocked capability also lands here regardless of ratio
-:eligible         has_next_level AND promotion_readiness[:eligible]
+                  → still the current level's bar
+:top_of_ladder    meeting, and the role has no level above this one
+                  → there is no next band to progress into
+:eligible         meets the next level's expectations (promotion ready)
                   → past the last gate, celebrate
-:mastering        ratio ≥ mastery_threshold AND NOT eligible
-                  → next milestone is promotion to E(n+1)
-:performing       fallback (meeting_threshold ≤ ratio < mastery_threshold)
-                  → next milestone is mastering the current level
+:mastering        score ≥ mastery_threshold (1.50) AND not eligible
+                  → more than halfway; the milestone is promotion
+:performing       fallback (meeting ≤ score < mastery)
+                  → the milestone is progress toward the next level
 ```
 
-Precedence: **underperforming → progressing → eligible → mastering → performing**. Eligible-precedence-over-mastering means promotion-readiness is the louder signal once both fire. Blocked-precedence-over-performing means a single blocker downgrades an otherwise-passing person to `:progressing` — same rule as `meeting_expectations?`.
-
-The state machine intentionally has no separate "progressing toward next level" state. At 110% performance ratio, a previous design fired `:progressing_to_next` because next-level ratio was above the underperforming floor — but that's misleading UX. The person hasn't mastered current yet; pointing at promotion skips a step. The simpler model: `:performing` owns 0.95–1.15, framed as "Gap to mastering". See [assessments.md](../guidelines/assessments.md#middle-band--state-driven) for the hero panel that consumes this.
+Precedence: **underperforming → progressing → top_of_ladder → eligible → mastering → performing**. Blocked-precedence means a single blocker downgrades an otherwise-passing person to `:progressing`.
 
 ### `has_next_level?` and `next_level_contribution(binding)`
 
-Two public helpers on Scoring exist for the hero's gap-to panels:
-
 ```ruby
-has_next_level?              → person_level < all_level_ordinals.last
+has_next_level?              → any level ordinal above person_level
 next_level_contribution(b)   → raw_contribution_at_level(b, person_level + 1)
 ```
 
-The matrix data builder uses these to expose `capability_contributions_at_next_level` on each scoring perspective when there IS a next level. The hero's `:performing` panel ("Gap to mastering") and `:mastering` panel ("Gap to promotion") both consume this dict — they sort ascending and surface the lowest-contributing capabilities as the actual gap.
-
-`:performing` switched to this data source because the previous current-level-contribution version showed `+0.0` for capabilities meeting expectations exactly — those aren't gaps, they're meeting. The real gap to mastering lives at L+1: mastery requires overperformance, which means consistent at L+1.
+The builder exposes `capability_contributions_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level.
 
 ---
 
 ## Category Pass/Fail
 
 ```
-category_pool = Σ raw_contribution per binding in category
-category_threshold = category.deficit_threshold || framework.deficit_threshold (default 1.0)
+category_pool = Σ raw_contribution per binding in category (weight units, gated)
+category_threshold = category.deficit_threshold || framework.deficit_threshold
 has_blocked = any capability in category is :blocked at person_level
 pass if category_pool >= -category_threshold AND NOT has_blocked
-
-Contributions are NOT individually capped — a single underperforming capability
-can drag the pool negative, but strong peers can offset it. However, a blocked
-capability always fails the category regardless of pool balance.
 ```
 
 ---
 
 ## Promotion Readiness
 
-Evaluated at NEXT level using `level_verdict(next_level)` — same code path as column headers and sidebar verdicts. Contributions are recomputed as if `person_level` were `next_level`. This means the next level's ordinal is expected (1.0), not bonus (0.0). You must demonstrate capability at the next level to be promotion-ready.
+Evaluated at the NEXT level with the same score formula — `level_verdict(next_level)`. Eligible when both:
 
-Eligible when `level_verdict(next_level) != :below`, which requires both:
 1. Score: `performance_ratio_at_level(next_level) >= meeting_expectation_threshold`
-2. No `:blocked` capabilities at next level (deficit > deficit_threshold blocks)
+2. No `:blocked` capabilities at the next level
 
-Frameworks can override via `meeting_expectation_threshold` on framework_states.
+With the default cap of 1 that is "score ≥ 1.95 and nothing blocked at L+1" — the same bar at every level.
 
 ---
 
 ## Configuration UI
 
-Framework-level scoring thresholds are configurable via the settings page at `GET /frameworks/:id/settings` (admin-only). Each setting can be customised or reverted to the system default. Changes flow through the event-sourced pipeline:
+Framework-level scoring thresholds are configurable at `GET /frameworks/:id/settings` (admin-only) and over MCP (`frameworks_configure_scoring_thresholds`, `:in_app`). Each setting can be customised or reverted to the system default. Changes flow through the event-sourced pipeline:
 
-`Frameworks::SettingsController#update` → `CommandHandler#configure_scoring_thresholds` → `ScoringThresholdsConfigured` event → `PublishedState` projection → `framework_states` table.
+`Frameworks::SettingsController#update` → `Operations::Frameworks::ConfigureScoringThresholds` → `CommandHandler#configure_scoring_thresholds` → `ScoringThresholdsConfigured` event → `PublishedState` projection → `framework_states` table.
 
 Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_threshold`, `underperforming_threshold`) mean "use system default". NOT NULL columns (`overperformance_cap`, `deficit_threshold`) are reset to their constant defaults when reverted.
 
-The `underperforming_threshold` is a 2026-05 addition powering the `:underperforming` / `:progressing` boundary in the performance state machine. Past `ScoringThresholdsConfigured` events don't carry the field, so the projection's writes are identical to before — the new column stays NULL on legacy frameworks and `Scoring` falls back to `DEFAULT_UNDERPERFORMING_THRESHOLD` (0.80). No projection rebuild needed.
+**Ordering is validated.** The state machine walks underperforming → meeting → mastery in a fixed order, so the Operation refuses `underperforming < meeting < mastery` violations as a `ParameterError` (resolving omitted values to their defaults first), and the aggregate refuses inverted supplied values.
 
 ---
 
 ## UI Implications
 
-### Framework explorer — capability matrix badges
+### Hero summary
 
-These apply to the framework explorer's read-only matrix view. The assessment view uses capability cards with a level strip; see [assessments.md](../guidelines/assessments.md#capability-cards) for the card / chip equivalents.
+The number, a two-segment bar (0–100 the assessed level, 100–200 the next, labelled with the level codes; a single segment at the top of the ladder), a state-driven verdict, and a gloss naming the components. See [assessments.md](../guidelines/assessments.md#hero-summary--three-bands). Colour tiers read the framework's configured thresholds — never a hard-coded number.
+
+### Framework explorer — capability matrix badges
 
 | Signal | When | Display |
 |--------|------|---------|
 | Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
 | Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
-| Mandatory indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
+| Required indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
 | Category threshold | `deficit_threshold == 0` on category | Lock icon on category section header |
 | Category threshold | `deficit_threshold > 0` on category | `"± N pts"` label on section header |
-| Category threshold | `nil` on category | No indicator (inherits framework default) |
 | Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
 
 ### Rating input — the inline FrequencyPill
 
-The assessment view rates through the inline `FrequencyPill`: a popover with the four options `Not yet` / `Some of the time` / `Most of the time` / `Consistently` plus an explicit "Clear rating" item (re-picking the shown value on a carried-forward rating *confirms* it; see [assessments.md — Carried-rating affordance](../guidelines/assessments.md#lifecycle)). When `frozen` (cycle in `aligning` / `aligned`) or `alignment_locked` (cycle `aligned`) the pill renders as a static coloured span — same colour and phrase, no popover.
+The assessment view rates through the inline `FrequencyPill`: a popover with the four options `Not yet` / `Some of the time` / `Most of the time` / `Consistently` plus an explicit "Clear rating" item. See [assessments.md](../guidelines/assessments.md).
 
-### LevelChip heatmap
+### Calibration cohort view
 
-`LevelChip` background tints are keyed by frequency × level position. See [assessments.md](../guidelines/assessments.md#level-chip-coloring) for the full table — same color rules the matrix cells used in the previous design.
-
-### Hero summary — Five-state performance panel
-
-The legacy three-tier sidebar is replaced by `HeroSummary` in the unified sticky header. Its middle band is a single state-driven panel keyed off `performance_state`. Each state picks the tone, headline, and which 3 capabilities to surface as evidence — see [assessments.md](../guidelines/assessments.md#middle-band--state-driven) for the full UI table.
-
-| State | Tone | Headline | Capability list framing |
-|---|---|---|---|
-| `:underperforming` | red | "Underperforming at E(n)" | 3 lowest current-level contributions |
-| `:progressing` | amber | "Progressing toward E(n)" | 3 lowest current-level contributions |
-| `:performing` | blue | "Performing at E(n)" | 3 lowest **next-level** contributions (gap to mastering) |
-| `:mastering` | purple | "Mastering E(n)" | blocked-at-next-level OR 3 lowest next-level contributions (gap to promotion) |
-| `:eligible` | green | "Eligible for promotion to E(n+1)" | 3 highest current-level contributions |
-
-Capability cards render the signed contribution delta (`+0.5` / `-0.5` / `+0.0`) directly — see the assessment guideline for color tiers.
+Plots each person's `% of expected` (manager ratings only) on a 0–200 axis with reference lines at 100 ("meets expectations") and 200 ("next level"). The glossary entry defines both marks.
 
 ---
 
 ## Multi-Perspective Scoring
 
 ### Perspective Parameter
-
-The scoring engine accepts a `perspective:` parameter that controls which frequency field is used:
 
 | Perspective | Frequency used | Purpose |
 |-------------|---------------|---------|
@@ -234,13 +233,11 @@ The scoring engine accepts a `perspective:` parameter that controls which freque
 | `:manager_only` | `manager_rated_frequency` only | What the manager's ratings alone produce |
 | `:aligned_only` | `aligned_frequency` only | What the agreed ratings alone produce |
 
-All other scoring logic (contribution, deficit, blocking, verdicts) is identical across perspectives — only the frequency source changes. This means perspective-specific scores are directly comparable.
+All other scoring logic (components, gate, deficit, blocking, verdicts) is identical across perspectives — only the frequency source changes, so perspective-specific scores are directly comparable.
 
-`MatrixDataBuilder` computes four scoring hashes in parallel: `scoring` (effective), `self_scoring`, `manager_scoring`, and `aligned_scoring`. Perspective-specific hashes are nil when no ratings exist for that perspective (e.g. `manager_scoring` is nil until the manager rates at least one cell).
+`MatrixDataBuilder` computes four scoring hashes in parallel: `scoring` (effective), `self_scoring`, `manager_scoring`, and `aligned_scoring`. Perspective-specific hashes are nil when no ratings exist for that perspective.
 
 ### Assessment Context and Primary/Secondary Display
-
-The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that determine which perspective is primary.
 
 | Context | Primary scoring | Subject pronoun in hero copy |
 |---|---|---|
@@ -248,17 +245,4 @@ The UI has three assessment contexts (`:self`, `:manager`, `:alignment`) that de
 | `:manager` | `manager_scoring` | "Alex is …" (first name of assessee) |
 | `:alignment` | `aligned_scoring` | "Alex is …" |
 
-`HeroSummary` uses the primary scoring's `performance_state`, `performance_ratio`, `promotion_readiness`, and `capability_contributions` to render the verdict + middle band + bottom-line. Secondary perspectives surface as small divergence dots on `LevelChip`s — see [assessments.md — Level chip coloring](../guidelines/assessments.md#level-chip-coloring). The full per-perspective values live inside `CapabilityCardExpansion` as `SecondaryRatingLine`s, where the user has space for the comparison.
-
 In `:self` context the data layer scrubs manager + aligned fields entirely before any view sees them; see [assessments.md — Self-assessment privacy](../guidelines/assessments.md#self-assessment-privacy).
-
-### Divergence — chip dots + expansion bars
-
-Divergence between perspectives appears at two levels:
-
-| Surface | Indicator | Detail shown |
-|---|---|---|
-| `LevelChip` (in the level strip) | 2px amber dot when primary ≠ any secondary | None — dot is the only signal at strip level |
-| `CapabilityCardExpansion` | One `SecondaryRatingLine` per *divergent* secondary perspective | Coloured dot + "`Self` / `Mgr` / `Agreed` rating: «phrase»" |
-
-**Design rationale:** Divergence is shown by an explicit secondary value (not just an "X ≠ Y" indicator) because disagreements are conversation opportunities. In the alignment context, both original positions (self + manager) are shown alongside the aligned value so the starting points stay visible.

@@ -102,7 +102,7 @@ end
 
 **Two-layer expectations:** `BehaviouralExpectation` (one per Capability × Level) is the canonical definition people are rated against. `RoleIllustration` (multiple per Capability × Role × Level) provides clarifying examples — NOT separately rated.
 
-**Capability scoping via bindings:** `CapabilityRoleBinding` ties a capability to a role with `weight` and `requirement_type` (`must_have` | `flexible`). No category-level scope — bindings are the source of truth.
+**Capability scoping via bindings:** `CapabilityRoleBinding` ties a capability to a role with `weight` and an optional `individual_tolerance` (projected as `deficit_threshold`; `0` marks the capability **Required** — any gap blocks and nothing above the level counts until it is consistent). No category-level scope — bindings are the source of truth.
 
 **stable_id:** UUID linking the "same" concept across framework versions. Enables trend analysis and evidence continuity across framework evolution.
 

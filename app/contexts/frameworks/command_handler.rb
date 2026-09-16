@@ -235,7 +235,8 @@ class Frameworks::CommandHandler
   # @param capability_id [String] UUID of the capability
   # @param role_id [String] UUID of the role
   # @param weight [BigDecimal] relative weight
-  # @param requirement_type [String] "must_have" or "flexible"
+  # @param individual_tolerance [BigDecimal, nil] per-binding deficit tolerance (0 = Required;
+  #   nil = category / framework default)
   def create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: 1.0, individual_tolerance: nil)
     @repository.with_framework(framework_id) do |framework|
       framework.create_capability_role_binding(framework_id, binding_id, capability_id, role_id, weight: weight, individual_tolerance: individual_tolerance)

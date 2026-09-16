@@ -425,7 +425,8 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
 ```
 
 **Score by cohort** — the third tab: every calibrated person as an
-initialed dot on a 0–125% axis, grouped by assessed level (the enrollment
+initialed dot on a 0–200% axis (100 = meeting the level, 200 = the next level
+in full — ADR-21), grouped by assessed level (the enrollment
 snapshot) and coloured by WHO rated them, so "Raj's people cluster low"
 is pre-attentive. Design rules, all deliberate:
 

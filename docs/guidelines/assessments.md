@@ -69,10 +69,10 @@ The hero is a single card with three logical bands. The header and bottom line a
 ```
 ┌─ #scoring-panel ───────────────────────────────────────────────┐
 │  ── Hero header (always visible) ─────────────────────────────│
-│  Verdict headline           91%       ← big number on the     │
-│  Gloss · L2 expectations    of expected                       │
-│  [Promo pill] [Continue →]  ▓▓▓░░░    ← bar + bottom line     │
-│                                          stack in left col    │
+│  Verdict headline           132%      ← big number on the     │
+│  Gloss · parts of the score ▓▓▓▓|▓░░  ← 0–200 bar, ticks at   │
+│  [Promo pill] [Continue →]  100·E3 200·E4  the level codes    │
+│                                          (left col stacks)    │
 │  ── Middle band (collapses on scroll) ────────────────────────│
 │  [State label · Gap-to label]                                 │
 │   capability-1                              +0.5              │
@@ -100,7 +100,9 @@ Before enough current-level capabilities are rated, the hero does **not** show a
 
 ### Header band
 
-The left column carries the verdict headline, a one-line gloss, and the "bottom line" (promotion pill + Continue CTA). The right column carries the big percentage + "of expected" caption + a thin progress bar. Both columns sit side-by-side so the card is just tall enough to fit whichever side is taller — the previous "stack vertically" layout wasted ~40px below the big number.
+The left column carries the verdict headline, a one-line gloss, and the "bottom line" (promotion pill + Continue CTA). The right column carries the big percentage and the **score bar** — the scale made visible (ADR-21): a two-segment 0–200 track whose left half is the assessed level and right half the next one, tick-labelled with the level codes ("100% · E3", "200% · E4"); at the top of the ladder it is a single 0–100 segment. Both columns sit side-by-side so the card is just tall enough to fit whichever side is taller.
+
+The **verdict headline** follows `performance_state` ("You're meeting E3 expectations." / "well on the way to E4." / "held back at E3 by 1 blocked capability." / "meeting E8 expectations — the top of the ladder."), and the **gloss** names the score's parts from `scoring[:components]` — "94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3" — so the headline number never has to be reverse-engineered. Colour tiers read the framework's configured thresholds (`underperforming_threshold` is threaded in alongside the other two); nothing hard-codes 0.8.
 
 Under the big percentage, a tiny secondary line (`#hero-secondary-percents`) shows the other perspectives' percentages (`Self: 118% · Mgr: 101%`). In alignment — where both Self and Mgr appear — they are ordered **viewer-first** (the viewer's own perspective leads): `Mgr: … · Self: …` for the manager-side viewer, `Self: … · Mgr: …` for the assessee. This is the **same viewer-aware ordering as the split chip** (see *Misalignment → diagonal split*) so the two surfaces tell one story; it's driven by the same `viewer_is_manager:` flag threaded into `HeroSummary`. (In the manager view the only secondary is "Self", so there's nothing to reorder.)
 
@@ -116,11 +118,12 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 |---|---|---|---|---|
 | `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | red |
 | `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | amber |
-| `:performing` | "Performing at E(n)" | "Gap to mastering" | 3 lowest **next-level** contributions | blue |
-| `:mastering` | "Mastering E(n)" | "Gap to promotion to E(n+1)" | blocked-at-next-level or 3 lowest next-level contributions | purple |
+| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest **next-level** contributions | blue |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked-at-next-level or 3 lowest next-level contributions | purple |
 | `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest current-level contributions | green |
+| `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest current-level contributions | blue |
 
-**Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're trying to *master* it. A `:mastering` person isn't trying to master (they already do); they're trying to be eligible for promotion. The Gap-to label reflects this — and crucially, `:performing` uses **next-level** contributions, not current-level, because mastery is earned by overperformance at the level above.
+**Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're on the way to the next one, and the scale says how far. A `:mastering` person is past the halfway waypoint; the question is what is still in the way of promotion. Both use **next-level** contributions, because progress past 100% is earned at the level above. At the top of the ladder there is no next band, so the panel shows what carries the score rather than a gap nobody can close.
 
 This was the bug that prompted the design: at 110% ratio, the panel originally showed three capabilities at `+0.0` current contribution (meeting exactly) under a "Gap to mastering" headline. That's not a gap — those capabilities ARE meeting expectations. The real gap is at L+1, where those same capabilities show `-1.0` (not yet rated consistent at the next level).
 
@@ -1039,7 +1042,7 @@ The `:self` / `:manager` / `:alignment` context flows from controller detection 
 
 ### 4. The middle band must point at the *next* milestone, not one already cleared
 
-At 110% performance ratio (in `:performing` range 0.95–1.15), the original state machine fired `:progressing_to_next` because next-level ratio was above the underperforming floor. That's wrong UX — the person hasn't even mastered current yet. The mental model the user wanted was *always-the-next-gate*: focus on mastering current first, then on promotion. The state machine now drops `:progressing_to_next` entirely; `:performing` owns the 0.95–1.15 band and is framed as "Gap to mastering", using next-level contributions so the gap values actually mean something (capabilities at `+0.0` current would show `-1.0` at L+1 — the real signal).
+An early state machine fired a separate `:progressing_to_next` state whenever the next-level ratio cleared the underperforming floor — pointing at promotion before the person had consolidated their own level. The mental model is *always-the-next-gate*: `:performing` owns the band from meeting to the mastery waypoint and is framed as progress toward the next level, using next-level contributions so the gap values actually mean something (capabilities at `+0.0` current would show `-1.0` at L+1 — the real signal). With the level-independent scale (ADR-21) the number itself says how far along that band the person is, so the headline carries it ("38% of the way to E4") instead of a separate state.
 
 ### 5. CSS scroll-driven animation needs `grid-template-rows`, not `max-height`
 
@@ -1116,15 +1119,16 @@ The selected level a card's expansion shows was originally carried by the **same
 Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md](../architecture/scoring-model.md) for the canonical definition. Summary:
 
 ```
-:underperforming  ratio < underperforming_threshold (default 0.80)
-:progressing      underperforming_threshold ≤ ratio < meeting_threshold
+:underperforming  score < underperforming_threshold (default 0.80)
+:progressing      underperforming_threshold ≤ score < meeting_threshold
                   OR any capability blocked
-:eligible         has_next_level AND promotion_readiness[:eligible]
-:mastering        ratio ≥ mastery_threshold AND not eligible
-:performing       otherwise (meeting_threshold ≤ ratio < mastery_threshold)
+:top_of_ladder    meeting, and no level above this one
+:eligible         promotion_readiness[:eligible]
+:mastering        score ≥ mastery_threshold (default 1.50) AND not eligible
+:performing       otherwise (meeting_threshold ≤ score < mastery_threshold)
 ```
 
-Precedence: underperforming → progressing → eligible → mastering → performing.
+Precedence: underperforming → progressing → top_of_ladder → eligible → mastering → performing.
 
 `MatrixDataBuilder` exposes the state on each perspective's scoring dict via `performance_state: scoring.performance_state`. The hero's `state_panel_config` is a `case` over this single symbol.
 
@@ -1224,7 +1228,8 @@ Precedence: underperforming → progressing → eligible → mastering → perfo
 | `test/system/manager_assessments_system_test.rb` | Manager assessment system tests |
 | `test/system/assessments_activity_feed_focus_system_test.rb` | Activity feed narrows on focus |
 | `test/system/assessments_activity_pane_system_test.rb` | Sidebar open/close + responsive behaviour |
-| `test/contexts/person_development/scoring_test.rb` | `performance_state` transition-point coverage; raw_contribution math |
+| `test/contexts/person_development/scoring_test.rb` | The level-independent scale (ADR-21): components, the per-binding gate, cap window, expectation coverage, `performance_state` transitions |
+| `test/components/assessments/hero_summary_test.rb` | Hero copy per state (top of ladder, mastering, blocked, eligible), the components gloss, the 0–200 / 0–100 bar |
 | `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_contributions_at_next_level` presence |
 | `test/system/assessment_delegation_system_test.rb` | Manager grants via modal → delegate reviews + rates → can't start alignment |
 | `test/policies/assessment_policy_delegation_test.rb` | Delegate rating, recorded-authoritative manager, grant/revoke gates |
