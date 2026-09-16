@@ -171,6 +171,28 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
     end
   end
 
+  context "defined terms" do
+    # The ⓘ glyph wrapped onto its own line under the term in a compact
+    # category header, because a custom trigger class dropped the flex
+    # layout the Kit default carries.
+    should "keep the glyph on the term's own line" do
+      html = indicators(rated: 1, total: 4,
+                        score: { prior: 1.0, current: 0.25, next: 0.0, score: 0.25,
+                                 bands_above: 1, scorable: true, state: :underperforming })
+
+      assert_includes html, "inline-flex items-center min-h-6"
+    end
+
+    should "stay reachable as a real control at the AA tap-target floor" do
+      html = indicators(rated: 1, total: 4,
+                        score: { prior: 1.0, current: 0.25, next: 0.0, score: 0.25,
+                                 bands_above: 1, scorable: true, state: :underperforming })
+
+      assert_includes html, "min-h-6"
+      assert_includes html, 'aria-describedby="assessment-term-rated-count-cat-1"'
+    end
+  end
+
   context "ScoreBar" do
     should "label the ticks only at hero size" do
       base = { score: 1.4, state: :performing, components: { bands_above: 1 }, merged_levels: LEVELS, person_level: 3 }

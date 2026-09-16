@@ -13,6 +13,18 @@
 # can reach. That matters more here than on the calibration screens: the
 # person reading these numbers is the person they are about.
 module Views::Assessments::Concerns::DefinedTerms
+  # Every assessment term overrides the tip's default look, because each
+  # already has a visual form of its own — a big number, a badge, a muted
+  # count. Two things they must not lose with it:
+  #
+  # - `inline-flex items-center`, or the ⓘ glyph wraps onto its own line
+  #   under the term. It did, in a compact category header.
+  # - a 24px tap target (WCAG 2.2 AA, 2.5.8). The Kit default is the
+  #   house 44px, which doubles the height of an 11px indicator row — so
+  #   these controls take the floor rather than the preference, and the
+  #   surrounding row keeps its shape.
+  COMPACT_TRIGGER = "inline-flex items-center min-h-6"
+
   # @return [Views::Assessments::Glossary]
   def glossary
     @glossary ||= Views::Assessments::Glossary.new(
@@ -40,7 +52,7 @@ module Views::Assessments::Concerns::DefinedTerms
       definition: glossary.definition(key),
       id: [ "assessment-term", key.to_s.tr("_", "-"), suffix ].compact.join("-"),
       align: align,
-      trigger_class: trigger_class
+      trigger_class: trigger_class && "#{COMPACT_TRIGGER} #{trigger_class}"
     )
   end
 
