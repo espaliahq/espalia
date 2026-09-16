@@ -90,7 +90,8 @@ class Views::Assessments::ManagerShowView < Views::Base
         subject: "#{@assessee.name}'s score",
         merged_levels: @matrix_data[:merged_levels],
         person_level: @matrix_data[:person_level],
-        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data)
+        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
+        second_person: false
       )
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence

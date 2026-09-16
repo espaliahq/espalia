@@ -50,10 +50,16 @@ class Views::Assessments::Glossary
   # @param thresholds [Hash] `{ underperforming:, meeting:, mastering: }`
   #   as ratios from the framework's configuration
   # @param tenant [Tenant, nil] whose words for the states are used
-  def initialize(current_code:, next_code: nil, thresholds: {}, tenant: ActsAsTenant.current_tenant)
+  # @param second_person [Boolean] whether the reader is the person being
+  #   described. A manager reading "what E3 expects you already show" about
+  #   their report is being told the wrong thing, so the copy follows the
+  #   same subject the hero's headline does.
+  def initialize(current_code:, next_code: nil, thresholds: {}, second_person: true,
+                 tenant: ActsAsTenant.current_tenant)
     @current_code = current_code
     @next_code = next_code
     @thresholds = thresholds
+    @second_person = second_person
     @tenant = tenant
   end
 
@@ -77,9 +83,9 @@ class Views::Assessments::Glossary
     @terms ||= {
       score: {
         label: "Score",
-        definition: "How much of what #{@current_code} expects you already show, across every " \
-                    "capability. #{full_scale_sentence} Feedback and comments are not part of it — " \
-                    "they are how people talk about the ratings, not an input to them."
+        definition: "How much of what #{@current_code} expects #{subject_shows} already, across " \
+                    "every capability. #{full_scale_sentence} Feedback and comments are not part " \
+                    "of it — they are how people talk about the ratings, not an input to them."
       },
       state: {
         label: "State",
@@ -87,9 +93,9 @@ class Views::Assessments::Glossary
       },
       required: {
         label: "Required",
-        definition: "A capability this role cannot be short of. Doing well elsewhere does not make " \
-                    "up for a gap here, and nothing you show above #{@current_code} counts until " \
-                    "you are consistent at #{@current_code} itself."
+        definition: "A capability this role cannot be short of. Doing well elsewhere does not " \
+                    "make up for a gap here, and nothing shown above #{@current_code} counts " \
+                    "until #{@current_code} itself is consistent."
       },
       blocked: {
         label: "Blocked",
@@ -135,8 +141,16 @@ class Views::Assessments::Glossary
   def full_scale_sentence
     return "100% is #{@current_code} in full, and there is no level above it." unless @next_code
 
-    "100% means you show all of #{@current_code}; 200% means you show all of #{@next_code} too."
+    "100% means all of #{@current_code} is shown; 200% means all of #{@next_code} is too."
   end
+
+  # "you show" / "they show" — the one place the copy has to know who is
+  # reading it.
+  def subject_shows = @second_person ? "you show" : "they show"
+
+  # @return [String] "you" or "they", for a sentence that needs the bare
+  #   pronoun rather than the verb with it
+  def subject = @second_person ? "you" : "they"
 
   def state_sentence
     "The word beside the number, from where the score falls: " \

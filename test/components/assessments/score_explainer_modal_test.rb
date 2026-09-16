@@ -11,9 +11,10 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
   ].freeze
 
   def render_modal(components:, state: :mastering, person_level: 3, subject: "Your score",
+                   second_person: true,
                    thresholds: { underperforming: 0.8, meeting: 0.95, mastering: 1.5 })
     Views::Assessments::ScoreExplainerModal.new(
-      components: components, state: state, subject: subject,
+      components: components, state: state, subject: subject, second_person: second_person,
       merged_levels: LEVELS, person_level: person_level, thresholds: thresholds
     ).call
   end
@@ -67,6 +68,26 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
 
       assert_includes html, "What doesn&#39;t count"
       assert_includes html, "never an input to it"
+    end
+  end
+
+  context "who the reader is" do
+    should "speak to the assessee on their own page" do
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.5, score: 1.5 })
+
+      assert_includes html, "what E3 expects you show"
+      assert_includes html, "What you show at E4"
+    end
+
+    should "speak about the report on a manager's page" do
+      # A manager reading "what E3 expects you already show" about their
+      # report is being told the wrong thing.
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.5, score: 1.5 },
+                          subject: "Alex's score", second_person: false)
+
+      assert_includes html, "what E3 expects they show"
+      assert_includes html, "What they show at E4"
+      assert_not_includes html, "expects you show"
     end
   end
 

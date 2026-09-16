@@ -18,7 +18,8 @@ module Views::Assessments::Concerns::DefinedTerms
     @glossary ||= Views::Assessments::Glossary.new(
       current_code: current_code,
       next_code: next_code,
-      thresholds: glossary_thresholds
+      thresholds: glossary_thresholds,
+      second_person: glossary_second_person?
     )
   end
 
@@ -41,6 +42,15 @@ module Views::Assessments::Concerns::DefinedTerms
       align: align,
       trigger_class: trigger_class
     )
+  end
+
+  # Whether the reader is the person being described. Views that render
+  # for a manager set `@context` to something other than `:self`; anything
+  # without a context is the assessee's own page.
+  #
+  # @return [Boolean]
+  def glossary_second_person?
+    !defined?(@context) || @context.nil? || @context == :self
   end
 
   # The framework's own bands. Falls back to the engine's defaults only when

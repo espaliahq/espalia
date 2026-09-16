@@ -28,8 +28,11 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   #   score", "this section")
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
+  # @param second_person [Boolean] whether the reader is the person these
+  #   numbers describe — a manager must not read "what E3 expects you show"
   # @param thresholds [Hash] the framework's own bands
-  def initialize(components:, state:, subject:, merged_levels:, person_level:, thresholds: {})
+  def initialize(components:, state:, subject:, merged_levels:, person_level:, thresholds: {},
+                 second_person: true)
     @components = components
     @state = state
     @subject = subject
@@ -38,6 +41,7 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     @underperforming_threshold = thresholds[:underperforming]
     @meeting_threshold = thresholds[:meeting]
     @mastery_threshold = thresholds[:mastering]
+    @second_person = second_person
   end
 
   def view_template
@@ -55,6 +59,9 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   end
 
   private
+
+  # The concern guesses from `@context`; this view is handed the answer.
+  def glossary_second_person? = @second_person
 
   # The sum, with this person's own numbers in it.
   def arithmetic
@@ -106,9 +113,10 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   def gate_sentence
     return "Anything shown above #{current_code} counts once #{current_code} itself is consistent." unless next_level?
 
-    "What you show at #{next_code} counts in proportion to how consistently you show the same " \
-      "capability at #{current_code} — so #{next_code} adds to the number rather than covering " \
-      "for #{current_code}."
+    who = @second_person ? "you" : "they"
+    "What #{who} show at #{next_code} counts in proportion to how consistently #{who} show the " \
+      "same capability at #{current_code} — so #{next_code} adds to the number rather than " \
+      "covering for #{current_code}."
   end
 
   def not_counted

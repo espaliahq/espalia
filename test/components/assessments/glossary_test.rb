@@ -8,9 +8,11 @@ require "test_helper"
 class Views::Assessments::GlossaryTest < ActiveSupport::TestCase
   setup { @tenant = create(:tenant) }
 
-  def glossary(current: "E3", nxt: "E4", thresholds: { underperforming: 0.8, meeting: 0.95, mastering: 1.5 })
+  def glossary(current: "E3", nxt: "E4", second_person: true,
+               thresholds: { underperforming: 0.8, meeting: 0.95, mastering: 1.5 })
     Views::Assessments::Glossary.new(
-      current_code: current, next_code: nxt, thresholds: thresholds, tenant: @tenant
+      current_code: current, next_code: nxt, thresholds: thresholds,
+      second_person: second_person, tenant: @tenant
     )
   end
 
@@ -44,6 +46,16 @@ class Views::Assessments::GlossaryTest < ActiveSupport::TestCase
 
       assert_includes definition, "no level above"
       assert_not_includes definition, "200%"
+    end
+  end
+
+  context "who is reading" do
+    should "address the assessee on their own page" do
+      assert_includes glossary.definition(:score), "expects you show"
+    end
+
+    should "describe the report on a manager's page" do
+      assert_includes glossary(second_person: false).definition(:score), "expects they show"
     end
   end
 
