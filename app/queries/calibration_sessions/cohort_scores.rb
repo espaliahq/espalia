@@ -165,10 +165,24 @@ class CalibrationSessions::CohortScores
         categories: categories,
         person_level: ordinal,
         all_level_ordinals: all_level_ordinals,
+        expectation_cells: stable_expectation_cells(role_id),
         perspective: :manager_only,
         thresholds: thresholds
       )
     end
+  end
+
+  # The engine keys cells by capability STABLE id; `expectation_cells` is
+  # keyed by capability id for the coverage counts. Translate through the
+  # role's bindings so the score normalises over the same cells the
+  # assessment hero does.
+  def stable_expectation_cells(role_id)
+    @stable_expectation_cells ||= {}
+    @stable_expectation_cells[role_id] ||= bindings_for(role_id).flat_map do |binding|
+      all_level_ordinals
+        .select { |o| expectation_cells.include?([ binding.capability_id, o ]) }
+        .map { |o| [ binding.capability.stable_id, o ] }
+    end.to_set
   end
 
   # ALL levels, not just at-level: below-level cells feed the ratio's

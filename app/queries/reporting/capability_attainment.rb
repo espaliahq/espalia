@@ -155,6 +155,7 @@ class Reporting::CapabilityAttainment
       categories: @categories,
       person_level: level,
       all_level_ordinals: @ordinals_by_role.fetch(enrollment.role_id, [ level ]),
+      expectation_cells: expectation_cells,
       thresholds: framework_thresholds,
       perspective: @perspective
     )
@@ -301,6 +302,22 @@ class Reporting::CapabilityAttainment
       .where(role_family_id: @roles.values.map(&:role_family_id).compact.uniq)
       .pluck(:role_family_id, :name).to_h
     @family_labels[family_key] || "Ungrouped roles"
+  end
+
+  # The (capability_stable_id, level_ordinal) cells with an expectation, so
+  # each engine normalises its bands over the same cells the assessment
+  # hero does. Constant across the whole call.
+  #
+  # @return [Set<Array(String, Integer)>]
+  def expectation_cells
+    @expectation_cells ||= begin
+      bindings = @bindings_by_role.values.flatten
+      stable_by_id = bindings.to_h { |b| [ b.capability_id, b.capability.stable_id ] }
+      FrameworkState::BehaviouralExpectation
+        .where(capability_id: stable_by_id.keys)
+        .pluck(:capability_id, :level_ordinal)
+        .to_set { |capability_id, ordinal| [ stable_by_id[capability_id], ordinal ] }
+    end
   end
 
   # Constant across the whole call — memoized so per-participant scoring

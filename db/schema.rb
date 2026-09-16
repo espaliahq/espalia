@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_14_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -440,7 +440,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_14_000001) do
   create_table "framework_states", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "current_published_version", default: 0, null: false
-    t.decimal "deficit_threshold", precision: 5, scale: 2, default: "1.0", null: false
+    t.decimal "deficit_threshold", precision: 5, scale: 2, default: "0.75", null: false
     t.boolean "draft_in_progress", default: false, null: false
     t.integer "draft_version"
     t.uuid "framework_id", null: false

@@ -96,6 +96,8 @@ class Assessments::MatrixDataBuilder
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
+      underperforming_threshold: @framework.underperforming_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD,
       inferred_level: scoring_engine.inferred_level,
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories),
@@ -398,9 +400,26 @@ class Assessments::MatrixDataBuilder
       categories: category_records,
       person_level: @level.ordinal,
       all_level_ordinals: all_ordinals,
+      expectation_cells: expectation_cells(categories_data),
       perspective: perspective,
       thresholds: @framework.scoring_thresholds
     )
+  end
+
+  # The (capability_stable_id, level_ordinal) cells that carry a behavioural
+  # expectation — exactly the cells the matrix renders. The engine normalises
+  # each level's band over these, so a capability with no next-level
+  # expectation neither earns nor owes next-level credit.
+  #
+  # @param categories_data [Array<Hash>]
+  # @return [Set<Array(String, Integer)>]
+  def expectation_cells(categories_data)
+    categories_data.flat_map do |category|
+      category[:capabilities].flat_map do |cap|
+        stable_id = cap[:capability].stable_id
+        cap[:cells].keys.map { |ordinal| [ stable_id, ordinal ] }
+      end
+    end.to_set
   end
 
   # Extracts scoring results from the engine.
@@ -411,9 +430,11 @@ class Assessments::MatrixDataBuilder
   def extract_scoring(scoring, bindings: nil)
     result = {
       performance_ratio: scoring.performance_ratio,
+      components: scoring.components,
       meeting_expectations: scoring.meeting_expectations?,
       mastering: scoring.mastering?,
       performance_state: scoring.performance_state,
+      top_of_ladder: !scoring.has_next_level?,
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,
