@@ -64,13 +64,14 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   # Two capabilities in one category, with per-binding tolerances.
   def build_pair(person_level:, all_levels:, ratings:, tolerance_a: nil, tolerance_b: nil,
-                 weight_a: 1.0, weight_b: 1.0, category_deficit_threshold: nil, thresholds: {})
+                 weight_a: 1.0, weight_b: 1.0, category_deficit_threshold: nil, thresholds: {},
+                 cap_a_limit: nil, cap_b_limit: nil)
     cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
     cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
     binding_a = BindingStub.new(capability_id: "bid-a", weight: weight_a,
-      deficit_threshold: tolerance_a, overperformance_cap: nil, capability: cap_a)
+      deficit_threshold: tolerance_a, overperformance_cap: cap_a_limit, capability: cap_a)
     binding_b = BindingStub.new(capability_id: "bid-b", weight: weight_b,
-      deficit_threshold: tolerance_b, overperformance_cap: nil, capability: cap_b)
+      deficit_threshold: tolerance_b, overperformance_cap: cap_b_limit, capability: cap_b)
     category = CategoryStub.new(category_id: CAT_1,
       deficit_threshold: category_deficit_threshold, overperformance_cap: nil)
 
@@ -415,6 +416,33 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], expectation_cells: [ [ CAP_A, 4 ] ],
         ratings: [ rated(4, "consistent") ])
       assert_not scorer.capability_components(scorer.instance_variable_get(:@bindings).first)[:scorable]
+    end
+  end
+
+  context "the bar's band count" do
+    # The bar's scale is drawn from bands_above, so it must be the cap of
+    # the bindings being scored — not the assessment's widest. A capability
+    # capped at one level otherwise gets a 0–300 track it can never fill.
+    should "follow each altitude's own cap, not the assessment's widest" do
+      scorer = build_pair(
+        person_level: 1, all_levels: [ 1, 2, 3 ], cap_a_limit: 1, cap_b_limit: 2,
+        ratings: [ rated(1, "consistent"), rated(2, "consistent"), rated(3, "consistent"),
+                   rated(1, "consistent", cap: CAP_B), rated(2, "consistent", cap: CAP_B),
+                   rated(3, "consistent", cap: CAP_B) ]
+      )
+      bindings = scorer.instance_variable_get(:@bindings)
+
+      assert_equal 2, scorer.components[:bands_above], "the assessment can reach both bands"
+      assert_equal 1, scorer.capability_components(bindings.first)[:bands_above],
+        "a capability capped at one level must not advertise a second band"
+      assert_equal 2, scorer.capability_components(bindings.last)[:bands_above]
+    end
+
+    should "never claim more bands than the ladder has" do
+      scorer = build_pair(person_level: 2, all_levels: [ 1, 2 ], cap_a_limit: 2, cap_b_limit: 2,
+                          ratings: [ rated(2, "consistent") ])
+
+      assert_equal 0, scorer.components[:bands_above]
     end
   end
 

@@ -453,7 +453,19 @@ class PersonDevelopment::Scoring
     # assessed level would otherwise read as a negative share.
     score   = current.nil? ? 0.0 : [ current + nxt + (prior - 1.0), 0.0 ].max
     { prior: prior, current: current || 0.0, next: nxt, score: score,
-      bands_above: ordinals_above(reference_level).first(max_cap).size }
+      bands_above: bands_above_for(bindings, reference_level) }
+  end
+
+  # How many bands above the reference level THIS set of bindings can
+  # reach — the widest cap among them, not the assessment's. A bar drawn
+  # from the assessment-wide cap would give a capability capped at one
+  # level a 0–300 scale it can never fill (`next_band_progress` already
+  # refuses a binding credit past its own cap).
+  #
+  # @return [Integer]
+  def bands_above_for(bindings, reference_level)
+    cap = bindings.map { |b| overperformance_cap_for(b) }.max || 0
+    ordinals_above(reference_level).first(cap).size
   end
 
   # Weighted frequency attainment at one level over the bindings that
