@@ -43,6 +43,56 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) { Operations::Frameworks::Get.call(context: @context, params: { framework_id: @framework_id }) }
   end
 
+  context "the scoring roll-up" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cap = FrameworkState::Capability.find_by!(name: "Critical Thinking")
+        create(:framework_capability_role_binding,
+          capability_id: cap.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation,
+          capability_id: cap.capability_id, level_ordinal: 2, description: "Asks clarifying questions")
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, cap.stable_id,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+    end
+
+    should "carry the score with its parts and the scale spelled out" do
+      scoring = call_assessment_op[:scoring]
+
+      assert_equal 100, scoring[:score]
+      assert_equal "top_of_ladder", scoring[:state]
+      assert_equal 100, scoring.dig(:components, :assessed_level)
+      assert_equal 0, scoring.dig(:components, :missing_below_assessed_level)
+      assert_equal "percent_of_assessed_level_expectations", scoring.dig(:scale, :unit)
+      assert_equal "E2", scoring.dig(:scale, :assessed_level)
+    end
+
+    should "carry the framework's own thresholds rather than assumed ones" do
+      thresholds = call_assessment_op.dig(:scoring, :thresholds)
+
+      assert_equal 80, thresholds[:underperforming]
+      assert_equal 95, thresholds[:meeting]
+      assert_equal 150, thresholds[:mastering]
+    end
+
+    should "roll up per category with the coverage counts the screen shows" do
+      categories = call_assessment_op.dig(:scoring, :categories)
+
+      thinking = categories.find { |c| c[:name] == "Thinking" }
+      assert_equal 100, thinking[:score]
+      assert_equal "top_of_ladder", thinking[:state]
+      assert_equal 1, thinking[:rated_at_assessed_level]
+      assert_equal 1, thinking[:total_at_assessed_level]
+    end
+
+    should "name nothing as blocked when nothing is" do
+      assert_empty call_assessment_op.dig(:scoring, :blocked)
+      assert_equal false, call_assessment_op.dig(:scoring, :promotion_ready)
+    end
+  end
+
   context "structure" do
     should "embed the framework payload under :framework" do
       assert_equal "Eng", call_assessment_op.dig(:framework, :name)

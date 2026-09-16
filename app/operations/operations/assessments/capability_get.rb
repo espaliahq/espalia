@@ -12,9 +12,12 @@
 # keys, same nesting — so an LLM that learned the framework capability
 # shape needs zero new schema knowledge to consume it. Each expectation
 # row gains a `ratings:` key with the assessee's self / manager / aligned
-# values for that level (nil when not yet rated).
+# values for that level (nil when not yet rated), and the payload carries
+# a `score:` key — this capability's own number on the level-independent
+# scale (ADR-21), the same one its card shows.
 class Operations::Assessments::CapabilityGet < Operations::Base
-  description "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned). " \
+  description "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), " \
+              "and the capability's own score on the 0-200 scale. " \
               "Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument."
   category :read
   approval :none
@@ -38,11 +41,21 @@ class Operations::Assessments::CapabilityGet < Operations::Base
 
     base.merge(
       cycle_id: cycle&.cycle_id,
+      score: score_summary.capability(capability.stable_id),
       expectations: base[:expectations].map { |e| e.merge(ratings: ratings_index[e[:level_ordinal]]) }
     )
   end
 
   private
+
+  # Same perspective resolution as the web and as `assessments_get`, so
+  # one capability's number can't disagree with the assessment's.
+  def score_summary
+    @score_summary ||= Assessments::ScoreSummary.new(
+      assignment: assignment,
+      context: Assessments::ViewerContext.for(assignment: assignment, authorization: context)
+    )
+  end
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])

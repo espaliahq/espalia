@@ -99,7 +99,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_capability_get",
-        "description" => "Fetch one capability's detail plus the assessee's per-level ratings (self/manager/aligned). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the 0-200 scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -255,7 +255,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure and the assessee's current role/level/cycle status.",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the 0-200 scale (100 = meeting their level, 200 = promotion ready) with a per-category breakdown.",
         "inputSchema" => {
           "type" => "object",
           "properties" => { "assignment_id" => { "type" => "string" } },

@@ -11,11 +11,13 @@
 # The framework payload is a strict subset of this payload's `framework:`
 # subtree — same keys, same nesting — so an LLM that learned the
 # `frameworks_get` schema needs zero new schema knowledge to consume
-# this. Per-category scoring rollup is deliberately deferred to a follow-
-# up slice that also ships `assessment_capability_get`; that slice will
-# wire MatrixDataBuilder / PersonDevelopment::Scoring into the overlay.
+# this. The overlay also carries `scoring:` — the assessment's score on
+# the level-independent scale (ADR-21) plus a per-category roll-up, shaped
+# by {Assessments::ScoreSummary} from the same builder the web renders, so
+# an agent reads the number the person sees.
 class Operations::Assessments::Get < Operations::Base
-  description "Fetch one assessment's framework structure and the assessee's current role/level/cycle status."
+  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, " \
+              "and their score on the 0-200 scale (100 = meeting their level, 200 = promotion ready) with a per-category breakdown."
   category :read
   approval :none
 
@@ -26,13 +28,16 @@ class Operations::Assessments::Get < Operations::Base
   end
 
   # @return [Hash] same payload as {Operations::Frameworks::Get} under
-  #   `:framework`, plus `:assignment` (role + level + person identity)
-  #   and `:current_cycle` (id, name, status, planned_end_at) or nil.
+  #   `:framework`, plus `:assignment` (role + level + person identity),
+  #   `:current_cycle` (id, name, status, planned_end_at) or nil, and
+  #   `:scoring` (scale, score, state, components, thresholds, blocked
+  #   capabilities, per-category roll-up).
   def perform
     {
       framework: Mcp::FrameworkSerializer.framework(assignment.framework),
       assignment: assignment_payload,
-      current_cycle: cycle_payload(assignment.current_open_cycle)
+      current_cycle: cycle_payload(assignment.current_open_cycle),
+      scoring: score_summary.overall
     }
   end
 
@@ -40,6 +45,16 @@ class Operations::Assessments::Get < Operations::Base
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+  end
+
+  # The viewer's own perspective, resolved exactly as the web resolves it
+  # (assessments.md) — the assessee must not read the manager's ratings
+  # through the score until alignment starts.
+  def score_summary
+    @score_summary ||= Assessments::ScoreSummary.new(
+      assignment: assignment,
+      context: Assessments::ViewerContext.for(assignment: assignment, authorization: context)
+    )
   end
 
   def assignment_payload
