@@ -306,24 +306,14 @@ class Views::Assessments::HeroSummary < Views::Base
     current_level_rated.to_f / current_level_total
   end
 
-  # Compact one-row gloss: "94% of E3 demonstrated · 38% of the way to E4. · Self: Below expectations"
-  # On narrow viewports the secondary chunk wraps to a second line.
+  # Compact one-row gloss: "94% of E3 demonstrated · 38% of the way to E4."
+  #
+  # The other perspectives are deliberately NOT spelled out here as state
+  # words. They already read as percentages under the number, beside the
+  # one they differ from, and a second "Self: Below expectations" in the
+  # same card says the same thing twice in more space.
   def gloss_and_secondaries
-    secondaries = diverging_secondary_verdicts
-    p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") do
-      plain verdict_gloss
-      if secondaries.any?
-        span(class: "ml-2 text-xs") do
-          plain " · "
-          plain(secondaries.map { |label, s| "#{label}: #{short_verdict(s)}" }.join(" · "))
-        end
-      end
-    end
-  end
-
-  def diverging_secondary_verdicts
-    primary = short_verdict(primary_scoring)
-    secondary_perspectives.reject { |_, s| short_verdict(s) == primary }
+    p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { verdict_gloss }
   end
 
   # Builds the single state-driven panel for the middle band. Picks the
@@ -601,27 +591,33 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # Tiny percentage line tucked under "of expected" so the primary
   # number stays dominant. Renders nothing in self view.
+  # "Self: 10%" under the number — and the shared amber divergence dot
+  # when that perspective lands in a different state, the same marker the
+  # category header uses. The gap between two numbers is the message; the
+  # dot only says it is worth reading.
   def secondary_percents
     return if secondary_perspectives.empty?
 
     div(id: "hero-secondary-percents",
-        class: "text-[11px] text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
-      plain(secondary_perspectives.map { |label, s| "#{label}: #{format_pct(s)}" }.join(" · "))
+        class: "flex items-center justify-end gap-1 text-[11px] " \
+               "text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
+      secondary_perspectives.each_with_index do |(label, scoring), i|
+        span(class: "text-gray-400 dark:text-gray-500") { "·" } if i.positive?
+        if diverges?(scoring)
+          span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
+               aria: { hidden: "true" }) { }
+        end
+        span { "#{label}: #{format_pct(scoring)}" }
+      end
     end
+  end
+
+  def diverges?(scoring)
+    scoring[:performance_state] != primary_scoring[:performance_state]
   end
 
   def format_pct(scoring)
     "#{((scoring[:performance_ratio] || 0.0) * 100).round(0)}%"
-  end
-
-  def short_verdict(scoring)
-    case scoring[:performance_state]
-    when :eligible then "Promotion ready"
-    when :mastering then "Mastering"
-    when :performing, :top_of_ladder then "Meeting expectations"
-    when :progressing then "Almost there"
-    else "Below expectations"
-    end
   end
 
   def primary_scoring
