@@ -1588,6 +1588,15 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
           assert_text "How it adds up"
           assert_text "What doesn't count"
         end
+
+        # The way out must be on screen. A drawer taller than the viewport
+        # used to centre and push its own title and × off the top edge,
+        # leaving Esc as the only exit and nothing on screen saying so.
+        close = find("##{Views::Assessments::ScoreExplainerModal::ID} [aria-label='Close']")
+        assert_operator close.rect.y, :>=, 0, "the close button is above the top of the viewport"
+        viewport_height = page.evaluate_script("window.innerHeight")
+        assert_operator close.rect.y, :<, viewport_height,
+          "the close button is below the bottom of the viewport"
       end
     end
 
