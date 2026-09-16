@@ -240,7 +240,9 @@ class PersonDevelopment::Scoring
       sid = binding.capability.stable_id
       components = capability_components_at(binding, reference_level)
       blocked = capability_statuses(reference_level: reference_level)[sid] == :blocked
-      [ sid, components.merge(state: state_for(components[:score], blocked: blocked, eligible: false)) ]
+      state = state_for(components[:score], blocked: blocked, eligible: false,
+                        at_top: ordinals_above(reference_level).empty?)
+      [ sid, components.merge(state: state) ]
     end
   end
 
@@ -675,10 +677,15 @@ class PersonDevelopment::Scoring
 
   # The state machine as a pure function of a score, so a category reads
   # its state by the same rules as the assessment.
-  def state_for(score, blocked:, eligible:)
+  # @param at_top [Boolean] whether the level being judged is the last on
+  #   the ladder. Defaults to the person's own level, which is what every
+  #   caller but {#capability_scores_at} is asking about — that one scores
+  #   a level the person is not standing on, and the top of the ladder is
+  #   a property of the level being judged, not of where they stand.
+  def state_for(score, blocked:, eligible:, at_top: !has_next_level?)
     return :underperforming if score < @underperforming_threshold
     return :progressing     if score < @meeting_expectation_threshold || blocked
-    return :top_of_ladder   unless has_next_level?
+    return :top_of_ladder   if at_top
     return :eligible        if eligible
     return :mastering       if score >= @mastery_threshold
 

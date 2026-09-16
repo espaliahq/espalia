@@ -416,9 +416,13 @@ class Views::Assessments::HeroSummary < Views::Base
       # Past the halfway waypoint — the meaningful question is what is
       # still in the way of promotion. Surface the capabilities with the
       # weakest contribution AT the next level (blocked ones first).
+      # Blocked capabilities lead, but they are ranked among themselves
+      # like any other gap row: `blocked_at_next_level` is in whatever
+      # order the engine collected it, so taking the first three could
+      # both omit a worse one and show them out of order.
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      blocked_items = blocked.filter_map { |sid| [ sid, scores_at_next[sid] ] if scores_at_next[sid] }.first(3)
-      items = blocked_items.any? ? blocked_items : weakest(gap_scores)
+      blocked_scores = scores_at_next.slice(*blocked)
+      items = blocked_scores.any? ? weakest(blocked_scores) : weakest(gap_scores)
       { state_label: "Mastering #{current_code} · #{progress_label}",
         list_label: "Gap to #{gap_code}",
         items: items,

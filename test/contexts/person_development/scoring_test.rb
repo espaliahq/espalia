@@ -484,6 +484,18 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         "nothing is expected of it at that level, so it owes nothing there"
     end
 
+    should "read the top of the ladder from the level being judged" do
+      # The reference level here IS the last on the ladder, so a capability
+      # meeting it is at the top — whatever levels sit above the one the
+      # person is standing on.
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+
+      assert_equal :top_of_ladder, scorer.capability_scores_at(4)[CAP_A][:state]
+    end
+
     should "carry the state vocabulary at that level" do
       scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
         rated(3, "consistent"), rated(4, "consistent"),

@@ -33,7 +33,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   # #418: the rows used to print a weight-unit delta — "-1.0" for every
   # capability nobody had rated at the next level, so three rows ranked
   # nothing and the number could not be read against an expectation.
-  def render_gap_list(next_scores:, state: :mastering, here_scores: nil)
+  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil)
     capabilities = CAPS.each_with_index.map do |name, i|
       { capability: CAP.new(stable_id: "cap-#{i}", name: name),
         cells: { 3 => { current_frequency: "consistent" } } }
@@ -45,7 +45,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       performance_state: state,
       capability_scores: scored(here_scores),
       capability_scores_at_next_level: scored(next_scores),
-      promotion_readiness: nil
+      promotion_readiness: blocked ? { blocked_at_next_level: blocked } : nil
     }
     Views::Assessments::HeroSummary.new(
       scoring: scoring, self_scoring: scoring, manager_scoring: scoring,
@@ -176,6 +176,19 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
       assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps"),
         "the capability with no assessed-level expectation must not lead the gap list"
+    end
+
+    should "rank blocked capabilities among themselves, not by collection order" do
+      # `blocked_at_next_level` arrives in whatever order the engine
+      # collected it, so taking the first three could omit a worse one and
+      # show the rest out of order.
+      html = render_gap_list(
+        next_scores: { "cap-0" => 0.4, "cap-1" => 0.1, "cap-2" => 0.7 },
+        blocked: [ "cap-2", "cap-0", "cap-1" ]
+      )
+
+      assert_operator html.index("Quality First"), :<, html.index("Strategic Thinking")
+      assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps")
     end
 
     should "leave out a capability with no expectation at that level" do
