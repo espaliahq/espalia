@@ -18,7 +18,6 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param scoring [Hash] primary scoring from MatrixDataBuilder
   # @param blocked [Boolean]
   # @param block_reason [String, nil]
-  # @param contribution [Float, nil]
   # @param expanded_capability_id [String, nil] pre-expanded capability stable_id
   # @param focused_level_ordinal [Integer, nil]
   # @param selected_levels [Hash{String => Integer}] per-capability selected
@@ -33,7 +32,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param viewer_is_tenant_admin [Boolean]
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:,
                  context: :self, viewer_is_manager: false, category: nil, scoring: {},
-                 blocked: false, block_reason: nil, contribution: nil,
+                 blocked: false, block_reason: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
                  selected_levels: {},
                  category_id: nil, frozen: false, alignment_locked: false,
@@ -53,7 +52,6 @@ class Views::Assessments::CapabilityCard < Views::Base
     @scoring = scoring
     @blocked = blocked
     @block_reason = block_reason
-    @contribution = contribution || capability_data[:contribution]
     @frozen = frozen
     @alignment_locked = alignment_locked
     @viewer_person_id = viewer_person_id
@@ -131,8 +129,7 @@ class Views::Assessments::CapabilityCard < Views::Base
     # that duplicated the +/header affordance inside the expansion
     # panel (per-level evidence list), took a chunky border on mobile,
     # and pushed the contribution badge off into a separate column.
-    # Removed — `contribution_badge` already right-aligns itself via
-    # ml-auto inside capability_name.
+    # Removed — the name row right-aligns the capability's own score.
     #
     # Click on the header sets capability-level focus so the activity
     # sidebar narrows to this capability. The handler lives on the
@@ -162,53 +159,31 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def capability_name
-    div(
-      id: "capability-name-#{@capability.stable_id}",
-      class: "flex items-center gap-2"
-    ) do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white") do
-        @capability.name
-      end
-      blocked_badge if @blocked
-      contribution_badge
-    end
+    render Views::Assessments::CapabilityNameRow.new(
+      capability: @capability,
+      score: @scoring.dig(:capability_scores, @capability.stable_id),
+      rated: rated_at_assessed_level?,
+      blocked: @blocked,
+      block_reason: @block_reason,
+      merged_levels: @merged_levels,
+      person_level: @person_level
+    )
+  end
+
+  # Whether the assessed-level cell carries the viewer's own perspective's
+  # rating — the row shows "Not rated" rather than 0% until it does.
+  def rated_at_assessed_level?
+    cell = @cells[@person_level]
+    return false unless cell
+
+    key = Views::Assessments::Concerns::RatedCount::CONTEXT_FREQUENCY_KEYS[@context] || :current_frequency
+    cell[key].present?
   end
 
   def capability_description
     p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-2") do
       @capability.description
     end
-  end
-
-  # Signed delta vs the meeting-expectations baseline at the person's
-  # current level (from `PersonDevelopment::Scoring#raw_contribution`).
-  # Positive = over-performing for their level, negative = under,
-  # 0 = exactly meeting. Rendered as `+0.5` / `-0.5` / `+0.0`. Hiding
-  # the badge when negative — the previous behaviour — silently
-  # dropped the most useful signal (under-performance).
-  def contribution_badge
-    return unless @contribution
-
-    value = @contribution.to_f
-    label = sprintf("%+.1f", value)
-    color = if value >= 0.5
-              "text-green-700 dark:text-green-400"
-    elsif value > -0.5
-              "text-gray-600 dark:text-gray-300"
-    elsif value > -1.5
-              "text-amber-700 dark:text-amber-400"
-    else
-              "text-red-700 dark:text-red-400"
-    end
-    span(class: "text-base font-bold tabular-nums #{color} ml-auto") { label }
-  end
-
-  def blocked_badge
-    span(
-      class: "text-[10px] font-medium text-red-700 dark:text-red-400 " \
-             "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded",
-      title: @block_reason
-    ) { "Blocked" }
   end
 
   def expansion_panel

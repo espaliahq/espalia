@@ -275,13 +275,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "capability contribution badge" do
-    should "render a signed delta (negative included) on every capability card" do
-      # Seed an explicit underperforming rating on cap1 at the person's
-      # level so its raw_contribution is < 0. Production renders this as
-      # a signed delta next to the capability name; the earlier
-      # redesign suppressed negative contributions, hiding the most
-      # useful "where am I under" signal.
+  context "capability score row" do
+    should "read each capability on the assessment's own scale" do
+      # Three shapes on one page, all from the same components: a rated
+      # capability shows its percent plus the bar, an unrated one says so
+      # rather than reading 0%, and one with no expectation at the
+      # assessed level says that instead of a number.
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_self(
           @person.id, @framework_id, @cap1_stable,
@@ -292,21 +291,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Find the cap1 card and assert its name row contains a signed
-      # delta matching `±N.N` (any sign, one decimal).
-      label = page.evaluate_script(<<~JS)
-        (function() {
-          var card = document.querySelector('[data-capability-stable-id="#{@cap1_stable}"]');
-          if (!card) return null;
-          var nameRow = card.querySelector('h3')?.parentElement;
-          var spans = nameRow ? Array.from(nameRow.querySelectorAll('span')) : [];
-          var m = spans.map(s => s.textContent.trim()).find(t => /^[+-]\\d+\\.\\d$/.test(t));
-          return m || null;
-        })()
-      JS
+      rated = find("#capability-name-#{@cap1_stable} [data-capability-score]")
+      assert_match(/\d+%/, rated.text,
+        "Expected the rated capability's score as a percent, got #{rated.text.inspect}")
+      assert_selector "#capability-name-#{@cap1_stable} [data-score-bar] [role='progressbar']"
 
-      assert_match(/^[+-]\d+\.\d$/, label.to_s,
-        "Expected a signed delta (e.g. '-0.5') next to the capability name, got #{label.inspect}")
+      # Problem Solving has an expectation at E1 only.
+      assert_selector "#capability-name-#{@cap2_stable} [data-capability-score]", text: "No expectation at E2"
+
+      # Execution has an E2 cell but no rating yet.
+      assert_selector "#capability-name-#{@cap3_stable} [data-capability-score]", text: "Not rated"
     end
   end
 
@@ -555,11 +549,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "nav#category-tabs", visible: true
     end
 
-    should "show category pass/fail indicators on chips" do
+    should "show a category's state dot on its chip only once its score unlocks" do
+      # The chip carries the category's state as a dot and its percent —
+      # both behind the same coverage gate as the header, so an untouched
+      # category shows its name and count without a misleadingly low score.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
       visit assessment_path(@assignment)
-      # Category chips should carry pass/fail status dots
-      within("nav#category-tabs") do
+      assert_selector "#scoring-panel"
+
+      within("nav#category-tabs a[data-category-id='#{@cat_id}']") do
         assert_selector "[data-category-status]"
+        assert_text "%"
+      end
+      # "Delivering" has an E2 cell nobody has rated — gated, so no dot.
+      within("nav#category-tabs a[data-category-id='#{@cat2_id}']") do
+        assert_no_selector "[data-category-status]"
+        assert_no_text "%"
       end
     end
   end
@@ -1471,6 +1482,73 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         assert_selector "#cell-#{@cap1_stable}-2[aria-label*='rated not yet demonstrated']"
         assert_selector "#assessment-live-status",
           text: "Rated not yet demonstrated — Critical Thinking, E2", visible: :all
+      end
+    end
+  end
+
+  context "a category header's description" do
+    # Reported from the field (#413): sharing the header's one row with the
+    # score cluster squeezed a real description into a four-word ribbon six
+    # lines tall — inside a sticky header, so it ate the viewport it was
+    # pinned to. The description now owns a row of its own beneath the name.
+    LONG_DESCRIPTION = "Domain-specific technical knowledge and skills required for the engineering " \
+                       "discipline. Strength in one technical area can compensate for a gap in " \
+                       "another, but the group must not go negative overall."
+
+    # `max-w-3xl` caps the description's line length, so on a wide screen a
+    # squeezed column can still be wider than the cap — geometry alone can't
+    # tell the two layouts apart there. Two assertions, each biting where the
+    # other can't: the row it lives in (any width) and the width it gets
+    # (narrow, which is where the ribbon was reported).
+    MAX_DESCRIPTION_WIDTH = 768
+
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+      should "own its row and its width, not a residue beside the score (#{name})" do
+        ActsAsTenant.with_tenant(@tenant) do
+          FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id)
+            .update!(description: LONG_DESCRIPTION)
+        end
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+        assert_text "Strength in one technical area"
+
+        metrics = page.evaluate_script(<<~JS)
+          (function () {
+            var header = document.querySelector('#category-#{@cat_id} [data-section-header]');
+            if (!header) return null;
+            var heading = header.querySelector('h2');
+            var description = header.querySelector('p');
+            var score = header.querySelector('[id^="category-indicators-"]');
+            if (!heading || !description || !score) return null;
+            var h = header.getBoundingClientRect();
+            var n = heading.getBoundingClientRect();
+            var d = description.getBoundingClientRect();
+            var style = getComputedStyle(header);
+            return {
+              // A row of the header itself, not a column shared with the score.
+              descriptionIsOwnRow: description.parentElement === header,
+              scoreSharesDescriptionColumn: score.parentElement === description.parentElement,
+              descriptionWidth: d.width,
+              contentWidth: h.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+              descriptionStartsAtHeadingEdge: Math.abs(d.left - n.left) <= 1
+            };
+          })()
+        JS
+
+        assert metrics, "expected the category header to render a name, a description and a score"
+        assert metrics["descriptionIsOwnRow"],
+          "the description is nested beside the score instead of taking its own row"
+        assert_not metrics["scoreSharesDescriptionColumn"],
+          "the score cluster is back in the description's column"
+        assert metrics["descriptionStartsAtHeadingEdge"],
+          "the description no longer starts at the heading's left edge"
+
+        # Whatever is left after the cap is the full content width — never a
+        # residue of it. Allow a point of sub-pixel rounding.
+        expected = [ MAX_DESCRIPTION_WIDTH, metrics["contentWidth"] ].min
+        assert_operator metrics["descriptionWidth"], :>=, expected - 1,
+          "description is #{metrics['descriptionWidth']}px of an available #{expected}px — squeezed"
       end
     end
   end

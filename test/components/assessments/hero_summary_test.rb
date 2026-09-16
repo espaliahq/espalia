@@ -17,7 +17,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
   def render_hero(state:, components:, person_level: 3, levels: LEVELS, statuses: {}, readiness: nil,
                   contributions: { "cap-a" => 0.0 }, next_contributions: { "cap-a" => -0.5 }, context: :self,
-                  cells: nil)
+                  cells: nil, self_scoring: nil)
     cap = CAP.new(stable_id: "cap-a", name: "Strategic Thinking")
     cells ||= { person_level => {
       current_frequency: "consistent", manager_frequency: "consistent", aligned_frequency: "consistent"
@@ -36,10 +36,24 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     }
 
     Views::Assessments::HeroSummary.new(
-      scoring: scoring, self_scoring: scoring, manager_scoring: scoring, categories: categories, person_level: person_level,
+      scoring: scoring, self_scoring: self_scoring || scoring, manager_scoring: scoring,
+      categories: categories, person_level: person_level,
       merged_levels: levels, assessment_id: SecureRandom.uuid_v7, context: context,
       viewer_can_rate: false
     ).call
+  end
+
+  # A quick indicator beside the number it differs from — the state
+  # vocabulary is the primary verdict's job, once, at the top.
+  def render_with_diverging_self
+    render_hero(
+      context: :manager, state: :mastering,
+      components: { prior: 1.0, current: 1.0, next: 0.58, score: 1.58 },
+      self_scoring: {
+        performance_ratio: 0.1, components: { prior: 1.0, current: 0.1, next: 0.0, score: 0.1, bands_above: 1 },
+        performance_state: :underperforming, capability_contributions: { "cap-a" => -1.0 }
+      }
+    )
   end
 
   context "the score bar" do
@@ -64,6 +78,28 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
                          components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
       assert_includes html, 'aria-valuemax="100"'
       assert_not_includes html, "200%"
+    end
+  end
+
+  context "the other perspectives" do
+    should "read as a percentage, never a second state word" do
+      html = render_with_diverging_self
+
+      assert_includes html, "Self: 10%"
+      assert_not_includes html, "Self: Below expectations"
+      assert_not_includes html, "Below expectations"
+    end
+
+    should "mark a perspective that lands in a different state" do
+      assert_includes render_with_diverging_self, "bg-amber-400"
+    end
+
+    should "leave an agreeing perspective unmarked" do
+      html = render_hero(context: :manager, state: :performing,
+                         components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+
+      assert_includes html, "Self: 100%"
+      assert_not_includes html, "bg-amber-400"
     end
   end
 

@@ -64,13 +64,14 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   # Two capabilities in one category, with per-binding tolerances.
   def build_pair(person_level:, all_levels:, ratings:, tolerance_a: nil, tolerance_b: nil,
-                 weight_a: 1.0, weight_b: 1.0, category_deficit_threshold: nil, thresholds: {})
+                 weight_a: 1.0, weight_b: 1.0, category_deficit_threshold: nil, thresholds: {},
+                 cap_a_limit: nil, cap_b_limit: nil)
     cap_a = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
     cap_b = CapStub.new(stable_id: CAP_B, category_id: CAT_1)
     binding_a = BindingStub.new(capability_id: "bid-a", weight: weight_a,
-      deficit_threshold: tolerance_a, overperformance_cap: nil, capability: cap_a)
+      deficit_threshold: tolerance_a, overperformance_cap: cap_a_limit, capability: cap_a)
     binding_b = BindingStub.new(capability_id: "bid-b", weight: weight_b,
-      deficit_threshold: tolerance_b, overperformance_cap: nil, capability: cap_b)
+      deficit_threshold: tolerance_b, overperformance_cap: cap_b_limit, capability: cap_b)
     category = CategoryStub.new(category_id: CAT_1,
       deficit_threshold: category_deficit_threshold, overperformance_cap: nil)
 
@@ -369,46 +370,117 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # ── Category pass/fail ──
 
   context "#category_results" do
-    should "pass when pool >= -category deficit_threshold" do
+    should "pass when the category's own score clears the meeting bar" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "consistent") ],
         category_deficit_threshold: 0.5)
       result = scorer.category_results[CAT_1]
       assert result[:pass]
+      assert_equal :top_of_ladder, result[:state]
       assert_in_delta(0.0, result[:pool], 0.01)
     end
 
-    should "fail when net contribution exceeds category deficit_threshold" do
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "some") ],
-        category_deficit_threshold: 0)
-      assert_not scorer.category_results[CAT_1][:pass]
+    should "fail below the meeting bar even when the old points pool would have passed" do
+      # "most of the time" → pool −0.5 (within the 0.75 tolerance) but 50% of the band
+      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "occasional") ])
+      result = scorer.category_results[CAT_1]
+      assert_not result[:pass]
+      assert_equal :underperforming, result[:state]
     end
 
-    should "use the framework default when category deficit_threshold is nil" do
-      # "most of the time" → pool −0.5; framework default 0.75 → passes
-      scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ rated(3, "occasional") ],
-        category_deficit_threshold: nil)
-      assert scorer.category_results[CAT_1][:pass]
-    end
-
-    should "fail when the pool passes but a capability is blocked" do
-      # cap_a "some" at L3 → −0.75, blocked at category tolerance 0;
-      # cap_b consistent at L3 and L4 → +1.0; pool +0.25 passes on its own.
+    should "fail when the score passes but a capability is blocked" do
+      # cap_a "some" at L3 is blocked at category tolerance 0; cap_b consistent at L3 and L4.
       scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], category_deficit_threshold: 0, ratings: [
         rated(3, "some"),
         rated(3, "consistent", cap: CAP_B), rated(4, "consistent", cap: CAP_B)
       ])
       result = scorer.category_results[CAT_1]
       assert_not result[:pass]
-      assert_in_delta(0.25, result[:pool], 0.01)
+      assert_equal :progressing, result[:state]
+    end
+  end
+
+  # ── Altitudes ──
+
+  context "#capability_components" do
+    should "score one capability by the same formula as the assessment" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
+      components = scorer.capability_components(scorer.instance_variable_get(:@bindings).first)
+      assert_in_delta(0.5, components[:current], 0.001)
+      assert_in_delta(0.5, components[:next], 0.001)
+      assert_in_delta(1.0, components[:score], 0.001)
+      assert components[:scorable]
     end
 
-    should "pass when the pool passes and no capabilities are blocked" do
-      scorer = build_pair(person_level: 3, all_levels: [ 3 ], category_deficit_threshold: 0, ratings: [
+    should "mark a capability with no expectation at the assessed level as not scorable" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], expectation_cells: [ [ CAP_A, 4 ] ],
+        ratings: [ rated(4, "consistent") ])
+      assert_not scorer.capability_components(scorer.instance_variable_get(:@bindings).first)[:scorable]
+    end
+  end
+
+  context "the bar's band count" do
+    # The bar's scale is drawn from bands_above, so it must be the cap of
+    # the bindings being scored — not the assessment's widest. A capability
+    # capped at one level otherwise gets a 0–300 track it can never fill.
+    should "follow each altitude's own cap, not the assessment's widest" do
+      scorer = build_pair(
+        person_level: 1, all_levels: [ 1, 2, 3 ], cap_a_limit: 1, cap_b_limit: 2,
+        ratings: [ rated(1, "consistent"), rated(2, "consistent"), rated(3, "consistent"),
+                   rated(1, "consistent", cap: CAP_B), rated(2, "consistent", cap: CAP_B),
+                   rated(3, "consistent", cap: CAP_B) ]
+      )
+      bindings = scorer.instance_variable_get(:@bindings)
+
+      assert_equal 2, scorer.components[:bands_above], "the assessment can reach both bands"
+      assert_equal 1, scorer.capability_components(bindings.first)[:bands_above],
+        "a capability capped at one level must not advertise a second band"
+      assert_equal 2, scorer.capability_components(bindings.last)[:bands_above]
+    end
+
+    should "never claim more bands than the ladder has" do
+      scorer = build_pair(person_level: 2, all_levels: [ 1, 2 ], cap_a_limit: 2, cap_b_limit: 2,
+                          ratings: [ rated(2, "consistent") ])
+
+      assert_equal 0, scorer.components[:bands_above]
+    end
+  end
+
+  context "#category_components and #category_state" do
+    should "be the weight-mean of the category's capabilities" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "occasional", cap: CAP_B)
+      ])
+      assert_in_delta(1.25, scorer.category_components(CAT_1)[:score], 0.001)
+      assert_in_delta(1.25, scorer.performance_ratio, 0.001)
+      assert_equal :performing, scorer.category_state(CAT_1)
+    end
+
+    should "read mastering, eligible and top of ladder by the same rules as the assessment" do
+      mastering = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B), rated(4, "some", cap: CAP_B)
+      ])
+      eligible = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B), rated(4, "consistent", cap: CAP_B)
+      ])
+      top = build_pair(person_level: 3, all_levels: [ 3 ], ratings: [
         rated(3, "consistent"), rated(3, "consistent", cap: CAP_B)
       ])
-      result = scorer.category_results[CAT_1]
-      assert result[:pass]
-      assert_in_delta(0.0, result[:pool], 0.01)
+      assert_equal :mastering, mastering.category_state(CAT_1)
+      assert_equal :eligible, eligible.category_state(CAT_1)
+      assert_equal :top_of_ladder, top.category_state(CAT_1)
+    end
+
+    should "downgrade a category to progressing when a member is blocked" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "none", cap: CAP_B)
+      ])
+      assert_in_delta(1.0, scorer.category_components(CAT_1)[:score], 0.001)
+      assert_equal :progressing, scorer.category_state(CAT_1)
     end
   end
 

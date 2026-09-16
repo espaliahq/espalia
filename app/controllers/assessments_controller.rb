@@ -198,11 +198,7 @@ class AssessmentsController < ApplicationController
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    if AssessmentPolicy.new(pundit_user, @assignment).view_alignment?
-      :alignment
-    else
-      manager_viewing? ? :manager : :self
-    end
+    Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user)
   end
 
   def load_assessment_data

@@ -164,12 +164,25 @@ The builder exposes `capability_contributions_at_next_level` when a next level e
 
 ## Category Pass/Fail
 
+A category passes when **its own score clears the meeting bar and none of its
+capabilities is blocked** — the same verdict `category_state` carries, so the
+section header's number and the pass/fail a report reads can't disagree:
+
 ```
-category_pool = Σ raw_contribution per binding in category (weight units, gated)
-category_threshold = category.deficit_threshold || framework.deficit_threshold
-has_blocked = any capability in category is :blocked at person_level
-pass if category_pool >= -category_threshold AND NOT has_blocked
+pass = category_state(category_id) not in [:underperforming, :progressing]
+     # i.e. category_components(id)[:score] >= meeting_expectation_threshold
+     #      AND no member capability is :blocked at person_level
+pool = Σ raw_contribution per binding in category   # weight units, still exposed
 ```
+
+The category's `deficit_threshold` keeps its **blocking** role — it is resolved
+per capability (`binding → category → framework`), so a tighter category
+tolerance still blocks a member and therefore still fails the category. What is
+gone is the separate pool-in-points gate: a category used to be able to fail on
+a weight-unit sum while its own score said it was meeting, which is the same
+level-dependence ADR-21 removed everywhere else. `pool` is still returned for
+callers that want the weight-unit net (`Reporting::CapabilityAttainment` reads
+only `pass`).
 
 ---
 
@@ -201,6 +214,41 @@ Nil values in the nullable columns (`mastery_threshold`, `meeting_expectation_th
 ### Hero summary
 
 The number, a two-segment bar (0–100 the assessed level, 100–200 the next, labelled with the level codes; a single segment at the top of the ladder), a state-driven verdict, and a gloss naming the components. See [assessments.md](../guidelines/assessments.md#hero-summary--three-bands). Colour tiers read the framework's configured thresholds — never a hard-coded number.
+
+### One scale at three altitudes
+
+The same formula answers the assessment, one category and one capability —
+`components_over(bindings, reference)` with a narrower set of bindings each
+time (`components`, `category_components(category_id)`,
+`capability_components(binding)`), and `state_for` applied to each. So a
+card, its category header and the hero cannot disagree, and the reader
+learns one number once.
+
+What differs is only how much vocabulary each altitude can afford:
+
+| Altitude | Shows | Deliberately omits |
+|---|---|---|
+| Hero | Number, `:lg` bar with tick-labelled level codes, the state as a verdict sentence, the components as a gloss | — |
+| Category header | Rated count, the split when it adds anything, tone-coloured number, `:md` bar | The state **word** (a `title` only) — a scanned indicator has no room for it |
+| Capability card | The split, tone-coloured number, `:sm` bar | The state word; the number alone stands in for it |
+
+Three shared rules, all in `Views::Assessments::Concerns::ScoreScale`:
+
+- **Tone comes from the state, never the number** — a 150 held at
+  `:progressing` by a blocked capability reads amber like its verdict.
+- **Level codes are read off the role's own ladder** (`merged_levels`), the
+  same list the engine scores against, so a gap in the ordinals can't make
+  copy and number disagree.
+- **A band the cap doesn't allow isn't drawn.** The bar's segment count is
+  the engine's `bands_above`, clamped to the levels that actually exist.
+
+Two honesty guards sit above the formula, both the hero's:
+
+- **Unrated is not zero.** A capability with no rating at the assessed level
+  reads "Not rated"; one with no expectation there reads "No expectation at
+  E3". `capability_components` carries `scorable:` for the second case.
+- **Coverage gates the category.** Below half the category's assessed-level
+  cells rated, the header and the chip show no score at all.
 
 ### Framework explorer — capability matrix badges
 

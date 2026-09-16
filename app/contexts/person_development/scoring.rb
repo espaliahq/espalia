@@ -51,7 +51,10 @@
 # are the role's ladder in order — ordinals need not be contiguous.
 # Making up across DIFFERENT capabilities stays
 # allowed — that is what the weighted average is — bounded by the
-# per-capability deficit threshold (blocking) and the category gates.
+# per-capability deficit threshold, which blocks. A category's own
+# tolerance is one of the values that threshold resolves through
+# (binding → category → framework), so it still fails a category by
+# blocking a member; it is no longer a separate sum-in-points gate.
 #
 # The mandatory case is a step because with a multiplicative gate a
 # mandatory capability at "most of the time" with "consistently" above nets
@@ -199,6 +202,72 @@ class PersonDevelopment::Scoring
   # @return [Hash] { prior: Float, current: Float, next: Float, score: Float, bands_above: Integer }
   def components
     @components ||= components_at(@person_level)
+  end
+
+  # One capability's score on the assessment's own scale — the same
+  # components computed over that binding alone, so a card, its category
+  # and the whole assessment are one formula at three altitudes. `current`
+  # is its frequency at the assessed level; `scorable` is false when it has
+  # no expectation there (the card then shows no number).
+  #
+  # @param binding [#capability, #weight]
+  # @return [Hash] { prior:, current:, next:, score:, bands_above:, scorable: }
+  def capability_components(binding)
+    @capability_components ||= {}
+    @capability_components[binding.capability.stable_id] ||=
+      components_over([ binding ], @person_level)
+        .merge(scorable: cell?(binding.capability.stable_id, @person_level))
+  end
+
+  # The state vocabulary applied to one capability: its own score against
+  # the framework's thresholds, blocked → progressing, eligible when it
+  # clears the next level on its own.
+  #
+  # @param binding [#capability, #weight]
+  # @return [Symbol]
+  def capability_state(binding)
+    @capability_state ||= {}
+    @capability_state[binding.capability.stable_id] ||= begin
+      sid = binding.capability.stable_id
+      eligible = has_next_level? &&
+        components_over([ binding ], next_level_ordinal)[:score] >= @meeting_expectation_threshold &&
+        capability_statuses(reference_level: next_level_ordinal)[sid] != :blocked
+      state_for(capability_components(binding)[:score], blocked: capability_statuses[sid] == :blocked, eligible: eligible)
+    end
+  end
+
+  # A category's score — the components over its bound capabilities. With
+  # full expectation coverage this is exactly the weight-mean of its
+  # capabilities' scores, and the assessment's score the weight-mean of
+  # its categories'.
+  #
+  # @param category_id [String]
+  # @return [Hash] { prior:, current:, next:, score:, bands_above:, scorable: }
+  def category_components(category_id)
+    @category_components ||= {}
+    @category_components[category_id] ||= begin
+      members = bindings_in(category_id)
+      components_over(members, @person_level)
+        .merge(scorable: members.any? { |b| cell?(b.capability.stable_id, @person_level) })
+    end
+  end
+
+  # The five-state vocabulary applied to one category: its own score
+  # against the same thresholds, any blocked member forcing :progressing,
+  # and :eligible when its members clear the next level as a group.
+  #
+  # @param category_id [String]
+  # @return [Symbol]
+  def category_state(category_id)
+    @category_state ||= {}
+    @category_state[category_id] ||= begin
+      members = bindings_in(category_id)
+      blocked = members.any? { |b| capability_statuses[b.capability.stable_id] == :blocked }
+      eligible = has_next_level? &&
+        components_over(members, next_level_ordinal)[:score] >= @meeting_expectation_threshold &&
+        members.none? { |b| capability_statuses(reference_level: next_level_ordinal)[b.capability.stable_id] == :blocked }
+      state_for(category_components(category_id)[:score], blocked: blocked, eligible: eligible)
+    end
   end
 
   # Whether the person is meeting expectations at their current level.
@@ -361,45 +430,66 @@ class PersonDevelopment::Scoring
   # ── Core computation ──
 
   # The three components (and their sum) evaluated with +reference_level+
-  # as the assessed level.
+  # as the assessed level, over every binding.
   #
-  # @return [Hash] { prior:, current:, next:, score: }
+  # @return [Hash] { prior:, current:, next:, score:, bands_above: }
   def components_at(reference_level)
     @components_at ||= {}
-    @components_at[reference_level] ||= begin
-      prior   = prior_attainment(reference_level)
-      current = attainment_at(reference_level)
-      nxt     = next_band_progress(reference_level)
-      # Floored at 0: a prior-level "not yet" on top of nothing at the
-      # assessed level would otherwise read as a negative share.
-      score   = current.nil? ? 0.0 : [ current + nxt + (prior - 1.0), 0.0 ].max
-      { prior: prior, current: current || 0.0, next: nxt, score: score,
-        bands_above: ordinals_above(reference_level).first(max_cap).size }
-    end
+    @components_at[reference_level] ||= components_over(@bindings, reference_level)
+  end
+
+  # The ONE formula, over any set of bindings — the whole assessment, one
+  # category's members, or a single capability. Each component is
+  # normalised over the bindings it applies to (those with an expectation
+  # at the level in question), so a capability with no next-level
+  # expectation neither earns nor owes next-level credit.
+  #
+  # @return [Hash] { prior:, current:, next:, score:, bands_above: }
+  def components_over(bindings, reference_level)
+    prior   = prior_attainment(bindings, reference_level)
+    current = attainment_at(bindings, reference_level)
+    nxt     = next_band_progress(bindings, reference_level)
+    # Floored at 0: a prior-level "not yet" on top of nothing at the
+    # assessed level would otherwise read as a negative share.
+    score   = current.nil? ? 0.0 : [ current + nxt + (prior - 1.0), 0.0 ].max
+    { prior: prior, current: current || 0.0, next: nxt, score: score,
+      bands_above: bands_above_for(bindings, reference_level) }
+  end
+
+  # How many bands above the reference level THIS set of bindings can
+  # reach — the widest cap among them, not the assessment's. A bar drawn
+  # from the assessment-wide cap would give a capability capped at one
+  # level a 0–300 scale it can never fill (`next_band_progress` already
+  # refuses a binding credit past its own cap).
+  #
+  # @return [Integer]
+  def bands_above_for(bindings, reference_level)
+    cap = bindings.map { |b| overperformance_cap_for(b) }.max || 0
+    ordinals_above(reference_level).first(cap).size
   end
 
   # Weighted frequency attainment at one level over the bindings that
-  # carry an expectation there. nil when no binding does (unscorable).
+  # carry an expectation there. nil when none does (unscorable).
   #
   # @return [Float, nil]
-  def attainment_at(ordinal)
-    band = @bindings.select { |b| cell?(b.capability.stable_id, ordinal) }
+  def attainment_at(bindings, ordinal)
+    band = bindings.select { |b| cell?(b.capability.stable_id, ordinal) }
     weight = band.sum { |b| b.weight.to_f }
     return nil unless weight.positive?
 
     band.sum { |b| b.weight.to_f * effective_frequency(b.capability.stable_id, ordinal) } / weight
   end
 
-  # Pooled attainment across every prior level's cells — one bucket, so the
-  # count of prior levels never scales the deficit. 1.0 when there is
-  # nothing below the reference level.
+  # Pooled attainment across every prior level's cells — one bucket the
+  # size of a single band. 1.0 when there is nothing below the reference
+  # level.
   #
   # @return [Float]
-  def prior_attainment(reference_level)
+  def prior_attainment(bindings, reference_level)
     total = 0.0
     weight = 0.0
     ordinals_below(reference_level).each do |ordinal|
-      @bindings.each do |b|
+      bindings.each do |b|
         sid = b.capability.stable_id
         next unless cell?(sid, ordinal)
 
@@ -411,13 +501,13 @@ class PersonDevelopment::Scoring
   end
 
   # Gated, cap-windowed progress into the band(s) above the reference
-  # level, each band normalised over the capabilities with an expectation
+  # level, each band normalised over the bindings with an expectation
   # there. 0.0 at the top of the ladder.
   #
   # @return [Float]
-  def next_band_progress(reference_level)
+  def next_band_progress(bindings, reference_level)
     ordinals_above(reference_level).first(max_cap).each_with_index.sum do |ordinal, index|
-      band = @bindings.select { |b| cell?(b.capability.stable_id, ordinal) }
+      band = bindings.select { |b| cell?(b.capability.stable_id, ordinal) }
       weight = band.sum { |b| b.weight.to_f }
       next 0.0 unless weight.positive?
 
@@ -428,6 +518,11 @@ class PersonDevelopment::Scoring
       end
       credit / weight
     end
+  end
+
+  def bindings_in(category_id)
+    @bindings_in ||= {}
+    @bindings_in[category_id] ||= @bindings.select { |b| b.capability.category_id == category_id }
   end
 
   # A capability's credit at one level above the reference level — its
@@ -499,24 +594,16 @@ class PersonDevelopment::Scoring
     end
   end
 
+  # A category passes when its own score clears the meeting bar and none of
+  # its capabilities is blocked — the same verdict its state carries. The
+  # category tolerance keeps only its blocking role (resolved per
+  # capability); the old pool-in-points gate is gone. `pool` remains for
+  # callers that surface the weight-unit net.
   def compute_category_results
-    pools = Hash.new(0.0)
-    @bindings.each do |binding|
-      cat_id = binding.capability.category_id
-      pools[cat_id] += raw_contribution(binding)
-    end
-
-    statuses = capability_statuses(reference_level: @person_level)
-
     @bindings.map { |b| b.capability.category_id }.uniq.to_h do |cat_id|
-      cat       = @categories[cat_id]
-      pool      = pools[cat_id]
-      threshold = (cat&.deficit_threshold || @default_deficit_threshold).to_f
-      has_blocked = @bindings
-        .select { |b| b.capability.category_id == cat_id }
-        .any? { |b| statuses[b.capability.stable_id] == :blocked }
-      pass      = pool >= -threshold && !has_blocked
-      [ cat_id, { pass: pass, pool: pool } ]
+      state = category_state(cat_id)
+      pool = bindings_in(cat_id).sum { |b| raw_contribution(b) }
+      [ cat_id, { pass: !%i[underperforming progressing].include?(state), pool: pool, state: state } ]
     end
   end
 
@@ -550,14 +637,17 @@ class PersonDevelopment::Scoring
 
   # See {#performance_state} for the state vocabulary + precedence.
   def compute_performance_state
-    ratio       = performance_ratio
-    has_blocked = any_blocked?(@person_level)
+    state_for(performance_ratio, blocked: any_blocked?(@person_level), eligible: promotion_readiness[:eligible])
+  end
 
-    return :underperforming if ratio < @underperforming_threshold
-    return :progressing     if ratio < @meeting_expectation_threshold || has_blocked
+  # The state machine as a pure function of a score, so a category reads
+  # its state by the same rules as the assessment.
+  def state_for(score, blocked:, eligible:)
+    return :underperforming if score < @underperforming_threshold
+    return :progressing     if score < @meeting_expectation_threshold || blocked
     return :top_of_ladder   unless has_next_level?
-    return :eligible        if promotion_readiness[:eligible]
-    return :mastering       if ratio >= @mastery_threshold
+    return :eligible        if eligible
+    return :mastering       if score >= @mastery_threshold
 
     :performing
   end

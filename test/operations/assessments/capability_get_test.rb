@@ -4,8 +4,8 @@ require "test_helper"
 
 # Confirms the assessment capability payload is a strict superset of the
 # framework capability payload — same top-level keys, same expectation
-# structure — plus a `ratings:` key per expectation and a top-level
-# `cycle_id`.
+# structure — plus a `ratings:` key per expectation and the top-level
+# `cycle_id` / `score` the assessment adds.
 class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -130,14 +130,42 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
     end
   end
 
+  context "the capability's own score" do
+    should "read on the same 0-200 scale as the card, with its parts" do
+      score = call_assessment_op[:score]
+
+      # Consistently at the assessed level, which is the only level this
+      # fixture's role has — demonstrated in full, at the top of the ladder.
+      assert_equal 100, score[:score]
+      assert_equal "top_of_ladder", score[:state]
+      assert_equal 100, score.dig(:components, :assessed_level)
+      assert_equal 0, score.dig(:components, :above_assessed_level)
+      assert_equal true, score[:has_expectation_at_assessed_level]
+      assert_equal false, score[:blocked]
+      assert_nil score[:block_reason]
+    end
+
+    should "spell the scale out so the number cannot be misread" do
+      scale = call_assessment_op.dig(:score, :scale)
+
+      assert_equal "percent_of_assessed_level_expectations", scale[:unit]
+      assert_equal "E2", scale[:assessed_level]
+      assert_match(/100 = meeting E2 expectations/, scale[:meaning])
+      # The fixture role tops out at E2, so the scale says so rather than
+      # promising a 200 nobody can reach.
+      assert_nil scale[:next_level]
+      assert_match(/top of the ladder/, scale[:meaning])
+    end
+  end
+
   context "shape parity with Frameworks::CapabilityGet" do
-    should "the framework-shaped keys are unchanged; only :ratings and :cycle_id are added" do
+    should "the framework-shaped keys are unchanged; only :ratings, :cycle_id and :score are added" do
       framework_payload = call_framework_op
       assessment_payload = call_assessment_op
 
-      # Top-level: assessment adds :cycle_id and (per-expectation) :ratings.
+      # Top-level: assessment adds :cycle_id, :score and (per-expectation) :ratings.
       added_keys = assessment_payload.keys - framework_payload.keys
-      assert_equal [ :cycle_id ], added_keys
+      assert_equal [ :cycle_id, :score ], added_keys
 
       framework_payload.each do |k, v|
         next unless v.is_a?(Array) && v.first.is_a?(Hash)

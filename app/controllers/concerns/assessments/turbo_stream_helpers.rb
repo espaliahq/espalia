@@ -7,12 +7,9 @@
 # next view-layer change (e.g. capability contribution badge format)
 # only has to land in one place.
 #
-# `capability_name_html` mirrors `Views::Assessments::CapabilityCard`'s
-# `capability_name` + `contribution_badge` — signed delta (`±N.N`),
-# colour-tiered, never hidden when negative. The previous version
-# rendered the contribution as a percentage AND skipped it for
-# negative values; keep this in sync with the Phlex card so post-rate
-# re-renders don't regress.
+# `capability_name_html` renders `Views::Assessments::CapabilityNameRow` —
+# the very view the card renders — so a post-rate re-render can never
+# drift from the initial one.
 module Assessments::TurboStreamHelpers
   extend ActiveSupport::Concern
 
@@ -49,18 +46,30 @@ module Assessments::TurboStreamHelpers
     turbo_stream.update("assessment-live-status", text)
   end
 
+  # The capability's name row after a rating — rendered by the same view
+  # the card renders, so the post-rate row cannot drift from the initial one.
+  #
   # @param cap_data [Hash] capability data from MatrixDataBuilder
-  # @param blocked [Boolean]
-  # @param block_reason [String, nil]
-  # @param contribution [Float, nil] raw signed contribution from Scoring
+  # @param matrix_data [Hash] the rebuilt matrix data
+  # @param primary [Hash] the viewer's primary scoring hash
+  # @param context [Symbol] :self, :manager, or :alignment
   # @return [String] HTML
-  def capability_name_html(cap_data, blocked, block_reason, contribution)
-    cap = cap_data[:capability]
-    parts = []
-    parts << %(<h3 class="text-sm font-semibold text-gray-900 dark:text-white">#{ERB::Util.html_escape(cap.name)}</h3>)
-    parts << blocked_badge_html(block_reason) if blocked
-    parts << contribution_badge_html(contribution) if contribution
-    %(<div id="capability-name-#{cap.stable_id}" class="flex items-center gap-2">#{parts.join}</div>)
+  def capability_name_html(cap_data, matrix_data, primary, context)
+    stable_id = cap_data[:capability].stable_id
+    cell = cap_data[:cells][matrix_data[:person_level]]
+    key = Views::Assessments::Concerns::RatedCount::CONTEXT_FREQUENCY_KEYS[context] || :current_frequency
+    render_to_string(
+      Views::Assessments::CapabilityNameRow.new(
+        capability: cap_data[:capability],
+        score: primary.dig(:capability_scores, stable_id),
+        rated: cell.present? && cell[key].present?,
+        blocked: primary.dig(:capability_statuses, stable_id) == :blocked,
+        block_reason: primary.dig(:block_reasons, stable_id),
+        merged_levels: matrix_data[:merged_levels],
+        person_level: matrix_data[:person_level]
+      ),
+      layout: false
+    )
   end
 
   # @return [String] HTML
@@ -123,28 +132,5 @@ module Assessments::TurboStreamHelpers
       ]
     else []
     end
-  end
-
-  def blocked_badge_html(block_reason)
-    %(<span class="text-[10px] font-medium text-red-600 dark:text-red-400 ) +
-      %(bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded" ) +
-      %(title="#{ERB::Util.html_escape(block_reason)}">Blocked</span>)
-  end
-
-  # Matches `CapabilityCard#contribution_badge` — signed `±N.N` with
-  # green/gray/amber/red tiers.
-  def contribution_badge_html(contribution)
-    value = contribution.to_f
-    label = sprintf("%+.1f", value)
-    color = if value >= 0.5
-              "text-green-600 dark:text-green-400"
-    elsif value > -0.5
-              "text-gray-500 dark:text-gray-400"
-    elsif value > -1.5
-              "text-amber-600 dark:text-amber-400"
-    else
-              "text-red-600 dark:text-red-400"
-    end
-    %(<span class="text-base font-bold tabular-nums #{color} ml-auto">#{label}</span>)
   end
 end

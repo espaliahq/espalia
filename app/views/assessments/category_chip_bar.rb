@@ -8,6 +8,7 @@
 #
 class Views::Assessments::CategoryChipBar < Views::Base
   include Views::Assessments::Concerns::RatedCount
+  include Views::Assessments::Concerns::ScoreScale
 
   # @param categories [Array<Hash>] from MatrixDataBuilder
   # @param scoring [Hash] primary scoring for the context
@@ -45,7 +46,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
 
   def category_chip(cat_data)
     category = cat_data[:category]
-    result = @scoring[:category_results]&.dig(category.category_id)
+    result = @scoring.dig(:category_scores, category.category_id)
     active = category.category_id == @active_category_id
 
     attrs = {
@@ -56,40 +57,30 @@ class Views::Assessments::CategoryChipBar < Views::Base
               action: "click->category-nav#scrollTo" }
     }
     attrs[:aria] = { current: "page" } if active
+    unlocked = category_unlocked?(cat_data)
     a(**attrs) do
-      status_dot(result)
+      status_dot(result) if unlocked
       plain category.name
-      pct_badge(result, active)
+      pct_badge(result, active) if unlocked
       rated_count_chip(cat_data, active)
     end
   end
 
+  # The category's state as a dot — the same tone the header's number
+  # wears. Only called once the category is unlocked, which already
+  # settled that there is a score to colour.
   def status_dot(result)
-    return unless result
-
-    pass = result[:pass]
-    color = pass ? "bg-green-500" : "bg-red-500"
     span(
-      class: "w-2 h-2 rounded-full #{color} shrink-0",
-      data: { category_status: pass ? "pass" : "fail" }
+      class: "w-2 h-2 rounded-full #{tone_bar(result[:state])} shrink-0",
+      data: { category_status: result[:state] }
     ) { }
   end
 
+  # The category's score, once enough of its assessed-level cells are rated
+  # to mean something (the hero's own unlock rule).
   def pct_badge(result, active)
-    return unless result
-
-    pool_ratio = result[:pool_ratio]
-    return unless pool_ratio
-
-    pct = (pool_ratio * 100).round(0)
-    color = if active
-              pct >= 100 ? "text-green-300" : pct >= 80 ? "text-amber-300" : "text-red-300"
-    else
-              pct >= 100 ? "text-green-700 dark:text-green-400" :
-              pct >= 80 ? "text-amber-700 dark:text-amber-400" :
-              "text-red-700 dark:text-red-400"
-    end
-    span(class: "text-xs font-mono #{color}") { "#{pct}%" }
+    color = active ? "text-white/80 dark:text-gray-900/80" : tone_text(result[:state])
+    span(class: "text-xs font-mono tabular-nums #{color}") { "#{percent(result[:score])}%" }
   end
 
   # Tiny "3/24" count tucked inside the chip — desktop only so narrow
@@ -104,6 +95,21 @@ class Views::Assessments::CategoryChipBar < Views::Base
     span(class: "hidden lg:inline text-[10px] font-mono tabular-nums #{color}") do
       "#{counts[:rated]}/#{counts[:total]}"
     end
+  end
+
+  # The hero's coverage rule at category grain: a score only shows once at
+  # least half of the category's assessed-level cells carry a rating.
+  # Must stay in step with CategoryIndicators#unlocked? — the chip and the
+  # section header are the same category, and a chip showing a red 0% for
+  # a category the header declines to score is the worse of the two lies.
+  def category_unlocked?(cat_data)
+    result = @scoring.dig(:category_scores, cat_data[:category].category_id)
+    return false unless result && result[:scorable]
+
+    counts = category_rated_count(cat_data, @context)
+    return true if counts[:total].zero?
+
+    counts[:rated] >= (counts[:total] * Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
   def active_chip_classes
