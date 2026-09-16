@@ -318,30 +318,50 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # Builds the single state-driven panel for the middle band. Picks the
   # headline, list source, and tone from `performance_state`.
-  # Returns nil when there are no contributions to back any framing.
+  # Returns nil when there are no scored capabilities to back any framing.
+  # The capabilities a gap list may name, scored at the level the panel
+  # points at. Non-scorable ones are dropped: a capability with no
+  # expectation at that level owes nothing there, and its unavoidable 0
+  # would otherwise rank as the worst thing on the page.
+  def scores_here
+    @scores_here ||= scorable(primary_scoring[:capability_scores] || {})
+  end
+
+  def scores_at_next
+    @scores_at_next ||= scorable(primary_scoring[:capability_scores_at_next_level] || {})
+  end
+
+  def scorable(scores)
+    scores.select { |_, score| score[:scorable] }
+  end
+
+  # Three rows, weakest first — the shape every "Gap to …" list takes.
+  def weakest(scores, limit = 3)
+    scores.sort_by { |_, score| score[:score].to_f }.first(limit)
+  end
+
+  def strongest(scores, limit = 3)
+    scores.sort_by { |_, score| -score[:score].to_f }.first(limit)
+  end
+
   def state_panel_config
-    contributions = primary_scoring[:capability_contributions] || {}
-    return if contributions.empty?
+    return if scores_here.empty?
 
     caps_by_id = @categories.flat_map { |c| c[:capabilities] }
                             .index_by { |cap| cap[:capability].stable_id }
-    sorted = contributions.sort_by { |_, v| -v }
-
-    next_level_contributions = primary_scoring[:capability_contributions_at_next_level] || {}
-    sorted_next = next_level_contributions.sort_by { |_, v| -v }
 
     case primary_scoring[:performance_state]
     when :underperforming
       { state_label: "Underperforming at #{current_code}",
         list_label: "Gap to #{current_code}",
-        items: sorted.last(3).reverse,
+        items: weakest(scores_here),
         border: "border-red-300 dark:border-red-700",
         accent: "text-red-700 dark:text-red-300",
         caps: caps_by_id }
     when :progressing
       { state_label: "Progressing toward #{current_code}",
         list_label: "Gap to #{current_code}",
-        items: sorted.last(3).reverse,
+        items: weakest(scores_here),
         border: "border-amber-300 dark:border-amber-700",
         accent: "text-amber-700 dark:text-amber-300",
         caps: caps_by_id }
@@ -351,14 +371,14 @@ class Views::Assessments::HeroSummary < Views::Base
       # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
       { state_label: "Performing at #{current_code} · #{progress_label}",
         list_label: next_code ? "Gap to #{next_code}" : "Gap to #{current_code}",
-        items: next_level_contributions.any? ? sorted_next.last(3).reverse : sorted.last(3).reverse,
+        items: scores_at_next.any? ? weakest(scores_at_next) : weakest(scores_here),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     when :eligible
       { state_label: next_code ? "Eligible for promotion to #{next_code}" : "Eligible for promotion",
         list_label: "Top contributors",
-        items: sorted.first(3),
+        items: strongest(scores_here),
         border: "border-green-300 dark:border-green-700",
         accent: "text-green-700 dark:text-green-300",
         caps: caps_by_id }
@@ -367,11 +387,11 @@ class Views::Assessments::HeroSummary < Views::Base
       # still in the way of promotion. Surface the capabilities with the
       # weakest contribution AT the next level (blocked ones first).
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      blocked_items = blocked.first(3).map { |sid| [ sid, next_level_contributions[sid] || 0.0 ] }
-      items = blocked_items.any? ? blocked_items : sorted_next.last(3).reverse
+      blocked_items = blocked.filter_map { |sid| [ sid, scores_at_next[sid] ] if scores_at_next[sid] }.first(3)
+      items = blocked_items.any? ? blocked_items : weakest(scores_at_next)
       { state_label: "Mastering #{current_code} · #{progress_label}",
         list_label: next_code ? "Gap to #{next_code}" : "Top contributors",
-        items: items.any? ? items : sorted.first(3),
+        items: items.any? ? items : strongest(scores_here),
         border: "border-purple-300 dark:border-purple-700",
         accent: "text-purple-700 dark:text-purple-300",
         caps: caps_by_id }
@@ -380,14 +400,14 @@ class Views::Assessments::HeroSummary < Views::Base
       # score rather than a gap nobody can close.
       { state_label: "Meeting #{current_code} · top of the ladder",
         list_label: "Strongest at #{current_code}",
-        items: sorted.first(3),
+        items: strongest(scores_here),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     else # unknown state
       { state_label: "Performing at #{current_code}",
         list_label: "Gap to #{current_code}",
-        items: sorted.last(3).reverse.select { |_, v| v < 0 },
+        items: weakest(scores_here),
         border: "border-gray-200 dark:border-gray-700",
         accent: "text-gray-600 dark:text-gray-400",
         caps: caps_by_id }
@@ -408,31 +428,26 @@ class Views::Assessments::HeroSummary < Views::Base
           config[:list_label]
         end
       end
-      config[:items].each do |stable_id, value|
+      # Each row is that capability's own score at the level the panel
+      # names — the same scale, and the same tone-by-state rule, as every
+      # other number on the page. The signed weight-unit delta this
+      # replaced could only be compared against other capabilities, and
+      # read -1.0 for every capability nobody had rated at the next level,
+      # so a list of three ranked nothing.
+      config[:items].each do |stable_id, score|
         cap_data = config[:caps][stable_id]
-        next unless cap_data
+        next unless cap_data && score
 
         div(class: "flex items-center justify-between gap-2 py-0.5") do
           span(class: "min-w-0 truncate text-sm text-gray-700 dark:text-gray-300") do
             cap_data[:capability].name
           end
-          span(class: "text-sm font-bold tabular-nums shrink-0 #{contribution_color(value)}") do
-            sprintf("%+.1f", value.to_f)
+          span(class: "text-sm font-bold tabular-nums shrink-0 #{tone_text(score[:state])}",
+               title: state_label(score[:state])) do
+            "#{percent(score[:score])}%"
           end
         end
       end
-    end
-  end
-
-  def contribution_color(value)
-    if value >= 0.5
-      "text-green-700 dark:text-green-400"
-    elsif value > -0.5
-      "text-gray-600 dark:text-gray-300"
-    elsif value > -1.5
-      "text-amber-700 dark:text-amber-400"
-    else
-      "text-red-700 dark:text-red-400"
     end
   end
 
