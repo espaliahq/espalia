@@ -66,10 +66,10 @@ class Views::Assessments::CategoryChipBar < Views::Base
     end
   end
 
-  # The category's state as a dot — the same tone the header's number wears.
+  # The category's state as a dot — the same tone the header's number
+  # wears. Only called once the category is unlocked, which already
+  # settled that there is a score to colour.
   def status_dot(result)
-    return unless result
-
     span(
       class: "w-2 h-2 rounded-full #{tone_bar(result[:state])} shrink-0",
       data: { category_status: result[:state] }
@@ -79,8 +79,6 @@ class Views::Assessments::CategoryChipBar < Views::Base
   # The category's score, once enough of its assessed-level cells are rated
   # to mean something (the hero's own unlock rule).
   def pct_badge(result, active)
-    return unless result
-
     color = active ? "text-white/80 dark:text-gray-900/80" : tone_text(result[:state])
     span(class: "text-xs font-mono tabular-nums #{color}") { "#{percent(result[:score])}%" }
   end
