@@ -231,7 +231,8 @@ class Assessments::RatingsController < ApplicationController
             context: :self,
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
-            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data)
+            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
+            viewer_is_manager: viewer_is_manager?
           ),
           layout: false
         )

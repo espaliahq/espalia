@@ -168,7 +168,8 @@ class Views::Assessments::CapabilityCard < Views::Base
       block_reason: @block_reason,
       merged_levels: @merged_levels,
       person_level: @person_level,
-      thresholds: @thresholds
+      thresholds: @thresholds,
+      viewer_is_manager: @viewer_is_manager
     )
   end
 

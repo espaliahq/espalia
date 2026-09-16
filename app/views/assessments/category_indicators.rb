@@ -35,8 +35,10 @@ class Views::Assessments::CategoryIndicators < Views::Base
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param thresholds [Hash] the framework's own bands, for the definitions
+  # @param viewer_is_manager [Boolean] whether the reader is the
+  #   manager-side party — the definitions address them accordingly
   def initialize(category_id:, category_score:, category_data:, merged_levels:, person_level:,
-                 secondary_scores: [], context: :self, thresholds: {})
+                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false)
     @category_id = category_id
     @category_score = category_score
     @secondary_scores = secondary_scores
@@ -44,6 +46,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
     @context = context
     @merged_levels = merged_levels
     @person_level = person_level
+    @viewer_is_manager = viewer_is_manager
     @underperforming_threshold = thresholds[:underperforming]
     @meeting_threshold = thresholds[:meeting]
     @mastery_threshold = thresholds[:mastering]

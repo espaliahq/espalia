@@ -109,7 +109,8 @@ class Views::Assessments::CategorySection < Views::Base
           context: @context,
           merged_levels: @merged_levels,
           person_level: @person_level,
-          thresholds: @thresholds
+          thresholds: @thresholds,
+          viewer_is_manager: @viewer_is_manager
         )
       end
       if @category.description.present?

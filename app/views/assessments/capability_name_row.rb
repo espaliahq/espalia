@@ -29,8 +29,10 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
   # @param thresholds [Hash] the framework's own bands, for the definitions
+  # @param viewer_is_manager [Boolean] whether the reader is the
+  #   manager-side party — the definitions address them accordingly
   def initialize(capability:, score:, rated:, blocked:, block_reason:, merged_levels:, person_level:,
-                 thresholds: {})
+                 thresholds: {}, viewer_is_manager: false)
     @capability = capability
     @score = score
     @rated = rated
@@ -38,6 +40,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
     @block_reason = block_reason
     @merged_levels = merged_levels
     @person_level = person_level
+    @viewer_is_manager = viewer_is_manager
     @underperforming_threshold = thresholds[:underperforming]
     @meeting_threshold = thresholds[:meeting]
     @mastery_threshold = thresholds[:mastering]

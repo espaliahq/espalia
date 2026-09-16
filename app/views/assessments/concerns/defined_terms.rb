@@ -56,12 +56,19 @@ module Views::Assessments::Concerns::DefinedTerms
     )
   end
 
-  # Whether the reader is the person being described. Views that render
-  # for a manager set `@context` to something other than `:self`; anything
-  # without a context is the assessee's own page.
+  # Whether the reader is the person being described.
+  #
+  # `@context` is the WRONG signal on its own: it tracks the cycle's phase,
+  # not who is reading, so once alignment starts the assessee's own page
+  # renders `:alignment` and would be told "how much of what E2 expects
+  # THEY show" about themselves. `@viewer_is_manager` is the manager-side
+  # flag the split chips already thread for exactly this question; the
+  # context check remains only for views that carry neither.
   #
   # @return [Boolean]
   def glossary_second_person?
+    return !@viewer_is_manager if defined?(@viewer_is_manager) && !@viewer_is_manager.nil?
+
     !defined?(@context) || @context.nil? || @context == :self
   end
 
