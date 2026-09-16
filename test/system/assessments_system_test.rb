@@ -1486,6 +1486,73 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "a category header's description" do
+    # Reported from the field (#413): sharing the header's one row with the
+    # score cluster squeezed a real description into a four-word ribbon six
+    # lines tall — inside a sticky header, so it ate the viewport it was
+    # pinned to. The description now owns a row of its own beneath the name.
+    LONG_DESCRIPTION = "Domain-specific technical knowledge and skills required for the engineering " \
+                       "discipline. Strength in one technical area can compensate for a gap in " \
+                       "another, but the group must not go negative overall."
+
+    # `max-w-3xl` caps the description's line length, so on a wide screen a
+    # squeezed column can still be wider than the cap — geometry alone can't
+    # tell the two layouts apart there. Two assertions, each biting where the
+    # other can't: the row it lives in (any width) and the width it gets
+    # (narrow, which is where the ribbon was reported).
+    MAX_DESCRIPTION_WIDTH = 768
+
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+      should "own its row and its width, not a residue beside the score (#{name})" do
+        ActsAsTenant.with_tenant(@tenant) do
+          FrameworkState::CapabilityCategory.find_by!(category_id: @cat_id)
+            .update!(description: LONG_DESCRIPTION)
+        end
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+        assert_text "Strength in one technical area"
+
+        metrics = page.evaluate_script(<<~JS)
+          (function () {
+            var header = document.querySelector('#category-#{@cat_id} [data-section-header]');
+            if (!header) return null;
+            var heading = header.querySelector('h2');
+            var description = header.querySelector('p');
+            var score = header.querySelector('[id^="category-indicators-"]');
+            if (!heading || !description || !score) return null;
+            var h = header.getBoundingClientRect();
+            var n = heading.getBoundingClientRect();
+            var d = description.getBoundingClientRect();
+            var style = getComputedStyle(header);
+            return {
+              // A row of the header itself, not a column shared with the score.
+              descriptionIsOwnRow: description.parentElement === header,
+              scoreSharesDescriptionColumn: score.parentElement === description.parentElement,
+              descriptionWidth: d.width,
+              contentWidth: h.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+              descriptionStartsAtHeadingEdge: Math.abs(d.left - n.left) <= 1
+            };
+          })()
+        JS
+
+        assert metrics, "expected the category header to render a name, a description and a score"
+        assert metrics["descriptionIsOwnRow"],
+          "the description is nested beside the score instead of taking its own row"
+        assert_not metrics["scoreSharesDescriptionColumn"],
+          "the score cluster is back in the description's column"
+        assert metrics["descriptionStartsAtHeadingEdge"],
+          "the description no longer starts at the heading's left edge"
+
+        # Whatever is left after the cap is the full content width — never a
+        # residue of it. Allow a point of sub-pixel rounding.
+        expected = [ MAX_DESCRIPTION_WIDTH, metrics["contentWidth"] ].min
+        assert_operator metrics["descriptionWidth"], :>=, expected - 1,
+          "description is #{metrics['descriptionWidth']}px of an available #{expected}px — squeezed"
+      end
+    end
+  end
+
   context "responsive behaviour" do
     should "show scoring panel as hero card on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
