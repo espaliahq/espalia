@@ -626,6 +626,58 @@ end
 - If two contexts share >50% of their setup, merge them
 - Nested contexts inherit parent setup — use this to layer additional state
 
+## Running One System-Test File — `bin/rails test <path>`
+
+**`test:system` ignores a path argument and runs the whole system suite.**
+`bin/rails test:system test/system/foo.rb` boots all ~520 system tests (about
+11 minutes) and reports a pass, so nothing tells you the filter was dropped —
+you just wait, and a failure from an unrelated file looks like yours. The
+`TEST=` form is worse: `bin/rails test:system TEST=test/system/foo.rb` dies
+with `Rails::TestUnit::InvalidTestError` and a "Did you mean?" listing the
+path you already passed.
+
+Give the path to `bin/rails test` instead — it excludes system tests by
+default but runs them when the path names them, and it accepts several:
+
+```bash
+bin/rails test test/system/assessments_system_test.rb                 # one file
+bin/rails test test/system/{assessments,manager_assessments}_system_test.rb
+bin/rails test:system                                                 # deliberately all of them
+```
+
+## A `def` Inside a `context` Block Is Invisible to `should`
+
+Shoulda's `should` blocks are `instance_exec`'d against the test instance, but
+a `def` written inside a `context` block defines the method on the context
+object instead. The failure is a bare `NameError: undefined local variable or
+method 'my_helper'` at run time, which reads like a typo rather than a scoping
+rule:
+
+```ruby
+# WRONG — the should block cannot see it
+context "the score" do
+  def render_with_diverging_self = render_hero(...)
+
+  should "..." do
+    render_with_diverging_self   # NameError
+  end
+end
+
+# CORRECT — define it on the test class, use it from any context
+def render_with_diverging_self = render_hero(...)
+
+context "the score" do
+  should "..." do
+    render_with_diverging_self
+  end
+end
+```
+
+`setup` blocks are the exception — they run in the instance, so ivars set
+there are visible as usual. Shared *behaviour* still belongs in a nested
+context (see *Shared Setup Across Contexts*); this is only about helper
+methods.
+
 ## Rules
 
 - Use `subject { }` to define the object under test
