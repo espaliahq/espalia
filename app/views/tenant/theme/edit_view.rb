@@ -29,8 +29,8 @@ class Views::Tenant::Theme::EditView < Views::Base
     {
       label: "Nav background",
       var: "--color-nav-bg",
-      light: { attr: :nav_bg_color,         default: "#32c8c8" },
-      dark:  { attr: :nav_bg_color_dark,    default: "#1a1a2e" }
+      light: { attr: :nav_bg_color,         default: Tenant::DEFAULT_NAV_BG_COLOR },
+      dark:  { attr: :nav_bg_color_dark,    default: Tenant::DEFAULT_NAV_BG_COLOR_DARK }
     },
     {
       label: "Nav text",

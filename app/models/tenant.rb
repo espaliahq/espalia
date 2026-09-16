@@ -11,6 +11,13 @@
 class Tenant < ApplicationRecord
   HEX_COLOR_FORMAT = /\A#[0-9a-fA-F]{6}\z/
 
+  # The navbar colours the app ships with (`--color-nav-bg` in
+  # app/assets/tailwind/application.css). Also the fallback browser
+  # `theme-color`, and the `theme_color` of the (static, so never per-tenant)
+  # web-app manifest — see docs/guidelines/app-icons.md.
+  DEFAULT_NAV_BG_COLOR = "#32c8c8"
+  DEFAULT_NAV_BG_COLOR_DARK = "#1a1a2e"
+
   has_many :tenant_users, dependent: :destroy
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
@@ -43,6 +50,21 @@ class Tenant < ApplicationRecord
     format: { with: HEX_COLOR_FORMAT }, allow_blank: true
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
   validates :hris_config, store_model: true
+
+  # The colour the browser should paint its own chrome (address bar, title
+  # bar, task switcher) for a page of this tenant: the tenant's navbar
+  # colour, or the app default when none is set.
+  #
+  # @param tenant [Tenant, nil]
+  # @param scheme [Symbol] :light or :dark
+  # @return [String] a hex colour
+  def self.browser_theme_color(tenant, scheme)
+    if scheme == :dark
+      tenant&.nav_bg_color_dark.presence || DEFAULT_NAV_BG_COLOR_DARK
+    else
+      tenant&.nav_bg_color.presence || DEFAULT_NAV_BG_COLOR
+    end
+  end
 
   # Returns CSS variable overrides for light mode.
   #

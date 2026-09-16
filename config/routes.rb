@@ -134,8 +134,9 @@ Rails.application.routes.draw do
   # Unified evidence modal body (server-rendered into the #evidence-modal frame).
   resource :evidence_modal, only: [ :show ], controller: "evidence_modal"
 
-  # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
-  # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
+  # The web app manifest is a static file (public/manifest.json — nothing in it
+  # is per-request), and the service worker stays off: nothing needs offline or
+  # push yet. Wire app/views/pwa/service-worker.js here when that changes:
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   resources :assessments, only: [ :index, :show ] do

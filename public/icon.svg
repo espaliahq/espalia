@@ -1,3 +1,8 @@
-<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="256" cy="256" r="256" fill="red"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="166.5 148.5 730 730" role="img" aria-labelledby="growthos-title growthos-desc">
+  <title id="growthos-title">GrowthOS</title>
+  <desc id="growthos-desc">Three ascending steps with a leaf sprouting from the top step.</desc>
+  <g fill="#32c8c8">
+    <path d="M223,847 H777 A28,28 0 0 0 805,819 V408 A28,28 0 0 0 777,380 H633 A28,28 0 0 0 605,408 V506 A14,14 0 0 1 591,520 H428 A28,28 0 0 0 400,548 V636 A14,14 0 0 1 386,650 H223 A28,28 0 0 0 195,678 V819 A28,28 0 0 0 223,847 Z"/>
+    <path d="M688,400 V330 C688,235 765,180 868,180 C870,300 812,380 726,380 V400 Z"/>
+  </g>
 </svg>
