@@ -16,7 +16,7 @@
 # Write — :mcp_client (a pending proposal; nothing is removed until a
 # reviewer approves, and a capability archive is still draft-gated after that).
 class Operations::Frameworks::SuggestDelete < Operations::Base
-  description "Propose deleting a framework entity (capability or illustration) as a pending suggestion — nothing is removed until a reviewer approves."
+  description "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves."
   category :write
   approval :mcp_client
 

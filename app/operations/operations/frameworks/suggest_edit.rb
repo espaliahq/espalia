@@ -19,7 +19,7 @@
 # (FrameworkPolicy#suggest_edit?); the direct-apply decision is the
 # aggregate's `can_approve?`, driven by the mode + the author's authority.
 class Operations::Frameworks::SuggestEdit < Operations::Base
-  description "Edit framework content (capability/category name or description, expectation or illustration text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal."
+  description "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal."
   category :write
   approval :mcp_client
 

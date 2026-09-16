@@ -18,7 +18,7 @@
 # (FrameworkPolicy#suggest_edit?); the direct branch additionally requires
 # illustration-tier approval authority, otherwise it falls back to a suggestion.
 class Operations::Frameworks::ArchiveIllustration < Operations::Base
-  description "Archive a role illustration — removed directly with approval rights in editing mode, else proposed as a suggestion."
+  description "Archive an example (role illustration) — removed directly with approval rights in editing mode, else proposed as a suggestion."
   category :write
   approval :mcp_client
 
@@ -97,6 +97,6 @@ class Operations::Frameworks::ArchiveIllustration < Operations::Base
       .joins(role: :role_family)
       .where(framework_role_families: { framework_id: params[:framework_id] })
       .find_by(illustration_id: params[:illustration_id]) ||
-      raise(ActiveRecord::RecordNotFound, "illustration #{params[:illustration_id]} not found")
+      raise(ActiveRecord::RecordNotFound, "example #{params[:illustration_id]} not found")
   end
 end

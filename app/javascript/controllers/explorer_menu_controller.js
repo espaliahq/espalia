@@ -61,9 +61,9 @@ const SUGGESTION_LABELS = {
   capabilityName: ["name change", "capability name"],
   capabilityDescription: ["description change", "capability description"],
   expectation: ["expectation change", "expectation"],
-  illustration: ["illustration change", "illustration"],
+  illustration: ["example change", "example"],
   "expectation-create": ["new expectation", "new expectation"],
-  "illustration-create": ["new illustration", "new illustration"]
+  "illustration-create": ["new example", "new example"]
 }
 
 export default class extends BaseController {

@@ -4,6 +4,24 @@ This document captures the design decisions, interaction patterns, and hard-won 
 
 > **See also:** [assessments.md](assessments.md) for the assessment extension of the matrix pattern.
 
+> **Terminology — "example" on the surface, "illustration" in the domain.** A
+> `RoleIllustration` is shown to users as an **example** everywhere: matrix
+> cell counts ("3 examples"), the expanded row, the "+ Add example" affordance,
+> the "Example actions" kebab, feed entries ("Added an example"), suggestion
+> badges, modal copy, toasts, error messages, and MCP tool *descriptions*. The
+> **domain vocabulary is unchanged**: events (`RoleIllustrationAdded`…),
+> commands, read models (`FrameworkState::RoleIllustration`), DB tables and
+> columns, `suggestion.target_entity_type == "role_illustration"`, form param
+> namespaces (`illustration[...]`), routes (`/illustrations`,
+> `/illustration_archives`), controllers, view classes (`IllustrationFrame`),
+> Stimulus controllers and targets, turbo-frame ids (`illustration-<id>`), the
+> `illustrations` JSON key in MCP payloads, and the MCP **tool names**
+> (`frameworks_archive_illustration`, `frameworks_reorder_illustrations`,
+> `calibration_sessions_flag_illustration`). Same split as the assessment
+> surface's "Feedback / Evidence" relabel ([assessments.md](assessments.md)):
+> when you add a surface, label it "example", keep the identifier
+> "illustration". Never use the two interchangeably in copy.
+
 ## Overview
 
 The Framework Explorer is a two- or three-pane interactive view for browsing career frameworks. It renders a **capability x level matrix** filtered by user-selected roles, with a hierarchical role tree for navigation. View mode has two panes (role tree + matrix); edit mode adds a third — the context / suggestions pane on the right.
@@ -11,7 +29,7 @@ The Framework Explorer is a two- or three-pane interactive view for browsing car
 The explorer has two modes, both backed by the same components:
 
 - **View mode** (`GET /frameworks/:id`) — published state only. No inline editors, no pending-suggestion decorations on the grid, no context pane. The `.flex` layout has two panes (role tree + matrix).
-- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add illustration" affordances, the wiggle on draft (not-yet-published) entities + the pending-archive badge, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11. The row-actions **Archive** is offered to any suggest-rights viewer (it applies directly or proposes a suggestion per the edit/suggest toggle + authority — §11).
+- **Edit mode** (`GET /frameworks/:id/edit`) — contributor workspace. Adds inline-edit pencils on capability name / **capability description** / category / expectation / illustration text, "+ Add example" affordances, the wiggle on draft (not-yet-published) entities + the pending-archive badge, the amber "Edit mode" header badge, and the context (suggestions/activity) pane on the right. Access requires `FrameworkPolicy#edit?` — collaborator with suggest rights, or tenant admin. **Structural edits** (add capability/category, the draft pill, the Publish button) need the narrower `#edit_structure?` / `#publish?` bar — see §11. The row-actions **Archive** is offered to any suggest-rights viewer (it applies directly or proposes a suggestion per the edit/suggest toggle + authority — §11).
 
 Both modes read structural data from the same `Frameworks::ExplorerGraph` snapshot (see [docs/architecture/framework-edit-mode-benchmarks.md](../architecture/framework-edit-mode-benchmarks.md)). A `mode: :view | :edit` kwarg is threaded from `ShowView` down through `Matrix`, `MatrixCategoryGroup`, `MatrixRow`, `MatrixCell`, and each entity's inline-edit frame. The `MatrixDataBuilder` filters out `added_in_draft` entities in view mode — matching `PublishedState`'s event-deferral semantics from ADR-16.
 
@@ -484,7 +502,7 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   yet). `MatrixDataBuilder` emits an `authorable` placeholder cell only in edit
   mode (never view); `MatrixCell` renders the affordance for **any edit-mode
   viewer** (edit mode already requires suggest rights), via `NewExpectationFrame`
-  — the same inline-editor toggle as "+ Add illustration". Submits to
+  — the same inline-editor toggle as "+ Add example". Submits to
   `Operations::Frameworks::SetBehaviouralExpectation`, which **follows the
   suggest/approve path** (routes through `suggest_create`): in editing mode an
   author with expectation-tier approval authority has it applied directly
@@ -923,7 +941,7 @@ gone). Add is one dashed ghost (`HoverCluster#render_add_affordance`,
 `.explorer-add`), **always visible** in edit mode so it is keyboard reachable
 and discoverable on touch — used by "+ Add category" (stats bar), "+ Add
 capability" (category footer), "+ Add expectation" (empty cell, previously
-hover-only) and "+ Add illustration" (expanded row). Its label is
+hover-only) and "+ Add example" (expanded row). Its label is
 **left-anchored, and an add row sits in the column it adds to** — the
 add-capability row is a single sticky cell in the capability column, NOT a
 `colspan`-ed row: a centred label in a matrix-wide row lands off-screen at the
@@ -1137,7 +1155,7 @@ reject modal, and `suggestion:resolved` → `matrix#refresh` — so approving
 from the grid and from
 the feed are the same operation with the same live-update wiring (the feed
 reloads via broadcast either way). Pending **creates** (the ghost frames)
-carry the same kebab — "Approve/Reject new illustration/expectation" — so a
+carry the same kebab — "Approve/Reject new example/expectation" — so a
 proposed entity is as one-click to action from the grid as a proposed edit
 (the squiggle click's card remains the discussion path; the ghost frame
 re-renders — `IllustrationsController#render_pending_turbo_stream`,

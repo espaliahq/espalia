@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Renders the "+ Add illustration" affordance inside a Turbo Frame.
+# Renders the "+ Add example" affordance inside a Turbo Frame.
 #
 # After a successful POST the controller returns a Turbo Stream that:
 # 1. Appends the new IllustrationFrame to `ul#illustrations-{eid}-{rid}`
@@ -36,7 +36,7 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
       action: framework_illustrations_path(framework_id: @framework_id),
       field: "illustration[description]",
       value: "",
-      label: "New illustration",
+      label: "New example",
       entity: "role_illustration",
       method: "post",
       rows: 3,
@@ -51,7 +51,7 @@ class Views::Frameworks::Explorer::NewIllustrationFrame < Views::Base
 
   def add_button
     render_add_affordance(
-      "Add illustration", editor_display: true, action: "field-editor#open"
+      "Add example", editor_display: true, action: "field-editor#open"
     )
   end
 end

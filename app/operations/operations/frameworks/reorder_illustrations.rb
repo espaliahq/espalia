@@ -13,8 +13,8 @@
 # Write — :mcp_client. Restricted to edit-rights holders
 # (FrameworkPolicy#reorder_illustrations?).
 class Operations::Frameworks::ReorderIllustrations < Operations::Base
-  description "Reorder the illustrations for one expectation and role (owner/editor/lead only). " \
-              "Pass the complete list of illustration ids in the desired display order."
+  description "Reorder the examples (role illustrations) for one expectation and role (owner/editor/lead only). " \
+              "Pass the complete list of example (illustration) ids in the desired display order."
   category :write
   approval :mcp_client
 
@@ -23,7 +23,7 @@ class Operations::Frameworks::ReorderIllustrations < Operations::Base
   parameter :role_id,        String, required: true
   parameter :new_ordering,   Array,  required: true,
                              schema: { type: "array", items: { type: "string" },
-                                       description: "Every illustration id for this expectation × role, in the desired order" }
+                                       description: "Every example (illustration) id for this expectation × role, in the desired order" }
 
   def policy_check
     authorize framework, :reorder_illustrations?
@@ -70,12 +70,12 @@ class Operations::Frameworks::ReorderIllustrations < Operations::Base
 
     if current_ids.empty?
       raise Operations::Base::ParameterError,
-            "no illustrations found for expectation #{params[:expectation_id]} and role #{params[:role_id]}"
+            "no examples found for expectation #{params[:expectation_id]} and role #{params[:role_id]}"
     end
     return if new_ordering.sort == current_ids.sort
 
     raise Operations::Base::ParameterError,
-          "new_ordering must be a permutation of the #{current_ids.size} illustration id(s) " \
+          "new_ordering must be a permutation of the #{current_ids.size} example id(s) " \
           "for this expectation and role"
   end
 end

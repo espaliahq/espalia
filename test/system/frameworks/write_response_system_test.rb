@@ -133,7 +133,7 @@ class Frameworks::WriteResponseSystemTest < ApplicationSystemTestCase
       assert_text "Seeks guidance from tech lead"
       mark_page
 
-      use_explorer_menu("Illustration actions", "Archive",
+      use_explorer_menu("Example actions", "Archive",
                         scope: "li[data-editor-action*='/illustrations/']")
       assert_selector "#archive-illustration-modal", visible: true
       click_button_with_js_fallback("Archive example", expect_text: "Archived the example.")

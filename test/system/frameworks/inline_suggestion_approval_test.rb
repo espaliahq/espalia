@@ -252,8 +252,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      open_explorer_menu("Illustration actions", scope: "#illustration-#{@ill_id}")
-      assert_text "Approve illustration change"
+      open_explorer_menu("Example actions", scope: "#illustration-#{@ill_id}")
+      assert_text "Approve example change"
       # Archive lives in the same kebab — the menu is the illustration's
       # single "more actions" home.
       assert_text "Archive…"
@@ -272,9 +272,9 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      open_explorer_menu("New-illustration suggestion actions",
+      open_explorer_menu("New-example suggestion actions",
                          scope: "turbo-frame[id='pending-suggestion-#{create_sugg_id}']")
-      assert_text "Approve new illustration"
+      assert_text "Approve new example"
       page.execute_script(<<~JS)
         document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
       JS
@@ -290,7 +290,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      use_explorer_menu("New-illustration suggestion actions", "Reject new illustration",
+      use_explorer_menu("New-example suggestion actions", "Reject new example",
                         scope: "turbo-frame[id='pending-suggestion-#{create_sugg_id}']")
       assert_selector "#reject-suggestion-modal", visible: true
       fill_in "reject_reason", with: "Covered by the existing example"
@@ -308,8 +308,8 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       expand_matrix_row("tr[data-capability-id='#{@cap_id}']")
 
-      open_explorer_menu("Illustration actions", scope: "#illustration-#{@ill_id}")
-      assert_text "Approve illustration change"
+      open_explorer_menu("Example actions", scope: "#illustration-#{@ill_id}")
+      assert_text "Approve example change"
       page.execute_script(<<~JS)
         document.querySelector("[data-explorer-menu] [data-action~='suggestion-action#approve']").click();
       JS
@@ -388,7 +388,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
       toggle_context_pane
       within "#suggestion-panel" do
-        assert_text "Proposed a new illustration"
+        assert_text "Proposed a new example"
       end
 
       # Click the entry body (not its action buttons) — dispatches

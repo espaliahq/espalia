@@ -448,7 +448,7 @@ input[type="week"] {
 /* Framework explorer — the ONE "add" treatment (#380).
  *
  * "+ Add capability" was a plain footer row, "+ Add expectation" a hover-only
- * button, "+ Add illustration" always visible: three affordances for the same
+ * button, "+ Add example" always visible: three affordances for the same
  * act. They are now one dashed ghost, always visible in edit mode (so it is
  * keyboard reachable and discoverable on touch) and quiet enough not to
  * compete with the content it sits under. */

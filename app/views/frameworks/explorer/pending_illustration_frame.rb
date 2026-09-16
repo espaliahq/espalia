@@ -62,7 +62,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   def editor_data
     common = {
       value: @error ? @attempted_value.to_s : @attrs[:description].to_s,
-      label: @is_author ? "Amend suggestion" : "Alternative illustration",
+      label: @is_author ? "Amend suggestion" : "Alternative example",
       outcome: "propose",
       rows: 3,
       form_class: "pl-2",
@@ -134,7 +134,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   # client-side builder composes the Approve / Reject pair from these ids.
   def approval_trigger_data
     {
-      label: "New-illustration suggestion actions",
+      label: "New-example suggestion actions",
       kind: "illustration-create",
       sid: @suggestion.suggestion_id,
       preview: @attrs[:description].to_s

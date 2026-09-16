@@ -785,7 +785,7 @@ class Frameworks::AggregateSuggestionTest < ActiveSupport::TestCase
           "role_illustration", SecureRandom.uuid_v7, author_id: @author_id
         )
       end
-      assert_match /Illustration .* not found/, err.message
+      assert_match /Example .* not found/, err.message
     end
 
     should "raise for entity type without delete command (role)" do

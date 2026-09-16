@@ -713,7 +713,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_flag_illustration",
-        "description" => "Flag one role illustration (example) as unclear from a live calibration session — raises a framework clarification anchored on the illustration.",
+        "description" => "Flag one example (role illustration) as unclear from a live calibration session — raises a framework clarification anchored on the example.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1140,7 +1140,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_archive_illustration",
-        "description" => "Archive a role illustration — removed directly with approval rights in editing mode, else proposed as a suggestion.",
+        "description" => "Archive an example (role illustration) — removed directly with approval rights in editing mode, else proposed as a suggestion.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1160,7 +1160,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_capability_get",
-        "description" => "Fetch one capability's full detail: bindings, expectations per level, illustrations. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+        "description" => "Fetch one capability's full detail: bindings, expectations per level, examples (the illustrations key). Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1567,8 +1567,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_reorder_illustrations",
-        "description" => "Reorder the illustrations for one expectation and role (owner/editor/lead only). " \
-                         "Pass the complete list of illustration ids in the desired display order.",
+        "description" => "Reorder the examples (role illustrations) for one expectation and role (owner/editor/lead only). " \
+                         "Pass the complete list of example (illustration) ids in the desired display order.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1578,7 +1578,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "new_ordering"   => {
               "type" => "array",
               "items" => { "type" => "string" },
-              "description" => "Every illustration id for this expectation × role, in the desired order"
+              "description" => "Every example (illustration) id for this expectation × role, in the desired order"
             }
           },
           "required" => %w[framework_id expectation_id role_id new_ordering],
@@ -1593,7 +1593,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "frameworks_request_clarification",
         "description" => "Ask for clarification of a capability, one of its level expectations, or a role " \
-                         "illustration — opens a discussion, proposes nothing.",
+                         "example (illustration) — opens a discussion, proposes nothing.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1607,7 +1607,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             },
             "illustration_id" => {
               "type" => "string", "minLength" => 1, "pattern" => "\\S",
-              "description" => "A role illustration to anchor on — the most specific target, and its " \
+              "description" => "An example (role illustration) to anchor on — the most specific target, and its " \
                                "level is taken from the owning expectation. Required unless capability_id is given."
             },
             "level_ordinal"   => { "type" => "integer" },
@@ -1669,7 +1669,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_create",
-        "description" => "Propose creating a framework entity (illustration, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode.",
+        "description" => "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1713,7 +1713,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_delete",
-        "description" => "Propose deleting a framework entity (capability or illustration) as a pending suggestion — nothing is removed until a reviewer approves.",
+        "description" => "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1733,7 +1733,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_edit",
-        "description" => "Edit framework content (capability/category name or description, expectation or illustration text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal.",
+        "description" => "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

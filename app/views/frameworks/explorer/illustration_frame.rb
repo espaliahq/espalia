@@ -85,7 +85,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       ),
       field: "illustration[description]",
       value: @error ? @attempted_value.to_s : inline_editor_value(@illustration.description, @pending_edit),
-      label: "Illustration text",
+      label: "Example text",
       entity: "role_illustration",
       rows: 3,
       form_class: "pl-2",
@@ -121,8 +121,8 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
         # treatment (framework-explorer.md §11).
         render_hover_cluster(
           scope: "ill",
-          pencil: { aria_label: "Edit illustration" },
-          menu: { label: "Illustration actions", kind: "illustration", **illustration_menu_data }
+          pencil: { aria_label: "Edit example" },
+          menu: { label: "Example actions", kind: "illustration", **illustration_menu_data }
         )
       end
     end

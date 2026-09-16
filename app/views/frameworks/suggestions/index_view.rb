@@ -25,13 +25,13 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   }.freeze
 
   TIER_LABELS = {
-    1 => "Tier 1 — Illustrations",
+    1 => "Tier 1 — Examples",
     2 => "Tier 2 — Descriptions",
     3 => "Tier 3 — Behavioural expectations"
   }.freeze
 
   ENTITY_TYPE_LABELS = {
-    "role_illustration" => "Illustration",
+    "role_illustration" => "Example",
     "behavioural_expectation" => "Expectation",
     "capability" => "Capability",
     "capability_category" => "Category",
