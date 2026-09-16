@@ -47,7 +47,7 @@
 | 4 | Evidence from self/manager/peers, re-linkable | `EvidenceRecorded` / `EvidenceRelinked` events. Semi-freeform types + `ExternalReference`. |
 | 5 | Framework evolution | Event-sourced Framework with versioning. `stable_id` continuity. `requires_reassessment` flag. Nothing silently dropped. |
 | 6 | Weighted capabilities | `CapabilityRoleBinding.weight` — per-role weighting. Contributes to scoring as `(effective_frequency − expected) × weight`. |
-| 7 | Deficit threshold requirements | `deficit_threshold` (resolved per capability: binding → category → framework, default 1.0). Dual purpose at category level. `overperformance_cap` (resolved same hierarchy, default 1). |
+| 7 | Deficit threshold requirements | `deficit_threshold` (resolved per capability: binding → category → framework, default 0.75 — nil on the framework means the system default). Dual purpose at category level. `overperformance_cap` (resolved same hierarchy, default 1). |
 | 8 | Growth plans + check-ins + freshness | Growth events in Person Development stream. `GrowthPlanState` projection. Freshness = `last_check_in_at` delta. |
 | 9 | Aggregate gap reporting | `Reporting::GapAnalysis` async projection. Aggregates `effective_frequency` vs expected across people per role. |
 

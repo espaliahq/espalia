@@ -49,10 +49,10 @@ score   = max(0, current + next + (prior − 1))
 Three things the arithmetic is built around:
 
 - **Bands are normalised over the cells that carry an expectation.** A capability with no expectation at L+1 neither earns nor owes next-level credit. Every engine construction passes the cell set (`expectation_cells:`); the assessment builder derives it from the cells the matrix renders, the reporting and calibration queries from `BehaviouralExpectation`.
-- **Prior levels pool into one bucket.** A deficit rated below the assessed level subtracts from the score, but the *number* of prior levels never enters the denominator. That padding is what made the previous ratio level-dependent (an L7 ceiling of 114%, a promotion gate needing 65% of the next band at L7 versus 95% at L1).
+- **Prior levels pool into one bucket.** Their attainment is averaged into a bucket the size of a single band, so a deficit rated below the assessed level subtracts its share of that bucket — one "not yet" at L2 costs 1/(N × prior levels) of the score, a smaller share the more prior levels there are. Deliberate: the bucket is the same size at every level, which is what keeps the ceiling and the meeting bar level-independent, whereas the old ratio let every prior level pad the denominator (an L7 ceiling of 114%, a promotion gate needing 65% of the next band at L7 versus 95% at L1).
 - **Weight is the unit everywhere.** A 2× capability is 2/band of every level it has an expectation at.
 
-`performance_ratio` is `performance_ratio_at_level(person_level)` — one formula, so the hero, the level chips and promotion readiness cannot disagree. `components` exposes `{ prior:, current:, next:, score: }` for the hero copy ("94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3").
+`performance_ratio` is `performance_ratio_at_level(person_level)` — one formula, so the hero and promotion readiness cannot disagree. "The next level" is the next ordinal in the role's ladder (`next_level_ordinal`), not `person_level + 1`, so a gap in the ordinals scores correctly; a level at which a capability has no expectation neither earns, owes, nor gates. `components` exposes `{ prior:, current:, next:, score: }` for the hero copy ("94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3").
 
 ---
 
@@ -93,7 +93,7 @@ Verdict gate: deficit > deficit_threshold → capability is :blocked
 
 At the default 0.75 a current-level "not yet" (deficit 1.0) blocks; "some" and "most of the time" can be made up by strength elsewhere. At the previous default of 1.0 the gate could never fire — a capability's current-level deficit maxes out at exactly 1.0. Tolerance 0 marks the capability mandatory: any gap blocks, and the step gate applies.
 
-The framework-wide value lives on `framework_states.deficit_threshold` (NOT NULL, database default 0.75 since migration `20260916000001`); a framework that never configured thresholds carries the column default, not an event.
+The framework-wide value lives on `framework_states.deficit_threshold`; **nil means the system default** (like the three ratio thresholds), so the default lives in one constant and moves with the code. Migration `20260916000001` made the column nullable and set never-configured rows to nil, leaving any explicitly configured value — including 1.0 — exactly as its event says, so a projection rebuild reproduces the same state.
 
 ---
 
