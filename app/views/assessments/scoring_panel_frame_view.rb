@@ -42,6 +42,7 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         merged_levels: @matrix_data[:merged_levels],
         mastery_threshold: @matrix_data[:mastery_threshold],
         meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+        underperforming_threshold: @matrix_data[:underperforming_threshold],
         assessment_id: @assessment_id,
         context: @context,
         viewer_is_manager: @viewer_is_manager,

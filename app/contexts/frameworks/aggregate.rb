@@ -1180,6 +1180,7 @@ class Frameworks::Aggregate
                                    underperforming_threshold: nil,
                                    overperformance_cap: nil, deficit_threshold: nil)
     ensure_created!
+    ensure_thresholds_ordered!(underperforming_threshold, promotion_score_threshold, mastery_threshold)
 
     apply(Frameworks::Events::ScoringThresholdsConfigured.new(data: {
       framework_id: framework_id,
@@ -1271,6 +1272,18 @@ class Frameworks::Aggregate
   # @raise [RuntimeError] if the framework has not been created
   def ensure_created!
     raise "Framework not yet created" unless @status == :created
+  end
+
+  # The performance-state machine walks underperforming → meeting → mastery
+  # in a fixed order; an inverted configuration would silently produce
+  # nonsense states. Only the supplied values are compared here (nil means
+  # "system default", which the Operation resolves and checks in full).
+  def ensure_thresholds_ordered!(underperforming, meeting, mastery)
+    supplied = { underperforming: underperforming, meeting: meeting, mastery: mastery }.compact
+    ordered = supplied.values_at(:underperforming, :meeting, :mastery).compact
+    return if ordered.each_cons(2).all? { |lower, higher| lower < higher }
+
+    raise "Scoring thresholds must be ordered underperforming < meeting < mastery (got #{supplied})"
   end
 
   # Ensures the aggregate is inside a draft phase. Called by shape-changing

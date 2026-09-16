@@ -224,6 +224,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         merged_levels: @matrix_data[:merged_levels],
         mastery_threshold: @matrix_data[:mastery_threshold],
         meeting_expectation_threshold: @matrix_data[:meeting_expectation_threshold],
+        underperforming_threshold: @matrix_data[:underperforming_threshold],
         assessment_id: @assignment.id,
         context: @context,
         # The manager-side view — the manager's own rating leads

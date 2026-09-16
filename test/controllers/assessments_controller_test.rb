@@ -464,7 +464,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Rate yourself to see your score"
       assert_includes response.body, "Score unlocks at 2"
-      assert_not_includes response.body, "Baseline coverage at"
+      assert_not_includes response.body, "demonstrated"
     end
 
     should "stay primed below the 50% threshold (1 of 3 rated)" do
@@ -476,7 +476,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Score unlocks at 2"
       assert_includes response.body, "1/3"
-      assert_not_includes response.body, "Baseline coverage at"
+      assert_not_includes response.body, "demonstrated"
     end
 
     should "unlock scoring at the 50% threshold with a coverage chip (2 of 3 rated)" do
@@ -487,7 +487,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       get scoring_assessment_path(@assignment)
 
       assert_response :success
-      assert_includes response.body, "Baseline coverage at"
+      assert_includes response.body, "demonstrated"
       assert_includes response.body, "2 of 3 rated"
       assert_not_includes response.body, "Rate yourself to see your score"
     end
@@ -500,7 +500,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       get scoring_assessment_path(@assignment)
 
       assert_response :success
-      assert_includes response.body, "Baseline coverage at"
+      assert_includes response.body, "demonstrated"
       assert_not_includes response.body, "of 3 rated"
     end
   end

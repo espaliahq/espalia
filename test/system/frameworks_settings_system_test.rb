@@ -39,9 +39,9 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       sign_in @admin_user
       visit framework_settings_path(framework_id: @framework_id)
 
-      assert_text "performance ratio a person must reach"
-      assert_text "minimum performance ratio"
-      assert_text "levels above a person's assigned level"
+      assert_text "mastering their level"
+      assert_text "minimum score"
+      assert_text "levels above a person's assessed level"
       assert_text "weighted deficit above which a capability"
     end
 

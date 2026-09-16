@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Score by cohort — the third overview tab: every calibrated person as an
-# initialed dot on a 0–125% axis, grouped by assessed level and coloured by
+# initialed dot on a 0–200% axis, grouped by assessed level and coloured by
 # WHO rated them, so "Raj's people cluster low" is pre-attentive before a
 # single number is read (docs/architecture/calibration-sessions.md →
 # "Score by cohort").
@@ -18,15 +18,17 @@ class Views::CalibrationSessions::CohortView < Views::Base
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::PeopleNames
 
-  AXIS_MAX_PCT = 125
+  # The score's own scale (ADR-21): 100 is meeting the assessed level, 200 is
+  # demonstrating the next one in full.
+  AXIS_MAX_PCT = 200
   # Dots closer than this (in % points) stack into further lanes instead of
   # overlapping — the board's exactly-overlapping-dots nit, addressed here.
   # A real cohort clusters hard (twenty people between 75 and 100), so the
   # packing is greedy k-lane, not a two-lane flip-flop.
-  # ≥ the 44px tap-target LINK at the track's 480px min width (12% of a
-  # 0–125 axis ≈ 46px there) — a "far enough for the same lane" that still
+  # ≥ the 44px tap-target LINK at the track's 480px min width (20% of a
+  # 0–200 axis ≈ 48px there) — a "far enough for the same lane" that still
   # let the later link cover the earlier dot defeated the point.
-  LANE_NUDGE_PCT = 12
+  LANE_NUDGE_PCT = 20
   MAX_LANES = 4
   # A full 44px per lane: each dot's tap target is 44px high, so anything
   # tighter stacks one lane's links over the lane above and steals its
@@ -142,7 +144,8 @@ class Views::CalibrationSessions::CohortView < Views::Base
     end
   end
 
-  # A 0–125% track: labelled reference line at 100%, a median tick, one
+  # A 0–200% track: labelled reference lines at 100% (meets the level) and
+  # 200% (the next level in full), a median tick, one
   # initialed dot per unlocked person. The text equivalent rides each dot's
   # aria-label — position and colour are never the only carriers. Height
   # grows with the lanes the cluster needs, so tap targets never overflow
@@ -156,19 +159,20 @@ class Views::CalibrationSessions::CohortView < Views::Base
     div(class: "overflow-x-auto") do
       div(class: "relative mt-6 min-w-[480px]", style: "height: #{height}px") do
         span(class: "absolute left-0 right-0 top-[30px] h-1.5 rounded-full bg-gray-100 dark:bg-gray-700")
-        reference_line
+        reference_line(100, "100% — meets expectations")
+        reference_line(200, "200% — next level")
         median_tick(cohort[:median_pct]) if cohort[:median_pct]
         placed.each { |dot, lane| render_dot(dot, lane) }
       end
     end
   end
 
-  def reference_line
+  def reference_line(pct, label)
     span(class: "absolute top-2 bottom-1 w-px bg-gray-300 dark:bg-gray-600",
-         style: "left: #{position_pct(100)}%") do
+         style: "left: #{position_pct(pct)}%") do
       span(class: "absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap " \
                   "text-[10px] text-gray-600 dark:text-gray-300") do
-        "100% — meets expectations"
+        label
       end
     end
   end
@@ -187,8 +191,8 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def lanes(plotted)
     lane_edges = []
     plotted.map do |dot|
-      # Distance on the RENDERED position: two overperformers at 128% and
-      # 140% both draw at the 125% cap, so measuring the raw pcts would
+      # Distance on the RENDERED position: two overperformers at 210% and
+      # 240% both draw at the 200% cap, so measuring the raw pcts would
       # call them "far apart" and stack their tap targets exactly.
       pct = dot[:pct].clamp(0, AXIS_MAX_PCT)
       lane = lane_edges.index { |edge| (pct - edge).abs >= LANE_NUDGE_PCT }
@@ -293,7 +297,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   end
 
   # Display position, held off the wrapper's edges: a dot centred at 0% or
-  # 125% would hang half its 44px tap target outside the overflow container
+  # 200% would hang half its 44px tap target outside the overflow container
   # and get clipped.
   def position_pct(pct)
     ((pct.clamp(0, AXIS_MAX_PCT).to_f / AXIS_MAX_PCT) * 100).clamp(3.0, 97.0).round(1)

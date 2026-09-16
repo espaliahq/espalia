@@ -114,6 +114,27 @@ class Operations::Frameworks::ConfigureScoringThresholdsTest < ActiveSupport::Te
     end
   end
 
+  context "threshold ordering" do
+    should "reject thresholds that are not ordered underperforming < meeting < mastery" do
+      ActsAsTenant.with_tenant(@tenant) do
+        error = assert_raises(Operations::Base::ParameterError) do
+          configure(@admin_ctx, { framework_id: @framework_id,
+                                  mastery_threshold: 0.9, meeting_expectation_threshold: 0.95 })
+        end
+        assert_match(/ordered underperforming < meeting_expectation < mastery/, error.message)
+      end
+    end
+
+    should "check the order against the defaults an omitted threshold falls back to" do
+      # underperforming omitted → 0.80; a meeting threshold below it is inverted.
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_raises(Operations::Base::ParameterError) do
+          configure(@admin_ctx, { framework_id: @framework_id, meeting_expectation_threshold: 0.7 })
+        end
+      end
+    end
+  end
+
   context "as a plain tenant member" do
     should "be denied" do
       ActsAsTenant.with_tenant(@tenant) do

@@ -88,8 +88,10 @@ module Views::CalibrationSessions::Glossary
       label: "% of expected",
       definition: "The same number this person's own assessment shows: manager " \
                   "ratings measured against what their level expects, across every " \
-                  "capability. 100% means meeting the level. Manager ratings only, " \
-                  "so cohorts compare exactly the judgments being calibrated."
+                  "capability. 100% means meeting the level; every point above is " \
+                  "progress toward the next one, and 200% means demonstrating it in " \
+                  "full. Manager ratings only, so cohorts compare exactly the " \
+                  "judgments being calibrated."
     },
     cohort_median: {
       label: "median",

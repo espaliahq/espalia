@@ -116,10 +116,10 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "h1", text: "Report Alex"
       within("#scoring-panel") do
         # The hero verdict should refer to the assessee in third person
-        # (first name), not "You're tracking on target"
+        # (first name), not "You're meeting … expectations"
         assert_no_text "You're"
         assert_no_text "you're"
-        assert_text "Report is tracking on target."
+        assert_text "Report is meeting"
       end
     end
 
