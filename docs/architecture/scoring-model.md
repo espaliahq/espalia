@@ -153,8 +153,9 @@ Precedence: **underperforming → progressing → top_of_ladder → eligible →
 ### `has_next_level?` and `next_level_contribution(binding)`
 
 ```ruby
-has_next_level?              → any level ordinal above person_level
-next_level_contribution(b)   → raw_contribution_at_level(b, person_level + 1)
+next_level_ordinal           → the next ordinal in the role's ladder above person_level (nil at the top)
+has_next_level?              → next_level_ordinal present
+next_level_contribution(b)   → raw_contribution_at_level(b, next_level_ordinal)
 ```
 
 The builder exposes `capability_contributions_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level.
@@ -189,7 +190,7 @@ Framework-level scoring thresholds are configurable at `GET /frameworks/:id/sett
 
 `Frameworks::SettingsController#update` → `Operations::Frameworks::ConfigureScoringThresholds` → `CommandHandler#configure_scoring_thresholds` → `ScoringThresholdsConfigured` event → `PublishedState` projection → `framework_states` table.
 
-Nil values in nullable columns (`mastery_threshold`, `meeting_expectation_threshold`, `underperforming_threshold`) mean "use system default". NOT NULL columns (`overperformance_cap`, `deficit_threshold`) are reset to their constant defaults when reverted.
+Nil values in the nullable columns (`mastery_threshold`, `meeting_expectation_threshold`, `underperforming_threshold`, `deficit_threshold`) mean "use system default". The one NOT NULL column (`overperformance_cap`) is reset to its constant default when reverted.
 
 **Ordering is validated.** The state machine walks underperforming → meeting → mastery in a fixed order, so the Operation refuses `underperforming < meeting < mastery` violations as a `ParameterError` (resolving omitted values to their defaults first), and the aggregate refuses inverted supplied values.
 
