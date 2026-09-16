@@ -185,11 +185,17 @@ whole cluster atomically.
   is wider than the column and says twice what the colour already says.
   Divergent secondary perspectives read "Self: 45%" for the same reason.
   The hero is the one altitude that spends a line on the state vocabulary.
-- **Coverage gate.** Until at least half of the category's assessed-level
-  cells carry the viewer's rating, the header shows "1/4 rated · score
-  unlocks at 2" instead of a number, and the **chip bar** hides that
-  category's state dot and percent on the same rule. A category nobody has
-  touched must not read as underperforming.
+- **Coverage gate, per perspective.** Until at least half of the category's
+  assessed-level cells carry the viewer's rating, the header shows "1/4
+  rated · score unlocks at 2" instead of a number, and the **chip bar**
+  hides that category's state dot and percent on the same rule. A category
+  nobody has touched must not read as underperforming. The gate applies to
+  each **secondary** perspective against *its own* ratings too — a manager
+  who has rated everything must not read "Self: 0%" as a verdict when the
+  assessee has not started. `Assessments::SecondaryPerspectives` is the one
+  place the list is built (the section header and all three rating
+  controllers' Turbo Stream responses), and each entry carries its context
+  so the gate has ratings to count.
 - **The description gets its own row.** The name shares its line with the
   score cluster (which wraps below it on a narrow viewport); the
   description runs full width underneath at `max-w-3xl`. Sharing one row
@@ -1239,6 +1245,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
+| `app/models/assessments/secondary_perspectives.rb` | The ONE list of the perspectives shown beside the viewer's own — each carrying its context, so a secondary annotation can be held to the coverage gate against its own ratings |
 | `app/models/assessments/viewer_context.rb` | The ONE `:self` / `:manager` / `:alignment` resolution — the web controller and the MCP read tools both call it, so a score can't be built from ratings the viewer may not see |
 | `app/queries/assessments/score_summary.rb` | The MCP read tools' score payload — runs the same `MatrixDataBuilder` the web renders and reshapes its scoring into whole percents plus the scale's own meaning |
 | `app/queries/assessments/level_coverage.rb` | Current-level self/manager/aligned completion for a (person, framework, cycle). Mirrors the builder's denominator; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status, and by the alignment-completion gate (aligned side) |

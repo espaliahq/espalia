@@ -15,15 +15,20 @@
 #   cells carry the viewer's rating, no score shows — "1/4 rated · score
 #   unlocks at 2" instead of a misleadingly low number.
 # - **Secondary perspectives** appear only when they diverge (a different
-#   state, or five or more points apart).
+#   state, or five or more points apart) AND clear the same coverage gate
+#   against their own ratings.
 class Views::Assessments::CategoryIndicators < Views::Base
   include Views::Assessments::Concerns::RatedCount
   include Views::Assessments::Concerns::ScoreScale
 
+  COVERAGE_UNLOCK_THRESHOLD = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
+
   # @param category_id [String]
   # @param category_score [Hash, nil] the primary perspective's
   #   `category_scores[id]` — components plus `:state`
-  # @param secondary_scores [Array<Array(String, Hash)>] [["Mgr", {…}], …]
+  # @param secondary_scores [Array<Hash>] `{ label:, context:, score: }`
+  #   from {Assessments::SecondaryPerspectives} — each carries its own
+  #   context so its coverage can be judged on its own ratings
   # @param category_data [Hash, nil] entry from `matrix_data[:categories]`
   # @param context [Symbol] :self, :manager, or :alignment
   # @param merged_levels [Array<Hash>]
@@ -60,14 +65,21 @@ class Views::Assessments::CategoryIndicators < Views::Base
   end
 
   def unlock_target
-    (counts[:total] * Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD).ceil
+    (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
   def unlocked?
-    return false unless @category_score && @category_score[:scorable]
-    return true if counts[:total].zero?
+    unlocked_for?(@context, @category_score)
+  end
 
-    counts[:rated] >= unlock_target
+  # The coverage rule against one perspective's own ratings.
+  def unlocked_for?(context, score)
+    return false unless score && score[:scorable]
+
+    perspective_counts = context == @context ? counts : category_rated_count(@category_data, context)
+    return true if perspective_counts[:total].zero?
+
+    perspective_counts[:rated] >= (perspective_counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
   # "3/24 rated" — quiet text count so in-progress assessments show what's
@@ -115,14 +127,18 @@ class Views::Assessments::CategoryIndicators < Views::Base
   end
 
   # Compact annotations for each divergent secondary perspective —
-  # "Self: 45%", coloured by its state — with the shared amber divergence dot.
+  # "Self: 45%", coloured by its state — with the shared amber divergence
+  # dot. Each is held to the coverage gate against ITS OWN ratings: a
+  # manager who has rated every cell should not see "Self: 0%" and read it
+  # as a verdict when the assessee simply has not started.
   def divergent_annotations
-    @secondary_scores.each do |label, alt|
-      next unless alt && divergent?(alt)
+    @secondary_scores.each do |entry|
+      alt = entry[:score]
+      next unless alt && unlocked_for?(entry[:context], alt) && divergent?(alt)
 
       span(class: "flex items-center gap-1") do
         span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0") { }
-        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{label}:" }
+        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{entry[:label]}:" }
         span(class: "text-[10px] font-mono tabular-nums #{tone_text(alt[:state])}",
              title: state_label(alt[:state])) { "#{percent(alt[:score])}%" }
       end

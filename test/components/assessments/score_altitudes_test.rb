@@ -22,13 +22,16 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
     ).call
   end
 
-  def indicators(score:, rated: 2, total: 2, secondary: [])
-    cells = { 3 => { current_frequency: "consistent" } }
-    capabilities = Array.new(total) { |i| { cells: { 3 => { current_frequency: i < rated ? "consistent" : nil } } } }
+  def indicators(score:, rated: 2, total: 2, secondary: [], manager_rated: nil, context: :self)
+    manager_rated = rated if manager_rated.nil?
+    capabilities = Array.new(total) do |i|
+      { cells: { 3 => { current_frequency: i < rated ? "consistent" : nil,
+                        manager_frequency: i < manager_rated ? "consistent" : nil } } }
+    end
     Views::Assessments::CategoryIndicators.new(
       category_id: "cat-1", category_score: score, secondary_scores: secondary,
       category_data: { person_level: 3, capabilities: capabilities },
-      context: :self, merged_levels: LEVELS, person_level: 3
+      context: context, merged_levels: LEVELS, person_level: 3
     ).call
   end
 
@@ -97,12 +100,33 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
     should "annotate a divergent secondary perspective on the same scale" do
       html = indicators(
         score: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0, bands_above: 1, scorable: true, state: :performing },
-        secondary: [ [ "Self", { prior: 1.0, current: 0.45, next: 0.0, score: 0.45, bands_above: 1,
-                                 scorable: true, state: :underperforming } ] ]
+        secondary: [ { label: "Self", context: :self,
+                       score: { prior: 1.0, current: 0.45, next: 0.0, score: 0.45, bands_above: 1,
+                                scorable: true, state: :underperforming } } ]
       )
       assert_includes html, "Self:"
       assert_includes html, "45%"
       assert_includes html, 'title="Underperforming"'
+    end
+
+    should "withhold a secondary perspective that has not rated enough to be scored" do
+      # A manager who has rated every cell must not read "Self: 0%" as a
+      # verdict when the assessee simply has not started.
+      html = indicators(
+        context: :manager, rated: 0, total: 4, manager_rated: 4,
+        score: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0, bands_above: 1,
+                 scorable: true, state: :performing },
+        secondary: [ { label: "Self", context: :self,
+                       score: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0, bands_above: 1,
+                                scorable: true, state: :underperforming } } ]
+      )
+
+      # The primary must be scored here, or the assertion would pass
+      # simply because the whole cluster is gated.
+      assert_includes html, "100%"
+      assert_not_includes html, "Self:"
+      # No annotation at all — the amber divergence dot is the row's marker.
+      assert_not_includes html, "bg-amber-400"
     end
 
     should "read as meeting at the top of the ladder" do

@@ -117,27 +117,14 @@ class Views::Assessments::CategorySection < Views::Base
     end
   end
 
-  # Pairs each labelled secondary perspective with its score for this
-  # category, dropping perspectives that have no scoring or no score for
-  # this category — matches the shape rating controllers thread in for
-  # the turbo-replace path so initial render and post-rate render agree.
+  # One category's secondary perspectives, through the shared definition
+  # so the section header and the rating controllers' Turbo Stream
+  # responses cannot drift.
   def secondary_category_scores
-    perspectives =
-      case @context
-      when :self      then [ [ "Mgr",  @manager_scoring ], [ "Agreed", @aligned_scoring ] ]
-      when :manager   then [ [ "Self", @self_scoring ],    [ "Agreed", @aligned_scoring ] ]
-      when :alignment then [ [ "Self", @self_scoring ],    [ "Mgr",    @manager_scoring ] ]
-      else []
-      end
-
-    perspectives.filter_map do |label, scoring|
-      next unless scoring
-
-      score = scoring.dig(:category_scores, @category.category_id)
-      next unless score
-
-      [ label, score ]
-    end
+    Assessments::SecondaryPerspectives.category_scores(
+      { self_scoring: @self_scoring, manager_scoring: @manager_scoring, aligned_scoring: @aligned_scoring },
+      @context, @category.category_id
+    )
   end
 
   def capability_cards

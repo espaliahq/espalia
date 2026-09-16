@@ -262,33 +262,16 @@ class Assessments::AlignmentRatingsController < ApplicationController
     end
   end
 
-  def secondary_scorings(matrix_data, context)
-    case context
-    when :self
-      [ [ "Mgr", matrix_data[:manager_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
-    when :manager
-      [ [ "Self", matrix_data[:self_scoring] ], [ "Agreed", matrix_data[:aligned_scoring] ] ]
-    when :alignment
-      [ [ "Self", matrix_data[:self_scoring] ], [ "Mgr", matrix_data[:manager_scoring] ] ]
-    else []
-    end.select { |_, s| s }
-  end
-
   def secondary_category_scores(category_id, matrix_data, context)
-    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
-      score = scoring.dig(:category_scores, category_id)
-      next unless score
-
-      [ label, score ]
-    end
+    Assessments::SecondaryPerspectives.category_scores(matrix_data, context, category_id)
   end
 
   def secondary_capability_contributions(stable_id, matrix_data, context)
-    secondary_scorings(matrix_data, context).filter_map do |label, scoring|
-      contribution = scoring.dig(:capability_contributions, stable_id)
+    Assessments::SecondaryPerspectives.for(matrix_data, context).filter_map do |entry|
+      contribution = entry[:scoring].dig(:capability_contributions, stable_id)
       next unless contribution
 
-      [ label, contribution ]
+      [ entry[:label], contribution ]
     end
   end
 
