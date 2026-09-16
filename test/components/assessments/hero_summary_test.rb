@@ -16,19 +16,17 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   ].freeze
 
   def render_hero(state:, components:, person_level: 3, levels: LEVELS, statuses: {}, readiness: nil,
-                  contributions: { "cap-a" => 0.0 }, next_contributions: { "cap-a" => -0.5 }, context: :self)
+                  contributions: { "cap-a" => 0.0 }, next_contributions: { "cap-a" => -0.5 }, context: :self,
+                  cells: nil)
     cap = CAP.new(stable_id: "cap-a", name: "Strategic Thinking")
-    categories = [ {
-      category: nil,
-      capabilities: [ { capability: cap, cells: { person_level => {
-        current_frequency: "consistent", manager_frequency: "consistent", aligned_frequency: "consistent"
-      } } } ]
-    } ]
+    cells ||= { person_level => {
+      current_frequency: "consistent", manager_frequency: "consistent", aligned_frequency: "consistent"
+    } }
+    categories = [ { category: nil, capabilities: [ { capability: cap, cells: cells } ] } ]
     scoring = {
       performance_ratio: components[:score],
-      components: components,
+      components: { bands_above: 1 }.merge(components),
       performance_state: state,
-      top_of_ladder: levels.none? { |l| l[:ordinal] > person_level },
       meeting_expectations: components[:score] >= 0.95,
       mastering: components[:score] >= 1.5,
       capability_statuses: statuses,
@@ -39,8 +37,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
     Views::Assessments::HeroSummary.new(
       scoring: scoring, self_scoring: scoring, manager_scoring: scoring, categories: categories, person_level: person_level,
-      merged_levels: levels, mastery_threshold: 1.5, meeting_expectation_threshold: 0.95,
-      underperforming_threshold: 0.8, assessment_id: SecureRandom.uuid_v7, context: context,
+      merged_levels: levels, assessment_id: SecureRandom.uuid_v7, context: context,
       viewer_can_rate: false
     ).call
   end
@@ -52,6 +49,14 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_includes html, 'aria-valuenow="138"'
       assert_includes html, "100% · E3"
       assert_includes html, "200% · E4"
+    end
+
+    should "run to 300 with two bands above when the cap allows it" do
+      html = render_hero(state: :mastering, levels: LEVELS + [ { ordinal: 5, level_code: "E5" } ],
+                         components: { prior: 1.0, current: 1.0, next: 1.4, score: 2.4, bands_above: 2 })
+      assert_includes html, 'aria-valuemax="300"'
+      assert_includes html, "300% · E5"
+      assert_includes html, "E4 demonstrated in full · 40% of the way to E5"
     end
 
     should "collapse to a single 0–100 segment at the top of the ladder" do
@@ -102,6 +107,14 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
                          components: { prior: 1.0, current: 1.0, next: 1.0, score: 2.0 })
       assert_includes html, "demonstrating E4 expectations — promotion ready."
       assert_includes html, "Eligible for promotion to E4"
+    end
+
+    should "read as unscorable when the assessed level has no expectations" do
+      html = render_hero(state: :underperforming, cells: {},
+                         components: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0 })
+      assert_includes html, "Nothing to score at E3 yet"
+      assert_not_includes html, "Below E3 expectations"
+      assert_not_includes html, "hero-score-bar"
     end
 
     should "address the assessee in the third person for a manager" do

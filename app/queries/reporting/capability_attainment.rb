@@ -310,14 +310,9 @@ class Reporting::CapabilityAttainment
   #
   # @return [Set<Array(String, Integer)>]
   def expectation_cells
-    @expectation_cells ||= begin
-      bindings = @bindings_by_role.values.flatten
-      stable_by_id = bindings.to_h { |b| [ b.capability_id, b.capability.stable_id ] }
-      FrameworkState::BehaviouralExpectation
-        .where(capability_id: stable_by_id.keys)
-        .pluck(:capability_id, :level_ordinal)
-        .to_set { |capability_id, ordinal| [ stable_by_id[capability_id], ordinal ] }
-    end
+    @expectation_cells ||= FrameworkState::BehaviouralExpectation.stable_cells(
+      @bindings_by_role.values.flatten.map(&:capability_id).uniq
+    )
   end
 
   # Constant across the whole call — memoized so per-participant scoring

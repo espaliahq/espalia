@@ -76,9 +76,11 @@ class Assessments::MatrixDataBuilder
     levels = build_levels
     ordinals = levels.map { |l| l[:ordinal] }
     categories = build_categories(ordinals)
+    @all_ordinals = ordinals
+    @all_bindings = categories.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
+    @expectation_cells = expectation_cells(categories)
     scoring_engine = build_scoring_engine(categories, perspective: primary_scoring_perspective)
-    all_bindings = categories.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
-    enrich_levels_with_performance_ratios(levels, scoring_engine)
+    all_bindings = @all_bindings
     enrich_capabilities_with_contributions(categories, scoring_engine)
     scoring = extract_scoring(scoring_engine, bindings: all_bindings)
 
@@ -96,9 +98,6 @@ class Assessments::MatrixDataBuilder
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD,
-      underperforming_threshold: @framework.underperforming_threshold&.to_f ||
-        PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD,
-      inferred_level: scoring_engine.inferred_level,
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories),
       participant_status: @participant_status,
@@ -357,21 +356,6 @@ class Assessments::MatrixDataBuilder
       .index_by(&:capability_id)
   end
 
-  # Adds :performance_ratio to each level hash for ordinals up to person_level + 1.
-  # Mutates merged_levels in place. Levels beyond next level get nil.
-  #
-  # @param levels [Array<Hash>] from build_levels
-  # @param scoring [PersonDevelopment::Scoring]
-  def enrich_levels_with_performance_ratios(levels, scoring)
-    next_ordinal = @level.ordinal + 1
-    levels.each do |level|
-      if level[:ordinal] <= next_ordinal
-        level[:performance_ratio] = scoring.performance_ratio_at_level(level[:ordinal])
-        level[:level_verdict] = scoring.level_verdict(level[:ordinal])
-      end
-    end
-  end
-
   # Adds :contribution to each capability hash — the raw contribution score.
   #
   # @param categories_data [Array<Hash>]
@@ -390,17 +374,13 @@ class Assessments::MatrixDataBuilder
   # @param perspective [Symbol] frequency perspective for scoring
   # @return [PersonDevelopment::Scoring]
   def build_scoring_engine(categories_data, perspective: :effective)
-    bindings = categories_data.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
-    category_records = categories_data.map { |c| c[:category] }
-    all_ordinals = build_levels.map { |l| l[:ordinal] }
-
     PersonDevelopment::Scoring.new(
       level_ratings: @ratings_index.values,
-      bindings: bindings,
-      categories: category_records,
+      bindings: @all_bindings,
+      categories: categories_data.map { |c| c[:category] },
       person_level: @level.ordinal,
-      all_level_ordinals: all_ordinals,
-      expectation_cells: expectation_cells(categories_data),
+      all_level_ordinals: @all_ordinals,
+      expectation_cells: @expectation_cells,
       perspective: perspective,
       thresholds: @framework.scoring_thresholds
     )
@@ -434,7 +414,6 @@ class Assessments::MatrixDataBuilder
       meeting_expectations: scoring.meeting_expectations?,
       mastering: scoring.mastering?,
       performance_state: scoring.performance_state,
-      top_of_ladder: !scoring.has_next_level?,
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,
@@ -469,8 +448,7 @@ class Assessments::MatrixDataBuilder
     return nil unless has_ratings_for_perspective?(perspective)
 
     engine = build_scoring_engine(categories_data, perspective: perspective)
-    bindings = categories_data.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
-    extract_scoring(engine, bindings: bindings)
+    extract_scoring(engine, bindings: @all_bindings)
   end
 
   # Whether any rating records have a value for the given perspective.

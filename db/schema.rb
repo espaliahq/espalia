@@ -440,7 +440,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_000001) do
   create_table "framework_states", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "current_published_version", default: 0, null: false
-    t.decimal "deficit_threshold", precision: 5, scale: 2, default: "0.75", null: false
+    t.decimal "deficit_threshold", precision: 5, scale: 2
     t.boolean "draft_in_progress", default: false, null: false
     t.integer "draft_version"
     t.uuid "framework_id", null: false

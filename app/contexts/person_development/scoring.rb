@@ -30,10 +30,12 @@
 #
 #   score   = current + next + (prior − 1)
 #
-# Prior levels are pooled into one bucket the size of a single band, so a
-# deficit rated below the assessed level subtracts from the score without
-# the number of prior levels ever entering the arithmetic — that padding is
-# what made the previous ratio level-dependent.
+# Prior levels are pooled into ONE bucket the size of a single band: their
+# attainment is averaged, so a single deficit rated below the assessed level
+# subtracts its share of that bucket (one "not yet" at L2 costs 1/(N × prior
+# levels) of the score). Deliberate — the bucket is the same size at every
+# level, which is what keeps the ceiling and the meeting bar level-
+# independent; the old ratio let every prior level pad the denominator.
 #
 # == The progression gate
 #
@@ -44,8 +46,10 @@
 #   flexible binding (tolerance > 0):  gate = f(b, L)           (multiplicative)
 #   mandatory binding (tolerance 0):   gate = 1 if f(b, L) ≥ 1.0 else 0   (step)
 #
-# For a cap of 2 or more the factor chains along the levels (credit at L+2 is
-# gated by L and by L+1). Making up across DIFFERENT capabilities stays
+# For a cap of 2 or more the factor chains along the ladder (credit at the
+# second level above is gated by the assessed level and the first). Levels
+# are the role's ladder in order — ordinals need not be contiguous.
+# Making up across DIFFERENT capabilities stays
 # allowed — that is what the weighted average is — bounded by the
 # per-capability deficit threshold (blocking) and the category gates.
 #
@@ -114,6 +118,19 @@ class PersonDevelopment::Scoring
   # :aligned_only — only aligned_frequency
   PERSPECTIVES = %i[effective self_only manager_only aligned_only].freeze
 
+  # Whether a threshold configuration keeps the state machine's order —
+  # underperforming < meeting < mastery — with an omitted value resolved to
+  # its default, exactly as the engine will run it. The one rule the
+  # Operation and the aggregate both enforce.
+  #
+  # @return [Boolean]
+  def self.thresholds_ordered?(underperforming: nil, meeting: nil, mastery: nil)
+    under   = underperforming || DEFAULT_UNDERPERFORMING_THRESHOLD
+    meet    = meeting         || DEFAULT_MEETING_EXPECTATION_THRESHOLD
+    master  = mastery         || DEFAULT_MASTERY_THRESHOLD
+    under < meet && meet < master
+  end
+
   # @param level_ratings [Array<#capability_stable_id, #level_ordinal,
   #   #aligned_frequency, #manager_rated_frequency, #self_rated_frequency>]
   #   AssessmentLevelRating records (or duck-typed objects) for the person
@@ -130,15 +147,16 @@ class PersonDevelopment::Scoring
   #   (capability_stable_id, level_ordinal) pairs that carry a behavioural
   #   expectation. A band is normalised over the capabilities that have an
   #   expectation at that level, so a capability with no next-level
-  #   expectation neither earns nor owes next-level credit. nil means every
-  #   binding has an expectation at every ordinal.
+  #   expectation neither earns nor owes next-level credit. Required, so a
+  #   caller can't silently score over a fuller grid than the hero; pass nil
+  #   only to mean "every binding has an expectation at every ordinal".
   # @param thresholds [Hash] optional overrides: mastery_threshold:,
   #   meeting_expectation_threshold:, underperforming_threshold:,
   #   overperformance_cap:, deficit_threshold:
   # @param perspective [Symbol] which frequency field to use (:effective, :self_only,
   #   :manager_only, :aligned_only)
   def initialize(level_ratings:, bindings:, categories:, person_level:, all_level_ordinals:,
-                 expectation_cells: nil, thresholds: {}, perspective: :effective)
+                 expectation_cells:, thresholds: {}, perspective: :effective)
     @level_ratings = index_ratings(level_ratings)
     @bindings = bindings
     @categories = categories.index_by(&:category_id)
@@ -174,7 +192,11 @@ class PersonDevelopment::Scoring
   # and the pooled attainment at prior levels (1.0 when none, or none rated
   # down).
   #
-  # @return [Hash] { prior: Float, current: Float, next: Float, score: Float }
+  # `bands_above` is how many levels above the reference one can carry
+  # credit (the ladder above, windowed by the widest cap) — the hero's bar
+  # runs to 100 × (1 + bands_above).
+  #
+  # @return [Hash] { prior: Float, current: Float, next: Float, score: Float, bands_above: Integer }
   def components
     @components ||= components_at(@person_level)
   end
@@ -295,15 +317,6 @@ class PersonDevelopment::Scoring
     @promotion_readiness ||= compute_promotion_readiness
   end
 
-  # Highest level ordinal at which the person meets the expectation threshold.
-  #
-  # @return [Integer, nil]
-  def inferred_level
-    @inferred_level ||= @all_level_ordinals.reverse.detect do |ordinal|
-      performance_ratio_at_level(ordinal) >= @meeting_expectation_threshold
-    end
-  end
-
   # Raw total contribution for a single binding at the person's assessed
   # level, in weight units: deficits below and at the level, plus gated
   # credit above it. Drives the per-capability deltas and the block gate.
@@ -314,23 +327,33 @@ class PersonDevelopment::Scoring
     raw_contribution_at_level(binding, @person_level)
   end
 
+  # The ladder's next level above the assessed one — the next ORDINAL in the
+  # role's ladder, which need not be person_level + 1. nil at the top.
+  #
+  # @return [Integer, nil]
+  def next_level_ordinal
+    @next_level_ordinal ||= ordinals_above(@person_level).first
+  end
+
   # Whether the role has a level above the person's assessed one. False at
   # the top of the ladder — there is then no next band to progress into.
   #
   # @return [Boolean]
   def has_next_level?
-    @all_level_ordinals.any? { |o| o > @person_level }
+    !next_level_ordinal.nil?
   end
 
-  # Contribution evaluated against the next level above the person's
-  # current — what the contribution would be if their assessed level were
-  # @person_level + 1. Used to surface which capabilities still need work
-  # for promotion.
+  # Contribution evaluated against the next level above the assessed one —
+  # what the contribution would be if that were the assessed level. Used to
+  # surface which capabilities still need work for promotion. 0.0 at the
+  # top of the ladder.
   #
   # @param binding [#capability_id, #weight, #capability]
   # @return [Float]
   def next_level_contribution(binding)
-    raw_contribution_at_level(binding, @person_level + 1)
+    return 0.0 unless next_level_ordinal
+
+    raw_contribution_at_level(binding, next_level_ordinal)
   end
 
   private
@@ -350,7 +373,8 @@ class PersonDevelopment::Scoring
       # Floored at 0: a prior-level "not yet" on top of nothing at the
       # assessed level would otherwise read as a negative share.
       score   = current.nil? ? 0.0 : [ current + nxt + (prior - 1.0), 0.0 ].max
-      { prior: prior, current: current || 0.0, next: nxt, score: score }
+      { prior: prior, current: current || 0.0, next: nxt, score: score,
+        bands_above: ordinals_above(reference_level).first(max_cap).size }
     end
   end
 
@@ -374,9 +398,7 @@ class PersonDevelopment::Scoring
   def prior_attainment(reference_level)
     total = 0.0
     weight = 0.0
-    @all_level_ordinals.each do |ordinal|
-      next unless ordinal < reference_level
-
+    ordinals_below(reference_level).each do |ordinal|
       @bindings.each do |b|
         sid = b.capability.stable_id
         next unless cell?(sid, ordinal)
@@ -394,67 +416,85 @@ class PersonDevelopment::Scoring
   #
   # @return [Float]
   def next_band_progress(reference_level)
-    max_cap = @bindings.map { |b| overperformance_cap_for(b) }.max || 0
-    (1..max_cap).sum do |k|
-      ordinal = reference_level + k
+    ordinals_above(reference_level).first(max_cap).each_with_index.sum do |ordinal, index|
       band = @bindings.select { |b| cell?(b.capability.stable_id, ordinal) }
       weight = band.sum { |b| b.weight.to_f }
       next 0.0 unless weight.positive?
 
       credit = band.sum do |b|
-        next 0.0 if overperformance_cap_for(b) < k
+        next 0.0 if overperformance_cap_for(b) <= index
 
-        b.weight.to_f * progression_gate(b, reference_level, k) *
-          effective_frequency(b.capability.stable_id, ordinal)
+        b.weight.to_f * gated_credit(b, reference_level, ordinal)
       end
       credit / weight
     end
   end
 
-  # The discount applied to credit k levels above the reference level:
-  # the product of the gate factor at each level in between.
+  # A capability's credit at one level above the reference level — its
+  # frequency there, discounted by the gate at every ladder level from the
+  # reference level up to (not including) it. The ONE place above-level
+  # credit is computed: the score's next band and the per-capability
+  # contribution both read it.
   #
-  # @return [Float] 0.0..1.0
-  def progression_gate(binding, reference_level, k)
+  # @return [Float]
+  def gated_credit(binding, reference_level, ordinal)
     sid = binding.capability.stable_id
-    (0...k).reduce(1.0) do |gate, j|
-      gate * gate_factor(binding, effective_frequency(sid, reference_level + j))
-    end
+    steps = [ reference_level ] + ordinals_above(reference_level).take_while { |o| o < ordinal }
+    # A level where the capability has no expectation neither earns nor
+    # owes — so it does not gate either (a senior-only capability's first
+    # level would otherwise be discounted by an unrated default of 0).
+    gate = steps.select { |o| cell?(sid, o) }
+                .reduce(1.0) { |g, o| g * gate_factor(binding, effective_frequency(sid, o)) }
+    gate * effective_frequency(sid, ordinal)
   end
 
-  # Step for a mandatory binding (resolved tolerance 0), the frequency
-  # itself for a flexible one. See the class docs.
+  # Step for a mandatory binding, the frequency itself for a flexible one.
+  # See the class docs.
   #
   # @return [Float]
   def gate_factor(binding, frequency)
-    if deficit_threshold_for(binding).zero?
+    if mandatory?(binding)
       frequency >= FREQUENCY["consistent"] ? 1.0 : 0.0
     else
       frequency
     end
   end
 
+  # A binding whose resolved tolerance is 0 — the "Required" badge: any gap
+  # blocks, and nothing above the level counts until the level is consistent.
+  def mandatory?(binding)
+    deficit_threshold_for(binding).zero?
+  end
+
   # Total contribution for a single binding evaluated against a reference
   # level, in weight units: (f − 1) at and below the level, gated f above
-  # it, ordinals beyond reference_level + cap excluded.
+  # it, ordinals beyond reference_level + cap excluded. Memoised — the
+  # category pools, the statuses, the block reasons and the per-capability
+  # deltas all read it for the same (binding, level).
   #
   # @param binding [#capability_id, #weight, #capability]
   # @param reference_level [Integer]
   # @return [Float]
   def raw_contribution_at_level(binding, reference_level)
+    @raw_contribution_at_level ||= {}
+    @raw_contribution_at_level[[ binding.capability.stable_id, reference_level ]] ||=
+      compute_raw_contribution(binding, reference_level)
+  end
+
+  def compute_raw_contribution(binding, reference_level)
     stable_id = binding.capability.stable_id
-    cap       = overperformance_cap_for(binding)
     weight    = binding.weight.to_f
+    above     = ordinals_above(reference_level).first(overperformance_cap_for(binding))
 
     @all_level_ordinals.sum do |ordinal|
       next 0.0 unless cell?(stable_id, ordinal)
-      next 0.0 if ordinal > reference_level + cap
 
-      freq = effective_frequency(stable_id, ordinal)
       if ordinal <= reference_level
-        (freq - 1.0) * weight
+        (effective_frequency(stable_id, ordinal) - 1.0) * weight
+      elsif above.include?(ordinal)
+        gated_credit(binding, reference_level, ordinal) * weight
       else
-        progression_gate(binding, reference_level, ordinal - reference_level) * freq * weight
+        0.0
       end
     end
   end
@@ -492,7 +532,7 @@ class PersonDevelopment::Scoring
       status =
         if deficit > threshold
           :blocked
-        elsif @all_level_ordinals.any? { |o| o > reference_level + cap && effective_frequency(stable_id, o) >= FREQUENCY["consistent"] }
+        elsif ordinals_above(reference_level).drop(cap).any? { |o| effective_frequency(stable_id, o) >= FREQUENCY["consistent"] }
           :above_cap
         elsif freq >= FREQUENCY["consistent"]
           :at_bar
@@ -523,7 +563,8 @@ class PersonDevelopment::Scoring
   end
 
   def compute_promotion_readiness
-    next_level = @person_level + 1
+    next_level = next_level_ordinal
+    return { eligible: false, meets_score_threshold: false, blocked_at_next_level: [] } unless next_level
 
     verdict     = level_verdict(next_level)
     next_ratio  = performance_ratio_at_level(next_level)
@@ -562,27 +603,50 @@ class PersonDevelopment::Scoring
 
   # ── Resolution helpers ──
 
-  # Resolves the over-performance cap for a binding: binding → category → framework.
+  # Resolves the over-performance cap for a binding: binding → category →
+  # framework. Constant for the engine's lifetime, so resolved once.
   #
   # @param binding [#overperformance_cap, #capability]
   # @return [Integer]
   def overperformance_cap_for(binding)
-    binding.overperformance_cap ||
+    @overperformance_cap_for ||= {}
+    @overperformance_cap_for[binding.capability.stable_id] ||=
+      binding.overperformance_cap ||
       @categories[binding.capability.category_id]&.overperformance_cap ||
       @default_overperformance_cap
   end
 
-  # Resolves the deficit threshold for a binding: binding → category → framework.
+  # The widest cap any binding resolves to — how many bands above a
+  # reference level can carry credit.
+  def max_cap
+    @max_cap ||= @bindings.map { |b| overperformance_cap_for(b) }.max || 0
+  end
+
+  # Resolves the deficit threshold for a binding: binding → category →
+  # framework. Constant for the engine's lifetime, so resolved once.
   #
   # @param binding [#deficit_threshold, #capability]
   # @return [Float]
   def deficit_threshold_for(binding)
-    (binding.deficit_threshold ||
-      @categories[binding.capability.category_id]&.deficit_threshold ||
-      @default_deficit_threshold).to_f
+    @deficit_threshold_for ||= {}
+    @deficit_threshold_for[binding.capability.stable_id] ||=
+      (binding.deficit_threshold ||
+        @categories[binding.capability.category_id]&.deficit_threshold ||
+        @default_deficit_threshold).to_f
   end
 
   # ── Helpers ──
+
+  # The ladder above / below a level, in order (memoised per level).
+  def ordinals_above(ordinal)
+    @ordinals_above ||= {}
+    @ordinals_above[ordinal] ||= @all_level_ordinals.select { |o| o > ordinal }
+  end
+
+  def ordinals_below(ordinal)
+    @ordinals_below ||= {}
+    @ordinals_below[ordinal] ||= @all_level_ordinals.select { |o| o < ordinal }
+  end
 
   # Whether a behavioural expectation exists for the capability at the level.
   def cell?(stable_id, ordinal)

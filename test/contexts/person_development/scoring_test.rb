@@ -80,6 +80,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       categories: [ category ],
       person_level: person_level,
       all_level_ordinals: all_levels,
+      expectation_cells: nil,
       thresholds: thresholds
     )
   end
@@ -208,8 +209,10 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "pool prior levels into one bucket rather than one per level" do
-      # One "none" at L2 costs the same share of the prior bucket whether
-      # the ladder below is two levels or four.
+      # The prior bucket is ONE band's worth, averaged over every prior
+      # level — so one "none" at L2 costs half of it with two prior levels
+      # and a quarter with four (deliberate: the bucket, not the ladder,
+      # is what the score is normalised over).
       at_three = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ],
         ratings: [ rated(2, "none"), rated(3, "consistent") ])
       at_five = build_scorer(person_level: 5, all_levels: [ 1, 2, 3, 4, 5 ],
@@ -232,7 +235,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "expose the components the copy names" do
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
         ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
-      assert_equal({ prior: 1.0, current: 1.0, next: 0.5, score: 1.5 }, scorer.components)
+      assert_equal({ prior: 1.0, current: 1.0, next: 0.5, score: 1.5, bands_above: 1 }, scorer.components)
     end
 
     should "score the assessed level identically to performance_ratio_at_level(person_level)" do
@@ -292,6 +295,37 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       ])
       assert_in_delta(1.25, scorer.performance_ratio, 0.001)
       assert_equal :performing, scorer.performance_state
+    end
+  end
+
+  # ── The ladder ──
+
+  context "the ladder" do
+    should "treat the next ORDINAL in the ladder as the next level, not person_level + 1" do
+      # Levels [1, 2, 3, 5] — ordinal 4 was never authored.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 5 ],
+        ratings: [ rated(3, "consistent"), rated(5, "consistent") ])
+      assert_equal 5, scorer.next_level_ordinal
+      assert scorer.has_next_level?
+      assert_in_delta(2.0, scorer.performance_ratio, 0.001)
+      assert scorer.promotion_readiness[:eligible]
+    end
+
+    should "not let a level with no expectation gate the credit above it" do
+      # A senior-only capability: expectations start at L4. Rated consistent
+      # there while assessed at L3, it earns its L4 credit in full.
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+        expectation_cells: [ [ CAP_A, 4 ] ], ratings: [ rated(4, "consistent") ])
+      assert_in_delta(1.0, scorer.components[:next], 0.001)
+    end
+
+    should "report how many bands above can carry credit" do
+      cap_two = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(3, "consistent") ])
+      near_top = build_scorer(person_level: 4, all_levels: [ 1, 2, 3, 4, 5 ], overperformance_cap: 2,
+        ratings: [ rated(4, "consistent") ])
+      assert_equal 2, cap_two.components[:bands_above]
+      assert_equal 1, near_top.components[:bands_above]
     end
   end
 
@@ -543,14 +577,6 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       # At L4: prior = 0.5 (L3), current = 1.0 → 0.5
       assert_in_delta(0.5, scorer.performance_ratio_at_level(4), 0.001)
-    end
-  end
-
-  context "#inferred_level" do
-    should "return the highest level whose score clears the meeting threshold" do
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4, 5 ],
-        ratings: [ rated(3, "consistent"), rated(4, "consistent") ])
-      assert_equal 4, scorer.inferred_level
     end
   end
 

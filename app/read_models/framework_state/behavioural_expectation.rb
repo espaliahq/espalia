@@ -27,4 +27,18 @@ class FrameworkState::BehaviouralExpectation < ApplicationRecord
   validates :capability_id, presence: true
   validates :level_ordinal, presence: true
   validates :description, presence: true
+
+  # The (capability_stable_id, level_ordinal) cells that carry an expectation
+  # — the shape {PersonDevelopment::Scoring} normalises its bands over. One
+  # query so the assessment hero, the attainment report and the calibration
+  # cohorts can never normalise over different cell sets.
+  #
+  # @param capability_ids [Array<String>] the capabilities in scope (bound + active)
+  # @return [Set<Array(String, Integer)>]
+  def self.stable_cells(capability_ids)
+    joins(:capability)
+      .where(capability_id: capability_ids)
+      .pluck("framework_capabilities.stable_id", :level_ordinal)
+      .to_set
+  end
 end

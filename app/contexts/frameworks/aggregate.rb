@@ -1276,14 +1276,15 @@ class Frameworks::Aggregate
 
   # The performance-state machine walks underperforming → meeting → mastery
   # in a fixed order; an inverted configuration would silently produce
-  # nonsense states. Only the supplied values are compared here (nil means
-  # "system default", which the Operation resolves and checks in full).
+  # nonsense states. Same predicate as the Operation (nil = system default),
+  # so a caller that bypasses the Operation cannot persist what it refuses.
   def ensure_thresholds_ordered!(underperforming, meeting, mastery)
-    supplied = { underperforming: underperforming, meeting: meeting, mastery: mastery }.compact
-    ordered = supplied.values_at(:underperforming, :meeting, :mastery).compact
-    return if ordered.each_cons(2).all? { |lower, higher| lower < higher }
+    return if PersonDevelopment::Scoring.thresholds_ordered?(
+      underperforming: underperforming, meeting: meeting, mastery: mastery
+    )
 
-    raise "Scoring thresholds must be ordered underperforming < meeting < mastery (got #{supplied})"
+    raise "Scoring thresholds must be ordered underperforming < meeting < mastery " \
+          "(omitted values take their defaults)"
   end
 
   # Ensures the aggregate is inside a draft phase. Called by shape-changing

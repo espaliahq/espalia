@@ -12,9 +12,11 @@ class Views::Frameworks::SettingsView < Views::Base
       key: :mastery_threshold,
       label: "Mastery Threshold",
       description: "The score at which a person is considered to be mastering their level — well " \
-                   "on the way to the next one. Scores run from 0 to 200: 1.00 is meeting every " \
-                   "expectation at the assessed level, 2.00 is demonstrating the next level in full, " \
-                   "so 1.50 is halfway. Blocked capabilities prevent mastery regardless of score.",
+                   "on the way to the next one. With the default cap scores run from 0 to 200: 1.00 " \
+                   "is meeting every expectation at the assessed level, 2.00 is demonstrating the " \
+                   "next level in full (each extra level the cap allows adds another 100), " \
+                   "so #{'%.2f' % PersonDevelopment::Scoring::DEFAULT_MASTERY_THRESHOLD} is halfway. " \
+                   "Blocked capabilities prevent mastery regardless of score.",
       type: :decimal,
       step: "0.01",
       min: "0.01"
@@ -54,7 +56,8 @@ class Views::Frameworks::SettingsView < Views::Base
       key: :deficit_threshold,
       label: "Deficit Threshold",
       description: "The weighted deficit above which a capability is flagged as 'blocked'. " \
-                   "At 0.75 a 'not yet' at the assessed level blocks, while 'some' and 'most of " \
+                   "At #{'%.2f' % PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD} a 'not yet' " \
+                   "at the assessed level blocks, while 'some' and 'most of " \
                    "the time' can be made up by strength elsewhere. Blocked capabilities prevent " \
                    "meeting-expectations and mastery verdicts. Set to 0 to make every capability " \
                    "required: any gap blocks, and nothing above the level counts until it is " \
