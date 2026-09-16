@@ -164,12 +164,25 @@ The builder exposes `capability_contributions_at_next_level` when a next level e
 
 ## Category Pass/Fail
 
+A category passes when **its own score clears the meeting bar and none of its
+capabilities is blocked** — the same verdict `category_state` carries, so the
+section header's number and the pass/fail a report reads can't disagree:
+
 ```
-category_pool = Σ raw_contribution per binding in category (weight units, gated)
-category_threshold = category.deficit_threshold || framework.deficit_threshold
-has_blocked = any capability in category is :blocked at person_level
-pass if category_pool >= -category_threshold AND NOT has_blocked
+pass = category_state(category_id) not in [:underperforming, :progressing]
+     # i.e. category_components(id)[:score] >= meeting_expectation_threshold
+     #      AND no member capability is :blocked at person_level
+pool = Σ raw_contribution per binding in category   # weight units, still exposed
 ```
+
+The category's `deficit_threshold` keeps its **blocking** role — it is resolved
+per capability (`binding → category → framework`), so a tighter category
+tolerance still blocks a member and therefore still fails the category. What is
+gone is the separate pool-in-points gate: a category used to be able to fail on
+a weight-unit sum while its own score said it was meeting, which is the same
+level-dependence ADR-21 removed everywhere else. `pool` is still returned for
+callers that want the weight-unit net (`Reporting::CapabilityAttainment` reads
+only `pass`).
 
 ---
 

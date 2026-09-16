@@ -8,6 +8,7 @@ require "test_helper"
 # each state is pinned without a browser fixture.
 class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   CAP = Struct.new(:stable_id, :name, keyword_init: true)
+  CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
 
   LEVELS = [
     { ordinal: 2, level_code: "E2" }, { ordinal: 3, level_code: "E3" }, { ordinal: 4, level_code: "E4" }
@@ -28,6 +29,16 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       category_id: "cat-1", category_score: score, secondary_scores: secondary,
       category_data: { person_level: 3, capabilities: capabilities },
       context: :self, merged_levels: LEVELS, person_level: 3
+    ).call
+  end
+
+  def chip_bar(score:, rated: 1, total: 1)
+    capabilities = Array.new(total) { |i| { cells: { 3 => { current_frequency: i < rated ? "consistent" : nil } } } }
+    Views::Assessments::CategoryChipBar.new(
+      categories: [ { category: CATEGORY.new(category_id: "cat-1", name: "Thinking"),
+                      person_level: 3, capabilities: capabilities } ],
+      scoring: { category_scores: { "cat-1" => score } },
+      context: :self
     ).call
   end
 
@@ -103,6 +114,36 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       ).call
       assert_includes html, 'title="Meeting"'
       assert_includes html, 'aria-valuemax="100"'
+    end
+  end
+
+  context "CategoryChipBar" do
+    should "carry the state dot and the percent once the category is scored" do
+      html = chip_bar(score: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0,
+                               bands_above: 1, scorable: true, state: :performing })
+
+      assert_includes html, "data-category-status"
+      assert_includes html, "100%"
+    end
+
+    should "hold both back behind the coverage gate, like the section header" do
+      html = chip_bar(rated: 1, total: 4,
+                      score: { prior: 1.0, current: 0.25, next: 0.0, score: 0.25,
+                               bands_above: 1, scorable: true, state: :underperforming })
+
+      assert_not_includes html, "data-category-status"
+      assert_not_includes html, "25%"
+    end
+
+    should "show no score for a category with no expectation at the assessed level" do
+      # The section header reads "no score"; a red 0% dot on the chip for
+      # the same category is the worse of the two lies.
+      html = chip_bar(score: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0,
+                               bands_above: 1, scorable: false, state: :underperforming })
+
+      assert_not_includes html, "data-category-status"
+      assert_not_includes html, "0%"
+      assert_includes html, "Thinking"
     end
   end
 

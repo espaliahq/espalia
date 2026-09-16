@@ -101,7 +101,13 @@ class Views::Assessments::CategoryChipBar < Views::Base
 
   # The hero's coverage rule at category grain: a score only shows once at
   # least half of the category's assessed-level cells carry a rating.
+  # Must stay in step with CategoryIndicators#unlocked? — the chip and the
+  # section header are the same category, and a chip showing a red 0% for
+  # a category the header declines to score is the worse of the two lies.
   def category_unlocked?(cat_data)
+    result = @scoring.dig(:category_scores, cat_data[:category].category_id)
+    return false unless result && result[:scorable]
+
     counts = category_rated_count(cat_data, @context)
     return true if counts[:total].zero?
 

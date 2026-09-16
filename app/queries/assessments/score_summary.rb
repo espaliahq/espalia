@@ -50,7 +50,10 @@ class Assessments::ScoreSummary
     {
       scale: scale,
       score: components[:scorable] ? percent(components[:score]) : nil,
-      state: components[:state].to_s,
+      # No expectation at the assessed level means no verdict either — the
+      # card says "No expectation at E3" rather than calling someone
+      # underperforming at something nobody asked of them.
+      state: components[:scorable] ? components[:state].to_s : nil,
       components: components_payload(components),
       has_expectation_at_assessed_level: components[:scorable],
       blocked: scoring[:capability_statuses]&.dig(stable_id) == :blocked,
@@ -81,12 +84,30 @@ class Assessments::ScoreSummary
   def eager_loaded_categories
     FrameworkState::CapabilityCategory
       .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, :expectations ])
+      # The builder reads each expectation's illustrations while building
+      # cells, so leaving them out here is ~300 extra queries on a real
+      # framework for data no score reads.
+      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
       .order(:ordinal)
   end
 
+  # The perspective the viewer's own screen renders — NOT the builder's
+  # `:effective` fallback chain, which for a manager blends in the
+  # assessee's self ratings and would hand an agent a different number
+  # from the one on the page they are discussing.
   def scoring
-    @scoring ||= matrix_data[:scoring]
+    @scoring ||= perspective_scoring || matrix_data[:scoring]
+  end
+
+  # Falls back to the effective chain only when that perspective has no
+  # ratings at all — exactly what the views do, so the fallback can't
+  # diverge either.
+  def perspective_scoring
+    case @context
+    when :self      then matrix_data[:self_scoring]
+    when :manager   then matrix_data[:manager_scoring]
+    when :alignment then matrix_data[:aligned_scoring]
+    end
   end
 
   # What the numbers mean, in the client's own payload — an agent that
@@ -153,7 +174,7 @@ class Assessments::ScoreSummary
         id: category.category_id,
         name: category.name,
         score: components[:scorable] ? percent(components[:score]) : nil,
-        state: components[:state].to_s,
+        state: components[:scorable] ? components[:state].to_s : nil,
         components: components_payload(components),
         rated_at_assessed_level: counts[:rated],
         total_at_assessed_level: counts[:total]

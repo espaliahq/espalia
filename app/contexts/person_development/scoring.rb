@@ -51,7 +51,10 @@
 # are the role's ladder in order — ordinals need not be contiguous.
 # Making up across DIFFERENT capabilities stays
 # allowed — that is what the weighted average is — bounded by the
-# per-capability deficit threshold (blocking) and the category gates.
+# per-capability deficit threshold, which blocks. A category's own
+# tolerance is one of the values that threshold resolves through
+# (binding → category → framework), so it still fails a category by
+# blocking a member; it is no longer a separate sum-in-points gate.
 #
 # The mandatory case is a step because with a multiplicative gate a
 # mandatory capability at "most of the time" with "consistently" above nets
