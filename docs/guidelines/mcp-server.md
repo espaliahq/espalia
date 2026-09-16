@@ -129,6 +129,32 @@ are denied), return active rows only (withdrawn evidence / removed links /
 soft-deleted comments are omitted), and accept either a `capability_id` or a
 cross-version `stable_id` in the `capability_stable_id` argument.
 
+**Scores ride the same drill-down, at the altitude the caller is already
+at.** `assessments_get` carries the whole assessment's number plus a
+per-category roll-up; `assessments_capability_get` carries that one
+capability's. Both come from {Assessments::ScoreSummary}, which runs the
+web's own `MatrixDataBuilder`, so an agent cannot report a number the
+person's screen disagrees with. Three rules a payload of bare numbers
+needs and a screen does not:
+
+- **The scale travels with the score.** Every payload carries `scale:` —
+  the unit, the assessed level's code, the next level's, and a sentence
+  saying 100 is meeting the assessed level and 200 is demonstrating the
+  next. A client that reads `132` with no scale invents one.
+- **The parts travel with the net.** `components:` splits the number into
+  what is demonstrated at the assessed level, what is earned above it, and
+  what is still missing below — the gloss the hero renders, in fields.
+- **The thresholds are the framework's, not assumed.** A tenant can move
+  any of the three bands, so `thresholds:` ships with the score rather
+  than leaving a client to hard-code 80/95/150.
+
+The per-category roll-up also carries `rated_at_assessed_level` /
+`total_at_assessed_level`, the same coverage counts the screen shows, so an
+agent can tell a low score from a barely-rated one. Perspective is resolved
+by the shared `Assessments::ViewerContext`, so the self-assessment privacy
+rule holds identically on both surfaces: before alignment starts, an
+assessee's payload is built from self ratings alone.
+
 Evidence and comments are full **read + write** surfaces over MCP, not
 read-only feeds. Beyond recording/linking evidence, an agent can edit and
 withdraw it (`assessments_update_evidence`, `assessments_withdraw_evidence`)

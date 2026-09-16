@@ -104,7 +104,7 @@ The left column carries the verdict headline, a one-line gloss, and the "bottom 
 
 The **verdict headline** follows `performance_state` ("You're meeting E3 expectations." / "well on the way to E4." / "held back at E3 by 1 blocked capability." / "meeting E8 expectations — the top of the ladder."), and the **gloss** names the score's parts from `scoring[:components]` — "94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3" — so the headline number never has to be reverse-engineered. Colour tiers read the framework's configured thresholds (`underperforming_threshold` is threaded in alongside the other two); nothing hard-codes 0.8.
 
-Under the big percentage, a tiny secondary line (`#hero-secondary-percents`) shows the other perspectives' percentages (`Self: 118% · Mgr: 101%`). In alignment — where both Self and Mgr appear — they are ordered **viewer-first** (the viewer's own perspective leads): `Mgr: … · Self: …` for the manager-side viewer, `Self: … · Mgr: …` for the assessee. This is the **same viewer-aware ordering as the split chip** (see *Misalignment → diagonal split*) so the two surfaces tell one story; it's driven by the same `viewer_is_manager:` flag threaded into `HeroSummary`. (In the manager view the only secondary is "Self", so there's nothing to reorder.)
+Under the big percentage, a tiny secondary line (`#hero-secondary-percents`) shows the other perspectives' percentages (`Self: 118% · Mgr: 101%`), each carrying the shared amber divergence dot when it lands in a different state than the primary. **A secondary perspective is a number, never a second state word** — the gloss used to append "· Self: Below expectations" beside a line that already read "Self: 10%", saying the same thing twice in more space. The state vocabulary is the primary verdict's job, once, at the top of the card; every other altitude (category header, capability card, secondary perspective) is a quick indicator and shows the percentage alone. In alignment — where both Self and Mgr appear — they are ordered **viewer-first** (the viewer's own perspective leads): `Mgr: … · Self: …` for the manager-side viewer, `Self: … · Mgr: …` for the assessee. This is the **same viewer-aware ordering as the split chip** (see *Misalignment → diagonal split*) so the two surfaces tell one story; it's driven by the same `viewer_is_manager:` flag threaded into `HeroSummary`. (In the manager view the only secondary is "Self", so there's nothing to reorder.)
 
 **Once the agreed record is whole, the secondaries are withheld** — from the moment every current-level cell carries an agreed value (`coverage_complete?` in `:alignment`, where the primary frequency is the aligned one), not only after "Mark alignment complete": user testing showed the lingering Self/Mgr numbers on an all-agreed assessment read as competing scores and confused promotion conversations. While cells remain unagreed the secondaries stay — they are the conversation's working material. `alignment_locked:` (threaded into `HeroSummary`) still forces the drop for participants completed before the coverage gate existed. **The hiding is hero-only**: the expansion panel's divergent secondary lines, the level-chip splits (muted post-completion), the category indicators, and the activity feed all keep the self/manager history on drill-in.
 
@@ -170,6 +170,32 @@ Five surfaces, all reading from the same `?category=` URL state:
 3. **Scroll-based active marker**. As the user scrolls, `category_nav_controller#updateActiveCategory` finds the deepest section whose top has scrolled past the threshold and marks its chip active. Suppressed for ~900ms after a chip click so the explicit click result survives the smooth-scroll animation (otherwise the final scroll event of the animation could fall short of the threshold and re-mark the previous chip).
 4. **Activity sidebar**. Listens for `matrix:focus-changed@window` with `level: "category"` and narrows its rendered entries.
 5. **Server state**. The controller reads `?category=` only to render the active chip class — the document includes every category section regardless.
+
+### The category's score — `CategoryIndicators`
+
+The section heading carries the category's score on the same scale, one
+altitude above the card: the rated count, the split when it adds anything,
+the tone-coloured percent, and a `:md` `ScoreBar`. Rendered as a single
+Turbo Stream target (`category-indicators-<id>`) so a rating updates the
+whole cluster atomically.
+
+- **A quick indicator shows a number, not a word.** The state word is a
+  `title` on the percent (and `data-category-state` for tests), never
+  rendered text. A category header is scanned, not read; "75% Underperforming"
+  is wider than the column and says twice what the colour already says.
+  Divergent secondary perspectives read "Self: 45%" for the same reason.
+  The hero is the one altitude that spends a line on the state vocabulary.
+- **Coverage gate.** Until at least half of the category's assessed-level
+  cells carry the viewer's rating, the header shows "1/4 rated · score
+  unlocks at 2" instead of a number, and the **chip bar** hides that
+  category's state dot and percent on the same rule. A category nobody has
+  touched must not read as underperforming.
+- **The description gets its own row.** The name shares its line with the
+  score cluster (which wraps below it on a narrow viewport); the
+  description runs full width underneath at `max-w-3xl`. Sharing one row
+  with a ~14rem cluster left it a ribbon four or five words wide and six
+  lines tall inside a *sticky* header — prose needs the column, and a
+  category name is short enough not to.
 
 ## Capability focus
 
@@ -245,18 +271,38 @@ Every card auto-focuses the person's current level on first render — the expan
 
 There is no `×` close button. The previous design had one to drop back to "no level focused"; with auto-focus there's nothing meaningful to close *to*. Re-focusing means clicking a different level chip — handled by `matrix_controller#focusChip`, which sets the URL and reloads the matrix frame.
 
-### Signed contribution delta
+### The capability's own score — `CapabilityNameRow`
 
-The top-right of every card carries the capability's **signed score delta** (e.g. `+0.5`, `-0.5`, `+0.0`) — the raw value from `Scoring#raw_contribution`. Color-tiered:
+The name row carries the capability's score **on the same scale as the hero**
+(ADR-21), rendered by `Views::Assessments::CapabilityNameRow` inside
+`id="capability-name-<stable_id>"` so the rating controllers' Turbo Streams
+replace it with the same view that first drew it. One scale at three
+altitudes — hero, category header, capability card — all reading
+`Views::Assessments::Concerns::ScoreScale` for tone, state words and level
+codes, and all drawing `Views::Assessments::ScoreBar` at their own size.
 
-| Value | Color |
-|---|---|
-| ≥ +0.5 | green |
-| -0.5 .. +0.5 | neutral gray |
-| -1.5 .. -0.5 | amber |
-| ≤ -1.5 | red |
+Three rules, each load-bearing:
 
-The previous design rendered this as a percentage AND hid the badge entirely when contribution was negative — silently dropping the most informative signal. Don't reintroduce either.
+- **Never the net alone.** The row shows the split beside the number
+  (`50% · +50% toward E4`, plus `−N% below` when a prior level is short),
+  because under the multiplicative gate "most of the time" at the assessed
+  level with "consistently" above it nets to 100% next to a pill that says
+  "Most of the time". The split is dropped only when it would restate the
+  number — a lone `75%` beside a `75%` is noise — and hides below `sm`.
+- **Unrated is not 0%.** A capability whose assessed-level cell carries no
+  rating in the viewer's perspective reads **"Not rated"**; one with no
+  expectation at that level reads **"No expectation at E3"**. Both would
+  otherwise score 0.0 and read as a verdict on the person.
+- **The colour is the state, not the number.** The percent takes
+  `tone_text(state)` from the engine's per-capability state (blocked →
+  amber), so a card can't read green while the hero says held back. The
+  state *word* is a `title`, never rendered text — see the category header
+  rule below.
+
+The signed `±N.N` delta this replaced is gone from the card. It was in the
+engine's raw units, so it could only be compared against other capabilities,
+never against an expectation; the scale it now shows answers "how am I doing
+here" directly. `capability_contributions` still feeds the hero's gap lists.
 
 ### Level strip — `LevelStrip` + `LevelChip`
 
@@ -1150,13 +1196,17 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/views/assessments/header_chrome.rb` | Shared header chrome (shortcode chip + `render_status_pill`) for both show views |
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
+| `app/views/assessments/concerns/score_scale.rb` | The ONE score vocabulary every altitude reads — tone by state, state words, level codes relative to the assessed level, the band count the bar draws |
+| `app/views/assessments/score_bar.rb` | The scale made visible at three sizes (`:lg` hero / `:md` category / `:sm` card) — one segment per band, tick-labelled with level codes at hero size only |
 | **Category navigation** | |
-| `app/views/assessments/category_chip_bar.rb` | Sticky chip row, active marker, scoring legend |
+| `app/views/assessments/category_chip_bar.rb` | Sticky chip row, active marker, per-category state dot + percent (both behind the coverage gate) |
+| `app/views/assessments/category_indicators.rb` | A category's score at its section head — rated count, split, tone-coloured percent (state as a `title`, never a word), `:md` bar, divergent-perspective annotations |
 | `app/views/assessments/category_section.rb` | Anchor target + sticky section heading + stack of capability cards |
 | **Matrix content** | |
 | `app/views/assessments/assessment_matrix_frame_view.rb` | Turbo Frame wrapper for the matrix |
 | `app/views/assessments/assessment_matrix.rb` | Container that renders each `CategorySection` |
-| `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name, signed delta, level strip, expansion panel |
+| `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name row, level strip, expansion panel |
+| `app/views/assessments/capability_name_row.rb` | The card's name row — name, Blocked badge, and the capability's own score with its split (`id="capability-name-<stable_id>"`, Turbo-replaced by the rating controllers) |
 | `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
 | `app/views/assessments/level_chip.rb` | One chip per level — solid fill by frequency, diagonal split on disagreement / partial rating (colour vs grey), evidence/comment glyphs, YOU/CURRENT current-level badge |
 | `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
@@ -1189,6 +1239,8 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
+| `app/models/assessments/viewer_context.rb` | The ONE `:self` / `:manager` / `:alignment` resolution — the web controller and the MCP read tools both call it, so a score can't be built from ratings the viewer may not see |
+| `app/queries/assessments/score_summary.rb` | The MCP read tools' score payload — runs the same `MatrixDataBuilder` the web renders and reshapes its scoring into whole percents plus the scale's own meaning |
 | `app/queries/assessments/level_coverage.rb` | Current-level self/manager/aligned completion for a (person, framework, cycle). Mirrors the builder's denominator; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status, and by the alignment-completion gate (aligned side) |
 | `app/views/assessments/alignment_completion_control.rb` | Gated "Mark alignment complete" header control — disabled + "N to align →" jump chip until current-level aligned coverage is whole; Turbo-Stream-replaced on every alignment rating |
 | `app/views/assessments/continue_assessing_link.rb` | Shared "jump to a capability cell" anchor — sole owner of the `continue-assessing` href/data contract (hero CTA, priming CTA, completion jump chip) |
