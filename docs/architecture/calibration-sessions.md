@@ -451,7 +451,18 @@ is pre-attentive. Design rules, all deliberate:
   (`?cohort_person=`, swapped in the same frame) — the capabilities
   pulling the score down and up (`CohortScores#why_for`), each linking
   into the capability drill-in with that person's card open, composing
-  with the existing surface. The **rater-context line** ("Mia rates +0.41
+  with the existing surface. **Each row reads on the same 0–200 scale as
+  the axis beside it** — that capability's own score at the person's level,
+  from `Scoring#capability_scores_at`, coloured by the same state tone
+  their assessment page uses. The split is the score's own arithmetic
+  rather than the sign of a delta: the number is a weighted mean of these,
+  so below 100% pulls it down and above 100% pulls it up. **Weight rides
+  along** (a `×2` marker) because this drawer compares people, and a
+  capability that counts double drags the score twice as hard — which a
+  percentage alone hides. It used to print `sprintf("%+.1f", …)` of the
+  engine's weight units, which could only be compared against the other
+  rows in the same drawer and read `-1.0` for every capability nobody had
+  rated at that level (#421). The **rater-context line** ("Mia rates +0.41
   vs org mean across their whole team") ties the tendency strip to this
   view — a low dot under a harsh rater is a calibration question, not a
   verdict.
