@@ -266,14 +266,6 @@ class Assessments::AlignmentRatingsController < ApplicationController
     Assessments::SecondaryPerspectives.category_scores(matrix_data, context, category_id)
   end
 
-  def secondary_capability_contributions(stable_id, matrix_data, context)
-    Assessments::SecondaryPerspectives.for(matrix_data, context).filter_map do |entry|
-      contribution = entry[:scoring].dig(:capability_contributions, stable_id)
-      next unless contribution
-
-      [ entry[:label], contribution ]
-    end
-  end
 
   # In alignment context, both the assessee and their manager can submit
   # ratings. Use the assessee's name in the verdict only when the viewer

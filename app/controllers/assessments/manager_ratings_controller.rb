@@ -285,14 +285,6 @@ class Assessments::ManagerRatingsController < ApplicationController
     Assessments::SecondaryPerspectives.category_scores(matrix_data, context, category_id)
   end
 
-  def secondary_capability_contributions(stable_id, matrix_data, context)
-    Assessments::SecondaryPerspectives.for(matrix_data, context).filter_map do |entry|
-      contribution = entry[:scoring].dig(:capability_contributions, stable_id)
-      next unless contribution
-
-      [ entry[:label], contribution ]
-    end
-  end
 
   def assessee_name
     @assessee_name ||= Person.find_by(id: @assignment.person_id)&.name
