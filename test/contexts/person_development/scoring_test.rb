@@ -476,7 +476,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
     should "mark a capability with no expectation at that level unscorable" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
-                            expectation_cells: Set[ [ CAP_A, 3 ] ],
+                            expectation_cells: Set[[ CAP_A, 3 ]],
                             ratings: [ rated(3, "consistent") ])
       score = scorer.capability_scores_at(4)[CAP_A]
 
