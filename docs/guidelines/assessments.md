@@ -330,7 +330,9 @@ Three rules, each load-bearing:
 The signed `±N.N` delta this replaced is gone from the card. It was in the
 engine's raw units, so it could only be compared against other capabilities,
 never against an expectation; the scale it now shows answers "how am I doing
-here" directly. `capability_contributions` still feeds the hero's gap lists.
+here" directly. The hero's gap lists read `capability_scores` and
+`capability_scores_at_next_level`, the same per-capability scores on the
+same scale.
 
 ### Level strip — `LevelStrip` + `LevelChip`
 
@@ -522,7 +524,7 @@ Content indicators live in the chip's **bottom-right corner as glyphs** — a **
 
 Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter. Returns `nil` (not empty hash) when no ratings exist for that perspective — `HeroSummary` falls back to effective when its preferred perspective is nil.
 
-Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
+Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_scores_at_next_level` map keyed by stable_id — each capability's own score at the level above, from the engine's `capability_scores_at`. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
 ## Evidence-link valence — "what does this say about the behaviour?"
 
@@ -1311,7 +1313,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `test/system/assessments_activity_pane_system_test.rb` | Sidebar open/close + responsive behaviour |
 | `test/contexts/person_development/scoring_test.rb` | The level-independent scale (ADR-21): components, the per-binding gate, cap window, expectation coverage, `performance_state` transitions |
 | `test/components/assessments/hero_summary_test.rb` | Hero copy per state (top of ladder, mastering, blocked, eligible), the components gloss, the 0–200 / 0–100 bar |
-| `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_contributions_at_next_level` presence |
+| `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_scores_at_next_level` presence |
 | `test/system/assessment_delegation_system_test.rb` | Manager grants via modal → delegate reviews + rates → can't start alignment |
 | `test/policies/assessment_policy_delegation_test.rb` | Delegate rating, recorded-authoritative manager, grant/revoke gates |
 | `test/contexts/person_development/aggregate_authority_test.rb` | Reporting-manager recording, delegation commands, authority guard, `via_delegation` |

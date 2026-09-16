@@ -1002,8 +1002,8 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#scoring-panel"
       # Pre-condition: the file-level fixture must produce a hero with a
       # middle band (the perspective-driven 3-capability list). The band
-      # only renders when `primary_scoring[:capability_contributions]` is
-      # non-empty; with the shared setup (capabilities + person + ratings)
+      # only renders when `primary_scoring[:capability_scores]` holds a
+      # scorable capability; with the shared setup (capabilities + ratings)
       # this is currently always the case. Asserting it explicitly fails
       # loudly if a future fixture change empties the hero — rather than
       # silently skipping the actual collapse assertions below.

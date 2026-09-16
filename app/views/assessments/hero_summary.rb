@@ -331,6 +331,22 @@ class Views::Assessments::HeroSummary < Views::Base
     @scores_at_next ||= scorable(primary_scoring[:capability_scores_at_next_level] || {})
   end
 
+  # The scores a "Gap to …" list is filled from, and the level code that
+  # names it — always the same level. A next level that carries no
+  # expectations yet has nothing to be short of, so the list falls back to
+  # the assessed level AND says so: labelling assessed-level scores "Gap
+  # to E4" would read a 100% at E3 as E4 demonstrated in full.
+  def gap_target
+    @gap_target ||= if scores_at_next.any? && next_code
+      [ scores_at_next, next_code ]
+    else
+      [ scores_here, current_code ]
+    end
+  end
+
+  def gap_scores = gap_target.first
+  def gap_code = gap_target.last
+
   def scorable(scores)
     scores.select { |_, score| score[:scorable] }
   end
@@ -343,15 +359,19 @@ class Views::Assessments::HeroSummary < Views::Base
   # capabilities equally unshown above, the one weakest at the level the
   # person is standing on has the furthest to go, so it leads.
   def weakest(scores, limit = 3)
-    scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid) ] }.first(limit)
+    scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid, Float::INFINITY) ] }.first(limit)
   end
 
   def strongest(scores, limit = 3)
-    scores.sort_by { |sid, score| [ -score[:score].to_f, -assessed_score(sid) ] }.first(limit)
+    scores.sort_by { |sid, score| [ -score[:score].to_f, -assessed_score(sid, -Float::INFINITY) ] }.first(limit)
   end
 
-  def assessed_score(stable_id)
-    scores_here.dig(stable_id, :score).to_f
+  # Absent from the assessed level means it carries no expectation there,
+  # not that it scores zero. The caller says which way that should sort, so
+  # a capability nobody asked anything of is never promoted to "weakest"
+  # on a number it was never given.
+  def assessed_score(stable_id, absent)
+    scores_here.dig(stable_id, :score) || absent
   end
 
   def state_panel_config
@@ -380,8 +400,8 @@ class Views::Assessments::HeroSummary < Views::Base
       # matters is at L+1 — a capability at +0.0 current is meeting today;
       # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
       { state_label: "Performing at #{current_code} · #{progress_label}",
-        list_label: next_code ? "Gap to #{next_code}" : "Gap to #{current_code}",
-        items: scores_at_next.any? ? weakest(scores_at_next) : weakest(scores_here),
+        list_label: "Gap to #{gap_code}",
+        items: weakest(gap_scores),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
@@ -398,10 +418,10 @@ class Views::Assessments::HeroSummary < Views::Base
       # weakest contribution AT the next level (blocked ones first).
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
       blocked_items = blocked.filter_map { |sid| [ sid, scores_at_next[sid] ] if scores_at_next[sid] }.first(3)
-      items = blocked_items.any? ? blocked_items : weakest(scores_at_next)
+      items = blocked_items.any? ? blocked_items : weakest(gap_scores)
       { state_label: "Mastering #{current_code} · #{progress_label}",
-        list_label: next_code ? "Gap to #{next_code}" : "Top contributors",
-        items: items.any? ? items : strongest(scores_here),
+        list_label: "Gap to #{gap_code}",
+        items: items,
         border: "border-purple-300 dark:border-purple-700",
         accent: "text-purple-700 dark:text-purple-300",
         caps: caps_by_id }

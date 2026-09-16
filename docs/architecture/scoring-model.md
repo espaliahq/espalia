@@ -158,7 +158,7 @@ has_next_level?              → next_level_ordinal present
 next_level_contribution(b)   → raw_contribution_at_level(b, next_level_ordinal)
 ```
 
-The builder exposes `capability_contributions_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level.
+The builder exposes `capability_scores_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level, and fall back to the assessed level — label included — when that level carries no expectations yet.
 
 ---
 

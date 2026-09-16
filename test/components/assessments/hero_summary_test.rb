@@ -153,6 +153,31 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_operator html.index("DevSecOps"), :<, html.index("Strategic Thinking")
     end
 
+    should "name the level it is actually showing when the one above has no expectations" do
+      # A next level exists in the ladder but carries no expectations yet,
+      # so there is nothing to be short of there. Falling back to the
+      # assessed level under a "Gap to E4" label would read a 100% at E3
+      # as E4 demonstrated in full.
+      html = render_gap_list(next_scores: {}, state: :performing,
+                             here_scores: { "cap-0" => 1.0, "cap-1" => 0.9, "cap-2" => 0.8 })
+
+      # Raw HTML here — Tailwind's `uppercase` is visual only.
+      assert_includes html, "Gap to E3"
+      assert_not_includes html, "Gap to E4"
+    end
+
+    should "not rank a capability with no assessed-level expectation as the weakest" do
+      # Its absence from the assessed level means nothing was asked of it
+      # there, which must not become a zero that wins the tie-break.
+      html = render_gap_list(
+        next_scores: { "cap-0" => 0.0, "cap-1" => 0.0, "cap-2" => 0.0 },
+        here_scores: { "cap-0" => 0.4, "cap-1" => 0.6 }
+      )
+
+      assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps"),
+        "the capability with no assessed-level expectation must not lead the gap list"
+    end
+
     should "leave out a capability with no expectation at that level" do
       # It owes nothing there, so its unavoidable 0 must not rank as the
       # worst thing on the page.
