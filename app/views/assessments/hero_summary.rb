@@ -16,6 +16,8 @@
 # positions; the hero is still functional, just static.
 #
 class Views::Assessments::HeroSummary < Views::Base
+  include Views::Assessments::Concerns::ScoreScale
+
   # Fraction of current-level capabilities that must be rated before the
   # score + verdict are trustworthy enough to show. Below this, an unrated
   # cell scores as 0.0 ("never demonstrated") in PersonDevelopment::Scoring,
@@ -24,16 +26,6 @@ class Views::Assessments::HeroSummary < Views::Base
   # met we show a neutral coverage-progress hero instead.
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
-  # The number and the bar take their colour from the performance STATE, not
-  # the raw score, so a 150% held at "progressing" by a blocked capability
-  # reads amber like its verdict rather than purple like its number.
-  TONE_TEXT = {
-    red: "text-red-700 dark:text-red-400",
-    amber: "text-amber-700 dark:text-amber-400",
-    green: "text-green-700 dark:text-green-400",
-    purple: "text-purple-600 dark:text-purple-400"
-  }.freeze
-  TONE_BAR = { red: "bg-red-500", amber: "bg-amber-500", green: "bg-green-500", purple: "bg-purple-500" }.freeze
 
   # @param scoring [Hash] effective scoring
   # @param self_scoring [Hash, nil]
@@ -442,14 +434,6 @@ class Views::Assessments::HeroSummary < Views::Base
     end
   end
 
-  # Returns the level code for an ordinal in the merged level set, or
-  # nil when the ordinal isn't in the role's ladder (e.g. asking for
-  # @person_level + 1 when the person is already at the top). Callers
-  # branch on nil to swap the headline for a top-of-ladder framing.
-  def level_code(ordinal)
-    @merged_levels.find { |l| l[:ordinal] == ordinal }&.dig(:level_code)
-  end
-
   def contribution_color(value)
     if value >= 0.5
       "text-green-700 dark:text-green-400"
@@ -546,7 +530,7 @@ class Views::Assessments::HeroSummary < Views::Base
     components = primary_scoring[:components] || {}
 
     parts = [ "#{percent(components[:current])}% of #{current_code} demonstrated" ]
-    parts.concat(next_band_phrases) if next_level? && components[:next].to_f.positive?
+    parts.concat(next_band_phrases(components)) if next_level? && components[:next].to_f.positive?
     parts << "#{percent(1.0 - components[:prior].to_f)}% missing below #{current_code}" if components[:prior].to_f < 1.0
     parts << "no level above #{current_code}" unless next_level?
     "#{parts.join(' · ')}."
@@ -557,52 +541,7 @@ class Views::Assessments::HeroSummary < Views::Base
   def progress_label
     return "no level above" unless next_level?
 
-    next_band_phrases.join(" · ")
-  end
-
-  # The next-band component as level-by-level copy. With the default cap it
-  # is one phrase ("38% of the way to E4"); with a wider cap a whole band
-  # reads "E4 demonstrated in full" and the remainder names the level after.
-  def next_band_phrases
-    nxt = (primary_scoring[:components] || {})[:next].to_f
-    whole = [ nxt.floor, levels_above.size ].min
-    phrases = whole.positive? ? [ "#{code_above(whole - 1)} demonstrated in full" ] : []
-    remainder = nxt - whole
-    if levels_above[whole] && (remainder.positive? || phrases.empty?)
-      phrases << "#{percent(remainder)}% of the way to #{code_above(whole)}"
-    end
-    phrases
-  end
-
-  def percent(value)
-    (value.to_f * 100).round(0)
-  end
-
-  # ── Level codes ──
-  #
-  # The assessed level's code and the levels above it — what every piece of
-  # copy names. `levels_above` is the view's one source for "is there a band
-  # above": the same role ladder the engine scores, in order, so a gap in
-  # the ordinals cannot make the copy and the number disagree.
-  def current_code
-    @current_code ||= level_code(@person_level) || "L#{@person_level}"
-  end
-
-  def levels_above
-    @levels_above ||= @merged_levels.select { |l| l[:ordinal] > @person_level }.sort_by { |l| l[:ordinal] }
-  end
-
-  def next_code
-    levels_above.first&.dig(:level_code)
-  end
-
-  # The code of the level `index` steps above the assessed one.
-  def code_above(index)
-    levels_above[index]&.dig(:level_code) || "+#{index + 1}"
-  end
-
-  def next_level?
-    levels_above.any?
+    next_band_phrases(primary_scoring[:components]).join(" · ")
   end
 
   # Self view → "You're". Manager / alignment views → "<First name> is",
@@ -696,66 +635,17 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def performance_color
-    TONE_TEXT.fetch(tone)
-  end
-
-  def performance_bar_color
-    TONE_BAR.fetch(tone)
-  end
-
-  def tone
-    case primary_scoring[:performance_state]
-    when :eligible, :mastering then :purple
-    when :performing, :top_of_ladder then :green
-    when :progressing then :amber
-    else :red
-    end
+    tone_text(primary_scoring[:performance_state])
   end
 
   # ── Score bar ──
 
-  # The scale made visible: the left half is the assessed level (0–100),
-  # the right half the next one (100–200), with the level codes as tick
-  # labels — so the number explains itself before any copy does. At the
-  # top of the ladder there is no next band, so the bar is a single
-  # 0–100 segment.
+  # The scale made visible, at hero size: tick-labelled with the level
+  # codes, through as many bands as the cap allows (see ScoreBar).
   def score_bar(ratio)
-    bands = score_bands
-    max = 100 * (1 + bands)
-    pct = percent(ratio)
-    fill = ([ pct, max ].min.to_f / max * 100).round(1)
-    label = if bands.positive?
-      "#{pct}% — 100% is #{current_code} expectations, #{max}% is #{code_above(bands - 1)}"
-    else
-      "#{pct}% — 100% is #{current_code} expectations, the top of the ladder"
-    end
-
-    # 144px beside the number fits a 375px card; 176px clipped the last tick.
-    div(id: "hero-score-bar", class: "mt-2 w-36 sm:w-44 ml-auto") do
-      div(class: "relative h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden",
-          role: "progressbar",
-          aria: { valuenow: [ pct, max ].min, valuemin: 0, valuemax: max, label: label }) do
-        div(class: "h-full rounded-full #{performance_bar_color}", style: "width: #{fill}%") { }
-        (1..bands).each do |i|
-          span(class: "absolute inset-y-0 w-0.5 bg-white dark:bg-gray-900",
-               style: "left: #{(100.0 * i / (bands + 1)).round(2)}%", aria: { hidden: "true" }) { }
-        end
-      end
-      div(class: "mt-1 flex justify-between text-[10px] text-gray-600 dark:text-gray-300 tabular-nums",
-          aria: { hidden: "true" }) do
-        span { "0" }
-        span { "100% · #{current_code}" }
-        (1..bands).each { |i| span { "#{100 * (i + 1)}% · #{code_above(i - 1)}" } }
-      end
-    end
-  end
-
-  # How many levels above the assessed one the bar runs through — the
-  # engine's `bands_above` (the ladder above, windowed by the cap), so a
-  # framework with a cap of 2 gets a 0–300 bar rather than a clamped 0–200.
-  def score_bands
-    return 0 unless next_level?
-
-    (primary_scoring.dig(:components, :bands_above) || 1).to_i.clamp(1, levels_above.size)
+    render Views::Assessments::ScoreBar.new(
+      score: ratio, state: primary_scoring[:performance_state], components: primary_scoring[:components],
+      merged_levels: @merged_levels, person_level: @person_level, size: :lg, id: "hero-score-bar"
+    )
   end
 end

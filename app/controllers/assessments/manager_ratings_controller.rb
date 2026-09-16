@@ -156,9 +156,6 @@ class Assessments::ManagerRatingsController < ApplicationController
     cell_data = cap_data[:cells][level_ordinal]
     level_code = matrix_data[:merged_levels].find { |l| l[:ordinal] == level_ordinal }&.dig(:level_code) || "L#{level_ordinal}"
     primary = primary_scoring(matrix_data, :manager)
-    blocked = primary.dig(:capability_statuses, capability_stable_id) == :blocked
-    block_reason = primary.dig(:block_reasons, capability_stable_id)
-    contribution = primary.dig(:capability_contributions, capability_stable_id) || cap_data[:contribution]
 
     render turbo_stream: [
       (live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
@@ -223,17 +220,19 @@ class Assessments::ManagerRatingsController < ApplicationController
         render_to_string(
           Views::Assessments::CategoryIndicators.new(
             category_id: category_id,
-            category_result: primary[:category_results]&.dig(category_id),
-            secondary_results: secondary_category_results(category_id, matrix_data, :manager),
+            category_score: primary.dig(:category_scores, category_id),
+            secondary_scores: secondary_category_scores(category_id, matrix_data, :manager),
             category_data: matrix_data[:categories].find { |c| c[:category].category_id == category_id },
-            context: :manager
+            context: :manager,
+            merged_levels: matrix_data[:merged_levels],
+            person_level: matrix_data[:person_level]
           ),
           layout: false
         )
       ) if category_id),
       turbo_stream.replace(
         "capability-name-#{capability_stable_id}",
-        capability_name_html(cap_data, blocked, block_reason, contribution)
+        capability_name_html(cap_data, matrix_data, primary, :manager)
       ),
       (turbo_stream.replace(
         "category-tabs",
@@ -294,12 +293,12 @@ class Assessments::ManagerRatingsController < ApplicationController
     end.select { |_, s| s }
   end
 
-  def secondary_category_results(category_id, matrix_data, context)
+  def secondary_category_scores(category_id, matrix_data, context)
     secondary_scorings(matrix_data, context).filter_map do |label, scoring|
-      result = scoring[:category_results]&.dig(category_id)
-      next unless result
+      score = scoring.dig(:category_scores, category_id)
+      next unless score
 
-      [ label, result ]
+      [ label, score ]
     end
   end
 

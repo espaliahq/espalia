@@ -275,13 +275,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
-  context "capability contribution badge" do
-    should "render a signed delta (negative included) on every capability card" do
-      # Seed an explicit underperforming rating on cap1 at the person's
-      # level so its raw_contribution is < 0. Production renders this as
-      # a signed delta next to the capability name; the earlier
-      # redesign suppressed negative contributions, hiding the most
-      # useful "where am I under" signal.
+  context "capability score row" do
+    should "read each capability on the assessment's own scale" do
+      # Three shapes on one page, all from the same components: a rated
+      # capability shows its percent plus the bar, an unrated one says so
+      # rather than reading 0%, and one with no expectation at the
+      # assessed level says that instead of a number.
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_self(
           @person.id, @framework_id, @cap1_stable,
@@ -292,21 +291,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # Find the cap1 card and assert its name row contains a signed
-      # delta matching `±N.N` (any sign, one decimal).
-      label = page.evaluate_script(<<~JS)
-        (function() {
-          var card = document.querySelector('[data-capability-stable-id="#{@cap1_stable}"]');
-          if (!card) return null;
-          var nameRow = card.querySelector('h3')?.parentElement;
-          var spans = nameRow ? Array.from(nameRow.querySelectorAll('span')) : [];
-          var m = spans.map(s => s.textContent.trim()).find(t => /^[+-]\\d+\\.\\d$/.test(t));
-          return m || null;
-        })()
-      JS
+      rated = find("#capability-name-#{@cap1_stable} [data-capability-score]")
+      assert_match(/\d+%/, rated.text,
+        "Expected the rated capability's score as a percent, got #{rated.text.inspect}")
+      assert_selector "#capability-name-#{@cap1_stable} [data-score-bar] [role='progressbar']"
 
-      assert_match(/^[+-]\d+\.\d$/, label.to_s,
-        "Expected a signed delta (e.g. '-0.5') next to the capability name, got #{label.inspect}")
+      # Problem Solving has an expectation at E1 only.
+      assert_selector "#capability-name-#{@cap2_stable} [data-capability-score]", text: "No expectation at E2"
+
+      # Execution has an E2 cell but no rating yet.
+      assert_selector "#capability-name-#{@cap3_stable} [data-capability-score]", text: "Not rated"
     end
   end
 
@@ -555,11 +549,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "nav#category-tabs", visible: true
     end
 
-    should "show category pass/fail indicators on chips" do
+    should "show a category's state dot on its chip only once its score unlocks" do
+      # The chip carries the category's state as a dot and its percent —
+      # both behind the same coverage gate as the header, so an untouched
+      # category shows its name and count without a misleadingly low score.
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
       visit assessment_path(@assignment)
-      # Category chips should carry pass/fail status dots
-      within("nav#category-tabs") do
+      assert_selector "#scoring-panel"
+
+      within("nav#category-tabs a[data-category-id='#{@cat_id}']") do
         assert_selector "[data-category-status]"
+        assert_text "%"
+      end
+      # "Delivering" has an E2 cell nobody has rated — gated, so no dot.
+      within("nav#category-tabs a[data-category-id='#{@cat2_id}']") do
+        assert_no_selector "[data-category-status]"
+        assert_no_text "%"
       end
     end
   end
