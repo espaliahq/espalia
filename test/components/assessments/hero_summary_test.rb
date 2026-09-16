@@ -15,8 +15,48 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     { ordinal: 3, level_code: "E3" }, { ordinal: 4, level_code: "E4" }
   ].freeze
 
+  # A capability score map in the shape the builder hands the hero — the
+  # state derived from the default thresholds so call sites stay a number.
+  def scored(map)
+    map.transform_values do |value|
+      state = if value < 0.8 then :underperforming
+      elsif value < 0.95 then :progressing
+      elsif value < 1.5 then :performing
+      else :mastering
+      end
+      { score: value, scorable: true, state: state }
+    end
+  end
+
+  CAPS = [ "Strategic Thinking", "Quality First", "DevSecOps" ].freeze
+
+  # #418: the rows used to print a weight-unit delta — "-1.0" for every
+  # capability nobody had rated at the next level, so three rows ranked
+  # nothing and the number could not be read against an expectation.
+  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil)
+    capabilities = CAPS.each_with_index.map do |name, i|
+      { capability: CAP.new(stable_id: "cap-#{i}", name: name),
+        cells: { 3 => { current_frequency: "consistent" } } }
+    end
+    here_scores ||= CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }
+    scoring = {
+      performance_ratio: 1.62,
+      components: { prior: 1.0, current: 1.0, next: 0.62, score: 1.62, bands_above: 1 },
+      performance_state: state,
+      capability_scores: scored(here_scores),
+      capability_scores_at_next_level: scored(next_scores),
+      promotion_readiness: blocked ? { blocked_at_next_level: blocked } : nil
+    }
+    Views::Assessments::HeroSummary.new(
+      scoring: scoring, self_scoring: scoring, manager_scoring: scoring,
+      categories: [ { category: nil, capabilities: capabilities } ],
+      person_level: 3, merged_levels: LEVELS, assessment_id: SecureRandom.uuid_v7,
+      context: :self, viewer_can_rate: false
+    ).call
+  end
+
   def render_hero(state:, components:, person_level: 3, levels: LEVELS, statuses: {}, readiness: nil,
-                  contributions: { "cap-a" => 0.0 }, next_contributions: { "cap-a" => -0.5 }, context: :self,
+                  scores: { "cap-a" => 1.0 }, next_scores: { "cap-a" => 0.25 }, context: :self,
                   cells: nil, self_scoring: nil)
     cap = CAP.new(stable_id: "cap-a", name: "Strategic Thinking")
     cells ||= { person_level => {
@@ -30,8 +70,8 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       meeting_expectations: components[:score] >= 0.95,
       mastering: components[:score] >= 1.5,
       capability_statuses: statuses,
-      capability_contributions: contributions,
-      capability_contributions_at_next_level: next_contributions,
+      capability_scores: scored(scores),
+      capability_scores_at_next_level: scored(next_scores),
       promotion_readiness: readiness
     }
 
@@ -51,7 +91,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       components: { prior: 1.0, current: 1.0, next: 0.58, score: 1.58 },
       self_scoring: {
         performance_ratio: 0.1, components: { prior: 1.0, current: 0.1, next: 0.0, score: 0.1, bands_above: 1 },
-        performance_state: :underperforming, capability_contributions: { "cap-a" => -1.0 }
+        performance_state: :underperforming, capability_scores: scored({ "cap-a" => 0.1 })
       }
     )
   end
@@ -78,6 +118,113 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
                          components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
       assert_includes html, 'aria-valuemax="100"'
       assert_not_includes html, "200%"
+    end
+  end
+
+  context "the gap list" do
+    should "read each row as a percentage of the level the panel names" do
+      html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 })
+
+      assert_includes html, "Gap to E4"
+      assert_includes html, "50%"
+      assert_includes html, "25%"
+      assert_not_includes html, "-1.0"
+      assert_not_includes html, "+0.0"
+    end
+
+    should "rank a capability shown at the next level above one never shown there" do
+      html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 })
+
+      # Weakest first: DevSecOps (0%), Quality First (25%), Strategic (50%).
+      assert_operator html.index("DevSecOps"), :<, html.index("Quality First")
+      assert_operator html.index("Quality First"), :<, html.index("Strategic Thinking")
+    end
+
+    should "break a tie on the level the person is standing on" do
+      # Nothing is rated at the next level until someone starts working
+      # there, so a whole gap list sitting at 0% of it is the common case,
+      # not an edge one. The capability weakest at E3 has furthest to go.
+      html = render_gap_list(
+        next_scores: { "cap-0" => 0.0, "cap-1" => 0.0, "cap-2" => 0.0 },
+        here_scores: { "cap-0" => 1.0, "cap-1" => 0.6, "cap-2" => 0.9 }
+      )
+
+      assert_operator html.index("Quality First"), :<, html.index("DevSecOps")
+      assert_operator html.index("DevSecOps"), :<, html.index("Strategic Thinking")
+    end
+
+    should "name the level it is actually showing when the one above has no expectations" do
+      # A next level exists in the ladder but carries no expectations yet,
+      # so there is nothing to be short of there. Falling back to the
+      # assessed level under a "Gap to E4" label would read a 100% at E3
+      # as E4 demonstrated in full.
+      html = render_gap_list(next_scores: {}, state: :performing,
+                             here_scores: { "cap-0" => 1.0, "cap-1" => 0.9, "cap-2" => 0.8 })
+
+      # Raw HTML here — Tailwind's `uppercase` is visual only.
+      assert_includes html, "Gap to E3"
+      assert_not_includes html, "Gap to E4"
+    end
+
+    should "not rank a capability with no assessed-level expectation as the weakest" do
+      # Its absence from the assessed level means nothing was asked of it
+      # there, which must not become a zero that wins the tie-break.
+      #
+      # DevSecOps (absent from `here_scores`) is listed FIRST so that
+      # insertion order alone would put it at the top: with the tie-break
+      # removed entirely the rows would come out in map order and this
+      # assertion would fail, and with the absent-score fallback removed
+      # its 0.0 would win outright. Either regression is caught.
+      html = render_gap_list(
+        next_scores: { "cap-2" => 0.0, "cap-0" => 0.0, "cap-1" => 0.0 },
+        here_scores: { "cap-0" => 0.4, "cap-1" => 0.6 }
+      )
+
+      assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps"),
+        "the capability with no assessed-level expectation must not lead the gap list"
+      assert_operator html.index("Quality First"), :<, html.index("DevSecOps"),
+        "both capabilities that DO carry an assessed-level expectation rank ahead of it"
+    end
+
+    should "rank blocked capabilities among themselves, not by collection order" do
+      # `blocked_at_next_level` arrives in whatever order the engine
+      # collected it, so taking the first three could omit a worse one and
+      # show the rest out of order.
+      html = render_gap_list(
+        next_scores: { "cap-0" => 0.4, "cap-1" => 0.1, "cap-2" => 0.7 },
+        blocked: [ "cap-2", "cap-0", "cap-1" ]
+      )
+
+      assert_operator html.index("Quality First"), :<, html.index("Strategic Thinking")
+      assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps")
+    end
+
+    should "leave out a capability with no expectation at that level" do
+      # It owes nothing there, so its unavoidable 0 must not rank as the
+      # worst thing on the page.
+      scoring_scores = scored({ "cap-0" => 0.5, "cap-1" => 0.25 })
+      scoring_scores["cap-2"] = { score: 0.0, scorable: false, state: :underperforming }
+      capabilities = CAPS.each_with_index.map do |name, i|
+        { capability: CAP.new(stable_id: "cap-#{i}", name: name),
+          cells: { 3 => { current_frequency: "consistent" } } }
+      end
+      scoring = {
+        performance_ratio: 1.62,
+        components: { prior: 1.0, current: 1.0, next: 0.62, score: 1.62, bands_above: 1 },
+        performance_state: :mastering,
+        capability_scores: scored(CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }),
+        capability_scores_at_next_level: scoring_scores,
+        promotion_readiness: nil
+      }
+      html = Views::Assessments::HeroSummary.new(
+        scoring: scoring, self_scoring: scoring, manager_scoring: scoring,
+        categories: [ { category: nil, capabilities: capabilities } ],
+        person_level: 3, merged_levels: LEVELS, assessment_id: SecureRandom.uuid_v7,
+        context: :self, viewer_can_rate: false
+      ).call
+
+      assert_includes html, "Quality First"
+      assert_not_includes html, "DevSecOps"
     end
   end
 

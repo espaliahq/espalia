@@ -446,6 +446,68 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
   end
 
+  context "#capability_scores_at" do
+    # The hero's gap list points at a level the person is not standing on,
+    # so it needs each capability scored THERE — a share of that level's
+    # expectation, not a weight-unit delta that reads the same for every
+    # capability nobody has rated yet.
+    should "score each capability as its share of the reference level" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "some"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+      scores = scorer.capability_scores_at(4)
+
+      # "Some of the time" at E4 is a quarter of it; never rated there is none.
+      assert_in_delta(0.25, scores[CAP_A][:score], 0.001)
+      assert_in_delta(0.0, scores[CAP_B][:score], 0.001)
+    end
+
+    should "distinguish capabilities a weight-unit delta rated identically" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "occasional"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+      scores = scorer.capability_scores_at(4)
+
+      assert_operator scores[CAP_A][:score], :>, scores[CAP_B][:score],
+        "a capability shown at the next level must outrank one never shown there"
+    end
+
+    should "mark a capability with no expectation at that level unscorable" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+                            expectation_cells: Set[[ CAP_A, 3 ]],
+                            ratings: [ rated(3, "consistent") ])
+      score = scorer.capability_scores_at(4)[CAP_A]
+
+      assert_equal false, score[:scorable],
+        "nothing is expected of it at that level, so it owes nothing there"
+    end
+
+    should "read the top of the ladder from the level being judged" do
+      # The reference level here IS the last on the ladder, so a capability
+      # meeting it is at the top — whatever levels sit above the one the
+      # person is standing on.
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+
+      assert_equal :top_of_ladder, scorer.capability_scores_at(4)[CAP_A][:state]
+    end
+
+    should "carry the state vocabulary at that level" do
+      scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B)
+      ])
+      scores = scorer.capability_scores_at(4)
+
+      assert_equal :underperforming, scores[CAP_B][:state]
+      assert_includes %i[performing mastering top_of_ladder], scores[CAP_A][:state]
+    end
+  end
+
   context "#category_components and #category_state" do
     should "be the weight-mean of the category's capabilities" do
       scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [

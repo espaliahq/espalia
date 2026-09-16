@@ -116,12 +116,34 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 
 | Performance state | Headline | List label | Items | Border |
 |---|---|---|---|---|
-| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | red |
-| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | amber |
-| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest **next-level** contributions | blue |
-| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked-at-next-level or 3 lowest next-level contributions | purple |
-| `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest current-level contributions | green |
-| `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest current-level contributions | blue |
+| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | red |
+| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | amber |
+| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest scores **at E(n+1)** | blue |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1), else 3 lowest scores there | purple |
+| `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest scores at E(n) | green |
+| `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest scores at E(n) | blue |
+
+**Every row is a percentage on the same scale as the rest of the page** —
+that capability's own score at the level the panel names, tone-coloured by
+its state, read from `scoring[:capability_scores]` or
+`[:capability_scores_at_next_level]` (the engine's `capability_scores_at`).
+It used to print a signed weight-unit delta, which could only be compared
+against other rows and — because a capability nobody has rated at the next
+level always scores exactly `-1.0` there — showed three identical numbers
+that ranked nothing (#418).
+
+**Ties break on the assessed level.** Nothing is rated at the next level
+until someone starts working there, so a whole "Gap to E4" list sitting at
+0% of E4 is the common case rather than an edge one. Among capabilities
+equally unshown above, the one weakest at the level the person is standing
+on leads — it has the furthest to go, and the order is then deterministic
+rather than whatever the hash happened to hold.
+
+**A capability with no expectation at that level is left out**, rather than
+sinking to the bottom of the list on a zero it could never avoid. Before
+the change a capability with no expectation at the assessed level appeared
+in the gap list at `+0.0`, which is the same "no expectation vs not rated"
+confusion the card's "No expectation at E3" copy exists to prevent.
 
 **Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're on the way to the next one, and the scale says how far. A `:mastering` person is past the halfway waypoint; the question is what is still in the way of promotion. Both use **next-level** contributions, because progress past 100% is earned at the level above. At the top of the ladder there is no next band, so the panel shows what carries the score rather than a gap nobody can close.
 
@@ -308,7 +330,9 @@ Three rules, each load-bearing:
 The signed `±N.N` delta this replaced is gone from the card. It was in the
 engine's raw units, so it could only be compared against other capabilities,
 never against an expectation; the scale it now shows answers "how am I doing
-here" directly. `capability_contributions` still feeds the hero's gap lists.
+here" directly. The hero's gap lists read `capability_scores` and
+`capability_scores_at_next_level`, the same per-capability scores on the
+same scale.
 
 ### Level strip — `LevelStrip` + `LevelChip`
 
@@ -500,7 +524,7 @@ Content indicators live in the chip's **bottom-right corner as glyphs** — a **
 
 Each uses `PersonDevelopment::Scoring` with a different `perspective:` parameter. Returns `nil` (not empty hash) when no ratings exist for that perspective — `HeroSummary` falls back to effective when its preferred perspective is nil.
 
-Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_contributions_at_next_level` map keyed by stable_id. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
+Every perspective hash now carries a `performance_state` symbol (see [scoring-model.md](../architecture/scoring-model.md)) and, when the person isn't at the top of the level ladder, a `capability_scores_at_next_level` map keyed by stable_id — each capability's own score at the level above, from the engine's `capability_scores_at`. The hero's middle band uses both to pick its narrative — see *State-driven panel* above.
 
 ## Evidence-link valence — "what does this say about the behaviour?"
 
@@ -1289,7 +1313,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `test/system/assessments_activity_pane_system_test.rb` | Sidebar open/close + responsive behaviour |
 | `test/contexts/person_development/scoring_test.rb` | The level-independent scale (ADR-21): components, the per-binding gate, cap window, expectation coverage, `performance_state` transitions |
 | `test/components/assessments/hero_summary_test.rb` | Hero copy per state (top of ladder, mastering, blocked, eligible), the components gloss, the 0–200 / 0–100 bar |
-| `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_contributions_at_next_level` presence |
+| `test/models/assessments/matrix_data_builder_test.rb` | Data shape + `capability_scores_at_next_level` presence |
 | `test/system/assessment_delegation_system_test.rb` | Manager grants via modal → delegate reviews + rates → can't start alignment |
 | `test/policies/assessment_policy_delegation_test.rb` | Delegate rating, recorded-authoritative manager, grant/revoke gates |
 | `test/contexts/person_development/aggregate_authority_test.rb` | Reporting-manager recording, delegation commands, authority guard, `via_delegation` |

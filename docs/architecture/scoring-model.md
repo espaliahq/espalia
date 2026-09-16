@@ -158,7 +158,7 @@ has_next_level?              → next_level_ordinal present
 next_level_contribution(b)   → raw_contribution_at_level(b, next_level_ordinal)
 ```
 
-The builder exposes `capability_contributions_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level.
+The builder exposes `capability_scores_at_next_level` when a next level exists; the hero's `:performing` and `:mastering` panels sort it ascending to name the real gap to the next level, and fall back to the assessed level — label included — when that level carries no expectations yet.
 
 ---
 
@@ -231,6 +231,12 @@ What differs is only how much vocabulary each altitude can afford:
 | Hero | Number, `:lg` bar with tick-labelled level codes, the state as a verdict sentence, the components as a gloss | — |
 | Category header | Rated count, the split when it adds anything, tone-coloured number, `:md` bar | The state **word** (a `title` only) — a scanned indicator has no room for it |
 | Capability card | The split, tone-coloured number, `:sm` bar | The state word; the number alone stands in for it |
+
+A fourth caller sits slightly apart: the hero's gap list scores each
+capability at the level the panel *points at* rather than the one the person
+stands on — `capability_scores_at(reference_level)`, the same components with
+the same state vocabulary, plus the `scorable` flag a gap list needs to leave
+out capabilities that owe nothing at that level.
 
 Three shared rules, all in `Views::Assessments::Concerns::ScoreScale`:
 

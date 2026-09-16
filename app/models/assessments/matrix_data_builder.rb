@@ -80,9 +80,7 @@ class Assessments::MatrixDataBuilder
     @all_bindings = categories.flat_map { |c| c[:capabilities].map { |cap| cap[:binding] } }.compact
     @expectation_cells = expectation_cells(categories)
     scoring_engine = build_scoring_engine(categories, perspective: primary_scoring_perspective)
-    all_bindings = @all_bindings
-    enrich_capabilities_with_contributions(categories, scoring_engine)
-    scoring = extract_scoring(scoring_engine, bindings: all_bindings)
+    scoring = extract_scoring(scoring_engine, bindings: @all_bindings)
 
     {
       role: @role,
@@ -356,18 +354,6 @@ class Assessments::MatrixDataBuilder
       .index_by(&:capability_id)
   end
 
-  # Adds :contribution to each capability hash — the raw contribution score.
-  #
-  # @param categories_data [Array<Hash>]
-  # @param scoring [PersonDevelopment::Scoring]
-  def enrich_capabilities_with_contributions(categories_data, scoring)
-    categories_data.each do |cat_data|
-      cat_data[:capabilities].each do |cap_data|
-        cap_data[:contribution] = scoring.raw_contribution(cap_data[:binding])
-      end
-    end
-  end
-
   # Builds the PersonDevelopment::Scoring engine instance.
   #
   # @param categories_data [Array<Hash>] the built categories structure
@@ -420,9 +406,7 @@ class Assessments::MatrixDataBuilder
       block_reasons: scoring.block_reasons
     }
     if bindings
-      result[:capability_contributions] = bindings.to_h do |b|
-        [ b.capability.stable_id, scoring.raw_contribution(b) ]
-      end
+
       # The same scale at the two lower altitudes — one card, one category —
       # so every surface reads the same number and vocabulary.
       result[:capability_scores] = bindings.to_h do |b|
@@ -432,16 +416,12 @@ class Assessments::MatrixDataBuilder
         [ category_id, scoring.category_components(category_id).merge(state: scoring.category_state(category_id)) ]
       end
 
-      # Next-level contributions power the "Gap to mastering" /
-      # "Gap to promotion" panels in the hero — they show which
-      # capabilities are holding the person back at the next level,
-      # not at their current one. Only meaningful when a next level
-      # exists in the framework.
-      if scoring.has_next_level?
-        result[:capability_contributions_at_next_level] = bindings.to_h do |b|
-          [ b.capability.stable_id, scoring.next_level_contribution(b) ]
-        end
-      end
+      # The hero's gap panel points at the level above, so it needs every
+      # capability scored THERE — what share of the next level each one
+      # already shows, on the same scale as every other number on screen.
+      # Only meaningful when a next level exists in the framework.
+      result[:capability_scores_at_next_level] = scoring.capability_scores_at(scoring.next_level_ordinal) if
+        scoring.has_next_level?
     end
     result
   end
