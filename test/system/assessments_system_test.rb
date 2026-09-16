@@ -164,6 +164,22 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "read the gap list as percentages, not weight-unit deltas" do
+      # #418: every row used to print a signed delta in the engine's own
+      # units ("-1.0"), which could only be compared against other rows.
+      rate_to_unlock_hero(frequency: "none")
+
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      within("#scoring-panel") do
+        assert_text "GAP TO E2"
+        # Each row names a capability and its share of that level.
+        assert_text(/\d+%/)
+        assert_no_text(/[+\u2212-]\d\.\d/)
+      end
+    end
+
     should "show the score bar pinned at the top of the ladder at both viewports" do
       # This role's ladder ends at E2, so a fully consistent E2 is the top of
       # the ladder: the bar is a single 0–100 segment and the copy says so.

@@ -116,12 +116,27 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 
 | Performance state | Headline | List label | Items | Border |
 |---|---|---|---|---|
-| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | red |
-| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest current-level contributions | amber |
-| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest **next-level** contributions | blue |
-| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked-at-next-level or 3 lowest next-level contributions | purple |
-| `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest current-level contributions | green |
-| `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest current-level contributions | blue |
+| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | red |
+| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | amber |
+| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest scores **at E(n+1)** | blue |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1), else 3 lowest scores there | purple |
+| `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest scores at E(n) | green |
+| `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest scores at E(n) | blue |
+
+**Every row is a percentage on the same scale as the rest of the page** —
+that capability's own score at the level the panel names, tone-coloured by
+its state, read from `scoring[:capability_scores]` or
+`[:capability_scores_at_next_level]` (the engine's `capability_scores_at`).
+It used to print a signed weight-unit delta, which could only be compared
+against other rows and — because a capability nobody has rated at the next
+level always scores exactly `-1.0` there — showed three identical numbers
+that ranked nothing (#418).
+
+**A capability with no expectation at that level is left out**, rather than
+sinking to the bottom of the list on a zero it could never avoid. Before
+the change a capability with no expectation at the assessed level appeared
+in the gap list at `+0.0`, which is the same "no expectation vs not rated"
+confusion the card's "No expectation at E3" copy exists to prevent.
 
 **Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're on the way to the next one, and the scale says how far. A `:mastering` person is past the halfway waypoint; the question is what is still in the way of promotion. Both use **next-level** contributions, because progress past 100% is earned at the level above. At the top of the ladder there is no next band, so the panel shows what carries the score rather than a gap nobody can close.
 

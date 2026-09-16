@@ -232,6 +232,12 @@ What differs is only how much vocabulary each altitude can afford:
 | Category header | Rated count, the split when it adds anything, tone-coloured number, `:md` bar | The state **word** (a `title` only) — a scanned indicator has no room for it |
 | Capability card | The split, tone-coloured number, `:sm` bar | The state word; the number alone stands in for it |
 
+A fourth caller sits slightly apart: the hero's gap list scores each
+capability at the level the panel *points at* rather than the one the person
+stands on — `capability_scores_at(reference_level)`, the same components with
+the same state vocabulary, plus the `scorable` flag a gap list needs to leave
+out capabilities that owe nothing at that level.
+
 Three shared rules, all in `Views::Assessments::Concerns::ScoreScale`:
 
 - **Tone comes from the state, never the number** — a 150 held at
