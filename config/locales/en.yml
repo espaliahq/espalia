@@ -29,3 +29,15 @@
 
 en:
   hello: "Hello world"
+  assessments:
+    # The word each performance state wears. A tenant can override any of
+    # these (Tenant#<state>_label, #415) — these are the defaults every
+    # tenant falls back to, so changing one here reaches everyone who has
+    # not chosen their own.
+    states:
+      underperforming: "Underperforming"
+      progressing: "Progressing"
+      performing: "Meeting"
+      top_of_ladder: "Meeting"
+      mastering: "Mastering"
+      eligible: "Promotion ready"

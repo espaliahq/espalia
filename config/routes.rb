@@ -72,6 +72,7 @@ Rails.application.routes.draw do
     root to: "dashboard#show", as: :root
 
     resource :theme, only: [ :show, :update ], controller: "themes"
+    resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
     resources :users, only: [ :index, :show, :update ] do
       resources :collaborators,

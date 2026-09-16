@@ -1987,6 +1987,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_update_scoring_vocabulary",
+        "description" => "Rename the performance states for the active tenant (display labels only — the scoring states and thresholds are unchanged). Blank restores the default word.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "underperforming_label" => { "type" => "string" },
+            "progressing_label" => { "type" => "string" },
+            "performing_label" => { "type" => "string" },
+            "mastering_label" => { "type" => "string" },
+            "eligible_label" => { "type" => "string" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_update_theme",
         "description" => "Update the active tenant's theme (brand colors and font).",
         "inputSchema" => {

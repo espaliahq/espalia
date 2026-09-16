@@ -10,7 +10,8 @@
 #   "progressing" by a blocked capability reads amber like its verdict.
 #   Deliberately not the frequency palette — red/yellow/green/blue there
 #   means *ratings*; here green/purple mean *verdicts*.
-# - **The state words**, one label per state.
+# - **The state words**, one label per state — read through
+#   {Views::Assessments::StateLabels}, since a tenant can rename them.
 # - **Level codes** relative to the assessed level, read off the merged
 #   levels the engine also scores against (both come from the role's
 #   ladder), so a gap in the ordinals cannot make copy and number disagree.
@@ -26,15 +27,6 @@ module Views::Assessments::Concerns::ScoreScale
   TONE_BAR = { red: "bg-red-500", amber: "bg-amber-500", green: "bg-green-500", purple: "bg-purple-500" }.freeze
   TONE_DOT = TONE_BAR
 
-  STATE_LABELS = {
-    underperforming: "Underperforming",
-    progressing: "Progressing",
-    performing: "Meeting",
-    top_of_ladder: "Meeting",
-    mastering: "Mastering",
-    eligible: "Promotion ready"
-  }.freeze
-
   # @param state [Symbol, nil] a `performance_state` symbol
   # @return [Symbol] :red | :amber | :green | :purple
   def tone_for(state)
@@ -49,10 +41,14 @@ module Views::Assessments::Concerns::ScoreScale
   def tone_text(state) = TONE_TEXT.fetch(tone_for(state))
   def tone_bar(state) = TONE_BAR.fetch(tone_for(state))
 
+  # The word this tenant uses for the state — not a constant here, because
+  # a tenant can rename it (#415). {Views::Assessments::StateLabels} is the
+  # one reader, so every altitude says the same thing.
+  #
   # @param state [Symbol, nil]
   # @return [String]
   def state_label(state)
-    STATE_LABELS.fetch(state, "Below expectations")
+    Views::Assessments::StateLabels.for(state)
   end
 
   # @param value [Numeric, nil] a 0.0–N ratio

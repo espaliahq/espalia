@@ -38,7 +38,29 @@ class Tenant < ApplicationRecord
     :nav_fg_color, :nav_fg_color_dark,
     :font_family
 
+  # The word this tenant uses for each performance state. The state itself
+  # is scoring policy and stays internal; the word is culture (#415). A
+  # blank value falls back to the shipped default — see
+  # {Views::Assessments::StateLabels}, the one reader.
+  STATE_LABEL_ATTRIBUTES = %i[
+    underperforming_label progressing_label performing_label mastering_label eligible_label
+  ].freeze
+
+  # Long enough for "Exceeding expectations", short enough to stay a badge:
+  # every surface renders these as an eyebrow beside a number, never in the
+  # middle of a sentence.
+  STATE_LABEL_MAX_LENGTH = 24
+
+  translates(*STATE_LABEL_ATTRIBUTES)
+
+  # `normalizes` only reaches real AR attributes, and json_translate's are
+  # methods over a jsonb column — so the strip is a callback. Without it a
+  # label of spaces is neither blank (the fallback never fires) nor a word
+  # (it renders as an empty badge).
+  before_validation :strip_state_labels
+
   normalizes :slug, with: ->(s) { s.downcase.strip.gsub(/[^a-z0-9-]/, "-").gsub(/-+/, "-").delete_prefix("-").delete_suffix("-") }
+
 
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true,
@@ -49,6 +71,7 @@ class Tenant < ApplicationRecord
     :nav_fg_color, :nav_fg_color_dark,
     format: { with: HEX_COLOR_FORMAT }, allow_blank: true
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
+  validates(*STATE_LABEL_ATTRIBUTES, length: { maximum: STATE_LABEL_MAX_LENGTH }, allow_blank: true)
   validates :hris_config, store_model: true
 
   # The colour the browser should paint its own chrome (address bar, title
@@ -146,6 +169,18 @@ class Tenant < ApplicationRecord
     transaction do
       update!(slack_credentials: nil, slack_team_id: nil)
       tenant_users.where.not(slack_user_id: nil).update_all(slack_user_id: nil)
+    end
+  end
+
+  private
+
+  # @return [void]
+  def strip_state_labels
+    STATE_LABEL_ATTRIBUTES.each do |attribute|
+      value = public_send(attribute)
+      next unless value.is_a?(String) && value != value.strip
+
+      public_send(:"#{attribute}=", value.strip)
     end
   end
 end
