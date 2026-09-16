@@ -679,7 +679,10 @@ class Frameworks::SuggestionsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       follow_redirect!
-      assert_match(/role_illustration .* not found/, flash[:alert])
+      # The flash names the entity the way the UI does ("Example"), never the
+      # raw role_illustration identifier — see Frameworks::EntityLabels.
+      assert_match(/Example .* not found/, flash[:alert])
+      assert_no_match(/role_illustration/, flash[:alert])
 
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal 0, FrameworkState::SuggestedEdit.deletes.count
