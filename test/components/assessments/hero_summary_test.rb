@@ -169,13 +169,21 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     should "not rank a capability with no assessed-level expectation as the weakest" do
       # Its absence from the assessed level means nothing was asked of it
       # there, which must not become a zero that wins the tie-break.
+      #
+      # DevSecOps (absent from `here_scores`) is listed FIRST so that
+      # insertion order alone would put it at the top: with the tie-break
+      # removed entirely the rows would come out in map order and this
+      # assertion would fail, and with the absent-score fallback removed
+      # its 0.0 would win outright. Either regression is caught.
       html = render_gap_list(
-        next_scores: { "cap-0" => 0.0, "cap-1" => 0.0, "cap-2" => 0.0 },
+        next_scores: { "cap-2" => 0.0, "cap-0" => 0.0, "cap-1" => 0.0 },
         here_scores: { "cap-0" => 0.4, "cap-1" => 0.6 }
       )
 
       assert_operator html.index("Strategic Thinking"), :<, html.index("DevSecOps"),
         "the capability with no assessed-level expectation must not lead the gap list"
+      assert_operator html.index("Quality First"), :<, html.index("DevSecOps"),
+        "both capabilities that DO carry an assessed-level expectation rank ahead of it"
     end
 
     should "rank blocked capabilities among themselves, not by collection order" do
