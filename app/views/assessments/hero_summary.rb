@@ -87,7 +87,6 @@ class Views::Assessments::HeroSummary < Views::Base
         unscorable_header
       elsif coverage_unlocked?
         hero_header
-        middle_band
       else
         priming_header
       end
@@ -117,13 +116,17 @@ class Views::Assessments::HeroSummary < Views::Base
   # Renders a single state-driven panel (not two competing
   # strengths/lift columns). The performance state picks the
   # headline + tone; the capability list is the evidence for it.
+  #
+  # Lives in the header's LEFT column, under the gloss, so it sits beside
+  # the number + bar rather than below the whole row — a full-width band
+  # under the taller right column left a blank block beside the headline.
   def middle_band
     config = state_panel_config
     return unless config && config[:items].any?
 
     div(class: "hero-collapsible") do
       div do
-        div(class: "px-5 pb-5") { state_panel(config) }
+        div(class: "pt-3") { state_panel(config) }
       end
     end
   end
@@ -136,7 +139,7 @@ class Views::Assessments::HeroSummary < Views::Base
     # Below `sm` the headline stacks above the number + bar (which then
     # share one row); side by side, the 176px bar left the headline a
     # one-word-per-line column and pushed the document past the viewport.
-    div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do
+    div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6") do
       div(class: "min-w-0 flex-1") do
         # Headline + actions on one line — "Continue" used to sit on a
         # third row, and the promotion pill on a fourth. Inline-baseline
@@ -152,6 +155,7 @@ class Views::Assessments::HeroSummary < Views::Base
         # as they fit; flex-wrap drops the secondaries below on narrow
         # viewports rather than the previous fixed two-line stack.
         gloss_and_secondaries
+        middle_band
       end
       div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
         span(class: "text-4xl font-bold leading-none #{performance_color}") { "#{pct}%" }

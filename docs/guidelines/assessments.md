@@ -64,7 +64,7 @@ Activity:     /assessments/:id/activity?capability=<stable_id>&level_ordinal=<n>
 
 ## Hero Summary — three bands
 
-The hero is a single card with three logical bands. The header and bottom line are always visible; only the middle band scrolls away.
+The hero is a single card with three logical bands. The header and bottom line are always visible; only the middle band scrolls away. The middle band renders inside the header's **left column**, under the gloss — beside the number and bar, not below the whole row, so the taller right column never leaves a blank block beside the headline.
 
 ```
 ┌─ #scoring-panel ───────────────────────────────────────────────┐
