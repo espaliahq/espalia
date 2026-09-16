@@ -1569,6 +1569,44 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "the explanation layer" do
+    # #414: the number is read by the person it describes, so the
+    # explanation lives where the number is — not in a help page.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+      should "open the calculation drawer on the viewer's own numbers (#{name})" do
+        rate_to_unlock_hero(frequency: "consistent")
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#scoring-panel"
+
+        assert_no_selector "##{Views::Assessments::ScoreExplainerModal::ID}", visible: true
+        click_button_with_js_fallback("How is this calculated?", expect_text: "How it adds up")
+
+        within("##{Views::Assessments::ScoreExplainerModal::ID}") do
+          # Their arithmetic first, the rules second.
+          assert_text "Shown at E2"
+          assert_text "How it adds up"
+          assert_text "What doesn't count"
+        end
+      end
+    end
+
+    should "define a scored term on hover and on keyboard focus" do
+      rate_to_unlock_hero(frequency: "consistent")
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      # The definition is reachable without a pointer — the assessee may be
+      # driving by keyboard, and `title` would be unreachable to them.
+      definition = find("#assessment-term-score", visible: :all)
+      assert_match(/How much of what E2 expects/, definition.text(:all))
+
+      trigger = find("[aria-describedby='assessment-term-score']", match: :first)
+      assert_equal "button", trigger.tag_name,
+        "the term must be a real focusable control, not a bare span with a title"
+    end
+  end
+
   context "responsive behaviour" do
     should "show scoring panel as hero card on desktop" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)

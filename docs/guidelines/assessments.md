@@ -183,6 +183,53 @@ Two practical notes:
 
 Browser support for `animation-timeline: scroll()` was at ~94% globally as of 2026 (Chrome/Edge 115+, Safari 26+, Firefox 137+). Browsers without it silently keep the middle band fully expanded — functional, just static.
 
+## The explanation layer
+
+The calibration screens have defined their vocabulary in-surface since they
+shipped. The assessment side — where the same numbers are read by the person
+they describe — defined nothing, and a number nobody can define is one people
+either ignore or read as an accusation (#414).
+
+Three pieces, cheapest first:
+
+1. **The bar explains itself** — ticks labelled with the level codes, so
+   "100% · E3" and "200% · E4" are on screen before anyone asks.
+2. **Definition tips on every scored term** — the score, the state, Required,
+   Blocked, weight, Not rated, No expectation, Carried, the rated count.
+   `Views::Assessments::Concerns::DefinedTerms#defined_term` renders them
+   through `Kit::DefinitionTip`: hover AND keyboard, never the native `title`
+   attribute, which no keyboard user can reach. That matters more here than on
+   the calibration screens, because the reader is the subject.
+3. **"How is this calculated?"** in the hero opens
+   `Views::Assessments::ScoreExplainerModal` — a root-mounted `Kit::Modal`
+   showing **this viewer's own arithmetic first** (shown at E3, shown above
+   E3, missing below E3, score) and the rules second. Someone looking at 158%
+   wants to know where 158 came from, not to read a definition and do the sum
+   themselves.
+
+`Views::Assessments::Glossary` is the single source of the wording, built per
+request rather than frozen as constants, because nearly every definition has
+to name something only this page knows: the viewer's level codes, the
+framework's configured bands, and the tenant's word for each state. Copy that
+says 80% where the framework says 75% is worse than no copy at all — which is
+why `thresholds:` is threaded from `MatrixDataBuilder` down to every surface
+that defines a term, via `Glossary.thresholds_from(matrix_data)`.
+
+Rules for the copy, pinned by `test/components/assessments/glossary_test.rb`:
+
+- **Never a model word** — no band, gate, tolerance, ratio, perspective,
+  component, deficit, binding, ordinal. The reader did not build the engine.
+- **Always their own codes and numbers**, never "your level".
+- **Say what does NOT count**, since that is what people assume wrongly:
+  feedback and comments are not an input to the score, levels below the
+  assessed one are assumed met, unrated is not a zero, carried is not
+  confirmed.
+
+`SCALE_SENTENCE` — the scale stated without naming a level — is shared with
+`Views::CalibrationSessions::Glossary`'s `pct_of_expected`, where the axis
+spans people standing at different levels and no single code is true for the
+column. Everywhere a code IS known, the copy names it instead.
+
 ## Category navigation
 
 Five surfaces, all reading from the same `?category=` URL state:
@@ -1226,6 +1273,11 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/views/assessments/header_chrome.rb` | Shared header chrome (shortcode chip + `render_status_pill`) for both show views |
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
+| `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |
+| `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard) |
+| `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count |
+| `app/views/assessments/state_labels.rb` | The ONE reader of a state's word — the tenant's own if it set one, else the word GrowthOS ships (#415) |
+| `app/operations/operations/tenants/update_scoring_vocabulary.rb` | Shared web + MCP operation — rename the performance states for a tenant (labels only; the states and thresholds are untouched) |
 | `app/views/assessments/concerns/score_scale.rb` | The ONE score vocabulary every altitude reads — tone by state, state words, level codes relative to the assessed level, the band count the bar draws |
 | `app/views/assessments/score_bar.rb` | The scale made visible at three sizes (`:lg` hero / `:md` category / `:sm` card) — one segment per band, tick-labelled with level codes at hero size only |
 | **Category navigation** | |

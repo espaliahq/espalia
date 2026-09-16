@@ -210,6 +210,7 @@ class Assessments::RatingsController < ApplicationController
             self_scoring: matrix_data[:self_scoring],
             manager_scoring: matrix_data[:manager_scoring],
             aligned_scoring: matrix_data[:aligned_scoring],
+            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
             merged_levels: matrix_data[:merged_levels],
@@ -229,7 +230,8 @@ class Assessments::RatingsController < ApplicationController
             category_data: matrix_data[:categories].find { |c| c[:category].category_id == category_id },
             context: :self,
             merged_levels: matrix_data[:merged_levels],
-            person_level: matrix_data[:person_level]
+            person_level: matrix_data[:person_level],
+            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data)
           ),
           layout: false
         )

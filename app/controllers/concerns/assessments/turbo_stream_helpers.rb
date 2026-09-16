@@ -66,7 +66,8 @@ module Assessments::TurboStreamHelpers
         blocked: primary.dig(:capability_statuses, stable_id) == :blocked,
         block_reason: primary.dig(:block_reasons, stable_id),
         merged_levels: matrix_data[:merged_levels],
-        person_level: matrix_data[:person_level]
+        person_level: matrix_data[:person_level],
+        thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data)
       ),
       layout: false
     )

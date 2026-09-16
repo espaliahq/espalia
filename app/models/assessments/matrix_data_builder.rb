@@ -92,6 +92,10 @@ class Assessments::MatrixDataBuilder
       self_scoring: build_perspective_scoring(categories, :self_only),
       manager_scoring: hide_others? ? nil : build_perspective_scoring(categories, :manager_only),
       aligned_scoring: hide_others? ? nil : build_perspective_scoring(categories, :aligned_only),
+      # All three bands, because the explanation layer (#414) must name the
+      # framework's own numbers rather than the shipped 80/95/150.
+      underperforming_threshold: @framework.underperforming_threshold&.to_f ||
+        PersonDevelopment::Scoring::DEFAULT_UNDERPERFORMING_THRESHOLD,
       meeting_expectation_threshold: @framework.meeting_expectation_threshold&.to_f ||
         PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD,
       mastery_threshold: @framework.mastery_threshold&.to_f ||

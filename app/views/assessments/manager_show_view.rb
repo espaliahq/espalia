@@ -82,10 +82,36 @@ class Views::Assessments::ManagerShowView < Views::Base
         activity_sidebar
       end
 
+      # Root-mounted, so the hero's trigger can sit inside a frame that
+      # reloads on every rating without taking an open dialog down with it.
+      render Views::Assessments::ScoreExplainerModal.new(
+        components: primary_scoring_components,
+        state: primary_scoring_state,
+        subject: "#{@assessee.name}'s score",
+        merged_levels: @matrix_data[:merged_levels],
+        person_level: @matrix_data[:person_level],
+        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data)
+      )
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
   end
+
+  # The perspective the hero renders, so the explainer opens on the same
+  # numbers the reader is looking at.
+  def primary_scoring
+    @primary_scoring ||=
+      case @context
+      when :self      then @matrix_data[:self_scoring] || @matrix_data[:scoring]
+      when :manager   then @matrix_data[:manager_scoring] || @matrix_data[:scoring]
+      when :alignment then @matrix_data[:aligned_scoring] || @matrix_data[:scoring]
+      else @matrix_data[:scoring]
+      end
+  end
+
+  def primary_scoring_components = primary_scoring[:components]
+
+  def primary_scoring_state = primary_scoring[:performance_state]
 
   def sticky_header
     # On md+ the whole header is sticky as one block. On mobile the
@@ -219,6 +245,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         self_scoring: @matrix_data[:self_scoring],
         manager_scoring: @matrix_data[:manager_scoring],
         aligned_scoring: @matrix_data[:aligned_scoring],
+        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
         categories: @matrix_data[:categories],
         person_level: @matrix_data[:person_level],
         merged_levels: @matrix_data[:merged_levels],

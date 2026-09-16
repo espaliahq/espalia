@@ -64,6 +64,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             category_data: cat_data,
             merged_levels: @matrix_data[:merged_levels],
             person_level: @matrix_data[:person_level],
+            thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
             assessment_id: @assessment_id,
             context: @context,
             viewer_is_manager: @viewer_is_manager,

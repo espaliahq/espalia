@@ -7,6 +7,7 @@ class Views::Assessments::CategorySection < Views::Base
   # @param category_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
+  # @param thresholds [Hash] the framework's own bands, for the definitions
   # @param assessment_id [String]
   # @param context [Symbol] :self, :manager, or :alignment
   # @param viewer_is_manager [Boolean] whether the viewer is the manager-side
@@ -26,7 +27,7 @@ class Views::Assessments::CategorySection < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
-  def initialize(category_data:, merged_levels:, person_level:, assessment_id:,
+  def initialize(category_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, scoring: {}, self_scoring: nil,
                  manager_scoring: nil, aligned_scoring: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
@@ -40,6 +41,7 @@ class Views::Assessments::CategorySection < Views::Base
     @category = category_data[:category]
     @merged_levels = merged_levels
     @person_level = person_level
+    @thresholds = thresholds
     @assessment_id = assessment_id
     @context = context
     @viewer_is_manager = viewer_is_manager
@@ -106,7 +108,8 @@ class Views::Assessments::CategorySection < Views::Base
           category_data: @category_data,
           context: @context,
           merged_levels: @merged_levels,
-          person_level: @person_level
+          person_level: @person_level,
+          thresholds: @thresholds
         )
       end
       if @category.description.present?
@@ -138,6 +141,7 @@ class Views::Assessments::CategorySection < Views::Base
           capability_data: cap_data,
           merged_levels: @merged_levels,
           person_level: @person_level,
+          thresholds: @thresholds,
           assessment_id: @assessment_id,
           context: @context,
           viewer_is_manager: @viewer_is_manager,

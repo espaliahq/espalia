@@ -17,6 +17,7 @@
 #
 class Views::Assessments::HeroSummary < Views::Base
   include Views::Assessments::Concerns::ScoreScale
+  include Views::Assessments::Concerns::DefinedTerms
 
   # Fraction of current-level capabilities that must be rated before the
   # score + verdict are trustworthy enough to show. Below this, an unrated
@@ -44,6 +45,8 @@ class Views::Assessments::HeroSummary < Views::Base
   #   "rate" prompts (assessee, recorded manager, or active delegate).
   #   False for view-only manager-chain ancestors — the priming hero then
   #   renders passive copy and every rate-CTA is withheld.
+  # @param thresholds [Hash] the framework's own bands, so the definitions
+  #   name its numbers rather than the shipped 80/95/150
   # @param alignment_locked [Boolean] the participant is fully `aligned` —
   #   the hero then presents the agreed record only, withholding the
   #   Self/Mgr secondary percentages and divergent verdict labels. The
@@ -53,7 +56,8 @@ class Views::Assessments::HeroSummary < Views::Base
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 assessee_name: nil, viewer_can_rate: true, alignment_locked: false)
+                 assessee_name: nil, viewer_can_rate: true, alignment_locked: false,
+                 thresholds: {})
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -67,6 +71,9 @@ class Views::Assessments::HeroSummary < Views::Base
     @assessee_name = assessee_name
     @viewer_can_rate = viewer_can_rate
     @alignment_locked = alignment_locked
+    @underperforming_threshold = thresholds[:underperforming]
+    @meeting_threshold = thresholds[:meeting]
+    @mastery_threshold = thresholds[:mastering]
   end
 
   def view_template
@@ -150,13 +157,31 @@ class Views::Assessments::HeroSummary < Views::Base
         middle_band
       end
       div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
-        span(class: "text-4xl font-bold leading-none #{performance_color}") { "#{pct}%" }
+        # The number defines itself where it is read, rather than in a help
+        # page nobody opens (#414).
+        defined_term(:score, label: "#{pct}%", align: :right,
+                     trigger_class: "text-4xl font-bold leading-none #{performance_color}")
         div(class: "text-right") do
           score_bar(ratio)
           secondary_percents
+          explainer_trigger
         end
       end
     end
+  end
+
+  # Opens the root-mounted drawer with this viewer's own arithmetic. Small
+  # and quiet: it is an answer for the person who wants one, not a call to
+  # action competing with "Continue".
+  def explainer_trigger
+    button(
+      type: "button",
+      class: "mt-1 text-[11px] text-gray-600 dark:text-gray-300 underline decoration-dotted " \
+             "underline-offset-2 hover:text-gray-900 dark:hover:text-white cursor-pointer " \
+             "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+      data: { action: "modal#open",
+              modal_target_id: Views::Assessments::ScoreExplainerModal::ID }
+    ) { "How is this calculated?" }
   end
 
   # ── Unscorable (no expectations at the assessed level) ──
