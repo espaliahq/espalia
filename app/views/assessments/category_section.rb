@@ -82,38 +82,46 @@ class Views::Assessments::CategorySection < Views::Base
     div(
       class: "md:sticky md:z-10 -mx-6 px-6 py-3 mb-3 " \
              "bg-gray-50/95 dark:bg-gray-950/95 md:backdrop-blur-sm " \
-             "flex items-baseline justify-between gap-3",
+             "flex flex-col gap-0.5",
       # Stable hook for matrix_controller#scrollCardUnderHeader — the
       # sticky flavour now varies by viewport (`md:sticky`), so a
       # class-name selector would silently miss this element.
       data: { section_header: "true" },
       style: "top: var(--sticky-header-h, 0px)"
     ) do
-      div(class: "min-w-0") do
-        h2(class: "text-lg font-bold text-gray-900 dark:text-white") do
+      # The name shares its line with the score; the description gets the
+      # whole width underneath. Sharing one row with the ~14rem score
+      # cluster left the description a ribbon four or five words wide —
+      # prose needs the column, and a name is short enough not to.
+      # Wrapping is allowed so a narrow viewport drops the score below the
+      # name rather than crushing it.
+      div(class: "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1") do
+        h2(class: "text-lg font-bold text-gray-900 dark:text-white min-w-0") do
           @category.name
         end
-        if @category.description.present?
-          p(class: "text-sm text-gray-600 dark:text-gray-300 mt-0.5") do
-            @category.description
-          end
+        render Views::Assessments::CategoryIndicators.new(
+          category_id: @category.category_id,
+          category_score: primary_scoring_for_context.dig(:category_scores, @category.category_id),
+          secondary_scores: secondary_category_scores,
+          category_data: @category_data,
+          context: @context,
+          merged_levels: @merged_levels,
+          person_level: @person_level
+        )
+      end
+      if @category.description.present?
+        p(class: "text-sm text-gray-600 dark:text-gray-300 max-w-3xl") do
+          @category.description
         end
       end
-      render Views::Assessments::CategoryIndicators.new(
-        category_id: @category.category_id,
-        category_result: primary_scoring_for_context[:category_results]&.dig(@category.category_id),
-        secondary_results: secondary_category_results,
-        category_data: @category_data,
-        context: @context
-      )
     end
   end
 
-  # Pairs each labelled secondary perspective with its result for this
-  # category, dropping perspectives that have no scoring or no result for
+  # Pairs each labelled secondary perspective with its score for this
+  # category, dropping perspectives that have no scoring or no score for
   # this category — matches the shape rating controllers thread in for
   # the turbo-replace path so initial render and post-rate render agree.
-  def secondary_category_results
+  def secondary_category_scores
     perspectives =
       case @context
       when :self      then [ [ "Mgr",  @manager_scoring ], [ "Agreed", @aligned_scoring ] ]
@@ -125,17 +133,16 @@ class Views::Assessments::CategorySection < Views::Base
     perspectives.filter_map do |label, scoring|
       next unless scoring
 
-      result = scoring[:category_results]&.dig(@category.category_id)
-      next unless result
+      score = scoring.dig(:category_scores, @category.category_id)
+      next unless score
 
-      [ label, result ]
+      [ label, score ]
     end
   end
 
   def capability_cards
     statuses = primary_scoring_for_context[:capability_statuses] || {}
     reasons  = primary_scoring_for_context[:block_reasons] || {}
-    contributions = primary_scoring_for_context[:capability_contributions] || {}
 
     div(class: "space-y-3") do
       @category_data[:capabilities].each do |cap_data|
@@ -151,7 +158,6 @@ class Views::Assessments::CategorySection < Views::Base
           scoring: primary_scoring_for_context,
           blocked: statuses[stable_id] == :blocked,
           block_reason: reasons[stable_id],
-          contribution: contributions[stable_id],
           expanded_capability_id: @expanded_capability_id,
           focused_level_ordinal: @focused_level_ordinal,
           selected_levels: @selected_levels,
