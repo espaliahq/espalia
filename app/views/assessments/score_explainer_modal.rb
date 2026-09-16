@@ -3,9 +3,10 @@
 # "How is this calculated?" — the viewer's own arithmetic, then the rules
 # (#414).
 #
-# Opened from the hero and from any category header, and rendered with
-# whichever set of components the trigger names, so the same drawer explains
-# the whole assessment or one section without two copies of the wording.
+# Opened from the hero, and rendered with the whole assessment's components
+# — one drawer per page, explaining the number the hero shows. A
+# section-scoped variant would be the same wording over a category's
+# components; the category header links back to the hero's instead.
 #
 # The order is deliberate: **their numbers first**, the rules second. A
 # person looking at 158% wants to know where 158 came from, not to read a
@@ -129,6 +130,9 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
         li { glossary.definition(:score) }
         li { glossary.definition(:below_levels) }
         li { gate_sentence }
+        li { glossary.definition(:weight) }
+        li { glossary.definition(:required) }
+        li { glossary.definition(:carried) }
         li { glossary.definition(:state) }
       end
     end

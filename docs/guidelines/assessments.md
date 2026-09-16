@@ -194,18 +194,22 @@ Three pieces, cheapest first:
 
 1. **The bar explains itself** — ticks labelled with the level codes, so
    "100% · E3" and "200% · E4" are on screen before anyone asks.
-2. **Definition tips on every scored term** — the score, the state, Required,
-   Blocked, weight, Not rated, No expectation, Carried, the rated count.
+2. **A definition tip on every scored term the page renders** — the score,
+   Blocked, Not rated, No expectation, the rated count.
    `Views::Assessments::Concerns::DefinedTerms#defined_term` renders them
    through `Kit::DefinitionTip`: hover AND keyboard, never the native `title`
    attribute, which no keyboard user can reach. That matters more here than on
-   the calibration screens, because the reader is the subject.
+   the calibration screens, because the reader is the subject. **A term the
+   page never prints gets no tip** — there is nothing to hang it on — so the
+   state, Required, weight, Carried and the below-level rule are defined in
+   the drawer below instead. The wording is one glossary either way.
 3. **"How is this calculated?"** in the hero opens
    `Views::Assessments::ScoreExplainerModal` — a root-mounted `Kit::Modal`
    showing **this viewer's own arithmetic first** (shown at E3, shown above
    E3, missing below E3, score) and the rules second. Someone looking at 158%
    wants to know where 158 came from, not to read a definition and do the sum
-   themselves.
+   themselves. The rows are reconciled against the score before they render,
+   so a rounded breakdown always adds up to the total beneath it.
 
 `Views::Assessments::Glossary` is the single source of the wording, built per
 request rather than frozen as constants, because nearly every definition has

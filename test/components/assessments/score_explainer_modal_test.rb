@@ -76,6 +76,17 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
       assert_includes html, "rather than covering"
     end
 
+    # Required, weight and Carried change the number but are never printed
+    # on the page, so there is nothing for a tip to hang off — the drawer
+    # is where they get defined instead.
+    should "define the rules the page never prints a word for" do
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+
+      assert_includes html, "counts for more than the others"
+      assert_includes html, "cannot be short of"
+      assert_includes html, "came from the last cycle"
+    end
+
     should "say plainly that feedback is not an input" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
