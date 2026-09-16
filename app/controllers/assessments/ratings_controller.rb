@@ -241,6 +241,7 @@ class Assessments::RatingsController < ApplicationController
         "capability-name-#{capability_stable_id}",
         capability_name_html(cap_data, matrix_data, primary, :self)
       ),
+      score_explainer_stream(matrix_data, primary, :self),
       (turbo_stream.replace(
         "category-tabs",
         render_to_string(

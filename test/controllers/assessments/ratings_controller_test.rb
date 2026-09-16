@@ -81,6 +81,25 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
         "Expected to find the rated chip in the response."
     end
 
+    # The drawer is mounted on the page root so an open dialog survives a
+    # frame reload — which also means no frame reload replaces it. Without
+    # its own stream it keeps explaining the score the page loaded with.
+    should "re-render the score explainer so its arithmetic follows the rating" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        rating: {
+          capability_stable_id: @cap.stable_id,
+          level_ordinal: 2,
+          frequency: "consistent"
+        }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_includes response.body, %(target="score-explainer-modal"),
+        "Expected the rating response to replace the explainer drawer."
+      assert_includes response.body, "How it adds up"
+    end
+
     should "revise an existing self-rating" do
       # Create initial rating
       sign_in @user
