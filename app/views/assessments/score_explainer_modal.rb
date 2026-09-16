@@ -67,22 +67,47 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   def arithmetic
     return unless @components
 
+    parts = displayed_parts
     div do
       h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "#{@subject} today" }
       div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
                  "bg-gray-50/50 dark:bg-gray-800/30 p-3 space-y-1") do
-        row("Shown at #{current_code}", percent(@components[:current]))
-        row("Shown above #{current_code}", percent(@components[:next]), sign: "+") if next_level?
-        row("Missing below #{current_code}", percent(1.0 - @components[:prior].to_f), sign: "−") if short_below?
+        row("Shown at #{current_code}", parts[:current])
+        row("Shown above #{current_code}", parts[:next], sign: "+") if next_level?
+        row("Missing below #{current_code}", parts[:missing], sign: "−") if short_below?
         div(class: "flex items-center justify-between gap-3 pt-2 mt-1 " \
                    "border-t border-gray-200 dark:border-gray-700") do
           span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Score" }
           span(class: "text-sm font-bold tabular-nums #{tone_text(@state)}") do
-            "#{percent(@components[:score])}%"
+            "#{parts[:score]}%"
           end
         end
       end
     end
+  end
+
+  # Rounding each part on its own can leave the rows failing to add up to
+  # the total — 11% + 11% under a score of 23% — in the one panel whose
+  # whole job is showing the sum. The score is authoritative (the hero
+  # renders the same number), so the residual is given to the largest
+  # part: every row stays within a point of its true value and the
+  # arithmetic closes.
+  def displayed_parts
+    current = percent(@components[:current])
+    nxt     = next_level? ? percent(@components[:next]) : 0
+    missing = short_below? ? percent(1.0 - @components[:prior].to_f) : 0
+    score   = percent(@components[:score])
+
+    residual = score - (current + nxt - missing)
+    if residual != 0
+      if nxt >= current
+        nxt += residual
+      else
+        current += residual
+      end
+    end
+
+    { current: current, next: nxt, missing: missing, score: score }
   end
 
   def row(label, value, sign: nil)

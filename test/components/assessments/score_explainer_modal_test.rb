@@ -39,6 +39,19 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
       assert_includes short, "5%"
     end
 
+    # Rounding each row on its own produced 11% + 11% under a score of 23%
+    # — in the one panel whose whole job is showing the sum.
+    should "add up to the total beneath them" do
+      html = render_modal(components: { prior: 1.0, current: 0.114, next: 0.114, score: 0.228 })
+
+      sum_panel = html[/today.*?How it adds up/m]
+      rows = sum_panel.scan(/([+−]?)(\d+)%/).map { |sign, value| sign == "−" ? -value.to_i : value.to_i }
+      parts, total = rows[0..-2], rows.last
+
+      assert_equal total, parts.sum,
+                   "breakdown #{parts.inspect} does not add up to #{total}"
+    end
+
     should "name whose numbers these are" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
                           subject: "Alex's score")
