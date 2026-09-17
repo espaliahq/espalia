@@ -95,19 +95,30 @@ class CalibrationSessions::CohortScores
       next unless score&.dig(:scorable)
 
       { stable_id: capability.stable_id, name: capability.name,
-        score: (score[:score] * 100).round(0), state: score[:state], weight: binding.weight.to_f }
-    end.sort_by { |entry| entry[:score] }
+        ratio: score[:score], state: score[:state], weight: binding.weight.to_f }
+    end.sort_by { |entry| entry[:ratio] }
 
     {
-      weakest: rows.select { |row| row[:score] < 100 }.first(WEAKEST_LIMIT),
+      weakest: for_display(rows.select { |row| row[:ratio] < 1.0 }.first(WEAKEST_LIMIT)),
       # Strictly above: a capability at exactly 100% is MEETING the level,
       # which is neither "above expectations" (the column's empty copy) nor
       # pulling anything up — listing it green contradicted both.
-      strongest: rows.reverse.select { |row| row[:score] > 100 }.first(STRONGEST_LIMIT)
+      strongest: for_display(rows.reverse.select { |row| row[:ratio] > 1.0 }.first(STRONGEST_LIMIT))
     }
   end
 
   private
+
+  # Rank and partition on the raw ratio, round only what is shown. Rounding
+  # first put a capability at 99.6% of expectations on exactly 100, so it
+  # fell out of the weakest list — off both columns, in the one view whose
+  # job is finding the capability that needs the conversation.
+  #
+  # @param rows [Array<Hash>] entries carrying a raw `:ratio`
+  # @return [Array<Hash>] the same entries with `:score` as whole percent
+  def for_display(rows)
+    rows.map { |row| row.except(:ratio).merge(score: (row[:ratio] * 100).round(0)) }
+  end
 
   def dots
     @dots ||= enrollment.filter_map do |person_id, (ordinal, role_id)|
