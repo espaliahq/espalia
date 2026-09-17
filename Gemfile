@@ -7,6 +7,12 @@ ruby file: ".ruby-version"
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem "rails", "~> 8.1.0"
+
+# Pinned below 3: json 3.0 made JSON.parse's options keyword-only, but
+# ActiveSupport::JSON.decode still passes them positionally, so every jsonb
+# read raises ArgumentError. Only rubocop's `json (~> 2.3)` held it back
+# before, and rubocop 1.90 relaxed that. Remove once Rails supports json 3.
+gem "json", "< 3"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft", "~> 1.3"
 # Use postgresql as the database for Active Record
