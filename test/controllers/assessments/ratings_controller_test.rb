@@ -37,6 +37,9 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # Every percentage the drawer prints, in order.
+  def percents_in(html) = html.to_s.scan(/([+\u2212]?\d+)%/).flatten
+
   context "POST /assessments/:assessment_id/ratings" do
     should "create a new self-rating and return turbo stream" do
       sign_in @user
@@ -86,18 +89,25 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
     # its own stream it keeps explaining the score the page loaded with.
     should "re-render the score explainer so its arithmetic follows the rating" do
       sign_in @user
-      post assessment_ratings_path(@assignment), params: {
-        rating: {
-          capability_stable_id: @cap.stable_id,
-          level_ordinal: 2,
-          frequency: "consistent"
-        }
-      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
-      assert_response :success
-      assert_includes response.body, %(target="score-explainer-modal"),
-        "Expected the rating response to replace the explainer drawer."
-      assert_includes response.body, "How it adds up"
+      # Two DIFFERENT ratings: asserting the drawer merely renders would pass
+      # on a stale copy, since the panel's wording never changes. Only the
+      # numbers do, so the test has to watch a number move.
+      explainer = lambda do |frequency|
+        post assessment_ratings_path(@assignment), params: {
+          rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
+        }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+        assert_response :success
+        response.body[%r{<turbo-stream[^>]*target="score-explainer-modal".*?</turbo-stream>}m]
+      end
+
+      some = explainer.call("some")
+      assert_not_nil some, "Expected the rating response to replace the explainer drawer."
+      assert_includes some, "How it adds up"
+
+      consistent = explainer.call("consistent")
+      assert_not_equal percents_in(some), percents_in(consistent),
+        "the drawer must explain the score as it is now, not as the page loaded it"
     end
 
     should "revise an existing self-rating" do

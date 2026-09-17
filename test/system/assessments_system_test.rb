@@ -1605,14 +1605,20 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
-      # The definition is reachable without a pointer — the assessee may be
-      # driving by keyboard, and `title` would be unreachable to them.
-      definition = find("#assessment-term-score", visible: :all)
-      assert_match(/How much of what E2 expects/, definition.text(:all))
-
       trigger = find("[aria-describedby='assessment-term-score']", match: :first)
       assert_equal "button", trigger.tag_name,
         "the term must be a real focusable control, not a bare span with a title"
+
+      # The panel starts hidden, so asserting its text without focusing first
+      # would pass even if focus revealed nothing — which is the whole point
+      # of not using `title` here.
+      assert_no_selector "#assessment-term-score", visible: true
+      wait_for_stimulus "definition-tip"
+
+      # The definition is reachable without a pointer — the assessee may be
+      # driving by keyboard, and `title` would be unreachable to them.
+      trigger.send_keys("")
+      assert_selector "#assessment-term-score", visible: true, text: /How much of what E2 expects/
     end
   end
 
