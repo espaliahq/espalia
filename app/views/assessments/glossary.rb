@@ -93,9 +93,9 @@ class Views::Assessments::Glossary
       },
       required: {
         label: "Required",
-        definition: "A capability this role cannot be short of. Doing well elsewhere does not " \
-                    "make up for a gap here, and nothing shown above #{@current_code} counts " \
-                    "until #{@current_code} itself is consistent."
+        definition: "Some capabilities are marked Required — ones this role cannot be short of. " \
+                    "Doing well elsewhere does not make up for a gap in one of them, and nothing " \
+                    "shown above #{@current_code} counts until #{@current_code} itself is consistent."
       },
       blocked: {
         label: "Blocked",
@@ -105,7 +105,7 @@ class Views::Assessments::Glossary
       },
       weight: {
         label: "Weight",
-        definition: "This capability counts for more than the others when the score is worked out — " \
+        definition: "Some capabilities count for more than others when the score is worked out — " \
                     "a ×2 capability moves the number twice as much as a ×1 one."
       },
       not_rated: {
@@ -120,8 +120,9 @@ class Views::Assessments::Glossary
       },
       carried: {
         label: "Carried",
-        definition: "This rating came from the last cycle rather than from anyone this time. It " \
-                    "counts towards the score, and the work this cycle is to confirm or change it."
+        definition: "A rating can be carried from the last cycle rather than recorded this time. " \
+                    "It still counts towards the score, and the work this cycle is to confirm or " \
+                    "change it."
       },
       rated_count: {
         label: "Rated",

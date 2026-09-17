@@ -82,9 +82,9 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
     should "define the rules the page never prints a word for" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
-      assert_includes html, "counts for more than the others"
-      assert_includes html, "cannot be short of"
-      assert_includes html, "came from the last cycle"
+      assert_includes html, "Some capabilities count for more than others"
+      assert_includes html, "marked Required"
+      assert_includes html, "carried from the last cycle"
     end
 
     should "say plainly that feedback is not an input" do
