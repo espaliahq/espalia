@@ -53,8 +53,8 @@ When responding in the chat, writing comments, docs or user facing copy, please 
 - Rewrite. Then rewrite again. First drafts are scaffolding. The real writing happens in the cut.
 - **Link every GitHub issue and PR you mention.** In chat, docs and anything else read
   outside GitHub, `#534` on its own makes the reader go and look it up; write
-  [#534](https://github.com/dailyripple/dailyripple/issues/534) or
-  [PR #523](https://github.com/dailyripple/dailyripple/pull/523) instead. Only GitHub's own
+  [#534](https://github.com/mr-yum/growth-os/issues/534) or
+  [PR #523](https://github.com/mr-yum/growth-os/pull/523) instead. Only GitHub's own
   UI (commit messages, issue and PR bodies) turns a bare number into a link, so a bare number
   is fine there and nowhere else. (Asked for 2026-09-15.)
 
@@ -261,6 +261,11 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 ```
 
 > **CRITICAL**: Do NOT pipe test output (e.g. `bin/rails test | cat`). Run test commands directly.
+>
+> Without `pipefail`, a pipeline reports its LAST command's status. So
+> `bin/rails development:precommit | tail` exits 0 whenever `tail` succeeds — which is always,
+> even when the task itself exited 1. Piping hides the failure as well: rake prints it above
+> the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
 ## Visual Verification (NON-NEGOTIABLE)
 
