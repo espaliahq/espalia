@@ -193,30 +193,48 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
     assert_nil l4[:median_pct]
   end
 
+  # #421: the rows read as a share of what the level expects, on the same
+  # scale as the axis beside them — they used to be weight-unit deltas that
+  # could only be compared against the other rows in the same drawer.
   context "#why_for" do
     setup do
-      rate(@r1, @cap_a, "none")        # -expected → strongly negative delta
-      rate(@r1, @cap_b, "consistent")  # meets → 0.0
+      rate(@r1, @cap_a, "none")        # nothing shown at the level → 0%
+      rate(@r1, @cap_b, "consistent")  # meets the level exactly → 100%
     end
 
     should "name the capabilities pulling the score down, lowest first" do
       why = CalibrationSessions::CohortScores.new(session: @session).why_for(@r1.id)
 
       assert_equal [ "Strategic Thinking" ], why[:weakest].map { |c| c[:name] },
-                   "only genuinely-negative contributions are 'pulling down'"
-      assert why[:weakest].first[:delta].negative?
+                   "only capabilities below what the level expects are 'pulling down'"
+      assert_operator why[:weakest].first[:score], :<, 100
       assert_empty why[:strongest],
-                   "a +0.0 merely meets the level — it is not 'pulling it up'"
+                   "a capability at exactly 100% meets the level — it is not 'pulling it up'"
     end
 
     should "list only genuinely-positive contributions as pulling it up" do
-      # Delivery consistent ABOVE level too → a positive delta.
+      # Delivery consistent ABOVE the level too → past 100% of it.
       rate(@r1, @cap_b, "consistent", ordinal: 4)
 
       why = CalibrationSessions::CohortScores.new(session: @session).why_for(@r1.id)
 
       assert_equal [ "Delivery" ], why[:strongest].map { |c| c[:name] }
-      assert why[:strongest].first[:delta].positive?
+      assert_operator why[:strongest].first[:score], :>, 100
+    end
+
+    should "carry the weight, because this drawer compares people" do
+      why = CalibrationSessions::CohortScores.new(session: @session).why_for(@r1.id)
+
+      # A capability that counts double drags the score twice as hard, and
+      # a percentage on its own hides that.
+      assert why[:weakest].first.key?(:weight), "the row must say how much it counts for"
+      assert_operator why[:weakest].first[:weight], :>, 0
+    end
+
+    should "wear the same state vocabulary as the person's own assessment" do
+      why = CalibrationSessions::CohortScores.new(session: @session).why_for(@r1.id)
+
+      assert_equal :underperforming, why[:weakest].first[:state]
     end
 
     should "return nil for a gated or unknown person" do

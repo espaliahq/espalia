@@ -16,6 +16,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
     should "deny everything" do
       assert_not policy.show?
       assert_not policy.update_theme?
+      assert_not policy.update_scoring_vocabulary?
     end
   end
 
@@ -31,6 +32,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
     should "deny everything" do
       assert_not policy.show?
       assert_not policy.update_theme?
+      assert_not policy.update_scoring_vocabulary?
     end
   end
 
@@ -46,6 +48,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
     should "permit everything" do
       assert policy.show?
       assert policy.update_theme?
+      assert policy.update_scoring_vocabulary?
     end
   end
 
@@ -58,6 +61,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
     should "permit everything" do
       assert policy.show?
       assert policy.update_theme?
+      assert policy.update_scoring_vocabulary?
     end
   end
 

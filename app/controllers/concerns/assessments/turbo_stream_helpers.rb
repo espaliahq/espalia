@@ -66,10 +66,47 @@ module Assessments::TurboStreamHelpers
         blocked: primary.dig(:capability_statuses, stable_id) == :blocked,
         block_reason: primary.dig(:block_reasons, stable_id),
         merged_levels: matrix_data[:merged_levels],
-        person_level: matrix_data[:person_level]
+        person_level: matrix_data[:person_level],
+        thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
+        viewer_is_manager: viewer_is_manager?
       ),
       layout: false
     )
+  end
+
+  # The explainer drawer, re-rendered after a rating.
+  #
+  # It is mounted on the page ROOT so an open dialog survives a frame
+  # reload — which also means nothing else replaces it, and without this
+  # its arithmetic would keep explaining the score the page loaded with
+  # while the hero beside it showed the new one.
+  #
+  # @param matrix_data [Hash] the rebuilt matrix data
+  # @param primary [Hash] the viewer's primary scoring hash
+  # @return [Turbo::Streams::TagBuilder]
+  def score_explainer_stream(matrix_data, primary, _context)
+    turbo_stream.replace(
+      Views::Assessments::ScoreExplainerModal::ID,
+      render_to_string(
+        Views::Assessments::ScoreExplainerModal.new(
+          components: primary[:components],
+          state: primary[:performance_state],
+          subject: explainer_subject,
+          merged_levels: matrix_data[:merged_levels],
+          person_level: matrix_data[:person_level],
+          thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
+          second_person: !viewer_is_manager?
+        ),
+        layout: false
+      )
+    )
+  end
+
+  def explainer_subject
+    return "Your score" unless viewer_is_manager?
+
+    assessee = Person.find_by(id: @assignment.person_id)
+    assessee ? "#{assessee.name}'s score" : "This score"
   end
 
   # @return [String] HTML

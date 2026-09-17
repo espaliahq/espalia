@@ -17,6 +17,7 @@
 # language.
 class Views::Assessments::CapabilityNameRow < Views::Base
   include Views::Assessments::Concerns::ScoreScale
+  include Views::Assessments::Concerns::DefinedTerms
 
   # @param capability [FrameworkState::Capability]
   # @param score [Hash, nil] `scoring[:capability_scores][stable_id]`
@@ -27,7 +28,11 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   # @param block_reason [String, nil]
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
-  def initialize(capability:, score:, rated:, blocked:, block_reason:, merged_levels:, person_level:)
+  # @param thresholds [Hash] the framework's own bands, for the definitions
+  # @param viewer_is_manager [Boolean] whether the reader is the
+  #   manager-side party — the definitions address them accordingly
+  def initialize(capability:, score:, rated:, blocked:, block_reason:, merged_levels:, person_level:,
+                 thresholds: {}, viewer_is_manager: false)
     @capability = capability
     @score = score
     @rated = rated
@@ -35,6 +40,10 @@ class Views::Assessments::CapabilityNameRow < Views::Base
     @block_reason = block_reason
     @merged_levels = merged_levels
     @person_level = person_level
+    @viewer_is_manager = viewer_is_manager
+    @underperforming_threshold = thresholds[:underperforming]
+    @meeting_threshold = thresholds[:meeting]
+    @mastery_threshold = thresholds[:mastering]
   end
 
   def view_template
@@ -47,20 +56,26 @@ class Views::Assessments::CapabilityNameRow < Views::Base
 
   private
 
+  # The badge defines itself: "Blocked" is the most consequential word on
+  # the card and the least self-explanatory. The engine's own reason stays
+  # on the `title` for anyone who wants the arithmetic.
   def blocked_badge
-    span(
-      class: "text-[10px] font-medium text-red-700 dark:text-red-400 " \
-             "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded",
-      title: @block_reason
-    ) { "Blocked" }
+    span(title: @block_reason) do
+      defined_term(
+        :blocked, suffix: @capability.stable_id,
+        trigger_class: "text-[10px] font-medium text-red-700 dark:text-red-400 " \
+                       "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded"
+      )
+    end
   end
 
   def score_summary
     div(class: "ml-auto flex items-center gap-2", data: { capability_score: "true" }) do
       if @score.nil? || !@score[:scorable]
-        muted "No expectation at #{current_code}"
+        defined_term(:no_expectation, label: "No expectation at #{current_code}",
+                     suffix: @capability.stable_id, align: :right, trigger_class: MUTED)
       elsif !@rated
-        muted "Not rated"
+        defined_term(:not_rated, suffix: @capability.stable_id, align: :right, trigger_class: MUTED)
       else
         state = @score[:state]
         if (split = split_text)
@@ -77,9 +92,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
     end
   end
 
-  def muted(text)
-    span(class: "text-xs text-gray-600 dark:text-gray-300") { text }
-  end
+  MUTED = "text-xs text-gray-600 dark:text-gray-300"
 
   # "100% · +50% toward E4" — the assessed-level share and the next-band
   # credit, so the net never stands alone. A prior-level deficit shows too.

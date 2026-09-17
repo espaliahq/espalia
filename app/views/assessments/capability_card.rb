@@ -30,7 +30,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
-  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:,
+  def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, category: nil, scoring: {},
                  blocked: false, block_reason: nil,
                  expanded_capability_id: nil, focused_level_ordinal: nil,
@@ -45,6 +45,7 @@ class Views::Assessments::CapabilityCard < Views::Base
     @cells = capability_data[:cells]
     @merged_levels = merged_levels
     @person_level = person_level
+    @thresholds = thresholds
     @assessment_id = assessment_id
     @context = context
     @viewer_is_manager = viewer_is_manager
@@ -166,7 +167,9 @@ class Views::Assessments::CapabilityCard < Views::Base
       blocked: @blocked,
       block_reason: @block_reason,
       merged_levels: @merged_levels,
-      person_level: @person_level
+      person_level: @person_level,
+      thresholds: @thresholds,
+      viewer_is_manager: @viewer_is_manager
     )
   end
 

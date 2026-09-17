@@ -11,4 +11,9 @@ class TenantPolicy < ApplicationPolicy
 
   # @return [Boolean] whether the viewer can edit the tenant theme
   def update_theme? = tenant_admin?
+
+  # @return [Boolean] whether the viewer can rename the performance states
+  #   for this tenant (display labels only — scoring policy lives on the
+  #   framework and has its own bar)
+  def update_scoring_vocabulary? = tenant_admin?
 end

@@ -17,6 +17,7 @@
 #
 class Views::Assessments::HeroSummary < Views::Base
   include Views::Assessments::Concerns::ScoreScale
+  include Views::Assessments::Concerns::DefinedTerms
 
   # Fraction of current-level capabilities that must be rated before the
   # score + verdict are trustworthy enough to show. Below this, an unrated
@@ -44,6 +45,8 @@ class Views::Assessments::HeroSummary < Views::Base
   #   "rate" prompts (assessee, recorded manager, or active delegate).
   #   False for view-only manager-chain ancestors — the priming hero then
   #   renders passive copy and every rate-CTA is withheld.
+  # @param thresholds [Hash] the framework's own bands, so the definitions
+  #   name its numbers rather than the shipped 80/95/150
   # @param alignment_locked [Boolean] the participant is fully `aligned` —
   #   the hero then presents the agreed record only, withholding the
   #   Self/Mgr secondary percentages and divergent verdict labels. The
@@ -53,7 +56,8 @@ class Views::Assessments::HeroSummary < Views::Base
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
-                 assessee_name: nil, viewer_can_rate: true, alignment_locked: false)
+                 assessee_name: nil, viewer_can_rate: true, alignment_locked: false,
+                 thresholds: {})
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -67,6 +71,9 @@ class Views::Assessments::HeroSummary < Views::Base
     @assessee_name = assessee_name
     @viewer_can_rate = viewer_can_rate
     @alignment_locked = alignment_locked
+    @underperforming_threshold = thresholds[:underperforming]
+    @meeting_threshold = thresholds[:meeting]
+    @mastery_threshold = thresholds[:mastering]
   end
 
   def view_template
@@ -150,13 +157,31 @@ class Views::Assessments::HeroSummary < Views::Base
         middle_band
       end
       div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
-        span(class: "text-4xl font-bold leading-none #{performance_color}") { "#{pct}%" }
+        # The number defines itself where it is read, rather than in a help
+        # page nobody opens (#414).
+        defined_term(:score, label: "#{pct}%", align: :right,
+                     trigger_class: "text-4xl font-bold leading-none #{performance_color}")
         div(class: "text-right") do
           score_bar(ratio)
           secondary_percents
+          explainer_trigger
         end
       end
     end
+  end
+
+  # Opens the root-mounted drawer with this viewer's own arithmetic. Small
+  # and quiet: it is an answer for the person who wants one, not a call to
+  # action competing with "Continue".
+  def explainer_trigger
+    button(
+      type: "button",
+      class: "mt-1 text-[11px] text-gray-600 dark:text-gray-300 underline decoration-dotted " \
+             "underline-offset-2 hover:text-gray-900 dark:hover:text-white cursor-pointer " \
+             "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+      data: { action: "modal#open",
+              modal_target_id: Views::Assessments::ScoreExplainerModal::ID }
+    ) { "How is this calculated?" }
   end
 
   # ── Unscorable (no expectations at the assessed level) ──
@@ -319,6 +344,10 @@ class Views::Assessments::HeroSummary < Views::Base
   # Builds the single state-driven panel for the middle band. Picks the
   # headline, list source, and tone from `performance_state`.
   # Returns nil when there are no scored capabilities to back any framing.
+  #
+  # Every headline leads with the tenant's own word for the state (#415) and
+  # then qualifies it, so a renamed state never lands mid-sentence: "Meeting
+  # E3 · 62% of the way to E4", "Advancing E3 · …".
   # The capabilities a gap list may name, scored at the level the panel
   # points at. Non-scorable ones are dropped: a capability with no
   # expectation at that level owes nothing there, and its unavoidable 0
@@ -382,14 +411,14 @@ class Views::Assessments::HeroSummary < Views::Base
 
     case primary_scoring[:performance_state]
     when :underperforming
-      { state_label: "Underperforming at #{current_code}",
+      { state_label: "#{state_label(:underperforming)} at #{current_code}",
         list_label: "Gap to #{current_code}",
         items: weakest(scores_here),
         border: "border-red-300 dark:border-red-700",
         accent: "text-red-700 dark:text-red-300",
         caps: caps_by_id }
     when :progressing
-      { state_label: "Progressing toward #{current_code}",
+      { state_label: "#{state_label(:progressing)} toward #{current_code}",
         list_label: "Gap to #{current_code}",
         items: weakest(scores_here),
         border: "border-amber-300 dark:border-amber-700",
@@ -399,14 +428,14 @@ class Views::Assessments::HeroSummary < Views::Base
       # Meeting the current bar, below the mastery waypoint. The gap that
       # matters is at L+1 — a capability at +0.0 current is meeting today;
       # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
-      { state_label: "Performing at #{current_code} · #{progress_label}",
+      { state_label: "#{state_label(:performing)} #{current_code} · #{progress_label}",
         list_label: "Gap to #{gap_code}",
         items: weakest(gap_scores),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     when :eligible
-      { state_label: next_code ? "Eligible for promotion to #{next_code}" : "Eligible for promotion",
+      { state_label: next_code ? "#{state_label(:eligible)} · #{next_code}" : state_label(:eligible),
         list_label: "Top contributors",
         items: strongest(scores_here),
         border: "border-green-300 dark:border-green-700",
@@ -423,7 +452,7 @@ class Views::Assessments::HeroSummary < Views::Base
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
       blocked_scores = scores_at_next.slice(*blocked)
       items = blocked_scores.any? ? weakest(blocked_scores) : weakest(gap_scores)
-      { state_label: "Mastering #{current_code} · #{progress_label}",
+      { state_label: "#{state_label(:mastering)} #{current_code} · #{progress_label}",
         list_label: "Gap to #{gap_code}",
         items: items,
         border: "border-purple-300 dark:border-purple-700",
@@ -432,14 +461,14 @@ class Views::Assessments::HeroSummary < Views::Base
     when :top_of_ladder
       # No band above this level to progress into — show what carries the
       # score rather than a gap nobody can close.
-      { state_label: "Meeting #{current_code} · top of the ladder",
+      { state_label: "#{state_label(:top_of_ladder)} #{current_code} · top of the ladder",
         list_label: "Strongest at #{current_code}",
         items: strongest(scores_here),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
     else # unknown state
-      { state_label: "Performing at #{current_code}",
+      { state_label: "#{state_label(:performing)} #{current_code}",
         list_label: "Gap to #{current_code}",
         items: weakest(scores_here),
         border: "border-gray-200 dark:border-gray-700",

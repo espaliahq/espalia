@@ -63,32 +63,62 @@ class CalibrationSessions::CohortScores
   # inspector + up to MAX_PINS pins) — one engine walk each, never one
   # per dot.
   #
+  # The score each capability shows at this person's own level, on the same
+  # 0–200 scale as the axis beside it (#421). It used to be a signed
+  # weight-unit delta, which could only be compared against the other rows
+  # in the same drawer — and read `-1.0` for every capability nobody had
+  # rated at that level, so a column of three often ranked nothing.
+  #
+  # The split is the score's own arithmetic rather than the sign of a
+  # delta: the assessment's number is the weighted mean of these, so a
+  # capability below 100% pulls the mean down and one above it pulls up.
+  # Same boundary as the old sign test, said in the unit the page uses.
+  #
+  # Weight rides along because this drawer compares PEOPLE: a ×2 capability
+  # at 50% drags twice as hard as a ×1 one, and a percentage alone hides it.
+  #
   # @param person_id [String]
   # @return [Hash, nil] `{ weakest: [...], strongest: [...] }`, entries
-  #   `{ stable_id:, name:, delta: }`; nil for an unknown or gated person
+  #   `{ stable_id:, name:, score:, state:, weight: }`; nil for an unknown
+  #   or gated person
   def why_for(person_id)
     dot = dots.find { |d| d[:person_id] == person_id }
     return nil unless dot && dot[:unlocked]
 
     engine = engine_for(person_id)
-    contributions = bindings_for(enrollment[person_id][1]).filter_map do |binding|
+    scores = engine.capability_scores_at(dot[:ordinal])
+    rows = bindings_for(enrollment[person_id][1]).filter_map do |binding|
       capability = binding.capability
       next unless expectation_cells.include?([ capability.stable_id, dot[:ordinal] ])
 
+      score = scores[capability.stable_id]
+      next unless score&.dig(:scorable)
+
       { stable_id: capability.stable_id, name: capability.name,
-        delta: engine.raw_contribution(binding).round(1) }
-    end.sort_by { |entry| entry[:delta] }
+        ratio: score[:score], state: score[:state], weight: binding.weight.to_f }
+    end.sort_by { |entry| entry[:ratio] }
 
     {
-      weakest: contributions.take_while { |c| c[:delta].negative? }.first(WEAKEST_LIMIT),
-      # Positive only: a +0.0 is MEETING the level, which is neither "above
-      # expectations" (the column's empty copy) nor pulling anything up —
-      # listing it green contradicted both.
-      strongest: contributions.reverse.take_while { |c| c[:delta].positive? }.first(STRONGEST_LIMIT)
+      weakest: for_display(rows.select { |row| row[:ratio] < 1.0 }.first(WEAKEST_LIMIT)),
+      # Strictly above: a capability at exactly 100% is MEETING the level,
+      # which is neither "above expectations" (the column's empty copy) nor
+      # pulling anything up — listing it green contradicted both.
+      strongest: for_display(rows.reverse.select { |row| row[:ratio] > 1.0 }.first(STRONGEST_LIMIT))
     }
   end
 
   private
+
+  # Rank and partition on the raw ratio, round only what is shown. Rounding
+  # first put a capability at 99.6% of expectations on exactly 100, so it
+  # fell out of the weakest list — off both columns, in the one view whose
+  # job is finding the capability that needs the conversation.
+  #
+  # @param rows [Array<Hash>] entries carrying a raw `:ratio`
+  # @return [Array<Hash>] the same entries with `:score` as whole percent
+  def for_display(rows)
+    rows.map { |row| row.except(:ratio).merge(score: (row[:ratio] * 100).round(0)) }
+  end
 
   def dots
     @dots ||= enrollment.filter_map do |person_id, (ordinal, role_id)|

@@ -205,6 +205,7 @@ class Assessments::ManagerRatingsController < ApplicationController
             self_scoring: matrix_data[:self_scoring],
             manager_scoring: matrix_data[:manager_scoring],
             aligned_scoring: matrix_data[:aligned_scoring],
+            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
             categories: matrix_data[:categories],
             person_level: matrix_data[:person_level],
             merged_levels: matrix_data[:merged_levels],
@@ -225,7 +226,9 @@ class Assessments::ManagerRatingsController < ApplicationController
             category_data: matrix_data[:categories].find { |c| c[:category].category_id == category_id },
             context: :manager,
             merged_levels: matrix_data[:merged_levels],
-            person_level: matrix_data[:person_level]
+            person_level: matrix_data[:person_level],
+            thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
+            viewer_is_manager: viewer_is_manager?
           ),
           layout: false
         )
@@ -234,6 +237,7 @@ class Assessments::ManagerRatingsController < ApplicationController
         "capability-name-#{capability_stable_id}",
         capability_name_html(cap_data, matrix_data, primary, :manager)
       ),
+      score_explainer_stream(matrix_data, primary, :manager),
       (turbo_stream.replace(
         "category-tabs",
         render_to_string(

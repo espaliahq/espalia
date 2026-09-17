@@ -12,6 +12,11 @@
 class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::PeopleNames
+  # For `tone_text` only — the drill-in rows wear the same colour for a
+  # state as the person's own assessment page. The concern's level-code
+  # helpers need `@merged_levels` / `@person_level`, which this card does
+  # not carry and does not call.
+  include Views::Assessments::Concerns::ScoreScale
 
   # @param session [CalibrationSession]
   # @param dot [Hash] the person's {CalibrationSessions::CohortScores} dot
@@ -157,9 +162,11 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   def why_row(entry)
     div(class: "flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 py-1 text-sm") do
       span(class: "min-w-0 flex-1 text-gray-900 dark:text-white") { entry[:name] }
-      span(class: "tabular-nums font-bold #{delta_classes(entry[:delta])}") do
-        sprintf("%+.1f", entry[:delta])
-      end
+      weight_marker(entry[:weight])
+      # The same number, scale and tone as this person's own assessment
+      # page — this drawer used to speak in the engine's weight units, which
+      # only compared against the other rows beside it (#421).
+      span(class: "tabular-nums font-bold #{tone_text(entry[:state])}") { "#{entry[:score]}%" }
       a(
         href: calibration_session_capability_path(
           @session, entry[:stable_id],
@@ -176,11 +183,15 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     end
   end
 
-  def delta_classes(delta)
-    if delta.negative?
-      delta <= -1.0 ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"
-    else
-      "text-green-700 dark:text-green-300"
+  # Only when it is not 1.0: this drawer compares people, and a capability
+  # that counts double drags the score twice as hard — which a percentage
+  # on its own hides.
+  def weight_marker(weight)
+    return if weight.nil? || weight == 1.0
+
+    span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 shrink-0",
+         title: "Counts #{format('%g', weight)}× toward the score") do
+      "×#{format('%g', weight)}"
     end
   end
 

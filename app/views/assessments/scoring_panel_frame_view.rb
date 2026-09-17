@@ -37,6 +37,7 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         self_scoring: @matrix_data[:self_scoring],
         manager_scoring: @matrix_data[:manager_scoring],
         aligned_scoring: @matrix_data[:aligned_scoring],
+        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
         categories: @matrix_data[:categories],
         person_level: @matrix_data[:person_level],
         merged_levels: @matrix_data[:merged_levels],

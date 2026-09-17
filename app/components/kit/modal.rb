@@ -97,22 +97,30 @@ class Components::Kit::Modal < Components::Base
       aria_modal: "true",
       aria_labelledby: "#{@id}-title"
     ) do
+      # A modal taller than the viewport used to centre and clip its own
+      # header — on a phone the title and the × went off the top edge, and
+      # the only way out was Esc, which nothing on screen mentioned. The
+      # panel is now capped at the viewport with the header pinned and the
+      # body scrolling under it, so the way out is always visible.
       div(
-        class: "w-full #{SIZES[@size]} rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
+        class: "w-full #{SIZES[@size]} max-h-[90dvh] flex flex-col " \
+               "rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
         tabindex: "-1",
         data: { modal_target: "panel" }
       ) do
         header
-        # Call (don't instance_exec) so the block keeps its caller's `self` —
-        # the body usually calls methods/ivars on the view that rendered the
-        # modal. Phlex shares the output buffer, so it still emits in position.
-        @body_block&.call
+        div(class: "min-h-0 overflow-y-auto") do
+          # Call (don't instance_exec) so the block keeps its caller's `self` —
+          # the body usually calls methods/ivars on the view that rendered the
+          # modal. Phlex shares the output buffer, so it still emits in position.
+          @body_block&.call
+        end
       end
     end
   end
 
   def header
-    div(class: "flex items-baseline justify-between mb-3") do
+    div(class: "flex items-baseline justify-between mb-3 shrink-0") do
       h2(id: "#{@id}-title",
          class: "text-lg font-semibold text-gray-900 dark:text-white") { @title }
       button(

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -713,13 +713,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_000001) do
 
   create_table "tenants", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.jsonb "eligible_label_translations", default: {}, null: false
     t.jsonb "hris_config", default: {}, null: false
     t.string "hris_credentials"
+    t.jsonb "mastering_label_translations", default: {}, null: false
     t.string "name", null: false
+    t.jsonb "performing_label_translations", default: {}, null: false
+    t.jsonb "progressing_label_translations", default: {}, null: false
     t.jsonb "settings", default: {}, null: false
     t.string "slack_credentials"
     t.string "slack_team_id"
     t.string "slug", null: false
+    t.jsonb "underperforming_label_translations", default: {}, null: false
     t.datetime "updated_at", null: false
     t.index ["slack_team_id"], name: "index_tenants_on_slack_team_id", unique: true, where: "(slack_team_id IS NOT NULL)"
     t.index ["slug"], name: "index_tenants_on_slug", unique: true

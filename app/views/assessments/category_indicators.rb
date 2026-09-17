@@ -20,6 +20,7 @@
 class Views::Assessments::CategoryIndicators < Views::Base
   include Views::Assessments::Concerns::RatedCount
   include Views::Assessments::Concerns::ScoreScale
+  include Views::Assessments::Concerns::DefinedTerms
 
   COVERAGE_UNLOCK_THRESHOLD = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
 
@@ -33,8 +34,11 @@ class Views::Assessments::CategoryIndicators < Views::Base
   # @param context [Symbol] :self, :manager, or :alignment
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
+  # @param thresholds [Hash] the framework's own bands, for the definitions
+  # @param viewer_is_manager [Boolean] whether the reader is the
+  #   manager-side party — the definitions address them accordingly
   def initialize(category_id:, category_score:, category_data:, merged_levels:, person_level:,
-                 secondary_scores: [], context: :self)
+                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false)
     @category_id = category_id
     @category_score = category_score
     @secondary_scores = secondary_scores
@@ -42,6 +46,10 @@ class Views::Assessments::CategoryIndicators < Views::Base
     @context = context
     @merged_levels = merged_levels
     @person_level = person_level
+    @viewer_is_manager = viewer_is_manager
+    @underperforming_threshold = thresholds[:underperforming]
+    @meeting_threshold = thresholds[:meeting]
+    @mastery_threshold = thresholds[:mastering]
   end
 
   def view_template
@@ -87,9 +95,10 @@ class Views::Assessments::CategoryIndicators < Views::Base
   def rated_count_badge
     return if counts[:total].zero?
 
-    span(class: "text-[11px] text-gray-600 dark:text-gray-300 tabular-nums whitespace-nowrap") do
-      "#{counts[:rated]}/#{counts[:total]} rated"
-    end
+    defined_term(
+      :rated_count, label: "#{counts[:rated]}/#{counts[:total]} rated", suffix: @category_id,
+      trigger_class: "text-[11px] text-gray-600 dark:text-gray-300 tabular-nums whitespace-nowrap"
+    )
   end
 
   def unlock_hint

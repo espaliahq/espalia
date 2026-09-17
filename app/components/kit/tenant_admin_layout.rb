@@ -24,11 +24,13 @@ class Components::Kit::TenantAdminLayout < Components::Base
   SECTIONS = [
     { key: :dashboard,    label: "Dashboard",    href: "/tenant" },
     { key: :theme,        label: "Theme",        href: "/tenant/theme" },
+    { key: :vocabulary,   label: "Vocabulary",   href: "/tenant/vocabulary" },
     { key: :users,        label: "Users",        href: "/tenant/users" },
     { key: :integrations, label: "Integrations", href: "/tenant/integrations" }
   ].freeze
 
-  # @param active_section [Symbol] one of :dashboard, :theme, :users, :integrations
+  # @param active_section [Symbol] one of :dashboard, :theme, :vocabulary,
+  #   :users, :integrations
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]

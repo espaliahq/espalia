@@ -84,14 +84,17 @@ module Views::CalibrationSessions::Glossary
                   "A rater whose high ratings are systematically outlined is one " \
                   "of the most useful things this grid shows."
     },
+    # The one term this glossary shares with the assessment side, where the
+    # same number is read by the person it describes. The scale's own
+    # sentence comes from {Views::Assessments::Glossary} so the two surfaces
+    # cannot drift; what is added here is the part that is true only of a
+    # cohort — manager ratings only.
     pct_of_expected: {
       label: "% of expected",
-      definition: "The same number this person's own assessment shows: manager " \
-                  "ratings measured against what their level expects, across every " \
-                  "capability. 100% means meeting the level; every point above is " \
-                  "progress toward the next one, and 200% means demonstrating it in " \
-                  "full. Manager ratings only, so cohorts compare exactly the " \
-                  "judgments being calibrated."
+      definition: "The same number this person's own assessment shows: how much of what their " \
+                  "level expects they already show, across every capability. " \
+                  "#{Views::Assessments::Glossary::SCALE_SENTENCE} " \
+                  "Manager ratings only, so cohorts compare exactly the judgments being calibrated."
     },
     cohort_median: {
       label: "median",
