@@ -262,10 +262,10 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 
 > **CRITICAL**: Do NOT pipe test output (e.g. `bin/rails test | cat`). Run test commands directly.
 >
-> A pipeline reports the LAST command's status, so `bin/rails development:precommit | tail`
-> exits 0 however the run went — the task itself exits 1 correctly, and the pipe throws that
-> away. Piping also hides the failure, since rake prints it before the summary the tail shows.
-> If you must capture output, redirect to a file and read it, or set `-o pipefail`.
+> Without `pipefail`, a pipeline reports its LAST command's status. So
+> `bin/rails development:precommit | tail` exits 0 whenever `tail` succeeds — which is always,
+> even when the task itself exited 1. Piping hides the failure as well: rake prints it above
+> the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
 ## Visual Verification (NON-NEGOTIABLE)
 
