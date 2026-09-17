@@ -49,7 +49,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
     render Components::Kit::Card.new(title: "Past the halfway mark") do |card|
       card.body do
         p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
-          plain "The state a person reaches once they are more than halfway to the next level. "
+          plain "The state past the halfway point to the next level. "
           plain "GrowthOS calls it "
           strong { Views::Assessments::StateLabels.default_for(:mastering) }
           plain ". Leave this empty to keep that word."
@@ -92,8 +92,8 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
 
   def unchanged_note
     p(class: "text-sm text-gray-600 dark:text-gray-300") do
-      "Renaming a state changes nothing about how anyone is scored: the thresholds that decide " \
-      "which state a score lands in are part of each framework's settings."
+      "Renaming a state changes nobody's score. The thresholds each state starts at belong to " \
+      "the framework, not here."
     end
   end
 

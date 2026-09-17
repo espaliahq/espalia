@@ -73,7 +73,7 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
       assert_includes html, "counts in proportion to how consistently"
-      assert_includes html, "rather than covering"
+      assert_includes html, "does not cover for E3"
     end
 
     # Required, weight and Carried change the number but are never printed
@@ -136,14 +136,13 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
                           person_level: 4, state: :top_of_ladder)
 
-      assert_not_includes html, "Shown above E4"
+      assert_not_includes html, "above E4",
+        "nothing may name a level above the top of the ladder — not the row, not the Required rule"
       assert_includes html, "no level above it"
       # The gate rule explains credit earned at the level above. There
       # isn't one here, so describing it promises a band nobody can reach.
-      assert_includes html, "top of the ladder, so the number says how much of it is shown"
+      assert_includes html, "there is no level above to earn more"
       assert_not_includes html, "counts once E4 itself is consistent"
-      assert_not_includes html, "nothing shown above E4",
-        "the Required rule must not promise a band above the top of the ladder either"
     end
   end
 end

@@ -3,19 +3,14 @@
 # "How is this calculated?" — the viewer's own arithmetic, then the rules
 # (#414).
 #
-# Opened from the hero, and rendered with the whole assessment's components
-# — one drawer per page, explaining the number the hero shows. A
-# section-scoped variant would be the same wording over a category's
-# components; the category header links back to the hero's instead.
+# Their numbers first, the rules second: a person looking at 158% wants to
+# know where 158 came from, not to read a definition and do the sum.
 #
-# The order is deliberate: **their numbers first**, the rules second. A
-# person looking at 158% wants to know where 158 came from, not to read a
-# definition of scoring and then do the arithmetic themselves. The rules
-# below the sum are there for the second read.
-#
-# Embedded (`standalone: false`) and mounted once on the page root, so the
-# trigger can sit inside a Turbo Frame that reloads on every rating without
-# taking the open dialog down with it (framework-explorer.md Lesson 19).
+# Mounted once on the page root (`standalone: false`) so the trigger can sit
+# inside a Turbo Frame that reloads on every rating without taking the open
+# dialog down with it (framework-explorer.md Lesson 19). Nothing else
+# replaces it, which is why each rating streams it — see
+# `Assessments::TurboStreamHelpers`.
 class Views::Assessments::ScoreExplainerModal < Views::Base
   include Views::Assessments::Concerns::ScoreScale
   include Views::Assessments::Concerns::DefinedTerms
@@ -64,7 +59,6 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   # The concern guesses from `@context`; this view is handed the answer.
   def glossary_second_person? = @second_person
 
-  # The sum, with this person's own numbers in it.
   def arithmetic
     return unless @components
 
@@ -87,12 +81,9 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     end
   end
 
-  # Rounding each part on its own can leave the rows failing to add up to
-  # the total — 11% + 11% under a score of 23% — in the one panel whose
-  # whole job is showing the sum. The score is authoritative (the hero
-  # renders the same number), so the residual is given to the largest
-  # part: every row stays within a point of its true value and the
-  # arithmetic closes.
+  # Rounded on their own, the rows can fail to add up to the total — 11% +
+  # 11% under a score of 23%. The score is authoritative (the hero renders
+  # the same number), so the residual goes to the largest part.
   def displayed_parts
     current = percent(@components[:current])
     nxt     = next_level? ? percent(@components[:next]) : 0
@@ -122,7 +113,6 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     @components[:prior].to_f < 1.0
   end
 
-  # The rules, in the order they change the number.
   def rules
     div do
       h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "How it adds up" }
@@ -138,20 +128,19 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     end
   end
 
-  # The one rule people are most surprised by, in plain words.
   def gate_sentence
     # At the top of the ladder there is nothing above to earn credit at, so
     # the gate has nothing to gate — describing it would promise a band the
     # person can never reach.
     unless next_level?
-      return "#{current_code} is the top of the ladder, so the number says how much of it is " \
-             "shown — there is no level above it to earn more at."
+      return "#{current_code} is the top of the ladder. The number says how much of it is shown; " \
+             "there is no level above to earn more."
     end
 
     who = @second_person ? "you" : "they"
     "What #{who} show at #{next_code} counts in proportion to how consistently #{who} show the " \
-      "same capability at #{current_code} — so #{next_code} adds to the number rather than " \
-      "covering for #{current_code}."
+      "same capability at #{current_code}. #{next_code} adds to the number; it does not cover " \
+      "for #{current_code}."
   end
 
   def not_counted
