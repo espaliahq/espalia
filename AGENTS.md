@@ -34,6 +34,38 @@ This project uses a layered guidance system. Standards are loaded contextually �
 
 Each directory above has an `AGENTS.md` that imports the relevant guideline (with a peer `CLAUDE.md` stub that imports the `AGENTS.md`, so Claude Code and other agents read the same instructions). Root `AGENTS.md` covers the cross-cutting material — architecture, commands, style, workflow, and PR practices.
 
+## Text writing rules (when responding, writing user facing copy, comments or docs)
+
+When responding in the chat, writing comments, docs or user facing copy, please write in alignment with the principles of Zinsser's book "On Writing Well", see following.
+
+- Cut every word that isn't doing work. If a sentence reads the same without a word, delete it. Watch for "really," "very," "quite," "rather," "somewhat," "a bit," "in order to," "the fact that," "at this point in time."
+- Prefer short words to long ones. "Use" beats "utilise." "Help" beats "facilitate." "Now" beats "at the present time." Reach for the long word only when no short one carries the meaning.
+- Prefer short sentences. Break long sentences in two. If a sentence runs past about 25 words, look for the seam.
+  Use active verbs. "The team shipped the feature" — not "the feature was shipped by the team." Passive voice is fine when the actor genuinely doesn't matter; otherwise, name who did what.
+- Use concrete words and specific examples. "Three engineers" beats "several team members." A real example beats an abstract claim. Avoid vague nouns like "things," "stuff," "aspects," "factors."
+- Cut hedges. Drop "I think," "perhaps," "it seems," "somewhat," "maybe" unless the uncertainty is the point. State the claim.
+- Cut throat-clearing. No "It is interesting to note that," "It should be mentioned that," "In this section we will discuss." Start with the thing itself.
+- Avoid jargon, clichés, and corporate-speak. No "leverage," "synergy," "circle back," "at the end of the day," "deep dive." Say what you mean in plain words.
+- One thought per sentence, one idea per paragraph. If a paragraph covers two ideas, split it.
+- Choose a tone and hold it. Don't drift between casual and formal in the same piece. Don't lurch into a different register for one clever line.
+- Trust the reader. Don't explain the joke. Don't restate what you just said. Don't pre-summarise what's coming. Get to the point and move on.
+- Read it aloud. If it doesn't sound like something a person would say, rewrite it.
+- Rewrite. Then rewrite again. First drafts are scaffolding. The real writing happens in the cut.
+- **Link every GitHub issue and PR you mention.** In chat, docs and anything else read
+  outside GitHub, `#534` on its own makes the reader go and look it up; write
+  [#534](https://github.com/dailyripple/dailyripple/issues/534) or
+  [PR #523](https://github.com/dailyripple/dailyripple/pull/523) instead. Only GitHub's own
+  UI (commit messages, issue and PR bodies) turns a bare number into a link, so a bare number
+  is fine there and nowhere else. (Asked for 2026-09-15.)
+
+## Overall code writing rules
+
+- Good code communicates intent, doesn't require comments to describe it. Reach for a better name or a smaller function before reaching for an explanation.
+- **The default is no comment.** A comment has to earn its place by carrying what the code cannot: a non-obvious _why_, a constraint from outside the file, or a trap that reads like a mistake. If it restates the code, names the pattern, or narrates the line below it, delete it.
+- **Assume one line is enough.** A comment block is for the rare decision that genuinely needs a paragraph — not a docblock on every function, component, hook and test. A file where most declarations carry a block comment is over-commented, however good each one looks alone.
+- Apply the test before writing: _would a reviewer delete this as obvious?_ If yes, don't write it. Write it when the alternative is someone "fixing" the code and breaking it, or when the reason lives somewhere they cannot see — an API contract, a library bug, a spec.
+- This applies to agents especially. Explaining your reasoning is for the pull request and the chat, not the source file.
+
 ### Planning work
 
 Before designing or planning any feature, **read the relevant guideline files** for the layers involved — do not rely on defaults:
