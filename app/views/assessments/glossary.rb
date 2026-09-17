@@ -109,13 +109,13 @@ class Views::Assessments::Glossary
       },
       not_rated: {
         label: "Not rated",
-        definition: "Nobody has recorded a rating here yet. It is not a zero and not a judgement — " \
-                    "until it is rated it simply has no answer."
+        definition: "A capability nobody has rated yet has no answer. It is not a zero and not a " \
+                    "judgement — it waits for a rating rather than counting as one."
       },
       no_expectation: {
         label: "No expectation",
-        definition: "This capability has nothing written for #{@current_code}, so nothing is asked " \
-                    "of it at this level and it neither helps nor hurts the score."
+        definition: "A capability with nothing written for #{@current_code} is not asked of at " \
+                    "this level, so it neither helps nor hurts the score."
       },
       carried: {
         label: "Carried",

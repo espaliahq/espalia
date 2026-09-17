@@ -87,6 +87,22 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
       assert_includes html, "carried from the last cycle"
     end
 
+    # A definition is read in two places: beside the word it defines, and
+    # here as a bullet with no word beside it. Tip-shaped copy — "This
+    # capability counts for more", "nobody has rated here yet" — points at
+    # something this list cannot show. (A term rendered ONLY as a tip, like
+    # Blocked on its badge, is free to point at it — hence asserting on the
+    # drawer's output rather than on every term in the glossary.)
+    should "read without a word beside it to point at" do
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+      body = html[/How it adds up.*/m].downcase
+
+      [ "this capability", "this rating", "here yet", "shown here" ].each do |phrase|
+        assert_not_includes body, phrase,
+          "a bullet points at something the list cannot show: '#{phrase}'"
+      end
+    end
+
     should "say plainly that feedback is not an input" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 

@@ -228,6 +228,13 @@ Rules for the copy, pinned by `test/components/assessments/glossary_test.rb`:
   feedback and comments are not an input to the score, levels below the
   assessed one are assumed met, unrated is not a zero, carried is not
   confirmed.
+- **A definition has to stand on its own.** It is read beside the word it
+  defines AND as a bullet in the drawer, where there is no word beside it —
+  so "This capability counts for more", "nobody has rated here yet" point at
+  something the list cannot show. Write the subject out. The exception is a
+  term rendered ONLY as a tip (Blocked, on its badge), which may point at the
+  thing it is attached to; the rule is asserted over the drawer's rendered
+  bullets rather than over every term, so that stays legal.
 
 `SCALE_SENTENCE` — the scale stated without naming a level — is shared with
 `Views::CalibrationSessions::Glossary`'s `pct_of_expected`, where the axis
