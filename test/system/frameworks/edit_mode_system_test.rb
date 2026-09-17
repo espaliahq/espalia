@@ -1045,7 +1045,6 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       use_explorer_menu("Capability actions", "Move up",
                         scope: "tr[data-capability-id='#{moving_row[:'data-capability-id']}']")
 
-      # A successful move dispatches org-structure:updated → matrix#refresh.
       # Assert by capability id + document order (general-sibling combinator),
       # not row position — the tr count shifts as rows are added around the
       # list (header rows, expanded rows, the add-capability row).
@@ -1086,9 +1085,18 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # menu is the first one offering "Move up".
       use_explorer_menu("Category actions", "Move up", index: 1)
 
-      # A successful move dispatches org-structure:updated → matrix#refresh;
-      # the re-rendered matrix lists Delivery's header before Thinking's.
-      assert_selector "tbody tr:first-child", text: "Delivery"
+      # There is ONE <tbody> per category (§11b), so "tbody tr:first-child"
+      # matched the first row of EVERY category — true whichever order they
+      # sit in. Assert document order between the two groups instead, which
+      # also waits for the move: reorder-move repositions the node only after
+      # the server answers ok.
+      moved_id, other_id = ActsAsTenant.with_tenant(@tenant) do
+        %w[Delivery Thinking].map do |name|
+          FrameworkState::CapabilityCategory.find_by!(name: name).category_id
+        end
+      end
+      assert_selector "tbody[data-category-group='#{moved_id}'] ~ " \
+                      "tbody[data-category-group='#{other_id}']"
 
       ActsAsTenant.with_tenant(@tenant) do
         ordered = FrameworkState::CapabilityCategory
