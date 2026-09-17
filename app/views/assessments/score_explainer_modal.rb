@@ -140,7 +140,13 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
   # The one rule people are most surprised by, in plain words.
   def gate_sentence
-    return "Anything shown above #{current_code} counts once #{current_code} itself is consistent." unless next_level?
+    # At the top of the ladder there is nothing above to earn credit at, so
+    # the gate has nothing to gate — describing it would promise a band the
+    # person can never reach.
+    unless next_level?
+      return "#{current_code} is the top of the ladder, so the number says how much of it is " \
+             "shown — there is no level above it to earn more at."
+    end
 
     who = @second_person ? "you" : "they"
     "What #{who} show at #{next_code} counts in proportion to how consistently #{who} show the " \

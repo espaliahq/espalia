@@ -94,8 +94,7 @@ class Views::Assessments::Glossary
       required: {
         label: "Required",
         definition: "Some capabilities are marked Required — ones this role cannot be short of. " \
-                    "Doing well elsewhere does not make up for a gap in one of them, and nothing " \
-                    "shown above #{@current_code} counts until #{@current_code} itself is consistent."
+                    "Doing well elsewhere does not make up for a gap in one of them.#{required_gate_clause}"
       },
       blocked: {
         label: "Blocked",
@@ -139,6 +138,15 @@ class Views::Assessments::Glossary
   end
 
   # "100% is E3 in full; 200% is E4 in full, which is promotion ready."
+  # The gate only exists where there is a level above to earn credit at, so
+  # at the top of the ladder the sentence stops rather than promising a band
+  # the person can never reach.
+  def required_gate_clause
+    return "" unless @next_code
+
+    " And nothing shown above #{@current_code} counts until #{@current_code} itself is consistent."
+  end
+
   def full_scale_sentence
     return "100% is #{@current_code} in full, and there is no level above it." unless @next_code
 
@@ -154,10 +162,13 @@ class Views::Assessments::Glossary
   def subject = @second_person ? "you" : "they"
 
   def state_sentence
+    # Each band names the number it starts at, so the reader can place a
+    # score that lands exactly on a threshold. "Up to 95%, then from
+    # there" left 95% itself belonging to both bands at once.
     "The word beside the number, from where the score falls: " \
       "#{word(:underperforming)} below #{pct(:underperforming)}%, " \
-      "#{word(:progressing)} up to #{pct(:meeting)}%, " \
-      "#{word(:performing)} from there, " \
+      "#{word(:progressing)} from #{pct(:underperforming)}%, " \
+      "#{word(:performing)} from #{pct(:meeting)}%, " \
       "#{word(:mastering)} from #{pct(:mastering)}%. " \
       "#{blocked_clause}"
   end

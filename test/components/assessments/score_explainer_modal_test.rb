@@ -122,6 +122,12 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
 
       assert_not_includes html, "Shown above E4"
       assert_includes html, "no level above it"
+      # The gate rule explains credit earned at the level above. There
+      # isn't one here, so describing it promises a band nobody can reach.
+      assert_includes html, "top of the ladder, so the number says how much of it is shown"
+      assert_not_includes html, "counts once E4 itself is consistent"
+      assert_not_includes html, "nothing shown above E4",
+        "the Required rule must not promise a band above the top of the ladder either"
     end
   end
 end
