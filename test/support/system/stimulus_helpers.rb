@@ -738,6 +738,46 @@ module StimulusHelpers
     end
   end
 
+  # Dispatches a Tab (or Shift+Tab) keydown for +modal+'s focus trap.
+  #
+  # Same principle as +press_escape+: dispatch the event where the listener
+  # actually is. The two differ in where that is, and it matters —
+  # +modal#escape+ rides a +keydown.esc@window+ action, but the trap is a
+  # +document+ listener registered in the CAPTURE phase, which an event
+  # dispatched ON window never reaches (window is the root of the
+  # propagation path, not a descendant of document). So this dispatches from
+  # the focused element, exactly as a real keypress does, and the event
+  # captures down through document on its way.
+  #
+  # +find("body").send_keys(:tab)+ is what this replaces, and it is unsound
+  # for a trap test in two ways. Selenium focuses the element it sends keys
+  # to, so it perturbs the +document.activeElement+ the trap reads to decide
+  # what to do — the test's whole precondition. And when the keydown does not
+  # reach the listener, native traversal walks focus out of the dialog and
+  # the failure looks like a broken trap rather than a lost keystroke. That
+  # is the CI-only flake this replaced, first seen on
+  # https://github.com/mr-yum/growth-os/pull/430.
+  #
+  # A synthetic event performs no native traversal, so the trap's own
+  # +focus()+ call is the only thing that can move focus. The assertions keep
+  # their bite: a trap that declines to act leaves focus where it was, which
+  # is never the edge element the caller asserts.
+  #
+  # @param shift [Boolean] send Shift+Tab (backwards) instead of Tab
+  # @param scope [String, nil] CSS selector to dispatch from; defaults to the
+  #   focused element, which is what a real keypress targets
+  def press_tab(shift: false, scope: nil)
+    target = scope ? find(scope) : nil
+
+    page.execute_script(<<~JS, target, shift)
+      const el = arguments[0] || document.activeElement || document.body;
+      el.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Tab", code: "Tab", keyCode: 9, which: 9,
+        shiftKey: arguments[1], bubbles: true, cancelable: true
+      }));
+    JS
+  end
+
   # Stubs +window.confirm+ to always return true, then runs the block.
   # Use for clicks that submit forms with +data-turbo-confirm+ when the
   # action under test is the form submission, not the dialog itself.

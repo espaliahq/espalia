@@ -112,12 +112,12 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
         window.__first = els[0]; window.__last = els[els.length - 1];
         window.__last.focus();
       JS
-      find("body").send_keys(:tab)
+      press_tab
       assert page.evaluate_script("document.activeElement === window.__first"),
         "Tab from the last element should wrap to the first"
 
       page.execute_script("window.__first.focus();")
-      find("body").send_keys([ :shift, :tab ])
+      press_tab(shift: true)
       assert page.evaluate_script("document.activeElement === window.__last"),
         "Shift+Tab from the first element should wrap to the last"
 
@@ -126,14 +126,14 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       page.execute_script(
         "document.querySelector(\"#evidence-modal-overlay [data-modal-target='panel']\").focus();"
       )
-      find("body").send_keys(:tab)
+      press_tab
       assert page.evaluate_script("document.activeElement === window.__first"),
         "Tab from the panel should wrap to the first element"
 
       page.execute_script(
         "document.querySelector(\"#evidence-modal-overlay [data-modal-target='panel']\").focus();"
       )
-      find("body").send_keys([ :shift, :tab ])
+      press_tab(shift: true)
       assert page.evaluate_script("document.activeElement === window.__last"),
         "Shift+Tab from the panel should wrap to the last element"
       assert active_in_overlay?, "focus never leaves the open dialog"
