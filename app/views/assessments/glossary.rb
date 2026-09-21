@@ -86,8 +86,8 @@ class Views::Assessments::Glossary
       },
       weight: {
         label: "Weight",
-        definition: "Some capabilities count for more than others: a ×2 capability moves the " \
-                    "number twice as much as a ×1 one."
+        definition: "Some capabilities count for more or less than others: a ×2 capability moves " \
+                    "the number twice as much as a ×1 one, and a ×0.5 one half as much."
       },
       not_rated: {
         label: "Not rated",
