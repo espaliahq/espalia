@@ -27,9 +27,13 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   # @param second_person [Boolean] whether the reader is the person these
   #   numbers describe — a manager must not read "what E3 expects you show"
   # @param thresholds [Hash] the framework's own bands
+  # @param emphasised [Array<Hash>] the capabilities that count differently
+  #   for this role — `{ stable_id:, name:, weight:, required: }`, from
+  #   `.emphasised_from`
   def initialize(components:, state:, subject:, merged_levels:, person_level:, thresholds: {},
-                 second_person: true)
+                 second_person: true, emphasised: [])
     @components = components
+    @emphasised = emphasised
     @state = state
     @subject = subject
     @merged_levels = merged_levels
@@ -40,6 +44,23 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     @second_person = second_person
   end
 
+  # The capabilities whose binding changes how a rating lands — a weight
+  # other than 1, or a tolerance of 0 — read off the matrix data every
+  # render site already holds, so the drawer names them rather than
+  # defining "weight" for a list the reader cannot see (#431).
+  #
+  # @param matrix_data [Hash] from `Assessments::MatrixDataBuilder#build`
+  # @return [Array<Hash>]
+  def self.emphasised_from(matrix_data)
+    matrix_data[:categories].flat_map { |c| c[:capabilities] }.filter_map do |cap|
+      weighted = cap[:weight].present? && cap[:weight].to_f != 1.0
+      next unless weighted || cap[:required]
+
+      { stable_id: cap[:capability].stable_id, name: cap[:capability].name,
+        weight: cap[:weight], required: cap[:required] || false }
+    end
+  end
+
   def view_template
     render Components::Kit::Modal.new(
       id: ID, title: "How is this calculated?", size: :lg, standalone: false
@@ -47,6 +68,7 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
       modal.body do
         div(class: "space-y-5") do
           arithmetic
+          counts_differently
           rules
           not_counted
         end
@@ -55,6 +77,26 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   end
 
   private
+
+  # Their own list first, the rule second — the same order as the
+  # arithmetic above it. The chips are the ones the cards wear, so the
+  # drawer and the page use one vocabulary.
+  def counts_differently
+    return if @emphasised.empty?
+
+    div do
+      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "Counts differently for this role" }
+      ul(class: "space-y-1 text-sm text-gray-700 dark:text-gray-300") do
+        @emphasised.each do |cap|
+          li(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
+            span { cap[:name] }
+            weight_chip(cap[:weight], suffix: "explainer-#{cap[:stable_id]}")
+            required_chip(cap[:required], suffix: "explainer-#{cap[:stable_id]}")
+          end
+        end
+      end
+    end
+  end
 
   # The concern guesses from `@context`; this view is handed the answer.
   def glossary_second_person? = @second_person

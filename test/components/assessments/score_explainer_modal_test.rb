@@ -11,12 +11,53 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
   ].freeze
 
   def render_modal(components:, state: :mastering, person_level: 3, subject: "Your score",
-                   second_person: true,
+                   second_person: true, emphasised: [],
                    thresholds: { underperforming: 0.8, meeting: 0.95, mastering: 1.5 })
     Views::Assessments::ScoreExplainerModal.new(
       components: components, state: state, subject: subject, second_person: second_person,
-      merged_levels: LEVELS, person_level: person_level, thresholds: thresholds
+      merged_levels: LEVELS, person_level: person_level, thresholds: thresholds,
+      emphasised: emphasised
     ).call
+  end
+
+  CAP = Struct.new(:stable_id, :name, keyword_init: true)
+
+  context "the capabilities that count differently" do
+    # #431: the drawer defined "weight" and "Required" for a list the
+    # reader could not see.
+    should "name each one with the chip the card wears" do
+      html = render_modal(
+        components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
+        emphasised: [
+          { stable_id: "cap-a", name: "Critical Thinking", weight: 2.0, required: true },
+          { stable_id: "cap-b", name: "Delivery", weight: 1.0, required: true }
+        ]
+      )
+
+      assert_includes html, "Counts differently for this role"
+      assert_includes html, "Critical Thinking"
+      assert_includes html, 'aria-describedby="assessment-term-weight-explainer-cap-a"'
+      assert_includes html, 'aria-describedby="assessment-term-required-explainer-cap-a"'
+      assert_includes html, 'aria-describedby="assessment-term-required-explainer-cap-b"'
+      assert_not_includes html, "assessment-term-weight-explainer-cap-b"
+    end
+
+    should "say nothing when every capability counts ×1 and tolerates a gap" do
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+      assert_not_includes html, "Counts differently"
+    end
+
+    should "be read off the matrix data every render site holds" do
+      matrix_data = { categories: [ { capabilities: [
+        { capability: CAP.new(stable_id: "a", name: "A"), weight: 2.0, required: false },
+        { capability: CAP.new(stable_id: "b", name: "B"), weight: 1.0, required: true },
+        { capability: CAP.new(stable_id: "c", name: "C"), weight: 1.0, required: false },
+        { capability: CAP.new(stable_id: "d", name: "D") }
+      ] } ] }
+
+      names = Views::Assessments::ScoreExplainerModal.emphasised_from(matrix_data).map { |c| c[:name] }
+      assert_equal %w[A B], names
+    end
   end
 
   context "the viewer's own arithmetic" do
