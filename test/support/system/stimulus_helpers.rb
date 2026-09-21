@@ -738,7 +738,8 @@ module StimulusHelpers
     end
   end
 
-  # Dispatches a Tab (or Shift+Tab) keydown for +modal+'s focus trap.
+  # Dispatches a Tab (or Shift+Tab) keydown for +modal+'s focus trap and
+  # returns whether the trap called +preventDefault+ on it.
   #
   # Same principle as +press_escape+: dispatch the event where the listener
   # actually is. The two differ in where that is, and it matters —
@@ -747,7 +748,11 @@ module StimulusHelpers
   # dispatched ON window never reaches (window is the root of the
   # propagation path, not a descendant of document). So this dispatches from
   # the focused element, exactly as a real keypress does, and the event
-  # captures down through document on its way.
+  # captures down through document on its way. There is deliberately no
+  # +scope:+ here, unlike +press_escape+: the trap reads
+  # +document.activeElement+ and never +event.target+, so any in-document
+  # origin behaves identically and a +scope:+ would only invite a test that
+  # looks targeted while proving nothing.
   #
   # +find("body").send_keys(:tab)+ is what this replaces, and it is unsound
   # for a trap test in two ways. Selenium focuses the element it sends keys
@@ -758,23 +763,25 @@ module StimulusHelpers
   # is the CI-only flake this replaced, first seen on
   # https://github.com/mr-yum/growth-os/pull/430.
   #
-  # A synthetic event performs no native traversal, so the trap's own
-  # +focus()+ call is the only thing that can move focus. The assertions keep
-  # their bite: a trap that declines to act leaves focus where it was, which
-  # is never the edge element the caller asserts.
+  # ASSERT THE RETURN VALUE at an edge. A synthetic event performs no native
+  # traversal, so where focus lands is decided solely by the trap's own
+  # +focus()+ call — which means the +preventDefault+ that stops the browser
+  # ALSO moving focus is invisible to a focus assertion, and all three of the
+  # trap's +preventDefault+ calls could be deleted with the suite still
+  # green. A real keypress did cover that; this returns it so the caller can
+  # cover it explicitly instead.
   #
   # @param shift [Boolean] send Shift+Tab (backwards) instead of Tab
-  # @param scope [String, nil] CSS selector to dispatch from; defaults to the
-  #   focused element, which is what a real keypress targets
-  def press_tab(shift: false, scope: nil)
-    target = scope ? find(scope) : nil
-
-    page.execute_script(<<~JS, target, shift)
-      const el = arguments[0] || document.activeElement || document.body;
-      el.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "Tab", code: "Tab", keyCode: 9, which: 9,
-        shiftKey: arguments[1], bubbles: true, cancelable: true
-      }));
+  # @return [Boolean] true when a listener called +preventDefault+
+  def press_tab(shift: false)
+    page.evaluate_script(<<~JS, shift)
+      (function (shift) {
+        const el = document.activeElement || document.body;
+        return !el.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "Tab", code: "Tab", keyCode: 9, which: 9,
+          shiftKey: shift, bubbles: true, cancelable: true
+        }));
+      })(arguments[0])
     JS
   end
 
