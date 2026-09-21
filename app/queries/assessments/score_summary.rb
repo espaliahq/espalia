@@ -79,7 +79,11 @@ class Assessments::ScoreSummary
       has_expectation_at_assessed_level: components[:scorable],
       rated_at_assessed_level: capability_rated?(stable_id),
       blocked: scoring[:capability_statuses]&.dig(stable_id) == :blocked,
-      block_reason: scoring.dig(:block_reasons, stable_id)
+      block_reason: scoring.dig(:block_reasons, stable_id),
+      # The two binding facts the card wears as chips (#431): an agent
+      # explaining a score the person can see the reason for must see it too.
+      weight: capability_data(stable_id)&.dig(:weight),
+      required: capability_data(stable_id)&.dig(:required) || false
     }
   end
 
@@ -148,10 +152,14 @@ class Assessments::ScoreSummary
   def capability_rated?(stable_id)
     frequency_key = Views::Assessments::Concerns::RatedCount::CONTEXT_FREQUENCY_KEYS
       .fetch(@context, :current_frequency)
-    matrix_data[:categories].flat_map { |c| c[:capabilities] }
-      .find { |cap| cap[:capability].stable_id == stable_id }
+    capability_data(stable_id)
       &.dig(:cells, matrix_data[:person_level], frequency_key)
       .present?
+  end
+
+  def capability_data(stable_id)
+    matrix_data[:categories].flat_map { |c| c[:capabilities] }
+      .find { |cap| cap[:capability].stable_id == stable_id }
   end
 
   def matrix_data

@@ -86,6 +86,20 @@ class Assessments::ScoreSummaryTest < ActiveSupport::TestCase
       assert summary.capability(rated)[:scored]
     end
 
+    should "carry the binding's weight and Required flag beside the score" do
+      weighted, plain = @caps.map(&:stable_id)
+      ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::CapabilityRoleBinding.find_by!(capability_id: @caps.first.capability_id)
+          .update!(weight: 2.0, deficit_threshold: 0)
+        summary = Assessments::ScoreSummary.new(assignment: @assignment, context: :self)
+
+        assert_equal 2.0, summary.capability(weighted)[:weight]
+        assert_equal true, summary.capability(weighted)[:required]
+        assert_equal 1.0, summary.capability(plain)[:weight]
+        assert_equal false, summary.capability(plain)[:required]
+      end
+    end
+
     should "report no verdict for a capability the viewer has not rated" do
       # The card reads "Not rated" rather than 0% — an unrated cell is not
       # a judgement, and `scorable` only says an expectation exists.
