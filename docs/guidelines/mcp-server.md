@@ -166,7 +166,7 @@ next level and needs the meeting threshold plus no blocked capability. The
 tool descriptions say "level-independent scale" for both reasons.
 
 A capability's score also carries `weight` and `required` — the two binding
-facts its card wears as chips (#431) — so an agent can explain a score the
+facts its card wears as chips ([#431](https://github.com/mr-yum/growth-os/issues/431)) — so an agent can explain a score the
 person can see the reason for. `required` is the resolved tolerance
 (binding, then category, then framework default) being 0, exactly what the
 card shows; the raw per-binding tolerance stays on the framework payload.
