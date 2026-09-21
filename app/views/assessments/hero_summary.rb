@@ -505,6 +505,9 @@ class Views::Assessments::HeroSummary < Views::Base
           span(class: "min-w-0 truncate text-sm text-gray-700 dark:text-gray-300") do
             cap_data[:capability].name
           end
+          # A ×2 capability leads this list at a score a ×1 neighbour would
+          # sit below, and the percentage alone never says why (#431).
+          weight_chip(cap_data[:weight], suffix: "hero-#{stable_id}")
           span(class: "text-sm font-bold tabular-nums shrink-0 #{tone_text(score[:state])}",
                title: state_label(score[:state])) do
             "#{percent(score[:score])}%"
