@@ -122,7 +122,7 @@ end
 # gem "redis", "~> 5.1"
 
 # ActionText editor
-gem "lexxy", "~> 0.9.31"
+gem "lexxy", "~> 0.9.32"
 
 # Model attribute translations stored in JSONB columns
 gem "json_translate"
