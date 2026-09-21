@@ -27,11 +27,10 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   # @param second_person [Boolean] whether the reader is the person these
   #   numbers describe — a manager must not read "what E3 expects you show"
   # @param thresholds [Hash] the framework's own bands
-  # @param emphasised [Array<Hash>] the capabilities that count differently
-  #   for this role — `{ stable_id:, name:, weight:, required: }`, from
-  #   `.emphasised_from`
-  def initialize(components:, state:, subject:, merged_levels:, person_level:, thresholds: {},
-                 second_person: true, emphasised: [])
+  # @param emphasised [Array<Hash>] `matrix_data[:emphasised_capabilities]` —
+  #   the capabilities whose binding changes how a rating lands
+  def initialize(components:, state:, subject:, merged_levels:, person_level:, emphasised:, thresholds: {},
+                 second_person: true)
     @components = components
     @emphasised = emphasised
     @state = state
@@ -42,23 +41,6 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     @meeting_threshold = thresholds[:meeting]
     @mastery_threshold = thresholds[:mastering]
     @second_person = second_person
-  end
-
-  # The capabilities whose binding changes how a rating lands — a weight
-  # other than 1, or a tolerance of 0 — read off the matrix data every
-  # render site already holds, so the drawer names them rather than
-  # defining "weight" for a list the reader cannot see (#431).
-  #
-  # @param matrix_data [Hash] from `Assessments::MatrixDataBuilder#build`
-  # @return [Array<Hash>]
-  def self.emphasised_from(matrix_data)
-    matrix_data[:categories].flat_map { |c| c[:capabilities] }.filter_map do |cap|
-      weighted = cap[:weight].present? && cap[:weight].to_f != 1.0
-      next unless weighted || cap[:required]
-
-      { stable_id: cap[:capability].stable_id, name: cap[:capability].name,
-        weight: cap[:weight], required: cap[:required] || false }
-    end
   end
 
   def view_template
@@ -78,9 +60,9 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
   private
 
-  # Their own list first, the rule second — the same order as the
-  # arithmetic above it. The chips are the ones the cards wear, so the
-  # drawer and the page use one vocabulary.
+  # Plain chips, no tips: the rules list below defines both terms once, and a
+  # tip per chip resent on every rating stream would carry the same sentence
+  # once per capability.
   def counts_differently
     return if @emphasised.empty?
 
@@ -90,8 +72,8 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
         @emphasised.each do |cap|
           li(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
             span { cap[:name] }
-            weight_chip(cap[:weight], suffix: "explainer-#{cap[:stable_id]}")
-            required_chip(cap[:required], suffix: "explainer-#{cap[:stable_id]}")
+            span(class: EMPHASIS_CHIP) { weight_label(cap[:weight]) } if PersonDevelopment::Scoring.weighted?(cap[:weight])
+            span(class: EMPHASIS_CHIP) { glossary.label(:required) } if cap[:required]
           end
         end
       end

@@ -91,7 +91,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         merged_levels: @matrix_data[:merged_levels],
         person_level: @matrix_data[:person_level],
         thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
-        emphasised: Views::Assessments::ScoreExplainerModal.emphasised_from(@matrix_data),
+        emphasised: @matrix_data[:emphasised_capabilities],
         second_person: false
       )
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?

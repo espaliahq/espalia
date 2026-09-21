@@ -56,26 +56,18 @@ module Views::Assessments::Concerns::DefinedTerms
     )
   end
 
-  # The two binding facts that change how a rating lands, shown before it
-  # does: a capability that counts double, and one the role cannot be short
-  # of. Neither is a verdict, so both stay grey — colour beside a score
-  # means state. Nothing renders for the common case (×1, tolerated), so a
-  # chip only appears where it changes the reading.
-  EMPHASIS_CHIP = "text-[10px] font-medium text-gray-700 dark:text-gray-300 " \
-                  "bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"
+  # Grey, never a state colour: a binding fact is a property of the
+  # framework, not a verdict on the person ([#431](https://github.com/mr-yum/growth-os/issues/431)).
+  EMPHASIS_CHIP = "#{Components::Kit::Badge::VARIANTS[:default]} text-[10px] font-medium px-1.5 py-0.5 rounded"
 
-  # A "×2" chip, or nothing for a weight of 1.
-  #
   # @param weight [Numeric, nil]
   # @param suffix [String] see `defined_term`
   def weight_chip(weight, suffix:)
-    return if weight.nil? || weight.to_f == 1.0
+    return unless PersonDevelopment::Scoring.weighted?(weight)
 
-    defined_term(:weight, label: "×#{Kernel.format('%g', weight.to_f)}", suffix: suffix, trigger_class: EMPHASIS_CHIP)
+    defined_term(:weight, label: weight_label(weight), suffix: suffix, trigger_class: EMPHASIS_CHIP)
   end
 
-  # A "Required" chip, or nothing when the capability tolerates a gap.
-  #
   # @param required [Boolean]
   # @param suffix [String] see `defined_term`
   def required_chip(required, suffix:)

@@ -20,12 +20,8 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
     ).call
   end
 
-  CAP = Struct.new(:stable_id, :name, keyword_init: true)
-
   context "the capabilities that count differently" do
-    # #431: the drawer defined "weight" and "Required" for a list the
-    # reader could not see.
-    should "name each one with the chip the card wears" do
+    should "name each one with the chips the card wears" do
       html = render_modal(
         components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
         emphasised: [
@@ -33,30 +29,18 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
           { stable_id: "cap-b", name: "Delivery", weight: 1.0, required: true }
         ]
       )
+      section = html[/Counts differently for this role.*?How it adds up/m]
 
-      assert_includes html, "Counts differently for this role"
-      assert_includes html, "Critical Thinking"
-      assert_includes html, 'aria-describedby="assessment-term-weight-explainer-cap-a"'
-      assert_includes html, 'aria-describedby="assessment-term-required-explainer-cap-a"'
-      assert_includes html, 'aria-describedby="assessment-term-required-explainer-cap-b"'
-      assert_not_includes html, "assessment-term-weight-explainer-cap-b"
+      assert section, "expected the counts-differently section"
+      assert_includes section, "Critical Thinking"
+      assert_includes section, "×2"
+      assert_equal 2, section.scan(">Required<").size
+      assert_not_includes section, "×1"
     end
 
     should "say nothing when every capability counts ×1 and tolerates a gap" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
       assert_not_includes html, "Counts differently"
-    end
-
-    should "be read off the matrix data every render site holds" do
-      matrix_data = { categories: [ { capabilities: [
-        { capability: CAP.new(stable_id: "a", name: "A"), weight: 2.0, required: false },
-        { capability: CAP.new(stable_id: "b", name: "B"), weight: 1.0, required: true },
-        { capability: CAP.new(stable_id: "c", name: "C"), weight: 1.0, required: false },
-        { capability: CAP.new(stable_id: "d", name: "D") }
-      ] } ] }
-
-      names = Views::Assessments::ScoreExplainerModal.emphasised_from(matrix_data).map { |c| c[:name] }
-      assert_equal %w[A B], names
     end
   end
 
@@ -123,7 +107,7 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
     should "define the rules the page never prints a word for" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
-      assert_includes html, "Some capabilities count for more than others"
+      assert_includes html, "Some capabilities count for more or less than others"
       assert_includes html, "marked Required"
       assert_includes html, "carried from the last cycle"
     end

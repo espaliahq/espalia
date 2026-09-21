@@ -214,9 +214,11 @@ Three pieces, cheapest first:
    so a rounded breakdown always adds up to the total beneath it. Under the
    arithmetic, **"Counts differently for this role"** lists the capabilities
    whose binding changes how a rating lands — weighted, Required, or both —
-   wearing the same chips the cards do (`ScoreExplainerModal.emphasised_from`
-   reads them off the matrix data every render site already holds). The
-   drawer used to define "weight" for a list the reader could not see.
+   wearing the same chips the cards do, read from
+   `matrix_data[:emphasised_capabilities]`, which the builder emits beside
+   `categories`. The chips there carry no tips, since the rules list beneath
+   defines both terms once. The drawer used to define "weight" for a list
+   the reader could not see.
 
 `Views::Assessments::Glossary` is the single source of the wording, built per
 request rather than frozen as constants, because nearly every definition has
@@ -395,9 +397,11 @@ Three rules, each load-bearing:
 **The binding facts come before the score ([#431](https://github.com/mr-yum/growth-os/issues/431)).** Between the name and the
 Blocked badge the row wears up to two muted chips: **`×2`** when the
 binding's weight is not 1, and **"Required"** when the resolved tolerance is
-0 (binding, then category, then the framework default — the engine's own
-`mandatory?` resolution, mirrored by `MatrixDataBuilder#required?` so the
-chip and the block gate cannot disagree). Rules:
+0. Both ride the per-capability score hash the row already reads
+(`scoring[:capability_scores][stable_id][:weight]` / `[:required]`), stamped
+by `MatrixDataBuilder#extract_scoring` from the engine's own `mandatory?`, so
+the chip and the block gate cannot disagree and no render site threads them
+by hand. Rules:
 
 - **Shown before any rating, not after the damage.** Blocked is a state that
   appears once a gap exists; Required is the standing fact that a gap will
@@ -412,9 +416,11 @@ chip and the block gate cannot disagree). Rules:
 - **Defined where it is read.** Both go through `defined_term`, so they are
   keyboard-reachable and carry the glossary definition. The same helpers
   (`DefinedTerms#weight_chip` / `#required_chip`) draw the hero gap list's
-  `×N` marker and the explainer's "Counts differently" rows, so the three
-  surfaces cannot drift. The calibration cohort drawer's `×2` marker is the
-  precedent this follows.
+  `×N` marker; `ScoreScale#weight_label` is the one spelling of a weight and
+  `PersonDevelopment::Scoring.weighted?` the one test for it, shared with the
+  explainer's plain chips and the calibration cohort drawer's `×2` marker.
+  That marker stays a `title`-only span by design: it belongs to the
+  calibration glossary, not this one.
 
 The signed `±N.N` delta this replaced is gone from the card. It was in the
 engine's raw units, so it could only be compared against other capabilities,

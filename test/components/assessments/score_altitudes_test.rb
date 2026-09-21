@@ -13,17 +13,16 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   LEVELS = [
     { ordinal: 2, level_code: "E2" }, { ordinal: 3, level_code: "E3" }, { ordinal: 4, level_code: "E4" }
   ].freeze
+  SCORE = { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
+            scorable: true, state: :performing }.freeze
 
-  def name_row(score:, rated: true, blocked: false, weight: 1.0, required: false)
+  def name_row(score:, rated: true, blocked: false)
     Views::Assessments::CapabilityNameRow.new(
       capability: CAP.new(stable_id: "cap-a", name: "Strategic Thinking"),
       score: score, rated: rated, blocked: blocked, block_reason: blocked ? "Below expectations by 1.0 points" : nil,
-      merged_levels: LEVELS, person_level: 3, weight: weight, required: required
+      merged_levels: LEVELS, person_level: 3
     ).call
   end
-
-  SCORE = { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
-            scorable: true, state: :performing }.freeze
 
   def indicators(score:, rated: 2, total: 2, secondary: [], manager_rated: nil, context: :self)
     manager_rated = rated if manager_rated.nil?
@@ -49,23 +48,23 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   end
 
   context "CapabilityNameRow" do
-    # #431: both facts were defined in the explainer drawer and printed
-    # nowhere, so a Required capability's first sign of being special was
-    # the Blocked badge.
-    should "show a weight chip only when the capability counts more than ×1" do
-      weighted = name_row(score: SCORE, weight: 2.0)
+    should "show a weight chip only when the capability's weight is not 1" do
+      weighted = name_row(score: SCORE.merge(weight: 2.0))
       assert_includes weighted, "×2"
       assert_includes weighted, 'id="assessment-term-weight-cap-a"'
       assert_includes weighted, "twice as much"
 
-      plain = name_row(score: SCORE, weight: 1.0)
+      half = name_row(score: SCORE.merge(weight: 0.5))
+      assert_includes half, "×0.5"
+      assert_includes half, "half as much"
+
+      plain = name_row(score: SCORE.merge(weight: 1.0))
       assert_not_includes plain, "×1"
       assert_not_includes plain, "assessment-term-weight"
-      assert_not_includes name_row(score: SCORE, weight: nil), "assessment-term-weight"
     end
 
     should "show Required before any rating, independent of Blocked" do
-      required = name_row(score: SCORE, rated: false, required: true)
+      required = name_row(score: SCORE.merge(required: true), rated: false)
       assert_includes required, "Required"
       assert_includes required, 'id="assessment-term-required-cap-a"'
       assert_not_includes required, "assessment-term-blocked"
@@ -74,7 +73,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
     end
 
     should "keep the chips grey rather than coloured by state" do
-      html = name_row(score: SCORE, weight: 2.0, required: true)
+      html = name_row(score: SCORE.merge(weight: 2.0, required: true))
       chip = html[/<button[^>]*aria-describedby="assessment-term-weight-cap-a"[^>]*>/]
       assert chip, "expected the weight chip trigger"
       assert_includes chip, "text-gray-700"
@@ -82,8 +81,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
     end
 
     should "show the score with its split, never the net alone" do
-      html = name_row(score: { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
-                               scorable: true, state: :performing })
+      html = name_row(score: SCORE)
       assert_includes html, "100%"
       assert_includes html, "50% · +50% toward E4"
       assert_includes html, "text-green-700"

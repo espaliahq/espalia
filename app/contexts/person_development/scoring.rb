@@ -111,6 +111,7 @@ class PersonDevelopment::Scoring
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
   DEFAULT_UNDERPERFORMING_THRESHOLD      = 0.80
   DEFAULT_OVERPERFORMANCE_CAP        = 1
+  DEFAULT_WEIGHT = 1.0
   DEFAULT_DEFICIT_THRESHOLD          = 0.75
 
   # Perspective controls which frequency field is used for scoring.
@@ -452,6 +453,24 @@ class PersonDevelopment::Scoring
     raw_contribution_at_level(binding, next_level_ordinal)
   end
 
+  # A binding whose resolved tolerance is 0 — the "Required" chip: any gap
+  # blocks, and nothing above the level counts until the level is consistent.
+  #
+  # @param binding [#deficit_threshold, #capability]
+  # @return [Boolean]
+  def mandatory?(binding)
+    deficit_threshold_for(binding).zero?
+  end
+
+  # Whether a binding weight changes how its rating lands. nil is "no
+  # binding fact known" (a partial fixture), not a weight of zero.
+  #
+  # @param weight [Numeric, nil]
+  # @return [Boolean]
+  def self.weighted?(weight)
+    !weight.nil? && weight.to_f != DEFAULT_WEIGHT
+  end
+
   private
 
   # ── Core computation ──
@@ -588,12 +607,6 @@ class PersonDevelopment::Scoring
     else
       frequency
     end
-  end
-
-  # A binding whose resolved tolerance is 0 — the "Required" badge: any gap
-  # blocks, and nothing above the level counts until the level is consistent.
-  def mandatory?(binding)
-    deficit_threshold_for(binding).zero?
   end
 
   # Total contribution for a single binding evaluated against a reference

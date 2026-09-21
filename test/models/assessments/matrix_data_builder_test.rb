@@ -56,35 +56,39 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
-  def first_capability
-    build_self_data[:categories].first[:capabilities].first
+  def first_capability_score
+    build_self_data[:scoring][:capability_scores][@capability.stable_id]
   end
 
-  context "required (resolved tolerance of 0)" do
-    # Mirrors the engine's own resolution — binding, then category, then the
-    # framework default — so the card's chip and the block gate agree.
-    should "be false when nothing sets a zero tolerance" do
-      assert_equal false, first_capability[:required]
-      assert_equal 1.0, first_capability[:weight]
+  context "the binding facts on the capability's score" do
+    should "carry the weight and no Required flag by default" do
+      score = first_capability_score
+      assert_equal 1.0, score[:weight]
+      assert_equal false, score[:required]
+      assert_empty build_self_data[:emphasised_capabilities]
     end
 
-    should "be true when the binding's own tolerance is 0" do
+    should "flag Required from the binding's own zero tolerance, and list the capability" do
       FrameworkState::CapabilityRoleBinding.find_by!(capability_id: @capability.capability_id)
         .update!(deficit_threshold: 0, weight: 2.0)
-      assert_equal true, first_capability[:required]
-      assert_equal 2.0, first_capability[:weight]
+      data = build_self_data
+      score = data[:scoring][:capability_scores][@capability.stable_id]
+      assert_equal true, score[:required]
+      assert_equal 2.0, score[:weight]
+      assert_equal [ { stable_id: @capability.stable_id, name: "Strategic Thinking", weight: 2.0, required: true } ],
+                   data[:emphasised_capabilities]
     end
 
-    should "inherit a zero tolerance from the category" do
+    should "inherit a zero tolerance from the category, as the engine does" do
       @category.update!(deficit_threshold: 0)
-      assert_equal true, first_capability[:required]
+      assert_equal true, first_capability_score[:required]
     end
 
     should "let a binding's own tolerance override the category's zero" do
       @category.update!(deficit_threshold: 0)
       FrameworkState::CapabilityRoleBinding.find_by!(capability_id: @capability.capability_id)
         .update!(deficit_threshold: 0.5)
-      assert_equal false, first_capability[:required]
+      assert_equal false, first_capability_score[:required]
     end
   end
 
