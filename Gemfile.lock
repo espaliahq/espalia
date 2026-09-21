@@ -562,6 +562,7 @@ DEPENDENCIES
   image_processing (~> 2.1)
   importmap-rails
   invisible_captcha (~> 2.0)
+  json (< 3)
   json_translate
   kamal
   lexxy (~> 0.9.31)

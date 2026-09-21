@@ -5,6 +5,13 @@ updates:
   schedule:
     interval: weekly
   open-pull-requests-limit: 10
+  ignore:
+  # json is pinned "< 3" in the Gemfile (see the comment there for why).
+  # Without this, a bump may rewrite that constraint and re-break every job.
+  # Remove this entry and the pin together once Rails supports json 3.
+  - dependency-name: json
+    versions:
+    - ">= 3"
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
