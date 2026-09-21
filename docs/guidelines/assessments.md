@@ -201,15 +201,22 @@ Three pieces, cheapest first:
    attribute, which no keyboard user can reach. That matters more here than on
    the calibration screens, because the reader is the subject. **A term the
    page never prints gets no tip** — there is nothing to hang it on — so the
-   state, Required, weight, Carried and the below-level rule are defined in
-   the drawer below instead. The wording is one glossary either way.
+   state, Carried and the below-level rule are defined in the drawer below
+   instead. The wording is one glossary either way. Weight and Required
+   *are* printed now — as the card's chips (#431, below) — so they carry
+   their tips at the point of reading and are listed in the drawer too.
 3. **"How is this calculated?"** in the hero opens
    `Views::Assessments::ScoreExplainerModal` — a root-mounted `Kit::Modal`
    showing **this viewer's own arithmetic first** (shown at E3, shown above
    E3, missing below E3, score) and the rules second. Someone looking at 158%
    wants to know where 158 came from, not to read a definition and do the sum
    themselves. The rows are reconciled against the score before they render,
-   so a rounded breakdown always adds up to the total beneath it.
+   so a rounded breakdown always adds up to the total beneath it. Under the
+   arithmetic, **"Counts differently for this role"** lists the capabilities
+   whose binding changes how a rating lands — weighted, Required, or both —
+   wearing the same chips the cards do (`ScoreExplainerModal.emphasised_from`
+   reads them off the matrix data every render site already holds). The
+   drawer used to define "weight" for a list the reader could not see.
 
 `Views::Assessments::Glossary` is the single source of the wording, built per
 request rather than frozen as constants, because nearly every definition has
@@ -384,6 +391,30 @@ Three rules, each load-bearing:
   amber), so a card can't read green while the hero says held back. The
   state *word* is a `title`, never rendered text — see the category header
   rule below.
+
+**The binding facts come before the score (#431).** Between the name and the
+Blocked badge the row wears up to two muted chips: **`×2`** when the
+binding's weight is not 1, and **"Required"** when the resolved tolerance is
+0 (binding, then category, then the framework default — the engine's own
+`mandatory?` resolution, mirrored by `MatrixDataBuilder#required?` so the
+chip and the block gate cannot disagree). Rules:
+
+- **Shown before any rating, not after the damage.** Blocked is a state that
+  appears once a gap exists; Required is the standing fact that a gap will
+  block. Both had definitions in the explainer drawer and appeared nowhere on
+  the page, so a Required capability's first sign of being special was the
+  Blocked badge.
+- **Grey, never the state colour.** Colour beside a score means state; a
+  weight is a property of the framework, not a verdict on the person.
+- **Nothing for the common case.** No `×1`, no "Tolerated" — a chip only
+  appears where it changes the reading. Most capabilities are 1.0, and the
+  chip earns its place by being rare.
+- **Defined where it is read.** Both go through `defined_term`, so they are
+  keyboard-reachable and carry the glossary definition. The same helpers
+  (`DefinedTerms#weight_chip` / `#required_chip`) draw the hero gap list's
+  `×N` marker and the explainer's "Counts differently" rows, so the three
+  surfaces cannot drift. The calibration cohort drawer's `×2` marker is the
+  precedent this follows.
 
 The signed `±N.N` delta this replaced is gone from the card. It was in the
 engine's raw units, so it could only be compared against other capabilities,
@@ -1285,7 +1316,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
 | `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |
-| `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard) |
+| `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard); `weight_chip` / `required_chip` — the ONE drawing of the binding chips the card, the hero gap list and the explainer share |
 | `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count |
 | `app/views/assessments/state_labels.rb` | The ONE reader of a state's word — the tenant's own if it set one, else the word GrowthOS ships (#415) |
 | `app/operations/operations/tenants/update_scoring_vocabulary.rb` | Shared web + MCP operation — rename the performance states for a tenant (labels only; the states and thresholds are untouched) |
@@ -1299,7 +1330,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/views/assessments/assessment_matrix_frame_view.rb` | Turbo Frame wrapper for the matrix |
 | `app/views/assessments/assessment_matrix.rb` | Container that renders each `CategorySection` |
 | `app/views/assessments/capability_card.rb` | One card per capability — eyebrow, name row, level strip, expansion panel |
-| `app/views/assessments/capability_name_row.rb` | The card's name row — name, Blocked badge, and the capability's own score with its split (`id="capability-name-<stable_id>"`, Turbo-replaced by the rating controllers) |
+| `app/views/assessments/capability_name_row.rb` | The card's name row — name, the `×N` / Required chips (#431), Blocked badge, and the capability's own score with its split (`id="capability-name-<stable_id>"`, Turbo-replaced by the rating controllers) |
 | `app/views/assessments/level_strip.rb` | Horizontal flex of `LevelChip`s, scrolls horizontally on narrow |
 | `app/views/assessments/level_chip.rb` | One chip per level — solid fill by frequency, diagonal split on disagreement / partial rating (colour vs grey), evidence/comment glyphs, YOU/CURRENT current-level badge |
 | `app/views/assessments/capability_card_expansion.rb` | Focused-level panel — expectation sentence + inline FrequencyPill, divergent SecondaryRatingLines, illustrations, evidence, comments |
