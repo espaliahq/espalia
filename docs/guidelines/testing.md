@@ -287,7 +287,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 The dropped-click flake class (Selenium's synthetic pointer click / modal-handler registration silently lost on starved CI) recurs often enough that two automated guards now steer new tests toward the JS-dispatch remedies documented in the sections below:
 
-- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` (use `press_escape`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
+- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` / `send_keys(:tab)` (use `press_escape` / `press_tab`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
 - **CodeRabbit path instructions** (`.coderabbit.yaml`) catch the fuzzier cases a static cop can't reliably detect without false positives: navigation `click_button`/`click_link` without a retry/JS-fallback wrapper, `data-turbo-confirm` form submits via click, `fill_in` of an assertion-critical field, and read-after-click races.
 
 If you add a new JS-dispatch helper, update both the cop (if it introduces a new safe form) and the table in *Stimulus Toggle Helpers*.
@@ -473,7 +473,7 @@ This applies doubly to the `expect_text:` / `expect_selector:` you hand a JS-fal
 
 **The helpers now enforce this.** `assert_signal_is_a_transition!` runs before every guarded click and raises if `expect_text` / `expect_selector` is already true (or `expect_no_text` already absent), so a disarmed fallback fails loudly at authoring time instead of silently passing until CI. Arming it against the existing suite found thirteen such calls. If a click genuinely produces no visible transition, don't fake a signal — use a plain click and say in a comment why it's safe (usually: the next guarded step depends on it).
 
-## Esc Needs a Dispatched `KeyboardEvent` — `press_escape`
+## Keys Need a Dispatched `KeyboardEvent` — `press_escape` / `press_tab`
 
 **Use `press_escape` rather than `find("body").send_keys(:escape)`.** Stimulus binds Esc as `keydown.esc@window`, but Selenium's key dispatch needs a focused, interactable target — and once a modal opens, focus has moved *into* the dialog (the APG focus management), so keys aimed at `body` can be swallowed and the handler never runs.
 
@@ -491,6 +491,24 @@ press_escape(scope: "#evm-content")   # dispatch from an element; it bubbles
 Same principle as the `MouseEvent` rule below: dispatch the event where the listener actually is.
 
 **A supplied `scope:` must match.** The helper resolves it with Capybara (so it waits for an element still rendering) and fails the test if it never appears — it no longer falls back to a window dispatch. That fallback was invisible and self-defeating: a window dispatch still closes the modal, so a renamed id or a modal that never opened left the test passing while proving nothing about in-dialog dispatch.
+
+### Tab is the same rule, with a different listener — `press_tab`
+
+**Use `press_tab` / `press_tab(shift: true)` rather than `find("body").send_keys(:tab)`.** `modal`'s focus trap decides what to do by reading `document.activeElement` — and Selenium *focuses the element it sends keys to*, so aiming keys at `body` perturbs the very state the trap reads. When the keydown misses the trap entirely, native traversal walks focus out of the dialog and the failure reads as a broken focus trap rather than a lost keystroke. That is the CI-only flake behind [PR #430](https://github.com/mr-yum/growth-os/pull/430).
+
+```ruby
+# WRONG — moves the focus the trap is about to read, then may miss the listener
+find("body").send_keys(:tab)
+find("body").send_keys([ :shift, :tab ])
+
+# CORRECT — dispatch from the focused element, as a real keypress does
+press_tab
+press_tab(shift: true)
+```
+
+**Where you dispatch differs from `press_escape`, and it is load-bearing.** Esc rides a `keydown.esc@window` action, so a window dispatch reaches it. The trap is a **`document` listener in the capture phase**, which an event dispatched *on* `window` never reaches — window is the root of the propagation path, not a descendant of document. `press_tab` therefore defaults to dispatching from `document.activeElement`, which captures down through document on its way. Read where the listener is bound before adding the next key helper; the answer is not the same twice running.
+
+**A synthetic key event performs no native traversal**, so the trap's own `focus()` call is the only thing that can move focus. The assertions keep their bite — a trap that declines to act leaves focus where it was, which is never the edge element the caller asserts. Verified by disabling `trapKeydown` and watching the test fail.
 
 ## Click-Outside Listeners Need a Real `MouseEvent`
 

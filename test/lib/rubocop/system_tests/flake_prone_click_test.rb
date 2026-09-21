@@ -108,9 +108,9 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
       assert_match(/press_escape/, messages.first)
     end
 
-    should "not flag send_keys with another key" do
+    should "not flag send_keys with an unguarded key" do
       messages = offenses_for(<<~RUBY)
-        find("body").send_keys(:tab)
+        find("body").send_keys(:enter)
       RUBY
       assert_empty messages
     end
@@ -120,6 +120,37 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
         find("#search").send_keys("some text")
       RUBY
       assert_empty messages
+    end
+  end
+
+  context "Tab key dispatch" do
+    should "flag send_keys(:tab)" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys(:tab)
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/press_tab/, messages.first)
+    end
+
+    should "flag :tab nested one array level deep" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys([ :shift, :tab ])
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/press_tab/, messages.first)
+    end
+
+    # Both keys are checked over the same `send_keys` node, but RuboCop
+    # dedupes offenses by source range, so a call carrying both reports
+    # ONE — the Esc message, checked first. Pinned so the collapse is a
+    # known property rather than a surprise: the combination is not a real
+    # pattern, and either message points at the same remedy.
+    should "report a single offense for a call carrying both keys" do
+      messages = offenses_for(<<~RUBY)
+        find("body").send_keys([ :escape, :tab ])
+      RUBY
+      assert_equal 1, messages.size
+      assert_match(/press_escape/, messages.first)
     end
   end
 end
