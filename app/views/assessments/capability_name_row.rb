@@ -10,6 +10,12 @@
 # Turbo Streams replace it in place — they render this same view, so the
 # post-rate row cannot drift from the initial one.
 #
+# Before the score, the two binding facts that change how it lands: a
+# "×2" chip when the capability counts more than its neighbours, and a
+# "Required" chip when the role cannot be short of it. Both were defined in
+# the explainer drawer and printed nowhere, so a Required capability's first
+# sign of being special was the Blocked badge (#431).
+#
 # A single capability carries no state word: its states are its ratings,
 # which the pill already names. The number is coloured by the engine's
 # per-capability state (the framework's own thresholds applied to the
@@ -31,9 +37,13 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   # @param thresholds [Hash] the framework's own bands, for the definitions
   # @param viewer_is_manager [Boolean] whether the reader is the
   #   manager-side party — the definitions address them accordingly
+  # @param weight [Numeric, nil] the binding's weight; 1 (or nil) shows nothing
+  # @param required [Boolean] whether the resolved tolerance is 0
   def initialize(capability:, score:, rated:, blocked:, block_reason:, merged_levels:, person_level:,
-                 thresholds: {}, viewer_is_manager: false)
+                 thresholds: {}, viewer_is_manager: false, weight: 1.0, required: false)
     @capability = capability
+    @weight = weight
+    @required = required
     @score = score
     @rated = rated
     @blocked = blocked
@@ -49,6 +59,8 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   def view_template
     div(id: "capability-name-#{@capability.stable_id}", class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
       h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { @capability.name }
+      weight_chip(@weight, suffix: @capability.stable_id)
+      required_chip(@required, suffix: @capability.stable_id)
       blocked_badge if @blocked
       score_summary
     end

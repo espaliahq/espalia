@@ -56,6 +56,38 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  def first_capability
+    build_self_data[:categories].first[:capabilities].first
+  end
+
+  context "required (resolved tolerance of 0)" do
+    # Mirrors the engine's own resolution — binding, then category, then the
+    # framework default — so the card's chip and the block gate agree.
+    should "be false when nothing sets a zero tolerance" do
+      assert_equal false, first_capability[:required]
+      assert_equal 1.0, first_capability[:weight]
+    end
+
+    should "be true when the binding's own tolerance is 0" do
+      FrameworkState::CapabilityRoleBinding.find_by!(capability_id: @capability.capability_id)
+        .update!(deficit_threshold: 0, weight: 2.0)
+      assert_equal true, first_capability[:required]
+      assert_equal 2.0, first_capability[:weight]
+    end
+
+    should "inherit a zero tolerance from the category" do
+      @category.update!(deficit_threshold: 0)
+      assert_equal true, first_capability[:required]
+    end
+
+    should "let a binding's own tolerance override the category's zero" do
+      @category.update!(deficit_threshold: 0)
+      FrameworkState::CapabilityRoleBinding.find_by!(capability_id: @capability.capability_id)
+        .update!(deficit_threshold: 0.5)
+      assert_equal false, first_capability[:required]
+    end
+  end
+
   context "context validation" do
     should "raise ArgumentError on unknown context values" do
       assert_raises(ArgumentError) do

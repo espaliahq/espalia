@@ -68,7 +68,9 @@ module Assessments::TurboStreamHelpers
         merged_levels: matrix_data[:merged_levels],
         person_level: matrix_data[:person_level],
         thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-        viewer_is_manager: viewer_is_manager?
+        viewer_is_manager: viewer_is_manager?,
+        weight: cap_data[:weight],
+        required: cap_data[:required]
       ),
       layout: false
     )

@@ -174,9 +174,23 @@ class Assessments::MatrixDataBuilder
         capability: capability,
         binding: binding,
         weight: binding.weight.to_f,
+        required: required?(binding, category),
         cells: cells
       }
     end
+  end
+
+  # The engine's `mandatory?`, resolved the same way it resolves it —
+  # binding, then category, then the framework's default — so the card's
+  # "Required" chip and the block gate can never disagree.
+  #
+  # @return [Boolean]
+  def required?(binding, category)
+    threshold = binding.deficit_threshold ||
+      category.deficit_threshold ||
+      @framework.scoring_thresholds[:deficit_threshold] ||
+      PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
+    threshold.to_f.zero?
   end
 
   # Builds cells for each level ordinal with expectation + current rating.

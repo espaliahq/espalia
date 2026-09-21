@@ -56,6 +56,34 @@ module Views::Assessments::Concerns::DefinedTerms
     )
   end
 
+  # The two binding facts that change how a rating lands, shown before it
+  # does: a capability that counts double, and one the role cannot be short
+  # of. Neither is a verdict, so both stay grey — colour beside a score
+  # means state. Nothing renders for the common case (×1, tolerated), so a
+  # chip only appears where it changes the reading.
+  EMPHASIS_CHIP = "text-[10px] font-medium text-gray-700 dark:text-gray-300 " \
+                  "bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"
+
+  # A "×2" chip, or nothing for a weight of 1.
+  #
+  # @param weight [Numeric, nil]
+  # @param suffix [String] see `defined_term`
+  def weight_chip(weight, suffix:)
+    return if weight.nil? || weight.to_f == 1.0
+
+    defined_term(:weight, label: "×#{Kernel.format('%g', weight.to_f)}", suffix: suffix, trigger_class: EMPHASIS_CHIP)
+  end
+
+  # A "Required" chip, or nothing when the capability tolerates a gap.
+  #
+  # @param required [Boolean]
+  # @param suffix [String] see `defined_term`
+  def required_chip(required, suffix:)
+    return unless required
+
+    defined_term(:required, suffix: suffix, trigger_class: EMPHASIS_CHIP)
+  end
+
   # Whether the reader is the person being described.
   #
   # `@context` is the WRONG signal on its own: it tracks the cycle's phase,
