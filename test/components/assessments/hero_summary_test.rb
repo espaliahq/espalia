@@ -33,9 +33,10 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   # #418: the rows used to print a weight-unit delta — "-1.0" for every
   # capability nobody had rated at the next level, so three rows ranked
   # nothing and the number could not be read against an expectation.
-  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil)
+  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil, weights: {})
     capabilities = CAPS.each_with_index.map do |name, i|
       { capability: CAP.new(stable_id: "cap-#{i}", name: name),
+        weight: weights.fetch("cap-#{i}", 1.0),
         cells: { 3 => { current_frequency: "consistent" } } }
     end
     here_scores ||= CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }
@@ -122,6 +123,16 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   end
 
   context "the gap list" do
+    should "mark a capability that counts more than ×1, and only that one" do
+      html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 },
+                             weights: { "cap-1" => 2.0 })
+
+      assert_includes html, 'aria-describedby="assessment-term-weight-hero-cap-1"'
+      assert_includes html, "×2"
+      assert_not_includes html, "assessment-term-weight-hero-cap-0"
+      assert_not_includes html, "assessment-term-weight-hero-cap-2"
+    end
+
     should "read each row as a percentage of the level the panel names" do
       html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 })
 

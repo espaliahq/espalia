@@ -11,12 +11,37 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
   ].freeze
 
   def render_modal(components:, state: :mastering, person_level: 3, subject: "Your score",
-                   second_person: true,
+                   second_person: true, emphasised: [],
                    thresholds: { underperforming: 0.8, meeting: 0.95, mastering: 1.5 })
     Views::Assessments::ScoreExplainerModal.new(
       components: components, state: state, subject: subject, second_person: second_person,
-      merged_levels: LEVELS, person_level: person_level, thresholds: thresholds
+      merged_levels: LEVELS, person_level: person_level, thresholds: thresholds,
+      emphasised: emphasised
     ).call
+  end
+
+  context "the capabilities that count differently" do
+    should "name each one with the chips the card wears" do
+      html = render_modal(
+        components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
+        emphasised: [
+          { stable_id: "cap-a", name: "Critical Thinking", weight: 2.0, required: true },
+          { stable_id: "cap-b", name: "Delivery", weight: 1.0, required: true }
+        ]
+      )
+      section = html[/Counts differently for this role.*?How it adds up/m]
+
+      assert section, "expected the counts-differently section"
+      assert_includes section, "Critical Thinking"
+      assert_includes section, "×2"
+      assert_equal 2, section.scan(">Required<").size
+      assert_not_includes section, "×1"
+    end
+
+    should "say nothing when every capability counts ×1 and tolerates a gap" do
+      html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+      assert_not_includes html, "Counts differently"
+    end
   end
 
   context "the viewer's own arithmetic" do
@@ -82,7 +107,7 @@ class Views::Assessments::ScoreExplainerModalTest < ActiveSupport::TestCase
     should "define the rules the page never prints a word for" do
       html = render_modal(components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
-      assert_includes html, "Some capabilities count for more than others"
+      assert_includes html, "Some capabilities count for more or less than others"
       assert_includes html, "marked Required"
       assert_includes html, "carried from the last cycle"
     end

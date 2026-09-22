@@ -18,6 +18,14 @@
 #
 # Mix into a view that holds `@merged_levels` and `@person_level`.
 module Views::Assessments::Concerns::ScoreScale
+  # "×2", "×1.5" — the one spelling of a binding weight.
+  #
+  # @param weight [Numeric]
+  # @return [String]
+  def weight_label(weight)
+    "×#{Kernel.format('%g', weight.to_f)}"
+  end
+
   TONE_TEXT = {
     red: "text-red-700 dark:text-red-400",
     amber: "text-amber-700 dark:text-amber-400",

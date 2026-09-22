@@ -56,6 +56,26 @@ module Views::Assessments::Concerns::DefinedTerms
     )
   end
 
+  # Grey, never a state colour: a binding fact is a property of the
+  # framework, not a verdict on the person ([#431](https://github.com/mr-yum/growth-os/issues/431)).
+  EMPHASIS_CHIP = "#{Components::Kit::Badge::VARIANTS[:default]} text-[10px] font-medium px-1.5 py-0.5 rounded"
+
+  # @param weight [Numeric, nil]
+  # @param suffix [String] see `defined_term`
+  def weight_chip(weight, suffix:)
+    return unless PersonDevelopment::Scoring.weighted?(weight)
+
+    defined_term(:weight, label: weight_label(weight), suffix: suffix, trigger_class: EMPHASIS_CHIP)
+  end
+
+  # @param required [Boolean]
+  # @param suffix [String] see `defined_term`
+  def required_chip(required, suffix:)
+    return unless required
+
+    defined_term(:required, suffix: suffix, trigger_class: EMPHASIS_CHIP)
+  end
+
   # Whether the reader is the person being described.
   #
   # `@context` is the WRONG signal on its own: it tracks the cycle's phase,

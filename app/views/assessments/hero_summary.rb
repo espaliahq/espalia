@@ -501,11 +501,12 @@ class Views::Assessments::HeroSummary < Views::Base
         cap_data = config[:caps][stable_id]
         next unless cap_data && score
 
-        div(class: "flex items-center justify-between gap-2 py-0.5") do
+        div(class: "flex items-center gap-2 py-0.5") do
           span(class: "min-w-0 truncate text-sm text-gray-700 dark:text-gray-300") do
             cap_data[:capability].name
           end
-          span(class: "text-sm font-bold tabular-nums shrink-0 #{tone_text(score[:state])}",
+          weight_chip(cap_data[:weight], suffix: "hero-#{stable_id}")
+          span(class: "ml-auto text-sm font-bold tabular-nums shrink-0 #{tone_text(score[:state])}",
                title: state_label(score[:state])) do
             "#{percent(score[:score])}%"
           end

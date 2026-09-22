@@ -79,7 +79,9 @@ class Assessments::ScoreSummary
       has_expectation_at_assessed_level: components[:scorable],
       rated_at_assessed_level: capability_rated?(stable_id),
       blocked: scoring[:capability_statuses]&.dig(stable_id) == :blocked,
-      block_reason: scoring.dig(:block_reasons, stable_id)
+      block_reason: scoring.dig(:block_reasons, stable_id),
+      weight: components[:weight],
+      required: components[:required]
     }
   end
 
@@ -148,10 +150,14 @@ class Assessments::ScoreSummary
   def capability_rated?(stable_id)
     frequency_key = Views::Assessments::Concerns::RatedCount::CONTEXT_FREQUENCY_KEYS
       .fetch(@context, :current_frequency)
-    matrix_data[:categories].flat_map { |c| c[:capabilities] }
-      .find { |cap| cap[:capability].stable_id == stable_id }
+    capabilities_by_stable_id[stable_id]
       &.dig(:cells, matrix_data[:person_level], frequency_key)
       .present?
+  end
+
+  def capabilities_by_stable_id
+    @capabilities_by_stable_id ||= matrix_data[:categories].flat_map { |c| c[:capabilities] }
+      .index_by { |cap| cap[:capability].stable_id }
   end
 
   def matrix_data
@@ -290,8 +296,7 @@ class Assessments::ScoreSummary
   end
 
   def capability_names
-    @capability_names ||= matrix_data[:categories].flat_map { |c| c[:capabilities] }
-      .to_h { |cap| [ cap[:capability].stable_id, cap[:capability].name ] }
+    @capability_names ||= capabilities_by_stable_id.transform_values { |cap| cap[:capability].name }
   end
 
   def percent(value)

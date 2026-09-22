@@ -10,6 +10,10 @@
 # Turbo Streams replace it in place — they render this same view, so the
 # post-rate row cannot drift from the initial one.
 #
+# Before the score, the binding facts the score hash carries — a `×N` chip
+# for a weight other than 1, "Required" for a tolerance of 0 — shown before
+# any rating rather than once a gap has blocked (#431).
+#
 # A single capability carries no state word: its states are its ratings,
 # which the pill already names. The number is coloured by the engine's
 # per-capability state (the framework's own thresholds applied to the
@@ -49,6 +53,8 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   def view_template
     div(id: "capability-name-#{@capability.stable_id}", class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
       h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { @capability.name }
+      weight_chip(@score&.dig(:weight), suffix: @capability.stable_id)
+      required_chip(@score&.dig(:required), suffix: @capability.stable_id)
       blocked_badge if @blocked
       score_summary
     end

@@ -13,6 +13,8 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   LEVELS = [
     { ordinal: 2, level_code: "E2" }, { ordinal: 3, level_code: "E3" }, { ordinal: 4, level_code: "E4" }
   ].freeze
+  SCORE = { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
+            scorable: true, state: :performing }.freeze
 
   def name_row(score:, rated: true, blocked: false)
     Views::Assessments::CapabilityNameRow.new(
@@ -46,9 +48,40 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   end
 
   context "CapabilityNameRow" do
+    should "show a weight chip only when the capability's weight is not 1" do
+      weighted = name_row(score: SCORE.merge(weight: 2.0))
+      assert_includes weighted, "×2"
+      assert_includes weighted, 'id="assessment-term-weight-cap-a"'
+      assert_includes weighted, "twice as much"
+
+      half = name_row(score: SCORE.merge(weight: 0.5))
+      assert_includes half, "×0.5"
+      assert_includes half, "half as much"
+
+      plain = name_row(score: SCORE.merge(weight: 1.0))
+      assert_not_includes plain, "×1"
+      assert_not_includes plain, "assessment-term-weight"
+    end
+
+    should "show Required before any rating, independent of Blocked" do
+      required = name_row(score: SCORE.merge(required: true), rated: false)
+      assert_includes required, "Required"
+      assert_includes required, 'id="assessment-term-required-cap-a"'
+      assert_not_includes required, "assessment-term-blocked"
+
+      assert_not_includes name_row(score: SCORE), "assessment-term-required"
+    end
+
+    should "keep the chips grey rather than coloured by state" do
+      html = name_row(score: SCORE.merge(weight: 2.0, required: true))
+      chip = html[/<button[^>]*aria-describedby="assessment-term-weight-cap-a"[^>]*>/]
+      assert chip, "expected the weight chip trigger"
+      assert_includes chip, "text-gray-700"
+      assert_not_includes chip, "text-green-700"
+    end
+
     should "show the score with its split, never the net alone" do
-      html = name_row(score: { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
-                               scorable: true, state: :performing })
+      html = name_row(score: SCORE)
       assert_includes html, "100%"
       assert_includes html, "50% · +50% toward E4"
       assert_includes html, "text-green-700"

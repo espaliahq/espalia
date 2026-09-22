@@ -89,6 +89,7 @@ class Assessments::MatrixDataBuilder
       merged_levels: levels,
       categories: categories,
       scoring: scoring,
+      emphasised_capabilities: emphasised_capabilities(categories, scoring),
       self_scoring: build_perspective_scoring(categories, :self_only),
       manager_scoring: hide_others? ? nil : build_perspective_scoring(categories, :manager_only),
       aligned_scoring: hide_others? ? nil : build_perspective_scoring(categories, :aligned_only),
@@ -413,8 +414,14 @@ class Assessments::MatrixDataBuilder
 
       # The same scale at the two lower altitudes — one card, one category —
       # so every surface reads the same number and vocabulary.
+      # The two binding facts beside the number, so the card, the explainer
+      # and the MCP payload read them off the hash they already hold, and
+      # "Required" is the engine's own answer rather than a mirror of it.
       result[:capability_scores] = bindings.to_h do |b|
-        [ b.capability.stable_id, scoring.capability_components(b).merge(state: scoring.capability_state(b)) ]
+        [ b.capability.stable_id,
+          scoring.capability_components(b).merge(
+            state: scoring.capability_state(b), weight: b.weight.to_f, required: scoring.mandatory?(b)
+          ) ]
       end
       result[:category_scores] = bindings.map { |b| b.capability.category_id }.uniq.to_h do |category_id|
         [ category_id, scoring.category_components(category_id).merge(state: scoring.category_state(category_id)) ]
@@ -428,6 +435,21 @@ class Assessments::MatrixDataBuilder
         scoring.has_next_level?
     end
     result
+  end
+
+  # The capabilities whose binding changes how a rating lands — a weight
+  # other than 1, or a tolerance of 0 — for the explainer's list.
+  #
+  # @return [Array<Hash>] `{ stable_id:, name:, weight:, required: }`
+  def emphasised_capabilities(categories, scoring)
+    categories.flat_map { |c| c[:capabilities] }.filter_map do |cap|
+      capability = cap[:capability]
+      score = scoring.dig(:capability_scores, capability.stable_id)
+      next unless score && (PersonDevelopment::Scoring.weighted?(score[:weight]) || score[:required])
+
+      { stable_id: capability.stable_id, name: capability.name,
+        weight: score[:weight], required: score[:required] }
+    end
   end
 
   # Builds scoring output for a single perspective. Returns nil when no

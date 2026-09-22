@@ -256,16 +256,16 @@ Two honesty guards sit above the formula, both the hero's:
 - **Coverage gates the category.** Below half the category's assessed-level
   cells rated, the header and the chip show no score at all.
 
-### Framework explorer — capability matrix badges
+### Where the binding facts show
 
 | Signal | When | Display |
 |--------|------|---------|
-| Weight badge | `binding.weight != 1.0` | `"2×"` badge on capability row |
-| Shared vs per-role weight | All selected roles have same weight | Unified badge; otherwise per-role coloured dots |
-| Required indicator | `deficit_threshold == 0` on binding | Filled/solid amber weight badge + 3px amber left border on row |
-| Category threshold | `deficit_threshold == 0` on category | Lock icon on category section header |
-| Category threshold | `deficit_threshold > 0` on category | `"± N pts"` label on section header |
+| Weight chip | `binding.weight != 1.0` | Muted `×2` chip on the assessment card's name row, the hero gap list and the explainer's "Counts differently" list ([#431](https://github.com/mr-yum/growth-os/issues/431)); `×2` marker in the calibration cohort drawer |
+| Required chip | resolved `deficit_threshold == 0` (binding, then category, then framework default — the engine's `mandatory?`) | Muted "Required" chip on the same card row and explainer list, shown before any rating; the red "Blocked" badge is the later state once a gap exists |
+| Category threshold | `deficit_threshold` on a category | Not shown on any surface today; it reaches the reader only through the capabilities it makes Required |
 | Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
+
+The explorer's capability rows carry no weight badge today; weights are edited in the row kebab's "Edit roles…" binding editor.
 
 ### Rating input — the inline FrequencyPill
 

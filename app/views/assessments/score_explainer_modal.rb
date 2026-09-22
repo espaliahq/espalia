@@ -27,9 +27,12 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   # @param second_person [Boolean] whether the reader is the person these
   #   numbers describe — a manager must not read "what E3 expects you show"
   # @param thresholds [Hash] the framework's own bands
-  def initialize(components:, state:, subject:, merged_levels:, person_level:, thresholds: {},
+  # @param emphasised [Array<Hash>] `matrix_data[:emphasised_capabilities]` —
+  #   the capabilities whose binding changes how a rating lands
+  def initialize(components:, state:, subject:, merged_levels:, person_level:, emphasised:, thresholds: {},
                  second_person: true)
     @components = components
+    @emphasised = emphasised
     @state = state
     @subject = subject
     @merged_levels = merged_levels
@@ -47,6 +50,7 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
       modal.body do
         div(class: "space-y-5") do
           arithmetic
+          counts_differently
           rules
           not_counted
         end
@@ -55,6 +59,26 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   end
 
   private
+
+  # Plain chips, no tips: the rules list below defines both terms once, and a
+  # tip per chip resent on every rating stream would carry the same sentence
+  # once per capability.
+  def counts_differently
+    return if @emphasised.empty?
+
+    div do
+      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "Counts differently for this role" }
+      ul(class: "space-y-1 text-sm text-gray-700 dark:text-gray-300") do
+        @emphasised.each do |cap|
+          li(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
+            span { cap[:name] }
+            span(class: EMPHASIS_CHIP) { weight_label(cap[:weight]) } if PersonDevelopment::Scoring.weighted?(cap[:weight])
+            span(class: EMPHASIS_CHIP) { glossary.label(:required) } if cap[:required]
+          end
+        end
+      end
+    end
+  end
 
   # The concern guesses from `@context`; this view is handed the answer.
   def glossary_second_person? = @second_person

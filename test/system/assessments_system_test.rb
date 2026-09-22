@@ -318,6 +318,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # Execution has an E2 cell but no rating yet.
       assert_selector "#capability-name-#{@cap3_stable} [data-capability-score]", text: "Not rated"
     end
+
+    # #431: the binding facts that change how a rating lands — counts ×2,
+    # cannot be short — showed nowhere on the card before it was rated.
+    should "flag a capability that counts double or is Required, and only that one" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+
+      within "#capability-name-#{@cap1_stable}" do
+        assert_selector "button[aria-describedby='assessment-term-weight-#{@cap1_stable}']", text: "×2"
+        assert_selector "button[aria-describedby='assessment-term-required-#{@cap1_stable}']", text: "Required"
+      end
+      assert_no_selector "#assessment-term-weight-#{@cap2_stable}"
+      assert_no_selector "#assessment-term-required-#{@cap2_stable}"
+      assert_no_selector "#assessment-term-weight-#{@cap3_stable}"
+
+      # The rating stream re-renders the name row with the same view, so the
+      # chips must survive a rating rather than vanish with the first click.
+      click_rating_frequency("#rating-#{@cap1_stable}-2", "Consistently")
+      assert_selector "#capability-name-#{@cap1_stable} [data-capability-score]", text: /\d+%/
+      assert_selector "button[aria-describedby='assessment-term-weight-#{@cap1_stable}']", text: "×2"
+      assert_selector "button[aria-describedby='assessment-term-required-#{@cap1_stable}']", text: "Required"
+    end
   end
 
   context "category navigation" do

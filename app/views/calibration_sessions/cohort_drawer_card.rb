@@ -187,11 +187,11 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   # that counts double drags the score twice as hard — which a percentage
   # on its own hides.
   def weight_marker(weight)
-    return if weight.nil? || weight == 1.0
+    return unless PersonDevelopment::Scoring.weighted?(weight)
 
     span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 shrink-0",
-         title: "Counts #{format('%g', weight)}× toward the score") do
-      "×#{format('%g', weight)}"
+         title: "Counts #{weight_label(weight)} toward the score") do
+      weight_label(weight)
     end
   end
 

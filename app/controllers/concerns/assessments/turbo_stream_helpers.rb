@@ -95,7 +95,8 @@ module Assessments::TurboStreamHelpers
           merged_levels: matrix_data[:merged_levels],
           person_level: matrix_data[:person_level],
           thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-          second_person: !viewer_is_manager?
+          second_person: !viewer_is_manager?,
+          emphasised: matrix_data[:emphasised_capabilities]
         ),
         layout: false
       )

@@ -165,6 +165,12 @@ And 200 is not promotion readiness — that is evaluated separately at the
 next level and needs the meeting threshold plus no blocked capability. The
 tool descriptions say "level-independent scale" for both reasons.
 
+A capability's score also carries `weight` and `required` — the two binding
+facts its card wears as chips ([#431](https://github.com/mr-yum/growth-os/issues/431)) — so an agent can explain a score the
+person can see the reason for. `required` is the resolved tolerance
+(binding, then category, then framework default) being 0, exactly what the
+card shows; the raw per-binding tolerance stays on the framework payload.
+
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
 agent can tell a low score from a barely-rated one. Perspective is resolved
