@@ -52,6 +52,17 @@ class BrandConfettiSystemTest < ApplicationSystemTestCase
       assert_equal "none",
         page.evaluate_script("getComputedStyle(document.querySelector('[data-brand-confetti-layer]')).pointerEvents")
     end
+
+    should "leave neither the tagline nor the confetti in Turbo's page cache" do
+      hover_brand
+      page.execute_script("document.querySelector(\"#{BRAND}\").click()")
+      assert_selector "#{TAGLINE}[data-open]", visible: :all
+      assert_selector "[data-brand-confetti-layer][data-turbo-temporary]", visible: :all
+
+      page.execute_script("document.dispatchEvent(new CustomEvent('turbo:before-cache'))")
+
+      assert_no_selector "#{TAGLINE}[data-open]", visible: :all
+    end
   end
 
   context "at mobile width" do

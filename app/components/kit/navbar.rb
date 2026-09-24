@@ -57,7 +57,8 @@ class Components::Kit::Navbar < Components::Base
         data: {
           brand_confetti_target: "brand",
           action: "mouseenter->brand-confetti#enter focus->brand-confetti#focus " \
-                  "blur->brand-confetti#blur click->brand-confetti#celebrate"
+                  "blur->brand-confetti#blur click->brand-confetti#celebrate " \
+                  "turbo:before-cache@document->brand-confetti#beforeCache"
         }
       ) do
         plain "#{@current_tenant&.name} #{@app_name}"

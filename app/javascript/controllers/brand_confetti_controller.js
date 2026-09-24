@@ -6,7 +6,8 @@
 //   <div data-controller="brand-confetti">
 //     <button data-brand-confetti-target="brand"
 //             data-action="mouseenter->brand-confetti#enter focus->brand-confetti#focus
-//                          blur->brand-confetti#blur click->brand-confetti#celebrate">…</button>
+//                          blur->brand-confetti#blur click->brand-confetti#celebrate
+//                          turbo:before-cache@document->brand-confetti#beforeCache">…</button>
 //     <div data-brand-confetti-target="tagline" role="tooltip">…</div>
 //   </div>
 
@@ -61,6 +62,12 @@ export default class extends BaseController {
   }
 
   blur() {
+    this.hide()
+  }
+
+  // Turbo snapshots the page before this controller disconnects, so an open
+  // tagline would otherwise be restored open, and dead, on Back.
+  beforeCache() {
     this.hide()
   }
 
@@ -196,6 +203,7 @@ export default class extends BaseController {
       this.layer = document.createElement("div")
       this.layer.setAttribute("aria-hidden", "true")
       this.layer.dataset.brandConfettiLayer = ""
+      this.layer.dataset.turboTemporary = ""
       Object.assign(this.layer.style, {
         position: "fixed",
         left: "0",
