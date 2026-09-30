@@ -70,6 +70,33 @@ class Tenant::IntegrationsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    context "GET /integrations/hris with a title nobody mapped" do
+      setup do
+        ActsAsTenant.with_tenant(@tenant) do
+          create(:person, tenant: @tenant, name: "Una Mapped", email: "una@example.com",
+                 job_title: "Chief Vibes Officer", hris_source: "hibob", status: "active")
+        end
+      end
+
+      should "list it with a way to map it" do
+        get tenant_integration_path("hris")
+
+        assert_select "#unmapped-titles tr[data-unmapped-title='Chief Vibes Officer']" do
+          assert_select "button[aria-label='Map Chief Vibes Officer to a role']"
+        end
+        assert_select "##{Views::Integrations::HrisMappingModal::ID} form[action='#{tenant_hris_title_mapping_path}']"
+      end
+
+      should "offer each mapped title as editable and removable" do
+        get tenant_integration_path("hris")
+
+        assert_select "[data-mapped-title='Software Engineer']" do
+          assert_select "button[aria-label='Edit mapping for Software Engineer']"
+          assert_select "button[aria-label='Remove mapping for Software Engineer']"
+        end
+      end
+    end
+
     context "GET /integrations/unknown" do
       should "redirect to index with alert" do
         get tenant_integration_path("unknown")

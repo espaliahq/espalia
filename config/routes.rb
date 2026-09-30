@@ -89,6 +89,11 @@ Rails.application.routes.draw do
       end
     end
 
+    # Map / unmap one HRIS job title to a framework role (#436). The title
+    # travels as a form field — titles carry spaces, slashes and brackets.
+    resource :hris_title_mapping, only: [ :create, :destroy ],
+      path: "integrations/hris/title_mapping", controller: "hris_title_mappings"
+
     # Per-tenant Slack install (OAuth v2). install → Slack consent → callback.
     get    "slack/install",  to: "slack_connections#install",  as: :slack_install
     get    "slack/callback", to: "slack_connections#callback", as: :slack_callback
