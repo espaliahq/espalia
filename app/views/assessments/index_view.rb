@@ -230,6 +230,16 @@ class Views::Assessments::IndexView < Views::Base
     status = @card_statuses[[ assignment.framework_id, assignment.person_id ]]
     return render(Components::Kit::Badge.new("Not Started", variant: :default)) if status.nil?
 
+    div(class: "flex flex-col items-end gap-1") do
+      home_status_badges(status, show_manager: show_manager)
+      # "Aligning · PM3" beside the home status (ADR-22): a conversation
+      # about another role, linking into its lens.
+      render Views::Assessments::LensAlignmentChips.new(alignments: status[:lens_alignments] || [],
+                                                        assessment_id: assignment.id)
+    end
+  end
+
+  def home_status_badges(status, show_manager:)
     case status[:status]
     when "aligning" then return render(Components::Kit::Badge.new("Aligning", variant: :warning))
     when "aligned"  then return render(Components::Kit::Badge.new("Aligned", variant: :success))

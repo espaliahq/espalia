@@ -86,6 +86,60 @@ class AssessmentsRoleAlignmentDisclosureTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "the page around a lens role's alignment" do
+    should "tell the manager their ratings are private and offer the start" do
+      sign_in @manager_user
+      get assessment_path(@assignment, @pm_lens)
+
+      page = response.parsed_body
+      assert_includes page.at_css("#assessment-lens-alignment").text,
+                      "Your ratings here are private until you start alignment against PM2"
+      assert page.at_css("button[data-modal-target-id='start-lens-alignment-modal']")
+      form = page.at_css("#start-lens-alignment-modal form")
+      assert_equal assessment_alignment_start_path(@assignment), form["action"]
+      assert_equal @fx.pm.role_id, form.at_css("input[name='as_role']")["value"]
+    end
+
+    should "offer the assessee no start" do
+      sign_in @user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_nil response.parsed_body.at_css("#assessment-lens-alignment")
+      assert_nil response.parsed_body.at_css("#start-lens-alignment-modal")
+    end
+
+    context "once started" do
+      setup { start_alignment(@fx.pm) }
+
+      should "show the assessee Aligning · PM2 on the list and the home page, linking into the lens" do
+        sign_in @user
+        lens_href = assessment_path(@assignment, as_role: @fx.pm.role_id, as_level: 2)
+
+        get assessments_path
+        chip = response.parsed_body.at_css("a[data-lens-alignment='PM2']")
+        assert_equal "Aligning · PM2", chip.text
+        assert_equal lens_href, chip["href"]
+
+        get assessment_path(@assignment)
+        assert_equal lens_href, response.parsed_body.at_css("a[data-lens-alignment='PM2']")["href"]
+
+        get home_card_path(card: "assessment_progress", key: @cycle_id)
+        assert_equal lens_href, response.parsed_body.at_css("a[data-lens-alignment='PM2']")["href"],
+          "the home page's assessment card shows it too"
+      end
+
+      should "give the manager PM2's own completion control" do
+        sign_in @manager_user
+        get assessment_path(@assignment, @pm_lens)
+
+        assert_includes response.parsed_body.at_css("#assessment-lens-alignment").text, "Aligning with Alex against PM2"
+        control = response.parsed_body.at_css("#alignment-completion-control")
+        assert control, "the lens role's alignment has its own completion control"
+        assert_nil response.parsed_body.at_css("button[data-modal-target-id='start-lens-alignment-modal']")
+      end
+    end
+  end
+
   private
 
   def manager_rate(capability)

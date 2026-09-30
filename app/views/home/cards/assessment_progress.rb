@@ -39,8 +39,20 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
         h2(class: "text-base font-semibold text-gray-900 dark:text-white") { @state[:cycle].name }
       end
       label, variant = STATUS_LABELS.fetch(@state[:status], [ @state[:status].to_s.humanize, :default ])
-      render Components::Kit::Badge.new(label, variant: variant)
+      div(class: "flex flex-col items-end gap-1") do
+        render Components::Kit::Badge.new(label, variant: variant)
+        lens_alignment_chips
+      end
     end
+  end
+
+  # "Aligning · PM3" beside the home status (ADR-22): alignment the manager
+  # started against another role, linking into its lens.
+  def lens_alignment_chips
+    alignments = @state[:lens_alignments] || []
+    return if alignments.empty? || @state[:assignment].nil?
+
+    render Views::Assessments::LensAlignmentChips.new(alignments: alignments, assessment_id: @state[:assignment].id)
   end
 
   def detail_line

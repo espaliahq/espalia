@@ -169,6 +169,9 @@ class Assessments::MatrixDataBuilder
       # decides whether the page is the alignment conversation. Frozen cells
       # beyond it are marked per cell (`frozen_by`).
       lens_alignment: lens_alignment,
+      # Every other role alignment has started against this cycle — the
+      # header's "Aligning · PM3" chips.
+      lens_alignments: @disclosure.lens_alignments,
       individual_ratings_frozen: lens_alignment_started?,
       alignment_locked: lens_alignment_completed?,
       current_level_complete: current_level_complete?(categories)

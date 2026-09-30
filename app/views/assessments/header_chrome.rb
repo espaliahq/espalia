@@ -45,12 +45,35 @@ module Views::Assessments::HeaderChrome
   # The line saying what the page is read against and how to get back, on
   # its own row under the header so it never pushes the header's actions
   # out of line.
-  def render_lens_banner(assessee_name: nil)
+  def render_lens_banner(assessee_name: nil, can_start_alignment: false)
     lens = off_record_lens
     return unless lens
 
-    render Views::Assessments::LensBanner.new(lens: lens, assessment_id: @assignment.id,
-                                              assessee_name: assessee_name)
+    render Views::Assessments::LensBanner.new(
+      lens: lens, assessment_id: @assignment.id, assessee_name: assessee_name,
+      alignment: (@matrix_data[:lens_alignment] unless lens.home_role?),
+      can_start_alignment: can_start_alignment
+    )
+  end
+
+  # "Aligning · PM3" beside the home status, for every other role alignment
+  # has started against this cycle (ADR-22). Off the record, the banner says
+  # where the lens role stands instead.
+  def render_lens_alignment_chips
+    return if off_record_lens
+
+    render Views::Assessments::LensAlignmentChips.new(alignments: @matrix_data[:lens_alignments] || [],
+                                                      assessment_id: @assignment.id)
+  end
+
+  # The confirmation "Start alignment against PM3" opens — mounted only
+  # where the banner offers the start.
+  def render_start_lens_alignment_modal(assessee_name:, can_start_alignment:)
+    lens = off_record_lens
+    return unless lens && can_start_alignment
+
+    render Views::Assessments::StartLensAlignmentModal.new(lens: lens, assessment_id: @assignment.id,
+                                                           assessee_name: assessee_name)
   end
 
   def off_record_lens

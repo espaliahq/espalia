@@ -11,7 +11,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  selected_levels: {},
                  context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
-                 can_reopen_alignment: false,
+                 can_reopen_alignment: false, can_start_lens_alignment: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
@@ -32,6 +32,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_start_alignment = can_start_alignment
     @can_complete_alignment = can_complete_alignment
     @can_reopen_alignment = can_reopen_alignment
+    @can_start_lens_alignment = can_start_lens_alignment
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_request_evidence = can_request_evidence
@@ -95,6 +96,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         second_person: false
       )
       render_lens_role_modal(assessee_name: @assessee.name)
+      render_start_lens_alignment_modal(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
@@ -151,6 +153,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]
           )
+          render_lens_alignment_chips
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
@@ -161,7 +164,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
-      render_lens_banner(assessee_name: @assessee.name)
+      render_lens_banner(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment)
     end
   end
 
@@ -192,15 +195,16 @@ class Views::Assessments::ManagerShowView < Views::Base
   def mark_complete_button
     render Views::Assessments::AlignmentCompletionControl.new(
       assignment: @assignment,
-      matrix_data: @matrix_data
+      matrix_data: @matrix_data,
+      lens_params: lens_params
     )
   end
 
   def reopen_alignment_button
-    confirm_msg = "Re-open alignment for this cycle? Self and manager ratings stay locked and the " \
-      "agreed values are kept — you can adjust them and mark complete again."
+    confirm_msg = "Re-open alignment#{against_lens} for this cycle? Self and manager ratings stay locked and " \
+      "the agreed values are kept — you can adjust them and mark complete again."
     form(
-      action: assessment_alignment_reopening_path(@assignment),
+      action: assessment_alignment_reopening_path(@assignment, lens_params),
       method: "post",
       data: { turbo_confirm: confirm_msg },
       # Desktop-only, matching mark_complete_button: re-open pairs with
@@ -215,8 +219,14 @@ class Views::Assessments::ManagerShowView < Views::Base
                "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
                "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 " \
                "cursor-pointer"
-      ) { "Re-open alignment" }
+      ) { "Re-open alignment#{against_lens}" }
     end
+  end
+
+  # " against PM3" when the milestone is a lens role's (ADR-22).
+  def against_lens
+    lens = off_record_lens
+    lens && !lens.home_role? ? " against #{lens.code}" : ""
   end
 
   def delegates_button
