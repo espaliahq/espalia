@@ -35,6 +35,24 @@ class AssessmentsRoleAlignmentDisclosureTest < ActionDispatch::IntegrationTest
     end
   end
 
+  should "hide a calibration revisit on a PM-only cell until PM2 alignment starts" do
+    ActsAsTenant.with_tenant(@tenant) do
+      session = create(:calibration_session, tenant: @tenant, cycle_id: @cycle_id, framework_id: @fx.framework_id)
+      PersonDevelopment::CommandHandler.new.request_rating_revisit(
+        @person.id, @fx.framework_id, capability_stable_id: @fx.pm_only.stable_id, level_ordinal: 2,
+        calibration_session_id: session.id, rater_id: @manager.id, note: "Compare with peers",
+        session_name: session.name, requested_by_id: @manager.id
+      )
+    end
+    sign_in @user
+    get assessment_activity_path(@assignment)
+    assert_empty response.parsed_body.css("li[data-kind='rating_revisit_requested']")
+
+    start_alignment(@fx.pm)
+    get assessment_activity_path(@assignment)
+    assert_equal 1, response.parsed_body.css("li[data-kind='rating_revisit_requested']").size
+  end
+
   context "once the manager starts alignment against PM2" do
     setup { start_alignment(@fx.pm) }
 

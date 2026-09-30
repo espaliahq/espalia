@@ -679,7 +679,6 @@ class Assessments::ActivityFeedQuery
   # and the asked rater are resolved here so the view stays a dumb renderer.
   def revisit_entries
     return [] unless @viewer_sees_all
-    return [] if @disclosure.nil? && @context == :self && !@alignment_started
 
     events = stream_events.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
     # Key-defensive like the other actor lookups — read-back payload keys
@@ -689,11 +688,13 @@ class Assessments::ActivityFeedQuery
         e.data[:rater_id] || e.data["rater_id"] ]
     end.compact.uniq
     names = ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
+    session_ids = events.filter_map { |e| e.data[:calibration_session_id] || e.data["calibration_session_id"] }
+    session_cycles = session_ids.empty? ? {} : CalibrationSession.where(id: session_ids.uniq).pluck(:id, :cycle_id).to_h
 
     events.filter_map do |event|
       data = event.data.with_indifferent_access
       stable_id = data[:capability_stable_id]
-      next if @disclosure && !@disclosure.include?(stable_id, data[:level_ordinal])
+      next if hide_revisit?(data, session_cycles[data[:calibration_session_id]])
 
       Entry.new(
         id: event.event_id,
@@ -711,6 +712,17 @@ class Assessments::ActivityFeedQuery
         category_id: category_id_for(stable_id)
       )
     end
+  end
+
+  # The manager-rating gate, for a revisit request: per cell when it came
+  # from a session on the open cycle and the viewer is the assessee, the
+  # page-level rule otherwise.
+  def hide_revisit?(data, cycle_id)
+    if @disclosure && cycle_id.present? && cycle_id == open_cycle_id
+      return !@disclosure.include?(data[:capability_stable_id], data[:level_ordinal])
+    end
+
+    @context == :self && !@alignment_started
   end
 
   def hide_authority_entry?(kind)
