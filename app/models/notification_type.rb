@@ -88,6 +88,12 @@ class NotificationType
       label: "Calibration asked you to revisit a rating",
       description: "A calibration session asks you to take a second look at one of your ratings.",
       defaults: { in_app: true, slack: true, email: false }
+    ),
+    lens_alignment_started: Definition.new(
+      key: :lens_alignment_started,
+      label: "Alignment against another role started",
+      description: "Your manager starts an alignment conversation about another role, sharing their ratings on it.",
+      defaults: { in_app: true, slack: true, email: false }
     )
   }.freeze
 

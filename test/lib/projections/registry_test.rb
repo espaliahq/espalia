@@ -54,7 +54,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       forbidden = [
         PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
         PersonDevelopment::AsyncHandlers::CommentNotifier,
-        PersonDevelopment::AsyncHandlers::RatingRevisitNotifier
+        PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
+        PersonDevelopment::AsyncHandlers::LensAlignmentNotifier
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end
