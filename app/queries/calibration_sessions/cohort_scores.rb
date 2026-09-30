@@ -89,7 +89,7 @@ class CalibrationSessions::CohortScores
     scores = engine.capability_scores_at(dot[:ordinal])
     rows = bindings_for(enrollment[person_id][1]).filter_map do |binding|
       capability = binding.capability
-      next unless expectation_cells.include?([ capability.stable_id, dot[:ordinal] ])
+      next unless role_scope(enrollment[person_id][1]).include?(capability.stable_id, dot[:ordinal])
 
       score = scores[capability.stable_id]
       next unless score&.dig(:scorable)
@@ -195,7 +195,7 @@ class CalibrationSessions::CohortScores
         categories: categories,
         person_level: ordinal,
         all_level_ordinals: ladder_for(role_id),
-        expectation_cells: expectation_cells,
+        expectation_cells: role_scope(role_id).cells,
         perspective: :manager_only,
         thresholds: thresholds
       )
@@ -219,7 +219,8 @@ class CalibrationSessions::CohortScores
   # stale rating on an unbound / archived / no-expectation capability must
   # not inflate `rated` past what the score is computed from.
   def eligible_stable_ids(role_id, ordinal)
-    role_scope(role_id).at_level(ordinal).capability_stable_ids
+    @eligible_stable_ids ||= {}
+    @eligible_stable_ids[[ role_id, ordinal ]] ||= role_scope(role_id).at_level(ordinal).capability_stable_ids
   end
 
   # [rated, carried] counts over the person's at-level cells — already the
@@ -247,17 +248,6 @@ class CalibrationSessions::CohortScores
   def categories
     @categories ||= FrameworkState::CapabilityCategory
       .where(framework_id: @session.framework_id).to_a
-  end
-
-  # Every (capability_stable_id, level_ordinal) cell with an expectation in
-  # the framework — the coverage denominator AND the engine's band shape,
-  # from the one query the assessment hero's numbers rest on.
-  def expectation_cells
-    @expectation_cells ||= FrameworkState::BehaviouralExpectation.stable_cells(
-      FrameworkState::Capability.joins(:category)
-        .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
-        .pluck(:capability_id)
-    )
   end
 
   # The ROLE's ladder, as the assessment hero scores it — not the framework's
