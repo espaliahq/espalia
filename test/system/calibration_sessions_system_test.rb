@@ -488,6 +488,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       cat_id = SecureRandom.uuid_v7
       handler.add_capability_category(fw_id, cat_id, "Thinking")
       handler.add_capability(fw_id, cap_id, cap_stable, cat_id, "Strategic Thinking")
+      handler.create_capability_role_binding(fw_id, SecureRandom.uuid_v7, cap_id, role_id)
       exp3_id = SecureRandom.uuid_v7
       handler.set_behavioural_expectation(fw_id, exp3_id, SecureRandom.uuid_v7,
                                           cap_id, 3, "Shapes team direction")

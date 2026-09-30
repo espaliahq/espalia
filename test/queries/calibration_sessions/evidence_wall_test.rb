@@ -24,12 +24,20 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
       create(:calibration_session_member, :participant, tenant: @tenant,
              session: @session, person_id: em.id)
     end
+    @role = create(:framework_role, tenant: @tenant)
+    category = create(:framework_capability_category, tenant: @tenant, framework_id: @framework_id)
+    cap = create(:framework_capability, tenant: @tenant, category_id: category.category_id, stable_id: @cap_stable)
+    create(:framework_capability_role_binding, tenant: @tenant, capability_id: cap.capability_id, role_id: @role.role_id)
+    [ 3, 4 ].each do |ordinal|
+      create(:framework_behavioural_expectation, tenant: @tenant, capability_id: cap.capability_id,
+             level_ordinal: ordinal)
+    end
     [ @r1, @r2 ].each do |person|
       create(:calibration_session_member, tenant: @tenant,
              session: @session, person_id: person.id)
       # Attribution (rater ownership) only covers framework-assigned people.
       create(:person_framework_assignment, tenant: @tenant,
-             person_id: person.id, framework_id: @framework_id)
+             person_id: person.id, framework_id: @framework_id, role_id: @role.role_id)
     end
 
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
@@ -63,14 +71,15 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
-  def evidence_for(person, author:, ordinal:, valence:, content:, recorded_at: Time.current)
+  def evidence_for(person, author:, ordinal:, valence:, content:, recorded_at: Time.current,
+                   stable_id: @cap_stable)
     item = create(:evidence_item, tenant: @tenant, with_link: false,
                   person_id: person.id, author: author,
-                  framework_id: @framework_id, capability_stable_id: @cap_stable,
+                  framework_id: @framework_id, capability_stable_id: stable_id,
                   level_ordinal: ordinal, content: content, recorded_at: recorded_at)
     EvidenceLink.create!(
       tenant_id: @tenant.id, evidence_id: item.id, person_id: person.id,
-      framework_id: @framework_id, capability_stable_id: @cap_stable,
+      framework_id: @framework_id, capability_stable_id: stable_id,
       level_ordinal: ordinal, link_status: "active",
       linked_by_id: author.id, linked_at: recorded_at, valence: valence
     )
@@ -81,6 +90,19 @@ class CalibrationSessions::EvidenceWallTest < ActiveSupport::TestCase
     CalibrationSessions::EvidenceWall.new(
       session: @session, capability_stable_id: @cap_stable, **filters
     ).call
+  end
+
+  should "ignore ratings outside the assessed role" do
+    rating = create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3)
+    evidence_for(@r1, author: @em_1, ordinal: 3, valence: "demonstrated", content: "Ran the hiring loop.",
+                 stable_id: rating.capability_stable_id)
+
+    result = CalibrationSessions::EvidenceWall.new(
+      session: @session, capability_stable_id: rating.capability_stable_id
+    ).call
+    item = result[:groups].sole[:items].sole
+    assert_equal "Ran the hiring loop.", item[:content], "the feedback itself stays on the wall"
+    assert_nil item[:frequency]
   end
 
   should "group population evidence by level, highest first, newest first within" do
