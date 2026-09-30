@@ -139,6 +139,65 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "writes through the lens" do
+    should "rate a cell the lens role adds and re-render through the lens" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 2,
+        rating: { capability_stable_id: @fx.pm_only.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_includes response.body, %(name="as_role" value="#{@fx.pm.role_id}"),
+        "the re-rendered pill must keep rating through the lens"
+      assert_equal "some", stored(@fx.pm_only)&.self_rated_frequency
+    end
+
+    should "refuse a cell the lens role doesn't read" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 2,
+        rating: { capability_stable_id: @fx.e_only.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :unprocessable_content
+      assert_nil stored(@fx.e_only)
+    end
+
+    should "refuse a manager rating on a cell only the lens role reads" do
+      sign_in @manager_user
+      post assessment_manager_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 2,
+        rating: { capability_stable_id: @fx.pm_only.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :forbidden
+      assert_nil stored(@fx.pm_only)
+    end
+
+    should "take a manager rating on a shared cell through the lens" do
+      sign_in @manager_user
+      post assessment_manager_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 2,
+        rating: { capability_stable_id: @fx.shared.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_equal "some", stored(@fx.shared)&.manager_rated_frequency
+    end
+
+    should "render the manager's pill read-only on a cell only the lens role reads" do
+      sign_in @manager_user
+      get assessment_path(@assignment, @pm_lens.merge(levels: { @fx.pm_only.stable_id => 2 }))
+
+      pill = response.parsed_body.at_css("#rating-#{@fx.pm_only.stable_id}-2")
+      assert_nil pill.at_css("button"), "no popover on a cell a manager can't rate yet"
+      assert_match(/per-role alignment/, pill.at_css("span[title]")["title"])
+      assert response.parsed_body.at_css("#rating-#{@fx.shared.stable_id}-2 button"),
+        "a shared cell is the record's, so the manager rates it"
+    end
+  end
+
   private
 
   def matrix_data
@@ -149,6 +208,13 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
     matrix_data[:categories].flat_map { |c| c[:capabilities] }
       .find { |cap| cap[:capability].capability_id == capability.capability_id }
       .fetch(:cells).fetch(ordinal)
+  end
+
+  def stored(capability)
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentLevelRating.find_by(cycle_id: @cycle_id, person_id: @person.id,
+        capability_stable_id: capability.stable_id, level_ordinal: 2)
+    end
   end
 
   def sign_in(user)

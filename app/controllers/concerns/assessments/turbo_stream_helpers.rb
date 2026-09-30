@@ -15,6 +15,17 @@ module Assessments::TurboStreamHelpers
 
   private
 
+  # The lens the page was read through when the rating was made — the pill's
+  # form forwards `as_role` / `as_level` — so every re-rendered fragment
+  # matches the page around it instead of the home role.
+  #
+  # @return [Assessments::Lens]
+  def response_lens
+    @response_lens ||= Assessments::Lens.resolve(
+      assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level]
+    )
+  end
+
   # Announces the acting user's rating change into the page's pre-existing
   # polite live region (WCAG 4.1.3 — audit issue #318). Reads the POST-write
   # frequency off the fresh cell data, so the announcement is authoritative
@@ -122,7 +133,8 @@ module Assessments::TurboStreamHelpers
         context: context,
         category_id: category_id,
         interactive: interactive,
-        carried: carried
+        carried: carried,
+        lens_params: response_lens.to_params
       ),
       layout: false
     )

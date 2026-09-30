@@ -61,7 +61,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_align",
-        "description" => "Record the aligned (agreed) frequency for one capability × level.",
+        "description" => "Record the aligned (agreed) frequency for one capability × level of the assessee's own role.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -69,7 +69,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
-            "comment"              => { "type" => "string" }
+            "comment"              => { "type" => "string" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -324,7 +325,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_as_manager",
-        "description" => "Record or update a manager rating for one of your direct reports' capability × level.",
+        "description" => "Record or update a manager rating for one of your direct reports' capability × level. " \
+          "Only cells their own role reads can be manager-rated; a cell only another role reads is refused.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -334,7 +336,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -347,7 +350,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_self",
-        "description" => "Record or update your own rating for one capability × level.",
+        "description" => "Record or update your own rating for one capability × level. Pass as_role_id to rate a cell " \
+          "another role in the framework reads (a role lens): the rating is the same fact about you " \
+          "at that capability × level, and counts wherever a role reads the cell.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -357,7 +362,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false

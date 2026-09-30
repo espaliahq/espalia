@@ -15,9 +15,15 @@
 # Input shape is shared with {Operations::Assessments::RateAsManager}
 # and {Operations::Assessments::Align}: all three take `assignment_id`
 # (uniformly identifying whose assessment is being touched) plus the
-# capability/level/frequency triple. Pundit decides who can do what.
+# capability/level/frequency triple, and an optional `as_role_id` naming
+# the role the rater was reading the cell through (ADR-22). The cell must
+# be one that role reads. Pundit decides who can do what.
 class Operations::Assessments::RateSelf < Operations::Base
-  description "Record or update your own rating for one capability × level."
+  include Operations::Assessments::RatingCell
+
+  description "Record or update your own rating for one capability × level. Pass as_role_id to rate a cell " \
+              "another role in the framework reads (a role lens): the rating is the same fact about you " \
+              "at that capability × level, and counts wherever a role reads the cell."
   category :write
   approval :mcp_client
 
@@ -32,10 +38,17 @@ class Operations::Assessments::RateSelf < Operations::Base
   # current frequency confirms a carried value or untoggle-clears a human
   # one — so a client that MEANS clear should say so.
   parameter :clear, :boolean
+  # The role whose cells the rater is reading; blank = the home role.
+  parameter :as_role_id, String
 
   def policy_check
     authorize assignment, :create_self_rating?
+    rating_lens
   end
+
+  # @return [Boolean] false when the call changed nothing (an explicit clear
+  #   of an empty rating) — the web then announces nothing
+  def changed? = @changed != false
 
   # @return [Hash] uniform rating-tool payload —
   #   `{ framework_id, capability_stable_id, level_ordinal, cycle_id, frequency }`.
@@ -65,7 +78,7 @@ class Operations::Assessments::RateSelf < Operations::Base
 
     if params[:clear].present?
       # Explicit clear-or-noop — mirrors the web's rating[clear] marker.
-      return if existing_freq.blank?
+      return @changed = false if existing_freq.blank?
 
       handler.clear_self_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],

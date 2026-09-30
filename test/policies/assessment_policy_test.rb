@@ -380,6 +380,28 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "#home_cell? (role lens, ADR-22)" do
+    setup do
+      @fx = build_role_lens_framework(tenant: @tenant)
+      person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Lens subject") }
+      @lens_assignment, = enrol_in_role_lens_framework(person, @fx, tenant: @tenant)
+      @lens_policy = AssessmentPolicy.new(manager_context, @lens_assignment)
+    end
+
+    should "name the cells the home role reads" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert @lens_policy.home_cell?(@fx.shared.stable_id, 2)
+        assert @lens_policy.home_cell?(@fx.e_only.stable_id, 3)
+      end
+    end
+
+    should "refuse a cell only another role reads" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_not @lens_policy.home_cell?(@fx.pm_only.stable_id, 2)
+      end
+    end
+  end
+
   private
 
   def policy

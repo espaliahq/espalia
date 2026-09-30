@@ -2,9 +2,11 @@
 
 # Handles manager rating submissions during an assessment.
 #
-# Dispatches ManagerRated / ManagerRatingRevised commands through the
-# PersonDevelopment command handler. Returns Turbo Stream responses
-# to update the frequency selector, scoring panel, and category header.
+# Dispatches through {Operations::Assessments::RateAsManager} — the MCP
+# tool's code path — so the cell check and the phase-2 rule that a manager
+# rating lands only on a cell the record reads (ADR-22) hold on both
+# surfaces. Returns Turbo Stream responses re-rendered against the page's
+# lens (`as_role` / `as_level`, forwarded by the pill's form).
 #
 # The key difference from {Assessments::RatingsController} is that the
 # assessee is resolved from the URL (not current_person), and authorization
@@ -24,77 +26,22 @@ class Assessments::ManagerRatingsController < ApplicationController
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
-    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
-      head :unprocessable_content
-      return
-    end
-    frequency = rating_params[:frequency]
-    comment = rating_params[:comment]
 
-    cycle = @assignment.current_open_cycle
-    unless cycle
-      render_rating_error(capability_stable_id, level_ordinal, "No open assessment cycle")
-      return
-    end
-
-    handler = PersonDevelopment::CommandHandler.new
-    mutated = true
-
-    existing = AssessmentLevelRating.find_by(
-      cycle_id: cycle.cycle_id,
-      person_id: @assignment.person_id,
-      framework_id: @assignment.framework_id,
+    operation = Operations::Assessments::RateAsManager.new(context: pundit_user, params: {
+      assignment_id: @assignment.id,
       capability_stable_id: capability_stable_id,
-      level_ordinal: level_ordinal
-    )
-
-    if rating_params[:clear].present?
-      # Explicit clear-or-noop — see Assessments::RatingsController.
-      if existing&.manager_rated_frequency.present?
-        handler.clear_manager_rating(
-          @assignment.person_id, @assignment.framework_id, capability_stable_id,
-          level_ordinal: level_ordinal, cycle_id: cycle.cycle_id, rated_by_id: current_person.id
-        )
-      else
-        # Duplicate clear: nothing changed, so nothing must be announced.
-        mutated = false
-      end
-    elsif existing&.manager_rated_frequency == frequency && existing&.manager_rating_carried?
-      # Confirming a carried-forward (seeded) value — re-emit as a human
-      # rating (provenance flips, carried treatment solidifies); untoggle-
-      # to-clear only applies to ratings the manager made themselves.
-      handler.revise_manager_rating(
-        @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id,
-        # Quick-confirm sends no comment — keep the existing one.
-        comment: comment.presence || existing.manager_rated_comment,
-        rated_by_id: current_person.id
-      )
-    elsif existing&.manager_rated_frequency == frequency
-      # Untoggle: clicking the already-selected frequency clears the rating
-      handler.clear_manager_rating(
-        @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id, rated_by_id: current_person.id
-      )
-    elsif existing&.manager_rated_frequency.present?
-      handler.revise_manager_rating(
-        @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Updated during manager assessment", cycle_id: cycle.cycle_id, comment: comment,
-        rated_by_id: current_person.id
-      )
-    else
-      handler.rate_as_manager(
-        @assignment.person_id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        cycle_id: cycle.cycle_id, comment: comment, rated_by_id: current_person.id
-      )
-    end
+      level_ordinal: level_ordinal,
+      frequency: rating_params[:frequency],
+      comment: rating_params[:comment],
+      rationale: "Updated during manager assessment",
+      clear: rating_params[:clear].presence,
+      as_role_id: params[:as_role].presence
+    })
+    operation.call
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id],
-      announce: mutated)
-  rescue RuntimeError => e
+      announce: operation.changed?)
+  rescue Operations::Base::ParameterError, RuntimeError => e
     render_rating_error(capability_stable_id, level_ordinal, e.message)
   end
 
@@ -127,24 +74,12 @@ class Assessments::ManagerRatingsController < ApplicationController
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil, announce: true)
-    framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
-    role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
-    level = FrameworkState::Level.find_by!(level_id: @assignment.level_id)
-    categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
-
-    matrix_data = Assessments::MatrixDataBuilder.new(
-      framework: framework, role: role, level: level,
-      person_id: @assignment.person_id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
+    matrix_data = Assessments::MatrixDataBuilder.for_lens(
+      lens: response_lens,
       context: :manager,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
-    ).build
+    )
 
     category_id = find_category_id(capability_stable_id, matrix_data)
     cap_data = find_capability_data(capability_stable_id, matrix_data)

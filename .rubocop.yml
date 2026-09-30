@@ -40,8 +40,6 @@ GrowthOs/ControllersMustUseOperations:
     - "app/controllers/assessments/alignment_starts_controller.rb"
     - "app/controllers/assessments/comments_controller.rb"
     - "app/controllers/assessments/evidence_controller.rb"
-    - "app/controllers/assessments/manager_ratings_controller.rb"
-    - "app/controllers/assessments/ratings_controller.rb"
 
 GrowthOs/RatingsMustBeRoleScoped:
   Enabled: true

@@ -30,6 +30,8 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against — nil reads the card as its own home
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, category: nil, scoring: {},
                  blocked: false, block_reason: nil,
@@ -39,7 +41,8 @@ class Views::Assessments::CapabilityCard < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @cells = capability_data[:cells]
@@ -211,7 +214,8 @@ class Views::Assessments::CapabilityCard < Views::Base
       can_request_evidence: @can_request_evidence,
       can_relink_others_evidence: @can_relink_others_evidence,
       can_comment: @can_comment,
-      viewer_is_tenant_admin: @viewer_is_tenant_admin
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @lens
     )
   end
 end

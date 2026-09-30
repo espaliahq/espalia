@@ -50,6 +50,18 @@ class AssessmentPolicy < ApplicationPolicy
     (manages_assessee? || active_rating_delegate?) && individual_ratings_editable?
   end
 
+  # Whether the record reads this cell — the home role binds the capability
+  # and has an expectation at the level. Manager and alignment writes are
+  # held to these cells until per-role alignment exists (ADR-22): a manager
+  # rating on a cell only another role reads could never be disclosed.
+  #
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @return [Boolean]
+  def home_cell?(capability_stable_id, level_ordinal)
+    Assessments::Lens.home(record).in_home_scope?(capability_stable_id, level_ordinal)
+  end
+
   # Grant/revoke a manager-rating delegation. Any ancestor manager (direct,
   # skip-level, …) or a tenant admin may delegate the reporting manager's
   # rating authority. Distinct from `manages_assessee?` (direct-recorded

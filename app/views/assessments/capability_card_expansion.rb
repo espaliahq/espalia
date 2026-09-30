@@ -24,13 +24,17 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against; its params ride the pill's forms so the response re-renders
+  #   through it
   def initialize(cell_data:, capability:, level:, capability_stable_id:,
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @cell_data = cell_data
     @capability = capability
     @level = level
@@ -107,8 +111,10 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
             assessment_id: @assessment_id,
             context: @context,
             category_id: @category_id,
-            interactive: !primary_perspective_frozen?,
-            carried: primary_carried?
+            interactive: !primary_perspective_frozen? && !manager_side_outside_home?,
+            carried: primary_carried?,
+            lens_params: @lens&.to_params || {},
+            static_title: (outside_home_title if manager_side_outside_home?)
           )
         end
       end
@@ -193,6 +199,18 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
 
   def primary_perspective_frozen?
     @context == :alignment ? @alignment_locked : @frozen
+  end
+
+  # A manager-side rating on a cell the record doesn't read is refused until
+  # per-role alignment exists (ADR-22), so the manager's pill there is read
+  # only — shown, so the self rating beside it still has something to sit
+  # against, and titled so the reason is one hover away.
+  def manager_side_outside_home?
+    @context != :self && @cell_data[:in_home_scope] == false
+  end
+
+  def outside_home_title
+    "Manager rating against #{@lens&.code || 'this role'} comes with per-role alignment"
   end
 
   def primary_frequency
