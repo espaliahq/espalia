@@ -31,8 +31,9 @@ module ContrastHelpers
   JS
 
   # Contrast of the first element matching +css+ against everything painted
-  # behind it: every ancestor background, outermost first. Running
-  # transitions are finished first, so a just-toggled control reads settled.
+  # behind it: every ancestor background, outermost first, each faded by the
+  # opacity above it. Running colour transitions are finished first, so a
+  # just-toggled control reads settled.
   #
   # @param css [String]
   # @return [Float]
@@ -42,17 +43,19 @@ module ContrastHelpers
         #{CONTRAST_JS}
         const el = document.querySelector(arguments[0]);
         if (!el) throw new Error("rendered_contrast: nothing matches " + arguments[0]);
-        // Measure the settled state, not a frame of a colour transition.
+        // Settle colour transitions only: finishing a scroll-driven
+        // animation (the hero collapse) would change the page under test.
         for (let n = el; n; n = n.parentElement) {
-          n.getAnimations().forEach(a => { try { a.finish(); } catch (_) {} });
+          n.getAnimations().filter(a => a instanceof CSSTransition).forEach(a => a.finish());
         }
         const chain = [];
+        for (let n = el; n; n = n.parentElement) chain.unshift(n);
+        // Each layer fades by the opacity of everything above it.
         let opacity = 1;
-        for (let n = el; n; n = n.parentElement) {
-          chain.unshift(getComputedStyle(n).backgroundColor);
+        const backdrop = chain.map(n => {
           opacity *= parseFloat(getComputedStyle(n).opacity);
-        }
-        const backdrop = chain.map(c => [c, 1]);
+          return [getComputedStyle(n).backgroundColor, opacity];
+        });
         const bg = paint(backdrop);
         const fg = paint([...backdrop, [getComputedStyle(el).color, opacity]]);
         return ratio(fg, bg);

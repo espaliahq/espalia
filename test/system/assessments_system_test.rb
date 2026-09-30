@@ -936,9 +936,14 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         )
       end
       visit assessment_path(@assignment)
-      assert_selector "[aria-label='Feedback / evidence actions']"
+      assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
 
-      assert_operator rendered_contrast("[aria-label='Feedback / evidence actions']"), :>=, 3
+      # Two share the label: the list header's, and the card's, which only
+      # shows on hover or focus.
+      assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
+      card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
+      page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
+      assert_operator rendered_contrast(card_kebab), :>=, 3
     end
   end
 
