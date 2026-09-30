@@ -37,7 +37,12 @@ class AssessmentsController < ApplicationController
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
-    @explorations = Assessments::OpenExplorations.for(all_assignments, progress_for: @own_assignments)
+    # The person's own and their team's, as `assessments_mine` returns them —
+    # an exploration is a conversation between the two, not a list for the
+    # wider chain.
+    @explorations = Assessments::OpenExplorations.for(
+      @own_assignments.to_a + @report_assignments.to_a, progress_for: @own_assignments
+    )
 
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,

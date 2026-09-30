@@ -82,7 +82,7 @@ class Views::Assessments::IndexView < Views::Base
     section(id: "explorations", class: "mt-10", aria: { labelledby: "explorations-heading" }) do
       h2(id: "explorations-heading", class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Explorations" }
       p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
-        "Roles and levels you're exploring. You and your manager see these; nobody else does."
+        "Roles and levels you're exploring. Your managers and admins can see them too."
       end
       ul(class: "grid gap-3 sm:grid-cols-2 lg:grid-cols-3") do
         entries.each { |entry| exploration_row(entry) }

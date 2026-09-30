@@ -175,6 +175,15 @@ class Assessments::ExplorationsControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[data-exploration=PM3][href=?]", assessment_path(@assignment, @pm_lens), text: "Exploring PM3"
     end
 
+    should "leave it off a skip-level card" do
+      sign_out @report_user
+      sign_in @skip_user
+      get assessments_path
+
+      assert_select "#skip-level-assessments", text: /Alex Kim/
+      assert_select "a[data-exploration]", count: 0
+    end
+
     should "drop a closed exploration" do
       post assessment_exploration_closure_path(@assignment, exploration.id), params: { outcome: "moved" }
       get assessments_path
