@@ -91,9 +91,12 @@ class AssessmentLevelRating < ApplicationRecord
   def self.within_cells(cells)
     return none if cells.empty?
 
-    tuples = cells.map { |stable_id, ordinal| sanitize_sql_array([ "(?::uuid, ?)", stable_id, ordinal ]) }
-    where("(assessment_level_ratings.capability_stable_id, assessment_level_ratings.level_ordinal) " \
-          "IN (#{tuples.join(', ')})")
+    stable_ids, ordinals = cells.to_a.transpose
+    where(
+      "(assessment_level_ratings.capability_stable_id, assessment_level_ratings.level_ordinal) " \
+      "IN (SELECT * FROM unnest(ARRAY[?]::uuid[], ARRAY[?]::integer[]))",
+      stable_ids, ordinals
+    )
   end
   private_class_method :within_cells
 
