@@ -19,7 +19,8 @@ class Assessments::AlignmentCompletionsController < ApplicationController
 
     result = dispatch_milestone(Operations::Assessments::CompleteAlignment)
     notice = if result[:home]
-      "Alignment complete — all ratings for this cycle are now locked."
+      "Alignment complete — the agreed ratings on #{result[:role_code]}#{result[:level_ordinal]}'s " \
+        "capabilities are now locked."
     else
       "Alignment against #{result[:role_code]}#{result[:level_ordinal]} complete."
     end

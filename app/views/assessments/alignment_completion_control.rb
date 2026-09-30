@@ -44,7 +44,7 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
 
   def completion_form
     confirm_msg = if @lens_params.empty?
-      "Marking alignment complete will lock all ratings for this cycle, including the agreed values. Continue?"
+      "Marking alignment complete will lock the agreed values on #{home_code}'s capabilities. Continue?"
     else
       "Marking alignment against #{@matrix_data[:lens].code} complete will lock its agreed values. Continue?"
     end
@@ -109,5 +109,9 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
 
   def person_level
     @matrix_data[:person_level]
+  end
+
+  def home_code
+    @matrix_data[:lens]&.home_code || "#{@matrix_data[:role].code}#{person_level}"
   end
 end

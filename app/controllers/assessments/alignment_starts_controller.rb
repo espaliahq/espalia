@@ -19,7 +19,8 @@ class Assessments::AlignmentStartsController < ApplicationController
 
     result = dispatch_milestone(Operations::Assessments::StartAlignment)
     notice = if result[:home]
-      "Alignment started — self and manager ratings are now locked for this cycle."
+      "Alignment started — self and manager ratings on #{result[:role_code]}#{result[:level_ordinal]}'s " \
+        "capabilities are now locked."
     else
       "Alignment against #{result[:role_code]}#{result[:level_ordinal]} started — " \
         "your ratings on its capabilities are now shared and locked."
