@@ -9,9 +9,20 @@
 # Alignment against the lens role is the one deliberate act that shares the
 # manager's ratings there, so the manager is told their ratings are private
 # until they start it, and offered the start.
+#
+# Looking through a lens tells nobody; declaring it an exploration is what
+# the other party sees. So the last line either names the open exploration
+# of the lens role — who started it, when, with a way to stop — or offers to
+# declare one: "Keep exploring this" to the assessee, "Share with Alex" to
+# the manager side.
 class Views::Assessments::LensBanner < Views::Base
   ID = "assessment-lens-banner"
   ALIGNMENT_ID = "assessment-lens-alignment"
+  EXPLORATION_ID = "assessment-lens-exploration"
+  BUTTON = "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
+           "text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 " \
+           "dark:hover:bg-gray-700 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 " \
+           "focus-visible:ring-primary"
 
   # @param lens [Assessments::Lens]
   # @param assessment_id [String]
@@ -22,8 +33,15 @@ class Views::Assessments::LensBanner < Views::Base
   # @param viewer [Symbol] :assessee, :manager (the reporting manager),
   #   :delegate (an active rating delegate) or :observer (anyone else who
   #   may look) — whose ratings "your ratings" would be
+  # @param exploration [AssessmentExploration, nil] the open exploration of
+  #   the lens role, `started_by` preloaded
+  # @param can_explore [Boolean] the viewer may declare or close one
+  # @param viewer_person_id [String, nil] to say "started by you"
   def initialize(lens:, assessment_id:, assessee_name: nil, alignment: nil, can_start_alignment: false,
-                 viewer: nil)
+                 viewer: nil, exploration: nil, can_explore: false, viewer_person_id: nil)
+    @exploration = exploration
+    @can_explore = can_explore
+    @viewer_person_id = viewer_person_id
     @lens = lens
     @assessment_id = assessment_id
     @first_name = assessee_name.to_s.split.first
@@ -44,9 +62,48 @@ class Views::Assessments::LensBanner < Views::Base
       end
     end
     alignment_line
+    exploration_line
   end
 
   private
+
+  def exploration_line
+    return if @lens.home?
+    return unless @exploration || @can_explore
+
+    div(id: EXPLORATION_ID, class: "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm " \
+                                   "text-gray-600 dark:text-gray-300") do
+      if @exploration
+        open_exploration
+      else
+        span { @first_name ? "#{@first_name} isn't told you're looking." : "Nobody is told you're looking." }
+        modal_trigger(Views::Assessments::StartExplorationModal::ID,
+                      @first_name ? "Share with #{@first_name}" : "Keep exploring this")
+      end
+    end
+  end
+
+  def open_exploration
+    span(data: { exploration: @exploration.code }) do
+      plain "Exploring "
+      strong(class: "font-semibold text-gray-900 dark:text-white") { @exploration.code }
+      plain " since #{@exploration.started_at.strftime("%-d %b")} · started by #{starter}"
+    end
+    if @exploration.start_note.present?
+      span(class: "italic text-gray-500 dark:text-gray-400 line-clamp-2") { "“#{@exploration.start_note}”" }
+    end
+    modal_trigger(Views::Assessments::StopExplorationModal::ID, "Stop exploring") if @can_explore
+  end
+
+  def starter
+    return "you" if @exploration.started_by_id.present? && @exploration.started_by_id == @viewer_person_id
+
+    @exploration.started_by&.name.to_s.split.first.presence || "someone"
+  end
+
+  def modal_trigger(modal_id, text)
+    button(type: "button", data: { action: "click->modal#open", modal_target_id: modal_id }, class: BUTTON) { text }
+  end
 
   def alignment_line
     return if @lens.home_role?
@@ -86,14 +143,7 @@ class Views::Assessments::LensBanner < Views::Base
   end
 
   def start_trigger
-    button(
-      type: "button",
-      data: { action: "click->modal#open", modal_target_id: Views::Assessments::StartLensAlignmentModal::ID },
-      class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
-             "text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 " \
-             "dark:hover:bg-gray-700 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 " \
-             "focus-visible:ring-primary"
-    ) { "Start alignment against #{@lens.code}" }
+    modal_trigger(Views::Assessments::StartLensAlignmentModal::ID, "Start alignment against #{@lens.code}")
   end
 
   def whose

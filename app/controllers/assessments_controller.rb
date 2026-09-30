@@ -37,6 +37,7 @@ class AssessmentsController < ApplicationController
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
+    @explorations = Assessments::OpenExplorations.for(all_assignments, progress_for: @own_assignments)
 
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
@@ -46,6 +47,7 @@ class AssessmentsController < ApplicationController
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,
+      explorations: @explorations,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -89,6 +91,8 @@ class AssessmentsController < ApplicationController
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        exploration: lens_exploration,
+        can_explore: policy.start_exploration?,
         can_manage_delegates: policy.delegate_manager_rating?,
         active_delegations: load_active_delegations(policy),
         candidate_delegates: load_candidate_delegates(policy),
@@ -114,6 +118,8 @@ class AssessmentsController < ApplicationController
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        exploration: lens_exploration,
+        can_explore: policy.start_exploration?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -254,6 +260,17 @@ class AssessmentsController < ApplicationController
     return :observer unless policy.rating_participant?
 
     active_rating_delegate? ? :delegate : :manager
+  end
+
+  # The open exploration of the role the page is read through (ADR-22) — any
+  # level of it, since one per role is open at a time. nil on the record.
+  #
+  # @return [AssessmentExploration, nil]
+  def lens_exploration
+    return nil if lens.home?
+
+    AssessmentExploration.open.for_assignment(@assignment).includes(:target_role, :started_by)
+      .find_by(target_role_id: lens.role.role_id)
   end
 
   # @return [String, nil] the lens role, nil on the home role

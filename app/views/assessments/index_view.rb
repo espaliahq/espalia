@@ -20,10 +20,12 @@ class Views::Assessments::IndexView < Views::Base
   # @param report_people [Hash{String => Person}] preloaded person records by ID (direct + skip-level)
   # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}] preloaded open cycles keyed by [framework_id, person_id]
   # @param card_statuses [Hash{Array(String, String) => Hash}] per-card status keyed by [framework_id, person_id]
+  # @param explorations [Hash{String => Array<Assessments::OpenExplorations::Entry>}] open declared
+  #   explorations keyed by assignment id
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, user: nil, current_tenant: nil, tenants: [])
+  def initialize(assignments:, report_assignments: [], skip_level_assignments: [], skip_level_pagy: nil, report_people: {}, open_cycles: {}, card_statuses: {}, explorations: {}, user: nil, current_tenant: nil, tenants: [])
     @assignments = assignments
     @report_assignments = report_assignments
     @skip_level_assignments = skip_level_assignments
@@ -31,6 +33,7 @@ class Views::Assessments::IndexView < Views::Base
     @report_people = report_people
     @open_cycles = open_cycles
     @card_statuses = card_statuses
+    @explorations = explorations
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -42,6 +45,7 @@ class Views::Assessments::IndexView < Views::Base
     ) do
       page_header
       assignments_list
+      explorations_section
       report_assignments_section if @report_assignments.any?
       skip_level_assignments_section if @skip_level_assignments.any?
     end
@@ -66,6 +70,56 @@ class Views::Assessments::IndexView < Views::Base
         @assignments.each { |a| assignment_card(a) }
       end
     end
+  end
+
+  # The roles and levels the person is exploring (ADR-22), each a way into
+  # the assessment read through it. Only their own — a report's show as a
+  # chip on the team card.
+  def explorations_section
+    entries = @assignments.flat_map { |assignment| @explorations.fetch(assignment.id, []) }
+    return if entries.empty?
+
+    section(id: "explorations", class: "mt-10", aria: { labelledby: "explorations-heading" }) do
+      h2(id: "explorations-heading", class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Explorations" }
+      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+        "Roles and levels you're exploring. You and your manager see these; nobody else does."
+      end
+      ul(class: "grid gap-3 sm:grid-cols-2 lg:grid-cols-3") do
+        entries.each { |entry| exploration_row(entry) }
+      end
+    end
+  end
+
+  def exploration_row(entry)
+    li do
+      a(href: assessment_path(entry.assignment, entry.lens_params),
+        data: { exploration: entry.code },
+        class: "block rounded-lg border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-900 p-4 " \
+               "shadow-xs hover:border-sky-400 dark:hover:border-sky-600 transition-colors " \
+               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
+        p(class: "font-semibold text-gray-900 dark:text-white break-words") { entry.label }
+        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { exploration_meta(entry) }
+      end
+    end
+  end
+
+  # "4 of 10 rated · started by you · since 3 Oct"
+  def exploration_meta(entry)
+    exploration = entry.exploration
+    starter = if exploration.started_by_id == exploration.person_id
+      "you"
+    else
+      exploration.started_by&.name.to_s.split.first.presence || "someone"
+    end
+    [ rated_text(entry), "started by #{starter}", "since #{exploration.started_at.strftime('%-d %b')}" ]
+      .compact.join(" · ")
+  end
+
+  def rated_text(entry)
+    return if entry.total.nil?
+    return "#{entry.total} #{'capability'.pluralize(entry.total)}" if entry.rated.nil?
+
+    "#{entry.rated} of #{entry.total} rated"
   end
 
   def report_assignments_section
@@ -160,6 +214,7 @@ class Views::Assessments::IndexView < Views::Base
       if cycle&.name.present?
         p(class: "mt-3 text-sm text-gray-600 dark:text-gray-300") { cycle.name }
       end
+      exploration_chips(assignment)
 
       div(class: "mt-4") do
         a(
@@ -216,6 +271,16 @@ class Views::Assessments::IndexView < Views::Base
           ) { "View self-assessment" }
         end
       end
+    end
+  end
+
+  # "Exploring PM3" on a report's card (ADR-22), linking into the lens.
+  def exploration_chips(assignment)
+    entries = @explorations.fetch(assignment.id, [])
+    return if entries.empty?
+
+    div(class: "mt-3") do
+      render Views::Assessments::ExplorationChips.new(entries: entries, assessment_id: assignment.id)
     end
   end
 

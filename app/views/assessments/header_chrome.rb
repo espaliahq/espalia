@@ -52,8 +52,27 @@ module Views::Assessments::HeaderChrome
     render Views::Assessments::LensBanner.new(
       lens: lens, assessment_id: @assignment.id, assessee_name: assessee_name,
       alignment: (@matrix_data[:lens_alignment] unless lens.home_role?),
-      can_start_alignment: can_start_alignment, viewer: viewer
+      can_start_alignment: can_start_alignment, viewer: viewer,
+      exploration: @exploration, can_explore: @can_explore, viewer_person_id: @viewer_person_id
     )
+  end
+
+  # The dialogs the banner's exploration buttons open (ADR-22): declaring
+  # the lens as an exploration, or stopping the open one.
+  #
+  # @param assessee_name [String, nil] nil on the assessee's own page
+  def render_exploration_modals(assessee_name: nil)
+    lens = off_record_lens
+    return unless lens && @can_explore
+
+    if @exploration
+      other_party = assessee_name.to_s.split.first.presence || "your manager"
+      render Views::Assessments::StopExplorationModal.new(lens: lens, exploration: @exploration,
+                                                          assessment_id: @assignment.id, other_party: other_party)
+    else
+      render Views::Assessments::StartExplorationModal.new(lens: lens, assessment_id: @assignment.id,
+                                                           assessee_name: assessee_name)
+    end
   end
 
   # "Aligning · PM3" beside the home status, for every other role alignment

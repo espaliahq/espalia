@@ -157,6 +157,11 @@ Rails.application.routes.draw do
     resource :alignment_completion, only: [ :create ], controller: "assessments/alignment_completions"
     resource :alignment_reopening, only: [ :create ], controller: "assessments/alignment_reopenings"
     resources :delegations, only: [ :create, :destroy ], controller: "assessments/delegations"
+    # Declared explorations of another role or level (ADR-22): declare one,
+    # then close it with its outcome.
+    resources :explorations, only: [ :create ], controller: "assessments/explorations" do
+      resource :closure, only: [ :create ], controller: "assessments/exploration_closures"
+    end
     resources :evidence, only: [ :create, :update, :destroy ], controller: "assessments/evidence" do
       collection do
         post :save

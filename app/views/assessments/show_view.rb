@@ -22,6 +22,9 @@ class Views::Assessments::ShowView < Views::Base
   # @param can_relink_others_evidence [Boolean] whether the viewer may manage
   #   links (add/remove capability × level) on evidence authored by others
   # @param activity_entries [Array<Assessments::ActivityFeedQuery::Entry>]
+  # @param exploration [AssessmentExploration, nil] the open exploration of
+  #   the lens role (ADR-22)
+  # @param can_explore [Boolean] the viewer may declare or close one
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
@@ -34,6 +37,7 @@ class Views::Assessments::ShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
+                 exploration: nil, can_explore: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
@@ -50,6 +54,8 @@ class Views::Assessments::ShowView < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
+    @exploration = exploration
+    @can_explore = can_explore
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -107,6 +113,7 @@ class Views::Assessments::ShowView < Views::Base
         second_person: true
       )
       render_lens_role_modal(assessee_name: nil)
+      render_exploration_modals(assessee_name: nil)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
