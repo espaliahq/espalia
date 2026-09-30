@@ -72,7 +72,6 @@ class Operations::Assessments::StartExploration < Operations::Base
   end
 
   def open_exploration
-    AssessmentExploration.open.for_assignment(assignment).includes(:target_role)
-      .find_by(target_role_id: target.role.role_id)
+    AssessmentExploration.open_of_role(assignment, target.role.role_id)
   end
 end

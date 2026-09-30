@@ -8,7 +8,8 @@ class Views::Assessments::StopExplorationModal < Views::Base
 
   ID = "stop-exploration-modal"
 
-  OUTCOMES = {
+  # The dialog's own words for each of {AssessmentExploration::OUTCOMES}.
+  OUTCOME_COPY = {
     "pursue" => [ "Pursue it", "Work towards %<code>s." ],
     "not_now" => [ "Not now", "Set it aside for now." ],
     "moved" => [ "Moved", "Now in the role." ]
@@ -41,7 +42,10 @@ class Views::Assessments::StopExplorationModal < Views::Base
       legend(class: "text-sm font-medium text-gray-700 dark:text-gray-200") { "What came of it?" }
       p(class: "text-xs text-gray-600 dark:text-gray-300") { "#{@other_party.upcase_first} is told." }
       div(class: "mt-2 space-y-2") do
-        OUTCOMES.each_with_index { |(value, (name, hint)), index| outcome_option(value, name, hint, index) }
+        AssessmentExploration::OUTCOMES.each_with_index do |value, index|
+          name, hint = OUTCOME_COPY.fetch(value)
+          outcome_option(value, name, hint, index)
+        end
       end
     end
   end

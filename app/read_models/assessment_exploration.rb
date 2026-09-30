@@ -14,6 +14,9 @@
 class AssessmentExploration < ApplicationRecord
   STATUSES = %w[open closed].freeze
   OUTCOMES = PersonDevelopment::Aggregate::EXPLORATION_OUTCOMES
+  # What came of it, as a sentence about a closed exploration ends — the feed
+  # and the notification share it.
+  OUTCOME_PHRASES = { "pursue" => "pursuing it", "not_now" => "not now", "moved" => "moved into the role" }.freeze
 
   acts_as_tenant :tenant
 
@@ -29,6 +32,16 @@ class AssessmentExploration < ApplicationRecord
 
   scope :open, -> { where(status: "open") }
   scope :for_assignment, ->(assignment) { where(person_id: assignment.person_id, framework_id: assignment.framework_id) }
+
+  # The open exploration of a role on one assessment — at most one, whatever
+  # its level.
+  #
+  # @param assignment [PersonFrameworkAssignment]
+  # @param role_id [String]
+  # @return [AssessmentExploration, nil] `target_role` and `started_by` preloaded
+  def self.open_of_role(assignment, role_id)
+    open.for_assignment(assignment).includes(:target_role, :started_by).find_by(target_role_id: role_id)
+  end
 
   # @return [Boolean]
   def open? = status == "open"

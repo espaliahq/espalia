@@ -6,12 +6,10 @@
 class ExplorationClosedNotifier < ApplicationNotifier
   notifies :exploration_closed
 
-  OUTCOMES = { "pursue" => "pursuing it", "not_now" => "not now", "moved" => "moved into the role" }.freeze
-
   notification_methods do
     def inbox_title
       actor = params[:actor_name].presence
-      outcome = ExplorationClosedNotifier::OUTCOMES[params[:outcome]]
+      outcome = AssessmentExploration::OUTCOME_PHRASES[params[:outcome]]
       base = actor ? "#{actor} closed the exploration of #{params[:role_label]}" : "The exploration of #{params[:role_label]} closed"
       outcome ? "#{base}: #{outcome}" : base
     end

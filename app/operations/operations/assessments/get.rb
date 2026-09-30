@@ -68,9 +68,7 @@ class Operations::Assessments::Get < Operations::Base
   def current_exploration
     return nil if read_lens.nil? || read_lens.home?
 
-    exploration = AssessmentExploration.open.for_assignment(assignment)
-      .includes(:target_role, :started_by, :closed_by)
-      .find_by(target_role_id: read_lens.role.role_id)
+    exploration = AssessmentExploration.open_of_role(assignment, read_lens.role.role_id)
     exploration && exploration_payload(exploration)
   end
 

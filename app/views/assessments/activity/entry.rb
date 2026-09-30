@@ -75,13 +75,6 @@ class Views::Assessments::Activity::Entry < Views::Base
     "reporting_manager_recorded" => "authority"
   }.freeze
 
-  # What came of a closed exploration, as its feed entry ends.
-  EXPLORATION_OUTCOME_TEXT = {
-    "pursue" => "pursuing it",
-    "not_now" => "not now",
-    "moved" => "moved into the role"
-  }.freeze
-
   # @param entry [Assessments::ActivityFeedQuery::Entry]
   # @param assignment [PersonFrameworkAssignment, nil] the assessment, for
   #   entries that switch the page to another role's lens
@@ -242,7 +235,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   # "Morgan closed the exploration of Product Manager · PM3 — not now"; with
   # no actor (a move into the role closed it) "The exploration of … closed".
   def exploration_closed_summary
-    outcome = EXPLORATION_OUTCOME_TEXT[payload_value(:outcome)]
+    outcome = AssessmentExploration::OUTCOME_PHRASES[payload_value(:outcome)]
     base = if actor_name
       "#{actor_name} closed the exploration of #{explored_role}"
     else

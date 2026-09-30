@@ -274,8 +274,7 @@ class AssessmentsController < ApplicationController
   def lens_exploration
     return nil if lens.home?
 
-    AssessmentExploration.open.for_assignment(@assignment).includes(:target_role, :started_by)
-      .find_by(target_role_id: lens.role.role_id)
+    AssessmentExploration.open_of_role(@assignment, lens.role.role_id)
   end
 
   # @return [String, nil] the lens role, nil on the home role
