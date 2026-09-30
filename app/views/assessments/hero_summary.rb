@@ -53,11 +53,16 @@ class Views::Assessments::HeroSummary < Views::Base
   #   inputs remain visible on drill-in (the expansion panel's secondary
   #   lines) and in the activity feed; the glanceable surface reads as one
   #   formal outcome. Only consulted in :alignment context.
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against. Off the record, the verdict reads conditionally ("Against PM3
+  #   you'd be…") and the priming state counts what the role adds; always,
+  #   a meeting score links to the next level as a lens.
   def initialize(scoring:, categories:, person_level:, merged_levels:,
                  assessment_id:, context: :self, viewer_is_manager: false,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  assessee_name: nil, viewer_can_rate: true, alignment_locked: false,
-                 thresholds: {})
+                 thresholds: {}, lens: nil)
+    @lens = lens
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -147,6 +152,7 @@ class Views::Assessments::HeroSummary < Views::Base
         div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
           promotion_pill
+          next_level_lens_link
           continue_assessing_cta(target) if target && @viewer_can_rate
           coverage_chip if @context != :alignment && !coverage_complete?
         end
@@ -226,6 +232,8 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def priming_headline
+    return lens_priming_headline if new_to_role_count.positive?
+
     if !@viewer_can_rate
       # View-only chain ancestor — an imperative "Rate …" would prompt an
       # action this viewer isn't permitted to take.
@@ -240,6 +248,8 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def priming_gloss
+    return lens_priming_gloss if new_to_role_count.positive? && !can_rate_new_cells?
+
     level_code = level_code(@person_level) || "L#{@person_level}"
     unless @viewer_can_rate
       return "The score appears once at least half of these #{level_code} capabilities are rated."
@@ -247,6 +257,60 @@ class Views::Assessments::HeroSummary < Views::Base
 
     whose = @context == :self ? "your" : "these"
     "Rate at least half of #{whose} #{level_code} capabilities and the score appears."
+  end
+
+  # ── The lens (ADR-22) ──
+
+  def off_record?
+    @lens.present? && !@lens.home?
+  end
+
+  # Current-level capabilities the record doesn't read — what a lens role
+  # adds, and what the reader has to rate before the score means anything.
+  def new_to_role_count
+    return 0 unless off_record?
+
+    @new_to_role_count ||= @categories.flat_map { |cat| cat[:capabilities] }
+      .count { |cap| cap[:cells][@person_level] && cap[:in_home_role] == false }
+  end
+
+  # The assessee rates what a lens adds; a manager rating there waits for
+  # per-role alignment, so the manager's copy says so instead of asking.
+  def can_rate_new_cells?
+    @viewer_can_rate && @context == :self
+  end
+
+  def lens_priming_headline
+    count = new_to_role_count
+    noun = "#{count} #{'capability'.pluralize(count)} #{count == 1 ? 'is' : 'are'} new to this role"
+    if can_rate_new_cells?
+      "#{noun} — rate #{count == 1 ? 'it' : 'them'} to see your score"
+    else
+      "No score against #{@lens.code} yet"
+    end
+  end
+
+  def lens_priming_gloss
+    count = new_to_role_count
+    "#{count} of these #{@lens.code} capabilities #{count == 1 ? 'is' : 'are'} new to this role; " \
+      "manager ratings on them come with per-role alignment."
+  end
+
+  # "See yourself as E4 →" once a score meets its level — the next level of
+  # the role being read, as a lens. A link out of the scoring frame, so it
+  # targets the page.
+  def next_level_lens_link
+    return unless @lens && next_level?
+    return unless %i[performing mastering eligible].include?(primary_scoring[:performance_state])
+
+    next_ordinal = levels_above.first[:ordinal]
+    who = @context == :self ? "yourself" : (@assessee_name.to_s.split.first.presence || "them")
+    a(href: assessment_path(@assessment_id, @lens.params_for(role_id: @lens.role.role_id, ordinal: next_ordinal)),
+      data: { turbo_frame: "_top" },
+      class: "text-xs font-medium text-primary hover:underline rounded-sm " \
+             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
+      "See #{who} as #{next_code} →"
+    end
   end
 
   # Thin bar filling toward the unlock point (not 100%), with the concrete
@@ -523,8 +587,14 @@ class Views::Assessments::HeroSummary < Views::Base
       .flat_map { |cat| cat[:capabilities] }
       .find do |cap_data|
         cell = cap_data[:cells][@person_level]
-        cell && primary_cell_frequency(cell).blank?
+        cell && primary_cell_frequency(cell).blank? && rateable_here?(cell)
       end
+  end
+
+  # A manager-side pill on a cell the record doesn't read is read-only, so
+  # "Continue" must not point at one.
+  def rateable_here?(cell)
+    @context == :self || cell[:in_home_scope] != false
   end
 
   def primary_cell_frequency(cell)
@@ -588,6 +658,8 @@ class Views::Assessments::HeroSummary < Views::Base
         "#{subject} close to #{current_code} expectations."
       end
     else
+      return "#{subject} below #{current_code} expectations." if off_record?
+
       "Below #{current_code} expectations — focus areas highlighted below."
     end
   end
@@ -616,6 +688,8 @@ class Views::Assessments::HeroSummary < Views::Base
   # Self view → "You're". Manager / alignment views → "<First name> is",
   # falling back to "They're" when no assessee name is present.
   def subject
+    return lens_subject if off_record?
+
     if @context == :self
       "You're"
     elsif @assessee_name.present?
@@ -623,6 +697,16 @@ class Views::Assessments::HeroSummary < Views::Base
     else
       "They're"
     end
+  end
+
+  # "Against PM3 you'd be" / "Against PM3 Alex would be" — the verdict is
+  # what the score would say on that role, not what the record says.
+  def lens_subject
+    who = if @context == :self then "you'd"
+    elsif @assessee_name.present? then "#{@assessee_name.split.first} would"
+    else "they'd"
+    end
+    "Against #{@lens.code} #{who} be"
   end
 
   # ── Perspective helpers ──

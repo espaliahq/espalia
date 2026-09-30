@@ -166,7 +166,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
             assessee_name: assessee_name_if_not_self,
-            alignment_locked: matrix_data[:alignment_locked]
+            alignment_locked: matrix_data[:alignment_locked],
+            lens: matrix_data[:lens]
           ),
           layout: false
         )

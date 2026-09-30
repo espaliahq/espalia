@@ -260,7 +260,8 @@ class Views::Assessments::ManagerShowView < Views::Base
         viewer_is_manager: true,
         assessee_name: @assessee.name,
         viewer_can_rate: @viewer_can_rate,
-        alignment_locked: @matrix_data[:alignment_locked]
+        alignment_locked: @matrix_data[:alignment_locked],
+        lens: @matrix_data[:lens]
       )
     end
   end

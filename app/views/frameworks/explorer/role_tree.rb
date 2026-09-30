@@ -34,8 +34,12 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # @param mode [Symbol] :view or :edit — gates the inline rename pencils
   # @param can_edit_structure [Boolean] gates the per-family "Edit" dialog trigger
   #   (the update_role_family? bar) — keeps it off for suggest-only viewers
+  # @param viewer_assignment_id [String, nil] the viewer's own assignment in
+  #   this framework — each role row in view mode then links to their
+  #   assessment read against that role (ADR-22)
   def initialize(role_families:, selected_role_ids:, track_filter:, framework_id: nil, mode: :view,
-                 can_edit_structure: false)
+                 can_edit_structure: false, viewer_assignment_id: nil)
+    @viewer_assignment_id = viewer_assignment_id
     @role_families = role_families
     @selected_role_ids = selected_role_ids
     @track_filter = track_filter
@@ -370,9 +374,27 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           ) { "solo" }
 
           role_actions_kebab(role) if @mode == :edit && @can_edit_structure
+          my_ratings_link(role) if @mode == :view && @viewer_assignment_id
         end
       end
     end
+  end
+
+  # "See my ratings against this role" — the viewer's own assessment read
+  # through this role, at the level nearest their own ({Assessments::Lens}).
+  # A `standalone` cluster control, so a touch screen keeps it visible (it
+  # has no kebab to move into). Out of the families frame, so it navigates
+  # the page.
+  def my_ratings_link(role)
+    a(
+      href: assessment_path(@viewer_assignment_id, as_role: role.role_id),
+      class: "shrink-0 px-1.5 py-0.5 text-xs rounded-sm whitespace-nowrap " \
+             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
+             "hover:bg-primary/20 hover:text-primary",
+      data: cluster_control_data("tree", "standalone").merge(turbo_frame: "_top", my_ratings_link: role.role_id),
+      title: "See my ratings against this role",
+      aria: { label: "See my ratings against #{role.name}" }
+    ) { "My ratings →" }
   end
 
   # The row's name area: a positioning context the name fills and the row's

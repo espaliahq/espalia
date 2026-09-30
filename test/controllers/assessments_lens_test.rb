@@ -187,6 +187,64 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "the hero under a lens" do
+    should "count what the lens role adds before there is a score" do
+      sign_in @user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_includes hero_text, "1 capability is new to this role — rate it to see your score"
+    end
+
+    should "read the verdict against the lens and offer the next level as a lens" do
+      [ @fx.shared, @fx.pm_only ].each { |capability| rate_self(capability, as_role_id: @fx.pm.role_id) }
+      sign_in @user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_includes hero_text, "Against PM2 you'd be meeting PM2 expectations."
+      link = response.parsed_body.at_css("#scoring-panel a[data-turbo-frame='_top']")
+      assert_equal "See yourself as PM3 →", link.text
+      assert_equal assessment_path(@assignment, as_role: @fx.pm.role_id, as_level: 3), link["href"]
+    end
+
+    should "link the record to the next level of the home ladder" do
+      [ @fx.shared, @fx.e_only ].each { |capability| rate_self(capability) }
+      sign_in @user
+      get assessment_path(@assignment)
+
+      assert_includes hero_text, "You're meeting E2 expectations."
+      link = response.parsed_body.at_css("#scoring-panel a[data-turbo-frame='_top']")
+      assert_equal assessment_path(@assignment, as_level: 3), link["href"]
+    end
+
+    should "tell the manager the added capabilities wait for per-role alignment" do
+      sign_in @manager_user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_includes hero_text, "No score against PM2 yet"
+      assert_includes hero_text, "manager ratings on them come with per-role alignment"
+    end
+  end
+
+  context "the framework explorer" do
+    should "link each role to the viewer's own ratings read against it" do
+      sign_in @user
+      get framework_path(@fx.framework_id)
+
+      assert_response :success
+      link = response.parsed_body.at_css("a[data-my-ratings-link='#{@fx.pm.role_id}']")
+      assert_equal assessment_path(@assignment, as_role: @fx.pm.role_id), link["href"]
+      assert_equal "See my ratings against Product Manager", link["aria-label"]
+    end
+
+    should "offer no link to a viewer with no assignment in the framework" do
+      sign_in @manager_user
+      get framework_path(@fx.framework_id)
+
+      assert_response :success
+      assert_nil response.parsed_body.at_css("a[data-my-ratings-link]")
+    end
+  end
+
   context "writes through the lens" do
     should "rate a cell the lens role adds and re-render through the lens" do
       sign_in @user
@@ -256,6 +314,20 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
     matrix_data[:categories].flat_map { |c| c[:capabilities] }
       .find { |cap| cap[:capability].capability_id == capability.capability_id }
       .fetch(:cells).fetch(ordinal)
+  end
+
+  def hero_text
+    response.parsed_body.at_css("#scoring-panel").text.squish
+  end
+
+  def rate_self(capability, **extra)
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Assessments::RateSelf.call(
+        context: AuthorizationContext.new(user: @user, tenant_user: TenantUser.find_by!(user: @user), person: @person),
+        params: { assignment_id: @assignment.id, capability_stable_id: capability.stable_id, level_ordinal: 2,
+                  frequency: "consistent", **extra }
+      )
+    end
   end
 
   def stored(capability)

@@ -188,7 +188,8 @@ class Views::Assessments::ShowView < Views::Base
         # The assessee's own view — in alignment their Self rating leads
         # (top-left split / first secondary percentage).
         viewer_is_manager: false,
-        alignment_locked: @matrix_data[:alignment_locked]
+        alignment_locked: @matrix_data[:alignment_locked],
+        lens: @matrix_data[:lens]
       )
     end
   end

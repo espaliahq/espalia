@@ -147,7 +147,8 @@ class Assessments::ManagerRatingsController < ApplicationController
             merged_levels: matrix_data[:merged_levels],
             assessment_id: @assignment.id,
             context: :manager,
-            assessee_name: assessee_name
+            assessee_name: assessee_name,
+            lens: matrix_data[:lens]
           ),
           layout: false
         )

@@ -46,7 +46,8 @@ class Views::Assessments::ScoringPanelFrameView < Views::Base
         viewer_is_manager: @viewer_is_manager,
         assessee_name: @assessee_name,
         viewer_can_rate: @viewer_can_rate,
-        alignment_locked: @matrix_data[:alignment_locked]
+        alignment_locked: @matrix_data[:alignment_locked],
+        lens: @matrix_data[:lens]
       )
     end
   end

@@ -147,7 +147,8 @@ class Assessments::RatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             merged_levels: matrix_data[:merged_levels],
             assessment_id: @assignment.id,
-            context: :self
+            context: :self,
+            lens: matrix_data[:lens]
           ),
           layout: false
         )

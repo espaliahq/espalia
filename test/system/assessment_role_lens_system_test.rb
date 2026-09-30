@@ -61,8 +61,24 @@ class AssessmentRoleLensSystemTest < ApplicationSystemTestCase
         within("#scoring-panel") { assert_text "Score unlocks at 1" }
 
         click_rating_frequency("#rating-#{@fx.pm_only.stable_id}-2", "Consistently")
-        within("#scoring-panel") { assert_no_text "Score unlocks at" }
+        within("#scoring-panel") do
+          assert_no_text "Score unlocks at"
+          assert_text "Against PM2 you'd be"
+        end
         assert_selector "#assessment-lens-banner"
+      end
+
+      should "land on the lens from a role in the framework explorer" do
+        visit framework_path(@fx.framework_id)
+        link = "a[data-my-ratings-link='#{@fx.pm.role_id}']"
+        assert_selector link, visible: :all
+
+        # Hover-revealed on desktop and inside the closed role pane on a phone;
+        # the navigation is what's under test, so dispatch the click.
+        page.execute_script("document.querySelector(arguments[0]).click()", link)
+
+        assert_selector "#assessment-lens-banner", text: "Product Manager · PM2"
+        assert_selector "[data-scope-chip='outside-home']", text: "Not in your E2 role"
       end
     end
   end
