@@ -13,6 +13,9 @@ class Operations::Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       category = create(:framework_capability_category, framework_id: framework_id, name: "Thinking")
       @cap = create(:framework_capability, category_id: category.category_id, name: "Strategic Thinking")
       create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: @role.role_id)
+      (1..3).each do |ordinal|
+        create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: ordinal)
+      end
 
       @cycle = create(:assessment_cycle, tenant: @tenant, name: "Q1 2026",
         framework_id: framework_id, status: "open")
