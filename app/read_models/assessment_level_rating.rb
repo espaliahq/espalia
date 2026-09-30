@@ -85,6 +85,9 @@ class AssessmentLevelRating < ApplicationRecord
 
   # @param cells [Set<Array(String, Integer)>]
   # @return [ActiveRecord::Relation]
+  #
+  # Not `where([:capability_stable_id, :level_ordinal] => cells)`: Rails 8.1
+  # renders that as one OR per cell and an empty list as `WHERE ()`.
   def self.within_cells(cells)
     return none if cells.empty?
 

@@ -548,6 +548,16 @@ Avoid "aspirational assessment", "what-if", "shadow ratings" and "exploration ra
 - **Freeze is per cell; completion is per role.** A cell freezes once any started role's scope contains it, and each role's completion gate counts only that role's current-level cells.
 - **Where the control will live.** The header's shortcode chip becomes the lens picker (this ladder, or another role); under a lens a one-line banner names the lens and says the home assessment is unchanged.
 
+### Role-scoped reads (NON-NEGOTIABLE)
+
+Every reader that counts, scores or displays ratings says which role it reads for. `assessment_level_ratings` has no role column, so a query filtered by person, cycle and level alone picks up cells the assessed role doesn't bind — the moment a person rates one, or a framework migration re-keys a rating onto a capability their role has dropped.
+
+- **Build the cells from `Assessments::RoleScope`**: `.for(role_id:, framework_id:)` for one role, `.for_roles` for a cohort, `.for_people(cycle_id:, framework_id:, person_ids:)` for each person's home role (enrollment snapshot, live assignment only before the snapshot existed). `#at_level(ordinal)` narrows it; `#bindings` feeds `PersonDevelopment::Scoring`.
+- **Filter with `AssessmentLevelRating.within(scope)`** — one scope, or a `person_id => scope` map for a cohort.
+- **Say so when a read spans every role**: `.across_all_roles` for activity history, cross-cycle seeding, and a cell someone already named.
+- **The `GrowthOs/RatingsMustBeRoleScoped` cop fails CI** on a chain that does neither. Exempt: record building, a `find_by` naming both `capability_stable_id` and `level_ordinal`, and the `CurrentAssessment` projection.
+- **Every reader carries an "ignores ratings outside the assessed role" test** built on `create_out_of_scope_rating` ([testing.md](testing.md)).
+
 ## Frequency rating vocabulary
 
 The four rating values share a single palette across every surface — inline pill, level chip, divergent-secondary dot — via `Views::Assessments::FrequencyPalette`. The palette uses a red → yellow → green → blue scale: four **maximally-distinct hues** so adjacent states never blur. This replaced the old red → orange → amber → green ramp, whose middle two (orange "Some" vs amber "Most") were near-indistinguishable on small chips — and unusable in a diagonal split (see *Level chip coloring*). Data values (enum, events, DB, test fixtures) **never** change.
@@ -1390,11 +1400,13 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/contexts/person_development/async_handlers/comment_notifier.rb` | Async handler: `CommentPosted` → reply / assessee / manager-side notifications (see *Comment notifications*) |
 | `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
+| `app/queries/assessments/role_scope.rb` | The ONE definition of the cells a role reads (ADR-22) — active bound capabilities × their expectations, plus the bindings scoring uses; every rating reader filters through it via `AssessmentLevelRating.within` |
+| `lib/rubocop/cop/growth_os/ratings_must_be_role_scoped.rb` | Fails CI on a rating query that never passes through `.within` or `.across_all_roles` |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../architecture/adrs.md) |
 | `app/models/assessments/secondary_perspectives.rb` | The ONE list of the perspectives shown beside the viewer's own — each carrying its context, so a secondary annotation can be held to the coverage gate against its own ratings |
 | `app/models/assessments/viewer_context.rb` | The ONE `:self` / `:manager` / `:alignment` resolution — the web controller and the MCP read tools both call it, so a score can't be built from ratings the viewer may not see |
 | `app/queries/assessments/score_summary.rb` | The MCP read tools' score payload — runs the same `MatrixDataBuilder` the web renders and reshapes its scoring into whole percents plus the scale's own meaning |
-| `app/queries/assessments/level_coverage.rb` | Current-level self/manager/aligned completion for a (person, framework, cycle). Mirrors the builder's denominator; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status, and by the alignment-completion gate (aligned side) |
+| `app/queries/assessments/level_coverage.rb` | Current-level self/manager/aligned completion for a (person, framework, cycle). Its denominator is the role scope at the assessed level, the builder's cells; consumed by the `CurrentAssessment` projection to stamp `assessment_cycle_progress.{self,manager}_completed_at` for the dual-party list status, and by the alignment-completion gate (aligned side) |
 | `app/views/assessments/alignment_completion_control.rb` | Gated "Mark alignment complete" header control — disabled + "N to align →" jump chip until current-level aligned coverage is whole; Turbo-Stream-replaced on every alignment rating |
 | `app/views/assessments/continue_assessing_link.rb` | Shared "jump to a capability cell" anchor — sole owner of the `continue-assessing` href/data contract (hero CTA, priming CTA, completion jump chip) |
 | `app/read_models/assessment_level_rating.rb` | Three-frequency read model (self / manager / aligned) |
