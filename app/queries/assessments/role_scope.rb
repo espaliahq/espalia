@@ -66,6 +66,21 @@ class Assessments::RoleScope
   # @param person_ids [Array<String>]
   # @return [Hash{String => Assessments::RoleScope}]
   def self.for_people(cycle_id:, framework_id:, person_ids:)
+    role_by_person = home_role_ids(cycle_id: cycle_id, framework_id: framework_id, person_ids: person_ids)
+    scopes = for_roles(role_ids: role_by_person.values, framework_id: framework_id)
+    person_ids.uniq.index_with do |person_id|
+      scopes[role_by_person[person_id]] || empty(framework_id: framework_id)
+    end
+  end
+
+  # Each person's home role for a cycle: their enrollment snapshot's role,
+  # else their live assignment's. A person with neither is left out.
+  #
+  # @param cycle_id [String]
+  # @param framework_id [String]
+  # @param person_ids [Array<String>]
+  # @return [Hash{String => String}] person_id => role_id
+  def self.home_role_ids(cycle_id:, framework_id:, person_ids:)
     person_ids = person_ids.uniq
     return {} if person_ids.empty?
 
@@ -80,11 +95,7 @@ class Assessments::RoleScope
           .pluck(:person_id, :role_id).to_h
       )
     end
-
-    scopes = for_roles(role_ids: role_by_person.values, framework_id: framework_id)
-    person_ids.index_with do |person_id|
-      scopes[role_by_person[person_id]] || empty(framework_id: framework_id)
-    end
+    role_by_person
   end
 
   # A scope that reads nothing — for a person whose role is unknown.
