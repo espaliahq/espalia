@@ -1626,6 +1626,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       rate_to_unlock_hero(frequency: "consistent")
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
+      # The hero renders inline, then its frame's `src` load replaces it. A
+      # term found before that swap is detached with its panel, and focusing
+      # it opens nothing on screen.
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
 
       trigger = find("[aria-describedby='assessment-term-score']", match: :first)
       assert_equal "button", trigger.tag_name,
