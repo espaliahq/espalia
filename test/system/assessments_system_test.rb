@@ -978,6 +978,23 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "(main=#{main_visible_width}, viewport=#{viewport_width})"
     end
 
+    # WCAG 1.4.10: the page reflows at 320 CSS px. "Most of the time" is the
+    # widest pill phrase, and "Demonstrates:" used to be glued to it with
+    # nowrap, so the pair pushed the whole page sideways (#319).
+    [ [ "320px", [ 320, 812 ] ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "not scroll the page sideways at #{label}" do
+        rate_to_unlock_hero(frequency: "occasional")
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#rating-#{@cap1_stable}-2", text: "Most of the time"
+
+        widths = page.evaluate_script(
+          "({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })"
+        )
+        assert_operator widths["scroll"], :<=, widths["client"], "the page scrolls sideways at #{label}"
+      end
+    end
+
     should "contain capability cards within the viewport on narrow screens with many levels" do
       # Frameworks with many levels (E1-E8) produce a chip strip far
       # wider than mobile viewports — the card must contain that strip

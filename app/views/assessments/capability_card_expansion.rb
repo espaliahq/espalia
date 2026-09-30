@@ -80,9 +80,10 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   # Sentence-first layout. The expectation flows into:
   #   "<text>. Demonstrates: [pill]    <divergent secondaries>"
   # All on one line; on narrow viewports the secondaries wrap below
-  # the pill via flex-wrap. The lead-in "Demonstrates:" is glued to
-  # the pill via a `whitespace-nowrap` span so a wrap never strands
-  # the label without it.
+  # the pill via flex-wrap. The lead-in "Demonstrates:" shares a wrapping
+  # inline-flex box with the pill, so a line break takes both together
+  # and, where even the pair is wider than the line (a 320px phone), the
+  # pill drops under its label instead of pushing the page sideways.
   def expectation_sentence
     return unless @cell_data[:expectation]
 
@@ -94,8 +95,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       # means the trailing margin sits at the end of the pill's line
       # when the secondary wraps below on mobile, so the secondary
       # starts flush against the new line's left edge.
-      span(class: "whitespace-nowrap ml-2 mr-3") do
-        span(class: "text-gray-600 dark:text-gray-300 mr-1") { "Demonstrates:" }
+      span(class: "inline-flex flex-wrap items-baseline gap-x-1 ml-2 mr-3") do
+        span(class: "text-gray-600 dark:text-gray-300") { "Demonstrates:" }
         # Rating controllers replace `#rating-<stable>-<ord>` after every
         # POST — the id has to live on the element
         # `Assessments::TurboStreamHelpers#rating_wrapper_html` writes.
