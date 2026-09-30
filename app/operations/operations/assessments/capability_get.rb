@@ -101,18 +101,25 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   # scrubbed.
   def hide_others?(level_ordinal)
     return false unless context.person&.id == assignment.person_id
+    # No home role to scope by (its record is gone): fall back to the
+    # page-level rule — everything once home alignment has started.
+    return !alignment_started? unless read_lens
 
     !disclosure.include?(capability.stable_id, level_ordinal)
   end
 
   def disclosure
-    @disclosure ||=
-      if read_lens
-        Assessments::Disclosure.for(lens: read_lens,
-                                    participant_status: assignment.current_open_cycle_participation&.status)
-      else
-        Assessments::Disclosure.none
-      end
+    @disclosure ||= Assessments::Disclosure.for(lens: read_lens, participant_status: participant_status)
+  end
+
+  def alignment_started?
+    Assessments::Disclosure::STARTED_STATUSES.include?(participant_status)
+  end
+
+  def participant_status
+    return @participant_status if defined?(@participant_status)
+
+    @participant_status = assignment.current_open_cycle_participation&.status
   end
 
   def ratings_by_level(cycle)
