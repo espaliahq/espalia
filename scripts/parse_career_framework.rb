@@ -96,15 +96,12 @@ def extract_name_and_description(html)
 
   name = bold_segments.first
 
-  # Description: remaining bold segments + italic content + non-bold text
+  # Description: remaining bold segments + non-bold text. The non-bold text
+  # already includes italic content, so reading italics separately as well
+  # stored those sentences twice (#333).
   desc_parts = []
   desc_parts.concat(bold_segments[1..]) if bold_segments.length > 1
 
-  # Get italic content
-  italic_match = html.to_s.match(/<i>(.*?)<\/i>/m)
-  desc_parts << clean_text(italic_match[1]) if italic_match
-
-  # Get non-bold text
   non_bold = extract_non_bold_text(html)
   desc_parts << non_bold if non_bold
 
