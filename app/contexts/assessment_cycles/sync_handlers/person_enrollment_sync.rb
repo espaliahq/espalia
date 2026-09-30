@@ -92,6 +92,7 @@ class AssessmentCycles::SyncHandlers::PersonEnrollmentSync
 
     prior_cycle_id = candidate_cycle_ids.find do |cycle_id|
       AssessmentLevelRating
+        .across_all_roles
         .for_person(person_id)
         .for_cycle(cycle_id)
         .where(

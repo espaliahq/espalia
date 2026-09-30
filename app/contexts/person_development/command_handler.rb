@@ -450,6 +450,7 @@ class PersonDevelopment::CommandHandler
     # manager's incomplete alignment; the alternative to an imperfect
     # baseline is not a better baseline, it is blank.
     prior_rows = AssessmentLevelRating
+      .across_all_roles
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(prior_cycle_id)
@@ -471,6 +472,7 @@ class PersonDevelopment::CommandHandler
     # never held anything can be seeded on a re-run, so re-running the
     # whole seed is a no-op and never resurrects a deliberate clear.
     current_rows = AssessmentLevelRating
+      .across_all_roles
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(current_cycle_id)
