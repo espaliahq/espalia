@@ -11,7 +11,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  selected_levels: {},
                  context: :manager,
                  can_start_alignment: false, can_complete_alignment: false,
-                 can_reopen_alignment: false, can_start_lens_alignment: false,
+                 can_reopen_alignment: false, can_start_lens_alignment: false, lens_viewer: :observer,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
@@ -33,6 +33,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_complete_alignment = can_complete_alignment
     @can_reopen_alignment = can_reopen_alignment
     @can_start_lens_alignment = can_start_lens_alignment
+    @lens_viewer = lens_viewer
     @viewer_person_id = viewer_person_id
     @can_create_evidence = can_create_evidence
     @can_request_evidence = can_request_evidence
@@ -164,7 +165,8 @@ class Views::Assessments::ManagerShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
-      render_lens_banner(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment)
+      render_lens_banner(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment,
+                         viewer: @lens_viewer)
     end
   end
 

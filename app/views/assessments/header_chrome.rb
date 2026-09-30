@@ -45,14 +45,14 @@ module Views::Assessments::HeaderChrome
   # The line saying what the page is read against and how to get back, on
   # its own row under the header so it never pushes the header's actions
   # out of line.
-  def render_lens_banner(assessee_name: nil, can_start_alignment: false)
+  def render_lens_banner(assessee_name: nil, can_start_alignment: false, viewer: nil)
     lens = off_record_lens
     return unless lens
 
     render Views::Assessments::LensBanner.new(
       lens: lens, assessment_id: @assignment.id, assessee_name: assessee_name,
       alignment: (@matrix_data[:lens_alignment] unless lens.home_role?),
-      can_start_alignment: can_start_alignment
+      can_start_alignment: can_start_alignment, viewer: viewer
     )
   end
 

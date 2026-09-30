@@ -100,6 +100,22 @@ class AssessmentsRoleAlignmentDisclosureTest < ActionDispatch::IntegrationTest
       assert_equal @fx.pm.role_id, form.at_css("input[name='as_role']")["value"]
     end
 
+    should "tell a rating delegate whose start it is, and offer none" do
+      delegate_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        delegate = create(:person, tenant: @tenant, email: delegate_user.email)
+        create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate)
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @person.id,
+               framework_id: @fx.framework_id, delegate_person_id: delegate.id)
+      end
+      sign_in delegate_user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_includes response.parsed_body.at_css("#assessment-lens-alignment").text,
+                      "Your ratings here are private until Alex's manager starts alignment against PM2"
+      assert_nil response.parsed_body.at_css("button[data-modal-target-id='start-lens-alignment-modal']")
+    end
+
     should "offer the assessee no start" do
       sign_in @user
       get assessment_path(@assignment, @pm_lens)
@@ -126,6 +142,15 @@ class AssessmentsRoleAlignmentDisclosureTest < ActionDispatch::IntegrationTest
         get home_card_path(card: "assessment_progress", key: @cycle_id)
         assert_equal lens_href, response.parsed_body.at_css("a[data-lens-alignment='PM2']")["href"],
           "the home page's assessment card shows it too"
+      end
+
+      should "name the conversation's level on another level of the same role" do
+        sign_in @manager_user
+        get assessment_path(@assignment, as_role: @fx.pm.role_id, as_level: 3)
+
+        assert_includes response.parsed_body.at_css("#assessment-lens-alignment").text, "against PM2"
+        assert_nil response.parsed_body.at_css("#alignment-completion-control"),
+          "PM3 isn't the level the PM2 gate counts"
       end
 
       should "give the manager PM2's own completion control" do

@@ -81,6 +81,7 @@ class AssessmentsController < ApplicationController
         can_complete_alignment: milestone_lens? && policy.complete_alignment?(role_id: lens_role_id),
         can_reopen_alignment: milestone_lens? && policy.reopen_alignment?(role_id: lens_role_id),
         can_start_lens_alignment: !lens.home_role? && policy.start_alignment?(role_id: lens_role_id),
+        lens_viewer: lens_viewer(policy),
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
@@ -243,6 +244,16 @@ class AssessmentsController < ApplicationController
 
   def assignment_policy
     @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
+  end
+
+  # Whose ratings the lens banner speaks of on the manager view: the
+  # reporting manager's, a delegate's, or nobody's (a view-only viewer).
+  #
+  # @return [Symbol] :manager, :delegate or :observer
+  def lens_viewer(policy)
+    return :observer unless policy.rating_participant?
+
+    active_rating_delegate? ? :delegate : :manager
   end
 
   # @return [String, nil] the lens role, nil on the home role

@@ -19,12 +19,17 @@ class Views::Assessments::LensBanner < Views::Base
   # @param alignment [Assessments::Disclosure::Alignment, nil] alignment
   #   started against the lens role, if any
   # @param can_start_alignment [Boolean] the viewer may start it
-  def initialize(lens:, assessment_id:, assessee_name: nil, alignment: nil, can_start_alignment: false)
+  # @param viewer [Symbol] :assessee, :manager (the reporting manager),
+  #   :delegate (an active rating delegate) or :observer (anyone else who
+  #   may look) — whose ratings "your ratings" would be
+  def initialize(lens:, assessment_id:, assessee_name: nil, alignment: nil, can_start_alignment: false,
+                 viewer: nil)
     @lens = lens
     @assessment_id = assessment_id
     @first_name = assessee_name.to_s.split.first
     @alignment = alignment
     @can_start_alignment = can_start_alignment
+    @viewer = viewer || (assessee_name.present? ? :observer : :assessee)
   end
 
   def view_template
@@ -45,25 +50,38 @@ class Views::Assessments::LensBanner < Views::Base
 
   def alignment_line
     return if @lens.home_role?
-    return unless @alignment || manager_side?
+    text = alignment_text
+    return unless text
 
     div(id: ALIGNMENT_ID, class: "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm " \
                                  "text-gray-600 dark:text-gray-300") do
-      span { alignment_text }
+      span { text }
       start_trigger if @can_start_alignment && @alignment.nil?
     end
   end
 
+  # Names the conversation's own level, which a lens on another level of the
+  # same role doesn't change.
   def alignment_text
-    code = @lens.code
-    if @alignment&.aligned?
-      "Alignment against #{code} is complete."
-    elsif @alignment && manager_side?
+    return started_text(@alignment.code) if @alignment
+
+    case @viewer
+    when :manager then "Your ratings here are private until you start alignment against #{@lens.code}."
+    when :delegate
+      "Your ratings here are private until #{@first_name}'s manager starts alignment against #{@lens.code}."
+    end
+  end
+
+  def started_text(code)
+    return "Alignment against #{code} is complete." if @alignment.aligned?
+
+    case @viewer
+    when :manager
       "Aligning with #{@first_name} against #{code} — your ratings on its capabilities are shared and locked."
-    elsif @alignment
+    when :assessee
       "Your manager started alignment against #{code} — their ratings on its capabilities are shared with you."
     else
-      "Your ratings here are private until you start alignment against #{code}."
+      "Alignment against #{code} is in progress — manager ratings on its capabilities are shared with #{@first_name}."
     end
   end
 
@@ -76,10 +94,6 @@ class Views::Assessments::LensBanner < Views::Base
              "dark:hover:bg-gray-700 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 " \
              "focus-visible:ring-primary"
     ) { "Start alignment against #{@lens.code}" }
-  end
-
-  def manager_side?
-    @first_name.present?
   end
 
   def whose
