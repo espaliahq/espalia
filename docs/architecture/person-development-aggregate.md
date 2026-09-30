@@ -232,6 +232,10 @@ Declared explorations (ADR-22 — intent, not a rating scope):
   ExplorationClosed { exploration_id, closed_by_id, outcome, note? }
     ← outcome ∈ pursue | not_now | moved. Only an open exploration closes;
       whoever may declare may close, whoever declared it.
+    ← Also emitted by change_role / change_level, right after the change,
+      for every open exploration whose target role AND level the person now
+      holds: outcome "moved", closed_by_id = the change's changed_by (nil for
+      an HRIS sync).
 
   Read model (CurrentAssessment): AssessmentExploration, one row per
   exploration. Never read by a cohort surface.
