@@ -5,6 +5,7 @@ require_relative "../config/environment"
 require "rails/test_help"
 require_relative "support/explorer_write_stream_assertions"
 require_relative "support/out_of_scope_ratings"
+require_relative "support/role_lens_fixture"
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger

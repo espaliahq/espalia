@@ -20,6 +20,36 @@
 class Assessments::MatrixDataBuilder
   VALID_CONTEXTS = %i[self manager alignment].freeze
 
+  # Builds the matrix for an assignment read through a lens — the one way
+  # the assessment page, its frames, the rating responses and the MCP score
+  # read an assignment, so they all see the same cells, the same disclosure
+  # and the same floor.
+  #
+  # @param lens [Assessments::Lens]
+  # @param context [Symbol] :self, :manager or :alignment
+  # @param viewer_person_id [String, nil]
+  # @param viewer_sees_all_evidence [Boolean]
+  # @return [Hash] see {#build}
+  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false)
+    assignment = lens.assignment
+    status = assignment.current_open_cycle_participation&.status
+    new(
+      framework: FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
+      lens: lens,
+      person_id: assignment.person_id,
+      cycle_id: assignment.current_open_cycle&.cycle_id,
+      categories: FrameworkState::CapabilityCategory
+        .where(framework_id: assignment.framework_id, status: "active")
+        .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+        .order(:ordinal),
+      participant_status: status,
+      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
+      context: context,
+      viewer_person_id: viewer_person_id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence
+    ).build
+  end
+
   # @param framework [FrameworkState::Framework]
   # @param role [FrameworkState::Role, nil] the role to read against; taken
   #   from +lens+ when one is given

@@ -73,9 +73,11 @@ class AssessmentsController < ApplicationController
         expanded_level_ordinal: focused_level_ordinal_param,
         selected_levels: selected_levels_param,
         context: context,
-        can_start_alignment: policy.start_alignment?,
-        can_complete_alignment: policy.complete_alignment?,
-        can_reopen_alignment: policy.reopen_alignment?,
+        # Alignment is a milestone of the record; a lens on another role
+        # reads it but never drives it (ADR-22).
+        can_start_alignment: lens.home_role? && policy.start_alignment?,
+        can_complete_alignment: lens.home_role? && policy.complete_alignment?,
+        can_reopen_alignment: lens.home_role? && policy.reopen_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
@@ -167,6 +169,16 @@ class AssessmentsController < ApplicationController
     end
   end
 
+  # The role and level the page is read against (`as_role` / `as_level`),
+  # resolved once per request and only after `authorize`, so a pair the
+  # framework doesn't have is a 404 to a permitted viewer and nobody else.
+  #
+  # @return [Assessments::Lens]
+  # @raise [Assessments::Lens::NotFound]
+  def lens
+    @lens ||= Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level])
+  end
+
   def set_assignment
     return unless current_person
 
@@ -198,28 +210,17 @@ class AssessmentsController < ApplicationController
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user)
+    @assessment_context ||=
+      Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user, lens: lens)
   end
 
   def load_assessment_data
-    role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
-    categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
-
-    @matrix_data = Assessments::MatrixDataBuilder.new(
-      framework: @framework,
-      role: role,
-      level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
-      person_id: @assignment.person_id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
+    @matrix_data = Assessments::MatrixDataBuilder.for_lens(
+      lens: lens,
       context: assessment_context,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
-    ).build
+    )
     apply_viewer_rating_lock
   end
 

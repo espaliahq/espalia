@@ -239,7 +239,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   def hero_frame
     turbo_frame_tag(
       "assessment-scoring",
-      src: scoring_assessment_path(@assignment),
+      src: scoring_assessment_path(@assignment, lens_params),
       data: { assessment_sync_target: "scoringFrame" }
     ) do
       render Views::Assessments::HeroSummary.new(
@@ -322,7 +322,7 @@ class Views::Assessments::ManagerShowView < Views::Base
       # broadcasts).
       turbo_frame_tag(
         "assessment-activity",
-        src: assessment_activity_path(@assignment),
+        src: assessment_activity_path(@assignment, lens_params),
         loading: "lazy",
         data: { assessment_sync_target: "activityFrame" }
       ) do
@@ -335,7 +335,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def matrix_frame_params
-    p = {}
+    p = lens_params.dup
     p[:capability] = @expanded_capability_id if @expanded_capability_id
     p[:level_ordinal] = @expanded_level_ordinal if @expanded_level_ordinal && @expanded_capability_id
     p[:levels] = @selected_levels if @selected_levels.present?

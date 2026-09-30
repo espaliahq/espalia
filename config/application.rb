@@ -95,6 +95,11 @@ module GrowthOs
     # Revisit if we ever add an attachment that needs variants.
     config.active_storage.variant_processor = :disabled
 
+    # A role or level an assessment can't be read against is a missing
+    # record. Rails maps exception classes by name, not ancestry, so the
+    # RecordNotFound subclass needs its own entry to answer 404.
+    config.action_dispatch.rescue_responses["Assessments::Lens::NotFound"] = :not_found
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files

@@ -6,6 +6,15 @@
 module Views::Assessments::HeaderChrome
   private
 
+  # The params naming the lens the page is read against, carried on every
+  # frame `src` so a frame reload — a broadcast after a rating included —
+  # reads the same role and level as the page around it.
+  #
+  # @return [Hash]
+  def lens_params
+    @matrix_data[:lens]&.to_params || {}
+  end
+
   def render_shortcode_chip(role:, level:)
     span(
       class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \

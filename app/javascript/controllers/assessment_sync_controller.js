@@ -15,6 +15,8 @@
 
 import BaseController from "controllers/base_controller"
 
+const LENS_PARAMS = ["as_role", "as_level"]
+
 export default class extends BaseController {
   static targets = ["signal", "frame", "scoringFrame", "activityFrame"]
 
@@ -170,7 +172,7 @@ export default class extends BaseController {
     if (!skipMatrixAndScoring && this.hasScoringFrameTarget) {
       const src = this.scoringFrameTarget.getAttribute("src")
       if (src) {
-        const scoringUrl = new URL(src, window.location.origin)
+        const scoringUrl = new URL(this.#mergeLensParams(src), window.location.origin)
         const matrixCategory = this.#activeCategory()
         if (matrixCategory) {
           scoringUrl.searchParams.set("category", matrixCategory)
@@ -311,6 +313,28 @@ export default class extends BaseController {
     }
   }
 
+  // Copies the lens (as_role / as_level) from the browser URL onto a frame
+  // src, so a broadcast reload reads the role and level the page is read
+  // against instead of snapping back to the home role.
+  #mergeLensParams(src) {
+    let target
+    try {
+      target = new URL(src, window.location.origin)
+    } catch {
+      return src
+    }
+    const browser = new URL(window.location)
+    for (const name of LENS_PARAMS) {
+      const value = browser.searchParams.get(name)
+      if (value) {
+        target.searchParams.set(name, value)
+      } else {
+        target.searchParams.delete(name)
+      }
+    }
+    return target.toString()
+  }
+
   // Merges focus-related params (capability, level_ordinal) from the
   // browser URL into the given matrix frame src. The matrix controller
   // pushes these params via history.pushState on focus changes, but
@@ -319,7 +343,7 @@ export default class extends BaseController {
   #mergeFocusParams(src) {
     let target
     try {
-      target = new URL(src, window.location.origin)
+      target = new URL(this.#mergeLensParams(src), window.location.origin)
     } catch {
       return src
     }
