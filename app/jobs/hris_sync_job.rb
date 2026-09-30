@@ -9,6 +9,9 @@
 #   HrisSyncJob.perform_later(tenant)
 #
 class HrisSyncJob < ApplicationJob
+  # The Pass 5 result sets naming people the sync could not assign.
+  SKIP_KEYS = %i[unmapped_titles missing_roles missing_levels missing_ordinals].freeze
+
   queue_as :default
 
   retry_on Hris::Hibob::Errors::RateLimitError, wait: :polynomially_longer, attempts: 5
@@ -30,9 +33,23 @@ class HrisSyncJob < ApplicationJob
       "created=#{result[:created]} updated=#{result[:updated]} " \
       "deactivated=#{result[:deactivated]} errors=#{result[:errors].size}"
     )
+    log_skipped_assignments(tenant, result)
   end
 
   private
+
+  # The people Pass 5 could not place — previously computed and dropped, so a
+  # renamed HRIS title left its holders on their old assignment unnoticed
+  # (#436). The integrations page lists the same gaps.
+  def log_skipped_assignments(tenant, result)
+    skipped = SKIP_KEYS.filter_map do |key|
+      values = Array(result[key])
+      "#{key}=#{values.to_a.inspect}" if values.any?
+    end
+    return if skipped.empty?
+
+    Rails.logger.warn("[HrisSyncJob] Assignments skipped for tenant #{tenant.id}: #{skipped.join(' ')}")
+  end
 
   # Resolves the correct adapter based on the tenant's HRIS provider.
   #

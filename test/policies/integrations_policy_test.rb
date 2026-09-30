@@ -26,6 +26,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
 
     should "deny sync" do
       assert_not policy.sync?
+      assert_not policy.update_role_mappings?
     end
   end
 
@@ -48,6 +49,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
 
     should "allow sync" do
       assert policy.sync?
+      assert policy.update_role_mappings?
     end
   end
 
@@ -67,6 +69,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
 
     should "allow sync" do
       assert policy.sync?
+      assert policy.update_role_mappings?
     end
   end
 
@@ -80,6 +83,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.index?
       assert_not policy.show?
       assert_not policy.sync?
+      assert_not policy.update_role_mappings?
     end
   end
 

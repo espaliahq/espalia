@@ -104,4 +104,28 @@ class Integrations::HrisPersonRow
 
     "#{assignment.role.code} L#{assignment.level.ordinal}"
   end
+
+  # @return [String, nil] the assignment the next sync would give, in {#assigned_label}'s format
+  def target_label
+    return nil if role.nil? || level.nil?
+
+    "#{role.code} L#{level.ordinal}"
+  end
+
+  # Whether the next sync would assign or reassign this person.
+  #
+  # @return [Boolean]
+  def changes_on_sync?
+    [ STATUS_PENDING_SYNC, STATUS_DRIFT ].include?(status)
+  end
+
+  # Whether this person keeps an assignment the sync can no longer resolve —
+  # their title (or its role, or level) stopped matching, and the sync leaves
+  # whatever an earlier title gave them.
+  #
+  # @return [Boolean]
+  def stale_assignment?
+    assignment.present? &&
+      [ STATUS_UNMAPPED, STATUS_MISSING_ROLE, STATUS_MISSING_ORDINAL, STATUS_MISSING_LEVEL ].include?(status)
+  end
 end

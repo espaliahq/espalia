@@ -19,6 +19,10 @@ class IntegrationsPolicy < ApplicationPolicy
   # @return [Boolean]
   def sync?   = tenant_admin?
 
+  # Map or unmap an HRIS job title to a framework role (#436).
+  # @return [Boolean]
+  def update_role_mappings? = tenant_admin?
+
   # Connect / disconnect the tenant's Slack workspace.
   # @return [Boolean]
   def connect?    = tenant_admin?

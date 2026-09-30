@@ -131,7 +131,7 @@ For each touched person, the adapter picks exactly one path:
 }
 ```
 
-Admins inspecting unmapped titles is the primary feedback loop for refining `role_mappings`.
+Unmapped titles are the primary feedback loop for refining `role_mappings`: the integrations page lists them (and anyone still on an assignment an earlier title gave them), `HrisSyncJob` logs the four skip sets as a warning, and tenant admins map a title from the page or through the `integrations_*` MCP tools. See [hris-integration.md](../guidelines/hris-integration.md#configuring-rolelevel-mappings).
 
 ### Scheduling
 

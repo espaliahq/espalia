@@ -1896,6 +1896,65 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_hris_titles",
+        "description" => "List the job titles active HRIS people hold, each with the framework role mapping it " \
+                         "resolves to (nil = unmapped, so the sync skips those people) and the people the next " \
+                         "sync would change. Also lists the framework's roles and their levels as mapping targets.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "unmapped_only" => { "type" => "boolean" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "integrations_map_hris_title",
+        "description" => "Map an HRIS job title to a framework role, replacing any mapping it had. Omit " \
+                         "level_ordinal to take each person's level from the HRIS level column, or pass one to " \
+                         "fix the level for everyone with that title. Applied by the next HRIS sync; the result " \
+                         "previews what that sync will do to each person holding the title.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "title"               => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "framework_role_code" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "level_ordinal"       => { "type" => "integer" }
+          },
+          "required" => %w[title framework_role_code],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "integrations_unmap_hris_title",
+        "description" => "Remove an HRIS job title from the role mappings. The next sync skips people holding " \
+                         "it, and they keep their current framework assignment (listed in the result).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "title" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[title],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "reporting_capability_attainment",
         "description" => "Aggregate capability attainment for an assessment cycle across the caller's " \
           "org subtree (admins see the whole cycle): per role and role family, the share " \

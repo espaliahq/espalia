@@ -37,11 +37,21 @@ class HrisRoleMapping
   validate :hris_titles_not_empty
   validates :level_ordinal, numericality: { only_integer: true, greater_than_or_equal_to: 1, less_than_or_equal_to: 20 }, allow_nil: true
 
+  # The ONE matching rule for HRIS titles: case-insensitive, ends trimmed.
+  # Inner punctuation is significant — "Engineering Manager (EM3)" is a
+  # different title from "Engineering Manager".
+  #
+  # @param title [String, nil]
+  # @return [String]
+  def self.normalize_title(title)
+    title.to_s.downcase.strip
+  end
+
   # Returns the list of titles normalized for case-insensitive matching.
   #
   # @return [Array<String>]
   def normalized_hris_titles
-    Array(hris_titles).filter_map { |t| t.to_s.downcase.strip.presence }
+    Array(hris_titles).filter_map { |t| self.class.normalize_title(t).presence }
   end
 
   private

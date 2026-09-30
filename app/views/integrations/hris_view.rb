@@ -2,27 +2,51 @@
 
 # HRIS integration management view.
 #
-# Three sections rendered as cards:
+# Four sections rendered as cards:
 #  1. Configuration — provider, credential presence, sync enable flag,
 #     custom level column id, last sync timestamp, and a "Sync now" button.
-#  2. Role Mappings — every HrisRoleMapping with the resolved framework role.
-#  3. Imported People — every HRIS-managed Person with their resolved
+#  2. Unmapped titles — HRIS titles no mapping covers, each with a "Map…"
+#     action (#436). The sync skips these people without a word, so this
+#     card is the only place the gap shows.
+#  3. Role Mappings — every HrisRoleMapping with the resolved framework role;
+#     each title can be edited or removed.
+#  4. Imported People — every HRIS-managed Person with their resolved
 #     mapping/assignment status (computed via {Integrations::HrisPersonRow}).
 #
+# Every mapping edit goes through one shared modal
+# ({Views::Integrations::HrisMappingModal}), prefilled from its trigger.
+#
 class Views::Integrations::HrisView < Views::Base
+  SECONDARY_BUTTON_CLASSES = "inline-flex items-center whitespace-nowrap rounded-md border border-gray-300 " \
+                             "dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 " \
+                             "dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer " \
+                             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+
+  CHIP_CLASSES = "inline-flex items-center rounded-sm text-xs " \
+                 "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+
   # @param hris_config [HrisConfig]
   # @param hris_credentials_present [Boolean]
   # @param person_rows [Array<Integrations::HrisPersonRow>]
   # @param role_mapping_rows [Array<Hash>] each entry: { mapping:, role:, status_label:, status_variant: }
+  # @param unmapped_titles [Array<Integrations::HrisTitleResolution::Title>]
+  # @param mapping_options [Hash] roles, level ordinals by role code, HRIS
+  #   titles, and whether a level column is configured — see
+  #   {Views::Integrations::HrisMappingModal}
+  # @param can_edit_mappings [Boolean]
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_credentials_present:, person_rows:, role_mapping_rows:,
+                 unmapped_titles: [], mapping_options: {}, can_edit_mappings: false,
                  user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_credentials_present = hris_credentials_present
     @person_rows = person_rows
     @role_mapping_rows = role_mapping_rows
+    @unmapped_titles = unmapped_titles
+    @mapping_options = mapping_options
+    @can_edit_mappings = can_edit_mappings
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -33,11 +57,14 @@ class Views::Integrations::HrisView < Views::Base
       active_section: :integrations,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(class: "max-w-6xl mx-auto space-y-10") do
+      div(class: "max-w-6xl mx-auto space-y-10",
+          data: { controller: "modal", action: "keydown.esc@window->modal#escape" }) do
         page_header
         configuration_section
+        unmapped_titles_section
         role_mappings_section
         people_section
+        render Views::Integrations::HrisMappingModal.new(**@mapping_options) if @can_edit_mappings
       end
     end
   end
@@ -120,14 +147,100 @@ class Views::Integrations::HrisView < Views::Base
     end
   end
 
+  # ── Unmapped titles ──
+
+  def unmapped_titles_section
+    return if @unmapped_titles.empty?
+
+    div(id: "unmapped-titles") do
+      render Components::Kit::SectionHeading.new(
+        "Unmapped titles",
+        subtitle: "#{@unmapped_titles.size} HRIS #{'title'.pluralize(@unmapped_titles.size)} " \
+                  "no mapping covers. The sync skips the people holding them."
+      )
+
+      render Components::Kit::Card.new(variant: :flush) do |card|
+        card.body do
+          div(class: "overflow-x-auto") do
+            table(class: "min-w-full text-sm") do
+              thead(class: "bg-gray-50 dark:bg-gray-800/50") do
+                tr do
+                  th_cell("HRIS title")
+                  th_cell("People")
+                  th_cell("HRIS level")
+                  th_cell("Needs attention", hide_below_sm: true)
+                  th_cell("Action", sr_only: true, hide_below_sm: true) if @can_edit_mappings
+                end
+              end
+              tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+                @unmapped_titles.each { |entry| unmapped_title_row(entry) }
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def unmapped_title_row(entry)
+    tr(data: { unmapped_title: entry.title }) do
+      # Below `sm` the note and the action move under the title: off to the
+      # right of a scrolled table, nobody on a phone would find them.
+      td_cell do
+        span(class: "font-medium") { entry.title }
+        div(class: "sm:hidden mt-1 space-y-2") do
+          stale_note(entry, placeholder: false)
+          map_button(entry)
+        end
+      end
+      td_cell { span(title: entry.rows.map { |row| row.person.name }.join(", ")) { entry.people_count.to_s } }
+      td_cell { entry.hris_levels.any? ? entry.hris_levels.map { |l| "L#{l}" }.join(", ") : "\u2014" }
+      td_cell(hide_below_sm: true) { stale_note(entry) }
+      td_cell(hide_below_sm: true) { map_button(entry) } if @can_edit_mappings
+    end
+  end
+
+  def map_button(entry)
+    return unless @can_edit_mappings
+
+    mapping_trigger("Map\u2026", title: entry.title,
+      aria_label: "Map #{entry.title} to a role", classes: SECONDARY_BUTTON_CLASSES)
+  end
+
+  # The people the sync leaves on an assignment an earlier title gave them —
+  # the reason this card exists.
+  def stale_note(entry, placeholder: true)
+    stale = entry.rows.select(&:stale_assignment?)
+    if stale.empty?
+      span(class: "text-gray-400") { "\u2014" } if placeholder
+      return
+    end
+
+    ul(class: "space-y-0.5") do
+      stale.each do |row|
+        li(class: "text-amber-700 dark:text-amber-300") do
+          plain "#{row.person.name} is still on #{row.assigned_label} from an earlier title"
+        end
+      end
+    end
+  end
+
   # ── Role Mappings ──
 
   def role_mappings_section
     div do
-      render Components::Kit::SectionHeading.new(
-        "Role Mappings",
-        subtitle: "How HRIS job titles are translated into framework roles and levels"
-      )
+      div(class: "flex items-end justify-between gap-4") do
+        render Components::Kit::SectionHeading.new(
+          "Role Mappings",
+          subtitle: "How HRIS job titles are translated into framework roles and levels"
+        )
+        if @can_edit_mappings
+          div(class: "mb-4 shrink-0") do
+            mapping_trigger("Add mapping", title: "", aria_label: nil,
+              classes: SECONDARY_BUTTON_CLASSES)
+          end
+        end
+      end
 
       render Components::Kit::Card.new(variant: :flush) do |card|
         card.body do
@@ -161,22 +274,63 @@ class Views::Integrations::HrisView < Views::Base
 
   def role_mapping_row(row)
     tr do
-      td_cell { titles_list(row[:mapping].hris_titles) }
+      td_cell { titles_list(row[:mapping]) }
       td_cell { framework_role_cell(row) }
       td_cell { level_ordinal_cell(row[:mapping]) }
       td_cell { render Components::Kit::Badge.new(row[:status_label], variant: row[:status_variant]) }
     end
   end
 
-  def titles_list(titles)
+  def titles_list(mapping)
     div(class: "flex flex-wrap gap-1") do
-      Array(titles).each do |title|
-        span(
-          class: "inline-flex items-center rounded-sm px-2 py-0.5 text-xs " \
-                 "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-        ) { title }
+      Array(mapping.hris_titles).each do |title|
+        if @can_edit_mappings
+          editable_chip(title, mapping)
+        else
+          span(class: "#{CHIP_CLASSES} px-2 py-0.5") { title }
+        end
       end
     end
+  end
+
+  # The chip opens the mapping modal for its title; the × removes it.
+  def editable_chip(title, mapping)
+    span(class: CHIP_CLASSES, data: { mapped_title: title }) do
+      mapping_trigger(title, title: title, role: mapping.framework_role_code, level: mapping.level_ordinal,
+        aria_label: "Edit mapping for #{title}",
+        classes: "px-2 py-0.5 rounded-l-sm hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer " \
+               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary")
+      form(action: tenant_hris_title_mapping_path, method: "post", class: "contents") do
+        input(type: "hidden", name: "_method", value: "delete")
+        input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+        input(type: "hidden", name: "hris_title_mapping[title]", value: title)
+        button(
+          type: "submit",
+          aria: { label: "Remove mapping for #{title}" },
+          class: "px-1.5 py-0.5 rounded-r-sm text-gray-500 hover:text-red-700 hover:bg-gray-200 " \
+                 "dark:hover:bg-gray-700 dark:hover:text-red-300 cursor-pointer " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+        ) { "\u00D7" }
+      end
+    end
+  end
+
+  # A button that opens the shared mapping modal, prefilled from its dataset.
+  # A blank `title` is "Add mapping"; any other title is locked, since editing
+  # a mapping moves that title rather than renaming it.
+  def mapping_trigger(label, title:, classes:, aria_label:, role: nil, level: nil)
+    button(
+      type: "button",
+      class: classes,
+      aria: { label: aria_label }.compact,
+      data: {
+        action: "click->modal#open",
+        modal_target_id: Views::Integrations::HrisMappingModal::ID,
+        hris_mapping_title: title,
+        hris_mapping_role: role.to_s,
+        hris_mapping_level: level.to_s
+      }
+    ) { label }
   end
 
   def framework_role_cell(row)
@@ -271,16 +425,21 @@ class Views::Integrations::HrisView < Views::Base
     div(class: "px-6 py-10 text-center text-sm text-gray-600 dark:text-gray-300") { text }
   end
 
-  def th_cell(label)
+  # `sr_only:` hides the label but keeps it for screen readers. The cell is
+  # then `relative`, because an `sr-only` span is absolutely positioned: with
+  # no positioned ancestor inside the table's scroller it escapes to the
+  # document and widens the whole page on a phone.
+  def th_cell(label, sr_only: false, hide_below_sm: false)
     th(
       scope: "col",
-      class: "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide " \
-             "text-gray-600 dark:text-gray-300"
-    ) { label }
+      class: [ "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300",
+               ("relative" if sr_only), ("max-sm:hidden" if hide_below_sm) ].compact.join(" ")
+    ) { sr_only ? span(class: "sr-only") { label } : label }
   end
 
-  def td_cell(&block)
-    td(class: "px-4 py-3 align-top text-gray-900 dark:text-gray-100", &block)
+  def td_cell(hide_below_sm: false, &block)
+    td(class: [ "px-4 py-3 align-top text-gray-900 dark:text-gray-100", ("max-sm:hidden" if hide_below_sm) ].compact.join(" "),
+       &block)
   end
 
   def yes_no(value)

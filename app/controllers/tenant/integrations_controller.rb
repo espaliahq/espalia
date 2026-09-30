@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
-# Read-only management screens for tenant integrations.
+# Management screens for tenant integrations.
 #
 # Currently surfaces the HRIS integration: provider/credential status,
-# role mappings, and the resulting per-person assignments. Tenant admins
-# can also trigger an on-demand re-sync.
+# role mappings, titles nobody has mapped, and the resulting per-person
+# assignments. Tenant admins can trigger an on-demand re-sync; mapping edits
+# live in {Tenant::HrisTitleMappingsController}.
 #
 # Designed to be extended with additional integration types (Slack,
 # notifications, SSO) by adding new branches in {#show}.
@@ -55,14 +56,16 @@ class Tenant::IntegrationsController < ApplicationController
   private
 
   def render_hris
-    people = Person.hris_managed.includes(:manager).order(status: :asc, name: :asc).to_a
-    rows = build_hris_rows(people)
+    resolution = Integrations::HrisTitleResolution.new(current_tenant)
 
     render Views::Integrations::HrisView.new(
       hris_config: current_tenant.hris_config,
       hris_credentials_present: current_tenant.hris_credentials.present?,
-      person_rows: rows,
+      person_rows: resolution.rows,
       role_mapping_rows: build_role_mapping_rows,
+      unmapped_titles: unmapped_titles(resolution),
+      mapping_options: mapping_options(resolution),
+      can_edit_mappings: policy(:integrations).update_role_mappings?,
       user: current_user,
       current_tenant: current_tenant,
       tenants: tenants_for_user
@@ -79,88 +82,13 @@ class Tenant::IntegrationsController < ApplicationController
     end
   end
 
-  # Builds the per-person row data for the HRIS people table without N+1 queries.
-  #
-  # Pre-loads existing assignments, framework roles by code, and joins each
-  # person to its resolved mapping/role/level using the same predicates as
-  # {Hris::Hibob::Adapter#dispatch_framework_assignment}.
-  #
-  # @param people [Array<Person>]
-  # @return [Array<Integrations::HrisPersonRow>]
-  def build_hris_rows(people)
-    return [] if people.empty?
-
-    title_to_mapping = build_title_to_mapping
-    roles_by_code = framework_roles_by_code
-    levels_by_role_and_ordinal = framework_levels_by_role_and_ordinal
-    assignments_by_person_id = preload_assignments(people, current_tenant.hris_config.role_mappings.any?)
-
-    people.map do |person|
-      mapping = resolve_mapping(person, title_to_mapping)
-      role = mapping ? roles_by_code[mapping.framework_role_code] : nil
-      level = role ? lookup_level(role, mapping, person, levels_by_role_and_ordinal) : nil
-
-      Integrations::HrisPersonRow.new(
-        person: person,
-        mapping: mapping,
-        role: role,
-        level: level,
-        assignment: assignments_by_person_id[person.id]
-      )
-    end
-  end
-
-  # @return [Hash{String => HrisRoleMapping}] normalized title → mapping lookup
-  def build_title_to_mapping
-    lookup = {}
-    current_tenant.hris_config.role_mappings.each do |mapping|
-      mapping.normalized_hris_titles.each { |title| lookup[title] = mapping }
-    end
-    lookup
-  end
-
-  # @return [Hash{String => FrameworkState::Role}]
-  def framework_roles_by_code
-    FrameworkState::Role.all.index_by(&:code)
-  end
-
-  # @return [Hash{[String, Integer] => FrameworkState::Level}] keyed by [role_id, ordinal]
-  def framework_levels_by_role_and_ordinal
-    FrameworkState::Level.all.index_by { |level| [ level.role_id, level.ordinal ] }
-  end
-
-  # @param people [Array<Person>]
-  # @param has_mappings [Boolean]
-  # @return [Hash{String => PersonFrameworkAssignment}]
-  def preload_assignments(people, has_mappings)
-    return {} unless has_mappings
-
-    PersonFrameworkAssignment
-      .where(person_id: people.map(&:id))
-      .includes(:role, :level)
-      .index_by(&:person_id)
-  end
-
-  def resolve_mapping(person, title_to_mapping)
-    return nil if person.job_title.blank?
-
-    title_to_mapping[person.job_title.to_s.downcase.strip]
-  end
-
-  def lookup_level(role, mapping, person, levels_by_role_and_ordinal)
-    ordinal = mapping.level_ordinal || person.hris_level_ordinal
-    return nil if ordinal.nil?
-
-    levels_by_role_and_ordinal[[ role.role_id, ordinal ]]
-  end
-
   # Each role mapping resolves once for the table on the HRIS show page —
   # the badge needs to know whether the framework actually contains the
   # configured role code.
   #
   # @return [Array<Hash>] one entry per role mapping with status metadata
   def build_role_mapping_rows
-    roles_by_code = framework_roles_by_code
+    roles_by_code = FrameworkState::Role.all.index_by(&:code)
 
     current_tenant.hris_config.role_mappings.map do |mapping|
       role = roles_by_code[mapping.framework_role_code]
@@ -171,6 +99,29 @@ class Tenant::IntegrationsController < ApplicationController
         status_variant: role.nil? ? :warning : :success
       }
     end
+  end
+
+  # Titles nobody has mapped, those whose holders are still on an assignment
+  # an earlier title gave them first — they are the ones visibly wrong.
+  #
+  # @return [Array<Integrations::HrisTitleResolution::Title>]
+  def unmapped_titles(resolution)
+    stale, rest = resolution.titles.select(&:unmapped?).partition { |entry| entry.attention_rows.any? }
+    stale + rest
+  end
+
+  # What the mapping modal offers: the framework's roles, each role's levels,
+  # and every title HRIS people currently hold (for the title field's
+  # suggestions).
+  #
+  # @return [Hash]
+  def mapping_options(resolution)
+    {
+      roles: resolution.roles,
+      level_ordinals_by_role_code: resolution.level_ordinals_by_role_code,
+      hris_titles: resolution.titles.map(&:title),
+      level_column_configured: current_tenant.hris_config.level_field_id.present?
+    }
   end
 
   def current_tenant
