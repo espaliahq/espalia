@@ -24,13 +24,17 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against; its params ride the pill's forms so the response re-renders
+  #   through it
   def initialize(cell_data:, capability:, level:, capability_stable_id:,
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @cell_data = cell_data
     @capability = capability
     @level = level
@@ -107,8 +111,10 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
             assessment_id: @assessment_id,
             context: @context,
             category_id: @category_id,
-            interactive: !primary_perspective_frozen?,
-            carried: primary_carried?
+            interactive: !primary_perspective_frozen? && !manager_side_outside_home?,
+            carried: primary_carried?,
+            lens_params: @lens&.to_params || {},
+            static_title: (outside_home_title if manager_side_outside_home?)
           )
         end
       end
@@ -195,6 +201,18 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     @context == :alignment ? @alignment_locked : @frozen
   end
 
+  # A manager-side rating on a cell the record doesn't read is refused until
+  # per-role alignment exists (ADR-22), so the manager's pill there is read
+  # only — shown, so the self rating beside it still has something to sit
+  # against, and titled so the reason is one hover away.
+  def manager_side_outside_home?
+    @context != :self && @cell_data[:in_home_scope] == false
+  end
+
+  def outside_home_title
+    "Manager rating against #{@lens&.code || 'this role'} comes with per-role alignment"
+  end
+
   def primary_frequency
     case @context
     when :self      then @cell_data[:current_frequency]
@@ -214,13 +232,18 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  # Secondary perspectives the current viewer is permitted to see. Self
-  # context has no visible secondaries — the assessee never sees the
-  # manager's rating until alignment opens (the data layer already
-  # nils manager/aligned data for :self, this just makes the intent
-  # explicit). Manager context shows self; alignment shows both.
+  # Secondary perspectives the current viewer is permitted to see. In self
+  # context the builder has already scrubbed manager and aligned values from
+  # every cell the disclosure doesn't name (ADR-22), so the assessee sees
+  # them only on a shared cell home alignment disclosed, read through a
+  # lens. Manager context shows self; alignment shows both.
   def visible_secondary_entries
     case @context
+    when :self
+      # Only disclosed cells carry these values (the builder scrubs the
+      # rest), so before alignment this renders nothing.
+      [ { label: "Manager", frequency: @cell_data[:manager_frequency] },
+        { label: "Agreed", frequency: @cell_data[:aligned_frequency] } ]
     when :manager
       [ { label: "Self", frequency: @cell_data[:current_frequency] } ]
     when :alignment

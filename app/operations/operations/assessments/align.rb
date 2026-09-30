@@ -13,10 +13,16 @@
 # - The cycle must be in `aligning` status — `create_alignment_rating?`
 #   enforces this via the participant_status check.
 #
+# Alignment is against the home role, so the cell must be one the record
+# reads (ADR-22); `as_role_id` is accepted for the shared input shape and
+# the same cell check.
+#
 # Write — :mcp_client approval, same reasoning as the other two
 # rating tools.
 class Operations::Assessments::Align < Operations::Base
-  description "Record the aligned (agreed) frequency for one capability × level."
+  include Operations::Assessments::RatingCell
+
+  description "Record the aligned (agreed) frequency for one capability × level of the assessee's own role."
   category :write
   approval :mcp_client
 
@@ -26,9 +32,13 @@ class Operations::Assessments::Align < Operations::Base
   parameter :frequency, String, required: true,
                                 allowed: %w[none some occasional consistent]
   parameter :comment, String
+  # The role whose cells the pair is reading; blank = the home role.
+  parameter :as_role_id, String
 
   def policy_check
     authorize assignment, :create_alignment_rating?
+    rating_lens
+    refuse_outside_home_role!
   end
 
   # @return [Hash] same shape as {Operations::Assessments::RateSelf#perform} —

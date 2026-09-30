@@ -50,9 +50,16 @@ class Views::Assessments::LevelChip < Views::Base
   #   "contested — reconcile this" call to action nobody can act on.
   #   Current-level cells can't split post-lock (the completion gate
   #   requires them all agreed). Only consulted in :alignment context.
+  # @param assumed_below [Integer, nil] an unrated cell below this ordinal
+  #   paints as assumed-consistent — below both the level read and the home
+  #   level under a lens (ADR-22). Defaults to +person_level+.
+  # @param badge_label [String, nil] the marked chip's badge; defaults to
+  #   YOU / CURRENT
   def initialize(cell_data:, capability_stable_id:, ordinal:, person_level:,
                  level_code:, context: :self, viewer_is_manager: false, focused: false,
-                 alignment_locked: false)
+                 alignment_locked: false, assumed_below: nil, badge_label: nil)
+    @assumed_below = assumed_below || person_level
+    @badge_label = badge_label
     @cell_data = cell_data
     @capability_stable_id = capability_stable_id
     @ordinal = ordinal
@@ -125,7 +132,7 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_text
     freq = primary_frequency
     if freq.nil?
-      @ordinal < @person_level ? "text-blue-900 dark:text-blue-100" : "text-gray-700 dark:text-gray-200"
+      assumed? ? "text-blue-900 dark:text-blue-100" : "text-gray-700 dark:text-gray-200"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
       config ? config[:chip_txt] : "text-gray-700 dark:text-gray-200"
@@ -163,7 +170,10 @@ class Views::Assessments::LevelChip < Views::Base
   # rates, plus the current frequency value (or "unrated") and whether
   # the visible perspectives disagree.
   def aria_label
-    level_note = @context == :self ? "your level" : "current level"
+    level_note = if @badge_label then "target level"
+    elsif @context == :self then "your level"
+    else "current level"
+    end
     base = at_person_level? ? "Focus #{@level_code} (#{level_note})" : "Focus #{@level_code}"
     parts = [ "#{base}, rated #{rated_description}" ]
     parts << "carried forward from the previous cycle" if solid_carried?
@@ -215,7 +225,7 @@ class Views::Assessments::LevelChip < Views::Base
     when :split
       palette_bg(fill_state[2])
     else
-      @ordinal < @person_level ? ASSUMED_CONSISTENT_BG : "bg-gray-100 dark:bg-gray-700"
+      assumed? ? ASSUMED_CONSISTENT_BG : "bg-gray-100 dark:bg-gray-700"
     end
   end
 
@@ -374,7 +384,7 @@ class Views::Assessments::LevelChip < Views::Base
   def assumed_default(counterpart:)
     return nil if counterpart.nil?
 
-    @ordinal < @person_level ? ASSUMED : nil
+    assumed? ? ASSUMED : nil
   end
 
   def split?
@@ -395,6 +405,11 @@ class Views::Assessments::LevelChip < Views::Base
     @ordinal == @person_level
   end
 
+  # Whether an unrated value here counts as consistent.
+  def assumed?
+    @ordinal < @assumed_below
+  end
+
   def rated?
     primary_frequency.present?
   end
@@ -410,6 +425,8 @@ class Views::Assessments::LevelChip < Views::Base
   end
 
   def current_level_label
+    return @badge_label if @badge_label
+
     @context == :self ? "YOU" : "CURRENT"
   end
 

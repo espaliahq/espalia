@@ -710,6 +710,11 @@ Rate at the person's **assessed** level: a rating at another level proves nothin
 
 **Rating fixtures need a real role scope.** A reader scoped by `RoleScope` counts only cells where an **active** capability in the cycle's framework is **bound** to the person's role and carries an **expectation** at that level, with the role taken from the enrollment's `role_id` (or the assignment's before the snapshot existed). A factory rating on a random `capability_stable_id`, an enrollment with no `role_id`, or a capability with no binding silently reads as unrated. When an old test starts failing on a count of zero, check the fixture before the code.
 
+### Two roles that share cells — `build_role_lens_framework`
+
+For anything that reads *through* a lens, `test/support/role_lens_fixture.rb` builds Software Engineer (E1–E3) and Product Manager (PM1–PM3) sharing "Critical Thinking", with "Systems Design" E-only and "Roadmapping" PM-only; `enrol_in_role_lens_framework(person, fx, tenant:)` assigns E2 and enrols through the real command handlers **with the role/level snapshot** — cohort readers key on it, and an enrollment without one silently counts nothing. Prefer a real write through the lens (`Operations::Assessments::RateSelf` with `as_role_id`) over a hand-built row when the test is about what a lens write reaches (`test/queries/role_lens_leak_test.rb`).
+
+
 ## Rules
 
 - Use `subject { }` to define the object under test

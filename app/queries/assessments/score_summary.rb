@@ -28,9 +28,13 @@ class Assessments::ScoreSummary
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager or :alignment — the viewer's
   #   perspective, resolved by the caller exactly as the web resolves it
-  def initialize(assignment:, context:)
+  # @param lens [Assessments::Lens, nil, :home] the role and level to read
+  #   against (ADR-22); `:home` resolves the assignment's own. nil — a home
+  #   role or level that is gone — reports `assignment_structure_unavailable`.
+  def initialize(assignment:, context:, lens: :home)
     @assignment = assignment
     @context = context
+    @lens = lens == :home ? home_lens : lens
   end
 
   # @return [Hash] `{ scale:, score:, state:, components:, thresholds:,
@@ -40,6 +44,7 @@ class Assessments::ScoreSummary
 
     scored = overall_scored?
     {
+      lens: @lens.payload,
       scale: scale,
       scored: scored,
       unscored_reason: scored ? nil : "coverage_below_threshold",
@@ -92,20 +97,18 @@ class Assessments::ScoreSummary
   # assessment page's own lookups are strict, so there is nothing to fall
   # back to; the payload says so instead of raising through the read tool.
   def scorable_assignment?
-    role.present? && level.present?
+    @lens.present?
   end
 
-  def role
-    @role ||= FrameworkState::Role.find_by(role_id: @assignment.role_id)
-  end
-
-  def level
-    @level ||= FrameworkState::Level.find_by(level_id: @assignment.level_id)
+  def home_lens
+    Assessments::Lens.home(@assignment)
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   def unscorable_overall
     {
-      scale: nil, scored: false, unscored_reason: "assignment_structure_unavailable",
+      lens: nil, scale: nil, scored: false, unscored_reason: "assignment_structure_unavailable",
       score: nil, state: nil, components: nil, coverage: nil,
       thresholds: thresholds_payload, promotion_ready: false, blocked: [], categories: []
     }
@@ -160,32 +163,12 @@ class Assessments::ScoreSummary
       .index_by { |cap| cap[:capability].stable_id }
   end
 
+  # The builder the web page runs, through the same lens, disclosure and
+  # floor. No viewer — the builder then loads no evidence and no comments
+  # at all. A score reads neither, and this runs on a request that wants
+  # numbers, not a page.
   def matrix_data
-    @matrix_data ||= Assessments::MatrixDataBuilder.new(
-      framework: @assignment.framework,
-      role: role,
-      level: level,
-      person_id: @assignment.person_id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: eager_loaded_categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
-      context: @context,
-      # No viewer — the builder then loads no evidence and no comments at
-      # all. A score reads neither, and this runs on a request that wants
-      # numbers, not a page.
-      viewer_person_id: nil,
-      viewer_sees_all_evidence: false
-    ).build
-  end
-
-  def eager_loaded_categories
-    FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      # The builder reads each expectation's illustrations while building
-      # cells, so leaving them out here is ~300 extra queries on a real
-      # framework for data no score reads.
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
+    @matrix_data ||= Assessments::MatrixDataBuilder.for_lens(lens: @lens, context: @context)
   end
 
   # The perspective the viewer's own screen renders — NOT the builder's

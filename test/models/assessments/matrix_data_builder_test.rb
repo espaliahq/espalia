@@ -72,6 +72,46 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     end
   end
 
+  context "the home-level floor (ADR-22)" do
+    should "not assume the levels between home and a lens above it" do
+      # Home E1, read as E3: the unrated E1 cell is no longer assumed.
+      data = build_at(level: @levels[2], home_level: 1)
+      assert_equal 1, data[:assumed_below]
+      assert_in_delta 0.5, data[:self_scoring][:components][:prior], 0.001
+    end
+
+    should "change nothing when the lens is the home level" do
+      assert_equal build_at(level: @levels[2])[:self_scoring][:components],
+                   build_at(level: @levels[2], home_level: 3)[:self_scoring][:components]
+    end
+
+    should "assume below the lens level when home sits above it" do
+      data = build_at(level: @level, home_level: 3)
+      assert_equal 2, data[:assumed_below]
+      assert_in_delta 1.0, data[:self_scoring][:components][:prior], 0.001
+    end
+  end
+
+  context "per-cell disclosure to the assessee" do
+    should "show manager and aligned values only on disclosed cells" do
+      disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
+      cell = build_at(level: @level, disclosure: disclosed)[:categories].first[:capabilities].first[:cells][2]
+      assert_equal "occasional", cell[:manager_frequency]
+      assert_equal "none", cell[:aligned_frequency]
+
+      hidden = build_at(level: @level)[:categories].first[:capabilities].first[:cells][2]
+      assert_nil hidden[:manager_frequency]
+      assert_nil hidden[:aligned_frequency]
+    end
+
+    should "keep whole-page manager scores withheld even with a disclosed cell" do
+      disclosed = Assessments::Disclosure.new([ [ @capability.stable_id, 2 ] ])
+      data = build_at(level: @level, disclosure: disclosed)
+      assert_nil data[:manager_scoring]
+      assert_nil data[:aligned_scoring]
+    end
+  end
+
   context "the binding facts on the capability's score" do
     should "carry the weight and no Required flag by default" do
       score = first_capability_score
@@ -367,6 +407,13 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       framework: @framework, role: @role, level: level,
       person_id: @person_id, cycle_id: @cycle_id, categories: @categories,
       context: context
+    ).build
+  end
+
+  def build_at(level:, home_level: nil, disclosure: nil)
+    Assessments::MatrixDataBuilder.new(
+      framework: @framework, role: @role, level: level, home_level: home_level, disclosure: disclosure,
+      person_id: @person_id, cycle_id: @cycle_id, categories: @categories, context: :self
     ).build
   end
 

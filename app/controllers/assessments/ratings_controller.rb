@@ -2,9 +2,12 @@
 
 # Handles self-rating submissions during an assessment.
 #
-# Dispatches SelfRated / SelfRatingRevised commands through the
-# PersonDevelopment command handler. Returns Turbo Stream responses
-# to update the frequency selector, scoring panel, and category header.
+# Dispatches through {Operations::Assessments::RateSelf} — the same code
+# path as the MCP tool, so the cell check (the level is the lens role's and
+# the role reads the cell) and the toggle semantics can't drift between
+# them. Returns Turbo Stream responses to update the frequency selector,
+# scoring panel, and category header, re-rendered against the lens the page
+# is read through (`as_role` / `as_level`, forwarded by the pill's form).
 #
 class Assessments::RatingsController < ApplicationController
   include Assessments::TurboStreamHelpers
@@ -16,100 +19,48 @@ class Assessments::RatingsController < ApplicationController
   # POST /assessments/:assessment_id/ratings
   def create
     authorize @assignment, :create_self_rating?
+    # Resolve the page's lens before writing: a stale or crafted one is a
+    # 404 that has changed nothing, not a saved rating with no response.
+    response_lens
 
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
-    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
-      head :unprocessable_content
-      return
-    end
-    frequency = rating_params[:frequency]
-    comment = rating_params[:comment]
 
-    cycle = @assignment.current_open_cycle
-    unless cycle
-      render_rating_error(capability_stable_id, level_ordinal, "No open assessment cycle")
-      return
-    end
-
-    handler = PersonDevelopment::CommandHandler.new
-    mutated = true
-
-    existing = AssessmentLevelRating.find_by(
-      cycle_id: cycle.cycle_id,
-      person_id: current_person.id,
-      framework_id: @assignment.framework_id,
+    operation = Operations::Assessments::RateSelf.new(context: pundit_user, params: {
+      assignment_id: @assignment.id,
       capability_stable_id: capability_stable_id,
-      level_ordinal: level_ordinal
-    )
-
-    if rating_params[:clear].present?
-      # Explicit clear from the popover's "Clear rating" — unambiguous,
-      # regardless of carried state (the implicit same-frequency untoggle
-      # below can't be, since on a carried value that gesture confirms).
-      # Clear-or-noop, never anything else: a duplicate clear (double
-      # click, second tab) must not fall through and re-record the
-      # frequency riding on the form.
-      if existing&.self_rated_frequency.present?
-        handler.clear_self_rating(
-          current_person.id, @assignment.framework_id, capability_stable_id,
-          level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
-        )
-      else
-        # Duplicate clear (double click, second tab): nothing changed, so
-        # nothing must be announced either.
-        mutated = false
-      end
-    elsif existing&.self_rated_frequency == frequency && existing&.self_rating_carried?
-      # Confirming a carried-forward (seeded) value: clicking the shown
-      # frequency means "yes, still true" — re-emit as a human rating so
-      # the provenance flips and the carried treatment solidifies. The
-      # untoggle-to-clear gesture only applies to ratings the person made.
-      handler.revise_self_rating(
-        current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Confirmed carried-forward rating", cycle_id: cycle.cycle_id,
-        # The quick-confirm click sends no comment — keep the existing one
-        # (typically the seeded-provenance note) rather than wiping it.
-        comment: comment.presence || existing.self_rated_comment
-      )
-    elsif existing&.self_rated_frequency == frequency
-      # Untoggle: clicking the already-selected frequency clears the rating
-      handler.clear_self_rating(
-        current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, cycle_id: cycle.cycle_id
-      )
-    elsif existing&.self_rated_frequency.present?
-      handler.revise_self_rating(
-        current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        rationale: "Updated during self-assessment", cycle_id: cycle.cycle_id, comment: comment
-      )
-    else
-      handler.rate_self(
-        current_person.id, @assignment.framework_id, capability_stable_id,
-        level_ordinal: level_ordinal, frequency: frequency,
-        cycle_id: cycle.cycle_id, comment: comment
-      )
+      level_ordinal: level_ordinal,
+      frequency: rating_params[:frequency],
+      comment: rating_params[:comment],
+      rationale: "Updated during self-assessment",
+      clear: rating_params[:clear].presence,
+      as_role_id: params[:as_role].presence
+    })
+    begin
+      operation.call
+    rescue Pundit::NotAuthorizedError => e
+      # The Operation's own refusal (a cell the record doesn't read) carries
+      # a reason; a bodyless 403 would leave the click doing nothing on screen.
+      return render_rating_error(capability_stable_id, level_ordinal, e.message, status: :forbidden)
     end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id],
-      announce: mutated)
-  rescue RuntimeError => e
+      announce: operation.changed?)
+  rescue Operations::Base::ParameterError, RuntimeError => e
     render_rating_error(capability_stable_id, level_ordinal, e.message)
   end
 
   private
 
-  def render_rating_error(capability_stable_id, level_ordinal, message)
+  def render_rating_error(capability_stable_id, level_ordinal, message, status: :unprocessable_content)
     render turbo_stream: turbo_stream.replace(
       "rating-#{capability_stable_id}-#{level_ordinal}",
       render_to_string(
         Views::Assessments::RatingError.new(message: message),
         layout: false
       )
-    ), status: :unprocessable_content
+    ), status: status
   end
 
   def require_person
@@ -129,25 +80,14 @@ class Assessments::RatingsController < ApplicationController
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil, announce: true)
-    # Reload fresh data for the turbo stream response
-    framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
-    role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
-    level = FrameworkState::Level.find_by!(level_id: @assignment.level_id)
-    categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
-
-    matrix_data = Assessments::MatrixDataBuilder.new(
-      framework: framework, role: role, level: level,
-      person_id: current_person.id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
+    # Reload fresh data for the turbo stream response, read through the
+    # page's lens so the re-rendered fragments match the page around them.
+    matrix_data = Assessments::MatrixDataBuilder.for_lens(
+      lens: response_lens,
       context: :self,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
-    ).build
+    )
 
     # Find the capability's category for targeted category header update
     category_id = find_category_id(capability_stable_id, matrix_data)
@@ -165,7 +105,7 @@ class Assessments::RatingsController < ApplicationController
     render turbo_stream: [
       (live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
         frequency: cell_data&.dig(:current_frequency)) if announce),
-      turbo_stream.replace(
+      (turbo_stream.replace(
         Views::Assessments::StatusPill::WRAPPER_ID,
         render_to_string(
           Views::Assessments::StatusPill.new(
@@ -175,7 +115,7 @@ class Assessments::RatingsController < ApplicationController
           ),
           layout: false
         )
-      ),
+      ) if response_lens.home?),
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
@@ -186,7 +126,8 @@ class Assessments::RatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             level_code: level_code,
             context: :self,
-            focused: true
+            focused: true,
+            **lens_chip_options(matrix_data)
           ),
           layout: false
         )
@@ -215,7 +156,9 @@ class Assessments::RatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             merged_levels: matrix_data[:merged_levels],
             assessment_id: @assignment.id,
-            context: :self
+            context: :self,
+            lens: matrix_data[:lens],
+            ratings_frozen: matrix_data[:individual_ratings_frozen]
           ),
           layout: false
         )

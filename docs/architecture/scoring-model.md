@@ -39,7 +39,10 @@ f(b, o) = effective frequency of capability b at level o
   Home-level floor (ADR-22): when a person is read against another role or
   level (a lens), the default is 1.0 only if o < the level being read AND
   o < home_level. Reading an E2 as EM4 must not assume L3 for free. When the
-  lens is the home role the two levels are equal and nothing changes.
+  lens is the home role the two levels are equal and nothing changes. The
+  engine takes it as `home_level:` (default `person_level`); the builder
+  passes the lens's home level and exposes the floor as `assumed_below`, which
+  the level chips paint.
 
 band(o) = Σ weight over bindings that carry a behavioural expectation at level o
 

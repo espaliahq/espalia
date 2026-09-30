@@ -8,12 +8,19 @@
 # (AssessmentPolicy#create_manager_rating?) refuses the call unless the
 # caller is the assessee's manager.
 #
+# A manager rating lands only on a cell the record reads until per-role
+# alignment exists (ADR-22) — `as_role_id` names the role the manager was
+# reading through, for the same cell check as {RateSelf}.
+#
 # Write — :mcp_client approval. Per the MCP design doc, cross-person
 # ratings (manager rating a direct report) are routine enough that the
 # MCP client's own write-approval prompt is the right friction; we
 # don't push these through the in-app approval flow.
 class Operations::Assessments::RateAsManager < Operations::Base
-  description "Record or update a manager rating for one of your direct reports' capability × level."
+  include Operations::Assessments::RatingCell
+
+  description "Record or update a manager rating for one of your direct reports' capability × level. " \
+              "Only cells their own role reads can be manager-rated; a cell only another role reads is refused."
   category :write
   approval :mcp_client
 
@@ -26,10 +33,18 @@ class Operations::Assessments::RateAsManager < Operations::Base
   parameter :rationale, String
   # Explicit clear (no-op if already empty) — see RateSelf.
   parameter :clear, :boolean
+  # The role whose cells the manager is reading; blank = the home role.
+  parameter :as_role_id, String
 
   def policy_check
     authorize assignment, :create_manager_rating?
+    rating_lens
+    refuse_outside_home_role!
   end
+
+  # @return [Boolean] false when the call changed nothing (an explicit clear
+  #   of an empty rating)
+  def changed? = @changed != false
 
   # @return [Hash] same shape as {Operations::Assessments::RateSelf#perform} —
   #   `{ framework_id, capability_stable_id, level_ordinal, cycle_id, frequency }`,
@@ -58,7 +73,7 @@ class Operations::Assessments::RateAsManager < Operations::Base
 
     if params[:clear].present?
       # Explicit clear-or-noop — mirrors the web's rating[clear] marker.
-      return if existing_freq.blank?
+      return @changed = false if existing_freq.blank?
 
       handler.clear_manager_rating(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
@@ -73,7 +88,8 @@ class Operations::Assessments::RateAsManager < Operations::Base
         rationale: "Confirmed carried-forward rating", cycle_id: cycle_id,
         # Confirm without a comment keeps the existing one.
         comment: params[:comment].presence || existing.manager_rated_comment,
-        rated_by_id: rated_by_id
+        rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     elsif existing_freq == params[:frequency]
       handler.clear_manager_rating(
@@ -85,13 +101,15 @@ class Operations::Assessments::RateAsManager < Operations::Base
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
         rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment],
-        rated_by_id: rated_by_id
+        rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     else
       handler.rate_as_manager(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
-        cycle_id: cycle_id, comment: params[:comment], rated_by_id: rated_by_id
+        cycle_id: cycle_id, comment: params[:comment], rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     end
   end

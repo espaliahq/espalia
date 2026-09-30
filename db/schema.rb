@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -91,6 +91,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.uuid "manager_rated_by_id"
     t.text "manager_rated_comment"
     t.string "manager_rated_frequency"
+    t.uuid "manager_rated_via_role_id"
     t.string "manager_rating_source"
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
@@ -98,6 +99,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.uuid "seeded_from_cycle_id"
     t.text "self_rated_comment"
     t.string "self_rated_frequency"
+    t.uuid "self_rated_via_role_id"
     t.string "self_rating_source"
     t.string "source", default: "human", null: false
     t.uuid "tenant_id", null: false

@@ -82,7 +82,8 @@ class Views::Assessments::AssessmentMatrix < Views::Base
             can_request_evidence: @can_request_evidence,
             can_relink_others_evidence: @can_relink_others_evidence,
             can_comment: @can_comment,
-            viewer_is_tenant_admin: @viewer_is_tenant_admin
+            viewer_is_tenant_admin: @viewer_is_tenant_admin,
+            lens: @matrix_data[:lens]
           )
         end
       end

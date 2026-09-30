@@ -215,13 +215,15 @@ class PersonDevelopment::CommandHandler
   #   "seeded" when carried over from a prior cycle's aligned value at cycle join
   # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
   #   source == "seeded"; nil otherwise
+  # @param via_role_id [String, nil] the role whose cells the rater was reading
+  #   through a lens (ADR-22) — provenance only; nil for the home role
   def rate_self(person_id, framework_id, capability_stable_id,
                 level_ordinal:, frequency:, cycle_id:, comment: nil,
-                source: "human", seeded_from_cycle_id: nil)
+                source: "human", seeded_from_cycle_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, cycle_id: cycle_id, comment: comment,
-        source: source, seeded_from_cycle_id: seeded_from_cycle_id)
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id, via_role_id: via_role_id)
     end
   end
 
@@ -235,11 +237,13 @@ class PersonDevelopment::CommandHandler
   # @param rationale [String] reason for the change
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def revise_self_rating(person_id, framework_id, capability_stable_id,
-                         level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+                         level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_self_rating(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment)
+        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment,
+        via_role_id: via_role_id)
     end
   end
 
@@ -271,13 +275,15 @@ class PersonDevelopment::CommandHandler
   #   source == "seeded"; nil otherwise
   # @param rated_by_id [String, nil] UUID of the manager recording the rating;
   #   nil for system "seeded" carry-forwards
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def rate_as_manager(person_id, framework_id, capability_stable_id,
                       level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, cycle_id: cycle_id, comment: comment,
-        source: source, seeded_from_cycle_id: seeded_from_cycle_id, rated_by_id: rated_by_id)
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id, rated_by_id: rated_by_id,
+        via_role_id: via_role_id)
     end
   end
 
@@ -292,13 +298,14 @@ class PersonDevelopment::CommandHandler
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @param rated_by_id [String, nil] UUID of the manager recording the revision
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def revise_manager_rating(person_id, framework_id, capability_stable_id,
                             level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
-                            rated_by_id: nil)
+                            rated_by_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_manager_rating(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment,
-        rated_by_id: rated_by_id)
+        rated_by_id: rated_by_id, via_role_id: via_role_id)
     end
   end
 

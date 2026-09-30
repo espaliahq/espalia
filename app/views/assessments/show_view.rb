@@ -106,6 +106,7 @@ class Views::Assessments::ShowView < Views::Base
         emphasised: @matrix_data[:emphasised_capabilities],
         second_person: true
       )
+      render_lens_role_modal(assessee_name: nil)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
@@ -151,8 +152,8 @@ class Views::Assessments::ShowView < Views::Base
           h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
             @matrix_data[:level].title
           end
-          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
-          render_status_pill(
+          render_lens_control(assessee_name: nil)
+          render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]
@@ -163,13 +164,14 @@ class Views::Assessments::ShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
+      render_lens_banner
     end
   end
 
   def hero_frame
     turbo_frame_tag(
       "assessment-scoring",
-      src: scoring_assessment_path(@assignment),
+      src: scoring_assessment_path(@assignment, lens_params),
       data: { assessment_sync_target: "scoringFrame" }
     ) do
       render Views::Assessments::HeroSummary.new(
@@ -186,7 +188,9 @@ class Views::Assessments::ShowView < Views::Base
         # The assessee's own view — in alignment their Self rating leads
         # (top-left split / first secondary percentage).
         viewer_is_manager: false,
-        alignment_locked: @matrix_data[:alignment_locked]
+        alignment_locked: @matrix_data[:alignment_locked],
+        lens: @matrix_data[:lens],
+        ratings_frozen: @matrix_data[:individual_ratings_frozen]
       )
     end
   end
@@ -267,7 +271,7 @@ class Views::Assessments::ShowView < Views::Base
   end
 
   def matrix_frame_params
-    p = {}
+    p = lens_params.dup
     p[:capability] = @expanded_capability_id if @expanded_capability_id
     p[:level_ordinal] = @expanded_level_ordinal if @expanded_level_ordinal && @expanded_capability_id
     p[:levels] = @selected_levels if @selected_levels.present?

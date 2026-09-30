@@ -154,11 +154,11 @@ class Views::Assessments::Activity::Entry < Views::Base
   def summary_text
     case @entry.kind
     when "self_rated", "self_rating_revised"
-      "Self-rated #{capability_label}"
+      "Self-rated #{capability_label}#{lens_suffix}"
     when "self_rating_cleared"
       "Cleared self rating on #{capability_label}"
     when "manager_rated", "manager_rating_revised"
-      "#{manager_label} rated #{capability_label}"
+      "#{manager_label} rated #{capability_label}#{lens_suffix}"
     when "manager_rating_cleared"
       "#{manager_label} cleared rating on #{capability_label}"
     when "assessment_aligned"
@@ -192,6 +192,13 @@ class Views::Assessments::Activity::Entry < Views::Base
     session = payload_value(:session_name).to_s.strip.presence
     base = "#{asker} asked #{rater} to revisit #{capability_label}"
     session ? "#{base} (#{session})" : base
+  end
+
+  # " while exploring PM3" for a rating made through a role lens (ADR-22) —
+  # the query resolves the code from the event's `via_role_id`.
+  def lens_suffix
+    code = payload_value(:via_role_code).to_s.strip.presence
+    code ? " while exploring #{code}" : ""
   end
 
   # Name of the delegate referenced by a delegation entry, or a generic label.

@@ -24,7 +24,10 @@ class Assessments::AlignmentRatingsController < ApplicationController
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
-    unless level_ordinal && FrameworkState::Level.exists?(role_id: @assignment.role_id, ordinal: level_ordinal)
+    # Alignment is against the home role, so the cell must be one the
+    # record reads (ADR-22) — the same rule Operations::Assessments::Align
+    # applies over MCP.
+    unless level_ordinal && response_lens.in_home_scope?(capability_stable_id, level_ordinal)
       head :unprocessable_content
       return
     end
@@ -98,24 +101,12 @@ class Assessments::AlignmentRatingsController < ApplicationController
   end
 
   def respond_with_turbo_stream(capability_stable_id, level_ordinal, active_category_id = nil)
-    framework = FrameworkState::Framework.find_by!(framework_id: @assignment.framework_id)
-    role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
-    level = FrameworkState::Level.find_by!(level_id: @assignment.level_id)
-    categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
-
-    matrix_data = Assessments::MatrixDataBuilder.new(
-      framework: framework, role: role, level: level,
-      person_id: @assignment.person_id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
+    matrix_data = Assessments::MatrixDataBuilder.for_lens(
+      lens: response_lens,
       context: :alignment,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
-    ).build
+    )
 
     category_id = find_category_id(capability_stable_id, matrix_data)
     cap_data = find_capability_data(capability_stable_id, matrix_data)
@@ -143,7 +134,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
             focused: true,
-            alignment_locked: matrix_data[:alignment_locked]
+            alignment_locked: matrix_data[:alignment_locked],
+            **lens_chip_options(matrix_data)
           ),
           layout: false
         )
@@ -174,7 +166,9 @@ class Assessments::AlignmentRatingsController < ApplicationController
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
             assessee_name: assessee_name_if_not_self,
-            alignment_locked: matrix_data[:alignment_locked]
+            alignment_locked: matrix_data[:alignment_locked],
+            lens: matrix_data[:lens],
+            ratings_frozen: matrix_data[:individual_ratings_frozen]
           ),
           layout: false
         )

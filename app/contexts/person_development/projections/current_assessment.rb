@@ -361,6 +361,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
+    # Provenance only (ADR-22). Absent on every event before the lens, so a
+    # replay writes the nil the column already holds — no rebuild needed.
+    rating.self_rated_via_role_id = event.data[:via_role_id]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.self_rating_source = seeded_event?(event) ? "seeded" : "human"
     apply_source(rating, event)
@@ -377,6 +380,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
+    rating.self_rated_via_role_id = event.data[:via_role_id]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
     rating.self_rating_source = "human"
@@ -390,6 +394,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = nil
     rating.self_rated_comment = nil
+    rating.self_rated_via_role_id = nil
     # "human", not nil: a clear is a human decision that this side is
     # EMPTY. nil means "never held anything" — the distinction is what
     # lets a seed re-run complete untouched sides without resurrecting
@@ -404,6 +409,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_via_role_id = event.data[:via_role_id]
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.manager_rating_source = seeded_event?(event) ? "seeded" : "human"
@@ -419,6 +425,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_via_role_id = event.data[:via_role_id]
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
@@ -434,6 +441,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = nil
     rating.manager_rated_comment = nil
     rating.manager_rated_by_id = nil
+    rating.manager_rated_via_role_id = nil
     # "human", not nil — see handle_self_rating_cleared.
     rating.manager_rating_source = "human"
     rating.save!

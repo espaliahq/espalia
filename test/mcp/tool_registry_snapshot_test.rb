@@ -61,7 +61,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_align",
-        "description" => "Record the aligned (agreed) frequency for one capability × level.",
+        "description" => "Record the aligned (agreed) frequency for one capability × level of the assessee's own role.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -69,7 +69,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
-            "comment"              => { "type" => "string" }
+            "comment"              => { "type" => "string" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -99,12 +100,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_capability_get",
-        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "assignment_id" => { "type" => "string" },
-            "capability_id" => { "type" => "string" }
+            "assignment_id"    => { "type" => "string" },
+            "capability_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
           },
           "required" => %w[assignment_id capability_id],
           "additionalProperties" => false
@@ -255,10 +258,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number.",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it.",
         "inputSchema" => {
           "type" => "object",
-          "properties" => { "assignment_id" => { "type" => "string" } },
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
           "required" => [ "assignment_id" ],
           "additionalProperties" => false
         },
@@ -324,7 +331,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_as_manager",
-        "description" => "Record or update a manager rating for one of your direct reports' capability × level.",
+        "description" => "Record or update a manager rating for one of your direct reports' capability × level. " \
+          "Only cells their own role reads can be manager-rated; a cell only another role reads is refused.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -334,7 +342,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -347,7 +356,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_self",
-        "description" => "Record or update your own rating for one capability × level.",
+        "description" => "Record or update your own rating for one capability × level. Pass as_role_id to rate a cell " \
+          "another role in the framework reads (a role lens): the rating is the same fact about you " \
+          "at that capability × level, and counts wherever a role reads the cell.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -357,7 +368,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
