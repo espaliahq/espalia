@@ -88,6 +88,24 @@ class NotificationType
       label: "Calibration asked you to revisit a rating",
       description: "A calibration session asks you to take a second look at one of your ratings.",
       defaults: { in_app: true, slack: true, email: false }
+    ),
+    lens_alignment_started: Definition.new(
+      key: :lens_alignment_started,
+      label: "Alignment against another role started",
+      description: "Your manager starts an alignment conversation about another role, sharing their ratings on it.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
+    exploration_started: Definition.new(
+      key: :exploration_started,
+      label: "An exploration of another role started",
+      description: "You or your manager share that you're exploring another role or level.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
+    exploration_closed: Definition.new(
+      key: :exploration_closed,
+      label: "An exploration of another role closed",
+      description: "An exploration you share with your manager or report is stopped, with what came of it.",
+      defaults: { in_app: true, slack: false, email: false }
     )
   }.freeze
 

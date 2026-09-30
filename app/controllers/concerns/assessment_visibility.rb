@@ -72,6 +72,23 @@ module AssessmentVisibility
     )
   end
 
+  # The cells whose manager ratings the assessee may see (ADR-22) — for the
+  # assessee only; nil for anyone else, who sees every cell. Also nil when
+  # the home role's record is gone, leaving the feed's page-level gate.
+  #
+  # @return [Assessments::Disclosure, nil]
+  def assessee_disclosure
+    return @assessee_disclosure if defined?(@assessee_disclosure)
+    return (@assessee_disclosure = nil) unless current_person && @assignment.person_id == current_person.id
+
+    @assessee_disclosure = Assessments::Disclosure.for(
+      lens: Assessments::Lens.home(@assignment),
+      participant_status: @assignment.current_open_cycle_participation&.status
+    )
+  rescue ActiveRecord::RecordNotFound
+    @assessee_disclosure = nil
+  end
+
   # The assessed person. Memoised.
   #
   # @return [Person, nil]

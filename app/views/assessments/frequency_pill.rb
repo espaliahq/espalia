@@ -34,9 +34,14 @@ class Views::Assessments::FrequencyPill < Views::Base
   #   (seeded) rating the viewer hasn't confirmed — renders as a dashed
   #   outline in the frequency's hue instead of the solid soft fill, and
   #   re-selecting the shown value confirms rather than clears
+  # @param lens_params [Hash] the lens the page is read through (`as_role` /
+  #   `as_level`), forwarded so the rating is made — and the response
+  #   re-rendered — through it
+  # @param static_title [String, nil] overrides the frozen pill's tooltip,
+  #   for a pill that is read-only for a reason other than a freeze
   def initialize(capability_stable_id:, level_ordinal:, current_frequency:,
                  assessment_id:, context: :self, category_id: nil,
-                 interactive: true, carried: false)
+                 interactive: true, carried: false, lens_params: {}, static_title: nil)
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
     @current_frequency = current_frequency
@@ -45,6 +50,8 @@ class Views::Assessments::FrequencyPill < Views::Base
     @category_id = category_id
     @interactive = interactive
     @carried = carried
+    @lens_params = lens_params
+    @static_title = static_title
   end
 
   def view_template
@@ -90,7 +97,7 @@ class Views::Assessments::FrequencyPill < Views::Base
   def static_pill
     span(
       class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium #{pill_bg_classes}",
-      title: @carried ? "#{phrase} — carried forward from #{carried_origin}" : phrase
+      title: @static_title || (@carried ? "#{phrase} — carried forward from #{carried_origin}" : phrase)
     ) { phrase }
   end
 
@@ -212,6 +219,7 @@ class Views::Assessments::FrequencyPill < Views::Base
     input(type: "hidden", name: "rating[frequency]", value: frequency)
     input(type: "hidden", name: "rating[clear]", value: "1") if clear
     input(type: "hidden", name: "rating[category_id]", value: @category_id) if @category_id
+    @lens_params.each { |name, value| input(type: "hidden", name: name.to_s, value: value) }
   end
 
   def pill_bg_classes

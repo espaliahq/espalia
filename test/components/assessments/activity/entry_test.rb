@@ -41,6 +41,24 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     end
   end
 
+  context "ratings made through a role lens" do
+    should "name the lens a self rating was made through" do
+      html = render_entry(kind: "self_rated", payload: { frequency: "some", via_role_code: "PM2" })
+      assert_includes html, "Self-rated Critical Thinking · L2 while exploring PM2"
+    end
+
+    should "name the lens a manager rating was made through" do
+      html = render_entry(kind: "manager_rated", payload: { frequency: "some", actor_name: "Morgan",
+                                                           via_role_code: "PM2" })
+      assert_includes html, "Morgan rated Critical Thinking · L2 while exploring PM2"
+    end
+
+    should "say nothing extra for a rating on the home role" do
+      html = render_entry(kind: "self_rated", payload: { frequency: "some" })
+      assert_not_includes html, "exploring"
+    end
+  end
+
   context "evidence link entries" do
     should "name who linked the evidence" do
       html = render_entry(kind: "evidence_linked",
@@ -82,6 +100,39 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     should "label the lowest rating Not yet on the secondary line" do
       html = render_entry(kind: "self_rated", payload: { frequency: "none" })
       assert_includes html, "Not yet"
+    end
+  end
+
+  context "declared explorations" do
+    should "say who started exploring which role, with the note beneath" do
+      html = render_entry(kind: "exploration_started", payload: {
+        actor_name: "Alex", role_label: "Product Manager · PM3", note: "Curious about discovery", by_assessee: true
+      })
+      assert_includes html, "Alex started exploring Product Manager · PM3"
+      assert_includes html, "Curious about discovery"
+    end
+
+    should "say the manager side shared it when they declared it" do
+      html = render_entry(kind: "exploration_started", payload: {
+        actor_name: "Morgan", role_label: "Product Manager · PM3", by_assessee: false
+      })
+      assert_includes html, "Morgan shared an exploration of Product Manager · PM3"
+    end
+
+    should "say who closed it and what came of it" do
+      html = render_entry(kind: "exploration_closed", payload: {
+        actor_name: "Morgan", role_label: "Product Manager · PM3", outcome: "not_now"
+      })
+      assert_includes html, "Morgan closed the exploration of Product Manager · PM3 — not now"
+    end
+  end
+
+  context "an exploration a move into the role closed" do
+    should "say it closed without naming anyone" do
+      html = render_entry(kind: "exploration_closed", payload: {
+        actor_name: nil, role_label: "Product Manager · PM3", outcome: "moved"
+      })
+      assert_includes html, "The exploration of Product Manager · PM3 closed — moved into the role"
     end
   end
 end

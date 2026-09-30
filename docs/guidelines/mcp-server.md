@@ -171,6 +171,28 @@ person can see the reason for. `required` is the resolved tolerance
 (binding, then category, then framework default) being 0, exactly what the
 card shows; the raw per-binding tolerance stays on the framework payload.
 
+**A lens says it is one.** `assessments_get` and `assessments_capability_get`
+take `as_role_id` / `as_level_ordinal` to read the same ratings against another
+role or level (ADR-22). The score then carries `lens: { role_id, role_code,
+level_ordinal, home }` beside `scale:` (`home: false` off the record), and each
+capability carries `in_role: { home, lens }` — so an agent can't report a PM3
+number as the E3 assessment. Every honesty gate holds under a lens, and the
+per-cell disclosure is the web's: the assessee never receives a manager rating
+on a cell until alignment has started against a role that reads it. All three
+rating tools take `as_role_id` to rate a cell the lens role reads, and refuse a
+cell a started alignment froze (the error names the role).
+
+**Alignment is per role, and says so.** `assessments_start_alignment` /
+`assessments_complete_alignment` (`:in_app` — starting discloses the manager's
+ratings and freezes both parties'; completing formalises a record) and
+`assessments_reopen_alignment` take the same `as_role_id` / `as_level_ordinal`
+pair as the read tools, default to the home role, and return the role
+(`role_id, role_code, level_ordinal, home, status`) with the cycle. The
+completion gate is the role's own, and its refusal names how many cells remain.
+`assessments_get` lists every alignment started this cycle under
+`current_cycle.alignments: [{ role_id, role_code, level_ordinal, status, home }]`
+without needing a lens, so an agent knows a PM3 conversation exists.
+
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
 agent can tell a low score from a barely-rated one. Perspective is resolved
@@ -657,6 +679,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
+| `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
+| `app/operations/operations/assessments/alignment_lens.rb` | The role an alignment milestone acts on, and the per-role policy check Pundit's `authorize` can't pass (ADR-22) |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
 | `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*); validates an `:in_app` operation's parameters before deferring it to approval |

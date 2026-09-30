@@ -95,20 +95,23 @@ class Reporting::CycleCohort
       .where(cycle_id: @cycle.cycle_id, person_id: person_ids).index_by(&:person_id)
     people = Person.where(id: person_ids).index_by(&:id)
     roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
-    expected = expected_capability_counts(role_ids)
-    coverage = coverage_by_person(person_ids)
+    scope_by_person = role_scopes_by_person(enrollments)
+    coverage = coverage_by_person(enrollments, scope_by_person)
 
     enrollments.map do |enrollment|
-      build_participant(enrollment, progress, people, roles, expected, coverage)
+      build_participant(enrollment, progress, people, roles, scope_by_person, coverage)
     end
   end
 
-  def build_participant(enrollment, progress, people, roles, expected, coverage)
+  def build_participant(enrollment, progress, people, roles, scope_by_person, coverage)
     person = people[enrollment.person_id]
     prog = progress[enrollment.person_id]
     status = prog&.status || "in_progress"
     cov = coverage.fetch(enrollment.person_id, { self: 0, manager: 0, last_at: nil })
-    expected_count = expected.fetch(enrollment.role_id, 0)
+    # The completion denominator: the assessed role's cells at the assessed
+    # level — the same set Assessments::LevelCoverage counts against.
+    expected_count = scope_by_person.fetch(enrollment.person_id)
+      .at_level(enrollment.level_ordinal).capability_stable_ids.size
     last_activity = [
       enrollment.enrolled_at, prog&.started_at, prog&.alignment_started_at,
       prog&.aligned_at, cov[:last_at]
@@ -133,52 +136,58 @@ class Reporting::CycleCohort
     )
   end
 
-  # Distinct active capabilities bound to each role — the completion
-  # denominator. Keyed by stable_id to match the rating key space.
-  # @return [Hash{String => Integer}]
-  def expected_capability_counts(role_ids)
-    return {} if role_ids.empty?
-
-    FrameworkState::CapabilityRoleBinding
-      .joins(:capability)
-      .where(role_id: role_ids, framework_capabilities: { status: "active" })
-      .group("framework_capability_role_bindings.role_id")
-      .count("DISTINCT framework_capabilities.stable_id")
+  # person_id => the cells their assessed role (enrollment snapshot) reads.
+  # @return [Hash{String => Assessments::RoleScope}]
+  def role_scopes_by_person(enrollments)
+    scopes = Assessments::RoleScope.for_roles(role_ids: enrollments.map(&:role_id), framework_id: @cycle.framework_id)
+    empty = Assessments::RoleScope.empty(framework_id: @cycle.framework_id)
+    enrollments.to_h { |e| [ e.person_id, scopes[e.role_id] || empty ] }
   end
 
-  # Per-person coverage at their assessed level + last rating activity.
+  # Per-person coverage at their assessed level, in their assessed role's
+  # cells, + last rating activity.
   # @return [Hash{String => {self: Integer, manager: Integer, last_at: Time, nil}}]
-  def coverage_by_person(person_ids)
-    assessed_ordinal = AssessmentCycleEnrollment.active
-      .where(cycle_id: @cycle.cycle_id, person_id: person_ids)
-      .pluck(:person_id, :level_ordinal).to_h
+  def coverage_by_person(enrollments, scope_by_person)
+    assessed_ordinal = enrollments.to_h { |e| [ e.person_id, e.level_ordinal ] }
 
     rows = AssessmentLevelRating
-      .where(cycle_id: @cycle.cycle_id, person_id: person_ids)
+      .where(cycle_id: @cycle.cycle_id)
+      .within(scope_by_person)
       .pluck(:person_id, :capability_stable_id, :level_ordinal,
              :self_rated_frequency, :manager_rated_frequency,
-             :last_self_rated_at, :last_manager_rated_at,
              :self_rating_source, :manager_rating_source)
 
-    acc = Hash.new { |hash, key| hash[key] = { self: Set.new, manager: Set.new, last_at: nil } }
-    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_at, manager_at, self_src, manager_src|
-      bucket = acc[person_id]
-      # last_at deliberately counts seeded timestamps too: they coincide
-      # with enrollment, which already counts as activity for at-risk.
-      [ self_at, manager_at ].compact.each do |timestamp|
-        bucket[:last_at] = [ bucket[:last_at], timestamp ].compact.max
-      end
+    acc = Hash.new { |hash, key| hash[key] = { self: Set.new, manager: Set.new } }
+    rows.each do |person_id, stable_id, ordinal, self_freq, manager_freq, self_src, manager_src|
       next unless ordinal == assessed_ordinal[person_id]
 
       # Funnel counts VETTED sides only — a carried (seeded) value isn't
       # done, it's To confirm. Matches Assessments::LevelCoverage and the
       # /assessments chips, so the cohort report and the individual list
       # never disagree on what "done" means.
+      bucket = acc[person_id]
       bucket[:self] << stable_id if self_freq.present? && self_src != "seeded"
       bucket[:manager] << stable_id if manager_freq.present? && manager_src != "seeded"
     end
 
-    acc.transform_values { |b| { self: b[:self].size, manager: b[:manager].size, last_at: b[:last_at] } }
+    last_at = last_rating_activity(scope_by_person.keys)
+    scope_by_person.keys.index_with do |person_id|
+      bucket = acc.fetch(person_id, { self: Set.new, manager: Set.new })
+      { self: bucket[:self].size, manager: bucket[:manager].size, last_at: last_at[person_id] }
+    end
+  end
+
+  # The latest rating each person touched, in any role: rating a cell the
+  # assessed role doesn't bind is still activity, so it keeps a person off
+  # the idle list. Deliberately counts seeded timestamps too — they coincide
+  # with enrollment, which already counts as activity for at-risk.
+  # @return [Hash{String => Time}]
+  def last_rating_activity(person_ids)
+    AssessmentLevelRating.across_all_roles
+      .where(cycle_id: @cycle.cycle_id, person_id: person_ids)
+      .group(:person_id)
+      .pluck(:person_id, Arel.sql("GREATEST(MAX(last_self_rated_at), MAX(last_manager_rated_at))"))
+      .to_h
   end
 
   def at_risk?(status, last_activity)

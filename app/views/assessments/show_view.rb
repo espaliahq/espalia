@@ -22,6 +22,9 @@ class Views::Assessments::ShowView < Views::Base
   # @param can_relink_others_evidence [Boolean] whether the viewer may manage
   #   links (add/remove capability × level) on evidence authored by others
   # @param activity_entries [Array<Assessments::ActivityFeedQuery::Entry>]
+  # @param exploration [AssessmentExploration, nil] the open exploration of
+  #   the lens role (ADR-22)
+  # @param can_explore [Boolean] the viewer may declare or close one
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
@@ -34,6 +37,7 @@ class Views::Assessments::ShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
+                 exploration: nil, can_explore: false,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
     @framework = framework
@@ -50,6 +54,8 @@ class Views::Assessments::ShowView < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
+    @exploration = exploration
+    @can_explore = can_explore
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -106,6 +112,8 @@ class Views::Assessments::ShowView < Views::Base
         emphasised: @matrix_data[:emphasised_capabilities],
         second_person: true
       )
+      render_lens_role_modal(assessee_name: nil)
+      render_exploration_modals(assessee_name: nil)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
@@ -151,25 +159,27 @@ class Views::Assessments::ShowView < Views::Base
           h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
             @matrix_data[:level].title
           end
-          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
-          render_status_pill(
+          render_lens_control(assessee_name: nil)
+          render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]
           )
+          render_lens_alignment_chips
         end
 
         div(class: "flex items-center gap-2 shrink-0") do
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
+      render_lens_banner
     end
   end
 
   def hero_frame
     turbo_frame_tag(
       "assessment-scoring",
-      src: scoring_assessment_path(@assignment),
+      src: scoring_assessment_path(@assignment, lens_params),
       data: { assessment_sync_target: "scoringFrame" }
     ) do
       render Views::Assessments::HeroSummary.new(
@@ -186,7 +196,9 @@ class Views::Assessments::ShowView < Views::Base
         # The assessee's own view — in alignment their Self rating leads
         # (top-left split / first secondary percentage).
         viewer_is_manager: false,
-        alignment_locked: @matrix_data[:alignment_locked]
+        alignment_locked: @matrix_data[:alignment_locked],
+        lens: @matrix_data[:lens],
+        ratings_frozen: @matrix_data[:individual_ratings_frozen]
       )
     end
   end
@@ -267,7 +279,7 @@ class Views::Assessments::ShowView < Views::Base
   end
 
   def matrix_frame_params
-    p = {}
+    p = lens_params.dup
     p[:capability] = @expanded_capability_id if @expanded_capability_id
     p[:level_ordinal] = @expanded_level_ordinal if @expanded_level_ordinal && @expanded_capability_id
     p[:levels] = @selected_levels if @selected_levels.present?

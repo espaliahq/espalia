@@ -18,6 +18,8 @@ Once an event is published in production, its class, name, and payload shape are
 
 Adding a NEW event type is always safe. Adding a NEW field to a NEW event type is safe. Adding a field to an existing event is safe only if consumers tolerate its absence on older instances.
 
+**When a new field narrows what an event means, its absence must keep the old meaning — in every consumer.** Per-role alignment (ADR-22) added `role_id` and `cell_keys` to `AlignmentStarted`: a new start freezes only its role's cells, but a historical one, carrying neither, froze the whole assessment. The aggregate's `on` handler replays a missing `cell_keys` as "every cell", and the projection writes `whole_assessment: true` so the read side agrees — otherwise every open cycle that had started alignment would silently thaw on its next load. Test it by replaying the old event shape, not by constructing new events with the field set to nil.
+
 ## Tenant metadata invariant
 
 Every command dispatch in production code MUST wrap in:
@@ -103,6 +105,10 @@ When adding a read model, decide its external-identity strategy deliberately. Th
 
 **Enforced by the round-trip guard.** `ProjectionReplayHelpers#rows(scope, stable_id: true)` includes `id` in the snapshot for stable-PK tables, and the projection round-trip tests assert the snapshot is identical across `reset!` + replay. A reverted concern or a new addressable table with a random PK fails CI rather than silently reissuing ids.
 
+## Rating reads are role-scoped
+
+A rating belongs to a cell, not a role (ADR-22), so `assessment_level_ratings` has no role column. Any query over it outside the `CurrentAssessment` projection must pass through `AssessmentLevelRating.within(Assessments::RoleScope…)` or announce `.across_all_roles`; the `GrowthOs/RatingsMustBeRoleScoped` cop enforces it. The rule and its exemptions live in [assessments.md → Role-scoped reads](assessments.md). A new read model that stores rating-derived state inherits the rule: decide which role it reads for before writing the projection.
+
 ## Replay-mode side-effect suppression
 
 Replay must not produce side effects beyond writing read models — no Turbo broadcasts, no job enqueuing, no ActionCable, no outbound HTTP.
@@ -131,6 +137,8 @@ Do **not** bump for:
 - Pure additions of new handlers for new event types where no past events exist.
 - Refactors that produce identical read-model state (extracted method, renamed variable, etc.).
 - DB-schema-only changes (column addition with a default; index addition).
+
+**A brand-new registered projection is "stale" too.** `verify` treats a projection with no `projection_versions` row as never rebuilt and fails the deploy, so adding one to `Projections::Registry` is a deploy step (`REBUILD_ON_DEPLOY=<name>` or `mark_rebuilt`) even when no historical event exists. Handing a new table to an existing projection avoids registering and stamping a separate one — declared explorations went to `CurrentAssessment` for this reason, with new event types and no history. If historical events must populate the table, bump that projection's `CODE_VERSION` and rebuild it all the same.
 
 When you do bump, the predeploy guard (`events:projections:verify`) will fail the next deploy until the projection is rebuilt. See the runbook for the resolution flow (`REBUILD_ON_DEPLOY` env var, two-stage deploy).
 

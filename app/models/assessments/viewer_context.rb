@@ -11,14 +11,21 @@
 # scrubbed ratings. A second, drifting copy would let an agent read a
 # score the assessee is not allowed to see.
 #
-# Alignment wins once the manager has formally started it — both parties
-# then view in alignment mode, with no opt-in.
+# Alignment wins once the manager has formally started it against the role
+# being read (ADR-22) — both parties then view in alignment mode, with no
+# opt-in. The home role's alignment decides the home lens (at any level); a
+# lens on another role reads as alignment only once alignment has started
+# against that role. Until then the per-cell disclosure decides what the
+# assessee sees of the cells another conversation opened.
 class Assessments::ViewerContext
   # @param assignment [PersonFrameworkAssignment]
   # @param authorization [AuthorizationContext] the viewer's identity chain
+  # @param lens [Assessments::Lens, nil] the role the page is read against;
+  #   nil reads the home role
   # @return [Symbol] :self, :manager or :alignment
-  def self.for(assignment:, authorization:)
-    return :alignment if AssessmentPolicy.new(authorization, assignment).view_alignment?
+  def self.for(assignment:, authorization:, lens: nil)
+    role_id = lens.role.role_id unless lens.nil? || lens.home_role?
+    return :alignment if AssessmentPolicy.new(authorization, assignment).view_alignment?(role_id: role_id)
 
     assignment.person_id == authorization.person&.id ? :self : :manager
   end

@@ -82,10 +82,19 @@ export default class extends BaseController {
   // handler via the activity:navigate event the matrix wrapper listens
   // for. Includes categoryId so the matrix can switch to the right
   // tab if the entry's capability lives outside the active one.
+  //
+  // An entry about another role (its alignment, or a cell only that role
+  // reads) carries data-lens-href: when the page in front of the viewer
+  // doesn't render its card, the click switches to that role's lens instead
+  // of scrolling to nothing.
   focusEntry(event) {
     const el = event.currentTarget
     const capabilityStableId = el.dataset.capabilityStableId
     const levelOrdinal = parseInt(el.dataset.levelOrdinal, 10)
+    if (el.dataset.lensHref && !this.#cardOnPage(capabilityStableId)) {
+      window.Turbo.visit(el.dataset.lensHref)
+      return
+    }
     if (!capabilityStableId || isNaN(levelOrdinal)) return
 
     window.dispatchEvent(new CustomEvent("activity:navigate", {
@@ -100,6 +109,13 @@ export default class extends BaseController {
   }
 
   // private
+
+  #cardOnPage(capabilityStableId) {
+    if (!capabilityStableId) return false
+    return !!document.querySelector(
+      `[data-matrix-target="card"][data-capability-stable-id="${CSS.escape(capabilityStableId)}"]`
+    )
+  }
 
   #applyState() {
     this.entryTargets.forEach(entry => {

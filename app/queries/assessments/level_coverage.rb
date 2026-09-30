@@ -12,9 +12,9 @@
 # refuses to mark alignment complete while any current-level cell lacks an
 # agreed value, so `aligned` status always means the formal record is whole.
 #
-# The denominator mirrors {Assessments::MatrixDataBuilder} exactly — active,
-# role-bound capabilities that have a behavioural expectation at the assessed
-# level — so the list badge and the show-page pill never drift.
+# The denominator is the role's {Assessments::RoleScope} at the assessed
+# level — the same cells {Assessments::MatrixDataBuilder} renders — so the
+# list badge and the show-page pill never drift.
 #
 # @example
 #   Assessments::LevelCoverage.new(
@@ -27,10 +27,17 @@ class Assessments::LevelCoverage
   # @param person_id [String]
   # @param framework_id [String]
   # @param cycle_id [String]
-  def initialize(person_id:, framework_id:, cycle_id:)
+  # @param role_id [String, nil] count another role's cells instead of the
+  #   record's — the completion gate of an alignment against that role
+  #   (ADR-22)
+  # @param level_ordinal [Integer, nil] the level to count at; defaults to
+  #   the assessed level
+  def initialize(person_id:, framework_id:, cycle_id:, role_id: nil, level_ordinal: nil)
     @person_id = person_id
     @framework_id = framework_id
     @cycle_id = cycle_id
+    @role_id = role_id
+    @level_ordinal = level_ordinal
   end
 
   # @param include_aligned [Boolean] also count the aligned perspective.
@@ -46,16 +53,16 @@ class Assessments::LevelCoverage
   #   the aggregate so the coverage check re-runs atomically against the
   #   stream (see {PersonDevelopment::Aggregate#complete_alignment}).
   def call(include_aligned: false)
-    ordinal = assessed_level_ordinal
+    ordinal = @level_ordinal || assessed_level_ordinal
     return empty(include_aligned:) if ordinal.nil?
 
-    stable_ids = current_level_capability_stable_ids(ordinal)
-    return empty(include_aligned:) if stable_ids.empty?
+    scope = Assessments::RoleScope.for(role_id: role_id, framework_id: @framework_id).at_level(ordinal)
+    return empty(include_aligned:) if scope.empty?
 
-    ratings = AssessmentLevelRating.where(
-      person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id,
-      level_ordinal: ordinal, capability_stable_id: stable_ids
-    )
+    stable_ids = scope.capability_stable_ids
+    ratings = AssessmentLevelRating
+      .where(person_id: @person_id, framework_id: @framework_id, cycle_id: @cycle_id)
+      .within(scope)
     # Completion means VETTED THIS CYCLE: carried-forward (seeded) values
     # hold real data but nobody has confirmed them, so they don't count
     # toward the self/manager "Complete" signals. A confirm/revise flips a
@@ -101,7 +108,7 @@ class Assessments::LevelCoverage
   end
 
   def role_id
-    assignment&.role_id
+    @role_id || assignment&.role_id
   end
 
   # Prefers the cycle's enrollment snapshot level (same-role gate) over the live
@@ -116,26 +123,5 @@ class Assessments::LevelCoverage
     return enrollment.level_ordinal if enrollment&.level_ordinal && enrollment.role_id == role_id
 
     FrameworkState::Level.find_by(level_id: assignment.level_id)&.ordinal
-  end
-
-  # stable_ids of active, role-bound capabilities with an expectation at the
-  # assessed level — the coverage denominator.
-  #
-  # @param ordinal [Integer]
-  # @return [Array<String>]
-  def current_level_capability_stable_ids(ordinal)
-    bound_ids = FrameworkState::CapabilityRoleBinding.where(role_id: role_id).pluck(:capability_id)
-    return [] if bound_ids.empty?
-
-    cap_ids = FrameworkState::BehaviouralExpectation
-      .where(capability_id: bound_ids, level_ordinal: ordinal)
-      .pluck(:capability_id)
-    return [] if cap_ids.empty?
-
-    FrameworkState::Capability
-      .joins(:category)
-      .where(capability_id: cap_ids, status: "active")
-      .where(framework_capability_categories: { framework_id: @framework_id })
-      .pluck(:stable_id)
   end
 end

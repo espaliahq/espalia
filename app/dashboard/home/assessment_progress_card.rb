@@ -53,7 +53,9 @@ class Home::AssessmentProgressCard < Home::Card
     progress = AssessmentCycleProgress.find_by(cycle_id: cycle.cycle_id, person_id: person.id)
     self_rated = AssessmentLevelRating
       .for_cycle(cycle.cycle_id)
-      .for_person(person.id)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: cycle.cycle_id, framework_id: cycle.framework_id, person_ids: [ person.id ]
+      ))
       .self_rated
     # The self side counts as started only on a human touch — the row-level
     # progress status also flips on the MANAGER's first rating, and carried
@@ -71,7 +73,9 @@ class Home::AssessmentProgressCard < Home::Card
         assignment: assignment,
         status: progress&.status || "in_progress",
         self_rated_count: self_rated.count,
-        self_started: self_started
+        self_started: self_started,
+        lens_alignments: Assessments::LensAlignments.for(cycle_ids: [ cycle.cycle_id ], person_ids: [ person.id ])
+          .fetch([ cycle.cycle_id, person.id ], [])
       }
     )
   end

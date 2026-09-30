@@ -103,7 +103,7 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       # Manager starts alignment, then aligns
       manager = create(:person, tenant: @tenant, name: "Mgr")
       @handler.start_alignment(@person_id, @framework_id, cycle_id,
-        started_by_id: manager.id)
+        started_by_id: manager.id, cell_keys: [ [ cap_sid, 3 ] ])
       @handler.align_assessment(@person_id, @framework_id, cap_sid,
         level_ordinal: 3, aligned_frequency: "occasional", cycle_id: cycle_id,
         comment: "Agreed on occasional")
@@ -209,7 +209,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.rate_as_manager(@person_id, @framework_id, cap_a,
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -261,7 +262,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.rate_as_manager(@person_id, @framework_id, cap_vetted,
         level_ordinal: 2, frequency: "some", cycle_id: @cycle_id, rated_by_id: @manager.id)
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       aligned = Rails.configuration.event_store.read.stream(stream).to_a
@@ -277,7 +279,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.rate_as_manager(@person_id, @framework_id, cap_b,
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
@@ -293,7 +296,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.rate_self(@person_id, @framework_id, cap_c,
         level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
@@ -306,7 +310,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
     end
 
     should "NOT auto-align cells where neither party rated (no row exists)" do
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -321,7 +326,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       @handler.rate_as_manager(@person_id, @framework_id, cap_d,
         level_ordinal: 1, frequency: "none", cycle_id: @cycle_id)
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       ActsAsTenant.with_tenant(@tenant) do
         rating = AssessmentLevelRating.find_by(
@@ -342,7 +348,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
           level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id)
       end
 
-      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id)
+      @handler.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: @manager.id,
+        cell_keys: rated_cells)
 
       stream = EventStreamNaming.person_development_stream(@person_id, @framework_id)
       events = Rails.configuration.event_store.read.stream(stream).to_a
@@ -407,6 +414,8 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
         @cap_stable_id = SecureRandom.uuid_v7
         @cap = create(:framework_capability, category_id: cat.category_id,
           name: "Critical Thinking", stable_id: @cap_stable_id)
+        create(:framework_capability_role_binding, capability_id: @cap.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation, capability_id: @cap.capability_id, level_ordinal: 2)
 
         # Real Person records — required by FK on assessment_cycle_progress
         # for alignment_started_by_id / aligned_by_id.
@@ -661,6 +670,17 @@ class PersonDevelopment::CommandHandlerTest < ActiveSupport::TestCase
       item = EvidenceItem.find(evidence_id)
       assert_equal "github", item.external_reference.system
       assert_equal "https://github.com/o/r/pull/12", item.external_reference.url
+    end
+  end
+
+  private
+
+  # Every cell this person rated in the cycle — the role scope these tests'
+  # frameworkless fixtures would otherwise have to build.
+  def rated_cells
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentLevelRating.across_all_roles.where(cycle_id: @cycle_id, person_id: @person_id)
+        .pluck(:capability_stable_id, :level_ordinal)
     end
   end
 end

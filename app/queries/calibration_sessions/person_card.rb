@@ -82,16 +82,19 @@ class CalibrationSessions::PersonCard
     levels.map { |level| { ordinal: level.ordinal, code: level.code.presence || "L#{level.ordinal}" } }
   end
 
-  # Per-level rating frequencies for this capability. Manager ratings are
-  # the session's business and always shown; self ratings follow the same
-  # entitlement rule as evidence (AssesseeVisibility) — withheld, not
-  # blanked, when the viewer may not read this person's assessment.
+  # Per-level rating frequencies for this capability, in the cells the
+  # person's assessed role reads. Manager ratings are the session's business
+  # and always shown; self ratings follow the same entitlement rule as
+  # evidence (AssesseeVisibility) — withheld, not blanked, when the viewer
+  # may not read this person's assessment.
   #
   # @return [Hash{Integer => Hash}] ordinal => { manager:, manager_carried:, self: }
   def ratings_by_level(person_id, visible:)
     AssessmentLevelRating.for_cycle(@session.cycle_id)
-      .where(framework_id: @session.framework_id, person_id: person_id,
-             capability_stable_id: @capability_stable_id)
+      .where(framework_id: @session.framework_id, capability_stable_id: @capability_stable_id)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: [ person_id ]
+      ))
       .to_h do |rating|
         [ rating.level_ordinal, {
           manager: rating.manager_rated_frequency,

@@ -24,13 +24,17 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against; its params ride the pill's forms so the response re-renders
+  #   through it
   def initialize(cell_data:, capability:, level:, capability_stable_id:,
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @cell_data = cell_data
     @capability = capability
     @level = level
@@ -109,7 +113,9 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
             context: @context,
             category_id: @category_id,
             interactive: !primary_perspective_frozen?,
-            carried: primary_carried?
+            carried: primary_carried?,
+            lens_params: @lens&.to_params || {},
+            static_title: frozen_title
           )
         end
       end
@@ -192,8 +198,24 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     )
   end
 
+  # Freeze is per cell (ADR-22): a self or manager rating freezes once any
+  # started alignment reads the cell, whichever lens the page is read
+  # through; an agreed value, once no alignment reading it is in progress.
   def primary_perspective_frozen?
-    @context == :alignment ? @alignment_locked : @frozen
+    if @context == :alignment
+      @alignment_locked || @cell_data[:agreed_locked] || false
+    else
+      @frozen || !@cell_data[:frozen_by].nil?
+    end
+  end
+
+  # Why the pill is read-only when another role's conversation froze it —
+  # "Frozen — alignment against PM3 has started".
+  def frozen_title
+    alignment = @cell_data[:frozen_by]
+    return unless alignment && @context != :alignment && primary_perspective_frozen?
+
+    "Frozen — alignment against #{alignment.code} has started"
   end
 
   def primary_frequency
@@ -215,13 +237,18 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  # Secondary perspectives the current viewer is permitted to see. Self
-  # context has no visible secondaries — the assessee never sees the
-  # manager's rating until alignment opens (the data layer already
-  # nils manager/aligned data for :self, this just makes the intent
-  # explicit). Manager context shows self; alignment shows both.
+  # Secondary perspectives the current viewer is permitted to see. In self
+  # context the builder has already scrubbed manager and aligned values from
+  # every cell the disclosure doesn't name (ADR-22), so the assessee sees
+  # them only on a shared cell home alignment disclosed, read through a
+  # lens. Manager context shows self; alignment shows both.
   def visible_secondary_entries
     case @context
+    when :self
+      # Only disclosed cells carry these values (the builder scrubs the
+      # rest), so before alignment this renders nothing.
+      [ { label: "Manager", frequency: @cell_data[:manager_frequency] },
+        { label: "Agreed", frequency: @cell_data[:aligned_frequency] } ]
     when :manager
       [ { label: "Self", frequency: @cell_data[:current_frequency] } ]
     when :alignment

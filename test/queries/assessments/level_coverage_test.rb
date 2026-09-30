@@ -116,6 +116,16 @@ class Assessments::LevelCoverageTest < ActiveSupport::TestCase
       assert_not result[:self_complete], "self side untouched"
     end
 
+    should "ignore ratings outside the assessed role" do
+      rate(@cap1, self_rated_frequency: "consistent", manager_rated_frequency: "consistent",
+        aligned_frequency: "consistent")
+      create_out_of_scope_rating(person_id: @person_id, cycle: @cycle, level_ordinal: 2)
+
+      result = coverage(include_aligned: true)
+      assert_equal [ 2, 1, 1, 1 ], result.values_at(:total, :self_rated, :manager_rated, :aligned_rated)
+      assert_not result[:self_complete]
+    end
+
     should "never be complete when the assessed level has no cells" do
       # Move the assignment to L3 ordinal — no expectations exist there.
       no_cell_level = @levels[2]

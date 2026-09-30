@@ -44,7 +44,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # @param thresholds [Hash]
   def build_scorer(person_level:, all_levels:, ratings: [], weight: 1.0,
                    deficit_threshold: nil, category_deficit_threshold: nil,
-                   overperformance_cap: nil, expectation_cells: nil, thresholds: {})
+                   overperformance_cap: nil, expectation_cells: nil, thresholds: {}, home_level: nil)
     cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
     binding = BindingStub.new(capability_id: "bid", weight: weight,
       deficit_threshold: deficit_threshold, overperformance_cap: overperformance_cap, capability: cap)
@@ -58,7 +58,8 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       person_level: person_level,
       all_level_ordinals: all_levels,
       expectation_cells: expectation_cells,
-      thresholds: thresholds
+      thresholds: thresholds,
+      home_level: home_level
     )
   end
 
@@ -148,6 +149,34 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ rated(3, "consistent") ])
       assert_in_delta(0.0, scorer.components[:next], 0.001)
       assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+    end
+  end
+
+  # ── The home-level floor (ADR-22) ──
+
+  context "the home-level floor" do
+    should "not assume the levels between home and a lens above it" do
+      # Home E2, read as E4: L1 is still assumed, L2 and L3 are not.
+      scorer = build_scorer(person_level: 4, home_level: 2, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(4, "consistent") ])
+      assert_in_delta(1.0 / 3, scorer.components[:prior], 0.001)
+      assert_in_delta(1.0 / 3, scorer.performance_ratio, 0.001)
+    end
+
+    should "change nothing when the lens level is the home level" do
+      with_home = build_scorer(person_level: 3, home_level: 3, all_levels: [ 1, 2, 3 ],
+        ratings: [ rated(3, "consistent") ])
+      without = build_scorer(person_level: 3, all_levels: [ 1, 2, 3 ], ratings: [ rated(3, "consistent") ])
+      assert_in_delta(without.performance_ratio, with_home.performance_ratio, 0.001)
+      assert_in_delta(1.0, with_home.components[:prior], 0.001)
+    end
+
+    should "assume below the lens level when the lens sits under home" do
+      # Home E4, read as E2: only L1 is below both.
+      scorer = build_scorer(person_level: 2, home_level: 4, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(2, "consistent") ])
+      assert_in_delta(1.0, scorer.components[:prior], 0.001)
+      assert_in_delta(1.0, scorer.components[:current], 0.001)
     end
   end
 

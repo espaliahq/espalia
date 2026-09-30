@@ -18,9 +18,15 @@ class Views::Assessments::LevelStrip < Views::Base
   # @param focused_ordinal [Integer, nil] currently focused level ordinal
   # @param alignment_locked [Boolean] participant fully `aligned` —
   #   threaded to each {LevelChip} so residual splits render muted
+  # @param assumed_below [Integer, nil] unrated cells below this ordinal
+  #   paint as assumed-consistent — the lens floor (ADR-22); defaults to
+  #   +person_level+
+  # @param badge_label [String, nil] overrides the marked chip's badge
   def initialize(cells:, merged_levels:, capability_stable_id:, person_level:,
                  context: :self, viewer_is_manager: false, focused_ordinal: nil,
-                 alignment_locked: false)
+                 alignment_locked: false, assumed_below: nil, badge_label: nil)
+    @assumed_below = assumed_below
+    @badge_label = badge_label
     @cells = cells
     @merged_levels = merged_levels
     @capability_stable_id = capability_stable_id
@@ -48,7 +54,9 @@ class Views::Assessments::LevelStrip < Views::Base
             context: @context,
             viewer_is_manager: @viewer_is_manager,
             focused: level[:ordinal] == @focused_ordinal,
-            alignment_locked: @alignment_locked
+            alignment_locked: @alignment_locked,
+            assumed_below: @assumed_below,
+            badge_label: @badge_label
           )
         end
       end

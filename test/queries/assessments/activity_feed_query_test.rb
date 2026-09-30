@@ -101,7 +101,8 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         handler = PersonDevelopment::CommandHandler.new
-        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id,
+          cell_keys: [ [ @cap_sid, 2 ] ])
         handler.align_assessment(@assessee.id, @framework_id, @cap_sid,
           level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
           aligned_by_id: @manager.id)
@@ -140,6 +141,52 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       entries = run_query(viewer: @assessee, sees_all: true, context: :alignment,
         alignment_started: true)
       assert entries.any? { |e| e.kind == "alignment_reopened" }
+    end
+  end
+
+  context "declared explorations" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        family = create(:framework_role_family, framework_id: @framework_id)
+        @pm = create(:framework_role, role_family_id: family.role_family_id, name: "Product Manager", code: "PM")
+        handler = PersonDevelopment::CommandHandler.new
+        @exploration_id = SecureRandom.uuid_v7
+        handler.start_exploration(@assessee.id, @framework_id, @exploration_id, target_role_id: @pm.role_id,
+          target_level_id: SecureRandom.uuid_v7, target_level_ordinal: 3, started_by_id: @assessee.id,
+          note: "Curious about discovery")
+        handler.close_exploration(@assessee.id, @framework_id, @exploration_id, closed_by_id: @manager.id,
+          outcome: "not_now", note: "After the launch")
+      end
+    end
+
+    should "emit framework-level started and closed entries in the alignment group, naming the role" do
+      entries = run_query(viewer: @manager, sees_all: true, context: :manager, alignment_started: false)
+      started = entries.find { |e| e.kind == "exploration_started" }
+      closed = entries.find { |e| e.kind == "exploration_closed" }
+
+      assert_equal "Assessee", started.payload[:actor_name]
+      assert_equal "Product Manager · PM3", started.payload[:role_label]
+      assert_equal "Curious about discovery", started.payload[:note]
+      assert started.payload[:by_assessee]
+      assert_equal({ as_role: @pm.role_id, as_level: 3 }, started.payload[:lens].symbolize_keys)
+      assert_nil started.capability_stable_id
+      assert_equal "Dana Lee", closed.payload[:actor_name]
+      assert_equal "Product Manager · PM3", closed.payload[:role_label], "the close names the start's role"
+      assert_equal "not_now", closed.payload[:outcome]
+      %w[exploration_started exploration_closed].each do |kind|
+        assert_equal "alignment", Views::Assessments::Activity::Entry::KIND_GROUP[kind]
+      end
+    end
+
+    should "be visible to the assessee before any alignment" do
+      kinds = run_query(viewer: @assessee, sees_all: true, context: :self, alignment_started: false).map(&:kind)
+      assert_includes kinds, "exploration_started"
+      assert_includes kinds, "exploration_closed"
+    end
+
+    should "be hidden from a viewer who doesn't see the whole assessment" do
+      kinds = run_query(viewer: @peer, sees_all: false, context: :manager, alignment_started: false).map(&:kind)
+      refute_includes kinds, "exploration_started"
     end
   end
 

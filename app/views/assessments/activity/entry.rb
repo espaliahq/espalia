@@ -33,7 +33,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     "delegation_granted"       => "bg-indigo-500",
     "delegation_revoked"       => "bg-gray-400",
     "reporting_manager_recorded" => "bg-sky-500",
-    "rating_revisit_requested" => "bg-amber-500"
+    "rating_revisit_requested" => "bg-amber-500",
+    "exploration_started"      => "bg-sky-500",
+    "exploration_closed"       => "bg-gray-400"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -58,6 +60,10 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
     "alignment_reopened"      => "alignment",
+    # A declared exploration (ADR-22) is a step in the same conversation
+    # alignment belongs to.
+    "exploration_started"     => "alignment",
+    "exploration_closed"      => "alignment",
     "comment_posted"          => "comments",
     "evidence_link_commented" => "comments",
     # A calibration revisit request is about the manager rating — the
@@ -70,8 +76,11 @@ class Views::Assessments::Activity::Entry < Views::Base
   }.freeze
 
   # @param entry [Assessments::ActivityFeedQuery::Entry]
-  def initialize(entry:)
+  # @param assignment [PersonFrameworkAssignment, nil] the assessment, for
+  #   entries that switch the page to another role's lens
+  def initialize(entry:, assignment: nil)
     @entry = entry
+    @assignment = assignment
   end
 
   def view_template
@@ -112,7 +121,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   # to the (capability, level) they're attached to. Alignment milestones
   # have no matrix anchor and stay non-interactive.
   def focusable?
-    @entry.capability_stable_id.present? && @entry.level_ordinal.present?
+    (@entry.capability_stable_id.present? && @entry.level_ordinal.present?) || lens_href.present?
   end
 
   def entry_data
@@ -122,12 +131,29 @@ class Views::Assessments::Activity::Entry < Views::Base
       kind_group: kind_group
     }
     base[:category_id] = @entry.category_id if @entry.category_id
+    base[:lens_href] = lens_href if lens_href
     if focusable?
-      base[:capability_stable_id] = @entry.capability_stable_id
-      base[:level_ordinal] = @entry.level_ordinal
+      base[:capability_stable_id] = @entry.capability_stable_id if @entry.capability_stable_id
+      base[:level_ordinal] = @entry.level_ordinal if @entry.level_ordinal
       base[:action] = "click->activity-feed#focusEntry"
     end
     base
+  end
+
+  # Where the entry lives when the page is read through another role
+  # (ADR-22): its alignment, or a cell only that role reads. Clicking
+  # switches to it when the page in front of the viewer doesn't render it.
+  def lens_href
+    return @lens_href if defined?(@lens_href)
+
+    lens = @assignment && payload_value(:lens)
+    @lens_href = if lens
+      params = { as_role: lens[:as_role] || lens["as_role"], as_level: lens[:as_level] || lens["as_level"] }
+      if @entry.capability_stable_id && @entry.level_ordinal
+        params.merge!(capability: @entry.capability_stable_id, level_ordinal: @entry.level_ordinal)
+      end
+      assessment_path(@assignment, params.compact)
+    end
   end
 
   def summary
@@ -154,11 +180,11 @@ class Views::Assessments::Activity::Entry < Views::Base
   def summary_text
     case @entry.kind
     when "self_rated", "self_rating_revised"
-      "Self-rated #{capability_label}"
+      "Self-rated #{capability_label}#{lens_suffix}"
     when "self_rating_cleared"
       "Cleared self rating on #{capability_label}"
     when "manager_rated", "manager_rating_revised"
-      "#{manager_label} rated #{capability_label}"
+      "#{manager_label} rated #{capability_label}#{lens_suffix}"
     when "manager_rating_cleared"
       "#{manager_label} cleared rating on #{capability_label}"
     when "assessment_aligned"
@@ -171,15 +197,17 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
     when "evidence_revalenced"   then evidence_link_summary("Reclassified", preposition: "on")
     when "evidence_withdrawn"    then evidence_withdrawn_summary
-    when "alignment_started"     then "Manager started alignment"
-    when "alignment_completed"   then "Marked alignment complete"
-    when "alignment_reopened"    then "Re-opened alignment"
+    when "alignment_started"     then "Manager started alignment#{role_suffix}"
+    when "alignment_completed"   then "Marked alignment#{role_suffix} complete"
+    when "alignment_reopened"    then "Re-opened alignment#{role_suffix}"
     when "comment_posted"        then comment_posted_summary
     when "evidence_link_commented" then evidence_link_commented_summary
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
     when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
     when "rating_revisit_requested" then revisit_summary
+    when "exploration_started"   then exploration_started_summary
+    when "exploration_closed"    then exploration_closed_summary
     else @entry.kind.humanize
     end
   end
@@ -192,6 +220,46 @@ class Views::Assessments::Activity::Entry < Views::Base
     session = payload_value(:session_name).to_s.strip.presence
     base = "#{asker} asked #{rater} to revisit #{capability_label}"
     session ? "#{base} (#{session})" : base
+  end
+
+  # "Alex started exploring Product Manager · PM3" when the assessee declared
+  # it; "Morgan shared an exploration of …" when the manager side did — the
+  # exploration is always the assessee's.
+  def exploration_started_summary
+    actor = actor_name || "Someone"
+    return "#{actor} started exploring #{explored_role}" if payload_value(:by_assessee)
+
+    "#{actor} shared an exploration of #{explored_role}"
+  end
+
+  # "Morgan closed the exploration of Product Manager · PM3 — not now"; with
+  # no actor (a move into the role closed it) "The exploration of … closed".
+  def exploration_closed_summary
+    outcome = AssessmentExploration::OUTCOME_PHRASES[payload_value(:outcome)]
+    base = if actor_name
+      "#{actor_name} closed the exploration of #{explored_role}"
+    else
+      "The exploration of #{explored_role} closed"
+    end
+    outcome ? "#{base} — #{outcome}" : base
+  end
+
+  def explored_role
+    payload_value(:role_label).to_s.strip.presence || "another role"
+  end
+
+  # " against Product Manager · PM3" for an alignment milestone against a
+  # role other than home (ADR-22); empty for the home role's.
+  def role_suffix
+    label = payload_value(:role_label).to_s.strip.presence
+    label ? " against #{label}" : ""
+  end
+
+  # " while exploring PM3" for a rating made through a role lens (ADR-22) —
+  # the query resolves the code from the event's `via_role_id`.
+  def lens_suffix
+    code = payload_value(:via_role_code).to_s.strip.presence
+    code ? " while exploring #{code}" : ""
   end
 
   # Name of the delegate referenced by a delegation entry, or a generic label.
@@ -377,7 +445,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
       body.to_s.strip.presence
-    when "rating_revisit_requested"
+    when "rating_revisit_requested", "exploration_started", "exploration_closed"
       payload_value(:note).to_s.strip.presence
     end
   end

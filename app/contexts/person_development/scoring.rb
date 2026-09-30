@@ -21,8 +21,8 @@
 #
 #   band(o)   = Σ weight over bindings that carry an expectation at level o
 #   f(b, o)   = frequency value for capability b at level o (see
-#               effective_frequency: unrated defaults to 1.0 below the assessed
-#               level and to 0.0 at or above it)
+#               effective_frequency: unrated defaults to 1.0 below both the
+#               assessed level and the home level, and to 0.0 otherwise)
 #
 #   prior   = Σ_{o < L} Σ_b weight·f(b,o) / Σ_{o < L} band(o)    (1.0 when no prior levels)
 #   current = Σ_b weight·f(b,L) / band(L)
@@ -159,12 +159,17 @@ class PersonDevelopment::Scoring
   #   overperformance_cap:, deficit_threshold:
   # @param perspective [Symbol] which frequency field to use (:effective, :self_only,
   #   :manager_only, :aligned_only)
+  # @param home_level [Integer, nil] the level the cycle assesses the person at,
+  #   when +person_level+ is a lens (ADR-22) rather than the record. Unrated
+  #   cells count as consistent only below both, so reading an E2 as EM4 does
+  #   not grant L3 for free. Defaults to +person_level+.
   def initialize(level_ratings:, bindings:, categories:, person_level:, all_level_ordinals:,
-                 expectation_cells:, thresholds: {}, perspective: :effective)
+                 expectation_cells:, thresholds: {}, perspective: :effective, home_level: nil)
     @level_ratings = index_ratings(level_ratings)
     @bindings = bindings
     @categories = categories.index_by(&:category_id)
     @person_level = person_level
+    @assumed_below = [ person_level, home_level || person_level ].min
     @all_level_ordinals = all_level_ordinals.sort
     @expectation_cells = expectation_cells&.to_set
     @perspective = perspective
@@ -809,8 +814,9 @@ class PersonDevelopment::Scoring
   # Returns the effective frequency multiplier for a capability at a level.
   # Respects the configured perspective to select the appropriate frequency field.
   #
-  # Default only applies for levels strictly below person_level — the current
-  # level must be explicitly assessed.
+  # Default only applies for levels strictly below both person_level and the
+  # home level — the current level must be explicitly assessed, and a lens
+  # above the home level must not be handed the levels in between.
   #
   # @param stable_id [String]
   # @param level_ordinal [Integer]
@@ -821,7 +827,7 @@ class PersonDevelopment::Scoring
 
     if value
       FREQUENCY.fetch(value, 0.0)
-    elsif level_ordinal < @person_level
+    elsif level_ordinal < @assumed_below
       1.0  # default: assume consistent for unassessed past levels
     else
       0.0  # default: current level and above must be explicitly assessed

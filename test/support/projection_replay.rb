@@ -85,7 +85,11 @@ module ProjectionReplayHelpers
           # assert it survives reset! + replay (DeterministicId).
           assignments:              rows(PersonFrameworkAssignment, stable_id: true),
           assessment_level_ratings: rows(AssessmentLevelRating),
-          progress:                 rows(AssessmentCycleProgress)
+          progress:                 rows(AssessmentCycleProgress),
+          # PK derived from (cycle_id, person_id, role_id) — DeterministicId.
+          role_alignments:          rows(AssessmentCycleRoleAlignment, stable_id: true),
+          # PK is the event-carried exploration_id.
+          explorations:             rows(AssessmentExploration, stable_id: true)
         }
 
       when "AssessmentCycles::Projections::CurrentState"

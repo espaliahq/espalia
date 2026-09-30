@@ -36,6 +36,9 @@ class PersonDevelopment::Aggregate
   EVIDENCE_VALENCES = EvidenceLink::VALENCES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
   EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
+  # What came of a declared exploration: work towards it, set it aside, or
+  # the person has moved into the role.
+  EXPLORATION_OUTCOMES = %w[pursue not_now moved].freeze
 
   def initialize
     @person_id = nil
@@ -46,8 +49,15 @@ class PersonDevelopment::Aggregate
     @manager_id = nil       # recorded reporting manager (authoritative for rating authority)
     @active_delegates = {}   # delegate person id => expires_at (nil = open-ended)
     @current_cycle_id = nil
-    @alignment_started = false
-    @alignment_completed = false
+    # The role the current cycle assesses the person at — the role they held
+    # when they joined it. A historical alignment event carries no role and
+    # belongs to this one.
+    @home_role_id = nil
+    # Per-role alignment within the current cycle (ADR-22):
+    #   role_id => { completed: Boolean, cells: Set<[stable_id, level_ordinal]> | :all }
+    # `:all` is a start with no cell list — every event before per-role
+    # alignment — and freezes the whole assessment, as those always did.
+    @alignments = {}
     @self_ratings = {}    # [stable_id, level_ordinal] => frequency
     @manager_ratings = {} # [stable_id, level_ordinal] => frequency
     # Per-cell provenance ("human" | "seeded"; nil for pre-provenance
@@ -61,6 +71,9 @@ class PersonDevelopment::Aggregate
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
+    # Declared explorations (ADR-22) — intent facts that outlive cycles:
+    #   exploration_id => { target_role_id:, target_level_id:, open: Boolean }
+    @explorations = {}
   end
 
   # ── Assignment ──
@@ -109,6 +122,7 @@ class PersonDevelopment::Aggregate
       reason: reason,
       changed_by: changed_by
     }))
+    close_explorations_moved_into(changed_by)
   end
 
   # Changes a person's level within the same role (promotion).
@@ -128,6 +142,7 @@ class PersonDevelopment::Aggregate
       reason: reason,
       changed_by: changed_by
     }))
+    close_explorations_moved_into(changed_by)
   end
 
   # Removes the person's framework assignment entirely — the exit from the
@@ -263,6 +278,68 @@ class PersonDevelopment::Aggregate
     }.compact))
   end
 
+  # ── Declared explorations ──
+  #
+  # "We've agreed to explore this" (ADR-22): an intent fact about another
+  # role or level, visible to both parties, with a lifecycle. Not a rating
+  # scope — the lens reads the same ratings — so it needs an assignment but
+  # no open cycle, and survives from one cycle to the next. Who may declare
+  # or close (the assessee, their reporting manager, an active rating
+  # delegate) is the controller-side policy's call.
+
+  # Declares an exploration of another role or level.
+  #
+  # @param exploration_id [String] caller-minted UUID v7
+  # @param target_role_id [String]
+  # @param target_level_id [String] a level of the target role
+  # @param target_level_ordinal [Integer] that level's ordinal
+  # @param started_by_id [String, nil] UUID of the Person declaring it
+  # @param note [String, nil]
+  # @raise [CommandError] if not assigned, the id is taken, the target is the
+  #   role and level the person holds, or an exploration of the role is open
+  def start_exploration(exploration_id, target_role_id:, target_level_id:, target_level_ordinal:,
+                        started_by_id:, note: nil)
+    raise CommandError, "Not assigned to this framework" unless @assigned
+    raise CommandError, "Exploration id is required" if exploration_id.blank?
+    raise CommandError, "A target role and level are required" if target_role_id.blank? || target_level_id.blank?
+    raise CommandError, "Exploration #{exploration_id} already exists" if @explorations.key?(exploration_id)
+    raise CommandError, "That is the role and level already held" if
+      target_role_id == @role_id && target_level_id == @level_id
+    raise CommandError, "An exploration of that role is already open" if
+      @explorations.each_value.any? { |state| state[:open] && state[:target_role_id] == target_role_id }
+
+    apply(PersonDevelopment::Events::ExplorationStarted.new(data: {
+      exploration_id: exploration_id,
+      target_role_id: target_role_id,
+      target_level_id: target_level_id,
+      target_level_ordinal: target_level_ordinal,
+      started_by_id: started_by_id,
+      note: note.presence
+    }))
+  end
+
+  # Closes an open exploration with what came of it.
+  #
+  # @param exploration_id [String]
+  # @param closed_by_id [String, nil] UUID of the Person closing it
+  # @param outcome [String] one of EXPLORATION_OUTCOMES
+  # @param note [String, nil]
+  # @raise [CommandError] if the exploration is unknown or already closed, or
+  #   the outcome is invalid
+  def close_exploration(exploration_id, closed_by_id:, outcome:, note: nil)
+    state = @explorations[exploration_id]
+    raise CommandError, "No exploration with id #{exploration_id}" unless state
+    raise CommandError, "That exploration is already closed" unless state[:open]
+    raise CommandError, "Invalid outcome: #{outcome}" unless EXPLORATION_OUTCOMES.include?(outcome)
+
+    apply(PersonDevelopment::Events::ExplorationClosed.new(data: {
+      exploration_id: exploration_id,
+      closed_by_id: closed_by_id,
+      outcome: outcome,
+      note: note.presence
+    }))
+  end
+
   # ── Assessment Cycle Membership ──
   #
   # These commands are invoked ONLY by
@@ -293,7 +370,7 @@ class PersonDevelopment::Aggregate
     ensure_assigned!
     raise "Framework_id #{framework_id} does not match assignment" unless @framework_id == framework_id
     return if @last_migrated_to_version && @last_migrated_to_version >= new_version
-    raise "Cannot migrate a completed assessment cycle" if @alignment_completed
+    raise "Cannot migrate a completed assessment cycle" if home_alignment_completed?
 
     apply(PersonDevelopment::Events::FrameworkVersionMigrated.new(data: {
       framework_id: framework_id,
@@ -368,9 +445,9 @@ class PersonDevelopment::Aggregate
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                source: "human", seeded_from_cycle_id: nil)
+                source: "human", seeded_from_cycle_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
     apply(PersonDevelopment::Events::SelfRated.new(data: {
@@ -380,7 +457,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       source: source,
-      seeded_from_cycle_id: seeded_from_cycle_id
+      seeded_from_cycle_id: seeded_from_cycle_id,
+      via_role_id: via_role_id
     }))
   end
 
@@ -393,9 +471,10 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
-  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
+                         via_role_id: nil)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -406,7 +485,8 @@ class PersonDevelopment::Aggregate
       frequency: frequency,
       cycle_id: cycle_id,
       comment: comment,
-      rationale: rationale
+      rationale: rationale,
+      via_role_id: via_role_id
     }))
   end
 
@@ -418,7 +498,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
   def clear_self_rating(capability_stable_id, level_ordinal:, cycle_id:)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     raise "No self-rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @self_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -442,9 +522,9 @@ class PersonDevelopment::Aggregate
   #   nil for system "seeded" carry-forwards
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     ensure_manager_authority!(rated_by_id, source)
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
 
@@ -457,7 +537,8 @@ class PersonDevelopment::Aggregate
       source: source,
       seeded_from_cycle_id: seeded_from_cycle_id,
       rated_by_id: rated_by_id,
-      via_delegation: rated_via_delegation?(rated_by_id)
+      via_delegation: rated_via_delegation?(rated_by_id),
+      via_role_id: via_role_id
     }))
   end
 
@@ -472,9 +553,9 @@ class PersonDevelopment::Aggregate
   # @param rated_by_id [String, nil] UUID of the manager recording the revision
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
   def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
-                            rated_by_id: nil)
+                            rated_by_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     ensure_manager_authority!(rated_by_id, "human")
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
@@ -488,7 +569,8 @@ class PersonDevelopment::Aggregate
       comment: comment,
       rationale: rationale,
       rated_by_id: rated_by_id,
-      via_delegation: rated_via_delegation?(rated_by_id)
+      via_delegation: rated_via_delegation?(rated_by_id),
+      via_role_id: via_role_id
     }))
   end
 
@@ -501,7 +583,7 @@ class PersonDevelopment::Aggregate
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
   def clear_manager_rating(capability_stable_id, level_ordinal:, cycle_id:, rated_by_id: nil)
     ensure_in_cycle!(cycle_id)
-    ensure_individual_ratings_unfrozen!
+    ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
     ensure_manager_authority!(rated_by_id, "human")
     raise "No manager rating exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @manager_ratings.key?([ capability_stable_id, level_ordinal ])
@@ -517,23 +599,45 @@ class PersonDevelopment::Aggregate
 
   # ── Alignment ──
 
-  # Formally opens alignment for the current cycle.
+  # Formally opens alignment against one role for the current cycle.
   #
-  # Once started, individual self/manager ratings are frozen — the
-  # assessment becomes a shared conversation about agreed values.
-  # Issued by the assessee's current direct manager (enforced by the
-  # controller-side policy, not the aggregate).
+  # Alignment is per role (ADR-22): the home role's alignment is the
+  # record's, and a manager can also start one against another role the
+  # person is being read against. Once started, self and manager ratings are
+  # frozen on the cells that role reads — a cell is frozen once ANY started
+  # role reads it, so starting PM3 freezes the cells E3 shares with it while
+  # E3-only cells stay editable. Issued by the assessee's recorded reporting
+  # manager (enforced by the controller-side policy, not the aggregate).
+  #
+  # Cells where self and manager already agree — explicitly, this cycle —
+  # align automatically, within the role's cells only.
   #
   # @param cycle_id [String] UUID of the cycle alignment is starting on
   # @param started_by_id [String] UUID of the person who started alignment
+  # @param role_id [String, nil] the role aligned against; nil = the role the
+  #   cycle assesses the person at
+  # @param cell_keys [Array<Array(String, Integer)>, nil] the role's cells as
+  #   `[capability_stable_id, level_ordinal]` pairs — the stream doesn't carry
+  #   framework bindings, so the caller supplies them, as it supplies
+  #   `required_cell_keys` to {#complete_alignment}. nil covers every cell:
+  #   the contract every event before per-role alignment carries. The command
+  #   handler always passes the role's scope.
+  # @param level_ordinal [Integer, nil] the level of that role the
+  #   conversation is about — the one its completion gate counts
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or already started
-  def start_alignment(cycle_id, started_by_id:)
+  #   against this role
+  def start_alignment(cycle_id, started_by_id:, role_id: nil, cell_keys: nil, level_ordinal: nil)
     ensure_in_cycle!(cycle_id)
-    raise "Alignment already started for this cycle" if @alignment_started
+    role_id ||= @home_role_id
+    raise "Alignment already started for this cycle" if @alignments.key?(role_id)
 
+    cells = cell_keys&.map { |stable_id, ordinal| [ stable_id, ordinal ] }
     apply(PersonDevelopment::Events::AlignmentStarted.new(data: {
       cycle_id: cycle_id,
-      started_by_id: started_by_id
+      started_by_id: started_by_id,
+      role_id: role_id,
+      level_ordinal: level_ordinal,
+      cell_keys: cells
     }))
 
     # Auto-align cells where self and manager explicitly recorded the same
@@ -542,6 +646,10 @@ class PersonDevelopment::Aggregate
     # event stream this aggregate was loaded from — unlike a read-model
     # query, which can race with concurrent rate_* commits.
     #
+    # Only the role's own cells, and only cells not already agreed — a
+    # second role's start must not rewrite the first conversation's
+    # outcome.
+    #
     # VETTED agreements only: a carried-forward (seeded) side is not
     # deliberate agreement this cycle — ADR-20 seeds both sides of a
     # previously-agreed cell with equal values, so without the provenance
@@ -549,9 +657,12 @@ class PersonDevelopment::Aggregate
     # carried cell. Those cells stay open for the alignment conversation
     # instead (aligning one there IS the vetting). nil source = human
     # (pre-provenance history).
+    covered = @alignments.fetch(role_id)
     @self_ratings.each do |key, self_freq|
       manager_freq = @manager_ratings[key]
       next unless manager_freq == self_freq
+      next unless covers?(covered, key)
+      next if @aligned_ratings.key?(key)
       next if @self_rating_sources[key] == "seeded" || @manager_rating_sources[key] == "seeded"
 
       capability_stable_id, level_ordinal = key
@@ -568,8 +679,8 @@ class PersonDevelopment::Aggregate
 
   # Records an agreed assessment for a capability at a specific level.
   #
-  # Requires alignment to have been formally started for the cycle. The
-  # aligned_frequency is the authoritative view used in scoring. Agreed
+  # Requires an alignment in progress against a role that reads the cell.
+  # The aligned_frequency is the authoritative view used in scoring. Agreed
   # level is derived as the highest level_ordinal where
   # aligned_frequency == "consistent".
   #
@@ -579,12 +690,17 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
   # @param aligned_by_id [String, nil] UUID of the Person recording the agreement
-  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or invalid frequency
+  # @param role_id [String, nil] the role the pair is aligning against, when
+  #   the caller knows it reads the cell. A cell that role gained after its
+  #   alignment started (a framework publish mid-conversation) joins the
+  #   role's cells here — without it, the completion gate would count a cell
+  #   nobody could agree.
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, the cell isn't in
+  #   an alignment in progress, or invalid frequency
   def align_assessment(capability_stable_id, level_ordinal:, aligned_frequency:, cycle_id:, comment: nil,
-                       aligned_by_id: nil)
+                       aligned_by_id: nil, role_id: nil)
     ensure_in_cycle!(cycle_id)
-    raise "Alignment has not been started for this cycle" unless @alignment_started
-    raise "Alignment has been completed for this cycle" if @alignment_completed
+    ensure_alignable!([ capability_stable_id, level_ordinal ], role_id: role_id)
     raise "Invalid frequency: #{aligned_frequency}" unless FREQUENCIES.include?(aligned_frequency)
 
     apply(PersonDevelopment::Events::AssessmentAligned.new(data: {
@@ -593,7 +709,8 @@ class PersonDevelopment::Aggregate
       aligned_frequency: aligned_frequency,
       cycle_id: cycle_id,
       comment: comment,
-      aligned_by_id: aligned_by_id
+      aligned_by_id: aligned_by_id,
+      role_id: role_id
     }))
   end
 
@@ -603,19 +720,17 @@ class PersonDevelopment::Aggregate
   # During the alignment phase, either party can undo an alignment they
   # set by re-clicking the same value in the inline pill — the
   # controller treats a "post the same frequency back" submission as a
-  # clear. Refuses if alignment has already been completed for the cycle
-  # (in which case all values are frozen).
+  # clear. Refuses once the cell's alignment has been completed.
   #
   # @param capability_stable_id [String] stable UUID of the capability
   # @param level_ordinal [Integer] the level being cleared
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param cleared_by_id [String, nil] UUID of the Person clearing the alignment
-  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
-  #   started, alignment already completed, or no prior alignment for this cell
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, the cell isn't in
+  #   an alignment in progress, or no prior alignment for this cell
   def clear_alignment_rating(capability_stable_id, level_ordinal:, cycle_id:, cleared_by_id: nil)
     ensure_in_cycle!(cycle_id)
-    raise "Alignment has not been started for this cycle" unless @alignment_started
-    raise "Alignment has been completed for this cycle" if @alignment_completed
+    ensure_alignable!([ capability_stable_id, level_ordinal ])
     raise "No alignment exists for capability #{capability_stable_id} at level #{level_ordinal}" unless
       @aligned_ratings.key?([ capability_stable_id, level_ordinal ])
 
@@ -654,16 +769,20 @@ class PersonDevelopment::Aggregate
     }))
   end
 
-  # Marks alignment complete for the current cycle.
+  # Marks alignment against one role complete for the current cycle.
   #
-  # After this lands, all ratings (including aligned values) are frozen for
-  # the cycle. Issued by the assessee's current direct manager (enforced by
-  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  # After this lands, the agreed values on that role's cells are the record
+  # of the conversation and stay frozen. Completion is per role: E3's gate
+  # never counts PM3's cells and vice versa. Issued by the assessee's
+  # recorded reporting manager (enforced by the controller-side
+  # {AssessmentPolicy#complete_alignment?}).
   #
   # Snapshot point — long streams compress here.
   #
   # @param cycle_id [String] UUID of the cycle being completed
   # @param completed_by_id [String] UUID of the person completing alignment
+  # @param role_id [String, nil] the role whose alignment completes; nil =
+  #   the role the cycle assesses the person at
   # @param required_cell_keys [Array<Array(String, Integer)>, nil] cells that
   #   MUST carry an agreed value for completion to proceed, as
   #   `[capability_stable_id, level_ordinal]` pairs. The caller supplies the
@@ -682,11 +801,14 @@ class PersonDevelopment::Aggregate
   #   millisecond window; it stays in the documented known-limitation class
   #   of `FrameworkVersionMigrated` coverage staleness.)
   # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
-  #   started, already completed, or a required cell lacks an agreed value
-  def complete_alignment(cycle_id, completed_by_id:, required_cell_keys: nil)
+  #   started against the role, already completed, or a required cell lacks
+  #   an agreed value
+  def complete_alignment(cycle_id, completed_by_id:, role_id: nil, required_cell_keys: nil)
     ensure_in_cycle!(cycle_id)
-    raise "Alignment has not been started for this cycle" unless @alignment_started
-    raise "Alignment already completed for this cycle" if @alignment_completed
+    role_id ||= @home_role_id
+    alignment = @alignments[role_id]
+    raise "Alignment has not been started for this cycle" unless alignment
+    raise "Alignment already completed for this cycle" if alignment[:completed]
 
     missing = Array(required_cell_keys).reject { |key| @aligned_ratings.key?(key) }
     if missing.any?
@@ -697,32 +819,39 @@ class PersonDevelopment::Aggregate
     apply(PersonDevelopment::Events::FullAlignmentCompleted.new(data: {
       cycle_id: cycle_id,
       completed_by_id: completed_by_id,
-      framework_version: @assessed_framework_version
+      framework_version: @assessed_framework_version,
+      role_id: role_id
     }))
   end
 
-  # Re-opens a completed alignment, returning the cycle to the `aligning`
-  # phase so a manager can correct a completion made by accident.
+  # Re-opens a completed alignment against one role, returning it to the
+  # `aligning` phase so a manager can correct a completion made by accident.
   #
   # The agreed (aligned) per-cell values are PRESERVED — re-opening only
   # lifts the completion freeze; it does not clear or re-derive any
   # alignment. The manager resumes editing agreed values and re-completes
   # via {#complete_alignment} (which re-stamps the milestone; auto-align is
   # a start-time behaviour and is NOT re-run). Issued by the assessee's
-  # current direct manager while the cycle is still open (enforced by the
-  # controller-side {AssessmentPolicy#reopen_alignment?}).
+  # recorded reporting manager while the cycle is still open (enforced by
+  # the controller-side {AssessmentPolicy#reopen_alignment?}).
   #
   # @param cycle_id [String] UUID of the cycle being re-opened
   # @param reopened_by_id [String] UUID of the person re-opening alignment
-  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not started, or not completed
-  def reopen_alignment(cycle_id, reopened_by_id:)
+  # @param role_id [String, nil] the role whose alignment re-opens; nil =
+  #   the role the cycle assesses the person at
+  # @raise [RuntimeError] if not in a cycle, wrong cycle, alignment not
+  #   started against the role, or not completed
+  def reopen_alignment(cycle_id, reopened_by_id:, role_id: nil)
     ensure_in_cycle!(cycle_id)
-    raise "Alignment has not been started for this cycle" unless @alignment_started
-    raise "Alignment is not completed for this cycle" unless @alignment_completed
+    role_id ||= @home_role_id
+    alignment = @alignments[role_id]
+    raise "Alignment has not been started for this cycle" unless alignment
+    raise "Alignment is not completed for this cycle" unless alignment[:completed]
 
     apply(PersonDevelopment::Events::AlignmentReopened.new(data: {
       cycle_id: cycle_id,
-      reopened_by_id: reopened_by_id
+      reopened_by_id: reopened_by_id,
+      role_id: role_id
     }))
   end
 
@@ -1241,6 +1370,20 @@ class PersonDevelopment::Aggregate
     }[source]
   end
 
+  # A person who moves into the role and level they were exploring has
+  # arrived: the exploration closes as `moved`, attributed to whoever made
+  # the move (nil for an HRIS sync). Left open, it would name the record
+  # itself, where the lens banner — and so the Stop — never renders.
+  def close_explorations_moved_into(changed_by)
+    @explorations.each do |exploration_id, state|
+      next unless state[:open] && state[:target_role_id] == @role_id && state[:target_level_id] == @level_id
+
+      apply(PersonDevelopment::Events::ExplorationClosed.new(data: {
+        exploration_id: exploration_id, closed_by_id: changed_by, outcome: "moved", note: nil
+      }))
+    end
+  end
+
   def ensure_assigned!
     raise "Person not yet assigned to a framework" unless @assigned
   end
@@ -1249,8 +1392,7 @@ class PersonDevelopment::Aggregate
   # when cycle-exit clearing grows, so leave and conclude can't diverge.
   def reset_cycle_exit_state
     @current_cycle_id = nil
-    @alignment_started = false
-    @alignment_completed = false
+    @alignments = {}
   end
 
   # Withdrawal retracts the evidence artifact itself, so its linkage
@@ -1285,8 +1427,39 @@ class PersonDevelopment::Aggregate
     raise "Cycle ID does not match current cycle" unless @current_cycle_id == expected_cycle_id
   end
 
-  def ensure_individual_ratings_unfrozen!
-    raise "Self and manager ratings are frozen during alignment" if @alignment_started
+  # A self or manager rating is frozen once any alignment started this cycle
+  # reads its cell (ADR-22) — the union, so a shared cell can't be rated
+  # under one role while another role's conversation is about it.
+  def ensure_individual_ratings_unfrozen!(capability_stable_id, level_ordinal)
+    key = [ capability_stable_id, level_ordinal ]
+    raise "Self and manager ratings are frozen during alignment" if
+      @alignments.each_value.any? { |alignment| covers?(alignment, key) }
+  end
+
+  # An agreed value can be recorded or cleared while an alignment reading
+  # the cell is in progress — and never over one a completed alignment
+  # already agreed, which is that conversation's record.
+  def ensure_alignable!(key, role_id: nil)
+    raise "Alignment has not been started for this cycle" if @alignments.empty?
+
+    covering = @alignments.values.select { |alignment| covers?(alignment, key) }
+    named = @alignments[role_id] if role_id
+    covering << named if named && !named[:completed] && !covering.include?(named)
+    raise "Alignment has not been started against a role that reads this cell" if covering.empty?
+
+    completed, in_progress = covering.partition { |alignment| alignment[:completed] }
+    raise "Alignment has been completed for this cycle" if in_progress.empty?
+    raise "Alignment has been completed for this cycle" if completed.any? && @aligned_ratings.key?(key)
+  end
+
+  # @return [Boolean]
+  def covers?(alignment, key)
+    alignment[:cells] == :all || alignment[:cells].include?(key)
+  end
+
+  # @return [Boolean] the record's own alignment has been completed
+  def home_alignment_completed?
+    @alignments[@home_role_id]&.fetch(:completed) || false
   end
 
   # Domain invariant: a manager rating must be attributable to the recorded
@@ -1361,6 +1534,17 @@ class PersonDevelopment::Aggregate
     @active_delegates.delete(event.data[:delegate_person_id])
   end
 
+  on PersonDevelopment::Events::ExplorationStarted do |event|
+    @explorations[event.data[:exploration_id]] = {
+      target_role_id: event.data[:target_role_id], target_level_id: event.data[:target_level_id], open: true
+    }
+  end
+
+  on PersonDevelopment::Events::ExplorationClosed do |event|
+    state = @explorations[event.data[:exploration_id]]
+    state[:open] = false if state
+  end
+
   on PersonDevelopment::Events::PersonAssignedToFramework do |event|
     @person_id = event.data[:person_id]
     @framework_id = event.data[:framework_id]
@@ -1415,14 +1599,21 @@ class PersonDevelopment::Aggregate
           [ cap == from ? to : cap, ordinal ]
         }.to_set
       end
+      # A role's frozen cells follow the survivor too, or a mid-alignment
+      # publish would thaw the evolved capability's cells.
+      @alignments.each_value do |alignment|
+        next if alignment[:cells] == :all
+
+        alignment[:cells] = alignment[:cells].to_set { |cap, ordinal| [ cap == from ? to : cap, ordinal ] }
+      end
     end
   end
 
   on PersonDevelopment::Events::JoinedAssessmentCycle do |event|
     @current_cycle_id = event.data[:cycle_id]
     @assessed_framework_version = event.data[:framework_version]
-    @alignment_started = false
-    @alignment_completed = false
+    @home_role_id = @role_id
+    @alignments = {}
     @self_ratings = {}
     @manager_ratings = {}
     @self_rating_sources = {}
@@ -1438,18 +1629,28 @@ class PersonDevelopment::Aggregate
     reset_cycle_exit_state
   end
 
-  on PersonDevelopment::Events::AlignmentStarted do |_event|
-    @alignment_started = true
+  # A historical start carries neither a role nor cells: it is the home
+  # role's and it froze the whole assessment, so replaying it must too —
+  # otherwise every open cycle that started alignment before per-role
+  # alignment would silently thaw on its next load.
+  on PersonDevelopment::Events::AlignmentStarted do |event|
+    cell_keys = event.data[:cell_keys]
+    @alignments[event.data[:role_id] || @home_role_id] = {
+      completed: false,
+      cells: cell_keys ? cell_keys.to_set { |stable_id, ordinal| [ stable_id, ordinal ] } : :all
+    }
   end
 
-  on PersonDevelopment::Events::FullAlignmentCompleted do |_event|
-    @alignment_completed = true
+  on PersonDevelopment::Events::FullAlignmentCompleted do |event|
+    alignment = @alignments[event.data[:role_id] || @home_role_id]
+    alignment[:completed] = true if alignment
   end
 
-  on PersonDevelopment::Events::AlignmentReopened do |_event|
+  on PersonDevelopment::Events::AlignmentReopened do |event|
     # Back to the aligning phase — agreed values (@aligned_ratings) are
     # deliberately left intact so the manager resumes where they left off.
-    @alignment_completed = false
+    alignment = @alignments[event.data[:role_id] || @home_role_id]
+    alignment[:completed] = false if alignment
   end
 
   on PersonDevelopment::Events::RatingSeedSkipped do |_event|
@@ -1493,8 +1694,12 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::AssessmentAligned do |event|
-    @aligned_ratings[[ event.data[:capability_stable_id], event.data[:level_ordinal] ]] =
-      event.data[:aligned_frequency]
+    key = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    @aligned_ratings[key] = event.data[:aligned_frequency]
+    # An agreement made against a role counts the cell as that role's —
+    # absent on every event before per-role alignment.
+    alignment = @alignments[event.data[:role_id]] if event.data[:role_id]
+    alignment[:cells] << key if alignment && alignment[:cells] != :all
   end
 
   on PersonDevelopment::Events::AlignmentCleared do |event|

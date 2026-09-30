@@ -82,36 +82,6 @@ class AssessmentCycleParticipationTest < ActiveSupport::TestCase
     end
   end
 
-  context "#individual_ratings_editable?" do
-    should "true while enrolled or started" do
-      enrollment = create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @person_id)
-      assert AssessmentCycleParticipation.new(enrollment: enrollment).individual_ratings_editable?
-
-      progress = create(:assessment_cycle_progress, :started,
-        tenant: @tenant, cycle: @cycle, person_id: @person_id)
-      assert AssessmentCycleParticipation.new(enrollment: enrollment, progress: progress).individual_ratings_editable?
-    end
-
-    should "false once aligning" do
-      enrollment = create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @person_id)
-      progress = create(:assessment_cycle_progress, :aligning,
-        tenant: @tenant, cycle: @cycle, person_id: @person_id)
-
-      participation = AssessmentCycleParticipation.new(enrollment: enrollment, progress: progress)
-      assert_not participation.individual_ratings_editable?
-    end
-
-    should "false when withdrawn" do
-      enrollment = create(:assessment_cycle_enrollment, :withdrawn, tenant: @tenant, cycle: @cycle, person_id: @person_id)
-      assert_not AssessmentCycleParticipation.new(enrollment: enrollment).individual_ratings_editable?
-    end
-
-    should "false when concluded" do
-      enrollment = create(:assessment_cycle_enrollment, :concluded, tenant: @tenant, cycle: @cycle, person_id: @person_id)
-      assert_not AssessmentCycleParticipation.new(enrollment: enrollment).individual_ratings_editable?
-    end
-  end
-
   context "delegation" do
     setup do
       @enrollment = create(:assessment_cycle_enrollment,

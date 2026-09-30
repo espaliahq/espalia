@@ -8,6 +8,7 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = @tenant
     @framework_id = SecureRandom.uuid_v7
     @cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id)
+    @role = create(:framework_role, tenant: @tenant)
 
     @dept_head = create(:person, tenant: @tenant, name: "Dana Dept")
     @em_1 = create(:person, tenant: @tenant, name: "Mia", manager: @dept_head)
@@ -19,15 +20,13 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       create(:person_framework_assignment, tenant: @tenant,
              person_id: person.id, framework_id: @framework_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: person.id, level_ordinal: 3)
+             person_id: person.id, level_ordinal: 3, role_id: @role.role_id)
     end
 
     category = create(:framework_capability_category, tenant: @tenant,
                       framework_id: @framework_id, name: "Thinking")
-    @cap_a = create(:framework_capability, tenant: @tenant,
-                    category_id: category.category_id, name: "Strategic Thinking")
-    @cap_b = create(:framework_capability, tenant: @tenant,
-                    category_id: category.category_id, name: "Delivery")
+    @cap_a = capability(category, "Strategic Thinking")
+    @cap_b = capability(category, "Delivery")
 
     @session = create(:calibration_session, tenant: @tenant,
                       cycle_id: @cycle.cycle_id, framework_id: @framework_id,
@@ -56,6 +55,13 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
 
   def stats
     CalibrationSessions::OverviewStats.new(session: @session).call
+  end
+
+  def capability(category, name)
+    cap = create(:framework_capability, tenant: @tenant, category_id: category.category_id, name: name)
+    create(:framework_capability_role_binding, tenant: @tenant, capability_id: cap.capability_id, role_id: @role.role_id)
+    create(:framework_behavioural_expectation, tenant: @tenant, capability_id: cap.capability_id, level_ordinal: 3)
+    cap
   end
 
   context "tendency strip" do
@@ -109,8 +115,7 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
 
   context "divergence board" do
     should "rank capabilities by residual spread and name them" do
-      cap_c = create(:framework_capability, tenant: @tenant,
-                     category_id: @cap_a.category_id, name: "Collaboration")
+      cap_c = capability(@cap_a.category, "Collaboration")
       # cap_a: genuine disagreement (3.0 vs 0.0). cap_b + cap_c: agreement —
       # they anchor the raters' overall offsets so the correction doesn't
       # absorb the cap_a disagreement as mere tendency.
@@ -178,6 +183,17 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     end
   end
 
+  context "role scope" do
+    should "ignore ratings outside the assessed role" do
+      rate(@r1, @cap_a, manager: "consistent")
+      create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3, manager_rated_frequency: "none")
+
+      mia = stats[:raters].find { |r| r[:participant_id] == @em_1.id }
+      assert_equal 1, mia[:cell_count]
+      assert_equal 3.0, mia[:mean]
+    end
+  end
+
   context "attribution" do
     should "exclude population members whose rater is not a participant" do
       other_manager = create(:person, tenant: @tenant, name: "Kim Elsewhere")
@@ -185,7 +201,7 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       create(:person_framework_assignment, tenant: @tenant,
              person_id: outsider_report.id, framework_id: @framework_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: outsider_report.id, level_ordinal: 3)
+             person_id: outsider_report.id, level_ordinal: 3, role_id: @role.role_id)
       create(:calibration_session_member, tenant: @tenant,
              session: @session, person_id: outsider_report.id)
       rate(outsider_report, @cap_a, manager: "none")
@@ -291,7 +307,7 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     create(:person_framework_assignment, tenant: @tenant,
            person_id: report.id, framework_id: @framework_id)
     create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-           person_id: report.id, level_ordinal: 3)
+           person_id: report.id, level_ordinal: 3, role_id: @role.role_id)
     report
   end
 end

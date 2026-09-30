@@ -252,14 +252,19 @@ class CalibrationSessions::DrillInStats
   end
 
   # (person_id) => { frequency:, self_frequency:, carried: } for this
-  # capability at the person's assessed level. `carried` = the manager value
-  # was seeded from the previous cycle and not confirmed this one (ADR-20);
-  # only "seeded" counts, nil being a legacy/factory row.
+  # capability at the person's assessed level, in their assessed role's
+  # cells — a person whose role doesn't read this capability stays an
+  # unrated dot. `carried` = the manager value was seeded from the previous
+  # cycle and not confirmed this one (ADR-20); only "seeded" counts, nil
+  # being a legacy/factory row.
   def ratings
     @ratings ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .for_capability(@capability_stable_id)
-      .where(person_id: assessed_ordinals.keys, level_ordinal: ordinals)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: assessed_ordinals.keys
+      ))
+      .where(level_ordinal: ordinals)
       .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :self_rated_frequency,
              :manager_rating_source)
       .each_with_object({}) do |(person_id, level_ordinal, manager_frequency, self_frequency, source), map|

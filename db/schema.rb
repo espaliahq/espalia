@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -55,6 +55,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.index ["tenant_id"], name: "index_assessment_cycle_progress_on_tenant_id"
   end
 
+  create_table "assessment_cycle_role_alignments", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "aligned_at"
+    t.uuid "aligned_by_id"
+    t.integer "aligned_framework_version"
+    t.datetime "alignment_started_at", null: false
+    t.uuid "alignment_started_by_id"
+    t.datetime "created_at", null: false
+    t.uuid "cycle_id", null: false
+    t.uuid "framework_id", null: false
+    t.boolean "home", default: false, null: false
+    t.integer "level_ordinal"
+    t.uuid "person_id", null: false
+    t.datetime "reopened_at"
+    t.uuid "reopened_by_id"
+    t.uuid "role_id", null: false
+    t.string "status", default: "aligning", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.boolean "whole_assessment", default: false, null: false
+    t.index ["cycle_id", "person_id", "role_id"], name: "idx_assessment_cycle_role_alignments_unique", unique: true
+    t.index ["tenant_id", "person_id"], name: "idx_assessment_cycle_role_alignments_by_person"
+    t.index ["tenant_id"], name: "index_assessment_cycle_role_alignments_on_tenant_id"
+  end
+
   create_table "assessment_cycles", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "closed_at"
     t.datetime "created_at", null: false
@@ -76,6 +100,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.index ["tenant_id"], name: "index_assessment_cycles_on_tenant_id"
   end
 
+  create_table "assessment_explorations", id: :uuid, default: nil, force: :cascade do |t|
+    t.text "close_note"
+    t.datetime "closed_at"
+    t.uuid "closed_by_id"
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.string "outcome"
+    t.uuid "person_id", null: false
+    t.text "start_note"
+    t.datetime "started_at", null: false
+    t.uuid "started_by_id"
+    t.string "status", default: "open", null: false
+    t.uuid "target_level_id", null: false
+    t.integer "target_level_ordinal"
+    t.uuid "target_role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id", "target_role_id"], name: "idx_assessment_explorations_one_open_per_role", unique: true, where: "((status)::text = 'open'::text)"
+    t.index ["person_id", "framework_id"], name: "idx_assessment_explorations_by_person"
+    t.index ["tenant_id"], name: "index_assessment_explorations_on_tenant_id"
+  end
+
   create_table "assessment_level_ratings", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "aligned_by_id"
     t.text "aligned_comment"
@@ -91,6 +137,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.uuid "manager_rated_by_id"
     t.text "manager_rated_comment"
     t.string "manager_rated_frequency"
+    t.uuid "manager_rated_via_role_id"
     t.string "manager_rating_source"
     t.string "migration_status", default: "not_flagged", null: false
     t.uuid "person_id", null: false
@@ -98,6 +145,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
     t.uuid "seeded_from_cycle_id"
     t.text "self_rated_comment"
     t.string "self_rated_frequency"
+    t.uuid "self_rated_via_role_id"
     t.string "self_rating_source"
     t.string "source", default: "human", null: false
     t.uuid "tenant_id", null: false
@@ -752,7 +800,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_000001) do
   add_foreign_key "assessment_cycle_progress", "people", column: "aligned_by_id", on_delete: :nullify
   add_foreign_key "assessment_cycle_progress", "people", column: "alignment_started_by_id", on_delete: :nullify
   add_foreign_key "assessment_cycle_progress", "tenants"
+  add_foreign_key "assessment_cycle_role_alignments", "tenants"
   add_foreign_key "assessment_cycles", "tenants"
+  add_foreign_key "assessment_explorations", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "calibration_session_members", "tenants"
   add_foreign_key "calibration_sessions", "tenants"

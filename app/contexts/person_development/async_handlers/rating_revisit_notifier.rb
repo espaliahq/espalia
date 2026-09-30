@@ -77,7 +77,7 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifier < ApplicationJob
     requested_at = event.metadata[:timestamp]
     return false if requested_at.nil?
 
-    scope = AssessmentLevelRating.where(
+    scope = AssessmentLevelRating.across_all_roles.where(
       person_id: person_id, framework_id: framework_id,
       capability_stable_id: event.data[:capability_stable_id],
       level_ordinal: event.data[:level_ordinal]

@@ -36,7 +36,8 @@ class Views::Assessments::CategorySection < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -161,7 +162,8 @@ class Views::Assessments::CategorySection < Views::Base
           can_request_evidence: @can_request_evidence,
           can_relink_others_evidence: @can_relink_others_evidence,
           can_comment: @can_comment,
-          viewer_is_tenant_admin: @viewer_is_tenant_admin
+          viewer_is_tenant_admin: @viewer_is_tenant_admin,
+          lens: @lens
         )
       end
     end

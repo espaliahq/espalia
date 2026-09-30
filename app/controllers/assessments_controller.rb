@@ -37,6 +37,12 @@ class AssessmentsController < ApplicationController
     cycle_pairs = all_assignments.map { |a| [ a.framework_id, a.person_id ] }
     @open_cycles = AssessmentCycle.open_cycles_for(cycle_pairs)
     @card_statuses = build_card_statuses(@open_cycles)
+    # The person's own and their team's, as `assessments_mine` returns them —
+    # an exploration is a conversation between the two, not a list for the
+    # wider chain.
+    @explorations = Assessments::OpenExplorations.for(
+      @own_assignments.to_a + @report_assignments.to_a, progress_for: @own_assignments, open_cycles: @open_cycles
+    )
 
     render Views::Assessments::IndexView.new(
       assignments: @own_assignments,
@@ -46,6 +52,7 @@ class AssessmentsController < ApplicationController
       report_people: @report_people,
       open_cycles: @open_cycles,
       card_statuses: @card_statuses,
+      explorations: @explorations,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -73,9 +80,15 @@ class AssessmentsController < ApplicationController
         expanded_level_ordinal: focused_level_ordinal_param,
         selected_levels: selected_levels_param,
         context: context,
-        can_start_alignment: policy.start_alignment?,
-        can_complete_alignment: policy.complete_alignment?,
-        can_reopen_alignment: policy.reopen_alignment?,
+        # Alignment is per role (ADR-22): the record's milestones on the
+        # record, a lens role's on that lens at the level its conversation
+        # is about. Never on another level of the home ladder: the
+        # completion control counts the level it is rendered against.
+        can_start_alignment: lens.home? && policy.start_alignment?,
+        can_complete_alignment: milestone_lens? && policy.complete_alignment?(role_id: lens_role_id),
+        can_reopen_alignment: milestone_lens? && policy.reopen_alignment?(role_id: lens_role_id),
+        can_start_lens_alignment: !lens.home_role? && policy.start_alignment?(role_id: lens_role_id),
+        lens_viewer: lens_viewer(policy),
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
@@ -83,6 +96,8 @@ class AssessmentsController < ApplicationController
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        exploration: lens_exploration,
+        can_explore: policy.start_exploration?,
         can_manage_delegates: policy.delegate_manager_rating?,
         active_delegations: load_active_delegations(policy),
         candidate_delegates: load_candidate_delegates(policy),
@@ -108,6 +123,8 @@ class AssessmentsController < ApplicationController
         can_comment: viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
+        exploration: lens_exploration,
+        can_explore: policy.start_exploration?,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -167,6 +184,16 @@ class AssessmentsController < ApplicationController
     end
   end
 
+  # The role and level the page is read against (`as_role` / `as_level`),
+  # resolved once per request and only after `authorize`, so a pair the
+  # framework doesn't have is a 404 to a permitted viewer and nobody else.
+  #
+  # @return [Assessments::Lens]
+  # @raise [Assessments::Lens::NotFound]
+  def lens
+    @lens ||= Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level])
+  end
+
   def set_assignment
     return unless current_person
 
@@ -198,28 +225,17 @@ class AssessmentsController < ApplicationController
   #
   # @return [Symbol] :self, :manager, or :alignment
   def assessment_context
-    Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user)
+    @assessment_context ||=
+      Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user, lens: lens)
   end
 
   def load_assessment_data
-    role = FrameworkState::Role.find_by!(role_id: @assignment.role_id)
-    categories = FrameworkState::CapabilityCategory
-      .where(framework_id: @assignment.framework_id, status: "active")
-      .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-      .order(:ordinal)
-
-    @matrix_data = Assessments::MatrixDataBuilder.new(
-      framework: @framework,
-      role: role,
-      level: FrameworkState::Level.find_by!(level_id: @assignment.level_id),
-      person_id: @assignment.person_id,
-      cycle_id: @assignment.current_open_cycle&.cycle_id,
-      categories: categories,
-      participant_status: @assignment.current_open_cycle_participation&.status,
+    @matrix_data = Assessments::MatrixDataBuilder.for_lens(
+      lens: lens,
       context: assessment_context,
       viewer_person_id: current_person&.id,
       viewer_sees_all_evidence: viewer_sees_all_evidence?
-    ).build
+    )
     apply_viewer_rating_lock
   end
 
@@ -239,6 +255,39 @@ class AssessmentsController < ApplicationController
 
   def assignment_policy
     @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
+  end
+
+  # Whose ratings the lens banner speaks of on the manager view: the
+  # reporting manager's, a delegate's, or nobody's (a view-only viewer).
+  #
+  # @return [Symbol] :manager, :delegate or :observer
+  def lens_viewer(policy)
+    return :observer unless policy.rating_participant?
+
+    active_rating_delegate? ? :delegate : :manager
+  end
+
+  # The open exploration of the role the page is read through (ADR-22) — any
+  # level of it, since one per role is open at a time. nil on the record.
+  #
+  # @return [AssessmentExploration, nil]
+  def lens_exploration
+    return nil if lens.home?
+
+    AssessmentExploration.open_of_role(@assignment, lens.role.role_id)
+  end
+
+  # @return [String, nil] the lens role, nil on the home role
+  def lens_role_id
+    lens.role.role_id unless lens.home_role?
+  end
+
+  # Whether the page is read at the level an alignment milestone counts:
+  # the record itself, or a lens role at the level its conversation began.
+  def milestone_lens?
+    return lens.home? if lens.home_role?
+
+    @matrix_data[:lens_alignment]&.level_ordinal == lens.level.ordinal
   end
 
   # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and
@@ -291,7 +340,8 @@ class AssessmentsController < ApplicationController
       context: assessment_context,
       viewer_person_id: current_person.id,
       viewer_sees_all: viewer_sees_all_evidence?,
-      alignment_started: alignment_started?
+      alignment_started: alignment_started?,
+      disclosure: (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
     ).call
   end
 
@@ -347,9 +397,38 @@ class AssessmentsController < ApplicationController
     # explicitly cleared — provenance "human"; nil provenance counts as
     # human for legacy rows). The view derives the tri+1-state from these:
     # Complete / In progress (human touch) / To confirm (all carried) /
-    # Not started.
-    rated = AssessmentLevelRating
-      .where(cycle_id: cycle_ids, person_id: person_ids)
+    # Not started. Only the assessed role's cells count: rating a cell the
+    # role doesn't read hasn't started this assessment.
+    rated = open_cycles.group_by { |_, cycle| cycle }.each_with_object({}) do |(cycle, entries), h|
+      h.merge!(card_rating_counts(cycle, entries.map { |(_, person_id), _| person_id }))
+    end
+    lens_alignments = Assessments::LensAlignments.for(cycle_ids: cycle_ids, person_ids: person_ids)
+
+    open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
+      prog = progress[[ cycle.cycle_id, person_id ]]
+      any = rated[[ cycle.cycle_id, person_id ]] || {}
+      statuses[[ framework_id, person_id ]] = {
+        status: prog&.status,
+        self_complete: prog&.self_completed_at.present?,
+        manager_complete: prog&.manager_completed_at.present?,
+        self_any: any[:self_any] || false,
+        manager_any: any[:manager_any] || false,
+        self_human: any[:self_human] || false,
+        manager_human: any[:manager_human] || false,
+        lens_alignments: lens_alignments.fetch([ cycle.cycle_id, person_id ], [])
+      }
+    end
+  end
+
+  # One cycle's per-person "any" / "human" flags for each rating side.
+  #
+  # @return [Hash{Array(String, String) => Hash}]
+  def card_rating_counts(cycle, person_ids)
+    AssessmentLevelRating
+      .where(cycle_id: cycle.cycle_id)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: cycle.cycle_id, framework_id: cycle.framework_id, person_ids: person_ids
+      ))
       .group(:cycle_id, :person_id)
       .pluck(
         :cycle_id, :person_id,
@@ -364,20 +443,6 @@ class AssessmentsController < ApplicationController
         h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,
                             self_human: self_h.positive?, manager_human: mgr_h.positive? }
       end
-
-    open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
-      prog = progress[[ cycle.cycle_id, person_id ]]
-      any = rated[[ cycle.cycle_id, person_id ]] || {}
-      statuses[[ framework_id, person_id ]] = {
-        status: prog&.status,
-        self_complete: prog&.self_completed_at.present?,
-        manager_complete: prog&.manager_completed_at.present?,
-        self_any: any[:self_any] || false,
-        manager_any: any[:manager_any] || false,
-        self_human: any[:self_human] || false,
-        manager_human: any[:manager_human] || false
-      }
-    end
   end
 
   # Cell-level focus param. Only meaningful when paired with `?capability=`;

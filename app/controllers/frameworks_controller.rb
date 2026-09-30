@@ -131,8 +131,19 @@ class FrameworksController < ApplicationController
       # The editor's Save-vs-Propose label needs the Editing/Suggesting cookie
       # as well as the viewer's authority (#379).
       edit_mode: framework_edit_mode,
+      viewer_assignment_id: mode == :view ? viewer_assignment_id : nil,
       **viewer_matrix_flags(mode)
     )
+  end
+
+  # The viewer's own assignment in this framework, for the role tree's "See
+  # my ratings against this role" links (ADR-22). nil when they have none.
+  #
+  # @return [String, nil]
+  def viewer_assignment_id
+    return nil unless current_person
+
+    PersonFrameworkAssignment.find_by(person_id: current_person.id, framework_id: @framework.framework_id)&.id
   end
 
   # Renders the loaded expanded `<tr>` for one capability under the current

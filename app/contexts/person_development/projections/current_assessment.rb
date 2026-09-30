@@ -10,7 +10,11 @@
 # * `AssessmentLevelRating` — one row per (cycle_id, person, framework,
 #   capability_stable_id, level_ordinal).
 # * `AssessmentCycleProgress` — per-cycle journey: started_at, alignment
-#   timestamps, terminal aligned state.
+#   timestamps, terminal aligned state — the HOME role's lifecycle.
+# * `AssessmentCycleRoleAlignment` — one row per role alignment has been
+#   started against in a cycle, the home role included (ADR-22).
+# * `AssessmentExploration` — one row per declared exploration of another
+#   role or level (ADR-22), keyed by its event-carried id.
 #
 # Because rating rows are scoped by cycle, historical ratings across
 # cycles are preserved rather than overwritten.
@@ -72,7 +76,21 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     Ready-to-align cue were reading fully-carried assessments as done.
   #     A rebuild retro-clears completion stamps that were earned by
   #     seeds alone (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 7
+  #
+  # 8 — per-role alignment (ADR-22): writes `AssessmentCycleRoleAlignment`,
+  #     one row per role alignment has started against, and a rebuild
+  #     backfills the home role's rows from every historical alignment
+  #     event. Only a start against the home role moves
+  #     `AssessmentCycleProgress`. And a human rating made through a lens
+  #     (`via_role_id`) on a cell the home role doesn't read no longer flips
+  #     a participation to `started`, so a rebuild can revert such a
+  #     participation to `enrolled`
+  #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  #
+  # Not bumped for `ExplorationStarted` / `ExplorationClosed` (declared
+  # explorations, `AssessmentExploration`): brand-new event types with no
+  # history, so a rebuild writes exactly what live projection wrote.
+  CODE_VERSION = 8
 
   # All event classes this projection handles.
   #
@@ -98,7 +116,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::FullAlignmentCompleted,
       PersonDevelopment::Events::AlignmentReopened,
       PersonDevelopment::Events::FrameworkVersionMigrated,
-      PersonDevelopment::Events::RatingRevisitRequested
+      PersonDevelopment::Events::RatingRevisitRequested,
+      PersonDevelopment::Events::ExplorationStarted,
+      PersonDevelopment::Events::ExplorationClosed
     ]
   end
 
@@ -112,6 +132,8 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonFrameworkAssignment.where(tenant_id: tenant.id).delete_all
       AssessmentLevelRating.where(tenant_id: tenant.id).delete_all
       AssessmentCycleProgress.where(tenant_id: tenant.id).delete_all
+      AssessmentCycleRoleAlignment.where(tenant_id: tenant.id).delete_all
+      AssessmentExploration.where(tenant_id: tenant.id).delete_all
     end
   end
 
@@ -146,6 +168,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::AlignmentReopened then handle_alignment_reopened(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     when PersonDevelopment::Events::RatingRevisitRequested then handle_rating_revisit_requested(event)
+    when PersonDevelopment::Events::ExplorationStarted then handle_exploration_started(event)
+    when PersonDevelopment::Events::ExplorationClosed then handle_exploration_closed(event)
     end
   end
 
@@ -154,6 +178,40 @@ class PersonDevelopment::Projections::CurrentAssessment
   # time). Handled here solely so the assessment feed updates live for a
   # rater who has the page open when a calibration session nudges them.
   def handle_rating_revisit_requested(event)
+    broadcast_assessment_sync(event)
+  end
+
+  # A declared exploration (ADR-22). The row's id is the event's
+  # `exploration_id`, and every time is the event's own, so a rebuild
+  # reproduces the row exactly. Broadcast so an open assessment shows the
+  # banner, the list and the feed entry without a reload.
+  def handle_exploration_started(event)
+    AssessmentExploration.find_or_initialize_by(id: event.data[:exploration_id]).tap do |row|
+      row.assign_attributes(
+        tenant_id: event.metadata[:tenant_id],
+        person_id: event.metadata[:person_id],
+        framework_id: event.metadata[:framework_id],
+        target_role_id: event.data[:target_role_id],
+        target_level_id: event.data[:target_level_id],
+        target_level_ordinal: event.data[:target_level_ordinal],
+        status: "open",
+        started_at: event.metadata[:timestamp] || Time.current,
+        started_by_id: event.data[:started_by_id],
+        start_note: event.data[:note]
+      )
+      row.save!
+    end
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_exploration_closed(event)
+    AssessmentExploration.find_by(id: event.data[:exploration_id])&.update!(
+      status: "closed",
+      closed_at: event.metadata[:timestamp] || Time.current,
+      closed_by_id: event.data[:closed_by_id],
+      outcome: event.data[:outcome],
+      close_note: event.data[:note]
+    )
     broadcast_assessment_sync(event)
   end
 
@@ -324,6 +382,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       cycle_id: event.data[:cycle_id],
       person_id: event.metadata[:person_id]
     ).delete_all
+    AssessmentCycleRoleAlignment.for_participation(
+      cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id]
+    ).delete_all
 
     progress = AssessmentCycleProgress.find_or_initialize_by(
       cycle_id: event.data[:cycle_id],
@@ -361,6 +422,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
+    # Provenance only (ADR-22). Absent on every event before the lens, so a
+    # replay writes the nil the column already holds — no rebuild needed.
+    rating.self_rated_via_role_id = event.data[:via_role_id]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.self_rating_source = seeded_event?(event) ? "seeded" : "human"
     apply_source(rating, event)
@@ -377,6 +441,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = event.data[:frequency]
     rating.self_rated_comment = event.data[:comment]
+    rating.self_rated_via_role_id = event.data[:via_role_id]
     rating.last_self_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
     rating.self_rating_source = "human"
@@ -390,6 +455,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.self_rated_frequency = nil
     rating.self_rated_comment = nil
+    rating.self_rated_via_role_id = nil
     # "human", not nil: a clear is a human decision that this side is
     # EMPTY. nil means "never held anything" — the distinction is what
     # lets a seed re-run complete untouched sides without resurrecting
@@ -404,6 +470,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_via_role_id = event.data[:via_role_id]
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.manager_rating_source = seeded_event?(event) ? "seeded" : "human"
@@ -419,6 +486,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating = find_or_init_rating(event)
     rating.manager_rated_frequency = event.data[:frequency]
     rating.manager_rated_comment = event.data[:comment]
+    rating.manager_rated_via_role_id = event.data[:via_role_id]
     rating.manager_rated_by_id = event.data[:rated_by_id]
     rating.last_manager_rated_at = event.metadata[:timestamp] || Time.current
     rating.source = "human"
@@ -434,6 +502,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     rating.manager_rated_frequency = nil
     rating.manager_rated_comment = nil
     rating.manager_rated_by_id = nil
+    rating.manager_rated_via_role_id = nil
     # "human", not nil — see handle_self_rating_cleared.
     rating.manager_rating_source = "human"
     rating.save!
@@ -441,17 +510,33 @@ class PersonDevelopment::Projections::CurrentAssessment
     broadcast_assessment_sync(event)
   end
 
+  # A start with no role is history — the home role's, over every cell.
   def handle_alignment_started(event)
-    progress = find_progress(event)
-    return unless progress
-
     now = event.metadata[:timestamp] || Time.current
-    progress.update!(
-      status: "aligning",
-      alignment_started_at: now,
-      alignment_started_by_id: event.data[:started_by_id],
-      started_at: progress.started_at || now
-    )
+    role_id = alignment_role_id(event)
+    home = role_id == home_role_id(event)
+    write_role_alignment(event, role_id) do |row|
+      row.assign_attributes(
+        home: home,
+        whole_assessment: event.data[:cell_keys].nil?,
+        level_ordinal: event.data[:level_ordinal] || (home_level_ordinal(event) if home),
+        status: "aligning",
+        alignment_started_at: now,
+        alignment_started_by_id: event.data[:started_by_id],
+        aligned_at: nil, aligned_by_id: nil, aligned_framework_version: nil,
+        reopened_at: nil, reopened_by_id: nil
+      )
+    end
+
+    progress = find_progress(event)
+    if home && progress
+      progress.update!(
+        status: "aligning",
+        alignment_started_at: now,
+        alignment_started_by_id: event.data[:started_by_id],
+        started_at: progress.started_at || now
+      )
+    end
     broadcast_assessment_sync(event)
   end
 
@@ -491,36 +576,115 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   def handle_full_alignment_completed(event)
-    progress = find_progress(event)
-    return unless progress
-
     now = event.metadata[:timestamp] || Time.current
-    progress.update!(
-      status: "aligned",
-      aligned_at: now,
-      aligned_by_id: event.data[:completed_by_id],
-      aligned_framework_version: event.data[:framework_version]
-    )
+    role_id = alignment_role_id(event)
+    update_role_alignment(event, role_id,
+      status: "aligned", aligned_at: now, aligned_by_id: event.data[:completed_by_id],
+      aligned_framework_version: event.data[:framework_version])
+
+    progress = find_progress(event)
+    if role_id == home_role_id(event) && progress
+      progress.update!(
+        status: "aligned",
+        aligned_at: now,
+        aligned_by_id: event.data[:completed_by_id],
+        aligned_framework_version: event.data[:framework_version]
+      )
+    end
     broadcast_assessment_sync(event)
   end
 
-  # Re-opens a completed alignment: returns the cycle to the `aligning`
+  # Re-opens a completed alignment: returns the role to the `aligning`
   # phase and clears the completion stamps. The agreed per-cell values on
   # AssessmentLevelRating are deliberately left intact — the manager
   # resumes the conversation where it was left and re-completes when ready.
-  # The original alignment_started_at / _by_id are preserved (the cycle was
+  # The original alignment_started_at / _by_id are preserved (the role was
   # already in alignment; we're only undoing the completion).
   def handle_alignment_reopened(event)
-    progress = find_progress(event)
-    return unless progress
+    role_id = alignment_role_id(event)
+    update_role_alignment(event, role_id,
+      status: "aligning", aligned_at: nil, aligned_by_id: nil, aligned_framework_version: nil,
+      reopened_at: event.metadata[:timestamp] || Time.current,
+      reopened_by_id: event.data[:reopened_by_id])
 
-    progress.update!(
-      status: "aligning",
-      aligned_at: nil,
-      aligned_by_id: nil,
-      aligned_framework_version: nil
-    )
+    progress = find_progress(event)
+    if role_id == home_role_id(event) && progress
+      progress.update!(
+        status: "aligning",
+        aligned_at: nil,
+        aligned_by_id: nil,
+        aligned_framework_version: nil
+      )
+    end
     broadcast_assessment_sync(event)
+  end
+
+  # The role an alignment event is about; nil on history, which is the home
+  # role's.
+  #
+  # @return [String, nil]
+  def alignment_role_id(event)
+    event.data[:role_id] || home_role_id(event)
+  end
+
+  # The role the cycle assesses the person at: its enrollment snapshot, else
+  # the assignment this projection owns — the same home every reader uses
+  # ({Assessments::RoleScope.home_role_ids}).
+  #
+  # @return [String, nil]
+  def home_role_id(event)
+    Assessments::RoleScope.home_role_ids(
+      cycle_id: event.data[:cycle_id], framework_id: event.metadata[:framework_id],
+      person_ids: [ event.metadata[:person_id] ]
+    )[event.metadata[:person_id]]
+  end
+
+  # @return [Integer, nil]
+  def home_level_ordinal(event)
+    enrollment = AssessmentCycleEnrollment.find_by(cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id])
+    return enrollment.level_ordinal if enrollment&.level_ordinal
+
+    level_id = find_assignment(event)&.level_id
+    level_id && FrameworkState::Level.find_by(level_id: level_id)&.ordinal
+  end
+
+  # Whether a rating's cell counts toward the record. Only a rating made
+  # through a lens (`via_role_id`) can fall outside it: every other rating was
+  # made on the record itself, and deciding those by today's bindings would
+  # let a rebuild un-start a participation whose capability was archived or
+  # unbound since. A home role nobody can read — an unknown role, or one
+  # binding nothing — can't rule a cell out either.
+  #
+  # @return [Boolean]
+  def in_home_scope?(event)
+    return true if event.data[:via_role_id].blank?
+
+    role_id = home_role_id(event)
+    return true unless role_id
+
+    scope = Assessments::RoleScope.for(role_id: role_id, framework_id: event.metadata[:framework_id])
+    scope.empty? || scope.include?(event.data[:capability_stable_id], event.data[:level_ordinal])
+  end
+
+  # @yieldparam row [AssessmentCycleRoleAlignment]
+  def write_role_alignment(event, role_id)
+    return unless role_id
+
+    row = AssessmentCycleRoleAlignment.find_or_initialize_by(
+      cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id], role_id: role_id
+    )
+    row.tenant_id = event.metadata[:tenant_id]
+    row.framework_id = event.metadata[:framework_id]
+    yield row
+    row.save!
+  end
+
+  def update_role_alignment(event, role_id, **attributes)
+    return unless role_id
+
+    AssessmentCycleRoleAlignment
+      .find_by(cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id], role_id: role_id)
+      &.update!(attributes)
   end
 
   # Whether the rating event was emitted as part of a seeding flow.
@@ -587,10 +751,15 @@ class PersonDevelopment::Projections::CurrentAssessment
   # Sets the progress row's started_at if not already set.
   #
   # @param event [RubyEventStore::Event] a rating event carrying cycle_id
+  #
+  # Only a rating the record reads starts the participation: a rating made
+  # through a lens on a cell only another role reads is exploration, not
+  # progress on the assessment of record (ADR-22).
   def touch_progress_started(event)
     progress = find_progress(event)
     return unless progress
     return if progress.started_at.present?
+    return unless in_home_scope?(event)
 
     now = event.metadata[:timestamp] || Time.current
     progress.update_columns(

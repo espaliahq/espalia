@@ -30,6 +30,8 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against — nil reads the card as its own home
   def initialize(capability_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, category: nil, scoring: {},
                  blocked: false, block_reason: nil,
@@ -39,7 +41,8 @@ class Views::Assessments::CapabilityCard < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+    @lens = lens
     @capability_data = capability_data
     @capability = capability_data[:capability]
     @cells = capability_data[:cells]
@@ -115,7 +118,9 @@ class Views::Assessments::CapabilityCard < Views::Base
         context: @context,
         viewer_is_manager: @viewer_is_manager,
         focused_ordinal: @focused_ordinal,
-        alignment_locked: @alignment_locked
+        alignment_locked: @alignment_locked,
+        assumed_below: @lens&.assumed_below,
+        badge_label: lens_badge_label
       )
       # Expansion always renders — every card auto-focuses the person's
       # current level (or the URL-specified level when present).
@@ -151,12 +156,38 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def eyebrow
-    return unless @category
+    return unless @category || outside_home_role?
 
-    span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 " \
-                "uppercase tracking-wider") do
-      @category.name
+    div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
+      if @category
+        span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 " \
+                    "uppercase tracking-wider") do
+          @category.name
+        end
+      end
+      scope_chip if outside_home_role?
     end
+  end
+
+  # A capability only the lens role reads. The chip is a statement about
+  # scope, not about the rating: it counts here and nowhere on the record.
+  def scope_chip
+    span(class: "inline-flex items-center px-1.5 py-px rounded text-[10px] font-medium " \
+                "bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 " \
+                "ring-1 ring-inset ring-sky-200 dark:ring-sky-800",
+         data: { scope_chip: "outside-home" }) do
+      "Not in #{@viewer_is_manager ? 'their' : 'your'} #{@lens.home_code} role"
+    end
+  end
+
+  def outside_home_role?
+    @lens.present? && @capability_data[:in_home_role] == false
+  end
+
+  # Under a lens the marked chip is the level being read against, not the
+  # person's own — "TARGET", never "YOU".
+  def lens_badge_label
+    @lens && !@lens.home? ? "TARGET" : nil
   end
 
   def capability_name
@@ -211,7 +242,8 @@ class Views::Assessments::CapabilityCard < Views::Base
       can_request_evidence: @can_request_evidence,
       can_relink_others_evidence: @can_relink_others_evidence,
       can_comment: @can_comment,
-      viewer_is_tenant_admin: @viewer_is_tenant_admin
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @lens
     )
   end
 end

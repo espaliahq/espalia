@@ -126,6 +126,39 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Declares an exploration of another role or level (ADR-22).
+  #
+  # @param person_id [String] UUID of the person exploring
+  # @param framework_id [String] UUID of the framework
+  # @param exploration_id [String] caller-minted UUID v7
+  # @param target_role_id [String]
+  # @param target_level_id [String]
+  # @param target_level_ordinal [Integer]
+  # @param started_by_id [String, nil]
+  # @param note [String, nil]
+  def start_exploration(person_id, framework_id, exploration_id, target_role_id:, target_level_id:,
+                        target_level_ordinal:, started_by_id:, note: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.start_exploration(exploration_id, target_role_id: target_role_id, target_level_id: target_level_id,
+                                  target_level_ordinal: target_level_ordinal, started_by_id: started_by_id,
+                                  note: note)
+    end
+  end
+
+  # Closes a declared exploration with its outcome (ADR-22).
+  #
+  # @param person_id [String]
+  # @param framework_id [String]
+  # @param exploration_id [String]
+  # @param closed_by_id [String, nil]
+  # @param outcome [String] "pursue" | "not_now" | "moved"
+  # @param note [String, nil]
+  def close_exploration(person_id, framework_id, exploration_id, closed_by_id:, outcome:, note: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.close_exploration(exploration_id, closed_by_id: closed_by_id, outcome: outcome, note: note)
+    end
+  end
+
   # Revokes a manager-rating delegation (non-destructive).
   #
   # @param person_id [String] UUID of the person being assessed
@@ -215,13 +248,15 @@ class PersonDevelopment::CommandHandler
   #   "seeded" when carried over from a prior cycle's aligned value at cycle join
   # @param seeded_from_cycle_id [String, nil] UUID of the originating cycle when
   #   source == "seeded"; nil otherwise
+  # @param via_role_id [String, nil] the role whose cells the rater was reading
+  #   through a lens (ADR-22) — provenance only; nil for the home role
   def rate_self(person_id, framework_id, capability_stable_id,
                 level_ordinal:, frequency:, cycle_id:, comment: nil,
-                source: "human", seeded_from_cycle_id: nil)
+                source: "human", seeded_from_cycle_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_self(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, cycle_id: cycle_id, comment: comment,
-        source: source, seeded_from_cycle_id: seeded_from_cycle_id)
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id, via_role_id: via_role_id)
     end
   end
 
@@ -235,11 +270,13 @@ class PersonDevelopment::CommandHandler
   # @param rationale [String] reason for the change
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def revise_self_rating(person_id, framework_id, capability_stable_id,
-                         level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+                         level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_self_rating(capability_stable_id, level_ordinal: level_ordinal,
-        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment)
+        frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment,
+        via_role_id: via_role_id)
     end
   end
 
@@ -271,13 +308,15 @@ class PersonDevelopment::CommandHandler
   #   source == "seeded"; nil otherwise
   # @param rated_by_id [String, nil] UUID of the manager recording the rating;
   #   nil for system "seeded" carry-forwards
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def rate_as_manager(person_id, framework_id, capability_stable_id,
                       level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.rate_as_manager(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, cycle_id: cycle_id, comment: comment,
-        source: source, seeded_from_cycle_id: seeded_from_cycle_id, rated_by_id: rated_by_id)
+        source: source, seeded_from_cycle_id: seeded_from_cycle_id, rated_by_id: rated_by_id,
+        via_role_id: via_role_id)
     end
   end
 
@@ -292,13 +331,14 @@ class PersonDevelopment::CommandHandler
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @param rated_by_id [String, nil] UUID of the manager recording the revision
+  # @param via_role_id [String, nil] lens provenance — see {#rate_self}
   def revise_manager_rating(person_id, framework_id, capability_stable_id,
                             level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
-                            rated_by_id: nil)
+                            rated_by_id: nil, via_role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.revise_manager_rating(capability_stable_id, level_ordinal: level_ordinal,
         frequency: frequency, rationale: rationale, cycle_id: cycle_id, comment: comment,
-        rated_by_id: rated_by_id)
+        rated_by_id: rated_by_id, via_role_id: via_role_id)
     end
   end
 
@@ -318,26 +358,40 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Formally opens alignment for a person's current assessment cycle.
+  # Formally opens alignment against one role for a person's current
+  # assessment cycle (ADR-22).
   #
-  # Once started, individual self/manager ratings are frozen for the cycle.
-  # Issued only by the assessee's current direct manager (enforced by
-  # the controller-side {AssessmentPolicy#start_alignment?}).
+  # Once started, self/manager ratings are frozen on the cells that role
+  # reads. Issued only by the assessee's recorded reporting manager
+  # (enforced by the controller-side {AssessmentPolicy#start_alignment?}).
   #
   # The aggregate additionally auto-emits an AssessmentAligned event for
-  # every (capability × level) cell where both perspectives explicitly
-  # rated the same frequency. The conversation then focuses on
+  # every (capability × level) cell of the role where both perspectives
+  # explicitly rated the same frequency. The conversation then focuses on
   # disagreements and unrated cells. Default-fallback agreements (where
   # one or both perspectives never recorded an explicit value) do NOT
   # auto-align — only deliberate, recorded agreement counts.
+  #
+  # The stream doesn't carry framework bindings, so the role's cells are
+  # read here from {Assessments::RoleScope} and written onto the event.
   #
   # @param person_id [String] UUID of the person being assessed
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle alignment is starting on
   # @param started_by_id [String] UUID of the person who started alignment
-  def start_alignment(person_id, framework_id, cycle_id, started_by_id:)
+  # @param role_id [String, nil] the role aligned against; nil = the role the
+  #   cycle assesses the person at
+  # @param level_ordinal [Integer, nil] the level of that role the
+  #   conversation is about
+  # @param cell_keys [Array<Array(String, Integer)>, nil] the role's cells;
+  #   read from {Assessments::RoleScope} when nil
+  def start_alignment(person_id, framework_id, cycle_id, started_by_id:, role_id: nil,
+                      level_ordinal: nil, cell_keys: nil)
+    role_id ||= home_role_id(person_id, framework_id, cycle_id)
+    cell_keys ||= Assessments::RoleScope.for(role_id: role_id, framework_id: framework_id).cells.to_a if role_id
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.start_alignment(cycle_id, started_by_id: started_by_id)
+      aggregate.start_alignment(cycle_id, started_by_id: started_by_id, role_id: role_id,
+        level_ordinal: level_ordinal, cell_keys: cell_keys)
     end
   end
 
@@ -351,13 +405,15 @@ class PersonDevelopment::CommandHandler
   # @param cycle_id [String] UUID of the cycle this alignment belongs to
   # @param comment [String, nil] optional comment
   # @param aligned_by_id [String, nil] UUID of the Person recording the agreement
+  # @param role_id [String, nil] the role the pair is aligning against — pass
+  #   it once the caller has checked the role reads the cell
   def align_assessment(person_id, framework_id, capability_stable_id,
                        level_ordinal:, aligned_frequency:, cycle_id:, comment: nil,
-                       aligned_by_id: nil)
+                       aligned_by_id: nil, role_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.align_assessment(capability_stable_id, level_ordinal: level_ordinal,
         aligned_frequency: aligned_frequency, cycle_id: cycle_id, comment: comment,
-        aligned_by_id: aligned_by_id)
+        aligned_by_id: aligned_by_id, role_id: role_id)
     end
   end
 
@@ -377,40 +433,46 @@ class PersonDevelopment::CommandHandler
     end
   end
 
-  # Marks alignment complete for the current cycle.
+  # Marks alignment against one role complete for the current cycle.
   #
-  # After this lands, all ratings (including aligned values) are frozen.
-  # Issued only by the assessee's current direct manager (enforced by
-  # the controller-side {AssessmentPolicy#complete_alignment?}).
+  # After this lands, that role's agreed values are the record. Issued only
+  # by the assessee's recorded reporting manager (enforced by the
+  # controller-side {AssessmentPolicy#complete_alignment?}).
   #
   # @param person_id [String] UUID of the person being assessed
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle being completed
   # @param completed_by_id [String] UUID of the person completing alignment
+  # @param role_id [String, nil] the role whose alignment completes; nil =
+  #   the role the cycle assesses the person at
   # @param required_cell_keys [Array<Array(String, Integer)>, nil] cells that
   #   must carry an agreed value, as `[capability_stable_id, level_ordinal]`
   #   pairs — the completion coverage gate, re-checked atomically in the
   #   aggregate (see {PersonDevelopment::Aggregate#complete_alignment})
-  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:,
+  def complete_alignment(person_id, framework_id, cycle_id, completed_by_id:, role_id: nil,
                          required_cell_keys: nil)
+    role_id ||= home_role_id(person_id, framework_id, cycle_id)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.complete_alignment(cycle_id, completed_by_id: completed_by_id,
+      aggregate.complete_alignment(cycle_id, completed_by_id: completed_by_id, role_id: role_id,
         required_cell_keys: required_cell_keys)
     end
   end
 
-  # Re-opens a completed alignment, returning the cycle to the `aligning`
-  # phase. Agreed per-cell values are preserved. Issued only by the
-  # assessee's current direct manager while the cycle is still open
+  # Re-opens a completed alignment against one role, returning it to the
+  # `aligning` phase. Agreed per-cell values are preserved. Issued only by
+  # the assessee's recorded reporting manager while the cycle is still open
   # (enforced by the controller-side {AssessmentPolicy#reopen_alignment?}).
   #
   # @param person_id [String] UUID of the person being assessed
   # @param framework_id [String] UUID of the framework
   # @param cycle_id [String] UUID of the cycle being re-opened
   # @param reopened_by_id [String] UUID of the person re-opening alignment
-  def reopen_alignment(person_id, framework_id, cycle_id, reopened_by_id:)
+  # @param role_id [String, nil] the role whose alignment re-opens; nil =
+  #   the role the cycle assesses the person at
+  def reopen_alignment(person_id, framework_id, cycle_id, reopened_by_id:, role_id: nil)
+    role_id ||= home_role_id(person_id, framework_id, cycle_id)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      aggregate.reopen_alignment(cycle_id, reopened_by_id: reopened_by_id)
+      aggregate.reopen_alignment(cycle_id, reopened_by_id: reopened_by_id, role_id: role_id)
     end
   end
 
@@ -450,6 +512,7 @@ class PersonDevelopment::CommandHandler
     # manager's incomplete alignment; the alternative to an imperfect
     # baseline is not a better baseline, it is blank.
     prior_rows = AssessmentLevelRating
+      .across_all_roles
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(prior_cycle_id)
@@ -471,6 +534,7 @@ class PersonDevelopment::CommandHandler
     # never held anything can be seeded on a re-run, so re-running the
     # whole seed is a no-op and never resurrects a deliberate clear.
     current_rows = AssessmentLevelRating
+      .across_all_roles
       .for_person(person_id)
       .for_framework(framework_id)
       .for_cycle(current_cycle_id)
@@ -802,6 +866,15 @@ class PersonDevelopment::CommandHandler
   end
 
   private
+
+  # The role the cycle assesses the person at — its enrollment snapshot,
+  # else the live assignment. The same home {Assessments::Lens} reads.
+  #
+  # @return [String, nil]
+  def home_role_id(person_id, framework_id, cycle_id)
+    Assessments::RoleScope.home_role_ids(cycle_id: cycle_id, framework_id: framework_id,
+                                         person_ids: [ person_id ])[person_id]
+  end
 
   def feedback_direction_for(source:, author_id:, person_id:)
     EvidenceItem.feedback_direction_for(

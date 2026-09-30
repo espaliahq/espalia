@@ -105,9 +105,11 @@ Access to person development streams is based on the person/manager relationship
 | Self-rating | Person themselves (`record.person_id == person.id`) |
 | Manager rating | Recorded reporting manager **OR an active rating delegate** |
 | View assessment | Person, **anyone in their manager chain** (direct, skip-level, …), **an active delegate**, **or a tenant/global admin** (HR view). Chain ancestors above the reporting manager and admins view read-only (static rating pills); delegates see alignment read-only |
-| Start / complete / record alignment | Reporting manager only — never a delegate |
+| Start / complete / re-open alignment | Reporting manager only — never a delegate, the assessee, or an admin outside the chain. **Per role** (ADR-22): `start_alignment?(role_id:)`, `complete_alignment?(role_id:)`, `reopen_alignment?(role_id:)`; `role_id: nil` is the home role |
+| Record an agreed value | Assessee or reporting manager, while some alignment is in progress (`create_alignment_rating?`); the cell must be one an in-progress alignment reads (checked per cell by the Operation) |
 | Grant / revoke a rating delegation | Any ancestor manager (`Person#managed_by?`) or a tenant admin |
 | Unassign from framework (`unassign?`) | Tenant admin only — a destructive org-structure change, not the assessee or their manager |
+| Declare / close an exploration of another role (`start_exploration?` / `close_exploration?`) | The assessee, the reporting manager or an active delegate (`rating_participant?`) — no open cycle needed. View-only ancestors and admins outside the chain read it but can't declare or close |
 | Growth plan | Person proposes, manager agrees |
 
 **Recorded-authoritative manager.** `manages_assessee?` reads the reporting
@@ -118,6 +120,26 @@ non-HRIS tenant, or pre-backfill). This keeps Pundit and the aggregate's
 manager-rating invariant deriving authority from one source so they can't
 diverge. Deliberate trade-off: in an HRIS tenant a freshly promoted manager
 can't rate until the next sync records them.
+
+**Per-role alignment (ADR-22).** Alignment is started, completed and re-opened
+against a role. For the home role (`role_id: nil`, or the home role's id) the
+predicates read the participation's status exactly as before — start needs
+`started`, complete `aligning`, re-open `aligned`. For another role they read
+that role's `AssessmentCycleRoleAlignment` row: start needs a live participation
+and no row yet (it does not wait for the home role), complete needs the row
+`aligning`, re-open `aligned`. `view_alignment?(role_id:)` is true for another
+role only once its row exists — the home role being `aligned` says nothing about
+it. Pundit's `authorize` passes no arguments, so the Operations
+(`Operations::Assessments::AlignmentLens#authorize_alignment!`) ask the per-role
+predicates directly; the milestone controllers `authorize … :show?` and let the
+Operation refuse.
+
+**Freeze is per cell, not a policy gate.** `create_self_rating?` /
+`create_manager_rating?` now ask only whether the participation still takes
+ratings (a live one does, whatever the home status): a started alignment freezes
+only the cells its role reads, so an aligning participation still takes ratings
+on the cells a lens adds. The rating Operations refuse a frozen cell with the
+reason (`RatingCell#refuse_frozen_cell!`), and the aggregate backs them.
 
 **Delegated manager rating.** A reporting manager whose report is seconded into
 another team can delegate the manager *rating* (not alignment) to someone closer

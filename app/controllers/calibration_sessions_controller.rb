@@ -240,15 +240,19 @@ class CalibrationSessionsController < ApplicationController
   # FULL current-level VETTED coverage (carried/seeded values don't
   # count; see Assessments::LevelCoverage). carried_only_ids marks
   # managers whose values exist but are entirely carried forward —
-  # rendered "To confirm", matching the /assessments list vocabulary.
+  # rendered "To confirm", matching the /assessments list vocabulary. Only
+  # the calibrant's assessed role's cells count toward either.
   def readiness_for(calibrant_ids)
     if calibrant_ids.empty?
       return { enrolled_ids: [], manager_complete_ids: [], partially_rated_ids: [], carried_only_ids: [] }
     end
 
+    scopes = Assessments::RoleScope.for_people(
+      cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: calibrant_ids
+    )
     human_touched = AssessmentLevelRating
       .for_cycle(@session.cycle_id)
-      .where(person_id: calibrant_ids)
+      .within(scopes)
       .where(
         "manager_rating_source = 'human' " \
         "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL)"
@@ -256,7 +260,7 @@ class CalibrationSessionsController < ApplicationController
       .distinct.pluck(:person_id)
     any_rated = AssessmentLevelRating
       .for_cycle(@session.cycle_id)
-      .where(person_id: calibrant_ids)
+      .within(scopes)
       .where.not(manager_rated_frequency: nil)
       .distinct.pluck(:person_id)
 

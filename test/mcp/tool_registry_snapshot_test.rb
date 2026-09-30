@@ -61,7 +61,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_align",
-        "description" => "Record the aligned (agreed) frequency for one capability × level.",
+        "description" => "Record the aligned (agreed) frequency for one capability × level. Pass as_role_id when " \
+          "aligning against another role (a started role lens); the cell must be one that role reads.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -69,7 +70,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" },
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
-            "comment"              => { "type" => "string" }
+            "comment"              => { "type" => "string" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -99,12 +101,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_capability_get",
-        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "assignment_id" => { "type" => "string" },
-            "capability_id" => { "type" => "string" }
+            "assignment_id"    => { "type" => "string" },
+            "capability_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
           },
           "required" => %w[assignment_id capability_id],
           "additionalProperties" => false
@@ -113,6 +117,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint" => true,
           "destructiveHint" => false,
           "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "assessments_close_exploration",
+        "description" => "Close an open exploration of another role with its outcome: pursue (work towards it), " \
+                         "not_now (set it aside) or moved (they have moved into the role), plus an optional note.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"  => { "type" => "string" },
+            "exploration_id" => { "type" => "string" },
+            "outcome"        => { "type" => "string", "enum" => %w[pursue not_now moved] },
+            "note"           => { "type" => "string" }
+          },
+          "required" => %w[assignment_id exploration_id outcome],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
@@ -137,6 +162,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => true,
           "destructiveHint" => false,
           "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_complete_alignment",
+        "description" =>
+          "Mark the alignment conversation complete for one of your direct reports — against their own " \
+          "role, or against another role with as_role_id. Every current-level cell of that role must " \
+          "carry an agreed rating.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
@@ -254,11 +301,35 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
-        "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number.",
+        "name" => "assessments_explorations_list",
+        "description" => "List the explorations of other roles or levels declared on one assessment, newest first, " \
+                         "with who declared them and, once closed, the outcome. Each carries the lens params that " \
+                         "read the assessment against its target.",
         "inputSchema" => {
           "type" => "object",
-          "properties" => { "assignment_id" => { "type" => "string" } },
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "status"        => { "type" => "string", "enum" => %w[open closed all] }
+          },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_get",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
           "required" => [ "assignment_id" ],
           "additionalProperties" => false
         },
@@ -270,7 +341,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_mine",
-        "description" => "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments.",
+        "description" => "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments. explorations lists the open explorations of other roles on the caller's own assessments and their team's.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
@@ -324,7 +395,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_as_manager",
-        "description" => "Record or update a manager rating for one of your direct reports' capability × level.",
+        "description" => "Record or update a manager rating for one of your direct reports' capability × level. " \
+          "Pass as_role_id to rate a cell another role reads (a role lens): the report sees it only once " \
+          "you start alignment against a role that reads the cell. A cell a started alignment reads is frozen.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -334,7 +407,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -347,7 +421,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_rate_self",
-        "description" => "Record or update your own rating for one capability × level.",
+        "description" => "Record or update your own rating for one capability × level. Pass as_role_id to rate a cell " \
+          "another role in the framework reads (a role lens): the rating is the same fact about you " \
+          "at that capability × level, and counts wherever a role reads the cell.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -357,7 +433,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "frequency"            => { "type" => "string", "enum" => %w[none some occasional consistent] },
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
-            "clear"                => { "type" => "boolean" }
+            "clear"                => { "type" => "boolean" },
+            "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
           "additionalProperties" => false
@@ -449,11 +526,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "assessments_reopen_alignment",
         "description" =>
-          "Re-open a completed alignment so the manager can correct it; agreed values are preserved.",
+          "Re-open a completed alignment so the manager can correct it; agreed values are preserved. " \
+          "Pass as_role_id to re-open an alignment against another role.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "assignment_id" => { "type" => "string" }
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
           },
           "required" => %w[assignment_id],
           "additionalProperties" => false
@@ -542,6 +622,52 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           },
           "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal valence],
           "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_start_alignment",
+        "description" =>
+          "Start the alignment conversation for one of your direct reports — against their own role, or " \
+          "against another role or level with as_role_id / as_level_ordinal. Discloses your ratings on " \
+          "that role's cells to the report and freezes both parties' ratings there.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_start_exploration",
+        "description" => "Declare that a person is exploring another role or level — an intent both they and their " \
+                         "manager see, not a rating. Name the target like a lens: as_role_id (blank = their own " \
+                         "role) and/or as_level_ordinal; it can't be the role and level they hold, and only one " \
+                         "exploration per role is open at a time. The other party is notified.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" },
+            "note"             => { "type" => "string" }
+          },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false,
+          "anyOf" => [ { "required" => [ "as_role_id" ] }, { "required" => [ "as_level_ordinal" ] } ]
         },
         "annotations" => {
           "readOnlyHint"    => false,

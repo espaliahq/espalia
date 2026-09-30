@@ -27,7 +27,8 @@ class Views::Frameworks::ShowView < Views::Base
                  can_edit_structure: false, can_rename: false, archive_survivors: [], roles: [],
                  current_person_id: nil, search_query: nil,
                  approval_authority: Frameworks::SuggestionApprovalAuthority.none,
-                 edit_mode: :editing, publishing: false)
+                 edit_mode: :editing, publishing: false, viewer_assignment_id: nil)
+    @viewer_assignment_id = viewer_assignment_id
     @framework = framework
     @publishing = publishing
     @role_families = role_families
@@ -632,7 +633,8 @@ class Views::Frameworks::ShowView < Views::Base
         track_filter: @track_filter,
         framework_id: @framework.framework_id,
         mode: @mode,
-        can_edit_structure: @can_edit_structure
+        can_edit_structure: @can_edit_structure,
+        viewer_assignment_id: @viewer_assignment_id
       )
     end
   end

@@ -7,8 +7,8 @@
 # with the person's current self-rated frequency, binding weight/tolerance,
 # and scoring output.
 #
-# Operates on in-memory associations — no additional queries beyond the
-# initial ratings load.
+# Beyond loading the role scope and the ratings, works on the eager-loaded
+# associations — no per-cell queries.
 #
 # @example
 #   data = Assessments::MatrixDataBuilder.new(
@@ -20,9 +20,51 @@
 class Assessments::MatrixDataBuilder
   VALID_CONTEXTS = %i[self manager alignment].freeze
 
+  # Builds the matrix for an assignment read through a lens — the one way
+  # the assessment page, its frames, the rating responses and the MCP score
+  # read an assignment, so they all see the same cells, the same disclosure
+  # and the same floor.
+  #
+  # @param lens [Assessments::Lens]
+  # @param context [Symbol] :self, :manager or :alignment
+  # @param viewer_person_id [String, nil]
+  # @param viewer_sees_all_evidence [Boolean]
+  # @return [Hash] see {#build}
+  def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false)
+    assignment = lens.assignment
+    status = assignment.current_open_cycle_participation&.status
+    new(
+      framework: FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
+      lens: lens,
+      person_id: assignment.person_id,
+      cycle_id: assignment.current_open_cycle&.cycle_id,
+      categories: FrameworkState::CapabilityCategory
+        .where(framework_id: assignment.framework_id, status: "active")
+        .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
+        .order(:ordinal),
+      participant_status: status,
+      disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
+      context: context,
+      viewer_person_id: viewer_person_id,
+      viewer_sees_all_evidence: viewer_sees_all_evidence
+    ).build
+  end
+
   # @param framework [FrameworkState::Framework]
-  # @param role [FrameworkState::Role] the person's assigned role
-  # @param level [FrameworkState::Level] the person's assigned level
+  # @param role [FrameworkState::Role, nil] the role to read against; taken
+  #   from +lens+ when one is given
+  # @param level [FrameworkState::Level, nil] the level to read against;
+  #   taken from +lens+ when one is given
+  # @param lens [Assessments::Lens, nil] the role and level the page is read
+  #   against, with the home it is read from (ADR-22). When nil the builder
+  #   reads +role+ as its own home and resolves the level from the cycle's
+  #   enrollment snapshot itself.
+  # @param home_level [Integer, nil] the home level's ordinal — the floor
+  #   below which unrated cells count as consistent. Taken from +lens+ when
+  #   one is given; defaults to the level read.
+  # @param disclosure [Assessments::Disclosure, nil] the cells whose manager
+  #   and aligned ratings the assessee may see. Only consulted in `:self`;
+  #   nil discloses nothing.
   # @param person_id [String] UUID
   # @param cycle_id [String, nil] UUID of the assessment cycle whose ratings
   #   should be shown. When nil, the builder returns no ratings (empty matrix).
@@ -33,24 +75,28 @@ class Assessments::MatrixDataBuilder
   #   `concluded` status (closed cycles only) never reaches this builder.
   #   Used by views to decide read-only vs interactive rendering.
   # @param context [Symbol] viewer context (`:self` | `:manager` | `:alignment`).
-  #   When `:self`, manager and aligned ratings are scrubbed from the result so
-  #   the assessee never receives data they shouldn't see — even via HTML
-  #   inspection — until the manager formally starts alignment.
+  #   When `:self`, manager and aligned ratings are scrubbed from every cell
+  #   +disclosure+ doesn't name, so the assessee never receives data they
+  #   shouldn't see — even via HTML inspection.
   # @param viewer_person_id [String, nil] UUID of the Person currently viewing.
   #   When nil, evidence is omitted entirely (e.g. unauthenticated paths).
   # @param viewer_sees_all_evidence [Boolean] true when the viewer is the
   #   assessee, anywhere in their manager chain, or a tenant admin. False for
   #   peers — in which case the builder only returns evidence the viewer
   #   themselves authored.
-  def initialize(framework:, role:, level:, person_id:, cycle_id:, categories:,
-                 context:, participant_status: nil,
+  def initialize(framework:, person_id:, cycle_id:, categories:, context:,
+                 role: nil, level: nil, lens: nil, home_level: nil, disclosure: nil,
+                 participant_status: nil,
                  viewer_person_id: nil, viewer_sees_all_evidence: false)
     # Repopulated by load_evidence; eager default so build_cells never
     # depends on load ordering.
     @link_comment_cell_counts = {}
     @framework = framework
-    @role = role
-    @level = level
+    @lens = lens
+    @role = lens&.role || role
+    @level = lens&.level || level
+    @home_level_ordinal = lens&.home_level&.ordinal || home_level
+    @disclosure = disclosure || Assessments::Disclosure.none
     @person_id = person_id
     @cycle_id = cycle_id
     @categories = categories
@@ -58,6 +104,7 @@ class Assessments::MatrixDataBuilder
     @viewer_person_id = viewer_person_id
     @viewer_sees_all_evidence = viewer_sees_all_evidence
     @context = context&.to_sym
+    raise ArgumentError, "Pass a lens, or a role and a level" unless @role && @level
     return if VALID_CONTEXTS.include?(@context)
 
     raise ArgumentError,
@@ -68,7 +115,11 @@ class Assessments::MatrixDataBuilder
   #
   # @return [Hash]
   def build
-    @level = resolve_assessment_level
+    @level = resolve_assessment_level unless @lens
+    @home_level_ordinal ||= @level.ordinal
+    @role_scope = @lens&.scope ||
+      Assessments::RoleScope.for(role_id: @role.role_id, framework_id: @framework.framework_id)
+    @home_scope = @lens&.home_scope || @role_scope
     @ratings_index = load_ratings
     @evidence_index = load_evidence
     @comments_index = load_comments
@@ -86,13 +137,23 @@ class Assessments::MatrixDataBuilder
       role: @role,
       level: @level,
       person_level: @level.ordinal,
+      # The lens the page is read against (nil when the caller passed none),
+      # the home level it is read from, and the ordinal below which unrated
+      # cells count as consistent — the level chips paint that default.
+      lens: @lens,
+      home_level: @home_level_ordinal,
+      assumed_below: [ @level.ordinal, @home_level_ordinal ].min,
       merged_levels: levels,
       categories: categories,
       scoring: scoring,
       emphasised_capabilities: emphasised_capabilities(categories, scoring),
       self_scoring: build_perspective_scoring(categories, :self_only),
-      manager_scoring: hide_others? ? nil : build_perspective_scoring(categories, :manager_only),
-      aligned_scoring: hide_others? ? nil : build_perspective_scoring(categories, :aligned_only),
+      # Whole-page manager and aligned scores stay withheld from the assessee
+      # unless every cell they are built over is disclosed: a number built
+      # over a mix of disclosed and private cells would say something no
+      # cell does.
+      manager_scoring: withhold_page_scores? ? nil : build_perspective_scoring(categories, :manager_only),
+      aligned_scoring: withhold_page_scores? ? nil : build_perspective_scoring(categories, :aligned_only),
       # All three bands, because the explanation layer (#414) must name the
       # framework's own numbers rather than the shipped 80/95/150.
       underperforming_threshold: @framework.underperforming_threshold&.to_f ||
@@ -104,23 +165,35 @@ class Assessments::MatrixDataBuilder
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories),
       participant_status: @participant_status,
-      individual_ratings_frozen: %w[aligning aligned].include?(@participant_status),
-      alignment_locked: @participant_status == "aligned",
+      # The alignment against the role being read, if one has started — it
+      # decides whether the page is the alignment conversation. Frozen cells
+      # beyond it are marked per cell (`frozen_by`).
+      lens_alignment: lens_alignment,
+      # Every other role alignment has started against this cycle — the
+      # header's "Aligning · PM3" chips.
+      lens_alignments: @disclosure.lens_alignments,
+      # Lens-independent, so the page's feed reuses it rather than building
+      # a second one.
+      disclosure: @disclosure,
+      individual_ratings_frozen: lens_alignment_started?,
+      alignment_locked: lens_alignment_completed?,
       current_level_complete: current_level_complete?(categories)
     }
   end
 
   private
 
-  # Resolves the level this cycle is scored and displayed AGAINST.
+  # Resolves the level this cycle is scored and displayed AGAINST when the
+  # caller passed no lens. A lens settles the level itself
+  # ({Assessments::Lens.resolve} reads the snapshot for the home and takes a
+  # lens level as given), so this runs only for callers reading a role as
+  # its own home.
   #
   # Prefers the cycle's enrollment snapshot (the role/level the person was
   # assessed at) over their *current* assignment level, so a later promotion
-  # never silently re-interprets a cycle's ratings. Gated on the snapshot
-  # being for the SAME role being rendered — a horizontal-move snapshot is
-  # left alone (the matrix is built from the current role; applying another
-  # role's level ordinal would be incoherent — deferred to role-aware
-  # rendering). Falls back to the passed-in assignment level whenever there's
+  # never silently re-interprets a cycle's ratings. A snapshot for another
+  # role is ignored: rendering one role at another role's level is a lens,
+  # and a lens says so. Falls back to the passed-in level whenever there's
   # no usable snapshot (no cycle, historical enrollment, or different role).
   #
   # @return [FrameworkState::Level]
@@ -175,7 +248,10 @@ class Assessments::MatrixDataBuilder
         capability: capability,
         binding: binding,
         weight: binding.weight.to_f,
-        cells: cells
+        cells: cells,
+        # Whether the record reads this capability at all — false only
+        # under a lens, on a capability the lens role adds.
+        in_home_role: @home_scope.capability_stable_ids.include?(capability.stable_id)
       }
     end
   end
@@ -200,15 +276,24 @@ class Assessments::MatrixDataBuilder
       visible_comment_count = comments.count { |c| !c.deleted? } +
         @link_comment_cell_counts[[ capability.stable_id, ordinal ]].to_i
 
+      hidden = hide_others?(capability.stable_id, ordinal)
       cells[ordinal] = {
         expectation: expectation,
         current_frequency: rating&.self_rated_frequency,
-        manager_frequency: hide_others? ? nil : rating&.manager_rated_frequency,
-        aligned_frequency: hide_others? ? nil : rating&.aligned_frequency,
+        manager_frequency: hidden ? nil : rating&.manager_rated_frequency,
+        aligned_frequency: hidden ? nil : rating&.aligned_frequency,
         # Carried-forward (seeded, unconfirmed) provenance per side — drives
         # the lighter pill/chip treatment. Same privacy gate as the values.
         current_frequency_carried: rating&.self_rating_carried? || false,
-        manager_frequency_carried: (!hide_others? && rating&.manager_rating_carried?) || false,
+        manager_frequency_carried: (!hidden && rating&.manager_rating_carried?) || false,
+        # Whether the record reads this cell (ADR-22).
+        in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
+        # The started alignment that froze self and manager ratings here —
+        # any role's, whichever lens the page is read through — and whether
+        # the agreed value can still move.
+        frozen_by: @disclosure.frozen_by(capability.stable_id, ordinal),
+        agreed_locked: @disclosure.agreed_value_locked?(capability.stable_id, ordinal,
+                                                        agreed: rating&.aligned_frequency.present?),
         illustrations: illustrations,
         illustration_count: illustrations.size,
         evidence: evidence,
@@ -330,7 +415,9 @@ class Assessments::MatrixDataBuilder
       end
   end
 
-  # Loads and indexes all AssessmentLevelRatings for this person + framework + cycle.
+  # Loads and indexes this person's ratings in the cycle, inside the role's
+  # cells — a rating on a capability the role doesn't bind would otherwise
+  # count as having rated in a perspective (ADR-22).
   #
   # Returns an empty hash when cycle_id is nil — the person isn't
   # currently in a cycle, so there are no ratings to show.
@@ -343,20 +430,19 @@ class Assessments::MatrixDataBuilder
       .for_person(@person_id)
       .for_framework(@framework.framework_id)
       .for_cycle(@cycle_id)
+      .within(@role_scope)
       .each_with_object({}) do |r, h|
         h[[ r.capability_stable_id, r.level_ordinal ]] = r
       end
   end
 
-  # Indexes CapabilityRoleBindings for the person's role by capability_id.
+  # Indexes the role's active bindings by capability_id — from the same
+  # RoleScope every other rating reader uses, so there is one definition of
+  # what the role binds.
   #
   # @return [Hash{String => FrameworkState::CapabilityRoleBinding}]
   def index_bindings
-    @categories
-      .flat_map(&:capabilities)
-      .flat_map(&:bindings)
-      .select { |b| b.role_id == @role.role_id }
-      .index_by(&:capability_id)
+    @role_scope.bindings.index_by(&:capability_id)
   end
 
   # Builds the PersonDevelopment::Scoring engine instance.
@@ -370,6 +456,7 @@ class Assessments::MatrixDataBuilder
       bindings: @all_bindings,
       categories: categories_data.map { |c| c[:category] },
       person_level: @level.ordinal,
+      home_level: @home_level_ordinal,
       all_level_ordinals: @all_ordinals,
       expectation_cells: @expectation_cells,
       perspective: perspective,
@@ -482,17 +569,50 @@ class Assessments::MatrixDataBuilder
   end
 
   # When the viewer is the assessee themselves, hide manager and aligned data
-  # until alignment formally begins. Defense-in-depth — the data never reaches
-  # the HTML, not just the visible UI.
-  def hide_others?
+  # on every cell the disclosure doesn't name. Defense-in-depth — the data
+  # never reaches the HTML, not just the visible UI.
+  def hide_others?(capability_stable_id, level_ordinal)
+    self_context? && !@disclosure.include?(capability_stable_id, level_ordinal)
+  end
+
+  def self_context?
     @context == :self
+  end
+
+  def withhold_page_scores?
+    self_context? && !@disclosure.covers_all?(@role_scope.cells)
+  end
+
+  # @return [Assessments::Disclosure::Alignment, nil]
+  def lens_alignment
+    return @lens_alignment if defined?(@lens_alignment)
+
+    @lens_alignment = @disclosure.alignment_for(@role.role_id) if @lens
+  end
+
+  # Without a lens, or on the home role, the participation's own status is
+  # the home alignment's lifecycle — as it always was.
+  def lens_alignment_started?
+    return Assessments::Disclosure::STARTED_STATUSES.include?(@participant_status) if home_lifecycle?
+
+    !lens_alignment.nil?
+  end
+
+  def lens_alignment_completed?
+    return @participant_status == "aligned" if home_lifecycle?
+
+    lens_alignment&.aligned? || false
+  end
+
+  def home_lifecycle?
+    @lens.nil? || @lens.home_role?
   end
 
   # In :self context the effective fallback chain (aligned → manager → self)
   # would otherwise leak manager-derived numbers into the primary `scoring`
   # result. Force the engine to self-only so the fallback collapses safely.
   def primary_scoring_perspective
-    @context == :self ? :self_only : :effective
+    self_context? ? :self_only : :effective
   end
 
   def count_total_cells(categories)
