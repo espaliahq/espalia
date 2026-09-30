@@ -178,6 +178,14 @@ class DashboardController < ApplicationController
 end
 ```
 
+## Attribute values: pass strings, not symbols
+
+Phlex dasherizes a **Symbol attribute value** the way it dasherizes keys, so
+`input(type: "hidden", name: :as_role)` renders `name="as-role"` — and the
+controller silently receives no `as_role` param. Anything that becomes a param
+name or an id must be a String (`name: key.to_s`), which matters most when the
+names come from a hash of symbols (e.g. `Assessments::Lens#to_params`).
+
 ## Conditional Rendering by Permission (NON-NEGOTIABLE)
 
 **Never query policies or check roles directly in views.** Controllers resolve permissions and pass boolean flags.

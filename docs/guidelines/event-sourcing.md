@@ -138,6 +138,8 @@ Do **not** bump for:
 - Refactors that produce identical read-model state (extracted method, renamed variable, etc.).
 - DB-schema-only changes (column addition with a default; index addition).
 
+**A brand-new registered projection is "stale" too.** `verify` treats a projection with no `projection_versions` row as never rebuilt and fails the deploy, so adding one to `Projections::Registry` is a deploy step (`REBUILD_ON_DEPLOY=<name>` or `mark_rebuilt`) even when no historical event exists. When the new read model is fed by events an existing projection already reads from the same stream, handing the table to that projection avoids the step — declared explorations went to `CurrentAssessment` for this reason.
+
 When you do bump, the predeploy guard (`events:projections:verify`) will fail the next deploy until the projection is rebuilt. See the runbook for the resolution flow (`REBUILD_ON_DEPLOY` env var, two-stage deploy).
 
 ## Sync handlers must not be replayed
