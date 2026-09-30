@@ -61,11 +61,32 @@ class Integrations::HrisTitleResolution
   #
   # @return [Array<Title>]
   def titles
-    active = rows(Person.hris_managed.where(status: "active").where.not(job_title: [ nil, "" ]).order(:name))
+    @titles ||= group_titles(rows(active_people.order(:name)))
+  end
 
-    active.group_by { |row| HrisRoleMapping.normalize_title(row.person.job_title) }
-      .map { |_, group| Title.new(title: group.first.person.job_title.strip, mapping: group.first.mapping, rows: group) }
-      .sort_by { |title| [ title.unmapped? ? 0 : 1, title.title.downcase ] }
+  # The active HRIS people holding one title, resolved — without resolving
+  # everyone else.
+  #
+  # @param title [String]
+  # @return [Title, nil]
+  def title(title)
+    normalized = HrisRoleMapping.normalize_title(title)
+    return nil if normalized.empty?
+
+    # ILIKE narrows in SQL; the exact comparison stays in Ruby so it is the
+    # same `normalize_title` the sync matches with.
+    candidates = active_people.where("job_title ILIKE ?", "%#{Person.sanitize_sql_like(normalized)}%")
+      .select { |person| HrisRoleMapping.normalize_title(person.job_title) == normalized }
+    group_titles(rows(candidates)).first
+  end
+
+  # The framework role a mapping's code resolves to — the same lookup the
+  # sync uses, so a mapping validated here is one the sync can apply.
+  #
+  # @param code [String]
+  # @return [FrameworkState::Role, nil]
+  def role_for(code)
+    roles_by_code[code]
   end
 
   # The framework's roles, for choosing a mapping target.
@@ -77,12 +98,22 @@ class Integrations::HrisTitleResolution
 
   # @return [Hash{String => Array<Integer>}] role code → the level ordinals it has
   def level_ordinals_by_role_code
-    roles_by_code.transform_values do |role|
-      levels_by_role_and_ordinal.keys.filter_map { |role_id, ordinal| ordinal if role_id == role.role_id }.sort
-    end
+    ordinals_by_role_id = levels_by_role_and_ordinal.keys.group_by(&:first)
+      .transform_values { |keys| keys.map(&:last).sort }
+    roles_by_code.transform_values { |role| ordinals_by_role_id.fetch(role.role_id, []) }
   end
 
   private
+
+  def active_people
+    Person.hris_managed.where(status: "active").where.not(job_title: [ nil, "" ])
+  end
+
+  def group_titles(rows)
+    rows.group_by { |row| HrisRoleMapping.normalize_title(row.person.job_title) }
+      .map { |_, group| Title.new(title: group.first.person.job_title.strip, mapping: group.first.mapping, rows: group) }
+      .sort_by { |entry| [ entry.unmapped? ? 0 : 1, entry.title.downcase ] }
+  end
 
   def default_people
     Person.hris_managed.includes(:manager).order(status: :asc, name: :asc)

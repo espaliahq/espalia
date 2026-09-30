@@ -44,4 +44,15 @@ class Integrations::HrisTitleResolutionTest < ActiveSupport::TestCase
 
     assert_equal({ "AE" => [ 2, 3 ], "E" => [ 3 ], "EM" => [ 3, 4 ] }, levels)
   end
+
+  should "resolve one title's holders without matching titles that merely contain it" do
+    ActsAsTenant.with_tenant(@tenant) do
+      hris_person("Pat Senior", "Senior Software Engineer", assigned_to: [ @e_role, @e3 ])
+      entry = @resolution.title("  software ENGINEER ")
+
+      assert_equal "Software Engineer", entry.title
+      assert_equal [ "Sam Settled" ], entry.rows.map { |row| row.person.name }
+      assert_nil @resolution.title("Chief Vibes Officer")
+    end
+  end
 end

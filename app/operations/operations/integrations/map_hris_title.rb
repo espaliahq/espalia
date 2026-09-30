@@ -40,9 +40,8 @@ class Operations::Integrations::MapHrisTitle < Operations::Base
     validate_level!(role)
 
     tenant = ActsAsTenant.current_tenant
-    tenant.with_lock do
-      tenant.hris_config.map_title(title, framework_role_code: role.code, level_ordinal: params[:level_ordinal])
-      tenant.save!
+    save_hris_config!(tenant) do |config|
+      config.map_title(title, framework_role_code: role.code, level_ordinal: params[:level_ordinal])
     end
 
     {
@@ -61,7 +60,7 @@ class Operations::Integrations::MapHrisTitle < Operations::Base
   end
 
   def find_role!
-    FrameworkState::Role.find_by(code: params[:framework_role_code].strip) ||
+    resolution.role_for(params[:framework_role_code].strip) ||
       raise(ParameterError, "framework_role_code: no framework role has the code '#{params[:framework_role_code]}'")
   end
 
@@ -75,8 +74,12 @@ class Operations::Integrations::MapHrisTitle < Operations::Base
         "level_ordinal: required, because this workspace has no HRIS level column to read levels from"
     end
 
-    return if FrameworkState::Level.exists?(role_id: role.role_id, ordinal: ordinal)
+    return if resolution.level_ordinals_by_role_code.fetch(role.code, []).include?(ordinal)
 
     raise ParameterError, "level_ordinal: #{role.code} has no level #{ordinal}"
+  end
+
+  def resolution
+    @resolution ||= Integrations::HrisTitleResolution.new(ActsAsTenant.current_tenant)
   end
 end

@@ -23,11 +23,10 @@ class Operations::Integrations::UnmapHrisTitle < Operations::Base
     title = params[:title].strip
     tenant = ActsAsTenant.current_tenant
 
-    tenant.with_lock do
-      raise ParameterError, "title: '#{title}' is not mapped" if tenant.hris_config.mapping_for(title).nil?
+    save_hris_config!(tenant) do |config|
+      raise ParameterError, "title: '#{title}' is not mapped" if config.mapping_for(title).nil?
 
-      tenant.hris_config.unmap_title(title)
-      tenant.save!
+      config.unmap_title(title)
     end
 
     { title: title, people: people_payload(rows_for_title(tenant, title)) }

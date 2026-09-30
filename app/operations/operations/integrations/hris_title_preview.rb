@@ -37,8 +37,20 @@ module Operations::Integrations::HrisTitlePreview
   #
   # @return [Array<Integrations::HrisPersonRow>]
   def rows_for_title(tenant, title)
-    normalized = HrisRoleMapping.normalize_title(title)
-    Integrations::HrisTitleResolution.new(tenant).titles
-      .find { |entry| HrisRoleMapping.normalize_title(entry.title) == normalized }&.rows || []
+    Integrations::HrisTitleResolution.new(tenant).title(title)&.rows || []
+  end
+
+  # Saves the tenant's HRIS config under a row lock. A validation failure
+  # is the caller's input, so it leaves as a ParameterError (-32602 over MCP)
+  # rather than an internal error.
+  def save_hris_config!(tenant)
+    tenant.with_lock do
+      yield tenant.hris_config
+      tenant.save!
+    end
+  rescue ActiveRecord::RecordInvalid => e
+    # The tenant only says "Hris config is invalid"; the config says why.
+    reasons = tenant.hris_config.errors.full_messages.presence || e.record.errors.full_messages
+    raise Operations::Base::ParameterError, reasons.to_sentence
   end
 end

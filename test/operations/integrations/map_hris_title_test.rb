@@ -79,6 +79,17 @@ class Operations::Integrations::MapHrisTitleTest < ActiveSupport::TestCase
       assert_match(/no HRIS level column/, error.message)
     end
 
+    should "report a config the tenant refuses to save as invalid input, not an internal error" do
+      @tenant.update_column(:hris_config, @tenant.hris_config.as_json.merge("provider" => "workday"))
+
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(title: "Analytics Lead", framework_role_code: "AE", level_ordinal: 3)
+      end
+
+      assert_match(/provider/i, error.message)
+      assert_nil @tenant.reload.hris_config.mapping_for("Analytics Lead")
+    end
+
     should "refuse a blank title" do
       assert_raises(Operations::Base::ParameterError) do
         call(title: "   ", framework_role_code: "AE", level_ordinal: 3)
