@@ -55,9 +55,10 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
     end
   end
 
-  def self_rate(capability, source: "human")
+  def self_rate(capability, source: "human", via_role_id: nil)
     append_and_project(PersonDevelopment::Events::SelfRated, cycle_id: @cycle_id,
-      capability_stable_id: capability.stable_id, level_ordinal: 3, frequency: "some", source: source)
+      capability_stable_id: capability.stable_id, level_ordinal: 3, frequency: "some", source: source,
+      via_role_id: via_role_id)
   end
 
   def start(role, cells: [])
@@ -66,15 +67,24 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
   end
 
   context "the started rule" do
-    should "leave a participation unstarted by a rating only another role reads" do
-      self_rate(@pm_only)
+    should "leave a participation unstarted by a lens rating on a cell only another role reads" do
+      self_rate(@pm_only, via_role_id: @pm.role_id)
 
       assert_nil progress.started_at
       assert_equal "in_progress", progress.status
     end
 
-    should "start it on a rating the home role reads" do
-      self_rate(@shared)
+    should "start it on a lens rating the home role also reads" do
+      self_rate(@shared, via_role_id: @pm.role_id)
+
+      assert_equal "started", progress.status
+    end
+
+    # A rating made on the record counts whatever the framework says today —
+    # a rebuild must not un-start a participation whose capability was
+    # unbound since.
+    should "start it on any rating made on the record" do
+      self_rate(@pm_only)
 
       assert_equal "started", progress.status
     end
@@ -145,7 +155,7 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
   end
 
   should "rebuild every row identically from old and new event shapes" do
-    self_rate(@pm_only)
+    self_rate(@pm_only, via_role_id: @pm.role_id)
     append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
     start(@pm, cells: [ [ @pm_only.stable_id, 3 ] ])
     append_and_project(PersonDevelopment::Events::FullAlignmentCompleted, cycle_id: @cycle_id,

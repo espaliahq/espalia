@@ -79,10 +79,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     one row per role alignment has started against, and a rebuild
   #     backfills the home role's rows from every historical alignment
   #     event. Only a start against the home role moves
-  #     `AssessmentCycleProgress`. And `started` now means a human rating on
-  #     a cell the home role reads: a rating only another role reads (made
-  #     through a lens) no longer flips a participation to `started`, so a
-  #     rebuild can revert such a participation to `enrolled`
+  #     `AssessmentCycleProgress`. And a human rating made through a lens
+  #     (`via_role_id`) on a cell the home role doesn't read no longer flips
+  #     a participation to `started`, so a rebuild can revert such a
+  #     participation to `enrolled`
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
   CODE_VERSION = 8
 
@@ -603,12 +603,17 @@ class PersonDevelopment::Projections::CurrentAssessment
     level_id && FrameworkState::Level.find_by(level_id: level_id)&.ordinal
   end
 
-  # Whether a rating's cell counts toward the record. A home role nobody can
-  # read — an unknown role, or one binding nothing — can't rule a cell out,
-  # so every rating counts, as before per-role alignment.
+  # Whether a rating's cell counts toward the record. Only a rating made
+  # through a lens (`via_role_id`) can fall outside it: every other rating was
+  # made on the record itself, and deciding those by today's bindings would
+  # let a rebuild un-start a participation whose capability was archived or
+  # unbound since. A home role nobody can read — an unknown role, or one
+  # binding nothing — can't rule a cell out either.
   #
   # @return [Boolean]
   def in_home_scope?(event)
+    return true if event.data[:via_role_id].blank?
+
     role_id = home_role_id(event)
     return true unless role_id
 
