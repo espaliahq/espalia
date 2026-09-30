@@ -1639,7 +1639,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # The definition is reachable without a pointer — the assessee may be
       # driving by keyboard, and `title` would be unreachable to them.
-      trigger.send_keys("")
+      # Focus without scrolling: `send_keys` scrolls the term into view
+      # first, and the controller closes an open panel on scroll, so on a
+      # slow runner the scroll could land after the focus and hide it again.
+      page.execute_script("arguments[0].focus({ preventScroll: true })", trigger)
       assert_selector "#assessment-term-score", visible: true, text: /How much of what E2 expects/
     end
   end
