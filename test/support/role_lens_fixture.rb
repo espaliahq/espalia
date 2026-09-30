@@ -8,8 +8,9 @@
 #   "Roadmapping" alone. Every capability has an expectation at 1, 2 and 3.
 #
 # `enrol_in_role_lens_framework` assigns a person to E2 and enrols them in
-# an open cycle through the real command handlers, so the enrollment
-# snapshot, the progress row and the projection all exist.
+# an open cycle through the real command handlers, with the role/level
+# snapshot (ADR-19) the cohort readers key on, so the enrollment, the
+# progress row and the projection all exist.
 module RoleLensFixture
   Framework = Struct.new(:framework, :engineer, :e_levels, :pm, :pm_levels,
                          :shared, :e_only, :pm_only, keyword_init: true) do
@@ -48,13 +49,14 @@ module RoleLensFixture
   # @return [Array(PersonFrameworkAssignment, String)] the assignment and cycle id
   def enrol_in_role_lens_framework(person, fixture, tenant:, level_ordinal: 2)
     ActsAsTenant.with_tenant(tenant) do
+      level_id = fixture.e_levels.fetch(level_ordinal).level_id
       PersonDevelopment::CommandHandler.new.assign_to_framework(
-        person.id, fixture.framework_id, fixture.engineer.role_id, fixture.e_levels.fetch(level_ordinal).level_id
+        person.id, fixture.framework_id, fixture.engineer.role_id, level_id
       )
       cycle_id = SecureRandom.uuid_v7
       cycles = AssessmentCycles::CommandHandler.new
       cycles.define_cycle(cycle_id, fixture.framework_id, "Q3 2026", "regular", 1)
-      cycles.enroll(cycle_id, person.id)
+      cycles.enroll(cycle_id, person.id, role_id: fixture.engineer.role_id, level_id: level_id)
       [ PersonFrameworkAssignment.find_by!(person_id: person.id, framework_id: fixture.framework_id), cycle_id ]
     end
   end
