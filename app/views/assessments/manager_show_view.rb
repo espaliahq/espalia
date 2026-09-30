@@ -132,7 +132,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   def assessment_header
     div(class: "pt-4 pb-2") do
       a(href: assessments_path,
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink mb-1 inline-block") do
+        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink mb-1 inline-flex min-h-6 items-center") do
         plain "← Assessments"
       end
 

@@ -105,7 +105,7 @@ class Views::Assessments::FrequencyPill < Views::Base
   def pill_trigger
     button(
       type: "button",
-      class: "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium " \
+      class: "inline-flex min-h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium " \
              "#{pill_bg_classes} cursor-pointer " \
              "hover:brightness-95 dark:hover:brightness-110 transition " \
              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",

@@ -112,7 +112,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     details(class: "mt-1", data: { controller: "frame-error" }) do
       summary(
         class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
-               "inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
+               "inline-flex max-w-full min-h-6 items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
                "text-[10px] text-gray-600 dark:text-gray-300 " \
                "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
                "dark:hover:text-gray-200 transition-colors"
@@ -289,13 +289,14 @@ class Views::Assessments::Evidence::Card < Views::Base
   def kebab_trigger
     button(
       type: "button",
-      class: "rounded p-1 text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
+      class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
+             "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
              "dark:hover:bg-gray-700 dark:hover:text-gray-200",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
       aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }
     ) do
       # Vertical 3-dot kebab — kept inline so we don't depend on an icon set.
-      span(class: "block leading-none -mt-1 text-base", aria_hidden: "true") { "⋮" }
+      span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" }
     end
   end
 

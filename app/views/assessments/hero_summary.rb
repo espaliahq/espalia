@@ -176,7 +176,7 @@ class Views::Assessments::HeroSummary < Views::Base
   def explainer_trigger
     button(
       type: "button",
-      class: "mt-1 text-[11px] text-gray-600 dark:text-gray-300 underline decoration-dotted " \
+      class: "mt-1 inline-flex min-h-6 items-center text-[11px] text-gray-600 dark:text-gray-300 underline decoration-dotted " \
              "underline-offset-2 hover:text-gray-900 dark:hover:text-white cursor-pointer " \
              "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
       data: { action: "modal#open",
@@ -562,7 +562,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "Continue",
-      classes: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
+      classes: "inline-flex min-h-6 items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
                "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
                "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
     )

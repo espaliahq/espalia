@@ -78,7 +78,8 @@ class Views::Assessments::Evidence::List < Views::Base
     div(class: "relative", data: { controller: "dropdown", action: "keydown.esc@window->dropdown#close" }) do
       button(
         type: "button",
-        class: "rounded p-1 text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
+        class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
+               "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
                "dark:hover:bg-gray-700 dark:hover:text-gray-200",
         data: { dropdown_target: "trigger", action: "dropdown#toggle" },
         aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }

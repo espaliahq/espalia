@@ -279,12 +279,13 @@ class Views::Assessments::Comments::Card < Views::Base
   def kebab_trigger
     button(
       type: "button",
-      class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
+      class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
+             "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
              "dark:hover:bg-gray-700 dark:hover:text-gray-200",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
       aria: { label: "Comment actions", haspopup: "menu", expanded: "false" }
     ) do
-      span(class: "block leading-none -mt-1 text-base", aria_hidden: "true") { "⋮" }
+      span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" }
     end
   end
 

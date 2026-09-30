@@ -925,6 +925,36 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "target size (WCAG 2.5.8)" do
+    setup do
+      # The unlocked hero shows "How is this calculated?"; feedback on the
+      # card renders its "Discuss".
+      rate_to_unlock_hero
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap1_stable, level_ordinal: 2, source: "self",
+          evidence_type: "project_outcome", title: "Launch", content: "Shipped the launch.",
+          author_id: @person.id, valence: "demonstrated"
+        )
+      end
+    end
+
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "give every control at least a 24px target on #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_text "How is this calculated?"
+        assert_selector "summary", text: "Discuss"
+        wait_for_stimulus "activity-pane"
+        toggle_activity_pane
+        assert_selector "[data-activity-feed-mode-param]", visible: true
+
+        assert_empty undersized_targets
+      end
+    end
+  end
+
   context "responsive layout" do
     should "hide the activity sidebar on narrow viewports" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
@@ -1702,5 +1732,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id
       )
     end
+  end
+
+  # Visible controls smaller than 24x24 CSS px. A link inside running text
+  # is exempt (2.5.8's inline exception), and a 1px sr-only element is not a
+  # visible target at all.
+  def undersized_targets
+    page.evaluate_script(<<~JS)
+      [...document.querySelectorAll("button, a[href], summary, [role=button], [role=link], select, input:not([type=hidden])")]
+        .filter(e => e.offsetParent !== null && !e.closest("p"))
+        .map(e => [e, e.getBoundingClientRect()])
+        .filter(([, r]) => r.width > 1 && r.height > 1 && (r.width < 24 || r.height < 24))
+        .map(([e, r]) => `${e.tagName.toLowerCase()} "${(e.innerText || e.getAttribute("aria-label") || "").trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`)
+    JS
   end
 end
