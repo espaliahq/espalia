@@ -13,16 +13,18 @@
 # - The cycle must be in `aligning` status — `create_alignment_rating?`
 #   enforces this via the participant_status check.
 #
-# Alignment is against the home role, so the cell must be one the record
-# reads (ADR-22); `as_role_id` is accepted for the shared input shape and
-# the same cell check.
+# Alignment is per role (ADR-22): `as_role_id` names the role the pair is
+# aligning against (blank = home), the cell must be one that role reads, and
+# an alignment reading the cell must be in progress. The agreed value on a
+# cell a completed alignment already agreed stays that conversation's record.
 #
 # Write — :mcp_client approval, same reasoning as the other two
 # rating tools.
 class Operations::Assessments::Align < Operations::Base
   include Operations::Assessments::RatingCell
 
-  description "Record the aligned (agreed) frequency for one capability × level of the assessee's own role."
+  description "Record the aligned (agreed) frequency for one capability × level. Pass as_role_id when " \
+              "aligning against another role (a started role lens); the cell must be one that role reads."
   category :write
   approval :mcp_client
 
@@ -38,7 +40,7 @@ class Operations::Assessments::Align < Operations::Base
   def policy_check
     authorize assignment, :create_alignment_rating?
     rating_lens
-    refuse_outside_home_role!
+    refuse_locked_agreement!
   end
 
   # @return [Hash] same shape as {Operations::Assessments::RateSelf#perform} —
@@ -52,7 +54,8 @@ class Operations::Assessments::Align < Operations::Base
     PersonDevelopment::CommandHandler.new.align_assessment(
       assignment.person_id, assignment.framework_id, params[:capability_stable_id],
       level_ordinal: params[:level_ordinal], aligned_frequency: params[:frequency],
-      cycle_id: cycle.cycle_id, comment: params[:comment], aligned_by_id: context.person&.id
+      cycle_id: cycle.cycle_id, comment: params[:comment], aligned_by_id: context.person&.id,
+      role_id: rating_lens.role.role_id
     )
 
     {

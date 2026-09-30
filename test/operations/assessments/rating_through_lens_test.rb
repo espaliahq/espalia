@@ -2,10 +2,10 @@
 
 require "test_helper"
 
-# The rating Operations write through a role lens (ADR-22): the assessee can
-# rate any cell the lens role reads, the cell must exist for that role, and
-# manager-side writes stay on the cells the record reads until per-role
-# alignment exists.
+# The rating Operations write through a role lens (ADR-22): either party can
+# rate any cell the lens role reads, the cell must exist for that role, and a
+# cell some started alignment reads is frozen — whichever lens the write is
+# made through.
 class Operations::Assessments::RatingThroughLensTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
@@ -87,17 +87,26 @@ class Operations::Assessments::RatingThroughLensTest < ActiveSupport::TestCase
       assert_equal "consistent", rating(@fx.shared)&.manager_rated_frequency
     end
 
-    should "refuse a cell only another role reads" do
+    should "rate a cell only another role reads" do
+      rate(Operations::Assessments::RateAsManager, @manager_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
+      assert_equal "consistent", rating(@fx.pm_only)&.manager_rated_frequency
+    end
+
+    should "refuse a cell a started alignment froze, naming the role" do
+      start_alignment(@fx.pm)
+
       error = assert_raises(Pundit::NotAuthorizedError) do
-        rate(Operations::Assessments::RateAsManager, @manager_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
+        rate(Operations::Assessments::RateAsManager, @manager_context, @fx.shared)
       end
-      assert_match(/per-role alignment/, error.message)
-      assert_nil rating(@fx.pm_only)
+      assert_equal "Frozen — alignment against PM2 has started", error.message
+      assert_nothing_raised do
+        rate(Operations::Assessments::RateAsManager, @manager_context, @fx.e_only)
+      end
     end
   end
 
   context Operations::Assessments::Align do
-    should "refuse a cell only another role reads" do
+    should "refuse a cell no alignment in progress reads" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentCycleProgress.find_by!(cycle_id: @cycle_id, person_id: @person.id).update!(status: "aligning")
       end
@@ -105,9 +114,24 @@ class Operations::Assessments::RatingThroughLensTest < ActiveSupport::TestCase
         rate(Operations::Assessments::Align, @manager_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
       end
     end
+
+    should "agree a cell only the started lens role reads" do
+      start_alignment(@fx.pm)
+
+      rate(Operations::Assessments::Align, @manager_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
+      assert_equal "consistent", rating(@fx.pm_only)&.aligned_frequency
+    end
   end
 
   private
+
+  def start_alignment(role)
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Assessments::StartAlignment.call(
+        context: @manager_context, params: { assignment_id: @assignment.id, as_role_id: role.role_id, as_level_ordinal: 2 }
+      )
+    end
+  end
 
   def rate(operation, context, capability, level_ordinal: 2, frequency: "consistent", **extra)
     ActsAsTenant.with_tenant(@tenant) do

@@ -1,52 +1,31 @@
 # frozen_string_literal: true
 
-# Formally opens alignment for the current cycle of an assessment.
+# Formally opens alignment against a role for the current cycle of an
+# assessment (ADR-22) — the home role, or the lens role named by `as_role` /
+# `as_level` ("Start alignment against PM3").
 #
-# Once started, individual self/manager ratings are frozen for the cycle
-# (enforced by both the {AssessmentPolicy} freeze checks and the aggregate
-# guards). Only the assessee's current direct manager can call this — see
-# {AssessmentPolicy#start_alignment?}.
+# Once started, the manager's ratings on the role's cells are disclosed to
+# the assessee and self/manager ratings on them freeze (enforced by the
+# rating Operations and the aggregate). Only the assessee's reporting
+# manager can call this — see {AssessmentPolicy#start_alignment?}, checked
+# by {Operations::Assessments::StartAlignment}.
 #
 class Assessments::AlignmentStartsController < ApplicationController
-  before_action :require_person
-  before_action :set_assignment
+  include Assessments::AlignmentMilestone
 
   # POST /assessments/:assessment_id/alignment_start
   def create
-    authorize @assignment, :start_alignment?
+    authorize @assignment, :show?
 
-    cycle = @assignment.current_open_cycle
-    unless cycle
-      redirect_to assessment_path(@assignment), alert: "No open assessment cycle."
-      return
+    result = dispatch_milestone(Operations::Assessments::StartAlignment)
+    notice = if result[:home]
+      "Alignment started — self and manager ratings are now locked for this cycle."
+    else
+      "Alignment against #{result[:role_code]}#{result[:level_ordinal]} started — " \
+        "your ratings on its capabilities are now shared and locked."
     end
-
-    PersonDevelopment::CommandHandler.new.start_alignment(
-      @assignment.person_id, @assignment.framework_id, cycle.cycle_id,
-      started_by_id: current_person.id
-    )
-
-    redirect_to assessment_path(@assignment),
-      notice: "Alignment started — self and manager ratings are now locked for this cycle."
-  rescue RuntimeError => e
-    redirect_to assessment_path(@assignment), alert: e.message
-  end
-
-  private
-
-  def require_person
-    head :forbidden unless current_person
-  end
-
-  def set_assignment
-    return unless current_person
-
-    @assignment = PersonFrameworkAssignment.find(params.expect(:assessment_id))
-  rescue ActiveRecord::RecordNotFound
-    head :not_found
-  end
-
-  def user_not_authorized(_exception = nil)
-    head :forbidden
+    redirect_to lens_assessment_path, notice: notice
+  rescue Operations::Base::ParameterError, RuntimeError => e
+    redirect_to lens_assessment_path, alert: e.message
   end
 end

@@ -294,7 +294,22 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_nil stored(@fx.e_only)
     end
 
-    should "refuse a manager rating on a cell only the lens role reads" do
+    should "take a manager rating on a cell only the lens role reads" do
+      sign_in @manager_user
+      post assessment_manager_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 2,
+        rating: { capability_stable_id: @fx.pm_only.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      assert_equal "some", stored(@fx.pm_only)&.manager_rated_frequency
+    end
+
+    should "refuse a manager rating on a cell a started alignment froze" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @fx.framework_id, @cycle_id,
+          started_by_id: @manager.id, role_id: @fx.pm.role_id, level_ordinal: 2)
+      end
       sign_in @manager_user
       post assessment_manager_ratings_path(@assignment), params: {
         as_role: @fx.pm.role_id, as_level: 2,
@@ -302,7 +317,7 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
       assert_response :forbidden
-      assert_includes response.body, "per-role alignment", "a refusal the page can show, not a bodyless 403"
+      assert_includes response.body, "alignment against PM2 has started", "a refusal the page can show"
       assert_nil stored(@fx.pm_only)
     end
 

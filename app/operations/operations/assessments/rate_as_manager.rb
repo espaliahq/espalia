@@ -8,9 +8,10 @@
 # (AssessmentPolicy#create_manager_rating?) refuses the call unless the
 # caller is the assessee's manager.
 #
-# A manager rating lands only on a cell the record reads until per-role
-# alignment exists (ADR-22) — `as_role_id` names the role the manager was
-# reading through, for the same cell check as {RateSelf}.
+# A manager can rate any cell a lens reads (ADR-22) — `as_role_id` names the
+# role the manager was reading through, for the same cell check as
+# {RateSelf}. The rating stays private to the manager side until alignment
+# starts against a role that reads the cell, and freezes once it does.
 #
 # Write — :mcp_client approval. Per the MCP design doc, cross-person
 # ratings (manager rating a direct report) are routine enough that the
@@ -20,7 +21,8 @@ class Operations::Assessments::RateAsManager < Operations::Base
   include Operations::Assessments::RatingCell
 
   description "Record or update a manager rating for one of your direct reports' capability × level. " \
-              "Only cells their own role reads can be manager-rated; a cell only another role reads is refused."
+              "Pass as_role_id to rate a cell another role reads (a role lens): the report sees it only once " \
+              "you start alignment against a role that reads the cell. A cell a started alignment reads is frozen."
   category :write
   approval :mcp_client
 
@@ -39,7 +41,7 @@ class Operations::Assessments::RateAsManager < Operations::Base
   def policy_check
     authorize assignment, :create_manager_rating?
     rating_lens
-    refuse_outside_home_role!
+    refuse_frozen_cell!
   end
 
   # @return [Boolean] false when the call changed nothing (an explicit clear

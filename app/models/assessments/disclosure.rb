@@ -28,10 +28,11 @@ class Assessments::Disclosure
 
   # One alignment started in the participation's cycle.
   #
-  # `code` is the role and the level the conversation is about ("PM3");
+  # `code` is the role and the level the conversation is about ("PM3"),
+  # `role_code` the role's alone ("PM");
   # `whole` marks a start from before per-role alignment, which freezes
   # every cell; `scope` is the cells it discloses.
-  Alignment = Data.define(:role_id, :code, :label, :level_ordinal, :status, :home, :whole, :scope) do
+  Alignment = Data.define(:role_id, :role_code, :code, :label, :level_ordinal, :status, :home, :whole, :scope) do
     # @return [Boolean]
     def aligned? = status == "aligned"
 
@@ -64,7 +65,7 @@ class Assessments::Disclosure
 
   def self.home_alignment(lens, status, row)
     Alignment.new(
-      role_id: lens.home_role.role_id, code: lens.home_code, label: "#{lens.home_role.name} · #{lens.home_code}",
+      role_id: lens.home_role.role_id, role_code: lens.home_role.code, code: lens.home_code, label: "#{lens.home_role.name} · #{lens.home_code}",
       level_ordinal: lens.home_level.ordinal, status: status, home: true,
       whole: row&.whole_assessment || false, scope: lens.home_scope
     )
@@ -82,7 +83,7 @@ class Assessments::Disclosure
       next unless role
 
       code = "#{role.code}#{row.level_ordinal}"
-      Alignment.new(role_id: row.role_id, code: code, label: "#{role.name} · #{code}",
+      Alignment.new(role_id: row.role_id, role_code: role.code, code: code, label: "#{role.name} · #{code}",
                     level_ordinal: row.level_ordinal, status: row.status, home: false,
                     whole: row.whole_assessment, scope: scopes.fetch(row.role_id))
     end

@@ -41,7 +41,8 @@ class Operations::Assessments::Get < Operations::Base
 
   # @return [Hash] same payload as {Operations::Frameworks::Get} under
   #   `:framework`, plus `:assignment` (role + level + person identity),
-  #   `:current_cycle` (id, name, status, planned_end_at) or nil, and
+  #   `:current_cycle` (id, name, status, planned_end_at, and `alignments` —
+  #   every role alignment has started against, home included) or nil, and
   #   `:scoring` (scale, score, state, components, thresholds, blocked
   #   capabilities, per-category roll-up).
   def perform
@@ -104,7 +105,24 @@ class Operations::Assessments::Get < Operations::Base
       name: cycle.name,
       status: cycle.status,
       planned_end_at: cycle.planned_end_at&.iso8601,
-      participant_status: assignment.current_open_cycle_participation&.status
+      participant_status: participant_status,
+      alignments: alignments_payload
     }
+  end
+
+  def participant_status
+    @participant_status ||= assignment.current_open_cycle_participation&.status
+  end
+
+  # The conversations in progress or done this cycle (ADR-22), so an agent
+  # knows a PM3 alignment exists without reading through that lens.
+  # Disclosure-safe: starting alignment is what tells the other party.
+  def alignments_payload
+    return [] unless read_lens
+
+    Assessments::Disclosure.for(lens: read_lens, participant_status: participant_status).alignments.map do |alignment|
+      { role_id: alignment.role_id, role_code: alignment.role_code, level_ordinal: alignment.level_ordinal,
+        status: alignment.status, home: alignment.home }
+    end
   end
 end

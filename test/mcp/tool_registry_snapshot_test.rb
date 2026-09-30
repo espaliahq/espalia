@@ -61,7 +61,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_align",
-        "description" => "Record the aligned (agreed) frequency for one capability × level of the assessee's own role.",
+        "description" => "Record the aligned (agreed) frequency for one capability × level. Pass as_role_id when " \
+          "aligning against another role (a started role lens); the cell must be one that role reads.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -140,6 +141,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "readOnlyHint"    => true,
           "destructiveHint" => false,
           "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_complete_alignment",
+        "description" =>
+          "Mark the alignment conversation complete for one of your direct reports — against their own " \
+          "role, or against another role with as_role_id. Every current-level cell of that role must " \
+          "carry an agreed rating.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
         }
       },
       {
@@ -332,7 +355,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "assessments_rate_as_manager",
         "description" => "Record or update a manager rating for one of your direct reports' capability × level. " \
-          "Only cells their own role reads can be manager-rated; a cell only another role reads is refused.",
+          "Pass as_role_id to rate a cell another role reads (a role lens): the report sees it only once " \
+          "you start alignment against a role that reads the cell. A cell a started alignment reads is frozen.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -461,11 +485,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "assessments_reopen_alignment",
         "description" =>
-          "Re-open a completed alignment so the manager can correct it; agreed values are preserved.",
+          "Re-open a completed alignment so the manager can correct it; agreed values are preserved. " \
+          "Pass as_role_id to re-open an alignment against another role.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "assignment_id" => { "type" => "string" }
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
           },
           "required" => %w[assignment_id],
           "additionalProperties" => false
@@ -553,6 +580,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES }
           },
           "required" => %w[assignment_id evidence_id capability_stable_id level_ordinal valence],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_start_alignment",
+        "description" =>
+          "Start the alignment conversation for one of your direct reports — against their own role, or " \
+          "against another role or level with as_role_id / as_level_ordinal. Discloses your ratings on " \
+          "that role's cells to the report and freezes both parties' ratings there.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
+          "required" => %w[assignment_id],
           "additionalProperties" => false
         },
         "annotations" => {

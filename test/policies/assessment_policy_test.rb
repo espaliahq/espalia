@@ -294,12 +294,12 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       end
     end
 
-    should "freeze self rating for assessee" do
-      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
-    end
-
-    should "freeze manager rating" do
-      assert_not AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
+    # Freeze is per cell (ADR-22): home alignment freezes the cells the home
+    # role reads, which the rating Operations refuse; the participation
+    # still takes ratings on the cells a lens adds.
+    should "leave the per-cell freeze to the rating Operations" do
+      assert AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
+      assert AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
     end
 
     should "allow alignment ratings from both parties" do
@@ -348,9 +348,9 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       end
     end
 
-    should "freeze self and manager ratings" do
-      assert_not AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
-      assert_not AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
+    should "leave the per-cell freeze to the rating Operations" do
+      assert AssessmentPolicy.new(assessee_context, @assignment).create_self_rating?
+      assert AssessmentPolicy.new(manager_context, @assignment).create_manager_rating?
     end
 
     should "deny alignment ratings (alignment is complete)" do

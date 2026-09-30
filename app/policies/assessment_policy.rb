@@ -38,12 +38,19 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def scoring? = show?
 
+  # Freeze is per cell (ADR-22): a started alignment freezes only the cells
+  # its role reads, so this asks only whether the participation still takes
+  # ratings. The rating Operations refuse a frozen cell
+  # ({Operations::Assessments::RatingCell}), and the aggregate backs them.
+  #
   # @return [Boolean]
   def create_self_rating? = owns_assessment? && individual_ratings_editable?
 
   # A direct (recorded) manager OR an active delegate may record manager
   # ratings — delegation is for cases where the reporting manager lacks
-  # visibility (e.g. the report is seconded into another team).
+  # visibility (e.g. the report is seconded into another team). On any cell
+  # a lens reads (ADR-22): the rating stays private to the manager side
+  # until alignment starts against a role that reads the cell.
   #
   # @return [Boolean]
   def create_manager_rating?
@@ -72,12 +79,14 @@ class AssessmentPolicy < ApplicationPolicy
   def unassign? = tenant_admin?
 
   # Either the assessee or their manager can record an alignment, but only
-  # while the cycle is in the `aligning` lifecycle state — i.e. the manager
-  # has explicitly started alignment.
+  # while an alignment is in progress — against the home role (status
+  # `aligning`) or another role. Which cells it may touch is the
+  # Operation's per-cell check.
   #
   # @return [Boolean]
   def create_alignment_rating?
-    (owns_assessment? || manages_assessee?) && alignment_in_progress?
+    (owns_assessment? || manages_assessee?) &&
+      (alignment_in_progress? || open_role_alignments.any? { |row| row.status == "aligning" })
   end
 
   # Whether the assessment, read against a role, should render in alignment
@@ -101,50 +110,62 @@ class AssessmentPolicy < ApplicationPolicy
     !role_alignment(role_id).nil?
   end
 
-  # Only the assessee's current direct manager can formally start
-  # alignment for a cycle. Requires the participant to have at least
-  # begun rating (status `started`) — there must be something to align on.
+  # Only the assessee's recorded reporting manager can formally start
+  # alignment — never a delegate, never an admin outside the chain (ADR-22).
+  # Against the home role it needs the participant to have begun rating
+  # (status `started`): there must be something to align on. Against
+  # another role, any live participation, as long as alignment hasn't
+  # already started against that role.
   #
+  # @param role_id [String, nil] the role to align against; nil = home
   # @return [Boolean]
-  def start_alignment?
+  def start_alignment?(role_id: nil)
     return false unless manages_assessee?
+    return current_open_cycle_participation&.status == "started" if home_role?(role_id)
 
-    current_open_cycle_participation&.status == "started"
+    live_participation? && role_alignment(role_id).nil?
   end
 
-  # Only the assessee's current direct manager can mark alignment
-  # complete. Requires the cycle to be in the `aligning` state.
+  # Only the assessee's recorded reporting manager can mark alignment
+  # against a role complete, while it is in progress.
   #
+  # @param role_id [String, nil] nil = home
   # @return [Boolean]
-  def complete_alignment?
+  def complete_alignment?(role_id: nil)
     return false unless manages_assessee?
+    return current_open_cycle_participation&.status == "aligning" if home_role?(role_id)
 
-    current_open_cycle_participation&.status == "aligning"
+    role_alignment(role_id)&.status == "aligning"
   end
 
-  # Only the assessee's current direct manager can re-open a completed
+  # Only the assessee's recorded reporting manager can re-open a completed
   # alignment — to correct a completion made by accident. Allowed only
   # while the cycle is still open (the participation comes from the open
-  # cycle) and currently `aligned`. Mirrors {#complete_alignment?}: it's
-  # the inverse milestone, manager-owned, never a delegate.
+  # cycle) and the role's alignment is currently `aligned`. Mirrors
+  # {#complete_alignment?}: the inverse milestone, manager-owned, never a
+  # delegate.
   #
+  # @param role_id [String, nil] nil = home
   # @return [Boolean]
-  def reopen_alignment?
+  def reopen_alignment?(role_id: nil)
     return false unless manages_assessee?
+    return current_open_cycle_participation&.status == "aligned" if home_role?(role_id)
 
-    current_open_cycle_participation&.status == "aligned"
+    role_alignment(role_id)&.status == "aligned"
   end
 
   private
 
-  # Whether self/manager ratings are still mutable for the current cycle.
+  # Whether the participation still takes self/manager ratings on some
+  # cell. A started alignment freezes only its role's cells (ADR-22), so
+  # an aligning participation still takes ratings on cells no started role
+  # reads; the cell itself is checked by the rating Operations.
   #
   # @return [Boolean]
   def individual_ratings_editable?
-    participant = current_open_cycle_participation
-    return true if participant.nil? # no participant row yet — pre-cycle edits permitted
+    return true if current_open_cycle_participation.nil? # no participant row yet — pre-cycle edits permitted
 
-    participant.individual_ratings_editable?
+    live_participation?
   end
 
   def alignment_in_progress?
@@ -162,10 +183,30 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [AssessmentCycleRoleAlignment, nil] alignment started against
   #   the role in the open cycle
   def role_alignment(role_id)
-    cycle = record.current_open_cycle
-    return nil unless cycle
+    open_role_alignments.find { |row| row.role_id == role_id }
+  end
 
-    AssessmentCycleRoleAlignment.find_by(cycle_id: cycle.cycle_id, person_id: record.person_id, role_id: role_id)
+  # @return [Array<AssessmentCycleRoleAlignment>]
+  def open_role_alignments
+    @open_role_alignments ||= begin
+      cycle = record.current_open_cycle
+      cycle ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle.cycle_id, person_id: record.person_id).to_a : []
+    end
+  end
+
+  # Whether a role is the one the open cycle assesses the person at.
+  def home_role?(role_id)
+    return true if role_id.nil?
+
+    cycle = record.current_open_cycle
+    home = cycle && Assessments::RoleScope.home_role_ids(cycle_id: cycle.cycle_id, framework_id: record.framework_id,
+                                                         person_ids: [ record.person_id ])[record.person_id]
+    role_id == (home || record.role_id)
+  end
+
+  # An open-cycle participation still taking part.
+  def live_participation?
+    %w[enrolled started aligning aligned].include?(current_open_cycle_participation&.status)
   end
 
   # The current user's person matches the assignment's person.
