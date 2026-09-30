@@ -102,4 +102,21 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Not yet"
     end
   end
+
+  context "declared explorations" do
+    should "say who started exploring which role, with the note beneath" do
+      html = render_entry(kind: "exploration_started", payload: {
+        actor_name: "Alex", role_label: "Product Manager · PM3", note: "Curious about discovery"
+      })
+      assert_includes html, "Alex started exploring Product Manager · PM3"
+      assert_includes html, "Curious about discovery"
+    end
+
+    should "say who closed it and what came of it" do
+      html = render_entry(kind: "exploration_closed", payload: {
+        actor_name: "Morgan", role_label: "Product Manager · PM3", outcome: "not_now"
+      })
+      assert_includes html, "Morgan closed the exploration of Product Manager · PM3 — not now"
+    end
+  end
 end

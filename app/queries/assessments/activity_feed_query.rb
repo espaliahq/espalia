@@ -95,6 +95,14 @@ class Assessments::ActivityFeedQuery
 
   MANAGER_KINDS = %w[manager_rated manager_rating_revised manager_rating_cleared].freeze
 
+  # Declared explorations (ADR-22): framework-level entries naming the role
+  # explored, visible to both parties (and anyone who sees the whole
+  # assessment) — declaring is the act the other party is meant to see.
+  EXPLORATION_KINDS = {
+    PersonDevelopment::Events::ExplorationStarted => "exploration_started",
+    PersonDevelopment::Events::ExplorationClosed  => "exploration_closed"
+  }.freeze
+
   # A calibration session's value-free ask that the rater revisit a manager
   # rating (PD mirror of the session-stream event). Cell-anchored; gated by
   # the same privacy rule as manager ratings — it reveals manager-side
@@ -152,7 +160,7 @@ class Assessments::ActivityFeedQuery
   def call
     entries = rating_entries + relink_entries + link_entries + evidence_entries +
               alignment_entries + reopen_entries + comment_entries + migration_entries +
-              authority_entries + revisit_entries
+              authority_entries + revisit_entries + exploration_entries
     entries.sort_by { |e| e.occurred_at || Time.at(0) }.reverse
   end
 
@@ -670,6 +678,35 @@ class Assessments::ActivityFeedQuery
         capability_name: nil,
         category_id: nil
       )
+    end
+  end
+
+  # One entry per declared-exploration event on the stream (ADR-22). A close
+  # carries no target of its own, so it names the role its start named.
+  # Clicking either reads the page through that role and level.
+  def exploration_entries
+    return [] unless @viewer_sees_all
+
+    events = stream_events.select { |event| EXPLORATION_KINDS.key?(event.class) }
+    return [] if events.empty?
+
+    targets = events.grep(PersonDevelopment::Events::ExplorationStarted).to_h do |event|
+      data = event.data.with_indifferent_access
+      [ data[:exploration_id], [ data[:target_role_id], data[:target_level_ordinal] ] ]
+    end
+    roles = FrameworkState::Role.where(role_id: targets.values.map(&:first).uniq).index_by(&:role_id)
+    names = Person.where(id: events.map { |e| e.data[:started_by_id] || e.data[:closed_by_id] }.compact.uniq)
+      .pluck(:id, :name).to_h
+
+    events.map do |event|
+      data = event.data.with_indifferent_access
+      role_id, ordinal = targets[data[:exploration_id]]
+      role = roles[role_id]
+      payload = data.merge(actor_name: names[data[:started_by_id] || data[:closed_by_id]])
+      payload[:role_label] = "#{role.name} · #{role.code}#{ordinal}" if role
+      payload[:lens] = { as_role: role_id, as_level: ordinal } if role
+      Entry.new(id: event.event_id, kind: EXPLORATION_KINDS[event.class], occurred_at: event_timestamp(event),
+                payload: payload)
     end
   end
 
