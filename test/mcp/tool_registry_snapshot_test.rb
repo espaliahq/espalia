@@ -100,12 +100,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_capability_get",
-        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument.",
+        "description" => "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "assignment_id" => { "type" => "string" },
-            "capability_id" => { "type" => "string" }
+            "assignment_id"    => { "type" => "string" },
+            "capability_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
           },
           "required" => %w[assignment_id capability_id],
           "additionalProperties" => false
@@ -256,10 +258,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number.",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it.",
         "inputSchema" => {
           "type" => "object",
-          "properties" => { "assignment_id" => { "type" => "string" } },
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" }
+          },
           "required" => [ "assignment_id" ],
           "additionalProperties" => false
         },

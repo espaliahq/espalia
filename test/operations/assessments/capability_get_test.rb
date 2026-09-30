@@ -159,13 +159,14 @@ class Operations::Assessments::CapabilityGetTest < ActiveSupport::TestCase
   end
 
   context "shape parity with Frameworks::CapabilityGet" do
-    should "the framework-shaped keys are unchanged; only :ratings, :cycle_id and :score are added" do
+    should "the framework-shaped keys are unchanged; only :ratings, :cycle_id, :lens, :in_role and :score are added" do
       framework_payload = call_framework_op
       assessment_payload = call_assessment_op
 
-      # Top-level: assessment adds :cycle_id, :score and (per-expectation) :ratings.
+      # Top-level: assessment adds :cycle_id, the lens it read through, :score
+      # and (per-expectation) :ratings.
       added_keys = assessment_payload.keys - framework_payload.keys
-      assert_equal [ :cycle_id, :score ], added_keys
+      assert_equal [ :cycle_id, :lens, :in_role, :score ], added_keys
 
       framework_payload.each do |k, v|
         next unless v.is_a?(Array) && v.first.is_a?(Hash)
