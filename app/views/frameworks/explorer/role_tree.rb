@@ -390,7 +390,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       href: assessment_path(@viewer_assignment_id, as_role: role.role_id),
       class: "shrink-0 px-1.5 py-0.5 text-xs rounded-sm whitespace-nowrap " \
              "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-             "hover:bg-primary/20 hover:text-primary",
+             "hover:bg-primary/20 hover:text-primary-ink",
       data: cluster_control_data("tree", "standalone").merge(turbo_frame: "_top", my_ratings_link: role.role_id),
       title: "See my ratings against this role",
       aria: { label: "See my ratings against #{role.name}" }

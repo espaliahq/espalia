@@ -324,7 +324,7 @@ class Views::Assessments::HeroSummary < Views::Base
     who = @context == :self ? "yourself" : (@assessee_name.to_s.split.first.presence || "them")
     a(href: assessment_path(@assessment_id, @lens.params_for(role_id: @lens.role.role_id, ordinal: next_ordinal)),
       data: { turbo_frame: "_top" },
-      class: "text-xs font-medium text-primary hover:underline rounded-sm " \
+      class: "text-xs font-medium text-primary-ink hover:underline rounded-sm " \
              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
       "See #{who} as #{next_code} →"
     end
