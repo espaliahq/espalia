@@ -158,6 +158,7 @@ class Views::Assessments::ShowView < Views::Base
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]
           )
+          render_lens_alignment_chips
         end
 
         div(class: "flex items-center gap-2 shrink-0") do

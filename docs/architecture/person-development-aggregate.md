@@ -159,32 +159,62 @@ Reporting line & delegation:
   admin) is NOT checked here — that stays in Pundit, since the aggregate only
   knows the direct recorded manager.
 
-Alignment lifecycle (per cycle):
-  AlignmentStarted { cycle_id, started_by_id }
-    ← Manager-only. Flips participant status to `aligning` and FREEZES self/manager
-      ratings for the cycle. Aggregate guard rejects rate_self / rate_as_manager /
-      revise_* / clear_* once started until leave_cycle.
-    ← The dispatching CommandHandler additionally emits an AssessmentAligned event
-      for every (capability × level) cell where both self_rated_frequency and
-      manager_rated_frequency are explicitly recorded and equal — all inside the
-      same with_person_development block. Default-fallback matches do NOT
-      auto-align; only deliberate, recorded agreement counts.
-  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment, aligned_by_id? }
-    ← Per-cell agreed frequency. Requires alignment to have been started.
-      Agreed level is DERIVED (never stored): max(level_ordinal where
-      aligned_frequency == "consistent").
+Alignment lifecycle (per cycle, per role — ADR-22):
+  AlignmentStarted { cycle_id, started_by_id, role_id?, level_ordinal?, cell_keys? }
+    ← Manager-only. Alignment is against a role: the home role (the role the
+      person held when they joined the cycle) or a lens role. The aggregate
+      holds @alignments[role_id] = { completed:, cells: Set | :all } and
+      FREEZES self/manager ratings on the UNION of every started role's cells
+      (ensure_individual_ratings_unfrozen!(cell)) until leave/conclude.
+    ← cell_keys: the role's [capability_stable_id, level_ordinal] cells at
+      start. The stream carries no framework bindings, so the command handler
+      reads them from Assessments::RoleScope — the same shape as
+      required_cell_keys on complete_alignment.
+    ← HISTORY: every event before per-role alignment has no role_id and no
+      cell_keys. It is the home role's and its cells are :all — the whole
+      assessment froze, and replay reproduces that exactly. A start with
+      cell_keys: nil still means :all (only reachable by calling the
+      aggregate directly; the handler always supplies them).
+    ← A second start against the same role raises; another role can start.
+      A home start flips participant status to `aligning`; a lens start
+      leaves the home lifecycle alone.
+    ← The aggregate additionally emits an AssessmentAligned event for every
+      cell OF THE ROLE, not already agreed, where both self_rated_frequency
+      and manager_rated_frequency are explicitly recorded, human and equal —
+      all inside the same with_person_development block. Default-fallback
+      and seeded matches do NOT auto-align.
+  AssessmentAligned { capability_stable_id, level_ordinal, aligned_frequency, cycle_id, comment, aligned_by_id?, role_id? }
+    ← Per-cell agreed frequency. Requires an alignment IN PROGRESS whose
+      cells include the cell, and refuses to rewrite a value a COMPLETED
+      alignment's cells include. Agreed level is DERIVED (never stored):
+      max(level_ordinal where aligned_frequency == "consistent").
+    ← role_id: the role the pair aligned against, when the caller checked
+      that role reads the cell. A cell the role gained after its start (a
+      mid-conversation framework publish) joins the role's cells here, so
+      the completion gate never counts a cell nobody could agree. Absent on
+      history.
     ← aligned_by_id: who recorded the agreement (manual = the submitter; the
       cells auto-aligned at start = the manager who started). Projected to
       AssessmentLevelRating.aligned_by_id. See ADR-18.
   AlignmentCleared { capability_stable_id, level_ordinal, cycle_id, cleared_by_id? }
-  FullAlignmentCompleted { cycle_id, completed_by_id, framework_version? }
-    ← Manager-only. Flips participant status to `aligned` and freezes ALL
-      ratings (including aligned values). SNAPSHOT POINT — long streams will
-      compress here when snapshotting infrastructure ships.
+    ← Same per-cell rule as AssessmentAligned.
+  FullAlignmentCompleted { cycle_id, completed_by_id, framework_version?, role_id? }
+    ← Manager-only, per role. The role's agreed values become that
+      conversation's record. For the home role: flips participant status to
+      `aligned`. SNAPSHOT POINT — long streams will compress here when
+      snapshotting infrastructure ships. required_cell_keys gate the role's
+      own current-level cells (atomic re-check).
     ← framework_version: the version this cycle was assessed against at
       completion (join version, advanced by any mid-cycle migration). Projected
       to AssessmentCycleProgress.aligned_framework_version for reporting. A
       completed assessment is immutable as-at-completion — see ADR-19.
+    ← role_id nil on history = the home role.
+  AlignmentReopened { cycle_id, reopened_by_id, role_id? }
+    ← Per role; agreed values kept. role_id nil on history = the home role.
+
+  Read models (CurrentAssessment): AssessmentCycleProgress keeps the HOME
+  lifecycle; AssessmentCycleRoleAlignment holds one row per role started
+  (home included; `whole_assessment` marks a start from history).
 
 Cross-cycle seeding:
   RatingSeedSkipped { capability_stable_id, level_ordinal, prior_aligned_frequency,

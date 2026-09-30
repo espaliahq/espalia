@@ -27,10 +27,17 @@ class Assessments::LevelCoverage
   # @param person_id [String]
   # @param framework_id [String]
   # @param cycle_id [String]
-  def initialize(person_id:, framework_id:, cycle_id:)
+  # @param role_id [String, nil] count another role's cells instead of the
+  #   record's — the completion gate of an alignment against that role
+  #   (ADR-22)
+  # @param level_ordinal [Integer, nil] the level to count at; defaults to
+  #   the assessed level
+  def initialize(person_id:, framework_id:, cycle_id:, role_id: nil, level_ordinal: nil)
     @person_id = person_id
     @framework_id = framework_id
     @cycle_id = cycle_id
+    @role_id = role_id
+    @level_ordinal = level_ordinal
   end
 
   # @param include_aligned [Boolean] also count the aligned perspective.
@@ -46,7 +53,7 @@ class Assessments::LevelCoverage
   #   the aggregate so the coverage check re-runs atomically against the
   #   stream (see {PersonDevelopment::Aggregate#complete_alignment}).
   def call(include_aligned: false)
-    ordinal = assessed_level_ordinal
+    ordinal = @level_ordinal || assessed_level_ordinal
     return empty(include_aligned:) if ordinal.nil?
 
     scope = Assessments::RoleScope.for(role_id: role_id, framework_id: @framework_id).at_level(ordinal)
@@ -101,7 +108,7 @@ class Assessments::LevelCoverage
   end
 
   def role_id
-    assignment&.role_id
+    @role_id || assignment&.role_id
   end
 
   # Prefers the cycle's enrollment snapshot level (same-role gate) over the live

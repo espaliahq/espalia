@@ -20,9 +20,13 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
   # @param assignment [PersonFrameworkAssignment]
   # @param matrix_data [Hash] output from Assessments::MatrixDataBuilder —
   #   used to compute current-level aligned coverage in-memory
-  def initialize(assignment:, matrix_data:)
+  # @param lens_params [Hash] the lens role the alignment is against
+  #   (ADR-22); empty for the home role. Its completion gate counts that
+  #   role's cells at the level being read.
+  def initialize(assignment:, matrix_data:, lens_params: {})
     @assignment = assignment
     @matrix_data = matrix_data
+    @lens_params = lens_params
   end
 
   def view_template
@@ -39,10 +43,13 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
   private
 
   def completion_form
-    confirm_msg = "Marking alignment complete will lock all ratings for this cycle, " \
-      "including the agreed values. Continue?"
+    confirm_msg = if @lens_params.empty?
+      "Marking alignment complete will lock the agreed values on #{home_code}'s capabilities. Continue?"
+    else
+      "Marking alignment against #{@matrix_data[:lens].code} complete will lock its agreed values. Continue?"
+    end
     form(
-      action: assessment_alignment_completion_path(@assignment),
+      action: assessment_alignment_completion_path(@assignment, @lens_params),
       method: "post",
       data: { turbo_confirm: confirm_msg },
       class: "inline"
@@ -102,5 +109,9 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
 
   def person_level
     @matrix_data[:person_level]
+  end
+
+  def home_code
+    @matrix_data[:lens]&.home_code || "#{@matrix_data[:role].code}#{person_level}"
   end
 end

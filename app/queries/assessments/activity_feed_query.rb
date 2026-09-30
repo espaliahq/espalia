@@ -22,6 +22,11 @@
 #   has not yet started, manager-rating events are also hidden — same
 #   privacy gate as the matrix's `hide_others?` so the assessee never
 #   sees their manager's calibration before alignment formally begins.
+# - Given a `disclosure` (the assessee's view), that gate is per cell for
+#   the open cycle (ADR-22): a manager rating shows only on a cell some
+#   started alignment reads, so "Manager rated Discovery L3" stays hidden
+#   until the manager starts alignment against a role that binds it —
+#   whatever the home lifecycle says.
 #
 class Assessments::ActivityFeedQuery
   Entry = Struct.new(:id, :kind, :occurred_at, :payload, :capability_stable_id,
@@ -127,15 +132,19 @@ class Assessments::ActivityFeedQuery
   # @param viewer_sees_all [Boolean] true for assessee + manager-chain + admin
   # @param alignment_started [Boolean] whether the current cycle has reached
   #   `aligning` or beyond — gates manager-rating visibility for assessee
+  # @param disclosure [Assessments::Disclosure, nil] the assessee's disclosed
+  #   cells; when given, the manager-rating gate is per cell for the open
+  #   cycle. nil for every other viewer.
   # @param event_store [RailsEventStore::Client] override for tests
   def initialize(assignment:, context: :self, viewer_person_id: nil,
-                 viewer_sees_all: false, alignment_started: false,
+                 viewer_sees_all: false, alignment_started: false, disclosure: nil,
                  event_store: Rails.configuration.event_store)
     @assignment = assignment
     @context = context&.to_sym
     @viewer_person_id = viewer_person_id
     @viewer_sees_all = viewer_sees_all
     @alignment_started = alignment_started
+    @disclosure = disclosure
     @event_store = event_store
   end
 
@@ -183,9 +192,10 @@ class Assessments::ActivityFeedQuery
     stream_events.filter_map do |event|
       kind = RATING_KINDS[event.class]
       next unless kind
-      next if hide_manager_rating?(kind)
 
       data = event.data.with_indifferent_access
+      next if hide_manager_rating?(kind, data)
+
       # Resolve the actor's name from the event's actor id (a domain fact
       # captured at write time — e.g. the assessee's *current* manager can
       # differ from who actually rated). Merged into the payload under an
@@ -202,6 +212,11 @@ class Assessments::ActivityFeedQuery
       # `via_delegation` is stamped on the event at write time (accurate at
       # event time); historical events lack it → no badge.
       stable_id = data[:capability_stable_id]
+      # A cell the record doesn't read renders only under the lens it was
+      # rated through, so the entry carries that lens to switch to.
+      if lens_code && !home_scope&.include?(stable_id, data[:level_ordinal])
+        data = data.merge(lens: { as_role: data[:via_role_id], as_level: data[:level_ordinal] })
+      end
       Entry.new(
         id: event.event_id,
         kind: kind,
@@ -433,7 +448,15 @@ class Assessments::ActivityFeedQuery
     end
   end
 
+  # Home alignment milestones come from the progress row; a conversation
+  # against any other role from its {AssessmentCycleRoleAlignment} row, and
+  # names the role — the other party learns of it here (ADR-22). Re-opens
+  # come from the stream, which is the only record that one happened.
   def alignment_entries
+    home_alignment_entries + lens_alignment_entries
+  end
+
+  def home_alignment_entries
     AssessmentCycleProgress
       .joins("INNER JOIN assessment_cycles ac ON ac.cycle_id = " \
              "assessment_cycle_progress.cycle_id")
@@ -465,26 +488,94 @@ class Assessments::ActivityFeedQuery
       end
   end
 
+  def lens_alignment_entries
+    lens_alignment_rows.flat_map do |row|
+      role = { role_label: role_label(row.role_id, row.level_ordinal),
+               lens: { as_role: row.role_id, as_level: row.level_ordinal } }
+      out = [
+        Entry.new(
+          id: "alignment_started:#{row.id}",
+          kind: "alignment_started",
+          occurred_at: row.alignment_started_at,
+          payload: { cycle_id: row.cycle_id, started_by_id: row.alignment_started_by_id, **role }
+            .with_indifferent_access,
+          cycle_id: row.cycle_id
+        )
+      ]
+      if row.aligned_at
+        out << Entry.new(
+          id: "alignment_completed:#{row.id}",
+          kind: "alignment_completed",
+          occurred_at: row.aligned_at,
+          payload: { cycle_id: row.cycle_id, completed_by_id: row.aligned_by_id, **role }.with_indifferent_access,
+          cycle_id: row.cycle_id
+        )
+      end
+      out
+    end
+  end
+
   # One entry per `AlignmentReopened` event on this person's stream.
   # Sourced from the stream (not the progress row) because a re-open
   # clears the completion timestamps the progress-derived alignment
   # entries read — only the immutable event records that it happened.
   # An alignment milestone, so visible to both parties like
-  # started/completed.
+  # started/completed. A re-open against another role names it.
   def reopen_entries
     stream_events.filter_map do |event|
       next unless event.is_a?(PersonDevelopment::Events::AlignmentReopened)
 
       data = event.data.with_indifferent_access
+      payload = { cycle_id: data[:cycle_id], reopened_by_id: data[:reopened_by_id] }
+      row = lens_alignment_rows.find { |r| r.cycle_id == data[:cycle_id] && r.role_id == data[:role_id] }
+      if row
+        payload.merge!(role_label: role_label(row.role_id, row.level_ordinal),
+                       lens: { as_role: row.role_id, as_level: row.level_ordinal })
+      end
       Entry.new(
         id: "alignment_reopened:#{event.event_id}",
         kind: "alignment_reopened",
         occurred_at: event_timestamp(event),
-        payload: { cycle_id: data[:cycle_id],
-                   reopened_by_id: data[:reopened_by_id] }.with_indifferent_access,
+        payload: payload.with_indifferent_access,
         cycle_id: data[:cycle_id]
       )
     end
+  end
+
+  # This person's alignments against roles other than their home role.
+  def lens_alignment_rows
+    @lens_alignment_rows ||= AssessmentCycleRoleAlignment.lens
+      .where(person_id: @assignment.person_id, framework_id: @assignment.framework_id).to_a
+  end
+
+  # "Product Manager · PM3"
+  #
+  # @return [String, nil]
+  def role_label(role_id, level_ordinal)
+    @alignment_roles ||= FrameworkState::Role.where(role_id: lens_alignment_rows.map(&:role_id).uniq)
+      .index_by(&:role_id)
+    role = @alignment_roles[role_id]
+    role && "#{role.name} · #{role.code}#{level_ordinal}"
+  end
+
+  # The open cycle's home role scope — the record the feed's entries are
+  # read against. A rating outside it renders only under a lens.
+  #
+  # @return [Assessments::RoleScope, nil]
+  def home_scope
+    return @home_scope if defined?(@home_scope)
+
+    role_id = open_cycle_id && Assessments::RoleScope.home_role_ids(
+      cycle_id: open_cycle_id, framework_id: @assignment.framework_id, person_ids: [ @assignment.person_id ]
+    )[@assignment.person_id]
+    role_id ||= @assignment.role_id
+    @home_scope = Assessments::RoleScope.for(role_id: role_id, framework_id: @assignment.framework_id)
+  end
+
+  def open_cycle_id
+    return @open_cycle_id if defined?(@open_cycle_id)
+
+    @open_cycle_id = @assignment.current_open_cycle&.cycle_id
   end
 
   # Expands every `FrameworkVersionMigrated` event on this person's
@@ -588,7 +679,6 @@ class Assessments::ActivityFeedQuery
   # and the asked rater are resolved here so the view stays a dumb renderer.
   def revisit_entries
     return [] unless @viewer_sees_all
-    return [] if @context == :self && !@alignment_started
 
     events = stream_events.select { |e| e.is_a?(PersonDevelopment::Events::RatingRevisitRequested) }
     # Key-defensive like the other actor lookups — read-back payload keys
@@ -598,10 +688,14 @@ class Assessments::ActivityFeedQuery
         e.data[:rater_id] || e.data["rater_id"] ]
     end.compact.uniq
     names = ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
+    session_ids = events.filter_map { |e| e.data[:calibration_session_id] || e.data["calibration_session_id"] }
+    session_cycles = session_ids.empty? ? {} : CalibrationSession.where(id: session_ids.uniq).pluck(:id, :cycle_id).to_h
 
-    events.map do |event|
+    events.filter_map do |event|
       data = event.data.with_indifferent_access
       stable_id = data[:capability_stable_id]
+      next if hide_revisit?(data, session_cycles[data[:calibration_session_id]])
+
       Entry.new(
         id: event.event_id,
         kind: REVISIT_KIND,
@@ -620,6 +714,17 @@ class Assessments::ActivityFeedQuery
     end
   end
 
+  # The manager-rating gate, for a revisit request: per cell when it came
+  # from a session on the open cycle and the viewer is the assessee, the
+  # page-level rule otherwise.
+  def hide_revisit?(data, cycle_id)
+    if @disclosure && cycle_id.present? && cycle_id == open_cycle_id
+      return !@disclosure.include?(data[:capability_stable_id], data[:level_ordinal])
+    end
+
+    @context == :self && !@alignment_started
+  end
+
   def hide_authority_entry?(kind)
     return false unless DELEGATION_KINDS.include?(kind)
 
@@ -630,10 +735,15 @@ class Assessments::ActivityFeedQuery
     false
   end
 
-  def hide_manager_rating?(kind)
+  def hide_manager_rating?(kind, data)
     return false unless MANAGER_KINDS.include?(kind)
     # Peers can never see manager-source ratings.
     return true unless @viewer_sees_all
+    # The assessee, in the open cycle: only on a cell a started alignment
+    # reads (ADR-22).
+    if @disclosure && data[:cycle_id] == open_cycle_id
+      return !@disclosure.include?(data[:capability_stable_id], data[:level_ordinal])
+    end
     # Assessee in :self context: only after alignment has started.
     return true if @context == :self && !@alignment_started
 

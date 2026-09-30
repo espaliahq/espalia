@@ -44,6 +44,7 @@ class Operations::Assessments::RateSelf < Operations::Base
   def policy_check
     authorize assignment, :create_self_rating?
     rating_lens
+    refuse_frozen_cell!
   end
 
   # @return [Boolean] false when the call changed nothing (an explicit clear

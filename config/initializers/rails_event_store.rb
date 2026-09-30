@@ -154,4 +154,9 @@ Rails.configuration.to_prepare do
     PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
     to: PersonDevelopment::AsyncHandlers::RatingRevisitNotifier.handled_events
   )
+
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::LensAlignmentNotifier,
+    to: PersonDevelopment::AsyncHandlers::LensAlignmentNotifier.handled_events
+  )
 end

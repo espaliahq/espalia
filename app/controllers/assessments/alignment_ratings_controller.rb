@@ -24,13 +24,14 @@ class Assessments::AlignmentRatingsController < ApplicationController
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
-    # Alignment is against the home role, so the cell must be one the
-    # record reads (ADR-22) — the same rule Operations::Assessments::Align
-    # applies over MCP.
-    unless level_ordinal && response_lens.in_home_scope?(capability_stable_id, level_ordinal)
+    # Alignment is per role (ADR-22): the cell must be one the lens role
+    # reads, and an alignment reading it must be in progress — the rules
+    # Operations::Assessments::Align applies over MCP.
+    unless level_ordinal && response_lens.scope.include?(capability_stable_id, level_ordinal)
       head :unprocessable_content
       return
     end
+    raise Pundit::NotAuthorizedError if agreement_locked?(capability_stable_id, level_ordinal)
     frequency = rating_params[:frequency]
     comment = rating_params[:comment]
 
@@ -63,7 +64,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
       handler.align_assessment(
         @assignment.person_id, @assignment.framework_id, capability_stable_id,
         level_ordinal: level_ordinal, aligned_frequency: frequency,
-        cycle_id: cycle.cycle_id, comment: comment, aligned_by_id: current_person.id
+        cycle_id: cycle.cycle_id, comment: comment, aligned_by_id: current_person.id,
+        role_id: response_lens.role.role_id
       )
     end
 
@@ -73,6 +75,17 @@ class Assessments::AlignmentRatingsController < ApplicationController
   end
 
   private
+
+  def agreement_locked?(capability_stable_id, level_ordinal)
+    disclosure = Assessments::Disclosure.for(
+      lens: response_lens, participant_status: @assignment.current_open_cycle_participation&.status
+    )
+    agreed = AssessmentLevelRating.find_by(
+      cycle_id: @assignment.current_open_cycle&.cycle_id, person_id: @assignment.person_id,
+      capability_stable_id: capability_stable_id, level_ordinal: level_ordinal
+    )&.aligned_frequency.present?
+    disclosure.agreed_value_locked?(capability_stable_id, level_ordinal, agreed: agreed)
+  end
 
   def render_rating_error(capability_stable_id, level_ordinal, message)
     render turbo_stream: turbo_stream.replace(
@@ -220,11 +233,12 @@ class Assessments::AlignmentRatingsController < ApplicationController
         render_to_string(
           Views::Assessments::AlignmentCompletionControl.new(
             assignment: @assignment,
-            matrix_data: matrix_data
+            matrix_data: matrix_data,
+            lens_params: response_lens.home_role? ? {} : response_lens.to_params
           ),
           layout: false
         )
-      ) if policy(@assignment).complete_alignment?)
+      ) if policy(@assignment).complete_alignment?(role_id: (response_lens.role.role_id unless response_lens.home_role?)))
     ].compact
   end
 

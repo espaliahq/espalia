@@ -18,6 +18,8 @@ Once an event is published in production, its class, name, and payload shape are
 
 Adding a NEW event type is always safe. Adding a NEW field to a NEW event type is safe. Adding a field to an existing event is safe only if consumers tolerate its absence on older instances.
 
+**When a new field narrows what an event means, its absence must keep the old meaning — in every consumer.** Per-role alignment (ADR-22) added `role_id` and `cell_keys` to `AlignmentStarted`: a new start freezes only its role's cells, but a historical one, carrying neither, froze the whole assessment. The aggregate's `on` handler replays a missing `cell_keys` as "every cell", and the projection writes `whole_assessment: true` so the read side agrees — otherwise every open cycle that had started alignment would silently thaw on its next load. Test it by replaying the old event shape, not by constructing new events with the field set to nil.
+
 ## Tenant metadata invariant
 
 Every command dispatch in production code MUST wrap in:

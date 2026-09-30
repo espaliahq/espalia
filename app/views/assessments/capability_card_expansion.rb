@@ -111,10 +111,10 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
             assessment_id: @assessment_id,
             context: @context,
             category_id: @category_id,
-            interactive: !primary_perspective_frozen? && !manager_side_outside_home?,
+            interactive: !primary_perspective_frozen?,
             carried: primary_carried?,
             lens_params: @lens&.to_params || {},
-            static_title: (outside_home_title if manager_side_outside_home?)
+            static_title: frozen_title
           )
         end
       end
@@ -197,20 +197,24 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     )
   end
 
+  # Freeze is per cell (ADR-22): a self or manager rating freezes once any
+  # started alignment reads the cell, whichever lens the page is read
+  # through; an agreed value, once no alignment reading it is in progress.
   def primary_perspective_frozen?
-    @context == :alignment ? @alignment_locked : @frozen
+    if @context == :alignment
+      @alignment_locked || @cell_data[:agreed_locked] || false
+    else
+      @frozen || !@cell_data[:frozen_by].nil?
+    end
   end
 
-  # A manager-side rating on a cell the record doesn't read is refused until
-  # per-role alignment exists (ADR-22), so the manager's pill there is read
-  # only — shown, so the self rating beside it still has something to sit
-  # against, and titled so the reason is one hover away.
-  def manager_side_outside_home?
-    @context != :self && @cell_data[:in_home_scope] == false
-  end
+  # Why the pill is read-only when another role's conversation froze it —
+  # "Frozen — alignment against PM3 has started".
+  def frozen_title
+    alignment = @cell_data[:frozen_by]
+    return unless alignment && @context != :alignment && primary_perspective_frozen?
 
-  def outside_home_title
-    "Manager rating against #{@lens&.code || 'this role'} comes with per-role alignment"
+    "Frozen — alignment against #{alignment.code} has started"
   end
 
   def primary_frequency

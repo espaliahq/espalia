@@ -101,7 +101,8 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     setup do
       ActsAsTenant.with_tenant(@tenant) do
         handler = PersonDevelopment::CommandHandler.new
-        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id)
+        handler.start_alignment(@assessee.id, @framework_id, @cycle_id, started_by_id: @manager.id,
+          cell_keys: [ [ @cap_sid, 2 ] ])
         handler.align_assessment(@assessee.id, @framework_id, @cap_sid,
           level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
           aligned_by_id: @manager.id)

@@ -35,9 +35,7 @@ GrowthOs/ControllersMustUseOperations:
   Exclude:
     - "app/controllers/assessment_cycles_controller.rb"
     - "app/controllers/assessment_cycles/enrollments_controller.rb"
-    - "app/controllers/assessments/alignment_completions_controller.rb"
     - "app/controllers/assessments/alignment_ratings_controller.rb"
-    - "app/controllers/assessments/alignment_starts_controller.rb"
     - "app/controllers/assessments/comments_controller.rb"
     - "app/controllers/assessments/evidence_controller.rb"
 

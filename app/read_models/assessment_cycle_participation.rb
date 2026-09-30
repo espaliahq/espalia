@@ -25,7 +25,6 @@ class AssessmentCycleParticipation
   # All possible derived statuses, drawn from the union of enrollment and progress
   # state machines. Returned by {#status}.
   STATUSES = %w[enrolled started self_complete manager_complete aligning aligned concluded withdrawn].freeze
-  INDIVIDUAL_RATING_STATUSES = %w[enrolled started].freeze
 
   # Pundit policy lookup: reuse the AssessmentCyclePolicy
   def self.policy_class
@@ -128,13 +127,6 @@ class AssessmentCycleParticipation
     return "started" if progress&.started_at.present?
 
     "enrolled"
-  end
-
-  # @return [Boolean] whether self/manager ratings can still be edited.
-  #   False once alignment has been started for the cycle, or once the
-  #   participant has withdrawn.
-  def individual_ratings_editable?
-    INDIVIDUAL_RATING_STATUSES.include?(status)
   end
 
   # @return [Boolean] whether alignment ratings can be recorded.

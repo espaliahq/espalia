@@ -70,8 +70,11 @@ class Views::Assessments::Activity::Entry < Views::Base
   }.freeze
 
   # @param entry [Assessments::ActivityFeedQuery::Entry]
-  def initialize(entry:)
+  # @param assignment [PersonFrameworkAssignment, nil] the assessment, for
+  #   entries that switch the page to another role's lens
+  def initialize(entry:, assignment: nil)
     @entry = entry
+    @assignment = assignment
   end
 
   def view_template
@@ -112,7 +115,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   # to the (capability, level) they're attached to. Alignment milestones
   # have no matrix anchor and stay non-interactive.
   def focusable?
-    @entry.capability_stable_id.present? && @entry.level_ordinal.present?
+    (@entry.capability_stable_id.present? && @entry.level_ordinal.present?) || lens_href.present?
   end
 
   def entry_data
@@ -122,12 +125,29 @@ class Views::Assessments::Activity::Entry < Views::Base
       kind_group: kind_group
     }
     base[:category_id] = @entry.category_id if @entry.category_id
+    base[:lens_href] = lens_href if lens_href
     if focusable?
-      base[:capability_stable_id] = @entry.capability_stable_id
-      base[:level_ordinal] = @entry.level_ordinal
+      base[:capability_stable_id] = @entry.capability_stable_id if @entry.capability_stable_id
+      base[:level_ordinal] = @entry.level_ordinal if @entry.level_ordinal
       base[:action] = "click->activity-feed#focusEntry"
     end
     base
+  end
+
+  # Where the entry lives when the page is read through another role
+  # (ADR-22): its alignment, or a cell only that role reads. Clicking
+  # switches to it when the page in front of the viewer doesn't render it.
+  def lens_href
+    return @lens_href if defined?(@lens_href)
+
+    lens = @assignment && payload_value(:lens)
+    @lens_href = if lens
+      params = { as_role: lens[:as_role] || lens["as_role"], as_level: lens[:as_level] || lens["as_level"] }
+      if @entry.capability_stable_id && @entry.level_ordinal
+        params.merge!(capability: @entry.capability_stable_id, level_ordinal: @entry.level_ordinal)
+      end
+      assessment_path(@assignment, params.compact)
+    end
   end
 
   def summary
@@ -171,9 +191,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "evidence_unlinked"     then evidence_link_summary("Unlinked", preposition: "from")
     when "evidence_revalenced"   then evidence_link_summary("Reclassified", preposition: "on")
     when "evidence_withdrawn"    then evidence_withdrawn_summary
-    when "alignment_started"     then "Manager started alignment"
-    when "alignment_completed"   then "Marked alignment complete"
-    when "alignment_reopened"    then "Re-opened alignment"
+    when "alignment_started"     then "Manager started alignment#{role_suffix}"
+    when "alignment_completed"   then "Marked alignment#{role_suffix} complete"
+    when "alignment_reopened"    then "Re-opened alignment#{role_suffix}"
     when "comment_posted"        then comment_posted_summary
     when "evidence_link_commented" then evidence_link_commented_summary
     when "delegation_granted"    then "#{actor_name || 'Manager'} delegated rating to #{delegate_name}"
@@ -192,6 +212,13 @@ class Views::Assessments::Activity::Entry < Views::Base
     session = payload_value(:session_name).to_s.strip.presence
     base = "#{asker} asked #{rater} to revisit #{capability_label}"
     session ? "#{base} (#{session})" : base
+  end
+
+  # " against Product Manager · PM3" for an alignment milestone against a
+  # role other than home (ADR-22); empty for the home role's.
+  def role_suffix
+    label = payload_value(:role_label).to_s.strip.presence
+    label ? " against #{label}" : ""
   end
 
   # " while exploring PM3" for a rating made through a role lens (ADR-22) —

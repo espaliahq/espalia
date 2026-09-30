@@ -73,12 +73,15 @@ class AssessmentsController < ApplicationController
         expanded_level_ordinal: focused_level_ordinal_param,
         selected_levels: selected_levels_param,
         context: context,
-        # Alignment is a milestone of the record; a lens reads it but never
-        # drives it (ADR-22). Not even a lens on the home ladder: the
+        # Alignment is per role (ADR-22): the record's milestones on the
+        # record, a lens role's on that lens at the level its conversation
+        # is about. Never on another level of the home ladder: the
         # completion control counts the level it is rendered against.
         can_start_alignment: lens.home? && policy.start_alignment?,
-        can_complete_alignment: lens.home? && policy.complete_alignment?,
-        can_reopen_alignment: lens.home? && policy.reopen_alignment?,
+        can_complete_alignment: milestone_lens? && policy.complete_alignment?(role_id: lens_role_id),
+        can_reopen_alignment: milestone_lens? && policy.reopen_alignment?(role_id: lens_role_id),
+        can_start_lens_alignment: !lens.home_role? && policy.start_alignment?(role_id: lens_role_id),
+        lens_viewer: lens_viewer(policy),
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
@@ -243,6 +246,29 @@ class AssessmentsController < ApplicationController
     @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
   end
 
+  # Whose ratings the lens banner speaks of on the manager view: the
+  # reporting manager's, a delegate's, or nobody's (a view-only viewer).
+  #
+  # @return [Symbol] :manager, :delegate or :observer
+  def lens_viewer(policy)
+    return :observer unless policy.rating_participant?
+
+    active_rating_delegate? ? :delegate : :manager
+  end
+
+  # @return [String, nil] the lens role, nil on the home role
+  def lens_role_id
+    lens.role.role_id unless lens.home_role?
+  end
+
+  # Whether the page is read at the level an alignment milestone counts:
+  # the record itself, or a lens role at the level its conversation began.
+  def milestone_lens?
+    return lens.home? if lens.home_role?
+
+    @matrix_data[:lens_alignment]&.level_ordinal == lens.level.ordinal
+  end
+
   # `viewer_sees_all_evidence?`, `viewer_can_relink_others_evidence?`, and
   # `active_rating_delegate?` are provided by the shared {AssessmentVisibility}
   # concern so every assessment controller (page, activity frame, evidence
@@ -293,7 +319,8 @@ class AssessmentsController < ApplicationController
       context: assessment_context,
       viewer_person_id: current_person.id,
       viewer_sees_all: viewer_sees_all_evidence?,
-      alignment_started: alignment_started?
+      alignment_started: alignment_started?,
+      disclosure: (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
     ).call
   end
 
@@ -354,6 +381,7 @@ class AssessmentsController < ApplicationController
     rated = open_cycles.group_by { |_, cycle| cycle }.each_with_object({}) do |(cycle, entries), h|
       h.merge!(card_rating_counts(cycle, entries.map { |(_, person_id), _| person_id }))
     end
+    lens_alignments = Assessments::LensAlignments.for(cycle_ids: cycle_ids, person_ids: person_ids)
 
     open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
       prog = progress[[ cycle.cycle_id, person_id ]]
@@ -365,7 +393,8 @@ class AssessmentsController < ApplicationController
         self_any: any[:self_any] || false,
         manager_any: any[:manager_any] || false,
         self_human: any[:self_human] || false,
-        manager_human: any[:manager_human] || false
+        manager_human: any[:manager_human] || false,
+        lens_alignments: lens_alignments.fetch([ cycle.cycle_id, person_id ], [])
       }
     end
   end

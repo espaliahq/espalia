@@ -164,6 +164,20 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_not participant.self_done
     end
 
+    # ADR-22: a conversation about another role is not the record's
+    # milestone, whatever stage it reaches.
+    should "ignore alignment completed against another role" do
+      progress(@person, status: "started")
+      AssessmentCycleRoleAlignment.create!(tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
+        framework_id: @framework_id, role_id: SecureRandom.uuid_v7, level_ordinal: 2, status: "aligned",
+        alignment_started_at: 2.days.ago, aligned_at: 1.day.ago)
+
+      participant = result.participants.first
+      assert_equal "started", participant.status
+      assert_not participant.aligned
+      assert_equal 0, result.funnel.aligned
+    end
+
     should "still count them as activity for the at-risk check" do
       @cycle.update!(planned_end_at: nil)
       AssessmentLevelRating.update_all(last_self_rated_at: 30.days.ago)

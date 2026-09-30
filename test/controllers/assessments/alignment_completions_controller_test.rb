@@ -108,10 +108,12 @@ class Assessments::AlignmentCompletionsControllerTest < ActionDispatch::Integrat
 
     should "complete once every current-level cell carries an agreed rating" do
       ActsAsTenant.with_tenant(@tenant) do
+        # The capability was bound after alignment started, so the aligner
+        # names the role that now reads it.
         PersonDevelopment::CommandHandler.new.align_assessment(
           @report.id, @framework.framework_id, @cap.stable_id,
           level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id,
-          aligned_by_id: @manager.id
+          aligned_by_id: @manager.id, role_id: @role.role_id
         )
       end
 

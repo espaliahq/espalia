@@ -149,10 +149,11 @@ class Assessments::MatrixDataBuilder
       emphasised_capabilities: emphasised_capabilities(categories, scoring),
       self_scoring: build_perspective_scoring(categories, :self_only),
       # Whole-page manager and aligned scores stay withheld from the assessee
-      # even where single cells are disclosed: a number built over a mix of
-      # disclosed and private cells would say something no cell does.
-      manager_scoring: self_context? ? nil : build_perspective_scoring(categories, :manager_only),
-      aligned_scoring: self_context? ? nil : build_perspective_scoring(categories, :aligned_only),
+      # unless every cell they are built over is disclosed: a number built
+      # over a mix of disclosed and private cells would say something no
+      # cell does.
+      manager_scoring: withhold_page_scores? ? nil : build_perspective_scoring(categories, :manager_only),
+      aligned_scoring: withhold_page_scores? ? nil : build_perspective_scoring(categories, :aligned_only),
       # All three bands, because the explanation layer (#414) must name the
       # framework's own numbers rather than the shipped 80/95/150.
       underperforming_threshold: @framework.underperforming_threshold&.to_f ||
@@ -164,8 +165,18 @@ class Assessments::MatrixDataBuilder
       total_cells: count_total_cells(categories),
       rated_cells: count_rated_cells(categories),
       participant_status: @participant_status,
-      individual_ratings_frozen: %w[aligning aligned].include?(@participant_status),
-      alignment_locked: @participant_status == "aligned",
+      # The alignment against the role being read, if one has started — it
+      # decides whether the page is the alignment conversation. Frozen cells
+      # beyond it are marked per cell (`frozen_by`).
+      lens_alignment: lens_alignment,
+      # Every other role alignment has started against this cycle — the
+      # header's "Aligning · PM3" chips.
+      lens_alignments: @disclosure.lens_alignments,
+      # Lens-independent, so the page's feed reuses it rather than building
+      # a second one.
+      disclosure: @disclosure,
+      individual_ratings_frozen: lens_alignment_started?,
+      alignment_locked: lens_alignment_completed?,
       current_level_complete: current_level_complete?(categories)
     }
   end
@@ -275,9 +286,14 @@ class Assessments::MatrixDataBuilder
         # the lighter pill/chip treatment. Same privacy gate as the values.
         current_frequency_carried: rating&.self_rating_carried? || false,
         manager_frequency_carried: (!hidden && rating&.manager_rating_carried?) || false,
-        # Whether the record reads this cell. A manager-side write outside
-        # it is refused until per-role alignment exists (ADR-22).
+        # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
+        # The started alignment that froze self and manager ratings here —
+        # any role's, whichever lens the page is read through — and whether
+        # the agreed value can still move.
+        frozen_by: @disclosure.frozen_by(capability.stable_id, ordinal),
+        agreed_locked: @disclosure.agreed_value_locked?(capability.stable_id, ordinal,
+                                                        agreed: rating&.aligned_frequency.present?),
         illustrations: illustrations,
         illustration_count: illustrations.size,
         evidence: evidence,
@@ -561,6 +577,35 @@ class Assessments::MatrixDataBuilder
 
   def self_context?
     @context == :self
+  end
+
+  def withhold_page_scores?
+    self_context? && !@disclosure.covers_all?(@role_scope.cells)
+  end
+
+  # @return [Assessments::Disclosure::Alignment, nil]
+  def lens_alignment
+    return @lens_alignment if defined?(@lens_alignment)
+
+    @lens_alignment = @disclosure.alignment_for(@role.role_id) if @lens
+  end
+
+  # Without a lens, or on the home role, the participation's own status is
+  # the home alignment's lifecycle — as it always was.
+  def lens_alignment_started?
+    return Assessments::Disclosure::STARTED_STATUSES.include?(@participant_status) if home_lifecycle?
+
+    !lens_alignment.nil?
+  end
+
+  def lens_alignment_completed?
+    return @participant_status == "aligned" if home_lifecycle?
+
+    lens_alignment&.aligned? || false
+  end
+
+  def home_lifecycle?
+    @lens.nil? || @lens.home_role?
   end
 
   # In :self context the effective fallback chain (aligned → manager → self)
