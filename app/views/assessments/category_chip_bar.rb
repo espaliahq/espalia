@@ -40,7 +40,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
       data: { all_chip: "true", action: "click->category-nav#scrollToTop" }
     ) do
       plain "All"
-      span(class: "text-xs font-mono opacity-70") { total.to_s }
+      span(class: "text-xs font-mono font-normal") { total.to_s }
     end
   end
 

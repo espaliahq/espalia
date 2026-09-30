@@ -228,6 +228,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_includes response.body, "Page 1 of 2"
+      # The pager's dead end is an inactive control, not plain text — that is
+      # what exempts its muted colour from 1.4.3 (#323).
+      assert_select "#skip-level-assessments span[role='link'][aria-disabled='true']", text: /Prev/
       # 13 skip-level assignments, ordered by id (creation order): the last
       # one created falls on page 2.
       assert_not_includes response.body, "Extra Skip #{AssessmentsController::SKIP_LEVEL_PAGE_SIZE - 1}"

@@ -3,6 +3,8 @@
 require "application_system_test_case"
 
 class AssessmentsSystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
@@ -896,6 +898,30 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # of the viewport — so a short page's scroll length stays clamp-free.
       assert_operator min_h, :>=, inner_h + 240,
         "min-height floor (#{min_h}px) must exceed the viewport by at least the 240px collapse range"
+    end
+  end
+
+  context "contrast (WCAG 1.4.3 / 1.4.11)" do
+    should "keep the All chip's count at AA while a category chip is active" do
+      visit assessment_path(@assignment)
+      assert_selector "#category-tabs a[aria-current='page']"
+
+      assert_operator rendered_contrast("#category-tabs [data-all-chip] span"), :>=, 4.5
+    end
+
+    should "keep the feedback actions glyph above the 3:1 icon floor" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap1_stable, level_ordinal: 2, source: "self",
+          evidence_type: "project_outcome", title: "Launch", content: "Shipped the launch.",
+          author_id: @person.id, valence: "demonstrated"
+        )
+      end
+      visit assessment_path(@assignment)
+      assert_selector "[aria-label='Feedback / evidence actions']"
+
+      assert_operator rendered_contrast("[aria-label='Feedback / evidence actions']"), :>=, 3
     end
   end
 

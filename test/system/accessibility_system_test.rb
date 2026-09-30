@@ -7,6 +7,8 @@ require "application_system_test_case"
 # touch targets that meet WCAG 2.5.5 (44x44 CSS px). These regressions are
 # invisible to the unit suite and only surface in a real browser.
 class AccessibilitySystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -71,9 +73,9 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       visit root_path
       assert_text "Home"
 
-      assert_operator text_contrast("text-primary", "#ffffff"), :<, 4.5, "raw primary must fail, or this test proves nothing"
-      assert_operator text_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
-      assert_operator text_contrast("text-primary-ink", "#f9fafb"), :>=, 4.5
+      assert_operator utility_contrast("text-primary", "#ffffff"), :<, 4.5, "raw primary must fail, or this test proves nothing"
+      assert_operator utility_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
+      assert_operator utility_contrast("text-primary-ink", "#f9fafb"), :>=, 4.5
     end
 
     should "keep a pale tenant brand at AA as text" do
@@ -81,7 +83,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       visit root_path
       assert_text "Home"
 
-      assert_operator text_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
+      assert_operator utility_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
     end
 
     should "lighten a dark tenant brand to AA in dark mode" do
@@ -92,9 +94,9 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       visit root_path
       assert_text "Home"
 
-      assert_operator text_contrast("text-primary", "#111827"), :<, 4.5, "raw primary must fail, or this test proves nothing"
-      assert_operator text_contrast("text-primary-ink", "#111827"), :>=, 4.5
-      assert_operator text_contrast("text-primary-ink", "#1f2937"), :>=, 4.5
+      assert_operator utility_contrast("text-primary", "#111827"), :<, 4.5, "raw primary must fail, or this test proves nothing"
+      assert_operator utility_contrast("text-primary-ink", "#111827"), :>=, 4.5
+      assert_operator utility_contrast("text-primary-ink", "#1f2937"), :>=, 4.5
     ensure
       page.driver.browser.execute_cdp(
         "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
@@ -114,30 +116,4 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     JS
   end
 
-  # WCAG contrast of a probe span carrying +utility+ over +background+, as the
-  # browser renders it — tenant overrides and the colour scheme included.
-  def text_contrast(utility, background)
-    page.evaluate_script(<<~JS, utility, background)
-      (() => {
-        const probe = document.createElement("span");
-        probe.className = arguments[0];
-        document.body.appendChild(probe);
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = 1;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        const luminance = css => {
-          ctx.clearRect(0, 0, 1, 1);
-          ctx.fillStyle = css;
-          ctx.fillRect(0, 0, 1, 1);
-          return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3)
-            .map(v => v / 255)
-            .map(v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-            .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-        };
-        const [hi, lo] = [luminance(getComputedStyle(probe).color), luminance(arguments[1])].sort((a, b) => b - a);
-        probe.remove();
-        return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
-      })()
-    JS
-  end
 end
