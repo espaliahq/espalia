@@ -121,7 +121,7 @@ Three places now surface it:
 - `HrisSyncJob` logs `unmapped_titles`, `missing_roles`, `missing_levels` and `missing_ordinals` as a warning after every sync that had any.
 - `integrations_hris_titles` over MCP.
 
-`Integrations::HrisTitleResolution` answers "what would the next sync do to each person" without dispatching anything. It mirrors the adapter's Pass 5 predicates — keep the two in step.
+`Integrations::HrisTitleResolution` is the one resolution of title → role and level. The adapter's Pass 5 dispatches on its rows (`Integrations::HrisPersonRow#status`), and the integrations page, the MCP tools and a mapping's preview read the same rows — so a change to the rules lands in one place, and nothing can describe a sync that does something else. It resolves assignments within the framework the sync assigns into (`FrameworkState::Framework.first`).
 
 ### The sync must not save the config it read at the start
 

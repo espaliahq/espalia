@@ -3,10 +3,10 @@
 # What the next HRIS sync would do to each HRIS-managed person, and the same
 # answer grouped by job title.
 #
-# Mirrors {Hris::Hibob::Adapter#dispatch_framework_assignment}'s predicates
-# without dispatching anything, so the integrations page, the MCP read tool
-# and a mapping edit's preview all describe the sync the same way. Keep any
-# change to the resolution rules in step with the adapter.
+# The ONE resolution of HRIS title → framework role and level: the sync's
+# Pass 5 dispatches on these rows ({Hris::Hibob::Adapter#assign_to_framework}),
+# and the integrations page, the MCP read tool and a mapping edit's preview
+# read the same rows — so what they describe is what the sync does.
 #
 # @example
 #   resolution = Integrations::HrisTitleResolution.new(tenant)
@@ -42,7 +42,7 @@ class Integrations::HrisTitleResolution
     people = (people || default_people).to_a
     return [] if people.empty?
 
-    assignments = PersonFrameworkAssignment.where(person_id: people.map(&:id))
+    assignments = PersonFrameworkAssignment.where(person_id: people.map(&:id), framework_id: framework&.framework_id)
       .includes(:role, :level).index_by(&:person_id)
 
     people.map do |person|
@@ -87,6 +87,15 @@ class Integrations::HrisTitleResolution
   # @return [FrameworkState::Role, nil]
   def role_for(code)
     roles_by_code[code]
+  end
+
+  # The framework the sync assigns people into.
+  #
+  # @return [FrameworkState::Framework, nil]
+  def framework
+    return @framework if defined?(@framework)
+
+    @framework = FrameworkState::Framework.first
   end
 
   # The framework's roles, for choosing a mapping target.

@@ -276,7 +276,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # Uses config.role_mappings to match job_title → framework role.
   # Level ordinal comes from the mapping (Mode 1) or falls back to
-  # person.hris_level_ordinal (Mode 2).
+  # person.hris_level_ordinal (Mode 2). The resolution itself is
+  # {Integrations::HrisTitleResolution} — shared with the integrations page
+  # and the MCP tools, so they can't describe a different sync.
   #
   # Dispatches one of three commands per person:
   # - `assign_to_framework` — no existing assignment
@@ -297,97 +299,60 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     return if config.role_mappings.blank?
     return if touched_person_ids.empty?
 
-    framework = FrameworkState::Framework.first
+    resolution = Integrations::HrisTitleResolution.new(tenant)
+    framework = resolution.framework
     return if framework.nil?
-
-    title_to_mapping = config.title_lookup
-    roles_by_code = framework_roles_by_code
 
     with_hris_event_context do
       command_handler = PersonDevelopment::CommandHandler.new
 
-      Person.where(id: touched_person_ids).find_each do |person|
+      resolution.rows(Person.where(id: touched_person_ids)).each do |row|
         # HiBob returns inactive employees too (show_inactive: true) —
         # they are offboarded by Pass 3b, never (re-)assigned here.
-        if person.status == "inactive"
+        if row.status == Integrations::HrisPersonRow::STATUS_INACTIVE
           result[:skipped_inactive] += 1
           next
         end
 
-        dispatch_framework_assignment(
-          person: person,
-          framework: framework,
-          title_to_mapping: title_to_mapping,
-          roles_by_code: roles_by_code,
-          command_handler: command_handler,
-          result: result
-        )
-        record_reporting_manager(person: person, framework: framework, command_handler: command_handler)
+        dispatch_framework_assignment(row: row, framework: framework, command_handler: command_handler, result: result)
+        record_reporting_manager(person: row.person, framework: framework, command_handler: command_handler)
       end
     end
   end
 
-  # Preloads all framework roles keyed by code for fast lookup.
+  # Dispatches the command a resolved row calls for, or tallies why it can't.
   #
-  # @return [Hash{String => FrameworkState::Role}]
-  def framework_roles_by_code
-    FrameworkState::Role.all.index_by(&:code)
-  end
-
-  # Dispatches the appropriate framework assignment command for a single person.
-  #
-  # @param person [Person]
+  # @param row [Integrations::HrisPersonRow]
   # @param framework [FrameworkState::Framework]
-  # @param title_to_mapping [Hash{String => HrisRoleMapping}]
-  # @param roles_by_code [Hash{String => FrameworkState::Role}]
   # @param command_handler [PersonDevelopment::CommandHandler]
   # @param result [Hash]
-  def dispatch_framework_assignment(person:, framework:, title_to_mapping:, roles_by_code:, command_handler:, result:)
-    if person.job_title.blank?
+  def dispatch_framework_assignment(row:, framework:, command_handler:, result:)
+    person = row.person
+
+    case row.status
+    when Integrations::HrisPersonRow::STATUS_NO_TITLE
       result[:skipped_no_title] += 1
-      return
-    end
-
-    mapping = title_to_mapping[HrisRoleMapping.normalize_title(person.job_title)]
-    if mapping.nil?
+    when Integrations::HrisPersonRow::STATUS_UNMAPPED
       result[:unmapped_titles] << person.job_title
-      return
-    end
-
-    role = roles_by_code[mapping.framework_role_code]
-    if role.nil?
-      result[:missing_roles] << mapping.framework_role_code
-      return
-    end
-
-    resolved_ordinal = mapping.level_ordinal || person.hris_level_ordinal
-    if resolved_ordinal.nil?
-      result[:missing_ordinals] << { title: person.job_title, code: mapping.framework_role_code }
-      return
-    end
-
-    level = FrameworkState::Level.find_by(role_id: role.role_id, ordinal: resolved_ordinal)
-    if level.nil?
-      result[:missing_levels] << { code: mapping.framework_role_code, ordinal: resolved_ordinal }
-      return
-    end
-
-    existing = PersonFrameworkAssignment.find_by(
-      person_id: person.id,
-      framework_id: framework.framework_id
-    )
-
-    if existing.nil?
-      command_handler.assign_to_framework(person.id, framework.framework_id, role.role_id, level.level_id)
+    when Integrations::HrisPersonRow::STATUS_MISSING_ROLE
+      result[:missing_roles] << row.mapping.framework_role_code
+    when Integrations::HrisPersonRow::STATUS_MISSING_ORDINAL
+      result[:missing_ordinals] << { title: person.job_title, code: row.mapping.framework_role_code }
+    when Integrations::HrisPersonRow::STATUS_MISSING_LEVEL
+      result[:missing_levels] << { code: row.mapping.framework_role_code, ordinal: row.resolved_ordinal }
+    when Integrations::HrisPersonRow::STATUS_PENDING_SYNC
+      command_handler.assign_to_framework(person.id, framework.framework_id, row.role.role_id, row.level.level_id)
       result[:assigned] += 1
-    elsif existing.role_id == role.role_id && existing.level_id == level.level_id
+    when Integrations::HrisPersonRow::STATUS_ASSIGNED
       result[:unchanged] += 1
-    elsif existing.role_id != role.role_id
-      command_handler.change_person_role(person.id, framework.framework_id, role.role_id, level.level_id)
-      result[:role_changed] += 1
-    else
-      command_handler.change_person_level(person.id, framework.framework_id, level.level_id)
-      result[:level_changed] += 1
+    when Integrations::HrisPersonRow::STATUS_DRIFT
+      if row.assignment.role_id != row.role.role_id
+        command_handler.change_person_role(person.id, framework.framework_id, row.role.role_id, row.level.level_id)
+        result[:role_changed] += 1
+      else
+        command_handler.change_person_level(person.id, framework.framework_id, row.level.level_id)
+        result[:level_changed] += 1
+      end
     end
   end
 
