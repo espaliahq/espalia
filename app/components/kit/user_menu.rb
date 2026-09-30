@@ -28,7 +28,10 @@ class Components::Kit::UserMenu < Components::Base
     # also hosts the notification bell dropdown.
     div(id: "user-menu", class: "inline-block") do
       render Components::Kit::Dropdown.new(align: :right) do |dropdown|
-        dropdown.trigger { avatar_circle }
+        # Two tones, because the nav colour is the tenant's: whichever of the
+        # ring and the dark band behind it contrasts with their navbar carries.
+        dropdown.trigger(focus_ring: "rounded-full focus-visible:ring-nav-fg " \
+                                     "focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900") { avatar_circle }
         dropdown.menu { menu_content }
       end
     end

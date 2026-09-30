@@ -68,6 +68,30 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "focus visible (WCAG 2.4.7)" do
+    should "ring the avatar menu visibly against the navbar when keyboard-focused" do
+      visit root_path
+      assert_text "Home"
+
+      focus = page.evaluate_script(<<~JS)
+        (() => {
+          #{ContrastHelpers::CONTRAST_JS}
+          const button = document.querySelector("#user-menu button");
+          button.focus();
+          const nav = paint([[getComputedStyle(button.closest("nav")).backgroundColor, 1]]);
+          const bands = [...getComputedStyle(button).boxShadow.matchAll(/((?:rgba?|oklch|oklab|lab|lch|color)\\([^)]*\\)) 0px 0px 0px ([1-9][0-9.]*)px/g)]
+            .map(m => m[1]).filter(c => !/, 0\\)$/.test(c));
+          return { focusVisible: button.matches(":focus-visible"), bands: bands,
+                   best: Math.max(0, ...bands.map(c => ratio(paint([[c, 1]]), nav))) };
+        })()
+      JS
+
+      assert focus["focusVisible"], "a script focus with no prior pointer input should read as keyboard focus"
+      assert_not_empty focus["bands"], "the avatar trigger draws no focus ring"
+      assert_operator focus["best"], :>=, 3, "the ring must stand out from the navbar (1.4.11): #{focus["bands"]}"
+    end
+  end
+
   context "brand-coloured text (WCAG 1.4.3)" do
     should "keep the default brand ink at AA on light surfaces, where raw primary fails" do
       visit root_path
