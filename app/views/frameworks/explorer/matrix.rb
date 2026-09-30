@@ -128,7 +128,7 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
         end
         div(class: "mt-3 flex items-center justify-center gap-4 text-sm") do
           a(href: reset_path(@selected_role_ids), data: { turbo_frame: "_top" },
-            class: "text-primary hover:underline font-medium") { "Clear search" }
+            class: "text-primary-ink hover:underline font-medium") { "Clear search" }
           a(href: reset_path([]), data: { turbo_frame: "_top" },
             class: "text-gray-600 dark:text-gray-300 hover:underline") { "Show all roles" }
         end

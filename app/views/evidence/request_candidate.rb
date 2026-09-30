@@ -49,7 +49,7 @@ class Views::Evidence::RequestCandidate < Views::Base
         p(class: "truncate text-sm font-medium text-gray-900 dark:text-gray-100") { "#{@person.name}#{suffix}" }
         p(class: "truncate text-xs text-gray-600 dark:text-gray-300") { secondary }
       end
-      span(class: "shrink-0 text-xs font-medium text-primary") { "Add" } unless @already_requested
+      span(class: "shrink-0 text-xs font-medium text-primary-ink") { "Add" } unless @already_requested
     end
   end
 

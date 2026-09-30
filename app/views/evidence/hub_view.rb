@@ -172,7 +172,7 @@ class Views::Evidence::HubView < Views::Base
     div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
       if request.can_nudge?
         button_to("Send a nudge", nudge_evidence_request_path(request),
-          class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline cursor-pointer")
+          class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline cursor-pointer")
       end
       a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
         class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
@@ -197,7 +197,7 @@ class Views::Evidence::HubView < Views::Base
       applies_to_line(response[:links])
       div(class: "flex items-center gap-4") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit links" }
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") { "Edit links" }
         view_in_assessment_link(item)
       end
     end
@@ -260,7 +260,7 @@ class Views::Evidence::HubView < Views::Base
     path = @in_situ_paths[item.id]
     return if path.blank?
 
-    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline") do
+    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline") do
       "View in assessment"
     end
   end
@@ -282,7 +282,7 @@ class Views::Evidence::HubView < Views::Base
     div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
       view_in_assessment_link(item)
       button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-             class: "inline-flex items-center min-h-11 text-sm font-medium text-primary cursor-pointer") { "Edit" }
+             class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") { "Edit" }
       form_with(url: evidence_item_path(item), method: :delete) do
         button(type: "submit", data: { turbo_confirm: "Withdraw this feedback? It will be hidden everywhere it appears." },
                class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline cursor-pointer") { "Withdraw" }

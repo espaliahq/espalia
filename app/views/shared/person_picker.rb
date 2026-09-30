@@ -115,13 +115,13 @@ class Views::Shared::PersonPicker < Views::Base
   # add — same structure so remove works identically on both.
   def selected_chip(entry)
     span(
-      class: "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary text-xs font-medium",
+      class: "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary-ink text-xs font-medium",
       data: { person_id: entry[:id] }
     ) do
       plain entry[:name]
       button(
         type: "button", aria: { label: "Remove #{entry[:name]}" },
-        class: "leading-none text-primary/70 hover:text-primary cursor-pointer",
+        class: "leading-none text-primary-ink/80 hover:text-primary-ink cursor-pointer",
         data: { action: "person-picker#remove", person_picker_person_id_param: entry[:id] }
       ) { "×" }
     end

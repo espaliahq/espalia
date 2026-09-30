@@ -115,7 +115,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
     return plain(label) unless item.assignment_id
 
     a(href: item_path(item), data: { turbo_frame: "_top" },
-      class: "font-medium text-primary hover:underline") { label }
+      class: "font-medium text-primary-ink hover:underline") { label }
   end
 
   def cell_label(item)

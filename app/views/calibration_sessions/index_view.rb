@@ -65,7 +65,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
         card.body do
           div(class: "flex items-start justify-between gap-3") do
             div do
-              h3(class: "text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary transition-colors") do
+              h3(class: "text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary-ink transition-colors") do
                 session.name
               end
               p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do

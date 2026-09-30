@@ -62,7 +62,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
       end
       a(
         href: framework_suggestions_path(@framework.framework_id),
-        class: "text-xs text-primary hover:text-primary/80 shrink-0",
+        class: "text-xs text-primary-ink hover:underline shrink-0",
         data: { turbo_frame: "_top" }
       ) { "View all" }
     end
@@ -73,7 +73,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
     a(
       href: @clear_path,
-      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary mt-1 inline-block",
+      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink mt-1 inline-block",
       data: {
         turbo_frame: "suggestion-panel",
         action: "click->context-pane#clearFocus"
@@ -178,8 +178,8 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   def detail_link(suggestion)
     a(
       href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
-      class: "ml-auto text-gray-600 dark:text-gray-300 hover:text-primary " \
-             "focus-visible:text-primary focus-visible:opacity-100 " \
+      class: "ml-auto text-gray-600 dark:text-gray-300 hover:text-primary-ink " \
+             "focus-visible:text-primary-ink focus-visible:opacity-100 " \
              "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 " \
              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
       data: { turbo_frame: "_top" },

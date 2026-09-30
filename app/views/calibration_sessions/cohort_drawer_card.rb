@@ -99,7 +99,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     elsif @pin_ids.size < @max_pins
       a(
         href: session_path(pins: @pin_ids + [ @dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
+        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary-ink hover:underline",
         aria: { label: "Pin #{person_name(@dot[:person_id])}" }
       ) { "Pin" }
     end

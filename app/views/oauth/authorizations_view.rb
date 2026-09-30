@@ -79,7 +79,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
       ul(class: "space-y-1 text-sm text-gray-700") do
         @pre_auth.scopes.each do |scope|
           li(class: "flex items-start gap-2") do
-            span(class: "text-primary mt-0.5", aria: { hidden: "true" }) { "•" }
+            span(class: "text-primary-ink mt-0.5", aria: { hidden: "true" }) { "•" }
             span { scope_label(scope) }
           end
         end

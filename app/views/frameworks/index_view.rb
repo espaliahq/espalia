@@ -51,7 +51,7 @@ class Views::Frameworks::IndexView < Views::Base
       render Components::Kit::Card.new do |card|
         card.body do
           h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                    "group-hover:text-primary transition-colors") do
+                    "group-hover:text-primary-ink transition-colors") do
             framework.name
           end
 

@@ -163,7 +163,7 @@ class Components::Kit::UserMenu < Components::Base
   def checkmark_icon
     svg(
       xmlns: "http://www.w3.org/2000/svg",
-      class: "w-4 h-4 shrink-0 text-primary",
+      class: "w-4 h-4 shrink-0 text-primary-ink",
       fill: "none",
       viewBox: "0 0 24 24",
       stroke: "currentColor",

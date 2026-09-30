@@ -346,7 +346,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
     form(action: calibration_session_calibrants_path(@session), method: "post", class: "inline") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "person_id", value: person_id)
-      button(type: "submit", class: "text-sm text-primary hover:underline min-h-11 px-2", aria: { label: label }) { "Add" }
+      button(type: "submit", class: "text-sm text-primary-ink hover:underline min-h-11 px-2", aria: { label: label }) { "Add" }
     end
   end
 

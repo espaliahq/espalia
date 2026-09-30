@@ -51,7 +51,7 @@ class Views::Home::Cards::AwaitingYou < Views::Base
     a(
       href: assessments_path,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
     ) { "Review team →" }
   end
 end

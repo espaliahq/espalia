@@ -295,7 +295,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
     name = participant.person&.name || "(unknown)"
     assignment = @viewable_assignments[participant.person_id]
     if assignment
-      a(href: assessment_path(assignment), class: "font-medium text-primary hover:underline") { name }
+      a(href: assessment_path(assignment), class: "font-medium text-primary-ink hover:underline") { name }
     else
       plain name
     end

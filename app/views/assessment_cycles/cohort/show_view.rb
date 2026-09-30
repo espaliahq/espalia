@@ -68,9 +68,9 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
         span(class: "text-sm text-gray-600 dark:text-gray-300") { "#{@result.total} enrolled" }
         deadline_badge
         a(href: attainment_assessment_cycle_path(cycle),
-          class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline") { "Capability attainment →" }
+          class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline") { "Capability attainment →" }
         a(href: evidence_assessment_cycle_path(cycle),
-          class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline") { "Feedback & evidence →" }
+          class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline") { "Feedback & evidence →" }
       end
       p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
         "Ratings stay private to each person and their manager until alignment. This view shows progress only."
@@ -187,7 +187,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
           aria: { current: active ? "page" : nil },
           class: [
             "rounded-t-md px-3 py-2 text-sm font-medium",
-            active ? "border-b-2 border-primary text-primary" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            active ? "border-b-2 border-primary text-primary-ink" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           ].join(" ")
         ) { label }
       end
@@ -260,7 +260,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   def participant_name(participant)
     assignment = @viewable_assignments[participant.person_id]
     if assignment
-      a(href: assessment_path(assignment), class: "text-primary hover:underline") { participant.name }
+      a(href: assessment_path(assignment), class: "text-primary-ink hover:underline") { participant.name }
     else
       plain participant.name
     end

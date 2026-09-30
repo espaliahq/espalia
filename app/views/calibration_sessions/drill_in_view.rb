@@ -871,7 +871,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     elsif @pin_ids.size < MAX_PINS
       a(
         href: drill_in_path(view: @view, pins: @pin_ids + [ dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary hover:underline",
+        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary-ink hover:underline",
         aria: { label: "Pin #{dot[:name]} to the comparison drawer" }
       ) { "Pin" }
     end

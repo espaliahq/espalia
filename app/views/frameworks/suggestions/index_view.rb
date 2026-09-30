@@ -70,7 +70,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def back_link
     a(
       href: framework_path(@framework.framework_id),
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary"
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink"
     ) { plain "\u2190 Back to framework" }
   end
 
@@ -191,7 +191,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
     preview = suggestion_preview_text(suggestion)
 
     div(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-2 " \
-                "group-hover:text-primary transition-colors") do
+                "group-hover:text-primary-ink transition-colors") do
       plain preview
     end
   end

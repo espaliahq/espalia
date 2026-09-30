@@ -243,7 +243,7 @@ class Views::Frameworks::ShowView < Views::Base
       div(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-2") do
         div(class: "min-w-0 max-sm:w-full") do
           a(href: frameworks_path,
-            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary mb-2 inline-block") do
+            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink mb-2 inline-block") do
             plain "\u2190 Frameworks"
           end
           # The badges wrap under the title on a narrow viewport instead of
@@ -452,7 +452,7 @@ class Views::Frameworks::ShowView < Views::Base
     button(
       type: "button",
       class: "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium " \
-             "text-primary hover:bg-primary/10 transition-colors",
+             "text-primary-ink hover:bg-primary/10 transition-colors",
       data: { action: "click->modal#open", modal_target_id: "add-category-modal" }
     ) do
       span(class: "text-base leading-none") { "+" }

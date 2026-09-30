@@ -204,7 +204,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     a(
       href: framework_suggestion_path(@framework_id, @entry.suggestion_id),
       class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "text-primary hover:bg-primary/10 transition-colors",
+             "text-primary-ink hover:bg-primary/10 transition-colors",
       data: { turbo_frame: "_top" }
     ) { "Review" }
   end
@@ -230,7 +230,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
       button(
         type: "button",
         class: "inline-flex items-center gap-1 max-w-full rounded px-1.5 py-0.5 text-[10px] " \
-               "text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-primary/10 " \
+               "text-gray-500 dark:text-gray-400 hover:text-primary-ink hover:bg-primary/10 " \
                "transition-colors",
         data: {
           action: "click->context-pane#openSuggestionCard",

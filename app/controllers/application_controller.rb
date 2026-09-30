@@ -89,7 +89,7 @@ class ApplicationController < ActionController::Base
         # to it raw. Falls back to root_path for off-site / missing referers.
         helpers.link_to("Reload", url_from(request.referer) || root_path,
           data: { turbo_frame: "_top" },
-          class: "mx-4 mb-4 inline-block text-sm font-medium text-primary underline")
+          class: "mx-4 mb-4 inline-block text-sm font-medium text-primary-ink underline")
       ])
     end
     render html: content, layout: false

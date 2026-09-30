@@ -61,7 +61,7 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
     a(
       href: evidence_hub_path,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
     ) { "Respond →" }
   end
 end
