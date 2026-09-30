@@ -216,6 +216,26 @@ Alignment lifecycle (per cycle, per role — ADR-22):
   lifecycle; AssessmentCycleRoleAlignment holds one row per role started
   (home included; `whole_assessment` marks a start from history).
 
+Declared explorations (ADR-22 — intent, not a rating scope):
+  ExplorationStarted { exploration_id, target_role_id, target_level_id, target_level_ordinal,
+                       started_by_id, note? }
+    ← "We've agreed to explore PM3." Declared by the assessee, their recorded
+      reporting manager or an active rating delegate (Pundit, not the
+      aggregate). Needs an assignment, NOT an open cycle — it rates nothing,
+      so the open-cycle rule for writes (D7) doesn't apply — and survives
+      join / leave / conclude: @explorations is never reset by a cycle.
+    ← One open exploration per target role; refuses the role AND level the
+      person holds (the live assignment on the stream; the Operation also
+      refuses the enrollment-snapshot home). The next level of the same role
+      is allowed — a vertical exploration.
+    ← exploration_id is caller-minted and is the read model's primary key.
+  ExplorationClosed { exploration_id, closed_by_id, outcome, note? }
+    ← outcome ∈ pursue | not_now | moved. Only an open exploration closes;
+      whoever may declare may close, whoever declared it.
+
+  Read model (CurrentAssessment): AssessmentExploration, one row per
+  exploration. Never read by a cohort surface.
+
 Cross-cycle seeding:
   RatingSeedSkipped { capability_stable_id, level_ordinal, prior_aligned_frequency,
                       current_cycle_id, prior_cycle_id, reason }
