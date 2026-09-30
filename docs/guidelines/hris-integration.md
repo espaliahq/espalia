@@ -66,7 +66,11 @@ database. Key properties:
 
 ## Configuring role/level mappings
 
-`Tenant.hris_config.role_mappings` is an array of `HrisRoleMapping` StoreModel entries. Seed these in `db/seeds.rb` per tenant or add admin UI later.
+`Tenant.hris_config.role_mappings` is an array of `HrisRoleMapping` StoreModel entries.
+
+**Tenant admins edit them on the HRIS integration page** (`/tenant/integrations/hris`): an "Unmapped titles" card lists every title active HRIS people hold that no mapping covers, and a shared modal maps, remaps or removes one title at a time. MCP clients use the same three Operations: `integrations_hris_titles` (read), `integrations_map_hris_title` and `integrations_unmap_hris_title` (both `:in_app`). Nothing is reassigned when a mapping changes — the next sync applies it, and each write previews what that sync will do.
+
+Edits are **title-centric**: `HrisConfig#map_title` moves one title out of whichever mapping held it and into the group for its `(role code, level_ordinal)`, creating it if needed; `#unmap_title` removes it and drops a group it empties. So the stored shape is unchanged and a title can never be listed twice. `db/seeds.rb` still writes the me&u mappings for a fresh dev database — production never re-seeds (pre-deploy's `db:prepare` only seeds a brand-new database), so a change there does not reach production.
 
 ### Mode 1 — title carries the level
 
@@ -105,11 +109,23 @@ Both modes can coexist in one tenant's mappings — some titles carry their leve
 
 ### Title normalization
 
-Titles are matched case-insensitively after `downcase.strip`. Whitespace inside the title is preserved ("Example Product Director Title" must match exactly on the non-space characters). Duplicates across mappings are rejected by `HrisConfig` validation.
+Titles are matched case-insensitively after `downcase.strip` — `HrisRoleMapping.normalize_title` is the one definition, and `HrisConfig#title_lookup` / `#mapping_for` the one lookup the adapter, the integrations page and the Operations share. Everything inside the title is significant: "Engineering Manager (EM3)" does **not** match a mapping for "Engineering Manager". Duplicates across mappings are rejected by `HrisConfig` validation.
 
 ### Unmapped titles
 
-Silently skipped. Each unmapped title is added to `result[:unmapped_titles]` (a `Set`) for admin visibility. This is the primary feedback loop for refining the mapping — print the set from dev seeds or log from production syncs.
+Skipped by Pass 5, and **the person keeps whatever assignment an earlier title gave them** — the sync neither moves nor unassigns them. That is how a renamed HiBob title leaves someone on the wrong ladder for weeks without anyone noticing ([#436](https://github.com/mr-yum/growth-os/issues/436): "Engineering Manager (EM3)" stayed on E3).
+
+Three places now surface it:
+
+- The integrations page's "Unmapped titles" card, which calls out each holder still on an assignment from an earlier title (`Integrations::HrisPersonRow#stale_assignment?`).
+- `HrisSyncJob` logs `unmapped_titles`, `missing_roles`, `missing_levels` and `missing_ordinals` as a warning after every sync that had any.
+- `integrations_hris_titles` over MCP.
+
+`Integrations::HrisTitleResolution` answers "what would the next sync do to each person" without dispatching anything. It mirrors the adapter's Pass 5 predicates — keep the two in step.
+
+### The sync must not save the config it read at the start
+
+A sync runs for a while, and a mapping can change underneath it. The adapter stamps `last_synced_at` on a freshly locked, reloaded tenant (`stamp_last_synced`) rather than saving the `config` it read up front, which would write the old mappings back. Any new write to `hris_config` from a long-running path must do the same; the mapping Operations lock the tenant row too.
 
 ## Adding a new HRIS field to the sync
 
