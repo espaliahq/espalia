@@ -10,9 +10,9 @@ class ExplorationClosedNotifier < ApplicationNotifier
 
   notification_methods do
     def inbox_title
-      actor = params[:actor_name].presence || "Someone"
+      actor = params[:actor_name].presence
       outcome = ExplorationClosedNotifier::OUTCOMES[params[:outcome]]
-      base = "#{actor} closed the exploration of #{params[:role_label]}"
+      base = actor ? "#{actor} closed the exploration of #{params[:role_label]}" : "The exploration of #{params[:role_label]} closed"
       outcome ? "#{base}: #{outcome}" : base
     end
 

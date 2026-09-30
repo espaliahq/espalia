@@ -119,6 +119,32 @@ class PersonDevelopment::AggregateExplorationTest < ActiveSupport::TestCase
     end
   end
 
+  context "moving into the target" do
+    should "close it as moved when the role and level change to it" do
+      id = explore
+      @aggregate.change_role(@pm_role, @pm_level, changed_by: @actor)
+
+      event = events_of(PersonDevelopment::Events::ExplorationClosed).sole
+      assert_equal [ id, "moved", @actor ], event.data.values_at(:exploration_id, :outcome, :closed_by_id)
+      assert_nothing_raised { explore(@pm_role, SecureRandom.uuid_v7) }
+    end
+
+    should "close a vertical exploration on the promotion to it" do
+      e4 = SecureRandom.uuid_v7
+      explore(@home_role, e4, ordinal: 4)
+      @aggregate.change_level(e4)
+
+      assert_equal "moved", events_of(PersonDevelopment::Events::ExplorationClosed).sole.data[:outcome]
+    end
+
+    should "leave it open on a move to another level of the role" do
+      explore
+      @aggregate.change_role(@pm_role, SecureRandom.uuid_v7)
+
+      assert_empty events_of(PersonDevelopment::Events::ExplorationClosed)
+    end
+  end
+
   context "through the repository" do
     setup do
       @tenant = create(:tenant)

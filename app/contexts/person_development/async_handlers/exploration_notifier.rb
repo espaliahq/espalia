@@ -7,6 +7,8 @@
 #   declared / closed by the assessee → the manager side (recorded reporting
 #                                       manager + active rating delegates)
 #   declared / closed by anyone else  → the assessee
+#   closed by nobody (a move into the  → both
+#   explored role closed it)
 #
 # The actor is never notified of their own act.
 #
@@ -62,8 +64,17 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifier < ApplicationJob
 
   # @return [Array<String>]
   def recipient_ids(exploration, actor_id)
+    return [ exploration.person_id ] + manager_side_ids(exploration) if actor_id.nil?
     return [ exploration.person_id ] unless actor_id == exploration.person_id
 
+    manager_side_ids(exploration)
+  end
+
+  # The recorded reporting manager (live org chart fallback) plus active
+  # rating delegates — the manager side of the conversation.
+  #
+  # @return [Array<String>]
+  def manager_side_ids(exploration)
     manager_id = RecordedReportingManager.manager_id_for(exploration.person_id, exploration.framework_id) ||
       Person.where(id: exploration.person_id).pick(:manager_id)
     delegate_ids = ManagerAssessmentDelegation.active

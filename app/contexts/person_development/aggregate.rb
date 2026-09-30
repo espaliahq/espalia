@@ -72,7 +72,7 @@ class PersonDevelopment::Aggregate
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
     # Declared explorations (ADR-22) — intent facts that outlive cycles:
-    #   exploration_id => { target_role_id:, open: Boolean }
+    #   exploration_id => { target_role_id:, target_level_id:, open: Boolean }
     @explorations = {}
   end
 
@@ -122,6 +122,7 @@ class PersonDevelopment::Aggregate
       reason: reason,
       changed_by: changed_by
     }))
+    close_explorations_moved_into(changed_by)
   end
 
   # Changes a person's level within the same role (promotion).
@@ -141,6 +142,7 @@ class PersonDevelopment::Aggregate
       reason: reason,
       changed_by: changed_by
     }))
+    close_explorations_moved_into(changed_by)
   end
 
   # Removes the person's framework assignment entirely — the exit from the
@@ -1368,6 +1370,20 @@ class PersonDevelopment::Aggregate
     }[source]
   end
 
+  # A person who moves into the role and level they were exploring has
+  # arrived: the exploration closes as `moved`, attributed to whoever made
+  # the move (nil for an HRIS sync). Left open, it would name the record
+  # itself, where the lens banner — and so the Stop — never renders.
+  def close_explorations_moved_into(changed_by)
+    @explorations.each do |exploration_id, state|
+      next unless state[:open] && state[:target_role_id] == @role_id && state[:target_level_id] == @level_id
+
+      apply(PersonDevelopment::Events::ExplorationClosed.new(data: {
+        exploration_id: exploration_id, closed_by_id: changed_by, outcome: "moved", note: nil
+      }))
+    end
+  end
+
   def ensure_assigned!
     raise "Person not yet assigned to a framework" unless @assigned
   end
@@ -1519,7 +1535,9 @@ class PersonDevelopment::Aggregate
   end
 
   on PersonDevelopment::Events::ExplorationStarted do |event|
-    @explorations[event.data[:exploration_id]] = { target_role_id: event.data[:target_role_id], open: true }
+    @explorations[event.data[:exploration_id]] = {
+      target_role_id: event.data[:target_role_id], target_level_id: event.data[:target_level_id], open: true
+    }
   end
 
   on PersonDevelopment::Events::ExplorationClosed do |event|

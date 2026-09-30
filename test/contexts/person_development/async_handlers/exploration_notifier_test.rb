@@ -68,4 +68,16 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifierTest < ActiveSupport:
     assert_equal "Morgan Manager closed the exploration of Product Manager · PM3: not now", notification.inbox_title
     assert_equal "“After the launch”", notification.inbox_body
   end
+
+  should "tell both parties when a move into the role closes it" do
+    start(by: @person)
+    perform_enqueued_jobs do
+      @handler.change_person_role(@person.id, @fx.framework_id, @fx.pm.role_id, @fx.pm_levels.fetch(3).level_id)
+    end
+
+    assert_equal "The exploration of Product Manager · PM3 closed: moved into the role",
+                 @user.notifications.reload.sole.inbox_title
+    assert_equal "The exploration of Product Manager · PM3 closed: moved into the role",
+                 @manager_user.notifications.reload.sole.inbox_title
+  end
 end

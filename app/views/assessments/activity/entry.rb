@@ -239,10 +239,15 @@ class Views::Assessments::Activity::Entry < Views::Base
     "#{actor} shared an exploration of #{explored_role}"
   end
 
-  # "Morgan closed the exploration of Product Manager · PM3 — not now"
+  # "Morgan closed the exploration of Product Manager · PM3 — not now"; with
+  # no actor (a move into the role closed it) "The exploration of … closed".
   def exploration_closed_summary
     outcome = EXPLORATION_OUTCOME_TEXT[payload_value(:outcome)]
-    base = "#{actor_name || 'Someone'} closed the exploration of #{explored_role}"
+    base = if actor_name
+      "#{actor_name} closed the exploration of #{explored_role}"
+    else
+      "The exploration of #{explored_role} closed"
+    end
     outcome ? "#{base} — #{outcome}" : base
   end
 

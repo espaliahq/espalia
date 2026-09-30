@@ -126,4 +126,13 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Morgan closed the exploration of Product Manager · PM3 — not now"
     end
   end
+
+  context "an exploration a move into the role closed" do
+    should "say it closed without naming anyone" do
+      html = render_entry(kind: "exploration_closed", payload: {
+        actor_name: nil, role_label: "Product Manager · PM3", outcome: "moved"
+      })
+      assert_includes html, "The exploration of Product Manager · PM3 closed — moved into the role"
+    end
+  end
 end
