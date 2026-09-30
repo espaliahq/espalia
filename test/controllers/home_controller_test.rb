@@ -12,10 +12,11 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
       # The viewer is enrolled in an open cycle as an assessee.
       @cycle = create(:assessment_cycle, tenant: @tenant, name: "Q1 2026", status: "open")
+      @role = create(:framework_role, tenant: @tenant)
       create(:person_framework_assignment,
-        tenant: @tenant, person_id: @person.id, framework_id: @cycle.framework_id)
+        tenant: @tenant, person_id: @person.id, framework_id: @cycle.framework_id, role_id: @role.role_id)
       create(:assessment_cycle_enrollment,
-        tenant: @tenant, cycle: @cycle, person_id: @person.id, status: "enrolled")
+        tenant: @tenant, cycle: @cycle, person_id: @person.id, status: "enrolled", level_ordinal: 3)
       create(:assessment_cycle_progress,
         tenant: @tenant, cycle: @cycle, person_id: @person.id, status: "started")
     end
@@ -57,7 +58,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) do
         create(:assessment_level_rating,
           tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
-          framework_id: @cycle.framework_id,
+          framework_id: @cycle.framework_id, capability_stable_id: role_capability, level_ordinal: 3,
           self_rated_frequency: "consistent", self_rating_source: "human")
       end
 
@@ -79,11 +80,11 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       ActsAsTenant.with_tenant(@tenant) do
         create(:assessment_level_rating,
           tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
-          framework_id: @cycle.framework_id,
+          framework_id: @cycle.framework_id, capability_stable_id: role_capability, level_ordinal: 3,
           manager_rated_frequency: "consistent", manager_rating_source: "human")
         create(:assessment_level_rating,
           tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @person.id,
-          framework_id: @cycle.framework_id,
+          framework_id: @cycle.framework_id, capability_stable_id: role_capability, level_ordinal: 3,
           self_rated_frequency: "some", self_rating_source: "seeded")
       end
 
@@ -93,6 +94,18 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Start self-assessment"
       assert_not_includes response.body, "Continue self-assessment"
+    end
+
+    should "ignore ratings outside the assessed role" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create_out_of_scope_rating(person_id: @person.id, cycle: @cycle, level_ordinal: 3)
+      end
+
+      sign_in @user
+      get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Start self-assessment"
     end
 
     should "render the awaiting-you card frame for a manager with a pending report" do
@@ -217,6 +230,20 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  # A capability the viewer's role reads at their assessed level (L3) —
+  # a new one per call, so each rating row has its own cell.
+  #
+  # @return [String] its stable_id
+  def role_capability
+    category = create(:framework_capability_category, tenant: @tenant, framework_id: @cycle.framework_id)
+    capability = create(:framework_capability, tenant: @tenant, category_id: category.category_id)
+    create(:framework_capability_role_binding, tenant: @tenant,
+      capability_id: capability.capability_id, role_id: @role.role_id)
+    create(:framework_behavioural_expectation, tenant: @tenant,
+      capability_id: capability.capability_id, level_ordinal: 3)
+    capability.stable_id
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }
