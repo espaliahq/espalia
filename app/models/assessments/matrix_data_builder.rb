@@ -7,8 +7,8 @@
 # with the person's current self-rated frequency, binding weight/tolerance,
 # and scoring output.
 #
-# Operates on in-memory associations — no additional queries beyond the
-# initial ratings load.
+# Beyond loading the role scope and the ratings, works on the eager-loaded
+# associations — no per-cell queries.
 #
 # @example
 #   data = Assessments::MatrixDataBuilder.new(
@@ -69,6 +69,7 @@ class Assessments::MatrixDataBuilder
   # @return [Hash]
   def build
     @level = resolve_assessment_level
+    @role_scope = Assessments::RoleScope.for(role_id: @role.role_id, framework_id: @framework.framework_id)
     @ratings_index = load_ratings
     @evidence_index = load_evidence
     @comments_index = load_comments
@@ -330,7 +331,9 @@ class Assessments::MatrixDataBuilder
       end
   end
 
-  # Loads and indexes all AssessmentLevelRatings for this person + framework + cycle.
+  # Loads and indexes this person's ratings in the cycle, inside the role's
+  # cells — a rating on a capability the role doesn't bind would otherwise
+  # count as having rated in a perspective (ADR-22).
   #
   # Returns an empty hash when cycle_id is nil — the person isn't
   # currently in a cycle, so there are no ratings to show.
@@ -343,20 +346,19 @@ class Assessments::MatrixDataBuilder
       .for_person(@person_id)
       .for_framework(@framework.framework_id)
       .for_cycle(@cycle_id)
+      .within(@role_scope)
       .each_with_object({}) do |r, h|
         h[[ r.capability_stable_id, r.level_ordinal ]] = r
       end
   end
 
-  # Indexes CapabilityRoleBindings for the person's role by capability_id.
+  # Indexes the role's active bindings by capability_id — from the same
+  # RoleScope every other rating reader uses, so there is one definition of
+  # what the role binds.
   #
   # @return [Hash{String => FrameworkState::CapabilityRoleBinding}]
   def index_bindings
-    @categories
-      .flat_map(&:capabilities)
-      .flat_map(&:bindings)
-      .select { |b| b.role_id == @role.role_id }
-      .index_by(&:capability_id)
+    @role_scope.bindings.index_by(&:capability_id)
   end
 
   # Builds the PersonDevelopment::Scoring engine instance.
