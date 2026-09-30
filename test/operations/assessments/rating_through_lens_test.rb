@@ -53,6 +53,34 @@ class Operations::Assessments::RatingThroughLensTest < ActiveSupport::TestCase
     end
   end
 
+  context "provenance" do
+    should "stamp the lens role on a rating made through it, and nothing on the home role" do
+      rate(Operations::Assessments::RateSelf, @self_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
+      rate(Operations::Assessments::RateSelf, @self_context, @fx.e_only)
+      assert_equal @fx.pm.role_id, rating(@fx.pm_only).self_rated_via_role_id
+      assert_nil rating(@fx.e_only).self_rated_via_role_id
+    end
+
+    should "follow a revision, and clear with the rating" do
+      rate(Operations::Assessments::RateSelf, @self_context, @fx.shared, as_role_id: @fx.pm.role_id)
+      rate(Operations::Assessments::RateSelf, @self_context, @fx.shared, frequency: "some")
+      assert_nil rating(@fx.shared).self_rated_via_role_id, "revised on the home role"
+
+      rate(Operations::Assessments::RateAsManager, @manager_context, @fx.shared, as_role_id: @fx.pm.role_id)
+      assert_equal @fx.pm.role_id, rating(@fx.shared).manager_rated_via_role_id
+    end
+
+    should "name the lens in the activity feed" do
+      rate(Operations::Assessments::RateSelf, @self_context, @fx.pm_only, as_role_id: @fx.pm.role_id)
+      entry = ActsAsTenant.with_tenant(@tenant) do
+        Assessments::ActivityFeedQuery.new(assignment: @assignment, context: :self, viewer_person_id: @person.id,
+                                           viewer_sees_all: true, alignment_started: false).call
+          .find { |e| e.kind == "self_rated" }
+      end
+      assert_equal "PM2", entry.payload[:via_role_code]
+    end
+  end
+
   context Operations::Assessments::RateAsManager do
     should "rate a shared cell through the lens" do
       rate(Operations::Assessments::RateAsManager, @manager_context, @fx.shared, as_role_id: @fx.pm.role_id)
@@ -81,11 +109,11 @@ class Operations::Assessments::RatingThroughLensTest < ActiveSupport::TestCase
 
   private
 
-  def rate(operation, context, capability, level_ordinal: 2, **extra)
+  def rate(operation, context, capability, level_ordinal: 2, frequency: "consistent", **extra)
     ActsAsTenant.with_tenant(@tenant) do
       operation.call(context: context, params: {
         assignment_id: @assignment.id, capability_stable_id: capability.stable_id,
-        level_ordinal: level_ordinal, frequency: "consistent", **extra
+        level_ordinal: level_ordinal, frequency: frequency, **extra
       })
     end
   end

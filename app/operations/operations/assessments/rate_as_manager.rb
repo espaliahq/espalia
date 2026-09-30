@@ -88,7 +88,8 @@ class Operations::Assessments::RateAsManager < Operations::Base
         rationale: "Confirmed carried-forward rating", cycle_id: cycle_id,
         # Confirm without a comment keeps the existing one.
         comment: params[:comment].presence || existing.manager_rated_comment,
-        rated_by_id: rated_by_id
+        rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     elsif existing_freq == params[:frequency]
       handler.clear_manager_rating(
@@ -100,13 +101,15 @@ class Operations::Assessments::RateAsManager < Operations::Base
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
         rationale: rationale_for_revision, cycle_id: cycle_id, comment: params[:comment],
-        rated_by_id: rated_by_id
+        rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     else
       handler.rate_as_manager(
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], frequency: params[:frequency],
-        cycle_id: cycle_id, comment: params[:comment], rated_by_id: rated_by_id
+        cycle_id: cycle_id, comment: params[:comment], rated_by_id: rated_by_id,
+        via_role_id: via_role_id
       )
     end
   end

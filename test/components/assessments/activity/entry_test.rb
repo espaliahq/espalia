@@ -41,6 +41,24 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     end
   end
 
+  context "ratings made through a role lens" do
+    should "name the lens a self rating was made through" do
+      html = render_entry(kind: "self_rated", payload: { frequency: "some", via_role_code: "PM2" })
+      assert_includes html, "Self-rated Critical Thinking · L2 while exploring PM2"
+    end
+
+    should "name the lens a manager rating was made through" do
+      html = render_entry(kind: "manager_rated", payload: { frequency: "some", actor_name: "Morgan",
+                                                           via_role_code: "PM2" })
+      assert_includes html, "Morgan rated Critical Thinking · L2 while exploring PM2"
+    end
+
+    should "say nothing extra for a rating on the home role" do
+      html = render_entry(kind: "self_rated", payload: { frequency: "some" })
+      assert_not_includes html, "exploring"
+    end
+  end
+
   context "evidence link entries" do
     should "name who linked the evidence" do
       html = render_entry(kind: "evidence_linked",

@@ -36,6 +36,15 @@ module Operations::Assessments::RatingCell
     raise Operations::Base::ParameterError, e.message
   end
 
+  # The provenance stamp for a write through a lens: the lens role when it
+  # isn't the home role, nil otherwise. Never a scoping key — a shared-cell
+  # rating made through another role is still the home rating.
+  #
+  # @return [String, nil]
+  def via_role_id
+    rating_lens.home_role? ? nil : rating_lens.role.role_id
+  end
+
   # @raise [Pundit::NotAuthorizedError] when a manager-side write targets a
   #   cell the record doesn't read
   def refuse_outside_home_role!

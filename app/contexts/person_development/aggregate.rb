@@ -368,7 +368,7 @@ class PersonDevelopment::Aggregate
   # @param comment [String, nil] optional rationale
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_self(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                source: "human", seeded_from_cycle_id: nil)
+                source: "human", seeded_from_cycle_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -380,7 +380,8 @@ class PersonDevelopment::Aggregate
       cycle_id: cycle_id,
       comment: comment,
       source: source,
-      seeded_from_cycle_id: seeded_from_cycle_id
+      seeded_from_cycle_id: seeded_from_cycle_id,
+      via_role_id: via_role_id
     }))
   end
 
@@ -393,7 +394,8 @@ class PersonDevelopment::Aggregate
   # @param cycle_id [String] UUID of the cycle this rating belongs to
   # @param comment [String, nil] optional comment
   # @raise [RuntimeError] if no prior self-rating for this capability at this level
-  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil)
+  def revise_self_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
+                         via_role_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     raise "Invalid frequency: #{frequency}" unless FREQUENCIES.include?(frequency)
@@ -406,7 +408,8 @@ class PersonDevelopment::Aggregate
       frequency: frequency,
       cycle_id: cycle_id,
       comment: comment,
-      rationale: rationale
+      rationale: rationale,
+      via_role_id: via_role_id
     }))
   end
 
@@ -442,7 +445,7 @@ class PersonDevelopment::Aggregate
   #   nil for system "seeded" carry-forwards
   # @raise [RuntimeError] if not in a cycle, wrong cycle, or invalid frequency
   def rate_as_manager(capability_stable_id, level_ordinal:, frequency:, cycle_id:, comment: nil,
-                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil)
+                      source: "human", seeded_from_cycle_id: nil, rated_by_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     ensure_manager_authority!(rated_by_id, source)
@@ -457,7 +460,8 @@ class PersonDevelopment::Aggregate
       source: source,
       seeded_from_cycle_id: seeded_from_cycle_id,
       rated_by_id: rated_by_id,
-      via_delegation: rated_via_delegation?(rated_by_id)
+      via_delegation: rated_via_delegation?(rated_by_id),
+      via_role_id: via_role_id
     }))
   end
 
@@ -472,7 +476,7 @@ class PersonDevelopment::Aggregate
   # @param rated_by_id [String, nil] UUID of the manager recording the revision
   # @raise [RuntimeError] if no prior manager rating for this capability at this level
   def revise_manager_rating(capability_stable_id, level_ordinal:, frequency:, rationale:, cycle_id:, comment: nil,
-                            rated_by_id: nil)
+                            rated_by_id: nil, via_role_id: nil)
     ensure_in_cycle!(cycle_id)
     ensure_individual_ratings_unfrozen!
     ensure_manager_authority!(rated_by_id, "human")
@@ -488,7 +492,8 @@ class PersonDevelopment::Aggregate
       comment: comment,
       rationale: rationale,
       rated_by_id: rated_by_id,
-      via_delegation: rated_via_delegation?(rated_by_id)
+      via_delegation: rated_via_delegation?(rated_by_id),
+      via_role_id: via_role_id
     }))
   end
 

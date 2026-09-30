@@ -17,6 +17,9 @@
 #     "seeded" when carried over from a prior cycle's aligned value at cycle join
 #   @option data [String, nil] :seeded_from_cycle_id UUID of the originating cycle
 #     when source == "seeded"
+#   @option data [String, nil] :via_role_id the role whose cells the rater was
+#     reading through a lens (ADR-22) — provenance only, never a scoping key;
+#     nil or absent for the home role and on every event before the lens
 #
 class PersonDevelopment::Events::SelfRated < RubyEventStore::Event
 end

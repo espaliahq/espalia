@@ -21,6 +21,9 @@
 #   @option data [Boolean, nil] :via_delegation true when recorded by an active
 #     delegate rather than the reporting manager (stamped at event time for
 #     accurate activity-feed attribution). Absent on historical events.
+#   @option data [String, nil] :via_role_id the role whose cells the rater was
+#     reading through a lens (ADR-22) — provenance only, never a scoping key;
+#     nil or absent for the home role and on every event before the lens
 #
 class PersonDevelopment::Events::ManagerRated < RubyEventStore::Event
 end

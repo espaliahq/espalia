@@ -13,6 +13,9 @@
 #   @option data [String, nil] :rated_by_id UUID of the Person (manager) who
 #     recorded this revision. nil on historical events emitted before
 #     attribution was added.
+#   @option data [String, nil] :via_role_id the role whose cells the rater was
+#     reading through a lens (ADR-22) — provenance only, never a scoping key;
+#     nil or absent for the home role and on every event before the lens
 #
 class PersonDevelopment::Events::ManagerRatingRevised < RubyEventStore::Event
 end

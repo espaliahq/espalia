@@ -194,6 +194,11 @@ class Assessments::ActivityFeedQuery
       # falls back to a generic label.
       actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
       data = data.merge(actor_name: actor_names[actor_id]) if actor_id
+      # A rating made through a lens names the role it was read through —
+      # "while exploring PM3" (ADR-22). Provenance only; absent on every
+      # rating made on the home role.
+      lens_code = lens_code_for(data[:via_role_id], data[:level_ordinal])
+      data = data.merge(via_role_code: lens_code) if lens_code
       # `via_delegation` is stamped on the event at write time (accurate at
       # event time); historical events lack it → no badge.
       stable_id = data[:capability_stable_id]
@@ -208,6 +213,23 @@ class Assessments::ActivityFeedQuery
         capability_name: capability_name_for(stable_id),
         category_id: category_id_for(stable_id)
       )
+    end
+  end
+
+  # "PM3" for a rating made through the Product Manager lens at level 3.
+  #
+  # @return [String, nil]
+  def lens_code_for(role_id, level_ordinal)
+    code = lens_role_codes[role_id] if role_id
+    code && "#{code}#{level_ordinal}"
+  end
+
+  # {role_id => code} for every role a rating on this stream was made
+  # through — one query, memoised.
+  def lens_role_codes
+    @lens_role_codes ||= begin
+      ids = stream_events.filter_map { |event| event.data[:via_role_id] || event.data["via_role_id"] }.uniq
+      ids.empty? ? {} : FrameworkState::Role.where(role_id: ids).pluck(:role_id, :code).to_h
     end
   end
 
@@ -538,6 +560,11 @@ class Assessments::ActivityFeedQuery
       data = event.data.with_indifferent_access
       actor_id = data[ACTOR_ID_KEYS[kind]] if ACTOR_ID_KEYS.key?(kind)
       data = data.merge(actor_name: actor_names[actor_id]) if actor_id
+      # A rating made through a lens names the role it was read through —
+      # "while exploring PM3" (ADR-22). Provenance only; absent on every
+      # rating made on the home role.
+      lens_code = lens_code_for(data[:via_role_id], data[:level_ordinal])
+      data = data.merge(via_role_code: lens_code) if lens_code
       data = data.merge(delegate_name: actor_names[data[:delegate_person_id]]) if data[:delegate_person_id]
       data = data.merge(manager_name: actor_names[data[:manager_id]]) if data[:manager_id]
 
