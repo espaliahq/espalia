@@ -53,7 +53,9 @@ class AssessmentRoleLensSystemTest < ApplicationSystemTestCase
         open_dropdown(scope: "##{Views::Assessments::LensControl::ID}")
         click_button_with_js_fallback("Another role…", expect_selector: "##{Views::Assessments::LensRoleModal::ID}")
         select "Product Manager", from: "Role"
-        assert_equal "2", find("#lens-level-select").value, "the same ordinal carries across"
+        # Both ladders have a level 2, so wait for the PM option itself — a
+        # bare value check would pass with the picker never having run.
+        assert_select "Level", selected: "PM2 · Product Manager 2"
         click_button_with_js_fallback("View", expect_selector: "#assessment-lens-banner")
 
         within("#assessment-lens-banner") { assert_text "Product Manager · PM2" }
