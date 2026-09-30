@@ -172,6 +172,9 @@ class Assessments::MatrixDataBuilder
       # Every other role alignment has started against this cycle — the
       # header's "Aligning · PM3" chips.
       lens_alignments: @disclosure.lens_alignments,
+      # Lens-independent, so the page's feed reuses it rather than building
+      # a second one.
+      disclosure: @disclosure,
       individual_ratings_frozen: lens_alignment_started?,
       alignment_locked: lens_alignment_completed?,
       current_level_complete: current_level_complete?(categories)

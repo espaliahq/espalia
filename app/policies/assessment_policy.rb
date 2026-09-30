@@ -196,12 +196,16 @@ class AssessmentPolicy < ApplicationPolicy
 
   # Whether a role is the one the open cycle assesses the person at.
   def home_role?(role_id)
-    return true if role_id.nil?
+    role_id.nil? || role_id == home_role_id
+  end
+
+  def home_role_id
+    return @home_role_id if defined?(@home_role_id)
 
     cycle = record.current_open_cycle
     home = cycle && Assessments::RoleScope.home_role_ids(cycle_id: cycle.cycle_id, framework_id: record.framework_id,
                                                          person_ids: [ record.person_id ])[record.person_id]
-    role_id == (home || record.role_id)
+    @home_role_id = home || record.role_id
   end
 
   # An open-cycle participation still taking part.
