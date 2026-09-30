@@ -26,7 +26,10 @@ class Assessments::AlignmentStartsController < ApplicationController
         "your ratings on its capabilities are now shared and locked."
     end
     redirect_to lens_assessment_path, notice: notice
-  rescue Operations::Base::ParameterError, RuntimeError => e
+  rescue Operations::Base::ParameterError => e
     redirect_to lens_assessment_path, alert: e.message
+  rescue RuntimeError => e
+    Rails.logger.error("[AlignmentStarts] #{e.class}: #{e.message}")
+    redirect_to lens_assessment_path, alert: "Could not start alignment."
   end
 end
