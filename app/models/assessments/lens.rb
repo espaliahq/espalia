@@ -139,11 +139,6 @@ class Assessments::Lens
     @home_scope ||= Assessments::RoleScope.for(role_id: @home_role.role_id, framework_id: framework_id)
   end
 
-  # @return [Boolean] whether the record reads this cell
-  def in_home_scope?(capability_stable_id, level_ordinal)
-    home_scope.include?(capability_stable_id, level_ordinal)
-  end
-
   # Unrated cells count as consistent below this ordinal (ADR-22): below
   # both the level read and the home level.
   #
