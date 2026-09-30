@@ -121,7 +121,7 @@ class Views::Shared::PersonPicker < Views::Base
       plain entry[:name]
       button(
         type: "button", aria: { label: "Remove #{entry[:name]}" },
-        class: "leading-none text-primary-ink/80 hover:text-primary-ink cursor-pointer",
+        class: "leading-none rounded-full text-primary-ink hover:bg-primary/20 cursor-pointer",
         data: { action: "person-picker#remove", person_picker_person_id_param: entry[:id] }
       ) { "×" }
     end

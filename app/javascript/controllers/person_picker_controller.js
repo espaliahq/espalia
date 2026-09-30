@@ -119,7 +119,7 @@ export default class extends BaseController {
     const remove = document.createElement("button")
     remove.type = "button"
     remove.setAttribute("aria-label", `Remove ${name || "person"}`)
-    remove.className = "leading-none text-primary-ink/80 hover:text-primary-ink cursor-pointer"
+    remove.className = "leading-none rounded-full text-primary-ink hover:bg-primary/20 cursor-pointer"
     remove.dataset.action = `${this.identifier}#remove`
     remove.dataset[`${this.paramPrefix}PersonIdParam`] = personId
     remove.textContent = "×"
