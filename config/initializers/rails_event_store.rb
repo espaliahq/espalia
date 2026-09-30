@@ -159,4 +159,9 @@ Rails.configuration.to_prepare do
     PersonDevelopment::AsyncHandlers::LensAlignmentNotifier,
     to: PersonDevelopment::AsyncHandlers::LensAlignmentNotifier.handled_events
   )
+
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::ExplorationNotifier,
+    to: PersonDevelopment::AsyncHandlers::ExplorationNotifier.handled_events
+  )
 end

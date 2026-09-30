@@ -5,8 +5,11 @@ require "application_system_test_case"
 # Declared explorations, end to end (ADR-22): the assessee declares the lens
 # they are reading through, it appears on their list and as a chip on their
 # manager's team card, the manager lands on the same lens from the chip and
-# stops it with an outcome, and it leaves both lists.
+# stops it with an outcome, and it leaves both lists. And when the manager
+# shares one, Alex is notified and both feeds record it.
 class AssessmentExplorationSystemTest < ApplicationSystemTestCase
+  include ActiveJob::TestHelper
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
@@ -65,6 +68,26 @@ class AssessmentExplorationSystemTest < ApplicationSystemTestCase
         visit assessments_path
         assert_text "My Assessments"
         assert_no_selector "#explorations"
+      end
+
+      should "tell Alex when the manager shares an exploration, and record it in both feeds" do
+        sign_in_as(@manager_user)
+        visit @pm_lens
+        within("#assessment-lens-exploration") { assert_text "Alex isn't told you're looking." }
+        open_modal("start-exploration-modal")
+        click_selector_with_js_fallback("#start-exploration-modal button[type='submit']",
+                                        expect_text: "Shared Product Manager · PM3 with Alex as an exploration.")
+        within("#assessment-lens-exploration") { assert_text "started by you" }
+        assert_selector "li[data-kind='exploration_started']", visible: :all
+        perform_enqueued_jobs
+
+        switch_to(@user)
+        visit notifications_path
+        assert_text "Morgan Manager shared an exploration of Product Manager · PM3 with you"
+        visit @pm_lens
+        within("#assessment-lens-exploration") { assert_text "started by Morgan" }
+        assert_selector "li[data-kind='exploration_started']", visible: :all,
+                        text: "Morgan Manager shared an exploration of Product Manager · PM3"
       end
     end
   end
