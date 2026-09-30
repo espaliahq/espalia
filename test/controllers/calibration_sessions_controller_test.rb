@@ -138,14 +138,19 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         quinn_report = create(:person, tenant: @tenant, name: "Pax Thistledown", manager: @quinn)
         create(:person_framework_assignment, tenant: @tenant,
                person_id: quinn_report.id, framework_id: @cycle.framework_id)
+        role = create(:framework_role, tenant: @tenant)
         [ @report, quinn_report ].each do |person|
           create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-                 person_id: person.id, level_ordinal: 3)
+                 person_id: person.id, level_ordinal: 3, role_id: role.role_id)
         end
         category = create(:framework_capability_category, tenant: @tenant,
                           framework_id: @cycle.framework_id, name: "Thinking")
         cap = create(:framework_capability, tenant: @tenant,
                      category_id: category.category_id, name: "Strategic Thinking")
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: cap.capability_id, role_id: role.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: 3)
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: @report.id, framework_id: @cycle.framework_id,
                capability_stable_id: cap.stable_id, level_ordinal: 3,
@@ -158,7 +163,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
         create(:person_framework_assignment, tenant: @tenant,
                person_id: raj_report.id, framework_id: @cycle.framework_id)
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: raj_report.id, level_ordinal: 3)
+               person_id: raj_report.id, level_ordinal: 3, role_id: role.role_id)
         create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
                person_id: raj_report.id, framework_id: @cycle.framework_id,
                capability_stable_id: cap.stable_id, level_ordinal: 3,
