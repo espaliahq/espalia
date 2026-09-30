@@ -20,11 +20,14 @@
 # or level of the framework (a lens, ADR-22). The score then says so in
 # `scoring.lens` (`home: false`), and each capability in the framework
 # subtree carries `in_role: { home:, lens: }`, so a number read against PM3 is
-# never mistaken for the assessment of record.
+# never mistaken for the assessment of record. Read through a lens whose role
+# has an open declared exploration, the payload carries it as
+# `current_exploration`.
 class Operations::Assessments::Get < Operations::Base
   include Operations::Assessments::ReadLens
+  include Operations::Assessments::ExplorationPayload
 
-  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it."
+  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it."
   category :read
   approval :none
 
@@ -44,17 +47,30 @@ class Operations::Assessments::Get < Operations::Base
   #   `:current_cycle` (id, name, status, planned_end_at, and `alignments` —
   #   every role alignment has started against, home included) or nil, and
   #   `:scoring` (scale, score, state, components, thresholds, blocked
-  #   capabilities, per-category roll-up).
+  #   capabilities, per-category roll-up), and `:current_exploration` — the
+  #   open exploration of the lens role, or nil.
   def perform
     {
       framework: with_in_role(Mcp::FrameworkSerializer.framework(assignment.framework)),
       assignment: assignment_payload,
       current_cycle: cycle_payload(assignment.current_open_cycle),
-      scoring: score_summary.overall
+      scoring: score_summary.overall,
+      current_exploration: current_exploration
     }
   end
 
   private
+
+  # The open exploration of the role the page is read against — nil on the
+  # record itself, which nobody explores.
+  #
+  # @return [Hash, nil]
+  def current_exploration
+    return nil if read_lens.nil? || read_lens.home?
+
+    exploration = AssessmentExploration.open_of_role(assignment, read_lens.role.role_id)
+    exploration && exploration_payload(exploration)
+  end
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])

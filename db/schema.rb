@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -98,6 +98,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_000002) do
     t.index ["tenant_id", "framework_id"], name: "idx_assessment_cycles_by_framework"
     t.index ["tenant_id", "framework_id"], name: "idx_assessment_cycles_one_open_per_framework", unique: true, where: "((status)::text = 'open'::text)"
     t.index ["tenant_id"], name: "index_assessment_cycles_on_tenant_id"
+  end
+
+  create_table "assessment_explorations", id: :uuid, default: nil, force: :cascade do |t|
+    t.text "close_note"
+    t.datetime "closed_at"
+    t.uuid "closed_by_id"
+    t.datetime "created_at", null: false
+    t.uuid "framework_id", null: false
+    t.string "outcome"
+    t.uuid "person_id", null: false
+    t.text "start_note"
+    t.datetime "started_at", null: false
+    t.uuid "started_by_id"
+    t.string "status", default: "open", null: false
+    t.uuid "target_level_id", null: false
+    t.integer "target_level_ordinal"
+    t.uuid "target_role_id", null: false
+    t.uuid "tenant_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id", "framework_id", "target_role_id"], name: "idx_assessment_explorations_one_open_per_role", unique: true, where: "((status)::text = 'open'::text)"
+    t.index ["person_id", "framework_id"], name: "idx_assessment_explorations_by_person"
+    t.index ["tenant_id"], name: "index_assessment_explorations_on_tenant_id"
   end
 
   create_table "assessment_level_ratings", id: :uuid, default: nil, force: :cascade do |t|
@@ -780,6 +802,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_000002) do
   add_foreign_key "assessment_cycle_progress", "tenants"
   add_foreign_key "assessment_cycle_role_alignments", "tenants"
   add_foreign_key "assessment_cycles", "tenants"
+  add_foreign_key "assessment_explorations", "tenants"
   add_foreign_key "assessment_level_ratings", "tenants"
   add_foreign_key "calibration_session_members", "tenants"
   add_foreign_key "calibration_sessions", "tenants"

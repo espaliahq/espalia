@@ -17,6 +17,7 @@ class Views::Assessments::ManagerShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
+                 exploration: nil, can_explore: false,
                  can_manage_delegates: false, active_delegations: [], candidate_delegates: [],
                  viewer_can_rate: true,
                  user: nil, current_tenant: nil, tenants: [])
@@ -41,6 +42,8 @@ class Views::Assessments::ManagerShowView < Views::Base
     @can_comment = can_comment
     @viewer_is_tenant_admin = viewer_is_tenant_admin
     @activity_entries = activity_entries
+    @exploration = exploration
+    @can_explore = can_explore
     @can_manage_delegates = can_manage_delegates
     @active_delegations = active_delegations
     @candidate_delegates = candidate_delegates
@@ -97,6 +100,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         second_person: false
       )
       render_lens_role_modal(assessee_name: @assessee.name)
+      render_exploration_modals(assessee_name: @assessee.name)
       render_start_lens_alignment_modal(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence

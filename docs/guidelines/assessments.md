@@ -530,7 +530,7 @@ current state).
 
 ## Role lens
 
-A person can be read against a role or level they are not in — "how would I read as a PM3?" — without touching the assessment of record. The model is [ADR-22](../architecture/adrs.md): **a rating is a fact about the person at a capability × level; roles choose which of those facts count.** Built in phases ([role-lens-plan.md](../notes/role-lens-plan.md)); the scope guard, the lens and per-role alignment exist, declared explorations do not yet.
+A person can be read against a role or level they are not in — "how would I read as a PM3?" — without touching the assessment of record. The model is [ADR-22](../architecture/adrs.md): **a rating is a fact about the person at a capability × level; roles choose which of those facts count.** Built in phases ([role-lens-plan.md](../notes/role-lens-plan.md)): the scope guard, the lens, per-role alignment and declared explorations.
 
 | Term | Meaning |
 |---|---|
@@ -575,6 +575,20 @@ Alignment is started, completed and re-opened *against a role* (ADR-22). The hom
 - **Both parties see it without opening the lens.** `Views::Assessments::LensAlignmentChips` renders **Aligning · PM3** / **Aligned · PM3** beside the home status on the list cards, the home page's assessment card and the assessment header, each linking into the lens (`Assessments::LensAlignments` reads them). The assessee is also notified (`LensAlignmentStartedNotifier`, in-app + Slack); a home start still notifies nobody.
 - **The feed names the role.** Alignment milestones against another role read "Manager started alignment against Product Manager · PM3" (from the `AssessmentCycleRoleAlignment` row; home milestones still come from the progress row). An entry about another role — its milestones, or a rating made through its lens on a cell the record doesn't read — carries `data-lens-href`, and clicking it switches the page to that lens when the page in front of the viewer doesn't render its card.
 - **Nothing counts it.** The list's Self / Manager chips, the cohort report, calibration and the home page's status all keep reading the home lifecycle (`AssessmentCycleProgress#status`); a lens role's alignment moves none of them.
+
+### Declared exploration
+
+Looking through a lens tells nobody — it writes nothing. **Declaring an exploration is the shared act**: "we've agreed to explore PM3", an intent fact on the person's development stream that both parties see, with a lifecycle (ADR-22, D8).
+
+- **Domain.** `ExplorationStarted { exploration_id, target_role_id, target_level_id, target_level_ordinal, started_by_id, note }` and `ExplorationClosed { exploration_id, closed_by_id, outcome, note }`, `outcome` ∈ `pursue` / `not_now` / `moved`. The aggregate allows one open exploration per target role, refuses the role and level already held, and closes only an open one. It needs an assignment but **no open cycle**: it rates nothing, so D7's open-cycle rule for writes doesn't apply, and it outlives the cycle it was declared in.
+- **Not a rating scope.** Ratings through the lens stay facts about cells (D1); the exploration only says someone chose to look, who, and what came of it. It never reaches a cohort surface — the cohort report, calibration, `ReviewableAssignments`, cycle lists and the list's Self / Manager chips don't read it (pinned in `role_lens_leak_test.rb`).
+- **Who.** The assessee, their recorded reporting manager or an active rating delegate may declare and close one (`AssessmentPolicy#start_exploration?` / `#close_exploration?`, both `rating_participant?`). A view-only ancestor and an admin outside the chain see it but get no buttons.
+- **The banner.** Under a lens that isn't the record, `LensBanner` ends with the exploration line: "Nobody is told you're looking." + **Keep exploring this** (assessee), or "Alex isn't told you're looking." + **Share with Alex** (manager or delegate) — each a root-mounted `Kit::Modal` (`StartExplorationModal`) saying who is told and what is and isn't shared, with an optional note. Once declared: "Exploring PM3 since 3 Oct · started by Alex", the note, and **Stop exploring** (`StopExplorationModal` — the outcome as radios, required, plus a note). One exploration per role, so it shows on every level of the explored role; a vertical exploration (E4 from E3) works the same on the home role's ladder. Both forms carry the lens params and the `submit-guard` controller; the controllers redirect back to the lens with a notice.
+- **The list.** `/assessments` gains an **Explorations** section on the person's own list — "Product Manager · PM3", then "4 of 10 rated · started by you · since 3 Oct" (`LevelCoverage`'s vetted self count at the target level in the open cycle; omitted between cycles) — and a team card an **Exploring PM3** chip (`ExplorationChips`, the lens chip's sky tone; not on skip-level cards, matching `assessments_mine`). Both link into the lens. `Assessments::OpenExplorations` reads them.
+- **Moving into the target closes it.** A role or level change onto the explored role and level closes the exploration as `moved` (the aggregate, same unit of work), so it never lingers naming the record.
+- **Read model.** `assessment_explorations`, written by `CurrentAssessment`, PK = the event-carried `exploration_id` (externally addressed by MCP, so a rebuild reproduces it); a partial unique index mirrors one-open-per-role. The projection broadcasts the sync signal, so the banner and the feed update live.
+- **Notified.** The other party, on start and on close (`ExplorationNotifier` → `ExplorationStartedNotifier` / `ExplorationClosedNotifier`; see *Comment notifications* for the delivery model): the assessee's act reaches the manager side (reporting manager + active delegates), the manager side's reaches the assessee (and the reporting manager, when a delegate acted), a close by a move into the role reaches both, and never the actor.
+- **MCP.** `assessments_start_exploration` / `assessments_close_exploration` (`:mcp_client`), `assessments_explorations_list` (`:none`); `assessments_mine` carries `explorations: { own:, team: }` (open ones) and `assessments_get` under a lens carries the lens role's open one as `current_exploration`.
 
 ### Role-scoped reads (NON-NEGOTIABLE)
 
@@ -1035,7 +1049,10 @@ no entry, the other party (and the actor on reload) silently loses the story.
 > every affected frame. Don't reinvent it.
 
 This applies to ratings (self / manager / aligned + their revisions/clears),
-alignment milestones, comments, and **all evidence actions** — recording,
+alignment milestones, **declared explorations** (`exploration_started` /
+`exploration_closed` — alignment group, framework-level, the note as the
+secondary line, clicking switches to the explored lens, visible to anyone who
+sees the whole assessment), comments, and **all evidence actions** — recording,
 editing, withdrawing, **and link add / remove** (`evidence_linked` /
 `evidence_unlinked`). It also covers actions that originate OFF the
 assessment screen but land on the person's stream: a calibration session's
@@ -1087,7 +1104,7 @@ never the activity frame — so the actor sees their own entry appear too.
 Therefore **every projection that handles an on-screen assessment action
 MUST call `broadcast_assessment_sync` in its `call`** (guarded by
 `Projections::Replayer.replay_mode?` so rebuilds stay silent). Today that is
-`CurrentAssessment` (ratings / alignment), `EvidenceCollection` (evidence +
+`CurrentAssessment` (ratings / alignment / explorations), `EvidenceCollection` (evidence +
 links), `CommentThread` (comments), and `AssessmentAuthority` (delegation
 grant/revoke, reporting-manager). When you add a projection for a new
 assessment action, add the same broadcast — a feed entry that only appears
@@ -1406,6 +1423,13 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/operations/operations/assessments/{start,complete,reopen}_alignment.rb` | The alignment milestones, web and MCP, per role (`AlignmentLens` resolves the role) |
 | `app/contexts/person_development/async_handlers/lens_alignment_notifier.rb` | Tells the assessee when alignment against another role starts |
 | `app/javascript/controllers/lens_picker_controller.js` | Rebuilds the lens modal's level select on a role change |
+| `app/read_models/assessment_exploration.rb` | A declared exploration (ADR-22) — PK the event-carried id, written by `CurrentAssessment` |
+| `app/queries/assessments/open_explorations.rb` | Open explorations per assessment, with target-level progress for the person's own list |
+| `app/views/assessments/{start,stop}_exploration_modal.rb` | "Keep exploring this" / "Share with Alex" and "Stop exploring" dialogs (shared form in `exploration_modal_form.rb`) |
+| `app/views/assessments/exploration_chips.rb` | "Exploring PM3" chips on a report's card, linking into the lens |
+| `app/controllers/assessments/{explorations,exploration_closures}_controller.rb` | Declare / close from the lens banner → the shared Operations; back to the lens |
+| `app/operations/operations/assessments/{start,close}_exploration.rb`, `explorations_list.rb` | Declared explorations, web and MCP (`ExplorationPayload` is the one shape) |
+| `app/contexts/person_development/async_handlers/exploration_notifier.rb` | Tells the other party when an exploration starts or closes |
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
 | `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |

@@ -33,7 +33,9 @@ class Views::Assessments::Activity::Entry < Views::Base
     "delegation_granted"       => "bg-indigo-500",
     "delegation_revoked"       => "bg-gray-400",
     "reporting_manager_recorded" => "bg-sky-500",
-    "rating_revisit_requested" => "bg-amber-500"
+    "rating_revisit_requested" => "bg-amber-500",
+    "exploration_started"      => "bg-sky-500",
+    "exploration_closed"       => "bg-gray-400"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -58,6 +60,10 @@ class Views::Assessments::Activity::Entry < Views::Base
     "alignment_started"       => "alignment",
     "alignment_completed"     => "alignment",
     "alignment_reopened"      => "alignment",
+    # A declared exploration (ADR-22) is a step in the same conversation
+    # alignment belongs to.
+    "exploration_started"     => "alignment",
+    "exploration_closed"      => "alignment",
     "comment_posted"          => "comments",
     "evidence_link_commented" => "comments",
     # A calibration revisit request is about the manager rating — the
@@ -200,6 +206,8 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
     when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
     when "rating_revisit_requested" then revisit_summary
+    when "exploration_started"   then exploration_started_summary
+    when "exploration_closed"    then exploration_closed_summary
     else @entry.kind.humanize
     end
   end
@@ -212,6 +220,32 @@ class Views::Assessments::Activity::Entry < Views::Base
     session = payload_value(:session_name).to_s.strip.presence
     base = "#{asker} asked #{rater} to revisit #{capability_label}"
     session ? "#{base} (#{session})" : base
+  end
+
+  # "Alex started exploring Product Manager · PM3" when the assessee declared
+  # it; "Morgan shared an exploration of …" when the manager side did — the
+  # exploration is always the assessee's.
+  def exploration_started_summary
+    actor = actor_name || "Someone"
+    return "#{actor} started exploring #{explored_role}" if payload_value(:by_assessee)
+
+    "#{actor} shared an exploration of #{explored_role}"
+  end
+
+  # "Morgan closed the exploration of Product Manager · PM3 — not now"; with
+  # no actor (a move into the role closed it) "The exploration of … closed".
+  def exploration_closed_summary
+    outcome = AssessmentExploration::OUTCOME_PHRASES[payload_value(:outcome)]
+    base = if actor_name
+      "#{actor_name} closed the exploration of #{explored_role}"
+    else
+      "The exploration of #{explored_role} closed"
+    end
+    outcome ? "#{base} — #{outcome}" : base
+  end
+
+  def explored_role
+    payload_value(:role_label).to_s.strip.presence || "another role"
   end
 
   # " against Product Manager · PM3" for an alignment milestone against a
@@ -411,7 +445,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
       body.to_s.strip.presence
-    when "rating_revisit_requested"
+    when "rating_revisit_requested", "exploration_started", "exploration_closed"
       payload_value(:note).to_s.strip.presence
     end
   end

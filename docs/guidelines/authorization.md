@@ -109,6 +109,7 @@ Access to person development streams is based on the person/manager relationship
 | Record an agreed value | Assessee or reporting manager, while some alignment is in progress (`create_alignment_rating?`); the cell must be one an in-progress alignment reads (checked per cell by the Operation) |
 | Grant / revoke a rating delegation | Any ancestor manager (`Person#managed_by?`) or a tenant admin |
 | Unassign from framework (`unassign?`) | Tenant admin only — a destructive org-structure change, not the assessee or their manager |
+| Declare / close an exploration of another role (`start_exploration?` / `close_exploration?`) | The assessee, the reporting manager or an active delegate (`rating_participant?`) — no open cycle needed. View-only ancestors and admins outside the chain read it but can't declare or close |
 | Growth plan | Person proposes, manager agrees |
 
 **Recorded-authoritative manager.** `manages_assessee?` reads the reporting

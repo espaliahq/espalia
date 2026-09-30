@@ -13,6 +13,8 @@
 #   timestamps, terminal aligned state — the HOME role's lifecycle.
 # * `AssessmentCycleRoleAlignment` — one row per role alignment has been
 #   started against in a cycle, the home role included (ADR-22).
+# * `AssessmentExploration` — one row per declared exploration of another
+#   role or level (ADR-22), keyed by its event-carried id.
 #
 # Because rating rows are scoped by cycle, historical ratings across
 # cycles are preserved rather than overwritten.
@@ -84,6 +86,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     a participation to `started`, so a rebuild can revert such a
   #     participation to `enrolled`
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  #
+  # Not bumped for `ExplorationStarted` / `ExplorationClosed` (declared
+  # explorations, `AssessmentExploration`): brand-new event types with no
+  # history, so a rebuild writes exactly what live projection wrote.
   CODE_VERSION = 8
 
   # All event classes this projection handles.
@@ -110,7 +116,9 @@ class PersonDevelopment::Projections::CurrentAssessment
       PersonDevelopment::Events::FullAlignmentCompleted,
       PersonDevelopment::Events::AlignmentReopened,
       PersonDevelopment::Events::FrameworkVersionMigrated,
-      PersonDevelopment::Events::RatingRevisitRequested
+      PersonDevelopment::Events::RatingRevisitRequested,
+      PersonDevelopment::Events::ExplorationStarted,
+      PersonDevelopment::Events::ExplorationClosed
     ]
   end
 
@@ -125,6 +133,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       AssessmentLevelRating.where(tenant_id: tenant.id).delete_all
       AssessmentCycleProgress.where(tenant_id: tenant.id).delete_all
       AssessmentCycleRoleAlignment.where(tenant_id: tenant.id).delete_all
+      AssessmentExploration.where(tenant_id: tenant.id).delete_all
     end
   end
 
@@ -159,6 +168,8 @@ class PersonDevelopment::Projections::CurrentAssessment
     when PersonDevelopment::Events::AlignmentReopened then handle_alignment_reopened(event)
     when PersonDevelopment::Events::FrameworkVersionMigrated then handle_framework_version_migrated(event)
     when PersonDevelopment::Events::RatingRevisitRequested then handle_rating_revisit_requested(event)
+    when PersonDevelopment::Events::ExplorationStarted then handle_exploration_started(event)
+    when PersonDevelopment::Events::ExplorationClosed then handle_exploration_closed(event)
     end
   end
 
@@ -167,6 +178,40 @@ class PersonDevelopment::Projections::CurrentAssessment
   # time). Handled here solely so the assessment feed updates live for a
   # rater who has the page open when a calibration session nudges them.
   def handle_rating_revisit_requested(event)
+    broadcast_assessment_sync(event)
+  end
+
+  # A declared exploration (ADR-22). The row's id is the event's
+  # `exploration_id`, and every time is the event's own, so a rebuild
+  # reproduces the row exactly. Broadcast so an open assessment shows the
+  # banner, the list and the feed entry without a reload.
+  def handle_exploration_started(event)
+    AssessmentExploration.find_or_initialize_by(id: event.data[:exploration_id]).tap do |row|
+      row.assign_attributes(
+        tenant_id: event.metadata[:tenant_id],
+        person_id: event.metadata[:person_id],
+        framework_id: event.metadata[:framework_id],
+        target_role_id: event.data[:target_role_id],
+        target_level_id: event.data[:target_level_id],
+        target_level_ordinal: event.data[:target_level_ordinal],
+        status: "open",
+        started_at: event.metadata[:timestamp] || Time.current,
+        started_by_id: event.data[:started_by_id],
+        start_note: event.data[:note]
+      )
+      row.save!
+    end
+    broadcast_assessment_sync(event)
+  end
+
+  def handle_exploration_closed(event)
+    AssessmentExploration.find_by(id: event.data[:exploration_id])&.update!(
+      status: "closed",
+      closed_at: event.metadata[:timestamp] || Time.current,
+      closed_by_id: event.data[:closed_by_id],
+      outcome: event.data[:outcome],
+      close_note: event.data[:note]
+    )
     broadcast_assessment_sync(event)
   end
 

@@ -126,6 +126,39 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Declares an exploration of another role or level (ADR-22).
+  #
+  # @param person_id [String] UUID of the person exploring
+  # @param framework_id [String] UUID of the framework
+  # @param exploration_id [String] caller-minted UUID v7
+  # @param target_role_id [String]
+  # @param target_level_id [String]
+  # @param target_level_ordinal [Integer]
+  # @param started_by_id [String, nil]
+  # @param note [String, nil]
+  def start_exploration(person_id, framework_id, exploration_id, target_role_id:, target_level_id:,
+                        target_level_ordinal:, started_by_id:, note: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.start_exploration(exploration_id, target_role_id: target_role_id, target_level_id: target_level_id,
+                                  target_level_ordinal: target_level_ordinal, started_by_id: started_by_id,
+                                  note: note)
+    end
+  end
+
+  # Closes a declared exploration with its outcome (ADR-22).
+  #
+  # @param person_id [String]
+  # @param framework_id [String]
+  # @param exploration_id [String]
+  # @param closed_by_id [String, nil]
+  # @param outcome [String] "pursue" | "not_now" | "moved"
+  # @param note [String, nil]
+  def close_exploration(person_id, framework_id, exploration_id, closed_by_id:, outcome:, note: nil)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.close_exploration(exploration_id, closed_by_id: closed_by_id, outcome: outcome, note: note)
+    end
+  end
+
   # Revokes a manager-rating delegation (non-destructive).
   #
   # @param person_id [String] UUID of the person being assessed
