@@ -184,7 +184,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def capability_description
-    p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-2") do
+    p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
       @capability.description
     end
   end

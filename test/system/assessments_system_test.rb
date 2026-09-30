@@ -978,6 +978,35 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "(main=#{main_visible_width}, viewport=#{viewport_width})"
     end
 
+    # WCAG 1.4.12: a two-line clamp cut every description on a phone, and
+    # nothing revealed the rest (#320). The whole description must render.
+    should "show a capability's full description on mobile, even with text-spacing overrides" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.update_capability(
+          @framework_id, @cap1_id,
+          description: "Considers long-term impact, balances competing priorities, and makes smart, " \
+                       "intentional decisions that support our mission and the people we serve."
+        )
+      end
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+      assert_text "the people we serve."
+
+      clipped = page.evaluate_script(<<~JS)
+        (() => {
+          const style = document.createElement("style");
+          style.textContent = "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; " +
+                              "word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }";
+          document.head.appendChild(style);
+          const p = [...document.querySelectorAll("p")].find(e => e.textContent.includes("the people we serve."));
+          const cut = p.scrollHeight > p.clientHeight + 1;
+          style.remove();
+          return cut;
+        })()
+      JS
+      assert_not clipped, "the capability description is cut off"
+    end
+
     # WCAG 1.4.10: the page reflows at 320 CSS px. "Most of the time" is the
     # widest pill phrase, and "Demonstrates:" used to be glued to it with
     # nowrap, so the pair pushed the whole page sideways (#319).
