@@ -69,6 +69,22 @@ class Assessments::ExplorationsControllerTest < ActionDispatch::IntegrationTest
       assert_nil exploration
     end
 
+    should "not promise anyone is told when the assessee has no manager" do
+      loner_user = create(:user, password: "password123")
+      assignment = ActsAsTenant.with_tenant(@tenant) do
+        loner = create(:person, tenant: @tenant, email: loner_user.email, manager: nil)
+        create(:tenant_user, tenant: @tenant, user: loner_user, person: loner)
+        PersonDevelopment::CommandHandler.new.assign_to_framework(
+          loner.id, @fx.framework_id, @fx.engineer.role_id, @fx.e_levels.fetch(2).level_id
+        )
+        PersonFrameworkAssignment.find_by!(person_id: loner.id, framework_id: @fx.framework_id)
+      end
+      sign_in loner_user
+      post assessment_explorations_path(assignment), params: @pm_lens
+
+      assert_equal "You're exploring Product Manager · PM3.", flash[:notice]
+    end
+
     should "refuse the record itself with the reason" do
       sign_in @report_user
       post assessment_explorations_path(@assignment), params: { as_level: 2 }

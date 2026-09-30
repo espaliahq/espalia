@@ -18,16 +18,16 @@ module Assessments::ExplorationActions
   end
 
   # "Morgan" to the assessee, "Alex" to the manager side — the person who
-  # is told.
+  # is told. nil for an assessee with no manager, where nobody is.
   #
-  # @return [String]
+  # @return [String, nil]
   def other_party_name
     if @assignment.person_id == current_person.id
       manager_id = RecordedReportingManager.manager_id_for(@assignment.person_id, @assignment.framework_id) ||
         current_person.manager_id
-      first_name(Person.where(id: manager_id).pick(:name)) || "your manager"
+      manager_id && (first_name(Person.where(id: manager_id).pick(:name)) || "your manager")
     else
-      first_name(Person.where(id: @assignment.person_id).pick(:name)) || "they"
+      first_name(Person.where(id: @assignment.person_id).pick(:name)) || "them"
     end
   end
 

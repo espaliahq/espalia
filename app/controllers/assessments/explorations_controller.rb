@@ -18,10 +18,11 @@ class Assessments::ExplorationsController < ApplicationController
                 as_level_ordinal: params[:as_level].presence&.to_i, note: params[:note] }.compact
     )
     label = "#{result.dig(:target, :role_name)} · #{result.dig(:target, :code)}"
+    told = other_party_name
     notice = if @assignment.person_id == current_person.id
-      "You're exploring #{label} — #{other_party_name} can see it now."
+      told ? "You're exploring #{label} — #{told} can see it now." : "You're exploring #{label}."
     else
-      "Shared #{label} with #{other_party_name} as an exploration."
+      "Shared #{label} with #{told} as an exploration."
     end
     redirect_to lens_assessment_path, notice: notice
   rescue Operations::Base::ParameterError => e
