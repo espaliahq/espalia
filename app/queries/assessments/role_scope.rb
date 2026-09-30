@@ -149,6 +149,6 @@ class Assessments::RoleScope
 
   # @return [Integer]
   def hash
-    [ self.class, @role_id, @cells ].hash
+    @hash ||= [ self.class, @role_id, @cells ].hash
   end
 end
