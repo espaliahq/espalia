@@ -2,7 +2,8 @@
 
 # Tells the other party a declared exploration started (ADR-22): the manager
 # side hears "Alex started exploring Product Manager · PM3"; the assessee
-# hears "Morgan shared an exploration of Product Manager · PM3 with you".
+# hears "Morgan shared an exploration of Product Manager · PM3 with you",
+# and a reporting manager whose delegate shared it hears "… with Alex".
 # `params[:url]` opens the assessment read through that role and level.
 class ExplorationStartedNotifier < ApplicationNotifier
   notifies :exploration_started
@@ -13,7 +14,8 @@ class ExplorationStartedNotifier < ApplicationNotifier
       if params[:by_assessee]
         "#{actor} started exploring #{params[:role_label]}"
       else
-        "#{actor} shared an exploration of #{params[:role_label]} with you"
+        whom = params[:to_assessee] ? "you" : (params[:assessee_name].presence || "their report")
+        "#{actor} shared an exploration of #{params[:role_label]} with #{whom}"
       end
     end
 

@@ -6,7 +6,8 @@
 #
 #   declared / closed by the assessee → the manager side (recorded reporting
 #                                       manager + active rating delegates)
-#   declared / closed by anyone else  → the assessee
+#   declared / closed by anyone else  → the assessee, and the reporting
+#                                       manager when a delegate acted
 #   closed by nobody (a move into the  → both
 #   explored role closed it)
 #
@@ -47,6 +48,7 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifier < ApplicationJob
       tenant_id: event.metadata[:tenant_id],
       actor_name: Person.where(id: actor_id).pick(:name),
       by_assessee: actor_id == exploration.person_id,
+      assessee_name: Person.where(id: exploration.person_id).pick(:name),
       role_label: exploration.label,
       outcome: event.data[:outcome],
       note: event.data[:note],
@@ -58,16 +60,22 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifier < ApplicationJob
       user = Person.find_by(id: person_id)&.ensure_user!
       next if user.nil? || already_delivered?(notifier, user, event)
 
-      notifier.with(params).deliver(user)
+      notifier.with(params.merge(to_assessee: person_id == exploration.person_id)).deliver(user)
     end
   end
 
   # @return [Array<String>]
   def recipient_ids(exploration, actor_id)
     return [ exploration.person_id ] + manager_side_ids(exploration) if actor_id.nil?
-    return [ exploration.person_id ] unless actor_id == exploration.person_id
+    return manager_side_ids(exploration) if actor_id == exploration.person_id
 
-    manager_side_ids(exploration)
+    [ exploration.person_id, reporting_manager_id(exploration) ].compact
+  end
+
+  # @return [String, nil]
+  def reporting_manager_id(exploration)
+    RecordedReportingManager.manager_id_for(exploration.person_id, exploration.framework_id) ||
+      Person.where(id: exploration.person_id).pick(:manager_id)
   end
 
   # The recorded reporting manager (live org chart fallback) plus active
@@ -75,8 +83,7 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifier < ApplicationJob
   #
   # @return [Array<String>]
   def manager_side_ids(exploration)
-    manager_id = RecordedReportingManager.manager_id_for(exploration.person_id, exploration.framework_id) ||
-      Person.where(id: exploration.person_id).pick(:manager_id)
+    manager_id = reporting_manager_id(exploration)
     delegate_ids = ManagerAssessmentDelegation.active
       .for_person(exploration.person_id).for_framework(exploration.framework_id)
       .pluck(:delegate_person_id)

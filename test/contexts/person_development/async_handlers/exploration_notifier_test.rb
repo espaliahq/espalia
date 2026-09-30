@@ -57,6 +57,16 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifierTest < ActiveSupport:
     assert_empty @manager_user.notifications.reload
   end
 
+  should "tell the assessee and the reporting manager when a delegate shares it" do
+    perform_enqueued_jobs { start(by: @delegate) }
+
+    assert_equal "Dee Delegate shared an exploration of Product Manager · PM3 with you",
+                 @user.notifications.reload.sole.inbox_title
+    assert_equal "Dee Delegate shared an exploration of Product Manager · PM3 with Alex Assessee",
+                 @manager_user.notifications.reload.sole.inbox_title
+    assert_empty @delegate_user.notifications.reload
+  end
+
   should "tell the other party when it closes, with the outcome" do
     id = start(by: @person)
     perform_enqueued_jobs do
