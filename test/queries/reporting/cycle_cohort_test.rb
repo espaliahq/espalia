@@ -126,6 +126,19 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_equal 1, result.funnel.manager_done
     end
 
+    should "leave a bound capability with no expectation at the level out of the target" do
+      category = FrameworkState::CapabilityCategory.find_by!(framework_id: @framework_id)
+      unwritten = create(:framework_capability, category_id: category.category_id)
+      create(:framework_capability_role_binding, capability_id: unwritten.capability_id, role_id: @role.role_id)
+      person = create(:person, tenant: @tenant, name: "Complete")
+      enroll(person)
+      @caps.each { |cap| rate(person, cap, self_rated_frequency: "consistent") }
+
+      participant = result.participants.sole
+      assert_equal 3, participant.expected_count
+      assert participant.self_done, "agrees with Assessments::LevelCoverage"
+    end
+
     should "not count self-done when only some capabilities are rated" do
       person = create(:person, tenant: @tenant, name: "Partial")
       enroll(person)
