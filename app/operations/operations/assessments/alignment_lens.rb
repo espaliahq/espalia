@@ -59,6 +59,18 @@ module Operations::Assessments::AlignmentLens
       home: alignment_lens.home_role? }
   end
 
+  # The level the conversation was started about — the home level for the
+  # home role, the level on the role's alignment row otherwise (the lens
+  # level only if the row names none).
+  #
+  # @return [Integer]
+  def conversation_level(cycle_id)
+    return alignment_lens.home_level.ordinal if alignment_lens.home_role?
+
+    AssessmentCycleRoleAlignment.find_by(cycle_id: cycle_id, person_id: assignment.person_id,
+                                         role_id: alignment_role.role_id)&.level_ordinal || alignment_lens.level.ordinal
+  end
+
   def open_cycle!
     assignment.current_open_cycle || raise(Operations::Base::ParameterError, "no open assessment cycle")
   end

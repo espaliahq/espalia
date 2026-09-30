@@ -121,10 +121,11 @@ class Operations::Assessments::RoleAlignmentOperationsTest < ActiveSupport::Test
       end
       call(Operations::Assessments::CompleteAlignment, **@pm)
 
-      result = call(Operations::Assessments::ReopenAlignment, **@pm)
+      result = call(Operations::Assessments::ReopenAlignment, as_role_id: @fx.pm.role_id, as_level_ordinal: 3)
 
       assert_equal "aligning", result[:status]
       assert_not result[:home]
+      assert_equal 2, result[:level_ordinal], "the conversation's level, not the lens level the call named"
     end
   end
 end

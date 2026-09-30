@@ -57,15 +57,6 @@ class Operations::Assessments::CompleteAlignment < Operations::Base
 
   private
 
-  # The level the conversation was started about — the home level for the
-  # home role.
-  def conversation_level(cycle_id)
-    return alignment_lens.home_level.ordinal if alignment_lens.home_role?
-
-    AssessmentCycleRoleAlignment.find_by(cycle_id: cycle_id, person_id: assignment.person_id,
-                                         role_id: alignment_role.role_id)&.level_ordinal || alignment_lens.level.ordinal
-  end
-
   # A role with no cells at the level never blocks — there is nothing to align.
   def refuse_incomplete!(coverage)
     return unless coverage[:total].positive? && !coverage[:aligned_complete]

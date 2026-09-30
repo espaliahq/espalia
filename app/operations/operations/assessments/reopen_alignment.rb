@@ -41,9 +41,8 @@ class Operations::Assessments::ReopenAlignment < Operations::Base
       reopened_by_id: context.person&.id, role_id: alignment_role.role_id
     )
 
-    level = alignment_lens.home_role? ? alignment_lens.home_level : alignment_lens.level
     { framework_id: assignment.framework_id, cycle_id: cycle.cycle_id,
-      status: alignment_status(cycle.cycle_id), **alignment_role_payload(level.ordinal) }
+      status: alignment_status(cycle.cycle_id), **alignment_role_payload(conversation_level(cycle.cycle_id)) }
   end
 
   private
