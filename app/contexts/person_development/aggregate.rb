@@ -36,6 +36,9 @@ class PersonDevelopment::Aggregate
   EVIDENCE_VALENCES = EvidenceLink::VALENCES
   EVIDENCE_REQUEST_REMINDER_KINDS = %w[no_response due_soon manual].freeze
   EVIDENCE_REQUEST_NUDGE_GAP = EvidenceRequest::NUDGE_GAP
+  # What came of a declared exploration: work towards it, set it aside, or
+  # the person has moved into the role.
+  EXPLORATION_OUTCOMES = %w[pursue not_now moved].freeze
 
   def initialize
     @person_id = nil
@@ -68,6 +71,9 @@ class PersonDevelopment::Aggregate
     @comments = {}       # comment_id => { commentable_type:, capability_stable_id:, level_ordinal:, evidence_id:, parent_id:, author_id:, status: }
     @last_migrated_to_version = nil # highest framework version this stream has been migrated to
     @assessed_framework_version = nil # framework version the CURRENT cycle is assessed against
+    # Declared explorations (ADR-22) — intent facts that outlive cycles:
+    #   exploration_id => { target_role_id:, open: Boolean }
+    @explorations = {}
   end
 
   # ── Assignment ──
@@ -268,6 +274,68 @@ class PersonDevelopment::Aggregate
       note: note,
       requested_by_id: requested_by_id
     }.compact))
+  end
+
+  # ── Declared explorations ──
+  #
+  # "We've agreed to explore this" (ADR-22): an intent fact about another
+  # role or level, visible to both parties, with a lifecycle. Not a rating
+  # scope — the lens reads the same ratings — so it needs an assignment but
+  # no open cycle, and survives from one cycle to the next. Who may declare
+  # or close (the assessee, their reporting manager, an active rating
+  # delegate) is the controller-side policy's call.
+
+  # Declares an exploration of another role or level.
+  #
+  # @param exploration_id [String] caller-minted UUID v7
+  # @param target_role_id [String]
+  # @param target_level_id [String] a level of the target role
+  # @param target_level_ordinal [Integer] that level's ordinal
+  # @param started_by_id [String, nil] UUID of the Person declaring it
+  # @param note [String, nil]
+  # @raise [CommandError] if not assigned, the id is taken, the target is the
+  #   role and level the person holds, or an exploration of the role is open
+  def start_exploration(exploration_id, target_role_id:, target_level_id:, target_level_ordinal:,
+                        started_by_id:, note: nil)
+    raise CommandError, "Not assigned to this framework" unless @assigned
+    raise CommandError, "Exploration id is required" if exploration_id.blank?
+    raise CommandError, "A target role and level are required" if target_role_id.blank? || target_level_id.blank?
+    raise CommandError, "Exploration #{exploration_id} already exists" if @explorations.key?(exploration_id)
+    raise CommandError, "That is the role and level already held" if
+      target_role_id == @role_id && target_level_id == @level_id
+    raise CommandError, "An exploration of that role is already open" if
+      @explorations.each_value.any? { |state| state[:open] && state[:target_role_id] == target_role_id }
+
+    apply(PersonDevelopment::Events::ExplorationStarted.new(data: {
+      exploration_id: exploration_id,
+      target_role_id: target_role_id,
+      target_level_id: target_level_id,
+      target_level_ordinal: target_level_ordinal,
+      started_by_id: started_by_id,
+      note: note.presence
+    }))
+  end
+
+  # Closes an open exploration with what came of it.
+  #
+  # @param exploration_id [String]
+  # @param closed_by_id [String, nil] UUID of the Person closing it
+  # @param outcome [String] one of EXPLORATION_OUTCOMES
+  # @param note [String, nil]
+  # @raise [CommandError] if the exploration is unknown or already closed, or
+  #   the outcome is invalid
+  def close_exploration(exploration_id, closed_by_id:, outcome:, note: nil)
+    state = @explorations[exploration_id]
+    raise CommandError, "No exploration with id #{exploration_id}" unless state
+    raise CommandError, "That exploration is already closed" unless state[:open]
+    raise CommandError, "Invalid outcome: #{outcome}" unless EXPLORATION_OUTCOMES.include?(outcome)
+
+    apply(PersonDevelopment::Events::ExplorationClosed.new(data: {
+      exploration_id: exploration_id,
+      closed_by_id: closed_by_id,
+      outcome: outcome,
+      note: note.presence
+    }))
   end
 
   # ── Assessment Cycle Membership ──
@@ -1448,6 +1516,15 @@ class PersonDevelopment::Aggregate
 
   on PersonDevelopment::Events::ManagerRatingDelegationRevoked do |event|
     @active_delegates.delete(event.data[:delegate_person_id])
+  end
+
+  on PersonDevelopment::Events::ExplorationStarted do |event|
+    @explorations[event.data[:exploration_id]] = { target_role_id: event.data[:target_role_id], open: true }
+  end
+
+  on PersonDevelopment::Events::ExplorationClosed do |event|
+    state = @explorations[event.data[:exploration_id]]
+    state[:open] = false if state
   end
 
   on PersonDevelopment::Events::PersonAssignedToFramework do |event|
