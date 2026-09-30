@@ -93,6 +93,12 @@ class Reporting::CapabilityAttainmentTest < ActiveSupport::TestCase
       assert_equal [ @cap1.stable_id, @cap2.stable_id ].sort, cells.keys.sort
       assert_not_includes result.capabilities.map(&:stable_id), rating.capability_stable_id
       assert_equal 3, cells[@cap1.stable_id].n_assessed
+
+      # The buckets only walk bound capabilities, so nothing above can show
+      # the leak; the scoped read itself is the guard.
+      query = Reporting::CapabilityAttainment.new(cycle: @cycle)
+      query.call
+      assert_not_includes query.instance_variable_get(:@ratings_by_person).fetch(@ada.id), rating
     end
 
     should "not count a rating at another level as assessed" do
