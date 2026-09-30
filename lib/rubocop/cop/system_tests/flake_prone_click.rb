@@ -40,8 +40,8 @@ module RuboCop
       # chain. No such call exists today; disable inline if one is ever
       # needed.
       #
-      # Deliberately narrow: `escape_arg?` recognises only a literal
-      # `:escape`, bare or one array level deep. A computed or aliased Esc
+      # Deliberately narrow: `key_arg?` recognises only a literal `:escape`
+      # or `:tab`, bare or one array level deep. A computed or aliased key
       # (`send_keys(key)`, `send_keys(KEYS[:esc])`) is NOT flagged — a
       # low-false-positive posture, not coverage. The `.coderabbit.yaml`
       # path instructions are the intended net for those fuzzier forms.
@@ -68,6 +68,12 @@ module RuboCop
           "is swallowed, so the `keydown.esc@window` handler never runs. Use " \
           "`press_escape`. See docs/guidelines/testing.md."
 
+        MSG_TAB_KEY =
+          "Selenium focuses the element it sends keys to, so `send_keys(:tab)` " \
+          "perturbs the `document.activeElement` that `modal`'s focus trap reads " \
+          "— and a keydown that misses the trap lets native traversal walk focus " \
+          "out of the dialog. Use `press_tab`. See docs/guidelines/testing.md."
+
         # Matches `.click` whose receiver is `find(<str>)` / `first(<str>)`
         # where the selector literal references a Stimulus `data-action`.
         # The receiver is deliberately unconstrained: a SCOPED find
@@ -80,11 +86,11 @@ module RuboCop
             :click ...)
         PATTERN
 
-        # Matches EVERY `send_keys` call, on any receiver — the Esc filtering
-        # is entirely `escape_arg?`'s job (both are required in `on_send`).
-        # Widening this pattern without that guard would flag every
-        # `send_keys(:tab)` in the suite.
-        def_node_matcher :escape_send_keys?, <<~PATTERN
+        # Matches EVERY `send_keys` call, on any receiver — which key it
+        # carries is entirely `key_arg?`'s job (both are required in
+        # `on_send`). Widening this pattern without that guard would flag
+        # every `send_keys` in the suite, most of which type text.
+        def_node_matcher :send_keys?, <<~PATTERN
           (send _ :send_keys ...)
         PATTERN
 
@@ -95,7 +101,10 @@ module RuboCop
             add_offense(node, message: MSG_STIMULUS_CLICK) if stimulus_selector?(selector_node)
           end
 
-          add_offense(node, message: MSG_ESCAPE_KEY) if escape_send_keys?(node) && escape_arg?(node)
+          return unless send_keys?(node)
+
+          add_offense(node, message: MSG_ESCAPE_KEY) if key_arg?(node, :escape)
+          add_offense(node, message: MSG_TAB_KEY) if key_arg?(node, :tab)
         end
 
         private
@@ -105,12 +114,12 @@ module RuboCop
           selector_text(selector_node).include?("data-action")
         end
 
-        # True when any argument is the :escape symbol (bare or in an array,
-        # e.g. `send_keys([:shift, :escape])`).
-        def escape_arg?(node)
+        # True when any argument is +key+ (bare or in an array, e.g.
+        # `send_keys([:shift, :tab])`).
+        def key_arg?(node, key)
           node.arguments.any? do |arg|
-            (arg.sym_type? && arg.value == :escape) ||
-              (arg.array_type? && arg.values.any? { |v| v.sym_type? && v.value == :escape })
+            (arg.sym_type? && arg.value == key) ||
+              (arg.array_type? && arg.values.any? { |v| v.sym_type? && v.value == key })
           end
         end
 
