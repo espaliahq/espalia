@@ -65,7 +65,7 @@ class Components::Kit::Dropdown < Components::Base
   #   a literal, so Tailwind sees it. Override where the brand colour can't
   #   show against what the trigger sits on (the navbar).
   # @yield The content to display inside the trigger button
-  def trigger(label: nil, focus_ring: "rounded-md focus-visible:ring-primary", &block)
+  def trigger(label: nil, focus_ring: "rounded-md focus-visible:ring-primary-ink", &block)
     button(
       type: "button",
       aria: { haspopup: "true", expanded: "false", label: label }.compact,
