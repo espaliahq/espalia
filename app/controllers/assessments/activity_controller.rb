@@ -17,12 +17,6 @@ class Assessments::ActivityController < ApplicationController
   # GET /assessments/:assessment_id/activity
   def show
     authorize @assignment, :show?, policy_class: AssessmentPolicy
-    # The feed is the person's history, so it reads the same under any lens;
-    # the lens params still ride the frame src like every other frame, and a
-    # pair the framework doesn't have is a 404 here too.
-    if params[:as_role].present? || params[:as_level].present?
-      Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level])
-    end
 
     entries = Assessments::ActivityFeedQuery.new(
       assignment: @assignment,

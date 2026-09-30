@@ -189,7 +189,8 @@ class Views::Assessments::ShowView < Views::Base
         # (top-left split / first secondary percentage).
         viewer_is_manager: false,
         alignment_locked: @matrix_data[:alignment_locked],
-        lens: @matrix_data[:lens]
+        lens: @matrix_data[:lens],
+        ratings_frozen: @matrix_data[:individual_ratings_frozen]
       )
     end
   end
@@ -257,7 +258,7 @@ class Views::Assessments::ShowView < Views::Base
       # broadcasts).
       turbo_frame_tag(
         "assessment-activity",
-        src: assessment_activity_path(@assignment, lens_params),
+        src: assessment_activity_path(@assignment),
         loading: "lazy",
         data: { assessment_sync_target: "activityFrame" }
       ) do

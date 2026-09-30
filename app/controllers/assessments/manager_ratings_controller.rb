@@ -22,6 +22,9 @@ class Assessments::ManagerRatingsController < ApplicationController
   # POST /assessments/:assessment_id/manager_ratings
   def create
     authorize @assignment, :create_manager_rating?
+    # Resolve the page's lens before writing: a stale or crafted one is a
+    # 404 that has changed nothing, not a saved rating with no response.
+    response_lens
 
     rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
     capability_stable_id = rating_params[:capability_stable_id]
@@ -37,7 +40,13 @@ class Assessments::ManagerRatingsController < ApplicationController
       clear: rating_params[:clear].presence,
       as_role_id: params[:as_role].presence
     })
-    operation.call
+    begin
+      operation.call
+    rescue Pundit::NotAuthorizedError => e
+      # The Operation's own refusal (a cell the record doesn't read) carries
+      # a reason; a bodyless 403 would leave the click doing nothing on screen.
+      return render_rating_error(capability_stable_id, level_ordinal, e.message, status: :forbidden)
+    end
 
     respond_with_turbo_stream(capability_stable_id, level_ordinal, rating_params[:category_id],
       announce: operation.changed?)
@@ -47,14 +56,14 @@ class Assessments::ManagerRatingsController < ApplicationController
 
   private
 
-  def render_rating_error(capability_stable_id, level_ordinal, message)
+  def render_rating_error(capability_stable_id, level_ordinal, message, status: :unprocessable_content)
     render turbo_stream: turbo_stream.replace(
       "rating-#{capability_stable_id}-#{level_ordinal}",
       render_to_string(
         Views::Assessments::RatingError.new(message: message),
         layout: false
       )
-    ), status: :unprocessable_content
+    ), status: status
   end
 
   def require_person
@@ -148,7 +157,8 @@ class Assessments::ManagerRatingsController < ApplicationController
             assessment_id: @assignment.id,
             context: :manager,
             assessee_name: assessee_name,
-            lens: matrix_data[:lens]
+            lens: matrix_data[:lens],
+            ratings_frozen: matrix_data[:individual_ratings_frozen]
           ),
           layout: false
         )

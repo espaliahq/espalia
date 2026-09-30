@@ -53,6 +53,9 @@ class Views::Assessments::HeroSummary < Views::Base
   #   inputs remain visible on drill-in (the expansion panel's secondary
   #   lines) and in the activity feed; the glanceable surface reads as one
   #   formal outcome. Only consulted in :alignment context.
+  # @param ratings_frozen [Boolean] self and manager ratings are frozen
+  #   (home alignment has started). Outside :alignment nothing on the page
+  #   can then be rated, so the hero stops asking.
   # @param lens [Assessments::Lens, nil] the role and level the page is read
   #   against. Off the record, the verdict reads conditionally ("Against PM3
   #   you'd be…") and the priming state counts what the role adds; always,
@@ -61,8 +64,9 @@ class Views::Assessments::HeroSummary < Views::Base
                  assessment_id:, context: :self, viewer_is_manager: false,
                  self_scoring: nil, manager_scoring: nil, aligned_scoring: nil,
                  assessee_name: nil, viewer_can_rate: true, alignment_locked: false,
-                 thresholds: {}, lens: nil)
+                 thresholds: {}, lens: nil, ratings_frozen: false)
     @lens = lens
+    @ratings_frozen = ratings_frozen
     @scoring = scoring
     @viewer_is_manager = viewer_is_manager
     @self_scoring = self_scoring
@@ -153,7 +157,7 @@ class Views::Assessments::HeroSummary < Views::Base
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
           promotion_pill
           next_level_lens_link
-          continue_assessing_cta(target) if target && @viewer_can_rate
+          continue_assessing_cta(target) if target && can_rate?
           coverage_chip if @context != :alignment && !coverage_complete?
         end
         # Gloss + divergent secondary verdicts share one line as long
@@ -220,7 +224,7 @@ class Views::Assessments::HeroSummary < Views::Base
         div(class: "min-w-0 flex-1") do
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { priming_headline }
           p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { priming_gloss }
-          div(class: "mt-3") { priming_cta(target) } if target && @viewer_can_rate
+          div(class: "mt-3") { priming_cta(target) } if target && can_rate?
         end
         div(class: "sm:text-right shrink-0") do
           span(class: "text-4xl font-bold leading-none text-gray-900 dark:text-white tabular-nums") do
@@ -236,8 +240,8 @@ class Views::Assessments::HeroSummary < Views::Base
   def priming_headline
     return lens_priming_headline if new_to_role_count.positive?
 
-    if !@viewer_can_rate
-      # View-only chain ancestor — an imperative "Rate …" would prompt an
+    if !can_rate?
+      # View-only chain ancestor, or ratings frozen — an imperative "Rate …" would prompt an
       # action this viewer isn't permitted to take.
       @assessee_name.present? ? "No score for #{@assessee_name.split.first} yet" : "No score yet"
     elsif @context == :self
@@ -253,7 +257,7 @@ class Views::Assessments::HeroSummary < Views::Base
     return lens_priming_gloss if new_to_role_count.positive? && !can_rate_new_cells?
 
     level_code = level_code(@person_level) || "L#{@person_level}"
-    unless @viewer_can_rate
+    unless can_rate?
       return "The score appears once at least half of these #{level_code} capabilities are rated."
     end
 
@@ -276,10 +280,17 @@ class Views::Assessments::HeroSummary < Views::Base
       .count { |cap| cap[:cells][@person_level] && cap[:in_home_role] == false }
   end
 
+  # Whether the viewer can act on a "rate" prompt here: a rating participant,
+  # with ratings not frozen by alignment (which only :alignment escapes —
+  # its agreed values stay open).
+  def can_rate?
+    @viewer_can_rate && !(@ratings_frozen && @context != :alignment)
+  end
+
   # The assessee rates what a lens adds; a manager rating there waits for
   # per-role alignment, so the manager's copy says so instead of asking.
   def can_rate_new_cells?
-    @viewer_can_rate && @context == :self
+    can_rate? && @context == :self
   end
 
   def lens_priming_headline
@@ -294,8 +305,12 @@ class Views::Assessments::HeroSummary < Views::Base
 
   def lens_priming_gloss
     count = new_to_role_count
-    "#{count} of these #{@lens.code} capabilities #{count == 1 ? 'is' : 'are'} new to this role; " \
+    reason = if @ratings_frozen
+      "ratings are frozen once #{@lens.home_code} alignment has started."
+    else
       "manager ratings on them come with per-role alignment."
+    end
+    "#{count} of these #{@lens.code} capabilities #{count == 1 ? 'is' : 'are'} new to this role; #{reason}"
   end
 
   # "See yourself as E4 →" once a score meets its level — the next level of

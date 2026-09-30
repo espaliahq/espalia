@@ -46,7 +46,7 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       get assessment_path(@assignment, @pm_lens)
 
       frames = response.parsed_body.css("turbo-frame[src]").to_h { |f| [ f["id"], f["src"] ] }
-      %w[assessment-scoring assessment-matrix assessment-activity].each do |id|
+      %w[assessment-scoring assessment-matrix].each do |id|
         assert_includes frames.fetch(id), "as_role=#{@fx.pm.role_id}", "#{id} dropped the lens"
         assert_includes frames.fetch(id), "as_level=2", "#{id} dropped the lens"
       end
@@ -61,7 +61,7 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_equal "PM2", matrix_data[:lens].code
 
-      get assessment_activity_path(@assignment, @pm_lens)
+      get assessment_activity_path(@assignment)
       assert_response :success
     end
 
@@ -72,7 +72,7 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       get matrix_assessment_path(@assignment, as_role: SecureRandom.uuid_v7, as_level: 2)
       assert_response :not_found
 
-      get assessment_activity_path(@assignment, as_level: "E3")
+      get scoring_assessment_path(@assignment, as_level: "E3")
       assert_response :not_found
     end
   end
@@ -130,6 +130,30 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       get assessment_path(@assignment, as_level: 3)
 
       assert_equal :alignment, controller.send(:assessment_context)
+    end
+
+    should "keep the alignment controls on the record, not on a level of its ladder" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by!(cycle_id: @cycle_id, person_id: @person.id).update!(status: "aligning")
+      end
+      sign_in @manager_user
+      get assessment_path(@assignment, as_level: 3)
+      assert_nil response.parsed_body.at_css("#alignment-completion-control")
+
+      get assessment_path(@assignment)
+      assert response.parsed_body.at_css("#alignment-completion-control")
+    end
+
+    should "stop asking the assessee to rate while home alignment freezes ratings" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.across_all_roles.where(person_id: @person.id).update_all(self_rated_frequency: nil)
+      end
+      sign_in @user
+      get assessment_path(@assignment, @pm_lens)
+
+      assert_includes hero_text, "No score against PM2 yet"
+      assert_includes hero_text, "ratings are frozen once E2 alignment has started"
+      assert_nil response.parsed_body.at_css("#scoring-panel [data-controller='continue-assessing']")
     end
 
     should "show the manager every cell, and no alignment controls under another role" do
@@ -278,6 +302,18 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
 
       assert_response :forbidden
+      assert_includes response.body, "per-role alignment", "a refusal the page can show, not a bodyless 403"
+      assert_nil stored(@fx.pm_only)
+    end
+
+    should "refuse a stale lens before writing anything" do
+      sign_in @user
+      post assessment_ratings_path(@assignment), params: {
+        as_role: @fx.pm.role_id, as_level: 9,
+        rating: { capability_stable_id: @fx.pm_only.stable_id, level_ordinal: 2, frequency: "some" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :not_found
       assert_nil stored(@fx.pm_only)
     end
 

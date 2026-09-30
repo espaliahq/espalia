@@ -73,11 +73,12 @@ class AssessmentsController < ApplicationController
         expanded_level_ordinal: focused_level_ordinal_param,
         selected_levels: selected_levels_param,
         context: context,
-        # Alignment is a milestone of the record; a lens on another role
-        # reads it but never drives it (ADR-22).
-        can_start_alignment: lens.home_role? && policy.start_alignment?,
-        can_complete_alignment: lens.home_role? && policy.complete_alignment?,
-        can_reopen_alignment: lens.home_role? && policy.reopen_alignment?,
+        # Alignment is a milestone of the record; a lens reads it but never
+        # drives it (ADR-22). Not even a lens on the home ladder: the
+        # completion control counts the level it is rendered against.
+        can_start_alignment: lens.home? && policy.start_alignment?,
+        can_complete_alignment: lens.home? && policy.complete_alignment?,
+        can_reopen_alignment: lens.home? && policy.reopen_alignment?,
         viewer_person_id: current_person&.id,
         can_create_evidence: viewer_can_create_evidence?,
         can_request_evidence: viewer_can_request_evidence?,
