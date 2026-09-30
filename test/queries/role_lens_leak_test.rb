@@ -70,7 +70,41 @@ class RoleLensLeakTest < ActiveSupport::TestCase
     end
   end
 
+  # A declared exploration is an intent, not a cycle (ADR-22): declaring and
+  # closing one touches no rating, no participation and no cohort number.
+  context "a declared exploration" do
+    setup do
+      @before = cohort_numbers
+      @status_before = progress_status
+      result = Operations::Assessments::StartExploration.call(
+        context: as_assessee, params: { assignment_id: @assignment.id, as_role_id: @fx.pm.role_id }
+      )
+      Operations::Assessments::CloseExploration.call(
+        context: as_manager, params: { assignment_id: @assignment.id, exploration_id: result[:id], outcome: "pursue" }
+      )
+      Operations::Assessments::StartExploration.call(
+        context: as_manager, params: { assignment_id: @assignment.id, as_role_id: @fx.pm.role_id }
+      )
+    end
+
+    should "leave the cohort report, the participation and the ratings as they were" do
+      assert_equal @before, cohort_numbers
+      assert_equal @status_before, progress_status
+      assert_equal 0, AssessmentLevelRating.across_all_roles.where(person_id: @person.id).count
+    end
+  end
+
   private
+
+  def progress_status
+    AssessmentCycleProgress.find_by!(cycle_id: @cycle_id, person_id: @person.id).status
+  end
+
+  def cohort_numbers
+    Reporting::CycleCohort.new(cycle: @cycle).call.participants.map do |participant|
+      [ participant.self_count, participant.manager_count, participant.status ]
+    end
+  end
 
   def as_assessee
     AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @person)
