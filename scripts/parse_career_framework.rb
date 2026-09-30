@@ -83,7 +83,7 @@ def extract_non_bold_text(html)
 end
 
 # Extract name and description from a capability/category cell.
-# First bold segment = name, remaining bold + italic = description.
+# First bold segment = name, remaining bold + non-bold text = description.
 def extract_name_and_description(html)
   return [ nil, nil ] if html.nil? || html.to_s.strip.empty?
 
@@ -96,9 +96,7 @@ def extract_name_and_description(html)
 
   name = bold_segments.first
 
-  # Description: remaining bold segments + non-bold text. The non-bold text
-  # already includes italic content, so reading italics separately as well
-  # stored those sentences twice (#333).
+  # extract_non_bold_text already keeps italic content — don't read it again.
   desc_parts = []
   desc_parts.concat(bold_segments[1..]) if bold_segments.length > 1
 
