@@ -32,7 +32,7 @@ class PersonDevelopment::AsyncHandlers::LensAlignmentNotifierTest < ActiveSuppor
 
     notification = @user.notifications.reload.sole
     assert_equal "Morgan Manager started alignment against Product Manager · PM2", notification.inbox_title
-    assert_includes notification.inbox_body, "Your E2 assessment is unchanged"
+    assert_equal "Their ratings on the PM2 capabilities are now shared with you.", notification.inbox_body
     assert_equal "/assessments/#{@assignment.id}?as_level=2&as_role=#{@fx.pm.role_id}", notification.inbox_url
   end
 

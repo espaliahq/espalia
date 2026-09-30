@@ -45,7 +45,6 @@ class PersonDevelopment::AsyncHandlers::LensAlignmentNotifier < ApplicationJob
       started_by_name: Person.where(id: event.data[:started_by_id]).pick(:name),
       role_label: "#{role.name} · #{code}",
       role_code: code,
-      home_code: home_code(event.data[:cycle_id], person_id),
       url: deep_link(person_id, event.metadata[:framework_id], role_id, row.level_ordinal),
       alignment_event_id: event.event_id
     ).deliver(user)
@@ -57,13 +56,6 @@ class PersonDevelopment::AsyncHandlers::LensAlignmentNotifier < ApplicationJob
       .where(type: "LensAlignmentStartedNotifier")
       .where("params::text LIKE ?", "%#{event.event_id}%")
       .exists?
-  end
-
-  # "E3" — the record the lens leaves unchanged.
-  def home_code(cycle_id, person_id)
-    enrollment = AssessmentCycleEnrollment.find_by(cycle_id: cycle_id, person_id: person_id)
-    code = FrameworkState::Role.where(role_id: enrollment&.role_id).pick(:code)
-    code && enrollment.level_ordinal ? "#{code}#{enrollment.level_ordinal}" : "home"
   end
 
   def deep_link(person_id, framework_id, role_id, level_ordinal)

@@ -15,8 +15,7 @@ class LensAlignmentStartedNotifier < ApplicationNotifier
     end
 
     def inbox_body
-      "Their ratings on the #{params[:role_code]} capabilities are now shared with you. " \
-        "Your #{params[:home_code]} assessment is unchanged."
+      "Their ratings on the #{params[:role_code]} capabilities are now shared with you."
     end
   end
 end

@@ -36,9 +36,6 @@ class Views::Assessments::StartLensAlignmentModal < Views::Base
         li { "Both of your ratings on those capabilities lock, including the ones #{@lens.home_code} shares." }
         li { "Capabilities you already agree on are agreed automatically." }
       end
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
-        "#{@first_name}'s #{@lens.home_code} assessment is unchanged."
-      end
       div(class: "flex justify-end gap-2 pt-1") do
         button(type: "button", data: { action: "click->modal#close" },
                class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
