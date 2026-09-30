@@ -120,6 +120,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_close_exploration",
+        "description" => "Close an open exploration of another role with its outcome: pursue (work towards it), " \
+                         "not_now (set it aside) or moved (they have moved into the role), plus an optional note.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"  => { "type" => "string" },
+            "exploration_id" => { "type" => "string" },
+            "outcome"        => { "type" => "string", "enum" => %w[pursue not_now moved] },
+            "note"           => { "type" => "string" }
+          },
+          "required" => %w[assignment_id exploration_id outcome],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_comments_list",
         "description" => "List active comment threads on an assessment for one capability (optionally one level). " \
                          "Accepts either capability_id (version-specific) or stable_id (cross-version) in the " \
@@ -280,8 +301,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_explorations_list",
+        "description" => "List the explorations of other roles or levels declared on one assessment, newest first, " \
+                         "with who declared them and, once closed, the outcome. Each carries the lens params that " \
+                         "read the assessment against its target.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "status"        => { "type" => "string", "enum" => %w[open closed all] }
+          },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
         "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it.",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -300,7 +341,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_mine",
-        "description" => "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments.",
+        "description" => "List the caller's own assessment assignments plus the ones they review: their team's (direct reports and active rating delegations) and, view-only, their skip-level reports' assignments. explorations lists the open explorations of other roles on the caller's own assessments and their team's.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
@@ -603,6 +644,30 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           },
           "required" => %w[assignment_id],
           "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "assessments_start_exploration",
+        "description" => "Declare that a person is exploring another role or level — an intent both they and their " \
+                         "manager see, not a rating. Name the target like a lens: as_role_id (blank = their own " \
+                         "role) and/or as_level_ordinal; it can't be the role and level they hold, and only one " \
+                         "exploration per role is open at a time. The other party is notified.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id"    => { "type" => "string" },
+            "as_role_id"       => { "type" => "string" },
+            "as_level_ordinal" => { "type" => "integer" },
+            "note"             => { "type" => "string" }
+          },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false,
+          "anyOf" => [ { "required" => [ "as_role_id" ] }, { "required" => [ "as_level_ordinal" ] } ]
         },
         "annotations" => {
           "readOnlyHint"    => false,

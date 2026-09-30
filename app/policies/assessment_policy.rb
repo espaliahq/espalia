@@ -70,6 +70,22 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def revoke_manager_rating_delegation? = delegate_manager_rating?
 
+  # Declare an exploration of another role or level (ADR-22) — "we've
+  # agreed to explore PM3". The assessee, their recorded reporting manager
+  # or an active rating delegate: the people the conversation is between. A
+  # view-only ancestor or an admin outside the chain can read the
+  # exploration but not declare one. Needs no open cycle — it writes no
+  # rating.
+  #
+  # @return [Boolean]
+  def start_exploration? = rating_participant?
+
+  # Close a declared exploration with its outcome — the same people who
+  # may declare one, whoever declared it.
+  #
+  # @return [Boolean]
+  def close_exploration? = rating_participant?
+
   # Remove a person's framework assignment entirely. A destructive
   # org-structure change — the same kind of authority HRIS-driven
   # (un)assignment carries — so it is gated to tenant admins, not the
