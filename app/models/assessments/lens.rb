@@ -163,6 +163,22 @@ class Assessments::Lens
                           role_id: role_id, ordinal: ordinal)
   end
 
+  # Every role in the framework with its levels, grouped by role family —
+  # what the header's "Another role…" picker offers. Families and roles in
+  # name order; levels by ordinal.
+  #
+  # @return [Array<Array(String, Array<FrameworkState::Role>)>]
+  def ladders
+    @ladders ||= FrameworkState::Role
+      .joins(:role_family)
+      .where(framework_role_families: { framework_id: framework_id })
+      .includes(:role_family, :levels)
+      .reject { |role| role.levels.empty? }
+      .group_by { |role| role.role_family.name }
+      .sort_by(&:first)
+      .map { |family, roles| [ family, roles.sort_by(&:name) ] }
+  end
+
   # @return [String] e.g. "PM3" — the shortcode the header chip shows
   def code = "#{@role.code}#{@level.ordinal}"
 

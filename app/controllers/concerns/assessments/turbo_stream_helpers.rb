@@ -26,6 +26,16 @@ module Assessments::TurboStreamHelpers
     )
   end
 
+  # The level chip's lens-dependent options, matching what the card renders:
+  # the floor below which unrated chips paint as assumed-consistent, and the
+  # TARGET badge while a lens is on.
+  #
+  # @return [Hash]
+  def lens_chip_options(matrix_data)
+    { assumed_below: matrix_data[:assumed_below],
+      badge_label: (response_lens.home? ? nil : "TARGET") }
+  end
+
   # Announces the acting user's rating change into the page's pre-existing
   # polite live region (WCAG 4.1.3 — audit issue #318). Reads the POST-write
   # frequency off the fresh cell data, so the announcement is authoritative
@@ -173,6 +183,13 @@ module Assessments::TurboStreamHelpers
 
   def secondary_entries_for(cell_data, context)
     case context
+    when :self
+      # Only cells the disclosure names carry these values at all (the
+      # builder scrubs the rest), so on the home page before alignment this
+      # renders nothing; under a lens, a shared cell the home conversation
+      # disclosed shows what was said there.
+      [ { label: "Manager", frequency: cell_data[:manager_frequency] },
+        { label: "Agreed", frequency: cell_data[:aligned_frequency] } ]
     when :manager
       [ { label: "Self", frequency: cell_data[:current_frequency] } ]
     when :alignment

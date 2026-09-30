@@ -119,6 +119,10 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_equal "consistent", shared[:manager_frequency], "home alignment disclosed the shared cell"
       assert_equal "occasional", shared[:aligned_frequency]
       assert_nil matrix_data[:manager_scoring]
+
+      page = response.parsed_body
+      assert_includes page.at_css("#secondaries-#{@fx.shared.stable_id}-2").text, "Manager rating"
+      assert_empty page.at_css("#secondaries-#{@fx.pm_only.stable_id}-2").text.strip
     end
 
     should "read as alignment on the home role, where every cell is the record" do
@@ -136,6 +140,50 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_equal :manager, controller.send(:assessment_context)
       assert_equal "consistent", cell(@fx.pm_only)[:manager_frequency]
       assert_not_includes response.body, "Re-open alignment"
+    end
+  end
+
+  context "the page chrome under a lens" do
+    setup { sign_in @user }
+
+    should "swap the status pill for the lens banner, with the way back" do
+      get assessment_path(@assignment, @pm_lens)
+
+      page = response.parsed_body
+      assert_nil page.at_css("#assessment-status-pill")
+      banner = page.at_css("#assessment-lens-banner")
+      assert_includes banner.text, "Viewing your ratings against Product Manager · PM2"
+      assert_includes banner.text, "Your E2 assessment is unchanged"
+      assert_equal assessment_path(@assignment), banner.at_css("a")["href"]
+      assert_equal "exploring", page.at_css("#assessment-lens-chip")["data-lens"]
+      assert_equal "Product Manager 2", page.at_css("h1").text.strip
+    end
+
+    should "keep the status pill and a plain chip on the record" do
+      get assessment_path(@assignment)
+
+      page = response.parsed_body
+      assert page.at_css("#assessment-status-pill")
+      assert_nil page.at_css("#assessment-lens-banner")
+      assert_equal "home", page.at_css("#assessment-lens-chip")["data-lens"]
+    end
+
+    should "offer the ladder and another role from the chip" do
+      get assessment_path(@assignment)
+
+      page = response.parsed_body
+      ladder = page.css("[role='menu'] a[role='menuitem']").to_h { |a| [ a["href"], a.text.delete("✓").squish ] }
+      assert_equal "E3 Engineer 3", ladder[assessment_path(@assignment, as_level: 3)]
+      assert_equal "E2 Engineer 2 your level", ladder[assessment_path(@assignment)]
+      modal = page.at_css("##{Views::Assessments::LensRoleModal::ID}")
+      assert modal.at_css("select[name='as_role'] optgroup[label='Product'] option[value='#{@fx.pm.role_id}']")
+    end
+
+    should "mark the capabilities only the lens role reads" do
+      get assessment_path(@assignment, @pm_lens)
+
+      chips = response.parsed_body.css("[data-scope-chip='outside-home']")
+      assert_equal [ "Not in your E2 role" ], chips.map { |c| c.text.strip }
     end
   end
 

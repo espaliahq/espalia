@@ -94,6 +94,7 @@ class Views::Assessments::ManagerShowView < Views::Base
         emphasised: @matrix_data[:emphasised_capabilities],
         second_person: false
       )
+      render_lens_role_modal(assessee_name: @assessee.name)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?
       render Views::Evidence::RequestModalShell.new if @can_request_evidence
     end
@@ -144,8 +145,9 @@ class Views::Assessments::ManagerShowView < Views::Base
           span(class: "text-base text-gray-600 dark:text-gray-400") do
             @matrix_data[:level].title
           end
-          render_shortcode_chip(role: @matrix_data[:role], level: @matrix_data[:level])
-          render_status_pill(
+          render_lens_control(assessee_name: @assessee.name)
+          render_status_or_lens_banner(
+            assessee_name: @assessee.name,
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]

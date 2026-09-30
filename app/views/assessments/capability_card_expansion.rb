@@ -232,13 +232,18 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     end
   end
 
-  # Secondary perspectives the current viewer is permitted to see. Self
-  # context has no visible secondaries — the assessee never sees the
-  # manager's rating until alignment opens (the data layer already
-  # nils manager/aligned data for :self, this just makes the intent
-  # explicit). Manager context shows self; alignment shows both.
+  # Secondary perspectives the current viewer is permitted to see. In self
+  # context the builder has already scrubbed manager and aligned values from
+  # every cell the disclosure doesn't name (ADR-22), so the assessee sees
+  # them only on a shared cell home alignment disclosed, read through a
+  # lens. Manager context shows self; alignment shows both.
   def visible_secondary_entries
     case @context
+    when :self
+      # Only disclosed cells carry these values (the builder scrubs the
+      # rest), so before alignment this renders nothing.
+      [ { label: "Manager", frequency: @cell_data[:manager_frequency] },
+        { label: "Agreed", frequency: @cell_data[:aligned_frequency] } ]
     when :manager
       [ { label: "Self", frequency: @cell_data[:current_frequency] } ]
     when :alignment

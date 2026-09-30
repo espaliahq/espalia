@@ -134,7 +134,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             context: :alignment,
             viewer_is_manager: viewer_is_manager?,
             focused: true,
-            alignment_locked: matrix_data[:alignment_locked]
+            alignment_locked: matrix_data[:alignment_locked],
+            **lens_chip_options(matrix_data)
           ),
           layout: false
         )

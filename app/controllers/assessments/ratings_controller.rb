@@ -96,7 +96,7 @@ class Assessments::RatingsController < ApplicationController
     render turbo_stream: [
       (live_status_stream(cap_data: cap_data, cell_data: cell_data, level_code: level_code,
         frequency: cell_data&.dig(:current_frequency)) if announce),
-      turbo_stream.replace(
+      (turbo_stream.replace(
         Views::Assessments::StatusPill::WRAPPER_ID,
         render_to_string(
           Views::Assessments::StatusPill.new(
@@ -106,7 +106,7 @@ class Assessments::RatingsController < ApplicationController
           ),
           layout: false
         )
-      ),
+      ) if response_lens.home?),
       turbo_stream.replace(
         "cell-#{capability_stable_id}-#{level_ordinal}",
         render_to_string(
@@ -117,7 +117,8 @@ class Assessments::RatingsController < ApplicationController
             person_level: matrix_data[:person_level],
             level_code: level_code,
             context: :self,
-            focused: true
+            focused: true,
+            **lens_chip_options(matrix_data)
           ),
           layout: false
         )
