@@ -35,7 +35,8 @@ class Views::Assessments::Activity::FilterChips < Views::Base
     button(
       type: "button",
       class: "px-2 py-1 rounded-md transition-colors " \
-             "aria-pressed:bg-primary aria-pressed:text-white " \
+             "aria-pressed:bg-gray-900 aria-pressed:text-white " \
+             "dark:aria-pressed:bg-white dark:aria-pressed:text-gray-900 " \
              "aria-[pressed=false]:bg-gray-100 dark:aria-[pressed=false]:bg-gray-800 " \
              "aria-[pressed=false]:text-gray-600 dark:aria-[pressed=false]:text-gray-300 " \
              "aria-[pressed=false]:hover:bg-gray-200 dark:aria-[pressed=false]:hover:bg-gray-700",

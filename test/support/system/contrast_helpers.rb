@@ -31,7 +31,8 @@ module ContrastHelpers
   JS
 
   # Contrast of the first element matching +css+ against everything painted
-  # behind it: every ancestor background, outermost first.
+  # behind it: every ancestor background, outermost first. Running
+  # transitions are finished first, so a just-toggled control reads settled.
   #
   # @param css [String]
   # @return [Float]
@@ -41,6 +42,10 @@ module ContrastHelpers
         #{CONTRAST_JS}
         const el = document.querySelector(arguments[0]);
         if (!el) throw new Error("rendered_contrast: nothing matches " + arguments[0]);
+        // Measure the settled state, not a frame of a colour transition.
+        for (let n = el; n; n = n.parentElement) {
+          n.getAnimations().forEach(a => { try { a.finish(); } catch (_) {} });
+        }
         const chain = [];
         let opacity = 1;
         for (let n = el; n; n = n.parentElement) {

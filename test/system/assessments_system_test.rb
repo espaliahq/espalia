@@ -909,6 +909,23 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_operator rendered_contrast("#category-tabs [data-all-chip] span"), :>=, 4.5
     end
 
+    should "keep the activity pane's pressed filters at AA in dark mode" do
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
+      )
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      assert_selector "[data-activity-feed-filter-param='all'][aria-pressed='true']", visible: true
+
+      assert_operator rendered_contrast("[data-activity-feed-filter-param='all'][aria-pressed='true']"), :>=, 4.5
+      assert_operator rendered_contrast("[data-activity-feed-mode-param][aria-pressed='true']"), :>=, 4.5
+    ensure
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
+      )
+    end
+
     should "keep the feedback actions glyph above the 3:1 icon floor" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(
