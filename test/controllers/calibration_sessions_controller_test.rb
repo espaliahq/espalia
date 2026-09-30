@@ -67,10 +67,17 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     should "badge an entirely-carried manager side as To confirm, not In progress" do
       session_record = define_session
       ActsAsTenant.with_tenant(@tenant) do
-        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @report.id)
+        role = create(:framework_role, tenant: @tenant)
+        category = create(:framework_capability_category, tenant: @tenant, framework_id: @cycle.framework_id)
+        cap = create(:framework_capability, tenant: @tenant, category_id: category.category_id)
+        create(:framework_capability_role_binding, tenant: @tenant,
+          capability_id: cap.capability_id, role_id: role.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant, capability_id: cap.capability_id, level_ordinal: 2)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @report.id,
+          role_id: role.role_id, level_ordinal: 2)
         create(:assessment_level_rating,
           tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @report.id,
-          framework_id: @cycle.framework_id, capability_stable_id: SecureRandom.uuid_v7,
+          framework_id: @cycle.framework_id, capability_stable_id: cap.stable_id,
           level_ordinal: 2, manager_rated_frequency: "consistent",
           manager_rating_source: "seeded", source: "seeded")
       end
@@ -79,6 +86,20 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "To confirm"
       assert_not_includes response.body, "In progress"
+    end
+
+    should "ignore ratings outside the assessed role in the readiness badges" do
+      session_record = define_session
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: @report.id,
+          role_id: create(:framework_role, tenant: @tenant).role_id, level_ordinal: 2)
+        create_out_of_scope_rating(person_id: @report.id, cycle: @cycle, level_ordinal: 2)
+      end
+
+      get calibration_session_path(session_record)
+      assert_response :success
+      assert_not_includes response.body, "In progress"
+      assert_not_includes response.body, "To confirm"
     end
   end
 
