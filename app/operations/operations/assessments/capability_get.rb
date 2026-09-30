@@ -100,8 +100,6 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   def ratings_by_level(cycle, hide_others:)
     return Hash.new(EMPTY_RATING) unless cycle
 
-    # Phase 2 of the role lens adds `in_role:` so a client can tell whether
-    # this capability counts for the assessed role (ADR-22).
     rows = AssessmentLevelRating.across_all_roles.where(
       cycle_id: cycle.cycle_id,
       person_id: assignment.person_id,
