@@ -285,9 +285,7 @@ framework:
         code: FO8
   capability_categories:
   - name: Thinking & Delivery
-    description: |-
-      How we approach problems, make decisions, and deliver impact.
-      How we approach problems, make decisions, and deliver impact.
+    description: How we approach problems, make decisions, and deliver impact.
     capabilities:
     - name: Strategic & Critical Thinking
       description: Considers long term impact, balances competing priorities, and
@@ -1165,9 +1163,7 @@ framework:
             and timely financial systems.
           role_code: FO
   - name: Collaboration & Communication
-    description: |-
-      How we work with and elevate others, share ideas, and drive alignment.
-      How we work with and elevate others, share ideas, and drive alignment.
+    description: How we work with and elevate others, share ideas, and drive alignment.
     capabilities:
     - name: Clear & Impactful Communication
       description: Communicates openly and with purpose. Shares context, explains
@@ -2157,9 +2153,7 @@ framework:
         - description: Sets the tone for operational excellence across the organisation.
           role_code: FO
   - name: Growth Mindset
-    description: |-
-      How we develop, adapt, and continuously improve.
-      How we develop, adapt, and continuously improve.
+    description: How we develop, adapt, and continuously improve.
     capabilities:
     - name: Continuous Learning & Curiosity
       description: Shows curiosity and appetite to learn. Embraces feedback, reflects
