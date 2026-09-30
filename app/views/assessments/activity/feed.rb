@@ -29,7 +29,7 @@ class Views::Assessments::Activity::Feed < Views::Base
       else
         ul(class: "space-y-1") do
           @entries.each do |entry|
-            render Views::Assessments::Activity::Entry.new(entry: entry)
+            render Views::Assessments::Activity::Entry.new(entry: entry, assignment: @assignment)
           end
         end
       end

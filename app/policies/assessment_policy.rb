@@ -80,20 +80,25 @@ class AssessmentPolicy < ApplicationPolicy
     (owns_assessment? || manages_assessee?) && alignment_in_progress?
   end
 
-  # Whether the assessment should render in alignment mode for the viewer.
-  # True once the manager has formally started alignment (cycle status
-  # `aligning` or `aligned`). Both parties see all three rating perspectives
-  # — self, manager, and aligned — with aligned values as the primary view.
+  # Whether the assessment, read against a role, should render in alignment
+  # mode for the viewer. True once the manager has formally started
+  # alignment against that role (ADR-22): for the home role, the cycle
+  # status is `aligning` or `aligned`; for another role, its
+  # {AssessmentCycleRoleAlignment} row exists. Both parties then see all
+  # three rating perspectives — self, manager, and aligned — with aligned
+  # values as the primary view.
   #
   # Before alignment starts, the assessee sees `:self` only and the manager
   # sees `:manager` only; the manager's ratings are private to the manager
   # until they choose to start alignment.
   #
+  # @param role_id [String, nil] the role read against; nil = the home role
   # @return [Boolean]
-  def view_alignment?
+  def view_alignment?(role_id: nil)
     return false unless show?
+    return %w[aligning aligned].include?(current_open_cycle_participation&.status) if role_id.nil?
 
-    %w[aligning aligned].include?(current_open_cycle_participation&.status)
+    !role_alignment(role_id).nil?
   end
 
   # Only the assessee's current direct manager can formally start
@@ -152,6 +157,15 @@ class AssessmentPolicy < ApplicationPolicy
 
   def current_open_cycle_participation
     record.current_open_cycle_participation
+  end
+
+  # @return [AssessmentCycleRoleAlignment, nil] alignment started against
+  #   the role in the open cycle
+  def role_alignment(role_id)
+    cycle = record.current_open_cycle
+    return nil unless cycle
+
+    AssessmentCycleRoleAlignment.find_by(cycle_id: cycle.cycle_id, person_id: record.person_id, role_id: role_id)
   end
 
   # The current user's person matches the assignment's person.

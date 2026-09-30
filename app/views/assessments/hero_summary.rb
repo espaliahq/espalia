@@ -287,17 +287,17 @@ class Views::Assessments::HeroSummary < Views::Base
     @viewer_can_rate && !(@ratings_frozen && @context != :alignment)
   end
 
-  # The assessee rates what a lens adds; a manager rating there waits for
-  # per-role alignment, so the manager's copy says so instead of asking.
+  # Both parties rate what a lens adds (ADR-22): the manager's ratings there
+  # stay private until alignment against the role starts.
   def can_rate_new_cells?
-    can_rate? && @context == :self
+    can_rate?
   end
 
   def lens_priming_headline
     count = new_to_role_count
     noun = "#{count} #{'capability'.pluralize(count)} #{count == 1 ? 'is' : 'are'} new to this role"
     if can_rate_new_cells?
-      "#{noun} — rate #{count == 1 ? 'it' : 'them'} to see your score"
+      "#{noun} — rate #{count == 1 ? 'it' : 'them'} to see #{@context == :self ? 'your' : 'the'} score"
     else
       "No score against #{@lens.code} yet"
     end
@@ -306,9 +306,9 @@ class Views::Assessments::HeroSummary < Views::Base
   def lens_priming_gloss
     count = new_to_role_count
     reason = if @ratings_frozen
-      "ratings are frozen once #{@lens.home_code} alignment has started."
+      "ratings are frozen once alignment against #{@lens.code} has started."
     else
-      "manager ratings on them come with per-role alignment."
+      "only #{@assessee_name.present? ? @assessee_name.split.first : 'the assessee'} and their manager can rate them."
     end
     "#{count} of these #{@lens.code} capabilities #{count == 1 ? 'is' : 'are'} new to this role; #{reason}"
   end
@@ -608,10 +608,12 @@ class Views::Assessments::HeroSummary < Views::Base
       end
   end
 
-  # A manager-side pill on a cell the record doesn't read is read-only, so
+  # A cell another role's alignment froze (ADR-22) is read-only, so
   # "Continue" must not point at one.
   def rateable_here?(cell)
-    @context == :self || cell[:in_home_scope] != false
+    return !cell[:agreed_locked] if @context == :alignment
+
+    cell[:frozen_by].nil?
   end
 
   def primary_cell_frequency(cell)

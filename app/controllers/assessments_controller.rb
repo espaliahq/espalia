@@ -293,7 +293,8 @@ class AssessmentsController < ApplicationController
       context: assessment_context,
       viewer_person_id: current_person.id,
       viewer_sees_all: viewer_sees_all_evidence?,
-      alignment_started: alignment_started?
+      alignment_started: alignment_started?,
+      disclosure: assessee_disclosure
     ).call
   end
 

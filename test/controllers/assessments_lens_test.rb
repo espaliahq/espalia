@@ -144,16 +144,17 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert response.parsed_body.at_css("#alignment-completion-control")
     end
 
-    should "stop asking the assessee to rate while home alignment freezes ratings" do
+    should "keep asking the assessee to rate what only PM2 reads while E2 alignment freezes the rest" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentLevelRating.across_all_roles.where(person_id: @person.id).update_all(self_rated_frequency: nil)
       end
       sign_in @user
       get assessment_path(@assignment, @pm_lens)
 
-      assert_includes hero_text, "No score against PM2 yet"
-      assert_includes hero_text, "ratings are frozen once E2 alignment has started"
-      assert_nil response.parsed_body.at_css("#scoring-panel [data-controller='continue-assessing']")
+      assert_includes hero_text, "1 capability is new to this role — rate it to see your score"
+      shared = response.parsed_body.at_css("#rating-#{@fx.shared.stable_id}-2")
+      assert_nil shared.at_css("button"), "a cell E2 alignment reads is frozen under every lens"
+      assert_equal "Frozen — alignment against E2 has started", shared.at_css("span[title]")["title"]
     end
 
     should "show the manager every cell, and no alignment controls under another role" do
@@ -240,12 +241,11 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_equal assessment_path(@assignment, as_level: 3), link["href"]
     end
 
-    should "tell the manager the added capabilities wait for per-role alignment" do
+    should "ask the manager to rate the added capabilities" do
       sign_in @manager_user
       get assessment_path(@assignment, @pm_lens)
 
-      assert_includes hero_text, "No score against PM2 yet"
-      assert_includes hero_text, "manager ratings on them come with per-role alignment"
+      assert_includes hero_text, "rate it to see the score"
     end
   end
 
@@ -328,15 +328,13 @@ class AssessmentsLensTest < ActionDispatch::IntegrationTest
       assert_equal "some", stored(@fx.shared)&.manager_rated_frequency
     end
 
-    should "render the manager's pill read-only on a cell only the lens role reads" do
+    should "let the manager rate a cell only the lens role reads" do
       sign_in @manager_user
       get assessment_path(@assignment, @pm_lens.merge(levels: { @fx.pm_only.stable_id => 2 }))
 
-      pill = response.parsed_body.at_css("#rating-#{@fx.pm_only.stable_id}-2")
-      assert_nil pill.at_css("button"), "no popover on a cell a manager can't rate yet"
-      assert_match(/per-role alignment/, pill.at_css("span[title]")["title"])
-      assert response.parsed_body.at_css("#rating-#{@fx.shared.stable_id}-2 button"),
-        "a shared cell is the record's, so the manager rates it"
+      assert response.parsed_body.at_css("#rating-#{@fx.pm_only.stable_id}-2 button"),
+        "the manager lens is writable; the rating stays private until PM2 alignment starts"
+      assert response.parsed_body.at_css("#rating-#{@fx.shared.stable_id}-2 button")
     end
   end
 
