@@ -27,7 +27,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
     # Alignment is against the home role, so the cell must be one the
     # record reads (ADR-22) — the same rule Operations::Assessments::Align
     # applies over MCP.
-    unless level_ordinal && policy(@assignment).home_cell?(capability_stable_id, level_ordinal)
+    unless level_ordinal && response_lens.in_home_scope?(capability_stable_id, level_ordinal)
       head :unprocessable_content
       return
     end
@@ -167,7 +167,8 @@ class Assessments::AlignmentRatingsController < ApplicationController
             viewer_is_manager: viewer_is_manager?,
             assessee_name: assessee_name_if_not_self,
             alignment_locked: matrix_data[:alignment_locked],
-            lens: matrix_data[:lens]
+            lens: matrix_data[:lens],
+            ratings_frozen: matrix_data[:individual_ratings_frozen]
           ),
           layout: false
         )

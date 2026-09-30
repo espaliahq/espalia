@@ -48,8 +48,7 @@ module Operations::Assessments::RatingCell
   # @raise [Pundit::NotAuthorizedError] when a manager-side write targets a
   #   cell the record doesn't read
   def refuse_outside_home_role!
-    return if AssessmentPolicy.new(context, assignment)
-      .home_cell?(params[:capability_stable_id], params[:level_ordinal])
+    return if rating_lens.in_home_scope?(params[:capability_stable_id], params[:level_ordinal])
 
     raise Pundit::NotAuthorizedError,
       "Manager ratings against another role come with per-role alignment"
