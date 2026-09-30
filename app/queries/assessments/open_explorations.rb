@@ -6,10 +6,12 @@
 #
 # With `progress_for:` it also counts, for those assessments, how many of the
 # target level's capabilities the person has rated in their open cycle —
-# "4 of 10 rated". Without an open cycle there is nothing to count against.
+# "4 of 10 rated" — the vetted count {Assessments::LevelCoverage} takes, so a
+# carried rating nobody has confirmed doesn't count here either. Without an
+# open cycle there is nothing to count against.
 #
 # @example
-#   Assessments::OpenExplorations.for(assignments, progress_for: own)
+#   Assessments::OpenExplorations.for(assignments, progress_for: own, open_cycles: open_cycles)
 #   # => { assignment_id => [#<Entry code="PM3" rated=4 total=10 …>] }
 class Assessments::OpenExplorations
   # `rated` is nil when not counted, or when there is no open cycle.
@@ -27,14 +29,18 @@ class Assessments::OpenExplorations
   # @param assignments [Enumerable<PersonFrameworkAssignment>]
   # @param progress_for [Enumerable<PersonFrameworkAssignment>] the ones to
   #   count ratings for
+  # @param open_cycles [Hash{Array(String, String) => AssessmentCycle}, nil]
+  #   preloaded by `[framework_id, person_id]`, as the list already holds
+  #   them; looked up when nil
   # @return [Hash{String => Array<Entry>}] keyed by assignment id, oldest first
-  def self.for(assignments, progress_for: [])
-    new(assignments.to_a, progress_for.to_a).call
+  def self.for(assignments, progress_for: [], open_cycles: nil)
+    new(assignments.to_a, progress_for.to_a, open_cycles).call
   end
 
-  def initialize(assignments, progress_for)
+  def initialize(assignments, progress_for, open_cycles)
     @assignments = assignments
     @progress_ids = progress_for.to_set(&:id)
+    @open_cycles = open_cycles || AssessmentCycle.open_cycles_for(progress_for.map { |a| [ a.framework_id, a.person_id ] })
   end
 
   # @return [Hash{String => Array<Entry>}]
@@ -60,17 +66,11 @@ class Assessments::OpenExplorations
   # @return [Array(Integer, Integer), Array(nil, Integer)] rated and total
   #   capabilities at the target level; rated is nil without an open cycle
   def progress(exploration, assignment)
-    scope = Assessments::RoleScope.for(role_id: exploration.target_role_id, framework_id: assignment.framework_id)
-      .at_level(exploration.target_level_ordinal)
-    total = scope.capability_stable_ids.size
-    cycle = assignment.current_open_cycle
-    return [ nil, total ] if cycle.nil? || scope.empty?
-
-    rated = AssessmentLevelRating
-      .where(cycle_id: cycle.cycle_id, person_id: assignment.person_id, framework_id: assignment.framework_id)
-      .within(scope)
-      .where.not(self_rated_frequency: nil)
-      .distinct.count(:capability_stable_id)
-    [ rated, total ]
+    cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
+    coverage = Assessments::LevelCoverage.new(
+      person_id: assignment.person_id, framework_id: assignment.framework_id, cycle_id: cycle&.cycle_id,
+      role_id: exploration.target_role_id, level_ordinal: exploration.target_level_ordinal
+    ).call
+    [ (coverage[:self_rated] if cycle), coverage[:total] ]
   end
 end

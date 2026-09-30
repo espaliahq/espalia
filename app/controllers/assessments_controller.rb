@@ -41,7 +41,7 @@ class AssessmentsController < ApplicationController
     # an exploration is a conversation between the two, not a list for the
     # wider chain.
     @explorations = Assessments::OpenExplorations.for(
-      @own_assignments.to_a + @report_assignments.to_a, progress_for: @own_assignments
+      @own_assignments.to_a + @report_assignments.to_a, progress_for: @own_assignments, open_cycles: @open_cycles
     )
 
     render Views::Assessments::IndexView.new(
