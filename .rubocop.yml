@@ -48,6 +48,8 @@ GrowthOs/RatingsMustBeRoleScoped:
   Include:
     - "app/**/*.rb"
     - "lib/**/*.rb"
+    - "lib/**/*.rake"
+    - "db/seeds.rb"
   # The projection writes the table; every read elsewhere must scope.
   Exclude:
     - "app/contexts/person_development/projections/current_assessment.rb"

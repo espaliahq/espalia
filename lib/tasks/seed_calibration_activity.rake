@@ -65,10 +65,10 @@ namespace :assessments do
       expectation_cells = FrameworkState::BehaviouralExpectation
         .pluck(:capability_id, :level_ordinal).to_set
 
-      manager_rated = AssessmentLevelRating.for_cycle(cycle.cycle_id)
+      manager_rated = AssessmentLevelRating.across_all_roles.for_cycle(cycle.cycle_id)
         .where.not(manager_rated_frequency: nil)
         .pluck(:person_id, :capability_stable_id, :level_ordinal).to_set
-      self_rated = AssessmentLevelRating.for_cycle(cycle.cycle_id)
+      self_rated = AssessmentLevelRating.across_all_roles.for_cycle(cycle.cycle_id)
         .where.not(self_rated_frequency: nil)
         .pluck(:person_id, :capability_stable_id, :level_ordinal).to_set
 
