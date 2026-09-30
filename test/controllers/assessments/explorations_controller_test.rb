@@ -52,7 +52,7 @@ class Assessments::ExplorationsControllerTest < ActionDispatch::IntegrationTest
     should "let the manager share it, naming the assessee" do
       declare(@manager_user)
 
-      assert_equal "You're exploring Product Manager · PM3 — Alex can see it now.", flash[:notice]
+      assert_equal "Shared Product Manager · PM3 with Alex as an exploration.", flash[:notice]
       assert_equal @manager.id, exploration.started_by_id
     end
 

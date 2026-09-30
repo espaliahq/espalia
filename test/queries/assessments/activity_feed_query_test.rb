@@ -167,6 +167,7 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
       assert_equal "Assessee", started.payload[:actor_name]
       assert_equal "Product Manager · PM3", started.payload[:role_label]
       assert_equal "Curious about discovery", started.payload[:note]
+      assert started.payload[:by_assessee]
       assert_equal({ as_role: @pm.role_id, as_level: 3 }, started.payload[:lens].symbolize_keys)
       assert_nil started.capability_stable_id
       assert_equal "Dana Lee", closed.payload[:actor_name]

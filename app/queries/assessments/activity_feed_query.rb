@@ -702,7 +702,8 @@ class Assessments::ActivityFeedQuery
       data = event.data.with_indifferent_access
       role_id, ordinal = targets[data[:exploration_id]]
       role = roles[role_id]
-      payload = data.merge(actor_name: names[data[:started_by_id] || data[:closed_by_id]])
+      actor_id = data[:started_by_id] || data[:closed_by_id]
+      payload = data.merge(actor_name: names[actor_id], by_assessee: actor_id == @assignment.person_id)
       payload[:role_label] = "#{role.name} · #{role.code}#{ordinal}" if role
       payload[:lens] = { as_role: role_id, as_level: ordinal } if role
       Entry.new(id: event.event_id, kind: EXPLORATION_KINDS[event.class], occurred_at: event_timestamp(event),

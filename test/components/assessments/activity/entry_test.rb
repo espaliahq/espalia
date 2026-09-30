@@ -106,10 +106,17 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
   context "declared explorations" do
     should "say who started exploring which role, with the note beneath" do
       html = render_entry(kind: "exploration_started", payload: {
-        actor_name: "Alex", role_label: "Product Manager · PM3", note: "Curious about discovery"
+        actor_name: "Alex", role_label: "Product Manager · PM3", note: "Curious about discovery", by_assessee: true
       })
       assert_includes html, "Alex started exploring Product Manager · PM3"
       assert_includes html, "Curious about discovery"
+    end
+
+    should "say the manager side shared it when they declared it" do
+      html = render_entry(kind: "exploration_started", payload: {
+        actor_name: "Morgan", role_label: "Product Manager · PM3", by_assessee: false
+      })
+      assert_includes html, "Morgan shared an exploration of Product Manager · PM3"
     end
 
     should "say who closed it and what came of it" do

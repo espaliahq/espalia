@@ -213,7 +213,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     when "delegation_revoked"    then "#{actor_name || 'Manager'} revoked #{delegate_name}'s delegation"
     when "reporting_manager_recorded" then "Reporting manager changed to #{manager_name}"
     when "rating_revisit_requested" then revisit_summary
-    when "exploration_started"   then "#{actor_name || 'Someone'} started exploring #{explored_role}"
+    when "exploration_started"   then exploration_started_summary
     when "exploration_closed"    then exploration_closed_summary
     else @entry.kind.humanize
     end
@@ -227,6 +227,16 @@ class Views::Assessments::Activity::Entry < Views::Base
     session = payload_value(:session_name).to_s.strip.presence
     base = "#{asker} asked #{rater} to revisit #{capability_label}"
     session ? "#{base} (#{session})" : base
+  end
+
+  # "Alex started exploring Product Manager · PM3" when the assessee declared
+  # it; "Morgan shared an exploration of …" when the manager side did — the
+  # exploration is always the assessee's.
+  def exploration_started_summary
+    actor = actor_name || "Someone"
+    return "#{actor} started exploring #{explored_role}" if payload_value(:by_assessee)
+
+    "#{actor} shared an exploration of #{explored_role}"
   end
 
   # "Morgan closed the exploration of Product Manager · PM3 — not now"
