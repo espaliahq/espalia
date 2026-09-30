@@ -93,9 +93,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       # Pass 5: Assign (or reassign) to framework roles/levels
       assign_to_framework(result, touched_person_ids)
 
-      # Update last_synced_at
-      config.last_synced_at = Time.current
-      tenant.save!
+      stamp_last_synced
     end
 
     result
@@ -109,6 +107,16 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   private
+
+  # `config` was read when the sync started; saving it would write back the
+  # role mappings as they stood then, reverting any an admin changed while
+  # the sync ran. Stamp a freshly locked copy instead.
+  def stamp_last_synced
+    tenant.with_lock do
+      tenant.hris_config.last_synced_at = Time.current
+      tenant.save!
+    end
+  end
 
   # @return [Hris::Hibob::Client]
   def client
@@ -292,7 +300,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     framework = FrameworkState::Framework.first
     return if framework.nil?
 
-    title_to_mapping = build_title_to_mapping
+    title_to_mapping = config.title_lookup
     roles_by_code = framework_roles_by_code
 
     with_hris_event_context do
@@ -319,19 +327,6 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
   end
 
-  # Builds a normalized-title → HrisRoleMapping lookup for the tenant.
-  #
-  # @return [Hash{String => HrisRoleMapping}]
-  def build_title_to_mapping
-    lookup = {}
-    config.role_mappings.each do |mapping|
-      mapping.normalized_hris_titles.each do |title|
-        lookup[title] = mapping
-      end
-    end
-    lookup
-  end
-
   # Preloads all framework roles keyed by code for fast lookup.
   #
   # @return [Hash{String => FrameworkState::Role}]
@@ -353,7 +348,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       return
     end
 
-    mapping = title_to_mapping[person.job_title.to_s.downcase.strip]
+    mapping = title_to_mapping[HrisRoleMapping.normalize_title(person.job_title)]
     if mapping.nil?
       result[:unmapped_titles] << person.job_title
       return

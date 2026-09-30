@@ -197,6 +197,20 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
       assert_not_nil @tenant.hris_config.last_synced_at
     end
+
+    should "keep a role mapping an admin changed while the sync ran" do
+      adapter = build_adapter(@fixture["employees"])
+
+      # Another request edits the mappings after the adapter read the config.
+      elsewhere = Tenant.find(@tenant.id)
+      elsewhere.hris_config.map_title("Analytics Lead", framework_role_code: "AE", level_ordinal: 3)
+      elsewhere.save!
+
+      adapter.sync_people
+
+      assert_equal "AE", @tenant.reload.hris_config.mapping_for("Analytics Lead")&.framework_role_code
+      assert_not_nil @tenant.hris_config.last_synced_at
+    end
   end
 
   context "#sync_people framework assignment (Pass 5)" do
