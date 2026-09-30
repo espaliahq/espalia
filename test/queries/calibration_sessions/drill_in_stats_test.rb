@@ -39,6 +39,10 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
                       framework_id: @framework_id, name: "Thinking")
     @cap = create(:framework_capability, tenant: @tenant,
                   category_id: category.category_id, name: "Strategic Thinking")
+    [ @engineer, @manager_role ].each do |role|
+      create(:framework_capability_role_binding, tenant: @tenant,
+             capability_id: @cap.capability_id, role_id: role.role_id)
+    end
     @exp_l3 = create(:framework_behavioural_expectation, tenant: @tenant,
                      capability_id: @cap.capability_id, level_ordinal: 3,
                      description: "Identifies root causes and weighs trade-offs.")
@@ -100,6 +104,13 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     assert_equal "consistent", dot[:frequency]
     assert_equal "occasional", dot[:self_frequency]
     assert dot[:backed]
+  end
+
+  should "ignore ratings outside the assessed role" do
+    rating = create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3)
+
+    mia_row = stats(stable_id: rating.capability_stable_id)[:rows].find { |row| row[:rater_id] == @em_1.id }
+    assert_nil mia_row[:people][3].sole[:frequency]
   end
 
   should "render unrated members as frequency-nil dots" do

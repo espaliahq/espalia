@@ -262,7 +262,7 @@ class CalibrationHistorySeed
   # them (recorded reporting manager first — the move above is exactly why
   # the live chart is not authoritative here).
   def carried_by_rater(cycle)
-    ratings = AssessmentLevelRating.for_cycle(cycle.cycle_id)
+    ratings = AssessmentLevelRating.across_all_roles.for_cycle(cycle.cycle_id)
       .where(manager_rating_source: "seeded")
       .where.not(manager_rated_frequency: nil)
       .to_a

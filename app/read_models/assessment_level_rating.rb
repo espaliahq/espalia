@@ -55,6 +55,51 @@ class AssessmentLevelRating < ApplicationRecord
   scope :seeded, -> { where(source: "seeded") }
   scope :human_entered, -> { where(source: "human") }
 
+  # Ratings inside one role's scope, or inside each person's own scope
+  # (ADR-22). Every reader that counts or scores ratings goes through this
+  # or through {.across_all_roles}; the `GrowthOs/RatingsMustBeRoleScoped`
+  # cop enforces it.
+  #
+  # @param scope [Assessments::RoleScope, Hash{String => Assessments::RoleScope}]
+  #   one scope, or person_id => that person's scope for a cohort read
+  # @return [ActiveRecord::Relation]
+  def self.within(scope)
+    return within_cells(scope.cells) unless scope.is_a?(Hash)
+
+    groups = scope.group_by { |_, role_scope| role_scope }
+      .reject { |role_scope, _| role_scope.empty? }
+    return none if groups.empty?
+
+    groups.map { |role_scope, pairs| within_cells(role_scope.cells).where(person_id: pairs.map(&:first)) }
+      .reduce(:or)
+  end
+
+  # Every rating regardless of role — for readers whose answer is about the
+  # person rather than any one role: activity history, cross-cycle seeding,
+  # a cell a caller has already named. Says so at the call site.
+  #
+  # @return [ActiveRecord::Relation]
+  def self.across_all_roles
+    all
+  end
+
+  # @param cells [Set<Array(String, Integer)>]
+  # @return [ActiveRecord::Relation]
+  #
+  # Not `where([:capability_stable_id, :level_ordinal] => cells)`: Rails 8.1
+  # renders that as one OR per cell and an empty list as `WHERE ()`.
+  def self.within_cells(cells)
+    return none if cells.empty?
+
+    stable_ids, ordinals = cells.to_a.transpose
+    where(
+      "(assessment_level_ratings.capability_stable_id, assessment_level_ratings.level_ordinal) " \
+      "IN (SELECT * FROM unnest(ARRAY[?]::uuid[], ARRAY[?]::integer[]))",
+      stable_ids, ordinals
+    )
+  end
+  private_class_method :within_cells
+
   # Whether the self side still shows a carried-forward (seeded) value the
   # person hasn't confirmed or changed. Per-side — the row-level `source`
   # flips to "human" on any human touch and can't answer this.

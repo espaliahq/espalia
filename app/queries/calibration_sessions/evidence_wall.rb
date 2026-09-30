@@ -122,12 +122,16 @@ class CalibrationSessions::EvidenceWall
   end
 
   # The manager-rated frequency each linked cell carries in the session's
-  # cycle — the stamp beside every wall item.
+  # cycle — the stamp beside every wall item. Read through each person's
+  # assessed role: feedback on a cell their role doesn't read keeps its place
+  # on the wall, but it carries no grade to norm against.
   def frequencies
     @frequencies ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .for_capability(@capability_stable_id)
-      .where(person_id: calibrant_ids)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: calibrant_ids
+      ))
       .pluck(:person_id, :level_ordinal, :manager_rated_frequency, :manager_rating_source)
       .to_h do |person_id, ordinal, frequency, source|
         [ [ person_id, ordinal ], { frequency: frequency, carried: source == "seeded" } ]

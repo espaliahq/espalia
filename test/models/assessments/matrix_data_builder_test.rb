@@ -60,6 +60,18 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
     build_self_data[:scoring][:capability_scores][@capability.stable_id]
   end
 
+  context "ratings outside the assessed role" do
+    should "ignore ratings outside the assessed role" do
+      AssessmentLevelRating.where(person_id: @person_id).update_all(manager_rated_frequency: nil)
+      create_out_of_scope_rating(person_id: @person_id, cycle: @cycle, level_ordinal: 2,
+        self_rated_frequency: nil, aligned_frequency: nil)
+
+      data = build_completion(:manager)
+      assert_nil data[:manager_scoring], "a rating on another role's capability is not a manager perspective"
+      assert_equal 1, data[:rated_cells]
+    end
+  end
+
   context "the binding facts on the capability's score" do
     should "carry the weight and no Required flag by default" do
       score = first_capability_score

@@ -66,6 +66,19 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Start self-assessment"
     end
 
+    should "ignore ratings outside the assessed role" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create_out_of_scope_rating(person_id: @person.id, cycle: AssessmentCycle.find_by!(cycle_id: @cycle_id),
+          level_ordinal: 2)
+      end
+
+      sign_in @user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Start self-assessment"
+    end
+
     should "redirect unauthenticated users to sign in" do
       get assessments_path
       assert_redirected_to new_user_session_path

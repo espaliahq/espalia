@@ -347,23 +347,11 @@ class AssessmentsController < ApplicationController
     # explicitly cleared — provenance "human"; nil provenance counts as
     # human for legacy rows). The view derives the tri+1-state from these:
     # Complete / In progress (human touch) / To confirm (all carried) /
-    # Not started.
-    rated = AssessmentLevelRating
-      .where(cycle_id: cycle_ids, person_id: person_ids)
-      .group(:cycle_id, :person_id)
-      .pluck(
-        :cycle_id, :person_id,
-        Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
-        Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)"),
-        Arel.sql("COUNT(*) FILTER (WHERE self_rating_source = 'human' " \
-                 "OR (self_rated_frequency IS NOT NULL AND self_rating_source IS NULL))"),
-        Arel.sql("COUNT(*) FILTER (WHERE manager_rating_source = 'human' " \
-                 "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL))")
-      )
-      .each_with_object({}) do |(cid, pid, self_n, mgr_n, self_h, mgr_h), h|
-        h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,
-                            self_human: self_h.positive?, manager_human: mgr_h.positive? }
-      end
+    # Not started. Only the assessed role's cells count: rating a cell the
+    # role doesn't read hasn't started this assessment.
+    rated = open_cycles.group_by { |_, cycle| cycle }.each_with_object({}) do |(cycle, entries), h|
+      h.merge!(card_rating_counts(cycle, entries.map { |(_, person_id), _| person_id }))
+    end
 
     open_cycles.each_with_object({}) do |((framework_id, person_id), cycle), statuses|
       prog = progress[[ cycle.cycle_id, person_id ]]
@@ -378,6 +366,31 @@ class AssessmentsController < ApplicationController
         manager_human: any[:manager_human] || false
       }
     end
+  end
+
+  # One cycle's per-person "any" / "human" flags for each rating side.
+  #
+  # @return [Hash{Array(String, String) => Hash}]
+  def card_rating_counts(cycle, person_ids)
+    AssessmentLevelRating
+      .where(cycle_id: cycle.cycle_id)
+      .within(Assessments::RoleScope.for_people(
+        cycle_id: cycle.cycle_id, framework_id: cycle.framework_id, person_ids: person_ids
+      ))
+      .group(:cycle_id, :person_id)
+      .pluck(
+        :cycle_id, :person_id,
+        Arel.sql("COUNT(*) FILTER (WHERE self_rated_frequency IS NOT NULL)"),
+        Arel.sql("COUNT(*) FILTER (WHERE manager_rated_frequency IS NOT NULL)"),
+        Arel.sql("COUNT(*) FILTER (WHERE self_rating_source = 'human' " \
+                 "OR (self_rated_frequency IS NOT NULL AND self_rating_source IS NULL))"),
+        Arel.sql("COUNT(*) FILTER (WHERE manager_rating_source = 'human' " \
+                 "OR (manager_rated_frequency IS NOT NULL AND manager_rating_source IS NULL))")
+      )
+      .each_with_object({}) do |(cid, pid, self_n, mgr_n, self_h, mgr_h), h|
+        h[[ cid, pid ]] = { self_any: self_n.positive?, manager_any: mgr_n.positive?,
+                            self_human: self_h.positive?, manager_human: mgr_h.positive? }
+      end
   end
 
   # Cell-level focus param. Only meaningful when paired with `?capability=`;

@@ -127,11 +127,8 @@ class Reporting::CapabilityAttainment
     role_ids = enrollments.map(&:role_id).uniq
 
     @roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
-    @bindings_by_role = FrameworkState::CapabilityRoleBinding
-      .joins(:capability)
-      .where(role_id: role_ids, framework_capabilities: { status: "active" })
-      .includes(:capability)
-      .group_by(&:role_id)
+    @role_scopes = Assessments::RoleScope.for_roles(role_ids: role_ids, framework_id: @cycle.framework_id)
+    @bindings_by_role = @role_scopes.transform_values(&:bindings).reject { |_, bindings| bindings.empty? }
     @ordinals_by_role = FrameworkState::Level.where(role_id: role_ids)
       .pluck(:role_id, :ordinal)
       .group_by(&:first).transform_values { |pairs| pairs.map(&:last).sort }
@@ -140,7 +137,8 @@ class Reporting::CapabilityAttainment
     @categories = FrameworkState::CapabilityCategory.where(category_id: category_ids).to_a
 
     @ratings_by_person = AssessmentLevelRating
-      .where(cycle_id: @cycle.cycle_id, person_id: enrollments.map(&:person_id))
+      .where(cycle_id: @cycle.cycle_id)
+      .within(enrollments.to_h { |enrollment| [ enrollment.person_id, @role_scopes.fetch(enrollment.role_id) ] })
       .group_by(&:person_id)
   end
 
@@ -310,9 +308,7 @@ class Reporting::CapabilityAttainment
   #
   # @return [Set<Array(String, Integer)>]
   def expectation_cells
-    @expectation_cells ||= FrameworkState::BehaviouralExpectation.stable_cells(
-      @bindings_by_role.values.flatten.map(&:capability_id).uniq
-    )
+    @expectation_cells ||= @role_scopes.values.map(&:cells).reduce(Set.new, :|)
   end
 
   # Constant across the whole call — memoized so per-participant scoring

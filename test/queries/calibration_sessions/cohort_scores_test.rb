@@ -123,6 +123,15 @@ class CalibrationSessions::CohortScoresTest < ActiveSupport::TestCase
                  "the room calibrates raters; the assessee's private input stays out"
   end
 
+  should "ignore ratings outside the assessed role" do
+    rate(@r1, @cap_a, "consistent")
+    create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3,
+      manager_rating_source: "seeded")
+
+    ivy = dot_for(@r1)
+    assert_equal [ 1, 2, 0 ], ivy.values_at(:rated, :total, :carried_count)
+  end
+
   should "gate the score below the unlock threshold, saying how far along" do
     # 0 of 2 rated — below the 50% unlock (target 1).
     pax = dot_for(@r3)

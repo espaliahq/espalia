@@ -126,6 +126,14 @@ class CalibrationSessions::OverviewStats
       .pluck(:person_id, :level_ordinal).to_h
   end
 
+  # person_id => the cells their assessed role reads (ADR-22), so a rating on
+  # another role's capability never enters a rater's tendency.
+  def role_scopes
+    @role_scopes ||= Assessments::RoleScope.for_people(
+      cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: rater_for.keys
+    )
+  end
+
   # One entry per manager-rated at-level cell:
   # { person_id:, rater_id:, capability_stable_id:, frequency:, value:,
   #   self_value:, carried: }
@@ -139,7 +147,7 @@ class CalibrationSessions::OverviewStats
   def rated_cells
     @rated_cells ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
-      .where(person_id: rater_for.keys)
+      .within(role_scopes)
       .where(level_ordinal: assessed_ordinals.values.uniq)
       .where.not(manager_rated_frequency: nil)
       .pluck(:person_id, :level_ordinal, :capability_stable_id,

@@ -89,7 +89,7 @@ class CalibrationSessions::CohortScores
     scores = engine.capability_scores_at(dot[:ordinal])
     rows = bindings_for(enrollment[person_id][1]).filter_map do |binding|
       capability = binding.capability
-      next unless expectation_cells.include?([ capability.stable_id, dot[:ordinal] ])
+      next unless role_scope(enrollment[person_id][1]).include?(capability.stable_id, dot[:ordinal])
 
       score = scores[capability.stable_id]
       next unless score&.dig(:scorable)
@@ -128,7 +128,7 @@ class CalibrationSessions::CohortScores
       next no_snapshot_dot(person_id, ordinal) unless role_id
 
       total = eligible_stable_ids(role_id, ordinal).size
-      rated, carried = at_level_rated(person_id, role_id, ordinal)
+      rated, carried = at_level_rated(person_id, ordinal)
       unlock_target = (total * COVERAGE_UNLOCK).ceil
       # A role with zero at-level cells has nothing to score — gated with
       # total 0, which the view words as "no behaviours at this level"
@@ -195,7 +195,7 @@ class CalibrationSessions::CohortScores
         categories: categories,
         person_level: ordinal,
         all_level_ordinals: ladder_for(role_id),
-        expectation_cells: expectation_cells,
+        expectation_cells: role_scope(role_id).cells,
         perspective: :manager_only,
         thresholds: thresholds
       )
@@ -204,10 +204,12 @@ class CalibrationSessions::CohortScores
 
   # ALL levels, not just at-level: below-level cells feed the ratio's
   # assumed-consistent default exactly as the assessment hero computes it.
+  # Each person is read through their snapshot role's cells (ADR-22).
   def ratings_by_person
     @ratings_by_person ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
-      .where(framework_id: @session.framework_id, person_id: enrollment.keys)
+      .where(framework_id: @session.framework_id)
+      .within(enrollment.to_h { |person_id, (_, role_id)| [ person_id, role_scope(role_id) ] })
       .group_by(&:person_id)
   end
 
@@ -218,47 +220,34 @@ class CalibrationSessions::CohortScores
   # not inflate `rated` past what the score is computed from.
   def eligible_stable_ids(role_id, ordinal)
     @eligible_stable_ids ||= {}
-    @eligible_stable_ids[[ role_id, ordinal ]] ||= bindings_for(role_id)
-      .map { |binding| binding.capability.stable_id }
-      .select { |stable_id| expectation_cells.include?([ stable_id, ordinal ]) }
-      .to_set
+    @eligible_stable_ids[[ role_id, ordinal ]] ||= role_scope(role_id).at_level(ordinal).capability_stable_ids
   end
 
-  # [rated, carried] counts over the person's ELIGIBLE at-level cells.
+  # [rated, carried] counts over the person's at-level cells — already the
+  # eligible ones, since ratings_by_person reads within the role scope.
   # Carried counts as rated (a carried rating is the rater's rating); it is
   # also reported separately so the dot can wear the disclosure.
-  def at_level_rated(person_id, role_id, ordinal)
-    eligible = eligible_stable_ids(role_id, ordinal)
+  def at_level_rated(person_id, ordinal)
     rows = ratings_by_person.fetch(person_id, []).select do |rating|
-      rating.level_ordinal == ordinal &&
-        rating.manager_rated_frequency.present? &&
-        eligible.include?(rating.capability_stable_id)
+      rating.level_ordinal == ordinal && rating.manager_rated_frequency.present?
     end
     [ rows.size, rows.count { |rating| rating.manager_rating_source == "seeded" } ]
   end
 
   def bindings_for(role_id)
-    @bindings_for ||= {}
-    @bindings_for[role_id] ||= FrameworkState::CapabilityRoleBinding
-      .includes(:capability)
-      .where(role_id: role_id)
-      .select { |binding| binding.capability&.status == "active" }
+    role_scope(role_id).bindings
+  end
+
+  def role_scope(role_id)
+    @role_scopes ||= Assessments::RoleScope.for_roles(
+      role_ids: enrollment.values.map(&:last), framework_id: @session.framework_id
+    )
+    @role_scopes[role_id] || Assessments::RoleScope.empty(framework_id: @session.framework_id)
   end
 
   def categories
     @categories ||= FrameworkState::CapabilityCategory
       .where(framework_id: @session.framework_id).to_a
-  end
-
-  # Every (capability_stable_id, level_ordinal) cell with an expectation in
-  # the framework — the coverage denominator AND the engine's band shape,
-  # from the one query the assessment hero's numbers rest on.
-  def expectation_cells
-    @expectation_cells ||= FrameworkState::BehaviouralExpectation.stable_cells(
-      FrameworkState::Capability.joins(:category)
-        .merge(FrameworkState::CapabilityCategory.where(framework_id: @session.framework_id))
-        .pluck(:capability_id)
-    )
   end
 
   # The ROLE's ladder, as the assessment hero scores it — not the framework's

@@ -70,7 +70,7 @@ class Assessments::RecentActivityQuery
   private
 
   def rating_relation(column)
-    AssessmentLevelRating.where(person_id: @person_ids).where.not(column => nil)
+    AssessmentLevelRating.across_all_roles.where(person_id: @person_ids).where.not(column => nil)
   end
 
   def progress_relation(column)

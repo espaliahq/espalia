@@ -14,6 +14,7 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
     @caps = Array.new(3) do
       cap = create(:framework_capability, category_id: category.category_id)
       create(:framework_capability_role_binding, capability_id: cap.capability_id, role_id: @role.role_id)
+      create(:framework_behavioural_expectation, capability_id: cap.capability_id, level_ordinal: 2)
       cap
     end
 
@@ -125,12 +126,50 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_equal 1, result.funnel.manager_done
     end
 
+    should "leave a bound capability with no expectation at the level out of the target" do
+      category = FrameworkState::CapabilityCategory.find_by!(framework_id: @framework_id)
+      unwritten = create(:framework_capability, category_id: category.category_id)
+      create(:framework_capability_role_binding, capability_id: unwritten.capability_id, role_id: @role.role_id)
+      person = create(:person, tenant: @tenant, name: "Complete")
+      enroll(person)
+      @caps.each { |cap| rate(person, cap, self_rated_frequency: "consistent") }
+
+      participant = result.participants.sole
+      assert_equal 3, participant.expected_count
+      assert participant.self_done, "agrees with Assessments::LevelCoverage"
+    end
+
     should "not count self-done when only some capabilities are rated" do
       person = create(:person, tenant: @tenant, name: "Partial")
       enroll(person)
       rate(person, @caps.first, self_rated_frequency: "consistent")
 
       assert_equal 0, result.funnel.self_done
+    end
+  end
+
+  context "ratings outside the assessed role" do
+    setup do
+      @person = create(:person, tenant: @tenant, name: "Explorer")
+      enroll(@person, enrolled_at: 30.days.ago)
+      @caps.first(2).each { |cap| rate(@person, cap, self_rated_frequency: "consistent") }
+    end
+
+    should "ignore ratings outside the assessed role" do
+      create_out_of_scope_rating(person_id: @person.id, cycle: @cycle, level_ordinal: 2)
+
+      participant = result.participants.first
+      assert_equal 2, participant.self_count
+      assert_equal 0, participant.manager_count
+      assert_not participant.self_done
+    end
+
+    should "still count them as activity for the at-risk check" do
+      @cycle.update!(planned_end_at: nil)
+      AssessmentLevelRating.update_all(last_self_rated_at: 30.days.ago)
+      create_out_of_scope_rating(person_id: @person.id, cycle: @cycle, level_ordinal: 2)
+
+      assert_not result.participants.first.at_risk
     end
   end
 

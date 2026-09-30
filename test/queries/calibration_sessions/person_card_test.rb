@@ -35,10 +35,14 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
            capability_id: @cap.capability_id, level_ordinal: 3,
            description: "Identifies root causes.")
 
+    @role = create(:framework_role, tenant: @tenant)
+    create(:framework_capability_role_binding, tenant: @tenant,
+           capability_id: @cap.capability_id, role_id: @role.role_id)
+
     # The assignment rows already exist — the PD command above projected them.
     [ @report, @peer ].each do |person|
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: person.id, level_ordinal: 3)
+             person_id: person.id, level_ordinal: 3, role_id: @role.role_id)
     end
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
            person_id: @report.id, framework_id: @framework_id,
@@ -119,6 +123,8 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
       create(:framework_level, tenant: @tenant, role_id: role.role_id,
              ordinal: ordinal, code: "E#{ordinal}")
     end
+    create(:framework_capability_role_binding, tenant: @tenant,
+           capability_id: @cap.capability_id, role_id: role.role_id)
     AssessmentCycleEnrollment.find_by(cycle_id: @cycle.cycle_id, person_id: @report.id)
       .update!(role_id: role.role_id)
 
@@ -146,6 +152,16 @@ class CalibrationSessions::PersonCardTest < ActiveSupport::TestCase
     assert_equal card[:evidence_by_level][3], card[:evidence],
                  "the at-level list is the assessed level's slice"
     assert_not card[:self_withheld]
+  end
+
+  should "ignore ratings outside the assessed role" do
+    rating = create_out_of_scope_rating(person_id: @report.id, cycle: @cycle, level_ordinal: 3)
+    stable_id = rating.capability_stable_id
+    drill_in = CalibrationSessions::DrillInStats.new(session: @session, capability_stable_id: stable_id).call
+
+    card = CalibrationSessions::PersonCard.new(session: @session, stats: drill_in, capability_stable_id: stable_id)
+      .for(@report.id)
+    assert_empty card[:ratings_by_level]
   end
 
   should "withhold per-level self ratings from a viewer outside the entitlement set" do

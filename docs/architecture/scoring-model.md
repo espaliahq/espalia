@@ -36,6 +36,10 @@ f(b, o) = effective frequency of capability b at level o
              0.0 if o >= person_level (the assessed level and above must be rated)
   person_level is the cycle's ASSESSED level (the enrollment snapshot), not
   the person's live assignment level — see ADR-19.
+  Home-level floor (ADR-22): when a person is read against another role or
+  level (a lens), the default is 1.0 only if o < the level being read AND
+  o < home_level. Reading an E2 as EM4 must not assume L3 for free. When the
+  lens is the home role the two levels are equal and nothing changes.
 
 band(o) = Σ weight over bindings that carry a behavioural expectation at level o
 

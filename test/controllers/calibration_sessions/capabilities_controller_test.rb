@@ -170,7 +170,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         create(:person_framework_assignment, tenant: @tenant,
                person_id: seconded.id, framework_id: @cycle.framework_id)
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: seconded.id, level_ordinal: 3)
+               person_id: seconded.id, level_ordinal: 3, role_id: @role_id)
         create(:manager_assessment_delegation, tenant: @tenant,
                person_id: seconded.id, framework_id: @cycle.framework_id,
                delegate_person_id: @em.id, granted_by_id: stranger_head.id)
@@ -227,7 +227,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         create(:person_framework_assignment, tenant: @tenant,
                person_id: pax.id, framework_id: @cycle.framework_id)
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: pax.id, level_ordinal: 3)
+               person_id: pax.id, level_ordinal: 3, role_id: @role_id)
         create(:calibration_session_member, :participant, tenant: @tenant,
                session: @session, person_id: quinn.id)
         create(:calibration_session_member, tenant: @tenant,
@@ -444,7 +444,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         create(:person_framework_assignment, tenant: @tenant,
                person_id: seconded.id, framework_id: @cycle.framework_id)
         create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-               person_id: seconded.id, level_ordinal: 3)
+               person_id: seconded.id, level_ordinal: 3, role_id: @role_id)
         create(:manager_assessment_delegation, tenant: @tenant,
                person_id: seconded.id, framework_id: @cycle.framework_id,
                delegate_person_id: @em.id, granted_by_id: stranger_head.id)
@@ -535,6 +535,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     handler.add_capability_category(framework_id, category_id, "Thinking")
     handler.add_capability(framework_id, capability_id, SecureRandom.uuid_v7,
                            category_id, "Strategic Thinking")
+    handler.create_capability_role_binding(framework_id, SecureRandom.uuid_v7, capability_id, role_id)
     handler.set_behavioural_expectation(framework_id, SecureRandom.uuid_v7,
                                         SecureRandom.uuid_v7, capability_id, 3,
                                         "Identifies root causes.")
@@ -544,6 +545,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     handler.publish_version(framework_id, "seed")
 
     @cap = FrameworkState::Capability.find_by!(capability_id: capability_id)
+    @role_id = role_id
     [ framework_id, role_id, level_id ]
   end
 
@@ -575,7 +577,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       create(:person_framework_assignment, tenant: @tenant,
              person_id: other_report.id, framework_id: @cycle.framework_id)
       create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
-             person_id: other_report.id, level_ordinal: 3)
+             person_id: other_report.id, level_ordinal: 3, role_id: @role_id)
       create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
              person_id: other_report.id, framework_id: @cycle.framework_id,
              capability_stable_id: @cap.stable_id, level_ordinal: 3,

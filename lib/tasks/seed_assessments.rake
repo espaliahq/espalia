@@ -119,7 +119,7 @@ namespace :assessments do
       bindings_by_name = bindings.index_by { |b| b.capability.name }
       bindings_for_self_ratings = bindings.limit(3)
 
-      existing_ratings = AssessmentLevelRating.for_person(report_person.id)
+      existing_ratings = AssessmentLevelRating.across_all_roles.for_person(report_person.id)
         .for_framework(framework.framework_id).for_cycle(cycle_id).self_rated
       if existing_ratings.exists?
         puts "Self-ratings already exist in cycle. Skipping."

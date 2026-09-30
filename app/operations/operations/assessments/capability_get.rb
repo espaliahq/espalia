@@ -100,7 +100,7 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   def ratings_by_level(cycle, hide_others:)
     return Hash.new(EMPTY_RATING) unless cycle
 
-    rows = AssessmentLevelRating.where(
+    rows = AssessmentLevelRating.across_all_roles.where(
       cycle_id: cycle.cycle_id,
       person_id: assignment.person_id,
       capability_stable_id: capability.stable_id

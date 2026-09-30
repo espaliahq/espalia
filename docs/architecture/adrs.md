@@ -213,7 +213,7 @@ The aggregate tracks pending-mapping debt via `@archives_needing_mapping` (popul
 **Consequences:**
 - This **reverses migrate-forward for completed cycles** (migrate-forward remains correct for *open* cycles). `CurrentAssessment` `CODE_VERSION` was bumped to 3; the change requires a rebuild (`REBUILD_ON_DEPLOY=person_development/current_assessment`), which also retro-corrects any completed cycles earlier code over-migrated.
 - Frozen completed-cycle ratings keep their as-at-completion `stable_id`s, so after a future `evolved` publish they won't match the current grid — a completed cycle then needs **as-at-completion rendering** to display correctly. The faithful mechanism is **replay-to-the-`FullAlignmentCompleted`-event position** (its global position reconstructs the framework graph + un-migrated ratings + role/level as they were). The captured `aligned_framework_version` is a reporting convenience, NOT sufficient for full fidelity — shape-preserving edits (renames, illustrations, bindings) apply unversioned, so only replay is exact.
-- **Deferred (not built):** the as-at-completion renderer itself, and **role-aware rendering for horizontal moves** (rendering a closed cycle against its snapshot *role*'s matrix + un-orphaning ratings). Rare in alpha.
+- **Deferred (not built):** the as-at-completion renderer itself. **Role-aware rendering for horizontal moves** (rendering a closed cycle against its snapshot *role*'s matrix + un-orphaning ratings) is resolved by ADR-22: a role reads the ratings its scope contains, so nothing needs re-keying.
 
 Shipped in PRs #139, #140, #141, #142.
 
@@ -251,3 +251,24 @@ The gate exists because without one, next-level credit masks current-level gaps 
 - The hero, settings copy and the calibration cohort axis read the new scale (#412); capability and category altitudes (#413) and the in-surface explanation (#414) follow. The framework-wide deficit tolerance is now nullable (nil = system default), so the default lives in one constant and a rebuild reproduces the read model; the migration nils only rows whose stream never configured a tolerance.
 - A tenant that had explicitly configured `mastery_threshold` or `meeting_expectation_threshold` under the old ratio keeps those numbers, which now mean something different (1.15 is 15% into the next band); none existed in production at cut-over, and the settings page shows any such value as custom with the new default beside it.
 - The state-word thresholds keep their names; tests that pinned the old arithmetic (1.33, 1.083) were rewritten around the scale's invariants (1.0 / 1.5 / 2.0 at every level).
+
+## ADR-22: A rating is a fact about the person at a capability × level; roles choose which facts count
+
+**Decision:** A rating belongs to the person at one `(capability_stable_id, level_ordinal)` cell, never to a role. A role is a *reader*: its bindings and expectations define which cells count when you read the person as that role (`Assessments::RoleScope`). Manager ratings are disclosed to the assessee per role — a cell's manager and aligned values become visible only once alignment has started against a role whose scope contains it.
+
+- **One truth per cell.** `BehaviouralExpectation` is canonical per capability × ordinal; role illustrations bring it to life and are never what is rated. A rating made while reading another role's examples on a shared cell *is* the home rating. There is no second rating scope for reading a person against another role or level (a *lens*).
+- **Scope belongs to the reader, never the write.** Every reader filters by the role it is reading for, through `AssessmentLevelRating.within(scope)`; an unscoped read announces itself with `.across_all_roles`. A `via_role_id` stamp may record where a rating was made, for provenance only — it never decides whether the rating counts.
+- **The guard is mechanical.** One `RoleScope`, one `.within`, the `GrowthOs/RatingsMustBeRoleScoped` cop, and an "ignores ratings outside the assessed role" test per reader.
+- **Disclosure, freeze and completion are per role.** Starting alignment against a role discloses and freezes that role's cells; a cell is frozen once any started role's scope contains it; "Mark alignment complete" counts only that role's current-level cells.
+- **Writes still need an open cycle.** Between cycles a lens is read-only.
+- **The lens is private; declaring is shared.** Reading a person through another role writes nothing and notifies nobody. Starting alignment against it, or declaring an exploration, is what the other party sees.
+- **Self ratings and evidence keep today's visibility.** Neither is gated on alignment now, and a lens does not change that.
+- **Below-level assumption uses the home level.** Scoring assumes "consistently" only below *both* the level being read and the home level, so reading an E2 as EM4 does not grant L3 for free.
+
+**Why:** Ratings were always keyed without a role (`assessment_level_ratings` is `(cycle, person, framework, capability_stable_id, level_ordinal)`), so a role was already a reader in practice — but several readers never said which role they read for and counted raw rows filtered by ordinal alone. The first out-of-scope cell leaks into the home record, the cohort report and the calibration room; a framework migration that re-keys a rating onto a capability the role no longer binds produces one today. An earlier design gave a lens its own seeded rating scope so reading against PM examples couldn't move the E3 record; since ratings are against the expectation, there was nothing to protect, and a second scope would have fought the PersonDevelopment aggregate's single-current-cycle invariant.
+
+**Consequences:**
+- Out-of-scope cells are rated into the current cycle like any other, carried forward by ADR-20 seeding per cell, and need no reconciliation. A later role move starts warm.
+- Every rating reader must choose a scope; the cop fails CI on one that doesn't. Write-side code (the projection, seeding, the migration sync) and natural-key single-cell reads are exempt by construction.
+- Resolves ADR-19's deferred *role-aware rendering for horizontal moves*: a cycle is rendered against a role by scoping its ratings to that role, not by re-keying them.
+- Built in phases (plan: [role-lens-plan.md](../notes/role-lens-plan.md)): the scope guard (#439), the lens, per-role alignment and disclosure (a `CurrentAssessment` rebuild), and declared explorations.
