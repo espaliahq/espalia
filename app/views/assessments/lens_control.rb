@@ -45,7 +45,7 @@ class Views::Assessments::LensControl < Views::Base
           span(class: "text-[10px] leading-none", aria_hidden: "true") { "▾" }
         end
       end
-      dropdown.menu(width: "w-64") do
+      dropdown.menu(width: "w-80 max-w-[calc(100vw-2rem)]") do
         ladder
         div(class: "my-1 border-t border-gray-100 dark:border-gray-700", role: "none")
         back_home_item unless @lens.home?
@@ -74,7 +74,7 @@ class Views::Assessments::LensControl < Views::Base
       span(class: "w-4 shrink-0 text-gray-500", aria_hidden: "true") { current ? "✓" : "" }
       span(class: "font-mono text-xs w-10 shrink-0") { "#{@lens.role.code}#{level.ordinal}" }
       whitespace
-      span(class: "min-w-0 truncate") { level.title }
+      span(class: "min-w-0") { level.title }
       if @lens.home_role? && level.ordinal == @lens.home_level.ordinal
         whitespace
         home_note
@@ -83,7 +83,7 @@ class Views::Assessments::LensControl < Views::Base
   end
 
   def home_note
-    span(class: "ml-auto shrink-0 text-[11px] text-gray-500 dark:text-gray-400") do
+    span(class: "ml-auto shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-gray-400") do
       @whose == "your" ? "your level" : "#{@whose} level"
     end
   end

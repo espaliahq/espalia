@@ -35,16 +35,27 @@ module Views::Assessments::HeaderChrome
                                                whose: lens_whose(assessee_name))
   end
 
-  # The record's status pill, or — while a lens is on — the line saying what
-  # the page is read against and how to get back.
-  def render_status_or_lens_banner(assessee_name: nil, **pill)
+  # The record's status pill — withheld while a lens is on, where the lens
+  # banner takes its place (the pill describes the record's lifecycle, which
+  # a lens neither reads nor changes).
+  def render_status_pill_unless_lens(**pill)
+    render_status_pill(**pill) unless off_record_lens
+  end
+
+  # The line saying what the page is read against and how to get back, on
+  # its own row under the header so it never pushes the header's actions
+  # out of line.
+  def render_lens_banner(assessee_name: nil)
+    lens = off_record_lens
+    return unless lens
+
+    render Views::Assessments::LensBanner.new(lens: lens, assessment_id: @assignment.id,
+                                              assessee_name: assessee_name)
+  end
+
+  def off_record_lens
     lens = @matrix_data[:lens]
-    if lens && !lens.home?
-      render Views::Assessments::LensBanner.new(lens: lens, assessment_id: @assignment.id,
-                                                assessee_name: assessee_name)
-    else
-      render_status_pill(**pill)
-    end
+    lens unless lens.nil? || lens.home?
   end
 
   # Mounted with the page's other embedded modals, inside the `modal`

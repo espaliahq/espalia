@@ -146,8 +146,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             @matrix_data[:level].title
           end
           render_lens_control(assessee_name: @assessee.name)
-          render_status_or_lens_banner(
-            assessee_name: @assessee.name,
+          render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
             current_level_complete: @matrix_data[:current_level_complete]
@@ -162,6 +161,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
+      render_lens_banner(assessee_name: @assessee.name)
     end
   end
 

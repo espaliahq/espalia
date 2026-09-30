@@ -214,13 +214,15 @@ class Views::Assessments::HeroSummary < Views::Base
     target = next_unrated_capability
 
     div(class: "px-5 py-4") do
-      div(class: "flex items-start justify-between gap-4") do
+      # Stacks below `sm`, like the scored header: side by side, a phone left
+      # the headline a one-word-per-line column.
+      div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do
         div(class: "min-w-0 flex-1") do
           h2(class: "text-xl font-bold text-gray-900 dark:text-white") { priming_headline }
           p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { priming_gloss }
           div(class: "mt-3") { priming_cta(target) } if target && @viewer_can_rate
         end
-        div(class: "text-right shrink-0") do
+        div(class: "sm:text-right shrink-0") do
           span(class: "text-4xl font-bold leading-none text-gray-900 dark:text-white tabular-nums") do
             "#{current_level_rated}/#{current_level_total}"
           end
@@ -320,7 +322,7 @@ class Views::Assessments::HeroSummary < Views::Base
     target = unlock_target
     fill = target.positive? ? [ current_level_rated.to_f / target, 1.0 ].min : 1.0
 
-    div(class: "mt-2 w-32 ml-auto") do
+    div(class: "mt-2 w-32 sm:ml-auto") do
       div(class: "h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden") do
         div(class: "h-full rounded-full bg-gray-900 dark:bg-white",
             style: "width: #{(fill * 100).round}%") { }
