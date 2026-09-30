@@ -168,8 +168,8 @@ class Views::Integrations::HrisView < Views::Base
                   th_cell("HRIS title")
                   th_cell("People")
                   th_cell("HRIS level")
-                  th_cell("Needs attention")
-                  th_cell(@can_edit_mappings ? "Action" : "", sr_only: true)
+                  th_cell("Needs attention", hide_below_sm: true)
+                  th_cell("Action", sr_only: true, hide_below_sm: true) if @can_edit_mappings
                 end
               end
               tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
@@ -184,24 +184,37 @@ class Views::Integrations::HrisView < Views::Base
 
   def unmapped_title_row(entry)
     tr(data: { unmapped_title: entry.title }) do
-      td_cell { span(class: "font-medium") { entry.title } }
-      td_cell { span(title: entry.rows.map { |row| row.person.name }.join(", ")) { entry.people_count.to_s } }
-      td_cell { entry.hris_levels.any? ? entry.hris_levels.map { |l| "L#{l}" }.join(", ") : "\u2014" }
-      td_cell { stale_note(entry) }
+      # Below `sm` the note and the action move under the title: off to the
+      # right of a scrolled table, nobody on a phone would find them.
       td_cell do
-        if @can_edit_mappings
-          mapping_trigger("Map\u2026", title: entry.title,
-            aria_label: "Map #{entry.title} to a role", classes: SECONDARY_BUTTON_CLASSES)
+        span(class: "font-medium") { entry.title }
+        div(class: "sm:hidden mt-1 space-y-2") do
+          stale_note(entry, placeholder: false)
+          map_button(entry)
         end
       end
+      td_cell { span(title: entry.rows.map { |row| row.person.name }.join(", ")) { entry.people_count.to_s } }
+      td_cell { entry.hris_levels.any? ? entry.hris_levels.map { |l| "L#{l}" }.join(", ") : "\u2014" }
+      td_cell(hide_below_sm: true) { stale_note(entry) }
+      td_cell(hide_below_sm: true) { map_button(entry) } if @can_edit_mappings
     end
+  end
+
+  def map_button(entry)
+    return unless @can_edit_mappings
+
+    mapping_trigger("Map\u2026", title: entry.title,
+      aria_label: "Map #{entry.title} to a role", classes: SECONDARY_BUTTON_CLASSES)
   end
 
   # The people the sync leaves on an assignment an earlier title gave them —
   # the reason this card exists.
-  def stale_note(entry)
+  def stale_note(entry, placeholder: true)
     stale = entry.rows.select(&:stale_assignment?)
-    return span(class: "text-gray-400") { "\u2014" } if stale.empty?
+    if stale.empty?
+      span(class: "text-gray-400") { "\u2014" } if placeholder
+      return
+    end
 
     ul(class: "space-y-0.5") do
       stale.each do |row|
@@ -412,16 +425,21 @@ class Views::Integrations::HrisView < Views::Base
     div(class: "px-6 py-10 text-center text-sm text-gray-600 dark:text-gray-300") { text }
   end
 
-  def th_cell(label, sr_only: false)
+  # `sr_only:` hides the label but keeps it for screen readers. The cell is
+  # then `relative`, because an `sr-only` span is absolutely positioned: with
+  # no positioned ancestor inside the table's scroller it escapes to the
+  # document and widens the whole page on a phone.
+  def th_cell(label, sr_only: false, hide_below_sm: false)
     th(
       scope: "col",
-      class: "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide " \
-             "text-gray-600 dark:text-gray-300"
+      class: [ "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300",
+               ("relative" if sr_only), ("max-sm:hidden" if hide_below_sm) ].compact.join(" ")
     ) { sr_only ? span(class: "sr-only") { label } : label }
   end
 
-  def td_cell(&block)
-    td(class: "px-4 py-3 align-top text-gray-900 dark:text-gray-100", &block)
+  def td_cell(hide_below_sm: false, &block)
+    td(class: [ "px-4 py-3 align-top text-gray-900 dark:text-gray-100", ("max-sm:hidden" if hide_below_sm) ].compact.join(" "),
+       &block)
   end
 
   def yes_no(value)

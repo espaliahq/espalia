@@ -100,14 +100,15 @@ class Views::Integrations::HrisMappingModal < Views::Base
         data: { hris_mapping_form_target: "level" }
       ) do
         if @level_column_configured
-          option(value: "") { "Each person’s level from the HRIS level column" }
+          option(value: "") { "From the HRIS level column" }
         else
           option(value: "") { "Choose a level…" }
         end
         all_ordinals.each { |ordinal| option(value: ordinal) { "Everyone at L#{ordinal}" } }
       end
       p(id: "hris-mapping-level-hint", class: HINT_CLASSES) do
-        "A fixed level suits a title that names one level. Only the chosen role’s levels are offered."
+        "The HRIS level column gives each person their own level; a fixed level suits a title that " \
+        "names one. Only the chosen role’s levels are offered."
       end
     end
   end
