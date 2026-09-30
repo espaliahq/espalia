@@ -42,7 +42,18 @@ class Tenant::HrisTitleMappingsControllerTest < ActionDispatch::IntegrationTest
           hris_title_mapping: { title: "Analytics Lead", framework_role_code: "AE", level_ordinal: "" }
         }
 
-        assert_match(/1 person can't be placed: AE has no level matching their HRIS level/, flash[:notice])
+        assert_match(/1 person has an HRIS level AE doesn't have\./, flash[:notice])
+      end
+
+      should "tell a missing HRIS level apart from a missing framework level" do
+        ActsAsTenant.with_tenant(@tenant) { @unmapped.update!(hris_level_ordinal: nil) }
+
+        post tenant_hris_title_mapping_path, params: {
+          hris_title_mapping: { title: "Analytics Lead", framework_role_code: "AE", level_ordinal: "" }
+        }
+
+        assert_match(/1 person has no HRIS level: set one in the HRIS, or map the title to a fixed level\./, flash[:notice])
+        assert_no_match(/doesn't have/, flash[:notice])
       end
 
       should "redirect back with the reason when the input is refused" do
@@ -65,6 +76,15 @@ class Tenant::HrisTitleMappingsControllerTest < ActionDispatch::IntegrationTest
         assert_nil mapping_for("Software Engineer")
         assert_equal "Removed “Software Engineer”. The next sync skips the one person holding it, " \
                      "who keeps their current assignment.", flash[:notice]
+      end
+
+      should "not promise an assignment to holders who have none" do
+        PersonFrameworkAssignment.where(person_id: @settled.id).delete_all
+
+        delete tenant_hris_title_mapping_path, params: { hris_title_mapping: { title: "Software Engineer" } }
+
+        assert_equal "Removed “Software Engineer”. The next sync skips the one person holding it, " \
+                     "who isn't assigned to a role.", flash[:notice]
       end
 
       should "explain a title nobody mapped" do

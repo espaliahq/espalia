@@ -53,10 +53,17 @@ class Tenant::HrisTitleMappingsController < ApplicationController
     role = result.dig(:mapping, :framework_role_code)
     level = result.dig(:mapping, :level_ordinal)
     target = level ? "#{role} L#{level}" : "#{role} (level from HRIS)"
-    moves = result[:people].select { |p| p[:next_sync_assignment] && p[:next_sync_assignment] != p[:current_assignment] }
-    stuck = result[:people].count { |p| p[:next_sync_assignment].nil? }
+    people = result[:people]
+    moves = people.select { |p| p[:next_sync_assignment] && p[:next_sync_assignment] != p[:current_assignment] }
 
-    [ "Mapped “#{result[:title]}” to #{target}.", moves_sentence(moves), stuck_sentence(stuck, role) ].compact.join(" ")
+    [
+      "Mapped “#{result[:title]}” to #{target}.",
+      moves_sentence(moves),
+      unplaced_sentence(people.count { |p| p[:status] == "missing_ordinal" },
+        "no HRIS level: set one in the HRIS, or map the title to a fixed level."),
+      unplaced_sentence(people.count { |p| p[:status] == "missing_level" },
+        "an HRIS level #{role} doesn't have.")
+    ].compact.join(" ")
   end
 
   def moves_sentence(moves)
@@ -70,18 +77,27 @@ class Tenant::HrisTitleMappingsController < ApplicationController
     "The next sync moves #{changes.to_sentence}."
   end
 
-  def stuck_sentence(count, role)
+  def unplaced_sentence(count, reason)
     return nil if count.zero?
 
-    "#{count} #{'person'.pluralize(count)} can't be placed: #{role} has no level matching their HRIS level."
+    "#{count} #{count == 1 ? 'person has' : 'people have'} #{reason}"
   end
 
   def unmapped_notice(result)
-    count = result[:people].size
-    return "Removed “#{result[:title]}”. Nobody holds that title right now." if count.zero?
+    removed = "Removed “#{result[:title]}”."
+    people = result[:people]
+    return "#{removed} Nobody holds that title right now." if people.empty?
 
-    holders = count == 1 ? "the one person holding it, who keeps" : "the #{count} people holding it, who keep"
-    "Removed “#{result[:title]}”. The next sync skips #{holders} their current assignment."
+    kept = people.count { |p| p[:current_assignment] }
+    skipped = "The next sync skips #{people.size == 1 ? 'the one person' : "the #{people.size} people"} holding it"
+    if kept.zero?
+      return "#{removed} #{skipped}, who isn't assigned to a role." if people.size == 1
+
+      return "#{removed} #{skipped}; none of them is assigned to a role."
+    end
+    return "#{removed} #{skipped}, who #{kept == 1 ? 'keeps' : 'keep'} their current assignment." if kept == people.size
+
+    "#{removed} #{skipped}; #{kept} keep their current assignment and #{people.size - kept} stay unassigned."
   end
 
   def error_message(error)
