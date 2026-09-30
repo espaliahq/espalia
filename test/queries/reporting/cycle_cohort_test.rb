@@ -151,7 +151,7 @@ class Reporting::CycleCohortTest < ActiveSupport::TestCase
   context "ratings outside the assessed role" do
     setup do
       @person = create(:person, tenant: @tenant, name: "Explorer")
-      enroll(@person)
+      enroll(@person, enrolled_at: 30.days.ago)
       @caps.first(2).each { |cap| rate(@person, cap, self_rated_frequency: "consistent") }
     end
 
