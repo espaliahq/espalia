@@ -139,5 +139,4 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
                return Math.round(Math.min(r.width, r.height)); })()
     JS
   end
-
 end
