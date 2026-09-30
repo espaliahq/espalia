@@ -199,7 +199,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
 
     span(**attrs) do
       icon("discuss", class: "w-2.5 h-2.5")
-      span(class: "text-[9px] font-medium leading-none") { count.to_s } if count.to_i > 1
+      span(class: "text-[10px] font-medium leading-none") { count.to_s } if count.to_i > 1
     end
   end
 end

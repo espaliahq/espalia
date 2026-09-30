@@ -921,7 +921,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         ) { level[:code] }
       end
       if assessed
-        span(class: "text-[9px] font-semibold tracking-wide text-gray-600 dark:text-gray-300") do
+        span(class: "text-[10px] font-semibold tracking-wide text-gray-600 dark:text-gray-300") do
           "CURRENT"
         end
       end

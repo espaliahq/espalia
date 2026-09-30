@@ -33,7 +33,7 @@ class Views::Assessments::LevelStrip < Views::Base
 
   def view_template
     # `overflow-x-auto` lets the chip strip scroll horizontally on
-    # narrow viewports (the chips have `min-w-[60px]` × N levels which
+    # narrow viewports (the chips have `min-w-16` × N levels which
     # can exceed mobile widths). `-mx-4 px-4` extends the scroll area
     # to the card's padded edges so users can swipe to the very end.
     div(class: "overflow-x-auto -mx-4 px-4") do
