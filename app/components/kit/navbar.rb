@@ -39,13 +39,41 @@ class Components::Kit::Navbar < Components::Base
   def left_section
     div(class: "flex items-center gap-4") do
       hamburger_button
-      span(class: "text-sm font-bold tracking-tight") do
-        plain "#{@current_tenant&.name} #{@app_name}"
-        if Rails.env.development?
-          span(class: "ml-1 text-[10px] font-normal opacity-70") { "(#{Rails.root.basename})" }
-        end
-      end
+      brand
       desktop_nav_links
+    end
+  end
+
+  # The brand doubles as an easter egg — hover for the tagline and a heart-hands
+  # shower, click for a bigger one. See brand_confetti_controller.js.
+  def brand
+    div(data: { controller: "brand-confetti" }) do
+      button(
+        type: "button",
+        aria: { describedby: "brand-tagline" },
+        class: "text-sm font-bold tracking-tight px-2 py-1 -mx-2 rounded-md cursor-pointer " \
+               "transition-colors hover:bg-white/20 focus:outline-hidden " \
+               "focus-visible:bg-white/20 focus-visible:ring-2 focus-visible:ring-white",
+        data: {
+          brand_confetti_target: "brand",
+          action: "mouseenter->brand-confetti#enter focus->brand-confetti#focus " \
+                  "blur->brand-confetti#blur click->brand-confetti#celebrate " \
+                  "turbo:before-cache@document->brand-confetti#beforeCache"
+        }
+      ) do
+        plain "#{@current_tenant&.name} #{@app_name}"
+      end
+      div(
+        id: "brand-tagline",
+        role: "tooltip",
+        style: "font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', 'Comic Neue', cursive",
+        class: "fixed top-0 left-0 z-50 whitespace-nowrap rounded-lg border border-gray-200 bg-white " \
+               "px-3 py-2 text-[13px] font-normal text-gray-900 shadow-sm pointer-events-none " \
+               "opacity-0 scale-95 transition-[opacity,scale] duration-200 " \
+               "data-open:opacity-100 data-open:scale-100 " \
+               "dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100",
+        data: { brand_confetti_target: "tagline" }
+      ) { "not just a tool, but a way of life 🫶" }
     end
   end
 
