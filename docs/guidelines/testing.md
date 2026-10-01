@@ -644,6 +644,32 @@ end
 - If two contexts share >50% of their setup, merge them
 - Nested contexts inherit parent setup — use this to layer additional state
 
+## Measuring Contrast in System Tests — `ContrastHelpers`
+
+**Assert contrast as the browser paints it, not as the class list reads.**
+`include ContrastHelpers` (`test/support/system/contrast_helpers.rb`) gives
+`rendered_contrast(css)` — an element against every ancestor background,
+ancestor `opacity` included — and `utility_contrast(utility, background)` for
+a token on a flat surface. Tenant overrides and an emulated colour scheme
+(`Emulation.setEmulatedMedia`, as the evidence report test does) all count.
+Before you trust a new contrast test, revert the fix and watch it fail with
+the number axe reported.
+
+Three traps it already handles or that bit writing it:
+
+- **A just-toggled control is mid-transition.** A pressed chip with
+  `transition-colors` measured 3.8:1 when its settled colours are 17:1.
+  `rendered_contrast` finishes the running animations on the element and its
+  ancestors before it reads.
+- **An interpolating heredoc eats a regex backslash.** Inside `<<~JS`, Ruby
+  turns `\(` into `(`, so `/rgba?\([^)]*\)/` silently becomes a different
+  regex and matches nothing. Write `\\(` in the Ruby source.
+- **Keyboard focus without a keypress.** `send_keys(:tab)` is banned (see
+  *Flake-Prone Click Guards*), and `press_tab` performs no native traversal.
+  A script `element.focus()` on a page with no prior pointer input does match
+  `:focus-visible` in Chrome, so focus-ring tests focus by script and assert
+  `matches(":focus-visible")` before measuring the ring.
+
 ## Running One System-Test File — `bin/rails test <path>`
 
 **`test:system` ignores a path argument and runs the whole system suite.**

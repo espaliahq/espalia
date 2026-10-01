@@ -32,8 +32,9 @@ class Views::Assessments::Activity::FocusModeToggle < Views::Base
   def render_segment(mode)
     button(
       type: "button",
-      class: "px-2 py-0.5 rounded transition-colors " \
-             "aria-pressed:bg-primary aria-pressed:text-white " \
+      class: "min-h-6 px-2 py-0.5 rounded transition-colors " \
+             "aria-pressed:bg-gray-900 aria-pressed:text-white " \
+             "dark:aria-pressed:bg-white dark:aria-pressed:text-gray-900 " \
              "aria-[pressed=false]:text-gray-600 dark:aria-[pressed=false]:text-gray-300 " \
              "aria-[pressed=false]:hover:bg-gray-100 dark:aria-[pressed=false]:hover:bg-gray-700",
       data: {

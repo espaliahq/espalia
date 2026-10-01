@@ -107,7 +107,7 @@ class Views::Frameworks::Explorer::LevelEditorFrame < Views::Base
         )
         button(
           type: "submit",
-          class: "rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
+          class: "rounded px-2 py-1 text-[11px] font-medium text-primary-ink hover:bg-primary/10 transition-colors"
         ) { "Save" }
       end
     end
@@ -119,7 +119,7 @@ class Views::Frameworks::Explorer::LevelEditorFrame < Views::Base
   def entry_control(level)
     if level.is_entry
       span(
-        class: "shrink-0 inline-flex items-center rounded-full bg-primary/10 text-primary " \
+        class: "shrink-0 inline-flex items-center rounded-full bg-primary/10 text-primary-ink " \
                "px-2 py-0.5 text-[11px] font-semibold"
       ) { "Entry" }
     else
@@ -130,7 +130,7 @@ class Views::Frameworks::Explorer::LevelEditorFrame < Views::Base
         button(
           type: "submit",
           class: "rounded px-2 py-1 text-[11px] font-medium text-gray-500 dark:text-gray-400 " \
-                 "hover:text-primary hover:bg-primary/10 transition-colors"
+                 "hover:text-primary-ink hover:bg-primary/10 transition-colors"
         ) { "Set as entry" }
       end
     end

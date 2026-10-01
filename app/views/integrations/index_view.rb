@@ -101,7 +101,7 @@ class Views::Integrations::IndexView < Views::Base
           div(class: "flex items-start justify-between") do
             div do
               h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                        "group-hover:text-primary transition-colors") { "HRIS" }
+                        "group-hover:text-primary-ink transition-colors") { "HRIS" }
               p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
                 plain provider_label
               end

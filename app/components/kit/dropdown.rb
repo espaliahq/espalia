@@ -61,13 +61,16 @@ class Components::Kit::Dropdown < Components::Base
   #
   # @param label [String, nil] accessible name for an icon-only trigger
   #   (sets aria-label so the button isn't nameless to screen readers)
+  # @param focus_ring [String] the keyboard focus ring's shape and colour —
+  #   a literal, so Tailwind sees it. Override where the brand colour can't
+  #   show against what the trigger sits on (the navbar).
   # @yield The content to display inside the trigger button
-  def trigger(label: nil, &block)
+  def trigger(label: nil, focus_ring: "rounded-md focus-visible:ring-primary-ink", &block)
     button(
       type: "button",
       aria: { haspopup: "true", expanded: "false", label: label }.compact,
       data: { action: "dropdown#toggle", dropdown_target: "trigger" },
-      class: "inline-flex items-center focus:outline-hidden"
+      class: "inline-flex items-center focus:outline-hidden focus-visible:ring-2 #{focus_ring}"
     ) do
       yield
     end

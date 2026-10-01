@@ -56,7 +56,7 @@ class Views::Assessments::LensBanner < Views::Base
       strong(class: "font-semibold text-gray-900 dark:text-white") { @lens.label }
       plain ". #{whose.capitalize} #{@lens.home_code} assessment is unchanged. "
       a(href: assessment_path(@assessment_id),
-        class: "font-medium text-primary hover:underline whitespace-nowrap rounded-sm " \
+        class: "font-medium text-primary-ink hover:underline whitespace-nowrap rounded-sm " \
                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
         "← Back to #{@lens.home_code}"
       end

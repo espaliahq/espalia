@@ -60,7 +60,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
         # there is no separate full-activity index page.
         a(
           href: framework_suggestions_path(@framework.framework_id),
-          class: "text-xs text-primary hover:text-primary/80 shrink-0",
+          class: "text-xs text-primary-ink hover:underline shrink-0",
           data: { turbo_frame: "_top" },
           title: "Open the full suggestion-review page"
         ) { "All suggestions" }
@@ -118,7 +118,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
     a(
       href: @clear_path,
       class: "shrink-0 inline-flex items-center justify-center min-w-11 min-h-11 -my-3 " \
-             "rounded text-base leading-none text-gray-600 dark:text-gray-300 hover:text-primary",
+             "rounded text-base leading-none text-gray-600 dark:text-gray-300 hover:text-primary-ink",
       title: "Clear focus",
       aria_label: "Clear focus",
       data: {
@@ -143,7 +143,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
 
     a(
       href: @clear_path,
-      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary mt-1 inline-block",
+      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink mt-1 inline-block",
       data: {
         turbo_frame: "suggestion-panel",
         action: "click->context-pane#clearFocus"

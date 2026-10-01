@@ -62,7 +62,7 @@ class Views::AssessmentCycles::CycleTypeFrame < Views::Base
     button(
       type: "button",
       class: "opacity-0 group-hover/ine:opacity-100 group-focus-within/ine:opacity-100 " \
-             "focus-visible:opacity-100 transition-opacity text-gray-400 hover:text-primary shrink-0",
+             "focus-visible:opacity-100 transition-opacity text-gray-400 hover:text-primary-ink shrink-0",
       data: { action: "inline-editor#startEdit" },
       aria_label: "Edit cycle type"
     ) do

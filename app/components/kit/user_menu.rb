@@ -28,7 +28,10 @@ class Components::Kit::UserMenu < Components::Base
     # also hosts the notification bell dropdown.
     div(id: "user-menu", class: "inline-block") do
       render Components::Kit::Dropdown.new(align: :right) do |dropdown|
-        dropdown.trigger { avatar_circle }
+        # Two tones, because the nav colour is the tenant's: whichever of the
+        # ring and the dark band behind it contrasts with their navbar carries.
+        dropdown.trigger(focus_ring: "rounded-full focus-visible:ring-nav-fg " \
+                                     "focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900") { avatar_circle }
         dropdown.menu { menu_content }
       end
     end
@@ -163,7 +166,7 @@ class Components::Kit::UserMenu < Components::Base
   def checkmark_icon
     svg(
       xmlns: "http://www.w3.org/2000/svg",
-      class: "w-4 h-4 shrink-0 text-primary",
+      class: "w-4 h-4 shrink-0 text-primary-ink",
       fill: "none",
       viewBox: "0 0 24 24",
       stroke: "currentColor",

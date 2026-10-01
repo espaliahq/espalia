@@ -84,7 +84,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       div(class: "flex items-center justify-between gap-2") do
         a(
           href: @clear_path,
-          class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary inline-block",
+          class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink inline-block",
           data: {
             turbo_frame: "suggestion-panel",
             action: "click->context-pane#clearFocus"
@@ -123,7 +123,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       button(
         type: "button",
         class: "w-full text-left rounded px-1.5 py-1 text-xs text-gray-700 dark:text-gray-200 " \
-               "hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer",
+               "hover:bg-primary/10 hover:text-primary-ink transition-colors cursor-pointer",
         # No aria-label: a fixed one would override the visible question and
         # announce every row identically, so the rationale below IS the
         # accessible name (the glyph is aria-hidden).
@@ -176,7 +176,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         # p-3/-m-3 around a 20px glyph gives a 44px hit target (WCAG 2.5.5)
         # without the button claiming 44px of header height.
         class: "inline-flex items-center justify-center p-3 -m-3 rounded " \
-               "text-gray-600 dark:text-gray-300 hover:text-primary " \
+               "text-gray-600 dark:text-gray-300 hover:text-primary-ink " \
                "transition-colors cursor-pointer",
         title: "Copy a link to this discussion",
         aria: { label: "Copy a link to this discussion" },
@@ -352,7 +352,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     p(class: "mt-1") do
       a(
         href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
-        class: "text-primary hover:underline",
+        class: "text-primary-ink hover:underline",
         data: { turbo_frame: "_top" }
       ) { "View the resulting suggestion →" }
     end

@@ -7,6 +7,8 @@ require "application_system_test_case"
 # touch targets that meet WCAG 2.5.5 (44x44 CSS px). These regressions are
 # invisible to the unit suite and only surface in a real browser.
 class AccessibilitySystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -63,6 +65,66 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
 
       drawer_link = min_dimension("aside[data-sidebar-target='drawer'] a")
       assert drawer_link >= 44, "drawer nav links should be >= 44px tall, was #{drawer_link}"
+    end
+  end
+
+  context "focus visible (WCAG 2.4.7)" do
+    should "ring the avatar menu visibly against the navbar when keyboard-focused" do
+      visit root_path
+      assert_text "Home"
+
+      focus = page.evaluate_script(<<~JS)
+        (() => {
+          #{ContrastHelpers::CONTRAST_JS}
+          const button = document.querySelector("#user-menu button");
+          button.focus();
+          const nav = paint([[getComputedStyle(button.closest("nav")).backgroundColor, 1]]);
+          const bands = [...getComputedStyle(button).boxShadow.matchAll(/((?:rgba?|oklch|oklab|lab|lch|color)\\([^)]*\\)) 0px 0px 0px ([1-9][0-9.]*)px/g)]
+            .map(m => m[1]).filter(c => !/, 0\\)$/.test(c));
+          return { focusVisible: button.matches(":focus-visible"), bands: bands,
+                   best: Math.max(0, ...bands.map(c => ratio(paint([[c, 1]]), nav))) };
+        })()
+      JS
+
+      assert focus["focusVisible"], "a script focus with no prior pointer input should read as keyboard focus"
+      assert_not_empty focus["bands"], "the avatar trigger draws no focus ring"
+      assert_operator focus["best"], :>=, 3, "the ring must stand out from the navbar (1.4.11): #{focus["bands"]}"
+    end
+  end
+
+  context "brand-coloured text (WCAG 1.4.3)" do
+    should "keep the default brand ink at AA on light surfaces, where raw primary fails" do
+      visit root_path
+      assert_text "Home"
+
+      assert_operator utility_contrast("text-primary", "#ffffff"), :<, 4.5, "raw primary must fail, or this test proves nothing"
+      assert_operator utility_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
+      assert_operator utility_contrast("text-primary-ink", "#f9fafb"), :>=, 4.5
+    end
+
+    should "keep a pale tenant brand at AA as text" do
+      @tenant.update!(primary_color: "#ffd400")
+      visit root_path
+      assert_text "Home"
+
+      assert_operator utility_contrast("text-primary-ink", "#ffffff"), :>=, 4.5
+    end
+
+    should "lighten a dark tenant brand to AA in dark mode" do
+      @tenant.update!(primary_color_dark: "#1e3a8a")
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
+      )
+      visit root_path
+      assert_text "Home"
+
+      assert_operator utility_contrast("text-primary", "#111827"), :<, 4.5, "raw primary must fail, or this test proves nothing"
+      assert_operator utility_contrast("text-primary-ink", "#111827"), :>=, 4.5
+      assert_operator utility_contrast("text-primary-ink", "#1f2937"), :>=, 4.5
+    ensure
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
+      )
     end
   end
 

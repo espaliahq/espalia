@@ -359,7 +359,7 @@ export default class extends BaseController {
     // Update toggle button active state
     if (this.hasRolePaneToggleTarget) {
       this.rolePaneToggleTarget.classList.toggle("bg-primary/10", this.rolePaneOpen)
-      this.rolePaneToggleTarget.classList.toggle("text-primary", this.rolePaneOpen)
+      this.rolePaneToggleTarget.classList.toggle("text-primary-ink", this.rolePaneOpen)
       this.rolePaneToggleTarget.classList.toggle("bg-gray-100", !this.rolePaneOpen)
       this.rolePaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.rolePaneOpen)
       this.rolePaneToggleTarget.setAttribute("aria-expanded", String(this.rolePaneOpen))
@@ -370,7 +370,7 @@ export default class extends BaseController {
     if (!this.hasContextPaneToggleTarget) return
 
     this.contextPaneToggleTarget.classList.toggle("bg-primary/10", this.contextPaneOpen)
-    this.contextPaneToggleTarget.classList.toggle("text-primary", this.contextPaneOpen)
+    this.contextPaneToggleTarget.classList.toggle("text-primary-ink", this.contextPaneOpen)
     this.contextPaneToggleTarget.classList.toggle("bg-gray-100", !this.contextPaneOpen)
     this.contextPaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.contextPaneOpen)
     this.contextPaneToggleTarget.setAttribute("aria-expanded", String(this.contextPaneOpen))

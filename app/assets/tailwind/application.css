@@ -12,6 +12,12 @@
   --color-secondary: #079191;
   --color-nav-bg: #32c8c8;
   --color-nav-fg: #ffffff;
+
+  /* The brand colour as readable text. A tenant can set any primary, so
+     clamp its lightness rather than pick a hex: >= 4.5:1 for every hue
+     tested (#302). Fills, rings and checkbox marks keep --color-primary.
+     This mix is the fallback; the exact clamp is in the @supports below. */
+  --color-primary-ink: color-mix(in oklab, var(--color-primary) 55%, black);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +26,19 @@
     --color-secondary: #0ababa;
     --color-nav-bg: #1a1a2e;
     --color-nav-fg: #e2e8f0;
+    --color-primary-ink: color-mix(in oklab, var(--color-primary) 45%, white);
+  }
+}
+
+@supports (color: oklch(from red min(l, 0.5) c h)) {
+  :root {
+    --color-primary-ink: oklch(from var(--color-primary) min(l, 0.5) c h);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-primary-ink: oklch(from var(--color-primary) max(l, 0.75) c h);
+    }
   }
 }
 
@@ -266,7 +285,7 @@ input[type="week"] {
 .explorer-cluster-btn:hover,
 .explorer-discuss:hover,
 .explorer-kebab:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
 }
 
 .explorer-cluster-btn:focus-visible,
@@ -473,7 +492,7 @@ input[type="week"] {
 
 .explorer-add:hover {
   border-color: var(--color-primary);
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
 }
 
 .explorer-add:focus-visible {

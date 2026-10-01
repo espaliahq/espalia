@@ -69,7 +69,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   def add_button
     button(
       type: "button",
-      class: "#{header_label_classes} w-full text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
+      class: "#{header_label_classes} w-full min-h-6 text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
              "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
              "dark:hover:text-gray-200 transition-colors",
       aria: { label: "Add a comment" },

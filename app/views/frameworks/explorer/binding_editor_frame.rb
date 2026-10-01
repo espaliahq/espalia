@@ -109,7 +109,7 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
       )
       button(
         type: "submit",
-        class: "rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
+        class: "rounded px-2 py-1 text-[11px] font-medium text-primary-ink hover:bg-primary/10 transition-colors"
       ) { "Save" }
     end
   end

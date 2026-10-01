@@ -181,7 +181,10 @@ class Views::Assessments::IndexView < Views::Base
                "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
       ) { label }
     else
-      span(class: "#{shared} border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600") { label }
+      # Inactive, so exempt from 1.4.3 — but only if it says so: a bare span
+      # reads as ordinary text to axe and to a screen reader.
+      span(role: "link", aria: { disabled: "true" },
+           class: "#{shared} border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600") { label }
     end
   end
 

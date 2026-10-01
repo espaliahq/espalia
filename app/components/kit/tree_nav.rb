@@ -117,7 +117,7 @@ class Components::Kit::TreeNav < Components::Base
         type: "button",
         class: "opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs rounded-sm " \
                "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-               "hover:bg-primary/20 hover:text-primary transition-opacity",
+               "hover:bg-primary/20 hover:text-primary-ink transition-opacity",
         data: { action: "tree#solo", role_id: node[:id] },
         title: "Solo — focus on this role only"
       ) { "solo" }

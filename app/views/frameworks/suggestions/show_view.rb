@@ -69,7 +69,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def back_link
     a(
       href: framework_suggestions_path(@framework.framework_id),
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary"
+      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink"
     ) { plain "\u2190 Back to suggestions" }
   end
 
@@ -324,7 +324,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
                 dd(class: "mt-0.5") do
                   a(
                     href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
-                    class: "text-primary hover:underline text-sm"
+                    class: "text-primary-ink hover:underline text-sm"
                   ) { "View the resulting suggestion →" }
                 end
               end

@@ -3,6 +3,8 @@
 require "application_system_test_case"
 
 class AssessmentsSystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
@@ -899,6 +901,82 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "contrast (WCAG 1.4.3 / 1.4.11)" do
+    should "keep the All chip's count at AA while a category chip is active" do
+      visit assessment_path(@assignment)
+      assert_selector "#category-tabs a[aria-current='page']"
+
+      assert_operator rendered_contrast("#category-tabs [data-all-chip] span"), :>=, 4.5
+    end
+
+    should "keep the activity pane's pressed filters at AA in dark mode" do
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
+      )
+      visit assessment_path(@assignment)
+      wait_for_stimulus "activity-pane"
+      toggle_activity_pane
+      assert_selector "[data-activity-feed-filter-param='all'][aria-pressed='true']", visible: true
+
+      assert_operator rendered_contrast("[data-activity-feed-filter-param='all'][aria-pressed='true']"), :>=, 4.5
+      assert_operator rendered_contrast("[data-activity-feed-mode-param][aria-pressed='true']"), :>=, 4.5
+    ensure
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
+      )
+    end
+
+    should "keep the feedback actions glyph above the 3:1 icon floor" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap1_stable, level_ordinal: 2, source: "self",
+          evidence_type: "project_outcome", title: "Launch", content: "Shipped the launch.",
+          author_id: @person.id, valence: "demonstrated"
+        )
+      end
+      visit assessment_path(@assignment)
+      assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
+
+      # Two share the label: the list header's, and the card's, which only
+      # shows on hover or focus.
+      assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
+      card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
+      page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
+      assert_operator rendered_contrast(card_kebab), :>=, 3
+    end
+  end
+
+  context "target size (WCAG 2.5.8)" do
+    setup do
+      # The unlocked hero shows "How is this calculated?"; feedback on the
+      # card renders its "Discuss".
+      rate_to_unlock_hero
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap1_stable, level_ordinal: 2, source: "self",
+          evidence_type: "project_outcome", title: "Launch", content: "Shipped the launch.",
+          author_id: @person.id, valence: "demonstrated"
+        )
+      end
+    end
+
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "give every control at least a 24px target on #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_text "How is this calculated?"
+        assert_selector "summary", text: "Discuss"
+        wait_for_stimulus "activity-pane"
+        toggle_activity_pane
+        assert_selector "[data-activity-feed-mode-param]", visible: true
+
+        assert_empty undersized_targets
+      end
+    end
+  end
+
   context "responsive layout" do
     should "hide the activity sidebar on narrow viewports" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
@@ -920,6 +998,52 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert main_visible_width >= viewport_width * 0.8,
         "On narrow viewport sidebar should overlay, not compress main pane " \
         "(main=#{main_visible_width}, viewport=#{viewport_width})"
+    end
+
+    # WCAG 1.4.12: a two-line clamp cut every description on a phone, and
+    # nothing revealed the rest (#320). The whole description must render.
+    should "show a capability's full description on mobile, even with text-spacing overrides" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.update_capability(
+          @framework_id, @cap1_id,
+          description: "Considers long-term impact, balances competing priorities, and makes smart, " \
+                       "intentional decisions that support our mission and the people we serve."
+        )
+      end
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+      assert_text "the people we serve."
+
+      clipped = page.evaluate_script(<<~JS)
+        (() => {
+          const style = document.createElement("style");
+          style.textContent = "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; " +
+                              "word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }";
+          document.head.appendChild(style);
+          const p = [...document.querySelectorAll("p")].find(e => e.textContent.includes("the people we serve."));
+          const cut = p.scrollHeight > p.clientHeight + 1;
+          style.remove();
+          return cut;
+        })()
+      JS
+      assert_not clipped, "the capability description is cut off"
+    end
+
+    # WCAG 1.4.10: the page reflows at 320 CSS px. "Most of the time" is the
+    # widest pill phrase, and "Demonstrates:" used to be glued to it with
+    # nowrap, so the pair pushed the whole page sideways (#319).
+    [ [ "320px", [ 320, 812 ] ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "not scroll the page sideways at #{label}" do
+        rate_to_unlock_hero(frequency: "occasional")
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#rating-#{@cap1_stable}-2", text: "Most of the time"
+
+        widths = page.evaluate_script(
+          "({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })"
+        )
+        assert_operator widths["scroll"], :<=, widths["client"], "the page scrolls sideways at #{label}"
+      end
     end
 
     should "contain capability cards within the viewport on narrow screens with many levels" do
@@ -1683,5 +1807,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         level_ordinal: 2, frequency: frequency, cycle_id: @cycle_id
       )
     end
+  end
+
+  # Visible controls smaller than 24x24 CSS px. A link inside running text
+  # is exempt (2.5.8's inline exception), and a 1px sr-only element is not a
+  # visible target at all.
+  def undersized_targets
+    page.evaluate_script(<<~JS)
+      [...document.querySelectorAll("button, a[href], summary, [role=button], [role=link], select, input:not([type=hidden])")]
+        .filter(e => e.offsetParent !== null && !e.closest("p"))
+        .map(e => [e, e.getBoundingClientRect()])
+        .filter(([, r]) => r.width > 1 && r.height > 1 && (r.width < 24 || r.height < 24))
+        .map(([e, r]) => `${e.tagName.toLowerCase()} "${(e.innerText || e.getAttribute("aria-label") || "").trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`)
+    JS
   end
 end

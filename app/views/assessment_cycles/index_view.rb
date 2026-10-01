@@ -103,7 +103,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
             div do
               h3(
                 class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                       "group-hover:text-primary transition-colors"
+                       "group-hover:text-primary-ink transition-colors"
               ) { cycle.name }
               p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
                 plain framework_label(cycle)

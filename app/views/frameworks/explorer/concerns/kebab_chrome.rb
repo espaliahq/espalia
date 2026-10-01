@@ -36,7 +36,7 @@ module Views::Frameworks::Explorer::Concerns::KebabChrome
       span(
         class: "#{reveal_classes} pointer-coarse:opacity-100 transition-opacity " \
                "inline-flex items-center justify-center " \
-               "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary"
+               "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary-ink"
       ) do
         # Sized here, not by a parent rule: this trigger is a `Kit::Dropdown`
         # span, not one of the grid's `.explorer-kebab` buttons (whose glyph the

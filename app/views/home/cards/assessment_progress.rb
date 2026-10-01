@@ -75,7 +75,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
     a(
       href: href,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
     ) { "#{cta_verb} self-assessment →" }
   end
 

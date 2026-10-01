@@ -81,7 +81,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         div(class: "flex items-center gap-3") do
           button(
             type: "button",
-            class: "text-xs text-primary hover:text-primary/80",
+            class: "text-xs text-primary-ink hover:underline",
             data: { action: "tree#showAll" }
           ) { "Show All" }
           button(
@@ -107,7 +107,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     ) do
       span(class: "flex-1 leading-snug") do
         plain "Tip: hover a role and click "
-        span(class: "font-semibold text-primary") { "Solo" }
+        span(class: "font-semibold text-primary-ink") { "Solo" }
         plain " to focus on just that one."
       end
       button(
@@ -268,7 +268,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     div(class: "px-3 py-1") do
       button(
         type: "button",
-        class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline",
         data: {
           action: "click->modal#open",
           modal_target_id: "add-role-modal",
@@ -289,7 +289,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     div(class: "px-3 pt-2 mt-1 border-t border-gray-100 dark:border-gray-800") do
       button(
         type: "button",
-        class: "inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline",
         data: {
           action: "click->modal#open",
           modal_target_id: "role-family-new-modal",
@@ -312,7 +312,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       type: "button",
       class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
              "focus-visible:opacity-100 shrink-0 p-0.5 rounded-sm " \
-             "text-gray-400 hover:text-primary transition-opacity",
+             "text-gray-400 hover:text-primary-ink transition-opacity",
       data: {
         action: "click->modal#open",
         modal_target_id: "role-family-edit-modal",
@@ -368,7 +368,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
             class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
                    "focus-visible:opacity-100 shrink-0 px-1.5 py-0.5 text-xs rounded-sm " \
                    "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-                   "hover:bg-primary/20 hover:text-primary transition-opacity",
+                   "hover:bg-primary/20 hover:text-primary-ink transition-opacity",
             data: { action: "tree#solo", role_id: role.role_id },
             title: "Solo — focus on this role only"
           ) { "solo" }
@@ -390,7 +390,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       href: assessment_path(@viewer_assignment_id, as_role: role.role_id),
       class: "shrink-0 px-1.5 py-0.5 text-xs rounded-sm whitespace-nowrap " \
              "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-             "hover:bg-primary/20 hover:text-primary",
+             "hover:bg-primary/20 hover:text-primary-ink",
       data: cluster_control_data("tree", "standalone").merge(turbo_frame: "_top", my_ratings_link: role.role_id),
       title: "See my ratings against this role",
       aria: { label: "See my ratings against #{role.name}" }

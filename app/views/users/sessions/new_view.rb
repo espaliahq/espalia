@@ -145,7 +145,7 @@ class Views::Users::Sessions::NewView < Views::Base
   def footer_links
     div(class: "mt-6 space-y-2 text-center text-sm") do
       div do
-        a(href: new_user_registration_path, class: "text-primary hover:text-secondary font-medium") { "Create an account" }
+        a(href: new_user_registration_path, class: "text-primary-ink hover:underline font-medium") { "Create an account" }
       end
       div do
         a(href: new_user_password_path, class: "text-gray-500 hover:text-gray-700") { "Forgot your password?" }

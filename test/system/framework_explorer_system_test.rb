@@ -265,7 +265,7 @@ class FrameworkExplorerSystemTest < ApplicationSystemTestCase
       visit framework_path(@framework_id)
 
       assert_selector "[data-framework-explorer-target='rolePane']", visible: true
-      # Wait for Stimulus to connect — connect() applies text-primary to the toggle button
+      # Wait for Stimulus to connect — connect() applies text-primary-ink to the toggle button
       wait_for_stimulus "framework-explorer"
 
       # Click the toggle to hide — target the action attribute (the canonical

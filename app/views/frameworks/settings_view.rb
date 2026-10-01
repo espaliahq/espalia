@@ -207,7 +207,7 @@ class Views::Frameworks::SettingsView < Views::Base
             # Reset to default link
             button(
               type: "button",
-              class: "text-sm text-primary hover:text-primary/80 transition-colors #{'hidden' if is_default}",
+              class: "text-sm text-primary-ink hover:underline transition-colors #{'hidden' if is_default}",
               data: {
                 setting_field_target: "reset",
                 action: "setting-field#reset"

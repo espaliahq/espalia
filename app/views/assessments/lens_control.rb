@@ -37,7 +37,7 @@ class Views::Assessments::LensControl < Views::Base
       dropdown.trigger(label: "Reading against #{@lens.code} — choose a role or level") do
         span(
           id: "assessment-lens-chip",
-          class: "inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-xs font-semibold " \
+          class: "inline-flex min-h-6 items-center gap-1 px-1.5 py-0.5 rounded font-mono text-xs font-semibold " \
                  "tracking-wide cursor-pointer #{@lens.home? ? HOME_CHIP : LENS_CHIP}",
           data: { lens: @lens.home? ? "home" : "exploring" }
         ) do

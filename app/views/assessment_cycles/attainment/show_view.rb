@@ -92,11 +92,11 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
     nav(class: "mt-1 flex flex-wrap gap-x-4 gap-y-1", aria: { label: "Assessment cycle reports" }) do
       a(
         href: cohort_assessment_cycle_path(cycle),
-        class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline"
+        class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline"
       ) { "Cohort progress" }
       a(
         href: evidence_assessment_cycle_path(cycle),
-        class: "inline-flex min-h-11 items-center text-sm text-primary hover:underline"
+        class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline"
       ) { "Feedback & evidence" }
     end
   end

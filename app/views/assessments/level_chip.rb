@@ -102,7 +102,7 @@ class Views::Assessments::LevelChip < Views::Base
     # the UA button background; the chip_bg utility paints on top.
     base = "appearance-none " \
            "relative flex flex-col items-center justify-center " \
-           "h-12 flex-1 min-w-[60px] rounded-lg cursor-pointer " \
+           "h-12 flex-1 min-w-16 rounded-lg cursor-pointer " \
            "transition-all border-2 " \
            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 "
     base += "#{muted_split_classes} " if muted_split?
@@ -419,9 +419,9 @@ class Views::Assessments::LevelChip < Views::Base
   # report, so "YOU" would be misleading — use the neutral "CURRENT".
   def current_level_badge
     span(class: "absolute -bottom-0.5 left-1/2 -translate-x-1/2 " \
-                "text-[9px] font-bold uppercase tracking-wider " \
+                "text-[10px] font-bold uppercase " \
                 "bg-gray-800 dark:bg-white text-white dark:text-gray-900 " \
-                "px-1.5 py-px rounded-sm") { current_level_label }
+                "px-1 py-px rounded-sm") { current_level_label }
   end
 
   def current_level_label
