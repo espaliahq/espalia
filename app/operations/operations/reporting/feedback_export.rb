@@ -16,7 +16,8 @@ class Operations::Reporting::FeedbackExport < Operations::Base
               "direction, requested or proactive, type, title, the feedback text, the behaviours it " \
               "applies to, and status. The rows are exactly the feedback the cycle's coverage report " \
               "counts. Pass month (YYYY-MM) to narrow to feedback recorded in one calendar month, and " \
-              "include_withdrawn to list withdrawn feedback too."
+              "include_withdrawn to list withdrawn feedback too. The response carries every row's full text, " \
+              "so a month is far smaller than a whole cycle; for counts alone use reporting_evidence_coverage."
   category :read
   approval :none
 
