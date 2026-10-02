@@ -8,11 +8,12 @@ ruby file: ".ruby-version"
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem "rails", "~> 8.1.0"
 
-# Pinned below 3: json 3.0 made JSON.parse's options keyword-only, but
-# ActiveSupport::JSON.decode still passes them positionally, so every jsonb
-# read raises ArgumentError. Only rubocop's `json (~> 2.3)` held it back
-# before, and rubocop 1.90 relaxed that. Remove this and the matching
-# .github/dependabot.yml ignore entry once Rails supports json 3.
+# Pinned below 3: json 3.0 made JSON.parse's options keyword-only, and under
+# Rails <= 8.1.3.1 ActiveSupport::JSON.decode passed them positionally, so
+# every jsonb read raised ArgumentError. Rails 8.1.4 fixed decode (it now
+# splats the options), so the pin CAN now be dropped — do it as a dedicated
+# json 3 bump, removing this and the matching .github/dependabot.yml ignore
+# entry, with a full suite run to catch other positional JSON.parse callers.
 gem "json", "< 3"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft", "~> 1.3"
@@ -122,7 +123,7 @@ end
 # gem "redis", "~> 5.1"
 
 # ActionText editor
-gem "lexxy", "~> 0.9.32"
+gem "lexxy", "~> 1.0.0"
 
 # Model attribute translations stored in JSONB columns
 gem "json_translate"
