@@ -257,7 +257,7 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   | Requested by / Requested at | that request |
   | Type | `evidence_type` humanised, or `custom_type_label` for *other* |
   | Title / Feedback | `title` / `content` |
-  | Applies to | active links: capability name (from the cycle's framework) · the recipient role's level code (`L<n>` when the role has none) · valence label |
+  | Applies to | active links (or, for a withdrawn item a migration left with none, the links it had): capability name (from the cycle's framework) · the recipient role's level code (`L<n>` when the role has none) · valence label |
   | Status / Withdrawn at | `link_status`, `withdrawn_at` |
   | Reference link | `external_reference.safe_url` (http/https only) |
 
@@ -281,8 +281,10 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   (`GET /tenant/feedback_exports/new`: choose a cycle, then a month and whether
   to include withdrawn feedback) downloads `GET /tenant/feedback_exports.csv`.
   The cycle's feedback & evidence report (4.9) shows tenant admins a *Download
-  CSV* button carrying the cycle and the month on screen. Both are full
-  navigations (`data-turbo="false"`): Turbo cannot hand a file to the browser.
+  CSV* button carrying the cycle and the month on screen (never the My-org
+  scope — the export is per cycle, and under My org the label says "whole
+  cycle"). Both are full navigations (`data-turbo="false"`): Turbo cannot hand
+  a file to the browser. The file is sent `Cache-Control: no-store`.
 - MCP — `Operations::Reporting::FeedbackExport` (`reporting_feedback_export`,
   `:read`, approval `:none`) returns `{ cycle:, period:, include_withdrawn:,
   columns:, rows: }` — the same rows as JSON.
