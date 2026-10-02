@@ -45,6 +45,15 @@ class Tenant::FeedbackExportsControllerTest < ActionDispatch::IntegrationTest
         assert_select "select#feedback-export-month option[value=?]", Time.current.strftime("%Y-%m")
       end
 
+      should "offer no download for a cycle that doesn't exist rather than another cycle" do
+        get new_tenant_feedback_export_path(cycle_id: SecureRandom.uuid_v7)
+
+        assert_response :success
+        assert_includes response.body, "That cycle doesn&#39;t exist. Choose one to export."
+        assert_select "select#feedback-export-cycle"
+        assert_select "form#feedback-export-download", count: 0
+      end
+
       should "show the chosen cycle" do
         get new_tenant_feedback_export_path(cycle_id: @older_cycle.cycle_id)
 
@@ -105,7 +114,8 @@ class Tenant::FeedbackExportsControllerTest < ActionDispatch::IntegrationTest
       should "send the admin back to the picker for an unknown cycle" do
         get tenant_feedback_exports_path(format: :csv, cycle_id: SecureRandom.uuid_v7)
 
-        assert_match(/that cycle doesn't exist/, flash[:alert])
+        assert_redirected_to new_tenant_feedback_export_path
+        assert_equal "Choose a cycle to export.", flash[:alert]
       end
 
       should "send a request with no cycle back to the picker" do

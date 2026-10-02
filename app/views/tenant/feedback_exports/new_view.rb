@@ -12,7 +12,8 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
   LABEL = "text-sm font-medium text-gray-900 dark:text-white"
 
   # @param cycles [Array<AssessmentCycle>] newest first
-  # @param cycle [AssessmentCycle, nil] the cycle being exported
+  # @param cycle [AssessmentCycle, nil] the cycle being exported; nil when the
+  #   requested one doesn't exist
   # @param months [Array<Reporting::CycleMonth>] that cycle's months, newest first
   # @param user [User]
   # @param current_tenant [Tenant]
@@ -36,10 +37,10 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
         subtitle: "Download every piece of feedback in a cycle as a CSV file for reporting."
       )
 
-      if @cycle
+      if @cycles.any?
         div(class: "space-y-6 max-w-3xl") do
           cycle_card
-          download_card
+          download_card if @cycle
         end
       else
         empty_state

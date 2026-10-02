@@ -11,7 +11,7 @@ class Tenant::FeedbackExportsController < ApplicationController
     authorize ActsAsTenant.current_tenant, :export_feedback?, policy_class: TenantPolicy
 
     cycles = AssessmentCycle.order(opened_at: :desc).to_a
-    cycle = cycles.find { |candidate| candidate.cycle_id == params[:cycle_id] } || cycles.first
+    cycle = chosen_cycle(cycles)
 
     render Views::Tenant::FeedbackExports::NewView.new(
       cycles: cycles,
@@ -35,6 +35,16 @@ class Tenant::FeedbackExportsController < ApplicationController
 
   private
 
+  # The newest cycle when none was asked for. An id that names no cycle picks
+  # nothing, so the admin can't download a different cycle than the URL says.
+  def chosen_cycle(cycles)
+    return cycles.first if params[:cycle_id].blank?
+
+    cycle = cycles.find { |candidate| candidate.cycle_id == params[:cycle_id] }
+    flash.now[:alert] = "That cycle doesn't exist. Choose one to export." unless cycle
+    cycle
+  end
+
   def send_export
     export = Operations::Reporting::FeedbackExport.call(context: pundit_user, params: export_params)
     csv = Reporting::FeedbackExportCsv.new(export)
@@ -42,14 +52,12 @@ class Tenant::FeedbackExportsController < ApplicationController
     send_data csv.to_s, type: "text/csv; charset=utf-8", filename: csv.filename, disposition: "attachment"
   rescue Operations::Base::ParameterError => e
     back_to_picker("Feedback could not be exported: #{e.message}")
-  rescue ActiveRecord::RecordNotFound
-    back_to_picker("Feedback could not be exported: that cycle doesn't exist.")
-  rescue ActionController::ParameterMissing
-    back_to_picker("Choose a cycle to export.")
+  rescue ActiveRecord::RecordNotFound, ActionController::ParameterMissing
+    back_to_picker("Choose a cycle to export.", cycle_id: nil)
   end
 
-  def back_to_picker(alert)
-    redirect_to new_tenant_feedback_export_path(cycle_id: params[:cycle_id]), alert: alert, status: :see_other
+  def back_to_picker(alert, cycle_id: params[:cycle_id])
+    redirect_to new_tenant_feedback_export_path(cycle_id: cycle_id), alert: alert, status: :see_other
   end
 
   # The month select's "Whole cycle" option submits a blank month, which the
