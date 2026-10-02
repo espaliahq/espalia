@@ -48,7 +48,7 @@ class Reporting::CycleMonth
 
   # The newest feedback or request timestamp the cycle report can attribute
   # to the cycle. Explicit rows carry the cycle id. Legacy rows (no cycle id)
-  # are attributed by `Reporting::EvidenceCoverage` from enrollment windows,
+  # are attributed by `Reporting::EvidenceAttribution` from enrollment windows,
   # which the cycle's own span covers — except a legacy *response*, which
   # inherits its request's cycle and may be recorded after close. Those are
   # found through requests that fall inside the cycle's span for an enrolled
