@@ -282,8 +282,9 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   to include withdrawn feedback) downloads `GET /tenant/feedback_exports.csv`.
   The cycle's feedback & evidence report (4.9) shows tenant admins a *Download
   CSV* button carrying the cycle and the month on screen (never the My-org
-  scope — the export is per cycle, and under My org the label says "whole
-  cycle"). Both are full navigations (`data-turbo="false"`): Turbo cannot hand
+  scope — the export covers every participant, and under My org the label
+  says "all participants"). An unknown `cycle_id` offers no download rather than
+  falling back to another cycle. Both are full navigations (`data-turbo="false"`): Turbo cannot hand
   a file to the browser. The file is sent `Cache-Control: no-store`.
 - MCP — `Operations::Reporting::FeedbackExport` (`reporting_feedback_export`,
   `:read`, approval `:none`) returns `{ cycle:, period:, include_withdrawn:,

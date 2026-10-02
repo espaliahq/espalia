@@ -100,7 +100,8 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   end
 
   # The whole cycle's feedback for the month on screen, whatever the scope or
-  # grouping: the export is per cycle, so under "My org" the label says so. A
+  # grouping: the export covers every participant, so under "My org" the label
+  # says so. A
   # full navigation, since Turbo can't hand a file to the browser.
   def csv_download
     return unless @can_export_feedback
@@ -109,7 +110,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
       href: tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id, month: month_key),
       class: Components::Kit::FrameLoadError::BUTTON_CLASSES,
       data: { turbo: "false" }
-    ) { @scope == "mine" ? "Download CSV (whole cycle)" : "Download CSV" }
+    ) { @scope == "mine" ? "Download CSV (all participants)" : "Download CSV" }
   end
 
   # Narrow the report to one month of the cycle. A plain GET form with an
