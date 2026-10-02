@@ -62,6 +62,8 @@ class Tenant::FeedbackExportsControllerTest < ActionDispatch::IntegrationTest
         assert_match(/\Aattachment; filename="growthos-feedback-export-q3-2026-all-\d{8}T\d{6}Z\.csv"/,
           response.headers["Content-Disposition"])
 
+        assert_equal "no-store", response.headers["Cache-Control"]
+
         body = response.body.dup.force_encoding("UTF-8")
         assert body.start_with?("﻿")
         rows = CSV.parse(body.delete_prefix("﻿"))
@@ -104,6 +106,13 @@ class Tenant::FeedbackExportsControllerTest < ActionDispatch::IntegrationTest
         get tenant_feedback_exports_path(format: :csv, cycle_id: SecureRandom.uuid_v7)
 
         assert_match(/that cycle doesn't exist/, flash[:alert])
+      end
+
+      should "send a request with no cycle back to the picker" do
+        get tenant_feedback_exports_path(format: :csv)
+
+        assert_redirected_to new_tenant_feedback_export_path
+        assert_equal "Choose a cycle to export.", flash[:alert]
       end
 
       should "send an HTML request to the picker" do

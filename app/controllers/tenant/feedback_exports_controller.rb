@@ -38,11 +38,14 @@ class Tenant::FeedbackExportsController < ApplicationController
   def send_export
     export = Operations::Reporting::FeedbackExport.call(context: pundit_user, params: export_params)
     csv = Reporting::FeedbackExportCsv.new(export)
+    response.headers["Cache-Control"] = "no-store"
     send_data csv.to_s, type: "text/csv; charset=utf-8", filename: csv.filename, disposition: "attachment"
   rescue Operations::Base::ParameterError => e
     back_to_picker("Feedback could not be exported: #{e.message}")
   rescue ActiveRecord::RecordNotFound
     back_to_picker("Feedback could not be exported: that cycle doesn't exist.")
+  rescue ActionController::ParameterMissing
+    back_to_picker("Choose a cycle to export.")
   end
 
   def back_to_picker(alert)
