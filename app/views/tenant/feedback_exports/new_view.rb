@@ -53,7 +53,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
     render Components::Kit::Card.new(title: "Cycle") do |card|
       card.body do
         form(action: new_tenant_feedback_export_path, method: "get", class: "flex flex-wrap items-end gap-3") do
-          div(class: "flex flex-col gap-1") do
+          div(class: "flex w-full flex-col gap-1 sm:w-auto") do
             label(for: "feedback-export-cycle", class: LABEL) { "Assessment cycle" }
             select(id: "feedback-export-cycle", name: "cycle_id", class: SELECT) do
               @cycles.each do |candidate|

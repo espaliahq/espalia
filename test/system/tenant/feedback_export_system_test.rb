@@ -52,6 +52,8 @@ class Tenant::FeedbackExportSystemTest < ApplicationSystemTestCase
     assert_download_form_for(@current)
     assert_selector "button", text: "Download CSV", visible: true
     assert_no_horizontal_page_scroll
+    assert_select_spans_the_card("feedback-export-cycle")
+    assert_select_spans_the_card("feedback-export-month")
     screenshot("picker_mobile")
   end
 
@@ -64,6 +66,11 @@ class Tenant::FeedbackExportSystemTest < ApplicationSystemTestCase
     assert_equal cycle.cycle_id, form.find("input[name=cycle_id]", visible: :all).value
     assert form.has_field?("Include withdrawn feedback", type: "checkbox")
     assert form.has_select?("Month", with_options: [ "Whole cycle" ])
+  end
+
+  def assert_select_spans_the_card(id)
+    width = page.evaluate_script("document.getElementById('#{id}').getBoundingClientRect().width")
+    assert_operator width, :>=, 250, "##{id} should fill the card on a phone, not shrink to its text"
   end
 
   def assert_no_horizontal_page_scroll
