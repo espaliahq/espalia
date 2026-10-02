@@ -131,6 +131,9 @@ gem "json_translate"
 # Type-safe structured objects in JSONB columns
 gem "store_model", "~> 4.6"
 
+# CSV export of feedback (no longer a default gem since Ruby 3.4)
+gem "csv", "~> 3.3"
+
 # Event sourcing for Framework and Person Development aggregates.
 # `rails_event_store/all` is required instead of the umbrella's default entrypoint
 # because the latter loads the deprecated `rails_event_store_active_record` gem.
