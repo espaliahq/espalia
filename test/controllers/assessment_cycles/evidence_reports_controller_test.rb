@@ -125,6 +125,14 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
         text: "Download CSV"
     end
 
+    should "say the CSV is the whole cycle when the report is narrowed to the admin's org" do
+      sign_in @admin_user
+      get evidence_assessment_cycle_path(@cycle, scope: "mine")
+
+      assert_select "a[href=?]", tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id),
+        text: "Download CSV (whole cycle)"
+    end
+
     should "not offer a manager the CSV download" do
       sign_in @manager_user
       get evidence_assessment_cycle_path(@cycle)
