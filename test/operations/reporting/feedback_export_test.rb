@@ -132,6 +132,17 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       assert_not_nil withdrawn[:withdrawn_at]
     end
 
+    should "show the links a withdrawn item had once a migration removed them all" do
+      orphan = feedback(person: @second, status: "withdrawn", content: "orphaned")
+      EvidenceLink.create!(
+        tenant: @tenant, evidence_item: orphan, person_id: @second.id, framework_id: @framework_id,
+        capability_stable_id: @capability.stable_id, level_ordinal: 2,
+        link_status: "removed", linked_by_id: @peer.id, linked_at: 1.day.ago, removed_at: Time.current)
+
+      row = call_op(include_withdrawn: true)[:rows].find { |candidate| candidate[:feedback] == "orphaned" }
+      assert_equal "Strategic Thinking · E2", row[:applies_to]
+    end
+
     should "accept the boolean-ish string a web form submits" do
       assert_equal 4, call_op(include_withdrawn: "1")[:rows].size
     end

@@ -81,25 +81,30 @@ class Reporting::FeedbackExport
 
   def load_lookups(attributed)
     items = attributed.map(&:row)
-    @links = EvidenceLink.active.where(evidence_id: items.map(&:id))
-      .order(:linked_at, :id).group_by(&:evidence_id)
-    load_people(items, attributed.filter_map(&:request))
-    load_roles_and_levels
+    @links = shown_links(items)
+    placed_ids = items.flat_map { |item| [ item.person_id, item.author_id ] }.uniq
+    load_people(placed_ids, items, attributed.filter_map(&:request))
+    load_roles_and_levels(placed_ids)
     @capability_names = capability_names(@links.values.flatten.map(&:capability_stable_id).uniq)
   end
 
-  def load_people(items, requests)
-    ids = (items.flat_map { |item| [ item.person_id, item.author_id ] } +
-           requests.map(&:requested_by_id)).compact.uniq
-    @people = Person.where(id: ids).index_by(&:id)
-    managers = Person.where(id: @people.values.filter_map(&:manager_id) - @people.keys)
+  # The links an item applies to now. A withdrawn item a framework migration
+  # orphaned has none left, so it shows the ones it had rather than nothing.
+  def shown_links(items)
+    EvidenceLink.where(evidence_id: items.map(&:id)).order(:linked_at, :id).group_by(&:evidence_id)
+      .transform_values { |links| links.select { |link| link.link_status == "active" }.presence || links }
+  end
+
+  def load_people(placed_ids, items, requests)
+    @people = Person.where(id: placed_ids + requests.map(&:requested_by_id)).index_by(&:id)
+    recipients = items.map(&:person_id).uniq.filter_map { |id| @people[id] }
+    managers = Person.where(id: recipients.filter_map(&:manager_id) - @people.keys)
     managers.each { |manager| @people[manager.id] = manager }
   end
 
   # A person's role and level as this cycle saw them: their enrollment
   # snapshot when they took part, else their live framework assignment.
-  def load_roles_and_levels
-    people_ids = @people.keys
+  def load_roles_and_levels(people_ids)
     provider_enrollments = AssessmentCycleEnrollment
       .where(cycle_id: @cycle.cycle_id, person_id: people_ids - @enrollments.keys)
       .index_by(&:person_id)
