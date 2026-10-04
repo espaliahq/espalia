@@ -115,6 +115,32 @@ class AssessmentCycles::EvidenceReportsControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "2 of 2 participants have feedback"
     end
 
+    should "offer an admin the month's feedback as a CSV download" do
+      sign_in @admin_user
+      month = @last_month.strftime("%Y-%m")
+      get evidence_assessment_cycle_path(@cycle, month: month)
+
+      assert_select "a[href=?][data-turbo=false]",
+        tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id, month: month),
+        text: "Download CSV"
+    end
+
+    should "say the CSV covers every participant when the report is narrowed to the admin's org" do
+      sign_in @admin_user
+      get evidence_assessment_cycle_path(@cycle, scope: "mine")
+
+      assert_select "a[href=?]", tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id),
+        text: "Download CSV (all participants)"
+    end
+
+    should "not offer a manager the CSV download" do
+      sign_in @manager_user
+      get evidence_assessment_cycle_path(@cycle)
+
+      assert_response :success
+      assert_select "a", text: "Download CSV", count: 0
+    end
+
     should "narrow an admin to their own empty subtree" do
       sign_in @admin_user
       get evidence_assessment_cycle_path(@cycle, scope: "mine")

@@ -23,7 +23,9 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
         tenant: @tenant, name: "Q1 2026", framework_id: framework_id,
         opened_at: @last_month)
 
-      manager = FactoryBot.create(:person, tenant: @tenant, name: "Team Manager")
+      @manager_user = FactoryBot.create(:user, password: "password123")
+      manager = FactoryBot.create(:person, tenant: @tenant, name: "Team Manager", email: @manager_user.email)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @manager_user, person: manager, role: :member)
       report = FactoryBot.create(:person,
         tenant: @tenant, name: "Report One", manager: manager)
       author = FactoryBot.create(:person, tenant: @tenant, name: "Feedback Author")
@@ -150,6 +152,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
 
     assert_text "1 of 2 participants have feedback"
     assert_equal @last_month.strftime("%Y-%m"), find_field("Month").value
+    assert_csv_link_for(@last_month.strftime("%Y-%m"))
     screenshot("light_desktop_month")
 
     click_link_with_js_fallback "By role", expect_text: "Engineer"
@@ -166,7 +169,20 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       expect_text: "Feedback recorded and requests sent in #{@last_month.strftime("%B %Y")}"
 
     assert_text "1 of 2 participants have feedback"
+    assert_csv_link_for(@last_month.strftime("%Y-%m"))
     screenshot("light_mobile_month")
+  end
+
+  should "offer an admin the whole cycle's CSV and not a manager" do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit evidence_assessment_cycle_path(@cycle)
+    assert_text "Feedback provided"
+    assert_csv_link_for(nil)
+
+    sign_out_and_in_as(@manager_user)
+    visit evidence_assessment_cycle_path(@cycle)
+    assert_text "Feedback provided"
+    assert_no_link "Download CSV"
   end
 
   should "switch the grouped breakdown to role" do
@@ -180,6 +196,19 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def assert_csv_link_for(month)
+    link = find_link("Download CSV", visible: true)
+    query = Rack::Utils.parse_query(URI(link[:href]).query)
+    assert_equal tenant_feedback_exports_path(format: :csv), URI(link[:href]).path
+    assert_equal({ "cycle_id" => @cycle.cycle_id, "month" => month }.compact, query)
+    assert_equal "false", link["data-turbo"]
+  end
+
+  def sign_out_and_in_as(user)
+    Capybara.reset_sessions!
+    sign_in_as(user)
+  end
 
   def scroll_direction_card_into_view
     heading = find("h2", text: "Feedback direction")

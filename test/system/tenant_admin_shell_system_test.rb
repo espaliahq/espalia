@@ -3,8 +3,7 @@
 require "application_system_test_case"
 
 # Exercises the tenant admin shell — sidebar navigation across the
-# three sections (Theme, Users, Integrations) and the dashboard
-# landing page.
+# sections and the dashboard landing page.
 #
 class TenantAdminShellSystemTest < ApplicationSystemTestCase
   setup do
@@ -18,7 +17,7 @@ class TenantAdminShellSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
   end
 
-  should "render the dashboard with three tiles for admins" do
+  should "render the dashboard with a tile per section for admins" do
     sign_in_as(@admin_user)
     visit tenant_root_path
     screenshot("tenant_dashboard")
@@ -28,6 +27,7 @@ class TenantAdminShellSystemTest < ApplicationSystemTestCase
     assert_link "Theme", href: "/tenant/theme"
     assert_link "Users", href: "/tenant/users"
     assert_link "Integrations", href: "/tenant/integrations"
+    assert_link "Feedback export", href: "/tenant/feedback_exports/new"
   end
 
   should "navigate between sections via the sidebar" do

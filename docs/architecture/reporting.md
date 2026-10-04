@@ -224,6 +224,72 @@ so `EvidenceCollection::CODE_VERSION` remains 3 and no rebuild is required.
 **Authorization**: `AssessmentCyclePolicy#evidence_report?`, the same audience
 and subtree rules as cohort and attainment reporting.
 
+## 4.10 Feedback Export (CSV)
+
+The row-level companion to 4.9, for People & Culture's monthly reporting: every
+piece of feedback a cycle holds, one row each, with names and content. Where
+4.9 counts, this lists — so it has a narrower audience and its own privacy bar.
+
+- **Grain**: one row per `EvidenceItem`. Its active `EvidenceLink`s collapse
+  into one *Applies to* cell ("Strategic Thinking · E2 · Demonstrates; …"), so a
+  pivot over the file still counts pieces of feedback, not links.
+- **Attribution parity**: `Reporting::FeedbackExport` reads the same
+  participants (active cycle enrollments) and the same rules as 4.9 — both go
+  through `Reporting::EvidenceAttribution` (explicit `cycle_id`, else the
+  answered request's cycle, else exactly one enrollment window). With withdrawn
+  items left out, the row count equals 4.9's `feedback_provided` for the same
+  cycle and month, and the *Requested* rows equal its `provided_by_request`.
+  `include_withdrawn` adds the withdrawn items (4.9's `feedback_withdrawn`). The
+  `month` filter is 4.9's: feedback **recorded** in that calendar month (UTC).
+- **Columns**, in order (`Operations::Reporting::FeedbackExport::COLUMNS` is the
+  one list — the CSV header, the JSON `columns` and each row's keys):
+
+  | Column | Source |
+  |---|---|
+  | Cycle | `AssessmentCycle#name` |
+  | Recorded at | `recorded_at`, ISO 8601 UTC |
+  | Recipient / Recipient email | `person_id` → Person |
+  | Recipient role / Recipient level | the cycle enrollment snapshot (`Role#name`, `Level#title`), else the live framework assignment |
+  | Recipient manager | the recipient's live manager |
+  | Provider / Provider email / Provider role | `author_id` → Person, role as for the recipient |
+  | Direction | `feedback_direction`, else the legacy `source` fallback 4.9 uses, in 4.9's labels |
+  | Requested or proactive | *Requested* when the item answered a request of this cycle (4.9's rule — evidence older than the request was reused, so it stays *Proactive*) |
+  | Requested by / Requested at | that request |
+  | Type | `evidence_type` humanised, or `custom_type_label` for *other* |
+  | Title / Feedback | `title` / `content` |
+  | Applies to | active links (or, for a withdrawn item a migration left with none, the links it had): capability name (from the cycle's framework) · the recipient role's level code (`L<n>` when the role has none) · valence label |
+  | Status / Withdrawn at | `link_status`, `withdrawn_at` |
+  | Reference link | `external_reference.safe_url` (http/https only) |
+
+- **The file**: `text/csv`, UTF-8 with a byte-order mark (so Excel reads "→"
+  and accented names correctly), named
+  `growthos-feedback-export-<cycle-slug>-<YYYY-MM|all>-<UTC timestamp>.csv`. A
+  cell that starts like a formula (`=`, `+`, `-`, `@`, tab, CR) is prefixed with
+  an apostrophe — the cells hold text people typed, and a spreadsheet would
+  otherwise run it (`Reporting::FeedbackExportCsv`).
+- **Privacy bar**: `TenantPolicy#export_feedback?` — tenant admins (or global
+  admins) **with a linked Person**, so every export is attributable. Managers
+  are refused even for their own reports: 4.9 shows them counts, never content.
+  The export is refused while an admin is viewing as another user, although it
+  writes nothing — the Operation checks `AuditMetadata`'s
+  `impersonation_active`, so the web and MCP refuse alike. Each export logs one
+  info line: `[feedback_export] actor_person_id=… cycle_id=… month=… include_withdrawn=… rows=…`.
+
+**Surfaces**:
+
+- Web — the *Feedback export* section of tenant admin
+  (`GET /tenant/feedback_exports/new`: choose a cycle, then a month and whether
+  to include withdrawn feedback) downloads `GET /tenant/feedback_exports.csv`.
+  The cycle's feedback & evidence report (4.9) shows tenant admins a *Download
+  CSV* button carrying the cycle and the month on screen (never the My-org
+  scope — the export covers every participant, and under My org the label
+  says "all participants"). An unknown `cycle_id` offers no download rather than
+  falling back to another cycle. Both are full navigations (`data-turbo="false"`): Turbo cannot hand
+  a file to the browser. The file is sent `Cache-Control: no-store`.
+- MCP — `Operations::Reporting::FeedbackExport` (`reporting_feedback_export`,
+  `:read`, approval `:none`) returns `{ cycle:, period:, include_withdrawn:,
+  columns:, rows: }` — the same rows as JSON.
+
 
 ## Home dashboard
 

@@ -27,6 +27,7 @@ class AssessmentCycles::EvidenceReportsController < ApplicationController
       group_by: group_param,
       scope: scope_param,
       can_scope_to_self: can_scope_to_self?,
+      can_export_feedback: policy(ActsAsTenant.current_tenant).export_feedback?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants

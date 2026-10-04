@@ -74,6 +74,10 @@ Rails.application.routes.draw do
     resource :theme, only: [ :show, :update ], controller: "themes"
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
+    # Feedback export for monthly reporting (#458): `new` is the picker,
+    # `index.csv` the download.
+    resources :feedback_exports, only: [ :index, :new ]
+
     resources :users, only: [ :index, :show, :update ] do
       resources :collaborators,
                 only: [ :create, :destroy ],

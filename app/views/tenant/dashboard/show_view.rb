@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Tenant administration dashboard. Three tiles linking to each admin
-# section. Sidebar navigation lives in {Components::Kit::TenantAdminLayout}.
+# Tenant administration dashboard: tiles linking to the admin sections.
+# Sidebar navigation lives in {Components::Kit::TenantAdminLayout}.
 #
 class Views::Tenant::Dashboard::ShowView < Views::Base
   include Phlex::Rails::Helpers::Routes
@@ -24,6 +24,11 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
       label: "Integrations",
       path: :tenant_integrations_path,
       description: "HRIS sync and other external systems."
+    },
+    {
+      label: "Feedback export",
+      path: :new_tenant_feedback_export_path,
+      description: "Download a cycle's feedback as a CSV file for reporting."
     }
   ].freeze
 

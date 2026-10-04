@@ -4,12 +4,9 @@
 # assessment cycle across an authorised participant scope.
 #
 # Feedback is counted by EvidenceItem, never by EvidenceLink, so linking one
-# item to several capabilities cannot inflate the report. Cycle attribution is
-# immutable: explicit cycle IDs win, while historical rows without one are
-# inferred only when their domain timestamp falls in exactly one enrollment
-# window. A historical response recorded after close inherits its request's
-# inferred cycle; evidence recorded before a request remains attributed to its
-# original provision cycle.
+# item to several capabilities cannot inflate the report. Which cycle an item
+# or request belongs to is {Reporting::EvidenceAttribution}'s decision, shared
+# with the feedback export.
 #
 # An optional reporting period narrows the cycle's activity to one window:
 # feedback recorded and requests sent inside it. Attribution runs first, so
@@ -81,12 +78,10 @@ class Reporting::EvidenceCoverage
     :provided_ids, :requested_provided_ids, :withdrawn_ids,
     :feedback_directions, :request_statuses
   )
-  RequestRow = Data.define(:id, :person_id, :status, :evidence_id, :requested_at, :cycle_id)
   EvidenceRow = Data.define(
     :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction
   )
-  Window = Data.define(:cycle_id, :starts_at, :ends_at)
-  private_constant :Participant, :RequestRow, :EvidenceRow, :Window
+  private_constant :Participant, :EvidenceRow
 
   # @param cycle [AssessmentCycle]
   # @param scope_person_ids [Array<String>, nil] manager subtree, or nil for all
@@ -106,7 +101,7 @@ class Reporting::EvidenceCoverage
     return empty_result if enrollments.empty?
 
     @participant_ids = enrollments.map(&:person_id)
-    @windows_by_person = load_windows
+    @attribution = Reporting::EvidenceAttribution.new(cycle: @cycle, person_ids: @participant_ids)
     request_rows = load_request_rows
     evidence_rows, requested_evidence_ids = load_evidence_rows
     participants = build_participants(
@@ -129,124 +124,25 @@ class Reporting::EvidenceCoverage
     scope.to_a
   end
 
-  # Load every cycle window for the selected people in this framework so a
-  # legacy timestamp is accepted only when exactly one cycle contains it.
-  def load_windows
-    rows = AssessmentCycleEnrollment
-      .joins(:cycle)
-      .where(person_id: @participant_ids, assessment_cycles: { framework_id: @cycle.framework_id })
-      .pluck(
-        "assessment_cycle_enrollments.person_id",
-        "assessment_cycle_enrollments.cycle_id",
-        "assessment_cycle_enrollments.enrolled_at",
-        "assessment_cycle_enrollments.withdrawn_at",
-        "assessment_cycles.closed_at"
-      )
-
-    rows.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |row, windows|
-      person_id, cycle_id, enrolled_at, withdrawn_at, closed_at = row
-      windows[person_id] << Window.new(
-        cycle_id: cycle_id,
-        starts_at: enrolled_at,
-        ends_at: [ withdrawn_at, closed_at ].compact.min
-      )
-    end
-  end
-
   def load_request_rows
-    scope = EvidenceRequest
-      .where(person_id: @participant_ids, framework_id: @cycle.framework_id)
-      .where(cycle_id: [ nil, @cycle.cycle_id ])
-    scope = scope.where(requested_at: @period) if @period
-
-    scope
-      .pluck(:id, :person_id, :status, :evidence_id, :requested_at, :cycle_id)
-      .map { |attributes| RequestRow.new(*attributes) }
-      .select { |row| request_cycle(row) == @cycle.cycle_id }
+    @attribution.attribute_requests(
+      @attribution.request_refs(@attribution.request_scope(period: @period))
+    )
   end
 
   def load_evidence_rows
-    scope = EvidenceItem
-      .where(person_id: @participant_ids, framework_id: @cycle.framework_id)
-      .where(cycle_id: [ nil, @cycle.cycle_id ])
-    scope = scope.where(recorded_at: @period) if @period
-
-    rows = scope
+    rows = @attribution.evidence_scope(period: @period)
       .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction)
       .map { |attributes| EvidenceRow.new(*attributes) }
+    attributed = @attribution.attribute_evidence(rows)
 
-    refs_by_evidence = response_references(rows.map(&:id))
-    attributed = rows.select do |row|
-      evidence_cycle(row, refs_by_evidence.fetch(row.id, [])) == @cycle.cycle_id
-    end
-    requested_ids = attributed.filter_map do |row|
-      row.id if response_cycle(row, refs_by_evidence.fetch(row.id, [])) == @cycle.cycle_id
-    end.to_set
-
-    [ attributed, requested_ids ]
-  end
-
-  def response_references(evidence_ids)
-    return {} if evidence_ids.empty?
-
-    EvidenceRequest
-      .where(evidence_id: evidence_ids)
-      .pluck(:id, :person_id, :status, :evidence_id, :requested_at, :cycle_id)
-      .map { |attributes| RequestRow.new(*attributes) }
-      .group_by(&:evidence_id)
-  end
-
-  def evidence_cycle(row, request_refs)
-    return row.cycle_id if row.cycle_id.present?
-
-    qualifying_refs = qualifying_response_refs(row, request_refs)
-    return cycle_at(row.person_id, row.recorded_at) if qualifying_refs.empty?
-
-    resolved_request_cycle(qualifying_refs)
-  end
-
-  def response_cycle(row, request_refs)
-    qualifying_refs = qualifying_response_refs(row, request_refs)
-    return nil if qualifying_refs.empty?
-
-    resolved_request_cycle(qualifying_refs)
-  end
-
-  # Evidence predating the request was reused, not provided in response.
-  def qualifying_response_refs(row, request_refs)
-    request_refs.select do |request|
-      request.requested_at.present? && request.requested_at <= row.recorded_at
-    end
-  end
-
-  def resolved_request_cycle(request_rows)
-    cycles = request_rows.map { |request| request_cycle(request) }
-    return nil if cycles.any?(&:nil?) || cycles.uniq.size != 1
-
-    cycles.first
-  end
-
-  def request_cycle(row)
-    row.cycle_id.presence || cycle_at(row.person_id, row.requested_at)
-  end
-
-  def cycle_at(person_id, timestamp)
-    return nil if timestamp.nil?
-
-    matches = @windows_by_person.fetch(person_id, []).select do |window|
-      timestamp >= window.starts_at && (window.ends_at.nil? || timestamp <= window.ends_at)
-    end
-    matches.one? ? matches.first.cycle_id : nil
+    [ attributed.map(&:row), attributed.select(&:requested?).to_set { |entry| entry.row.id } ]
   end
 
   def reporting_direction(row)
-    return row.feedback_direction if EvidenceItem::FEEDBACK_DIRECTIONS.include?(row.feedback_direction)
-
-    case row.source
-    when "manager" then "manager_to_report"
-    when "self" then "self"
-    else "legacy_peer_or_upward"
-    end
+    Reporting::EvidenceAttribution.reporting_direction(
+      feedback_direction: row.feedback_direction, source: row.source
+    )
   end
 
   def build_participants(enrollments, request_rows, evidence_rows, requested_evidence_ids)

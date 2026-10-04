@@ -17,6 +17,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
+      assert_not policy.export_feedback?
     end
   end
 
@@ -33,6 +34,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
+      assert_not policy.export_feedback?
     end
   end
 
@@ -50,6 +52,17 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
     end
+
+    should "deny the feedback export without a linked person to attribute it to" do
+      assert_not policy.export_feedback?
+    end
+
+    should "permit the feedback export with a linked person" do
+      person = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
+      @ctx = AuthorizationContext.new(user: @user, tenant_user: @tu, person: person)
+
+      assert policy.export_feedback?
+    end
   end
 
   context "as a global admin with no tenant_user" do
@@ -62,6 +75,10 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.show?
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
+    end
+
+    should "deny the feedback export, which needs a person to attribute it to" do
+      assert_not policy.export_feedback?
     end
   end
 

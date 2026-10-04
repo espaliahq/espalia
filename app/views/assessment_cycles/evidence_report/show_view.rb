@@ -15,17 +15,21 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   # @param group_by [String] active grouping (manager | role | level)
   # @param scope [String] active scope (all | mine)
   # @param can_scope_to_self [Boolean] whether to show the scope switcher
+  # @param can_export_feedback [Boolean] whether to offer the feedback CSV
+  #   (tenant admins only — it carries names and content this report never shows)
   #
   # The active month and the months on offer are read from the report itself
   # (`period` / `available_months`), so the view and the MCP payload can't
   # disagree about which window the counts describe.
   def initialize(cycle:, report:, group_by: "manager", scope: "all",
-                 can_scope_to_self: false, user: nil, current_tenant: nil, tenants: [])
+                 can_scope_to_self: false, can_export_feedback: false,
+                 user: nil, current_tenant: nil, tenants: [])
     @cycle = cycle
     @report = report
     @group_by = group_by
     @scope = scope
     @can_scope_to_self = can_scope_to_self
+    @can_export_feedback = can_export_feedback
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -90,8 +94,23 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
         group_tabs
         scope_toggle
         month_filter
+        csv_download
       end
     end
+  end
+
+  # The whole cycle's feedback for the month on screen, whatever the scope or
+  # grouping: the export covers every participant, so under "My org" the label
+  # says so. A
+  # full navigation, since Turbo can't hand a file to the browser.
+  def csv_download
+    return unless @can_export_feedback
+
+    a(
+      href: tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id, month: month_key),
+      class: Components::Kit::FrameLoadError::BUTTON_CLASSES,
+      data: { turbo: "false" }
+    ) { @scope == "mine" ? "Download CSV (all participants)" : "Download CSV" }
   end
 
   # Narrow the report to one month of the cycle. A plain GET form with an
