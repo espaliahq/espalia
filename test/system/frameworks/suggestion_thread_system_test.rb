@@ -93,9 +93,10 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_selector "[data-clipboard-target='idle']", visible: true
     assert_no_selector "[data-clipboard-target='copied']", visible: true
 
-    page.execute_script("document.querySelector(\"[aria-label='Copy a link to this discussion']\").click()")
-
-    assert_selector "[data-clipboard-target='copied']", visible: true
+    # A real click: copying needs the user activation a JS-dispatched click lacks.
+    click_with_retry(expect_selector: "[data-clipboard-target='copied']") do
+      click_button "Copy a link to this discussion"
+    end
     assert_no_selector "[data-clipboard-target='idle']", visible: true
 
     # Restores after the flash — with the link icon still present, not wiped.
