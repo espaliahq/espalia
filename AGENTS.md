@@ -302,10 +302,11 @@ Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes
 credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
 does (names are whimsified).
 
-**A cloud session's Chromium never settles `navigator.clipboard.writeText`**: the promise
-stays pending even with focus and permission granted, in Playwright's Chromium, Chrome for
-Testing and under Xvfb alike. Code that awaits it before doing anything visible shows nothing
-there, so the clipboard controller flashes its feedback first and writes beside it.
+**A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
+gesture**: a JS-dispatched click leaves the promise pending, even with focus and permission
+granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. A real click copies.
+So a system test that copies clicks for real (`click_with_retry`), and the clipboard controller
+shows "Copied!" only once a copy succeeds, falling back to `execCommand` when `writeText` hangs.
 
 **In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
 browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs

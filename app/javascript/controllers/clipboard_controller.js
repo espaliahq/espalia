@@ -23,6 +23,8 @@
 
 import BaseController from "controllers/base_controller"
 
+const WRITE_TIMEOUT_MS = 1000
+
 export default class extends BaseController {
   static targets = ["source", "button", "idle", "copied"]
   static values = {
@@ -38,24 +40,35 @@ export default class extends BaseController {
     super.disconnect()
   }
 
-  copy() {
+  async copy() {
     const text = this.sourceTarget.textContent.trim()
-
-    // Optimistic feedback, before the write rather than after it: a browser
-    // can leave writeText pending forever (seen in headless Chromium with no
-    // clipboard backend), and awaiting it there meant no feedback at all.
-    this.flashCopied()
-    this.write(text)
+    if (await this.write(text)) this.flashCopied()
   }
 
   // private
 
+  // Resolves true only once the text is on the clipboard. A browser can leave
+  // writeText pending forever (headless Chromium with no clipboard backend), so
+  // a write that hasn't settled in time falls back to execCommand, which
+  // answers synchronously while the click's user activation still holds.
   write(text) {
-    // Clipboard API can be unavailable (insecure context) or refuse the write
-    // (denied permission). Fall back to a hidden textarea + execCommand.
-    if (!navigator.clipboard?.writeText) return this.fallbackCopy(text)
+    if (!navigator.clipboard?.writeText) return Promise.resolve(this.fallbackCopy(text))
 
-    navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text))
+    return new Promise((resolve) => {
+      let settled = false
+      const settle = (copied) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(copied)
+      }
+      const timer = setTimeout(() => settle(this.fallbackCopy(text)), WRITE_TIMEOUT_MS)
+
+      navigator.clipboard.writeText(text).then(
+        () => settle(true),
+        () => settle(this.fallbackCopy(text))
+      )
+    })
   }
 
   fallbackCopy(text) {
@@ -67,11 +80,12 @@ export default class extends BaseController {
     document.body.appendChild(area)
     area.select()
     try {
-      document.execCommand("copy")
+      return document.execCommand("copy")
     } catch {
-      // Nothing more we can do — leave the feedback optimistic.
+      return false
+    } finally {
+      document.body.removeChild(area)
     }
-    document.body.removeChild(area)
   }
 
   flashCopied() {
