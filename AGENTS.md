@@ -301,6 +301,11 @@ ruby-build downloads Ruby. `LANG=C.UTF-8`, without which Ruby reads files as US-
 credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
 does (names are whimsified).
 
+**A cloud session's Chromium never settles `navigator.clipboard.writeText`**: the promise
+stays pending even with focus and permission granted, in Playwright's Chromium, Chrome for
+Testing and under Xvfb alike. Code that awaits it before doing anything visible shows nothing
+there, so the clipboard controller flashes its feedback first and writes beside it.
+
 **In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
 browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
 Overmind, which the image lacks.

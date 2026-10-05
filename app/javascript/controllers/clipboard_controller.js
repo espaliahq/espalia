@@ -38,23 +38,25 @@ export default class extends BaseController {
     super.disconnect()
   }
 
-  async copy() {
+  copy() {
     const text = this.sourceTarget.textContent.trim()
 
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Clipboard API can be unavailable (insecure context, denied
-      // permission). Fall back to a hidden textarea + execCommand.
-      this.fallbackCopy(text)
-    }
-
-    // Optimistic feedback regardless of which path succeeded — the user
-    // sees confirmation and we don't leak failures for a non-critical action.
+    // Optimistic feedback, before the write rather than after it: a browser
+    // can leave writeText pending forever (seen in headless Chromium with no
+    // clipboard backend), and awaiting it there meant no feedback at all.
     this.flashCopied()
+    this.write(text)
   }
 
   // private
+
+  write(text) {
+    // Clipboard API can be unavailable (insecure context) or refuse the write
+    // (denied permission). Fall back to a hidden textarea + execCommand.
+    if (!navigator.clipboard?.writeText) return this.fallbackCopy(text)
+
+    navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text))
+  }
 
   fallbackCopy(text) {
     const area = document.createElement("textarea")
