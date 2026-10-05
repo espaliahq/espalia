@@ -294,9 +294,10 @@ from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already
 the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
 the chromedriver there.
 
-**The environment provides three things.** Network access to `cache.ruby-lang.org`, where
-ruby-build downloads Ruby. `LANG=C.UTF-8`, without which Ruby reads files as US-ASCII. And
-`GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
+**The environment provides three things.** Network access to the hosts the script downloads
+from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
+(gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
+Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
 `db:prepare` seeds development. Tests never need it. The seed signs in the admin from
 credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
 does (names are whimsified).

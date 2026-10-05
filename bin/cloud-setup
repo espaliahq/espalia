@@ -61,12 +61,15 @@ if [ -f "$PROXY_CA" ]; then
   step "The egress proxy's CAs in Chrome's trust store"
   mkdir -p "$NSS_DB"
   [ -f "$NSS_DB/cert9.db" ] || "$CERTUTIL" -N -d "sql:$NSS_DB" --empty-password
+  # Clear every alias an earlier run imported, so a CA the proxy has dropped stops being trusted.
+  "$CERTUTIL" -L -d "sql:$NSS_DB" | grep -oE '^ccr-agent-proxy-[0-9]+' | sort -u |
+    while read -r stale; do
+      while "$CERTUTIL" -D -d "sql:$NSS_DB" -n "$stale" >/dev/null 2>&1; do :; done
+    done
   ca_dir="$(mktemp -d)"
   awk -v dir="$ca_dir" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/" n ".pem") }' "$PROXY_CA"
   for pem in "$ca_dir"/*.pem; do
-    name="ccr-agent-proxy-$(basename "$pem" .pem)"
-    while "$CERTUTIL" -D -d "sql:$NSS_DB" -n "$name" >/dev/null 2>&1; do :; done
-    "$CERTUTIL" -A -d "sql:$NSS_DB" -t "C,," -n "$name" -i "$pem"
+    "$CERTUTIL" -A -d "sql:$NSS_DB" -t "C,," -n "ccr-agent-proxy-$(basename "$pem" .pem)" -i "$pem"
   done
   rm -rf "$ca_dir"
 fi
@@ -120,6 +123,15 @@ step "Headless Chromium on localhost:9222 for the chrome-devtools MCP"
 if ! curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1; then
   setsid nohup "$CHROMIUM" --headless=new --no-sandbox --remote-debugging-port=9222 \
     --user-data-dir=/tmp/chrome-mcp about:blank >/tmp/chrome-mcp.log 2>&1 < /dev/null &
+  for _ in $(seq 1 30); do
+    curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1 && break
+    sleep 0.5
+  done
+  if ! curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1; then
+    echo "Chromium did not start listening on :9222:" >&2
+    cat /tmp/chrome-mcp.log >&2
+    exit 1
+  fi
 fi
 
 step "Ready"
