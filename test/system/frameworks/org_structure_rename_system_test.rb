@@ -69,6 +69,26 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       assert_text "Engineer One"
     end
 
+    # #401: a refused rename used to answer a bodyless 422, which Turbo ignores —
+    # the editor stayed put with no message (Hard-Won Lesson 26).
+    { "role-name" => [ :@role_id, "role[name]", "Software Engineer" ],
+      "level-title" => [ :@level_id, "level[title]", "Engineer I" ] }.each do |prefix, (ivar, field, original)|
+      should "show the error inline and keep the typed text when the #{prefix.tr('-', ' ')} is blank" do
+        frame_id = "#{prefix}-#{instance_variable_get(ivar)}"
+        sign_in_as(@admin_user)
+        visit edit_framework_path(@framework_id)
+        wait_for_stimulus "matrix"
+
+        submit_inline_rename(frame_id, field, "   ")
+        within "turbo-frame##{frame_id}" do
+          assert_selector "[role=alert]", text: "Couldn’t save:"
+          assert_selector "[data-editor-form]", visible: true
+          assert_equal "   ", find("[data-editor-input]").value
+          assert_selector "[data-editor-display]", text: original, visible: :all
+        end
+      end
+    end
+
     # Regression: the level-title editor used a fixed sentence-width form
     # (w-80/w-96), which ballooned the narrow, centred header cell so the editor
     # rendered offset ("next to") rather than in place — and, in a level column,

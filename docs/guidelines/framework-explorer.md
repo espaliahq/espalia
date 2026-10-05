@@ -739,7 +739,9 @@ a ghost role contributes no columns in view mode.
   that dispatches `Operations::Frameworks::{UpdateRoleFamily,UpdateRole,UpdateLevel}`
   (shape-preserving → applies live, no draft) and re-renders the frame. Gated by
   `FrameworkPolicy#{update_role_family?,update_role?,update_level?}` (the
-  `edit_structure?` bar). **Constraints:** the level-title pencil shows only when
+  `edit_structure?` bar). A refused rename answers **422 with the frame** — the
+  message inline plus the typed text, so the editor re-opens with it (Lesson
+  26). A department rename saved unchanged is a no-op, not a refusal. **Constraints:** the level-title pencil shows only when
   the header renders **full titles** (≤ 3 roles selected); the compact-code view
   (> 3 roles) stays read-only — titles are hidden there, so the user renames with
   fewer roles in scope. `MatrixDataBuilder#build_merged_levels` carries a
@@ -758,7 +760,7 @@ a ghost role contributes no columns in view mode.
   only in edit mode with it; everyone else (and view mode) gets the plain
   heading. The editor host is a `<div>` around the `<h1>`, not the heading —
   the shared editor appends its `<form>` to the host and a form isn't phrasing
-  content. Unlike the org-structure controllers, a rejected save answers **422
+  content. Like the org-structure renames, a rejected save answers **422
   with the frame** (message + attempted value, Lesson 26). The aggregate
   no-ops on an unchanged name (no event, no feed entry) and strips whitespace.
   The `<title>` catches up on the next full navigation. Feed:

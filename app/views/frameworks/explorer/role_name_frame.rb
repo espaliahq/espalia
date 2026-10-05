@@ -23,10 +23,15 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   # @param role [FrameworkState::Role, Frameworks::ExplorerGraph::Role]
   # @param framework_id [String]
   # @param mode [Symbol] :view or :edit
-  def initialize(role:, framework_id:, mode: :view)
+  # @param error [String, nil] a rejected inline save (Hard-Won Lesson 26 — the
+  #   422 must carry the frame, the message, and the attempted text)
+  # @param attempted_value [String, nil] the value the rejected save carried
+  def initialize(role:, framework_id:, mode: :view, error: nil, attempted_value: nil)
     @role = role
     @framework_id = framework_id
     @mode = mode
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -62,6 +67,7 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   def editable
     div(class: "flex flex-col items-start gap-1 min-w-0", data: editor_data) do
       div(class: "min-w-0", data: { editor_display: true }) { plain_name }
+      render_field_editor_error(@error)
     end
   end
 
@@ -70,10 +76,11 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
     field_editor_data(
       action: framework_role_path(framework_id: @framework_id, id: @role.role_id),
       field: "role[name]",
-      value: @role.name.to_s,
+      value: (@error ? @attempted_value : @role.name).to_s,
       label: "Role name",
       outcome: "apply",
-      rows: 2
+      rows: 2,
+      error: @error
     )
   end
 end

@@ -45,12 +45,19 @@ class Frameworks::DepartmentsControllerTest < ActionDispatch::IntegrationTest
       assert_equal "Commercial Finance", department_of(@fo_id)
     end
 
-    should "return unprocessable when renaming to the same name" do
+    # Saving the editor unchanged used to answer a bodyless 422 that left it
+    # open and silent; it is a no-op that re-renders the tree.
+    should "treat renaming to the same name as a no-op" do
       sign_in @user
-      patch framework_departments_path(framework_id: @framework_id),
-            params: { department: { from: "Finance", to: "Finance" } }
+      assert_no_difference -> { Rails.configuration.event_store.read.count } do
+        patch framework_departments_path(framework_id: @framework_id),
+              params: { department: { from: "Finance", to: "Finance" } },
+              headers: { "Turbo-Frame" => "role-tree-families" }
+      end
 
-      assert_response :unprocessable_content
+      assert_response :success
+      assert_includes response.body, "role-tree-families"
+      assert_equal "Finance", department_of(@fc_id)
     end
 
     should "deny non-contributor viewers" do
