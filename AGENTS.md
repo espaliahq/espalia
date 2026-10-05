@@ -267,6 +267,44 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 > even when the task itself exited 1. Piping hides the failure as well: rake prints it above
 > the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
+### Cloud sessions: `bin/cloud-setup`, not the devcontainer
+
+**A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
+devcontainer would rebuild its Rails image and start eight containers every session. The
+script takes about nine minutes from a cold container and six seconds once everything is in
+place. The environment's setup script runs it as root from the checkout; run it again by hand
+to restart anything that has stopped. It provides:
+
+- **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
+  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
+- **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
+  `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
+- **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:
+  `CAPYBARA_SERVER_PORT` stays unset, so one worker drives the preinstalled Playwright
+  Chromium. The script fetches the chromedriver that matches it (the image's is newer, and
+  Selenium Manager cannot reach its version index) and writes a `/usr/bin/google-chrome`
+  wrapper that adds `--no-sandbox`, which Chrome needs to run as root.
+- **A headless Chromium on `localhost:9222`**, where `.mcp.json` already points the
+  `chrome-devtools` MCP.
+- **The egress proxy's CAs in Chrome's NSS store**, so the browser can load anything off-host.
+- **The gems, the Tailwind build, the test database**, and the development database, seeded.
+
+**The tools reach the session through `/root/.local/bin`.** A session's shell takes its `PATH`
+from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already on it ahead of
+the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
+the chromedriver there.
+
+**The environment provides three things.** Network access to `cache.ruby-lang.org`, where
+ruby-build downloads Ruby. `LANG=C.UTF-8`, without which Ruby reads files as US-ASCII. And
+`GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
+`db:prepare` seeds development. Tests never need it. The seed signs in the admin from
+credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
+does (names are whimsified).
+
+**In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
+browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
+Overmind, which the image lacks.
+
 ## Visual Verification (NON-NEGOTIABLE)
 
 System tests remain the **source of truth** and MUST represent every piece of
