@@ -16,11 +16,14 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
   # @param merged_levels [Array<Hash>] from MatrixDataBuilder
   # @param selected_role_count [Integer] number of selected roles
   # @param framework_id [String, nil] required in :edit mode for inline-edit form actions
-  # @param mode [Symbol] :view or :edit — gates the inline level-title rename pencils
-  def initialize(merged_levels:, selected_role_count: 0, framework_id: nil, mode: :view)
+  # @param mode [Symbol] :view or :edit — edit mode shows draft-level wiggles
+  # @param can_edit_structure [Boolean] gates the inline level-title rename pencils
+  def initialize(merged_levels:, selected_role_count: 0, framework_id: nil, mode: :view,
+                 can_edit_structure: false)
     @merged_levels = merged_levels
     @framework_id = framework_id
     @mode = mode
+    @can_edit_structure = can_edit_structure
     @show_full_titles = selected_role_count <= FULL_TITLE_THRESHOLD
   end
 
@@ -70,7 +73,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
         if @mode == :edit && rc[:level_id]
           render Views::Frameworks::Explorer::LevelTitleFrame.new(
             level_id: rc[:level_id], title: rc[:level_title],
-            framework_id: @framework_id, mode: @mode,
+            framework_id: @framework_id, mode: @can_edit_structure ? :edit : :view,
             added_in_draft: rc[:added_in_draft]
           )
         else

@@ -17,6 +17,8 @@
 class Frameworks::RoleFamiliesController < ApplicationController
   include Frameworks::RoleTreeFamiliesFrame
 
+  BLANK_NAME = "the name can’t be blank"
+
   before_action :set_framework
   before_action :set_role_family, only: [ :update ]
 
@@ -45,6 +47,8 @@ class Frameworks::RoleFamiliesController < ApplicationController
     authorize @framework, :update_role_family?
 
     attrs = changed_role_family_attrs
+    return render_name_frame(error: BLANK_NAME) if inline_rename? && attrs.key?(:name) && attrs[:name].blank?
+
     if attrs.present?
       Operations::Frameworks::UpdateRoleFamily.call(
         context: pundit_user,
@@ -52,18 +56,29 @@ class Frameworks::RoleFamiliesController < ApplicationController
       )
     end
 
-    if request.headers["Turbo-Frame"] == FAMILIES_FRAME
-      render_role_tree_families_frame(@framework)
+    if inline_rename?
+      render_name_frame
     else
-      render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
-        role_family: @role_family.reload, framework_id: @framework.framework_id, mode: :edit
-      ), layout: false
+      render_role_tree_families_frame(@framework)
     end
-  rescue Operations::Base::ParameterError
-    head :unprocessable_content
+  rescue Operations::Base::ParameterError => e
+    inline_rename? ? render_name_frame(error: e.message) : head(:unprocessable_content)
   end
 
   private
+
+  def inline_rename?
+    request.headers["Turbo-Frame"] != FAMILIES_FRAME
+  end
+
+  # A rejected inline rename answers 422 WITH the frame: the message plus the
+  # typed text, so the editor re-opens with it (Hard-Won Lesson 26).
+  def render_name_frame(error: nil)
+    render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
+      role_family: @role_family.reload, framework_id: @framework.framework_id, mode: :edit,
+      error: error, attempted_value: (params.dig(:role_family, :name).to_s if error)
+    ), layout: false, status: (error ? :unprocessable_content : :ok)
+  end
 
   # Only forward fields that actually changed, so a department-only move reads
   # as "Updated a role family's department" in the activity feed (not a verbose

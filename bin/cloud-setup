@@ -62,7 +62,8 @@ if [ -f "$PROXY_CA" ]; then
   mkdir -p "$NSS_DB"
   [ -f "$NSS_DB/cert9.db" ] || "$CERTUTIL" -N -d "sql:$NSS_DB" --empty-password
   # Clear every alias an earlier run imported, so a CA the proxy has dropped stops being trusted.
-  "$CERTUTIL" -L -d "sql:$NSS_DB" | grep -oE '^ccr-agent-proxy-[0-9]+' | sort -u |
+  # `|| true`: a fresh store has nothing to match, and pipefail would end the script.
+  "$CERTUTIL" -L -d "sql:$NSS_DB" | { grep -oE '^ccr-agent-proxy-[0-9]+' || true; } | sort -u |
     while read -r stale; do
       while "$CERTUTIL" -D -d "sql:$NSS_DB" -n "$stale" >/dev/null 2>&1; do :; done
     done

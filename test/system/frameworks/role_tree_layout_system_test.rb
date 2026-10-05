@@ -192,7 +192,10 @@ class Frameworks::RoleTreeLayoutSystemTest < ApplicationSystemTestCase
         ).click();
       JS
       assert_selector "[data-tree-target='role'] [data-editor-input]", visible: true
-      press_escape
+      # The editor's Esc listener is on its own input; while it is open the row
+      # hides its cluster, so the kebab below needs it really closed.
+      press_escape(scope: "[data-tree-target='role'] [data-editor-input]")
+      assert_no_selector "[data-tree-target='role'] [data-editor-form]"
 
       page.execute_script(<<~JS)
         document.querySelector("[data-tree-target='role'] [aria-label='Role actions']").click();
