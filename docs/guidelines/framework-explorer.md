@@ -876,6 +876,10 @@ in a `relative flex-1 min-w-0` box and its controls in an absolutely-positioned
 - A tree pencil is now **outside** its name frame, so it names the frame with
   `data-editor-host-frame` — the same escape hatch a kebab's "Edit…" uses. It
   also survives that frame's PATCH re-render for free.
+- **The cluster hides while the row's editor is open**
+  (`:has([data-editor-form])`). The editor takes the row's whole width, so the
+  cluster would sit over its textarea and clip a save error; none of its
+  controls apply mid-edit, and Cancel or a save brings them back.
 
 Two more things fall out of the cluster rule itself:
 

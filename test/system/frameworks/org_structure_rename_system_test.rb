@@ -86,6 +86,11 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
           assert_equal "   ", find("[data-editor-input]").value
           assert_selector "[data-editor-display]", text: original, visible: :all
         end
+        # The tree row's floating controls would otherwise clip the message.
+        if prefix == "role-name"
+          row = find("turbo-frame##{frame_id}").ancestor("[data-hover-cluster='tree']")
+          assert_equal "none", row.find(".tree-actions", visible: :all).evaluate_script("getComputedStyle(this).display")
+        end
       end
     end
 
