@@ -8,13 +8,18 @@ require "application_system_test_case"
 # with no edit affordance.
 class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
   setup do
+    page.driver.browser.manage.window.resize_to(1400, 1400)
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user, password: "password123")
     @viewer_user = FactoryBot.create(:user, password: "password123")
+    @collaborator_user = FactoryBot.create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
       FactoryBot.create(:tenant_user, tenant: @tenant, user: @admin_user, role: :admin)
       FactoryBot.create(:tenant_user, tenant: @tenant, user: @viewer_user, role: :member)
+      collaborator = FactoryBot.create(:person, tenant: @tenant, email: @collaborator_user.email)
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: @collaborator_user,
+                                      role: :member, person: collaborator)
 
       handler = Frameworks::CommandHandler.new
       @framework_id = SecureRandom.uuid_v7
@@ -34,6 +39,10 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       handler.set_behavioural_expectation(@framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7,
                                           cap_id, 1, "Asks clarifying questions")
       handler.publish_version(@framework_id, "test")
+
+      # Suggest rights open edit mode; renames need the edit-structure bar.
+      FactoryBot.create(:framework_collaborator, tenant: @tenant,
+                        framework_id: @framework_id, person_id: collaborator.id, role: "collaborator")
     end
   end
 
@@ -77,6 +86,29 @@ class Frameworks::OrgStructureRenameSystemTest < ApplicationSystemTestCase
       assert_includes form[:class], "w-full"
       assert_in_delta width_before,
                       header.evaluate_script("this.getBoundingClientRect().width"), 1.0
+    end
+  end
+
+  # #401: a suggest-only collaborator reaches edit mode, but every rename here
+  # is refused by `edit_structure?`, so none may offer a pencil.
+  context "edit mode as a suggest-only collaborator" do
+    { desktop: [ 1400, 1400 ], mobile: [ 375, 812 ] }.each do |viewport, size|
+      should "offer no rename pencils on the #{viewport} viewport" do
+        page.driver.browser.manage.window.resize_to(*size)
+        sign_in_as(@collaborator_user)
+        visit edit_framework_path(@framework_id)
+        wait_for_stimulus "matrix"
+        assert_text "Strategic Thinking"
+
+        assert_selector "turbo-frame#role-name-#{@role_id}", text: "Software Engineer", visible: :all
+        assert_selector "turbo-frame#level-title-#{@level_id}", text: "Engineer I"
+        assert_no_selector "[aria-label='Edit role name']", visible: :all
+        assert_no_selector "[aria-label='Edit role family name']", visible: :all
+        assert_no_selector "[aria-label='Edit level title']", visible: :all
+        assert_no_selector "turbo-frame#role-name-#{@role_id} [data-editor-action]", visible: :all
+        assert_no_selector "turbo-frame#role-family-name-#{@rf_id} [data-editor-action]", visible: :all
+        assert_no_selector "turbo-frame#level-title-#{@level_id} [data-editor-action]", visible: :all
+      end
     end
   end
 

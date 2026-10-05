@@ -724,11 +724,13 @@ a ghost role contributes no columns in view mode.
 
 - **Org-structure inline renames** — hover-pencil inline editors on the
   **role-family name** and **role name** in the left role tree
-  (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree` when
-  `mode == :edit` — currently *without* the `can_edit_structure` check its
-  neighbours carry, so a suggest-only viewer sees pencils whose save the
-  policy refuses: #401) and on each per-role **level title** in the matrix header
-  (`LevelTitleFrame`, rendered by `MatrixHeader#full_title_badges`). These use
+  (`RoleFamilyNameFrame` / `RoleNameFrame`, rendered by `RoleTree`) and on each
+  per-role **level title** in the matrix header (`LevelTitleFrame`, rendered by
+  `MatrixHeader#full_title_badges`). All three pencils need edit mode **and**
+  `can_edit_structure`, like every other tree affordance: reaching edit mode
+  only takes suggest rights, so a suggest-only viewer sees the names (a draft
+  level's title still wiggles) but no pencil whose save the policy would refuse
+  (#401). These use
   the shared `InlineEditable` pencil/form helpers but — unlike capability /
   category text — are **direct edits, NOT the suggested-edit path**: org
   structure has no approval tier, so there is no pending decoration, no
@@ -2553,7 +2555,7 @@ line (§9).
 | `app/views/frameworks/explorer/archive_illustration_modal.rb` | Shared archive-example modal (confirm + optional reason) — replaced the menu's native `confirm()` |
 | `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
 | `app/views/frameworks/matrix_frame_view.rb` | Turbo Frame wrapper for matrix endpoint |
-| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; in view mode, a viewer with an assignment in the framework gets a "My ratings →" `standalone` cluster link per role, landing on their assessment read against it (assessments.md → *Role lens*); family list wrapped in the `role-tree-families` Turbo Frame. The per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows need `mode == :edit` **and** `can_edit_structure`; `RoleFamilyNameFrame` / `RoleNameFrame` (inline rename) currently follow `mode` alone — a **known divergence** from the `edit_structure?` policy bar those PATCHes enforce, so a suggest-only viewer is shown pencils their save will be refused (#401). Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
+| `app/views/frameworks/explorer/role_tree.rb` | Department → Family → Role tree; in view mode, a viewer with an assignment in the framework gets a "My ratings →" `standalone` cluster link per role, landing on their assessment read against it (assessments.md → *Role lens*); family list wrapped in the `role-tree-families` Turbo Frame. The per-family edit-dialog trigger, the role-row ⋮ kebab, the department-header editor and the "+ Add role" / "+ Add role family" rows and the `RoleFamilyNameFrame` / `RoleNameFrame` rename pencils all need `mode == :edit` **and** `can_edit_structure` (`#structure_editable?`) — the `edit_structure?` bar their writes enforce (#401). Hides ghost roles/families in view mode, wiggles them (+ "No roles yet") in edit mode |
 | `app/views/frameworks/explorer/framework_name_frame.rb` | The header `<h1>` + edit-mode inline rename editor for an admin / owner (`can_rename`; direct edit, no suggestion path; 422-with-frame on a rejected save) |
 | `app/views/frameworks/explorer/role_family_name_frame.rb` | Role-family name + edit-mode inline rename editor (direct edit, no suggestion path) |
 | `app/views/frameworks/explorer/role_family_edit_modal.rb` | Shared role-family dialog — `:edit` (per-family trigger, PATCH) or `:new` (tree-foot "+ Add role family", POST → `AddRoleFamily`); submit re-renders the `role-tree-families` frame so the family re-groups / appears ghost-wiggled |
@@ -2576,7 +2578,7 @@ line (§9).
 | `app/views/frameworks/explorer/role_name_frame.rb` | Role name + edit-mode inline rename editor (direct edit) |
 | `app/views/frameworks/explorer/level_title_frame.rb` | Per-role level title + edit-mode inline rename editor (full-title header mode only) |
 | `app/views/frameworks/explorer/matrix.rb` | Table container + empty state |
-| `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode |
+| `app/views/frameworks/explorer/matrix_header.rb` | Sticky column headers with responsive titles; renders `LevelTitleFrame` per role in full-title (≤3 roles) edit mode, with the rename pencil only for `can_edit_structure` |
 | `app/views/frameworks/explorer/matrix_category_group.rb` | Collapsible category with capability rows; sticky header renders CategoryNameFrame + CategoryDescriptionFrame |
 | `app/views/frameworks/explorer/expanded_row.rb` | The expanded (illustrations) row — shipped as a hidden placeholder, served loaded by `FrameworksController#expanded_row` / `#edit_expanded_row` on first expand (Hard-Won Lesson 25) |
 | `app/views/frameworks/explorer/matrix_row.rb` | Compact capability row + the `ExpandedRow` placeholder; row-actions kebab trigger (unconditional in edit mode) — its menu carries inline Approve/Reject of pending name/description edits + Edit name/description… + Discuss… + Move up/down + Edit roles… + Archive (§11, §11a, §12, §12a) |
