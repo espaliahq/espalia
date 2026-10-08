@@ -138,7 +138,7 @@ gem "csv", "~> 3.3"
 # `rails_event_store/all` is required instead of the umbrella's default entrypoint
 # because the latter loads the deprecated `rails_event_store_active_record` gem.
 gem "rails_event_store", "~> 3.1", require: "rails_event_store/all"
-gem "ruby_event_store-active_record", "~> 3.0"
+gem "ruby_event_store-active_record", "~> 3.2"
 
 # HTTP client for HRIS and external API integrations
 gem "faraday", "~> 2.14"
