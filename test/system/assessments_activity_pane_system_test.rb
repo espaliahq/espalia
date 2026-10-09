@@ -59,6 +59,83 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
+  # Enough entries that the feed overflows any viewport the tests use.
+  def record_many_evidence_entries(count = 40)
+    ActsAsTenant.with_tenant(@tenant) do
+      pd_handler = PersonDevelopment::CommandHandler.new
+      count.times do |i|
+        pd_handler.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", title: "Entry #{i}",
+          content: "Body content for entry #{i}.", author_id: @person.id, valence: "demonstrated")
+      end
+    end
+  end
+
+  def open_loaded_activity_pane
+    visit assessment_path(@assignment)
+    wait_for_stimulus "activity-pane"
+    toggle_activity_pane
+    assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
+    assert_selector "#assessment-activity-pane turbo-frame#assessment-activity[complete]",
+      visible: :all
+  end
+
+  def pane_geometry
+    page.evaluate_script(<<~JS)
+      (() => {
+        const pane = document.getElementById("assessment-activity-pane").getBoundingClientRect();
+        return { top: pane.top, bottom: pane.bottom, viewport: window.innerHeight };
+      })()
+    JS
+  end
+
+  # The header shrinks as the hero collapses and the sticky offset follows
+  # it through a ResizeObserver, so the geometry settles a frame or two late.
+  def assert_pane_within_viewport
+    geometry = nil
+    within_viewport = wait_until_js do
+      geometry = pane_geometry
+      geometry["bottom"] <= geometry["viewport"] + 0.5
+    end
+    assert within_viewport,
+      "expected the pane's bottom (#{geometry['bottom']}) within the viewport (#{geometry['viewport']})"
+  end
+
+  # Scrolls the pane to its end and checks the last entry is on screen,
+  # inside the pane and inside the viewport.
+  def assert_last_entry_reachable
+    page.execute_script(<<~JS)
+      const pane = document.getElementById("assessment-activity-pane");
+      pane.scrollTop = pane.scrollHeight;
+    JS
+    reachable = wait_until_js do
+      page.evaluate_script(<<~JS)
+        (() => {
+          const pane = document.getElementById("assessment-activity-pane");
+          const entries = pane.querySelectorAll("ul > li");
+          const last = entries[entries.length - 1].getBoundingClientRect();
+          const box = pane.getBoundingClientRect();
+          return entries.length > 1 && last.bottom <= box.bottom + 0.5 &&
+            last.bottom <= window.innerHeight + 0.5 && last.top >= box.top;
+        })()
+      JS
+    end
+    assert reachable, "expected the feed's last entry to scroll into view inside the pane"
+  end
+
+  def wait_until_js(seconds: Capybara.default_max_wait_time)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    loop do
+      result = yield
+      return result if result
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.1
+    end
+    nil
+  end
+
   context "activity pane" do
     should "default to closed and reveal the feed when toggled" do
       visit assessment_path(@assignment)
@@ -162,6 +239,32 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         "expected scrollTop preserved across broadcast reload; was #{scrolled_to}, now #{restored}"
     end
 
+    should "keep the pane's bottom on screen with the hero expanded and collapsed" do
+      record_many_evidence_entries
+      open_loaded_activity_pane
+
+      assert_operator page.evaluate_script("window.scrollY"), :<, 1
+      assert_pane_within_viewport
+      assert_last_entry_reachable
+
+      # Past the hero's 240px collapse range; the scroll root's min-height
+      # floor guarantees the page can scroll this far.
+      page.execute_script("document.getElementById('assessment-activity-pane').scrollTop = 0")
+      page.execute_script("window.scrollTo(0, 360)")
+      assert_operator page.evaluate_script("window.scrollY"), :>=, 300
+      assert_pane_within_viewport
+      assert_last_entry_reachable
+    end
+
+    should "keep the end of the feed from scrolling the page" do
+      open_loaded_activity_pane
+
+      assert_equal "contain",
+        page.evaluate_script(
+          "getComputedStyle(document.getElementById('assessment-activity-pane')).overscrollBehaviorY"
+        )
+    end
+
     should "push ?activity=open to the URL on toggle" do
       visit assessment_path(@assignment)
       wait_for_stimulus "activity-pane"
@@ -196,6 +299,17 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
   context "activity pane on mobile" do
     setup do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    end
+
+    should "open the overlay full height with its last entry reachable" do
+      record_many_evidence_entries
+      open_loaded_activity_pane
+
+      geometry = pane_geometry
+      assert_in_delta 0, geometry["top"], 0.5,
+        "expected the overlay to start at the top of the viewport, got #{geometry['top']}"
+      assert_pane_within_viewport
+      assert_last_entry_reachable
     end
 
     should "close on outside click but stay open when click lands inside the pane" do
