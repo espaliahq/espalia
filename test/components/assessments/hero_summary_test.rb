@@ -295,6 +295,17 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_not_includes html, "Strategic Thinking"
     end
 
+    should "cut a tied list the same way on every render" do
+      # Everyone at 0% of E4 and 100% of E3 is the common case. Unbroken,
+      # the rows and the "+N more" target could reshuffle on each reload.
+      ties = MORE_CAPS.each_index.to_h { |i| [ "cap-#{i}", 0.0 ] }
+      html = render_gap_list(names: MORE_CAPS, next_scores: ties.to_a.reverse.to_h)
+
+      assert_operator html.index("Strategic Thinking"), :<, html.index("Quality First")
+      assert_operator html.index("Quality First"), :<, html.index("DevSecOps")
+      assert_includes html, 'href="#cell-cap-3-4"'
+    end
+
     should "lead with blocked capabilities and still count the rest" do
       html = render_gap_list(
         names: MORE_CAPS,

@@ -116,10 +116,10 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 
 | Performance state | Headline | List label | Items | Border |
 |---|---|---|---|---|
-| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | red |
-| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | amber |
-| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest scores **at E(n+1)** | blue |
-| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1), else 3 lowest scores there | purple |
+| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | red |
+| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | amber |
+| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 weakest gaps **at E(n+1)**, then "+N more" | blue |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1) first, then the weakest other gaps there; 3 rows, then "+N more" | purple |
 | `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest scores at E(n) | green |
 | `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest scores at E(n) | blue |
 

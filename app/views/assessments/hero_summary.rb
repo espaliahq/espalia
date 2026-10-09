@@ -474,17 +474,18 @@ class Views::Assessments::HeroSummary < Views::Base
   # capabilities equally unshown above, the one weakest at the level the
   # person is standing on has the furthest to go, so it leads.
   def weakest(scores, limit = GAP_ROWS)
-    scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid, Float::INFINITY) ] }.first(limit)
+    scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid, Float::INFINITY), sid ] }.first(limit)
   end
 
-  # Every capability still short of the level, weakest first, with `lead`
-  # (blocked ones) ranked ahead of the rest. A capability demonstrated in
-  # full there is not a gap, however low it would sort, so it never pads
-  # a short list (#471).
-  def ranked_gaps(scores, caps, lead: {})
+  # Every capability still short of the level, weakest first, with
+  # `lead_ids` (blocked ones) ranked ahead of the rest. A capability
+  # demonstrated in full there is not a gap, however low it would sort, so
+  # it never pads a short list (#471). The stable_id tie-break keeps the
+  # cut between the shown rows and "+N more" from reshuffling on reload.
+  def ranked_gaps(scores, caps, lead_ids: [])
     gaps = scores.select { |sid, score| caps.key?(sid) && gap?(score) }
-    leading = gaps.slice(*lead.keys)
-    weakest(leading, leading.size) + weakest(gaps.except(*lead.keys), gaps.size)
+    leading = gaps.slice(*lead_ids)
+    weakest(leading, leading.size) + weakest(gaps.except(*lead_ids), gaps.size)
   end
 
   def gap?(score)
@@ -546,8 +547,9 @@ class Views::Assessments::HeroSummary < Views::Base
       # like any other gap row: `blocked_at_next_level` is in whatever
       # order the engine collected it, so taking the first three could
       # both omit a worse one and show them out of order.
-      blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      gaps = ranked_gaps(gap_scores, caps_by_id, lead: scores_at_next.slice(*blocked))
+      # Blocked is a next-level fact, so it only leads a list scored there.
+      blocked = gap_ordinal == @person_level ? [] : primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
+      gaps = ranked_gaps(gap_scores, caps_by_id, lead_ids: blocked)
       { state_label: "#{state_label(:mastering)} #{current_code} · #{progress_label}",
         **gap_list(gaps, gap_code, gap_ordinal),
         border: "border-purple-300 dark:border-purple-700",
