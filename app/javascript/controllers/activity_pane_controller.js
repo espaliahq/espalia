@@ -28,10 +28,8 @@ import { useClickOutside, useTransition } from "stimulus-use"
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const MOBILE_BREAKPOINT = 1024
-// Gap kept between the fitted pane's bottom and the viewport's, and the
-// least height it is ever given.
+// Gap kept between the fitted pane's bottom and the viewport's.
 const FIT_BOTTOM_GAP_PX = 16
-const FIT_MIN_HEIGHT_PX = 160
 
 export default class extends BaseController {
   static targets = ["pane", "toggle"]
@@ -155,7 +153,8 @@ export default class extends BaseController {
       this.enter()
       this.#scheduleFit()
     } else {
-      this.leave()
+      // Fit once the fade-out ends, which clears the inline height.
+      Promise.resolve(this.leave()).then(() => this.#scheduleFit())
     }
   }
 
@@ -175,6 +174,7 @@ export default class extends BaseController {
     window.removeEventListener("resize", this.onViewportChange)
     this.bodyResizeObserver.disconnect()
     if (this.fitFrame) cancelAnimationFrame(this.fitFrame)
+    this.fitFrame = null
     this.onViewportChange = null
   }
 
@@ -194,7 +194,9 @@ export default class extends BaseController {
       return
     }
     const room = window.innerHeight - pane.getBoundingClientRect().top - FIT_BOTTOM_GAP_PX
-    pane.style.maxHeight = `${Math.max(FIT_MIN_HEIGHT_PX, Math.floor(room))}px`
+    // No floor: a taller pane would put its end back below the fold, where
+    // overscroll-contain stops the wheel from scrolling the page to reach it.
+    pane.style.maxHeight = `${Math.max(0, Math.floor(room))}px`
   }
 
   #applyMetadata(state) {
