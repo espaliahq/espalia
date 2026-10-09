@@ -27,6 +27,10 @@ class Views::Assessments::HeroSummary < Views::Base
   # met we show a neutral coverage-progress hero instead.
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
+  # Rows a gap list shows before it points at the rest. The band collapses
+  # on scroll, so it stays short; the "+N more" line says it is not whole.
+  GAP_ROWS = 3
+
 
   # @param scoring [Hash] effective scoring
   # @param self_scoring [Hash, nil]
@@ -130,7 +134,7 @@ class Views::Assessments::HeroSummary < Views::Base
   # under the taller right column left a blank block beside the headline.
   def middle_band
     config = state_panel_config
-    return unless config && config[:items].any?
+    return unless config && (config[:items].any? || config[:gap_list])
 
     div(class: "hero-collapsible") do
       div do
@@ -448,14 +452,15 @@ class Views::Assessments::HeroSummary < Views::Base
   # to E4" would read a 100% at E3 as E4 demonstrated in full.
   def gap_target
     @gap_target ||= if scores_at_next.any? && next_code
-      [ scores_at_next, next_code ]
+      [ scores_at_next, next_code, levels_above.first[:ordinal] ]
     else
-      [ scores_here, current_code ]
+      [ scores_here, current_code, @person_level ]
     end
   end
 
-  def gap_scores = gap_target.first
-  def gap_code = gap_target.last
+  def gap_scores = gap_target[0]
+  def gap_code = gap_target[1]
+  def gap_ordinal = gap_target[2]
 
   def scorable(scores)
     scores.select { |_, score| score[:scorable] }
@@ -468,8 +473,22 @@ class Views::Assessments::HeroSummary < Views::Base
   # working there, so a whole gap list can sit at 0% of it. Among
   # capabilities equally unshown above, the one weakest at the level the
   # person is standing on has the furthest to go, so it leads.
-  def weakest(scores, limit = 3)
+  def weakest(scores, limit = GAP_ROWS)
     scores.sort_by { |sid, score| [ score[:score].to_f, assessed_score(sid, Float::INFINITY) ] }.first(limit)
+  end
+
+  # Every capability still short of the level, weakest first, with `lead`
+  # (blocked ones) ranked ahead of the rest. A capability demonstrated in
+  # full there is not a gap, however low it would sort, so it never pads
+  # a short list (#471).
+  def ranked_gaps(scores, caps, lead: {})
+    gaps = scores.select { |sid, score| caps.key?(sid) && gap?(score) }
+    leading = gaps.slice(*lead.keys)
+    weakest(leading, leading.size) + weakest(gaps.except(*lead.keys), gaps.size)
+  end
+
+  def gap?(score)
+    score[:score].to_f < 1.0 || %i[underperforming progressing].include?(score[:state])
   end
 
   def strongest(scores, limit = 3)
@@ -493,15 +512,13 @@ class Views::Assessments::HeroSummary < Views::Base
     case primary_scoring[:performance_state]
     when :underperforming
       { state_label: "#{state_label(:underperforming)} at #{current_code}",
-        list_label: "Gap to #{current_code}",
-        items: weakest(scores_here),
+        **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
         border: "border-red-300 dark:border-red-700",
         accent: "text-red-700 dark:text-red-300",
         caps: caps_by_id }
     when :progressing
       { state_label: "#{state_label(:progressing)} toward #{current_code}",
-        list_label: "Gap to #{current_code}",
-        items: weakest(scores_here),
+        **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
         border: "border-amber-300 dark:border-amber-700",
         accent: "text-amber-700 dark:text-amber-300",
         caps: caps_by_id }
@@ -510,8 +527,7 @@ class Views::Assessments::HeroSummary < Views::Base
       # matters is at L+1 — a capability at +0.0 current is meeting today;
       # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
       { state_label: "#{state_label(:performing)} #{current_code} · #{progress_label}",
-        list_label: "Gap to #{gap_code}",
-        items: weakest(gap_scores),
+        **gap_list(ranked_gaps(gap_scores, caps_by_id), gap_code, gap_ordinal),
         border: "border-blue-300 dark:border-blue-700",
         accent: "text-blue-700 dark:text-blue-300",
         caps: caps_by_id }
@@ -531,11 +547,9 @@ class Views::Assessments::HeroSummary < Views::Base
       # order the engine collected it, so taking the first three could
       # both omit a worse one and show them out of order.
       blocked = primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      blocked_scores = scores_at_next.slice(*blocked)
-      items = blocked_scores.any? ? weakest(blocked_scores) : weakest(gap_scores)
+      gaps = ranked_gaps(gap_scores, caps_by_id, lead: scores_at_next.slice(*blocked))
       { state_label: "#{state_label(:mastering)} #{current_code} · #{progress_label}",
-        list_label: "Gap to #{gap_code}",
-        items: items,
+        **gap_list(gaps, gap_code, gap_ordinal),
         border: "border-purple-300 dark:border-purple-700",
         accent: "text-purple-700 dark:text-purple-300",
         caps: caps_by_id }
@@ -550,12 +564,18 @@ class Views::Assessments::HeroSummary < Views::Base
         caps: caps_by_id }
     else # unknown state
       { state_label: "#{state_label(:performing)} #{current_code}",
-        list_label: "Gap to #{current_code}",
-        items: weakest(scores_here),
+        **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
         border: "border-gray-200 dark:border-gray-700",
         accent: "text-gray-600 dark:text-gray-400",
         caps: caps_by_id }
     end
+  end
+
+  # The part of a "Gap to …" panel config that every gap state shares: the
+  # first rows, and the rest as a count with a way to reach the next one.
+  def gap_list(gaps, code, ordinal)
+    { list_label: "Gap to #{code}", items: gaps.first(GAP_ROWS), more: gaps.drop(GAP_ROWS),
+      gap_code: code, gap_ordinal: ordinal, gap_list: true }
   end
 
   def state_panel(config)
@@ -593,7 +613,29 @@ class Views::Assessments::HeroSummary < Views::Base
           end
         end
       end
+      gap_list_footer(config) if config[:gap_list]
     end
+  end
+
+  # Three rows read as the whole list unless something says otherwise
+  # (#471): a reader rated one, watched a fourth take its place, and
+  # concluded three were all that stood between them and the level.
+  def gap_list_footer(config)
+    if config[:items].empty?
+      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+        "No gaps to #{config[:gap_code]} — every capability there is demonstrated in full."
+      end
+      return
+    end
+    return if config[:more].empty?
+
+    render Views::Assessments::ContinueAssessingLink.new(
+      capability_stable_id: config[:more].first.first,
+      level_ordinal: config[:gap_ordinal],
+      label: "+#{config[:more].size} more short of #{config[:gap_code]}",
+      classes: "mt-1 inline-flex min-h-6 items-center gap-1 text-xs text-gray-600 dark:text-gray-300 " \
+               "hover:text-gray-900 dark:hover:text-white hover:underline rounded-sm"
+    )
   end
 
   # The first capability at the person's current level whose primary

@@ -145,6 +145,19 @@ the change a capability with no expectation at the assessed level appeared
 in the gap list at `+0.0`, which is the same "no expectation vs not rated"
 confusion the card's "No expectation at E3" copy exists to prevent.
 
+**A gap list holds only gaps, and says when it is not whole** ([#471](https://github.com/mr-yum/growth-os/issues/471)).
+A capability already demonstrated in full at the panel's level (100% or
+more, and not blocked) is never listed, so a short list is never padded
+with capabilities that owe nothing. When none are short, the panel says
+"No gaps to E4". When more are short than the three rows it shows, a final
+muted line reads "+5 more short of E4 →" and jumps to the fourth through
+the shared `ContinueAssessingLink`, at the level the panel names. Three
+rows read as the whole list without it: a reader rated one, watched a
+fourth take its place, and concluded only three stood between them and
+the level. In `:mastering`, blocked capabilities still lead and the rest
+follow, so the count covers both. "Top contributors" and "Strongest at"
+lists are not gap lists and stay three rows with no count.
+
 **Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're on the way to the next one, and the scale says how far. A `:mastering` person is past the halfway waypoint; the question is what is still in the way of promotion. Both use **next-level** contributions, because progress past 100% is earned at the level above. At the top of the ladder there is no next band, so the panel shows what carries the score rather than a gap nobody can close.
 
 This was the bug that prompted the design: at 110% ratio, the panel originally showed three capabilities at `+0.0` current contribution (meeting exactly) under a "Gap to mastering" headline. That's not a gap — those capabilities ARE meeting expectations. The real gap is at L+1, where those same capabilities show `-1.0` (not yet rated consistent at the next level).

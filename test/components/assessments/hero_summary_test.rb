@@ -29,17 +29,18 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
   end
 
   CAPS = [ "Strategic Thinking", "Quality First", "DevSecOps" ].freeze
+  MORE_CAPS = (CAPS + [ "Mentoring", "Delivery", "Ownership" ]).freeze
 
   # #418: the rows used to print a weight-unit delta — "-1.0" for every
   # capability nobody had rated at the next level, so three rows ranked
   # nothing and the number could not be read against an expectation.
-  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil, weights: {})
-    capabilities = CAPS.each_with_index.map do |name, i|
+  def render_gap_list(next_scores:, state: :mastering, here_scores: nil, blocked: nil, weights: {}, names: CAPS)
+    capabilities = names.each_with_index.map do |name, i|
       { capability: CAP.new(stable_id: "cap-#{i}", name: name),
         weight: weights.fetch("cap-#{i}", 1.0),
         cells: { 3 => { current_frequency: "consistent" } } }
     end
-    here_scores ||= CAPS.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }
+    here_scores ||= names.each_with_index.to_h { |_, i| [ "cap-#{i}", 1.0 ] }
     scoring = {
       performance_ratio: 1.62,
       components: { prior: 1.0, current: 1.0, next: 0.62, score: 1.62, bands_above: 1 },
@@ -236,6 +237,79 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
       assert_includes html, "Quality First"
       assert_not_includes html, "DevSecOps"
+    end
+  end
+
+  context "a gap list longer than the panel" do
+    # #471: three rows read as the whole list. A reader rated one, watched a
+    # fourth take its place, and concluded three stood between them and E3.
+    should "say how many more are short of the level, and jump to the next one" do
+      html = render_gap_list(
+        names: MORE_CAPS,
+        next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0,
+                       "cap-3" => 0.6, "cap-4" => 0.75, "cap-5" => 1.0 }
+      )
+
+      # cap-5 meets E4, so only two of the remaining three are gaps.
+      assert_includes html, "+2 more short of E4"
+      # The fourth-weakest gap (Mentoring, 60%) at E4 is where it lands.
+      assert_includes html, 'href="#cell-cap-3-4"'
+      assert_includes html, 'data-continue-assessing-level-ordinal-value="4"'
+      assert_not_includes html, "Mentoring"
+    end
+
+    should "count gaps at the assessed level when the panel names it" do
+      html = render_gap_list(
+        names: MORE_CAPS, state: :underperforming, next_scores: {},
+        here_scores: { "cap-0" => 0.2, "cap-1" => 0.3, "cap-2" => 0.4,
+                       "cap-3" => 0.5, "cap-4" => 1.0, "cap-5" => 1.2 }
+      )
+
+      assert_includes html, "Gap to E3"
+      assert_includes html, "+1 more short of E3"
+      assert_includes html, 'href="#cell-cap-3-3"'
+    end
+
+    should "add nothing when every gap is already listed" do
+      html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 })
+
+      assert_includes html, "Gap to E4"
+      assert_not_includes html, "more short of"
+    end
+
+    should "never list a capability already demonstrated in full as a gap" do
+      html = render_gap_list(next_scores: { "cap-0" => 1.0, "cap-1" => 0.25, "cap-2" => 1.3 })
+
+      assert_includes html, "Quality First"
+      assert_not_includes html, "Strategic Thinking"
+      assert_not_includes html, "DevSecOps"
+      assert_not_includes html, "more short of"
+    end
+
+    should "say so when nothing is short of the level" do
+      html = render_gap_list(state: :performing,
+                             next_scores: { "cap-0" => 1.0, "cap-1" => 1.0, "cap-2" => 1.1 })
+
+      assert_includes html, "Gap to E4"
+      assert_includes html, "No gaps to E4"
+      assert_not_includes html, "Strategic Thinking"
+    end
+
+    should "lead with blocked capabilities and still count the rest" do
+      html = render_gap_list(
+        names: MORE_CAPS,
+        next_scores: { "cap-0" => 0.1, "cap-1" => 0.2, "cap-2" => 0.3,
+                       "cap-3" => 0.9, "cap-4" => 0.4, "cap-5" => 0.5 },
+        blocked: [ "cap-3" ]
+      )
+
+      # Blocked Mentoring leads despite the higher score; the other five
+      # gaps rank weakest first, two shown and three counted.
+      assert_operator html.index("Mentoring"), :<, html.index("Strategic Thinking")
+      assert_operator html.index("Strategic Thinking"), :<, html.index("Quality First")
+      assert_not_includes html, "DevSecOps"
+      assert_includes html, "+3 more short of E4"
+      assert_includes html, 'href="#cell-cap-2-4"'
     end
   end
 
