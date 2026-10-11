@@ -154,7 +154,7 @@ export default class extends BaseController {
       this.#scheduleFit()
     } else {
       // Fit once the fade-out ends, which clears the inline height.
-      Promise.resolve(this.leave()).then(() => this.#scheduleFit())
+      Promise.resolve(this.leave()).finally(() => this.#scheduleFit())
     }
   }
 

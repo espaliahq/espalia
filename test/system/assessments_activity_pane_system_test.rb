@@ -114,9 +114,10 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         (() => {
           const pane = document.getElementById("assessment-activity-pane");
           const entries = pane.querySelectorAll("ul > li");
+          if (entries.length < 2) return false;
           const last = entries[entries.length - 1].getBoundingClientRect();
           const box = pane.getBoundingClientRect();
-          return entries.length > 1 && last.bottom <= box.bottom + 0.5 &&
+          return last.bottom <= box.bottom + 0.5 &&
             last.bottom <= window.innerHeight + 0.5 && last.top >= box.top;
         })()
       JS
