@@ -20,8 +20,15 @@ fi
 pr="$1"
 shift
 
+# Names are restricted rather than escaped: each becomes a URL path segment and
+# alt text verbatim, and two inputs sharing a basename would overwrite one blob.
+seen=" "
 for file in "$@"; do
   [[ -f "$file" ]] || { echo "not a file: $file" >&2; exit 66; }
+  name="$(basename "$file")"
+  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "rename to letters, digits, '.', '_' or '-': $name" >&2; exit 65; }
+  [[ "$seen" != *" $name "* ]] || { echo "duplicate file name: $name" >&2; exit 65; }
+  seen+="$name "
 done
 
 repo="${SCREENSHOTS_REPO:-$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')}"
