@@ -11,7 +11,7 @@
 # change what an old PR shows, and they render for anyone who can read the repo.
 set -euo pipefail
 
-BRANCH="${SCREENSHOTS_BRANCH:-screenshots}"
+BRANCH="screenshots"
 
 if [[ $# -lt 2 || ! "$1" =~ ^[0-9]+$ ]]; then
   echo "usage: bin/pr-screenshots <pr-number> <image>..." >&2
@@ -26,12 +26,16 @@ seen=" "
 for file in "$@"; do
   [[ -f "$file" ]] || { echo "not a file: $file" >&2; exit 66; }
   name="$(basename "$file")"
+  case "$name" in
+    *.png | *.jpg | *.jpeg | *.gif | *.webp) ;;
+    *) echo "only images can be published: $name" >&2; exit 65 ;;
+  esac
   [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "rename to letters, digits, '.', '_' or '-': $name" >&2; exit 65; }
   [[ "$seen" != *" $name "* ]] || { echo "duplicate file name: $name" >&2; exit 65; }
   seen+="$name "
 done
 
-repo="${SCREENSHOTS_REPO:-$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')}"
+repo="$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
 index="$(mktemp)"
 trap 'rm -f "$index"' EXIT
 
