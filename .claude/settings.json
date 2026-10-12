@@ -35,10 +35,7 @@
       "Bash(coderabbit --version)",
       "Bash(coderabbit auth *)",
       "Bash(coderabbit review *)",
-      "Bash(npx -y gitshot *)",
-      "Bash(npx gitshot *)",
-      "Bash(npx -y gitshot:*)",
-      "Bash(gitshot *)"
+      "Bash(bin/pr-screenshots *)"
     ]
   },
   "enabledPlugins": {
