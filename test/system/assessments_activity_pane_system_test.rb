@@ -125,6 +125,18 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
     assert reachable, "expected the feed's last entry to scroll into view inside the pane"
   end
 
+  # Re-signs in as Alice's manager, so the same URL renders ManagerShowView.
+  def sign_in_as_manager
+    manager_user = FactoryBot.create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) do
+      manager = FactoryBot.create(:person, tenant: @tenant, email: manager_user.email, name: "Manager Mia")
+      FactoryBot.create(:tenant_user, tenant: @tenant, user: manager_user, person: manager)
+      @person.update!(manager: manager)
+    end
+    Capybara.reset_sessions!
+    sign_in_as(manager_user)
+  end
+
   def wait_until_js(seconds: Capybara.default_max_wait_time)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
     loop do
@@ -355,6 +367,37 @@ class AssessmentsActivityPaneSystemTest < ApplicationSystemTestCase
         visible: :all
 
       assert_selector "#assessment-activity-pane", text: "Alice recorded “Launch”", visible: true
+    end
+  end
+
+  context "activity pane in the manager view" do
+    setup do
+      record_many_evidence_entries
+      sign_in_as_manager
+    end
+
+    should "keep the pane's bottom on screen and its last entry reachable on desktop" do
+      open_loaded_activity_pane
+      assert_selector "h1", text: "Alice"
+
+      assert_pane_within_viewport
+      assert_last_entry_reachable
+
+      page.execute_script("document.getElementById('assessment-activity-pane').scrollTop = 0")
+      page.execute_script("window.scrollTo(0, 360)")
+      assert_operator page.evaluate_script("window.scrollY"), :>=, 300
+      assert_pane_within_viewport
+      assert_last_entry_reachable
+    end
+
+    should "open the overlay full height with its last entry reachable on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      open_loaded_activity_pane
+      assert_selector "h1", text: "Alice"
+
+      assert_in_delta 0, pane_geometry["top"], 0.5
+      assert_pane_within_viewport
+      assert_last_entry_reachable
     end
   end
 end
