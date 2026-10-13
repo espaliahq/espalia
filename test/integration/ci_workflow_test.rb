@@ -18,14 +18,24 @@ class CiWorkflowTest < ActiveSupport::TestCase
         "#{AUTO_MERGE_JOB} must list every CI job under needs:, or Dependabot PRs merge without it"
     end
 
-    should "trust the PR author and repository, not the actor alone" do
-      condition = ci_jobs.dig(AUTO_MERGE_JOB, "if")
+    should "trust the PR author and repository, never the actor" do
+      expected = "github.event_name == 'pull_request' && " \
+                 "github.event.pull_request.user.login == 'dependabot[bot]' && " \
+                 "github.event.pull_request.head.repo.full_name == github.repository"
 
-      assert_includes condition, "github.event.pull_request.user.login == 'dependabot[bot]'"
-      assert_includes condition, "github.event.pull_request.head.repo.full_name == github.repository"
+      assert_equal expected, ci_jobs.dig(AUTO_MERGE_JOB, "if").squish
     end
 
-    should "merge only the commit CI tested" do
+    should "act only once every commit is Dependabot's, signed" do
+      steps = ci_jobs.dig(AUTO_MERGE_JOB, "steps")
+      check, *actions = steps
+
+      assert_equal "commits", check["id"]
+      assert_includes check["run"], '.author.login != "dependabot[bot]" or .commit.verification.verified != true'
+      actions.each { |step| assert_equal "steps.commits.outputs.trusted == 'true'", step["if"], step["name"] }
+    end
+
+    should "merge only the head CI tested" do
       script = ci_jobs.dig(AUTO_MERGE_JOB, "steps").pluck("run").join("\n")
 
       assert_includes script, '--match-head-commit "$HEAD_SHA"'
@@ -46,13 +56,15 @@ class CiWorkflowTest < ActiveSupport::TestCase
     end
 
     should "avoid triggers that run with write access on untrusted input" do
-      triggers = WORKFLOWS.flat_map do |path|
-        # YAML 1.1 reads the bare key `on` as the boolean true.
-        on = YAML.load_file(path)[true]
-        on.is_a?(Hash) ? on.keys : Array(on)
+      triggers = WORKFLOWS.to_h do |path|
+        # YAML 1.1 reads a bare `on` key as the boolean true; a quoted one stays a string.
+        doc = YAML.load_file(path)
+        on = doc.fetch(true) { doc.fetch("on") }
+        [ path.basename.to_s, on.is_a?(Hash) ? on.keys : Array(on) ]
       end
 
-      assert_empty triggers & %w[workflow_run pull_request_target issue_comment]
+      triggers.each { |file, names| assert_not_empty names, "#{file} declares no triggers" }
+      assert_empty triggers.values.flatten & %w[workflow_run pull_request_target issue_comment]
     end
   end
 end
