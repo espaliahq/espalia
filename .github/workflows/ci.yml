@@ -219,8 +219,8 @@ jobs:
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
-  # Merges Dependabot's PRs once every job above has passed on the same commit.
-  # Every guard reads the PR, never github.actor alone: the actor can be made
+  # Merges Dependabot's PRs once every job above has passed on the same head.
+  # Every guard reads the PR, never github.actor: the actor can be made
   # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
   # read-only token whatever this job asks for. See AGENTS.md before editing.
   dependabot-auto-merge:
@@ -228,9 +228,10 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
-      github.actor == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    concurrency:
+      group: dependabot-auto-merge-${{ github.event.pull_request.number }}
     permissions:
       contents: write
       pull-requests: write
@@ -256,12 +257,21 @@ jobs:
         if: steps.commits.outputs.trusted == 'true'
         run: gh pr review "$PR_NUMBER" --repo "$REPO" --approve
 
-      - name: Merge the commit CI tested
+      - name: Merge the head CI tested
         if: steps.commits.outputs.trusted == 'true'
         run: |
           # Retry to absorb the brief mergeability recompute after approval.
           for attempt in 1 2 3 4 5; do
-            head=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            if ! pr=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state,headRefOid --jq '"\(.state) \(.headRefOid)"'); then
+              echo "Could not read PR #$PR_NUMBER (attempt $attempt); sleeping 10s…"
+              sleep 10
+              continue
+            fi
+            read -r state head <<< "$pr"
+            if [ "$state" != "OPEN" ]; then
+              echo "::notice::PR #$PR_NUMBER is $state; nothing to merge."
+              exit 0
+            fi
             if [ "$head" != "$HEAD_SHA" ]; then
               echo "::notice::PR #$PR_NUMBER moved on to $head; its own CI run will merge it."
               exit 0
