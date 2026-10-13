@@ -32,6 +32,7 @@ class CiWorkflowTest < ActiveSupport::TestCase
 
       assert_equal "commits", check["id"]
       assert_includes check["run"], '.author.login != "dependabot[bot]" or .commit.verification.verified != true'
+      assert_includes check["run"], '[ "$total" -gt 250 ]', "GitHub lists at most 250 commits; past that, fail closed"
       actions.each { |step| assert_equal "steps.commits.outputs.trusted == 'true'", step["if"], step["name"] }
     end
 

@@ -245,6 +245,12 @@ jobs:
       - name: Check every commit is Dependabot's own
         id: commits
         run: |
+          # The commits endpoint stops at 250, so a longer PR would go partly unchecked.
+          total=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .commits)
+          if [ "$total" -gt 250 ]; then
+            echo "::notice::Leaving PR #$PR_NUMBER for a human: its $total commits are more than GitHub will list."
+            exit 0
+          fi
           others=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" \
             --jq '.[] | select(.author.login != "dependabot[bot]" or .commit.verification.verified != true) | .sha')
           if [ -n "$others" ]; then
