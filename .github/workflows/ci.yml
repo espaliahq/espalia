@@ -218,3 +218,60 @@ jobs:
           name: screenshots
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
+
+  # Merges Dependabot's PRs once every job above has passed on the same commit.
+  # Every guard reads the PR, never github.actor alone: the actor can be made
+  # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
+  # read-only token whatever this job asks for. See AGENTS.md before editing.
+  dependabot-auto-merge:
+    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - name: Check every commit is Dependabot's own
+        id: commits
+        run: |
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" \
+            --jq '.[] | select(.author.login != "dependabot[bot]" or .commit.verification.verified != true) | .sha')
+          if [ -n "$others" ]; then
+            echo "::notice::Leaving PR #$PR_NUMBER for a human: it carries commits not signed by Dependabot ($others)."
+            exit 0
+          fi
+          echo "trusted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Approve the PR
+        if: steps.commits.outputs.trusted == 'true'
+        run: gh pr review "$PR_NUMBER" --repo "$REPO" --approve
+
+      - name: Merge the commit CI tested
+        if: steps.commits.outputs.trusted == 'true'
+        run: |
+          # Retry to absorb the brief mergeability recompute after approval.
+          for attempt in 1 2 3 4 5; do
+            head=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            if [ "$head" != "$HEAD_SHA" ]; then
+              echo "::notice::PR #$PR_NUMBER moved on to $head; its own CI run will merge it."
+              exit 0
+            fi
+            if gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
+              echo "Merged on attempt $attempt"
+              exit 0
+            fi
+            echo "Merge not ready (attempt $attempt); sleeping 10s…"
+            sleep 10
+          done
+          echo "::error::PR #$PR_NUMBER still not mergeable after retries (unresolved conversations, or a policy not yet met)."
+          exit 1
