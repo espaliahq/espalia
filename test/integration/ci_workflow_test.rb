@@ -35,10 +35,12 @@ class CiWorkflowTest < ActiveSupport::TestCase
       actions.each { |step| assert_equal "steps.commits.outputs.trusted == 'true'", step["if"], step["name"] }
     end
 
-    should "merge only the head CI tested" do
+    should "approve and merge only the head CI tested" do
       script = ci_jobs.dig(AUTO_MERGE_JOB, "steps").pluck("run").join("\n")
 
+      assert_includes script, '-f commit_id="$HEAD_SHA"'
       assert_includes script, '--match-head-commit "$HEAD_SHA"'
+      assert_not_includes script, "gh pr review", "gh pr review approves whatever the head is now"
     end
   end
 

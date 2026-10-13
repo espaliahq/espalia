@@ -253,9 +253,16 @@ jobs:
           fi
           echo "trusted=true" >> "$GITHUB_OUTPUT"
 
-      - name: Approve the PR
+      - name: Approve the commit that was checked
         if: steps.commits.outputs.trusted == 'true'
-        run: gh pr review "$PR_NUMBER" --repo "$REPO" --approve
+        run: |
+          # A push after the commit check would otherwise collect this approval.
+          head=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+          if [ "$head" != "$HEAD_SHA" ]; then
+            echo "::notice::PR #$PR_NUMBER moved on to $head before approval; its own CI run will handle it."
+            exit 0
+          fi
+          gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/reviews" -f event=APPROVE -f commit_id="$HEAD_SHA"
 
       - name: Merge the head CI tested
         if: steps.commits.outputs.trusted == 'true'
