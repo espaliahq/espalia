@@ -332,12 +332,15 @@ class Views::Assessments::IndexView < Views::Base
 
   # "Start" until the viewer has touched a rating this cycle — carried
   # (seeded) values don't count, so the verb agrees with the Self chip's
-  # :not_started / :to_confirm work states.
+  # :not_started / :to_confirm work states. "Review" while a finished
+  # self-assessment waits for alignment, as on the home card.
   # @param assignment [PersonFrameworkAssignment]
   # @return [String]
   def self_cta_verb(assignment)
     status = @card_statuses[[ assignment.framework_id, assignment.person_id ]]
     return "Start" if status.nil?
+    return "Review" if status[:self_complete] &&
+                       AssessmentCycleProgress::INDIVIDUAL_RATING_STATUSES.include?(status[:status])
 
     state = side_state(status[:self_complete], status[:self_human], status[:self_any])
     %i[not_started to_confirm].include?(state) ? "Start" : "Continue"

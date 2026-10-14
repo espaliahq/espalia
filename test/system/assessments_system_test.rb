@@ -1633,6 +1633,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       visit assessments_path
       assert_text "My Assessments"
       assert_text "Ready for alignment"
+      assert_text "Review self-assessment"
 
       visit root_path
       assert_text "Review self-assessment"
