@@ -13,48 +13,58 @@
 # @example
 #   Prose.to_html("See [the RFC](https://example.com)")
 #   # => "<p>See <a href=\"https://example.com\" rel=\"noopener noreferrer nofollow\" target=\"_blank\">the RFC</a></p>"
-#   Prose.to_plain("See [the RFC](https://example.com)") # => "See the RFC"
+#   Prose.to_plain("See [the RFC](https://example.com)") # => "See the RFC (https://example.com)"
 module Prose
   OPTIONS = {
     # escape: typed HTML shows as text. hardbreaks: a single newline stays a
     # line break, as it always has in these fields.
     render: { unsafe: false, escape: true, hardbreaks: true },
-    extension: { autolink: true, strikethrough: true, tagfilter: true, table: false, header_ids: nil },
-    plugins: { syntax_highlighter: nil }
+    extension: { autolink: true, strikethrough: true, tagfilter: true, table: false, header_ids: nil }
   }.freeze
+  # Its own keyword, not part of OPTIONS: Commonmarker ignores a plugins key
+  # there and loads its syntax highlighter on every call, 50x the render.
+  PLUGINS = { syntax_highlighter: nil }.freeze
 
   ALLOWED_TAGS = %w[p br a strong em del code pre ul ol li blockquote].freeze
+  BLOCK_TAGS = %w[p ul ol li blockquote pre].freeze
   LINK_SCHEMES = %w[http https mailto].freeze
   LINK_REL = "noopener noreferrer nofollow"
 
   # What a composer tells its author, beside the field.
   COMPOSER_HINT = "Markdown and links work"
 
-  # The same, for an MCP tool whose text field renders through {Prose}.
-  MCP_NOTE = "The text is Markdown: links, **bold**, _italic_, lists and `code` render, " \
-             "a bare URL becomes a link, typed HTML shows as text and images render as links."
-
   module_function
 
   # @param text [String, nil]
   # @return [String] sanitized HTML; empty for blank input
   def to_html(text)
-    return "" if text.blank?
-
-    fragment = Loofah.fragment(Commonmarker.to_html(text.to_s, options: OPTIONS))
-    fragment.scrub!(Scrubber.new)
-    fragment.to_s
+    fragment(text).to_html
   end
 
-  # The text a reader would see, on one line — for excerpts, previews and
-  # notifications, where Markdown syntax would show as punctuation.
+  # The text a reader would see, without Markdown syntax — for excerpts,
+  # previews and notifications. A link keeps its URL beside its text, so a
+  # Slack excerpt can still be followed, and line breaks survive.
   #
   # @param text [String, nil]
   # @return [String]
   def to_plain(text)
-    return "" if text.blank?
+    plain = +""
+    write_plain(fragment(text), plain)
+    plain.gsub(/[ \t]+/, " ").gsub(/ *\n */, "\n")
+         .gsub(/^-\n+/, "- ")             # a loose list item's paragraph joins its dash
+         .gsub(/\n+(?=- )/, "\n")         # list items sit on consecutive lines
+         .gsub(/\n{3,}/, "\n\n").strip
+  end
 
-    Loofah.fragment(to_html(text)).to_text(encode_special_chars: false).squish
+  # The sentence an MCP tool adds for each text field that renders through
+  # Prose — named, because the same tool may take framework text that doesn't.
+  #
+  # @param fields [Array<String, Symbol>]
+  # @return [String]
+  def mcp_note(*fields)
+    names = fields.map { |field| "`#{field}`" }.to_sentence
+    "#{names} #{fields.one? ? "is" : "are"} Markdown: links, **bold**, _italic_, lists and `code` render, " \
+      "a bare URL becomes a link, typed HTML shows as text and images render as links."
   end
 
   # Whether a URL may become a link.
@@ -67,19 +77,60 @@ module Prose
     false
   end
 
-  # Reduces Commonmarker's output to {ALLOWED_TAGS}. Walks bottom-up so a
-  # node's children are already clean when the node itself is unwrapped.
-  class Scrubber < Loofah::Scrubber
+  # @return [Nokogiri::HTML5::DocumentFragment]
+  def fragment(text)
+    return Nokogiri::HTML5.fragment("") if text.blank?
+
+    Sanitizer.call(Nokogiri::HTML5.fragment(Commonmarker.to_html(text.to_s, options: OPTIONS, plugins: PLUGINS)))
+  end
+
+  def write_plain(node, out)
+    node.children.each do |child|
+      if child.text?
+        # Commonmarker's own newlines are formatting; <br> and blocks carry the breaks.
+        out << (child.ancestors("pre").any? ? child.text : child.text.tr("\n", " "))
+      elsif child.name == "br"
+        out << "\n"
+      elsif child.name == "a"
+        out << link_text(child)
+      else
+        out << "\n" if BLOCK_TAGS.include?(child.name)
+        out << "- " if child.name == "li"
+        write_plain(child, out)
+        out << "\n" if BLOCK_TAGS.include?(child.name)
+      end
+    end
+  end
+
+  def link_text(anchor)
+    text = anchor.text
+    href = anchor["href"].to_s
+    shown = href.delete_prefix("mailto:")
+    text == href || text == shown ? text : "#{text} (#{shown})"
+  end
+
+  private_class_method :fragment, :write_plain, :link_text
+
+  # Reduces Commonmarker's output to {ALLOWED_TAGS}. Plain Nokogiri rather
+  # than a Loofah scrubber: Loofah's traversal cost ~6ms on a short comment,
+  # which a feed of excerpts multiplies.
+  module Sanitizer
     DROP_WITH_CONTENT = %w[script style iframe object embed template noscript svg math].freeze
 
-    def initialize
-      super
-      @direction = :bottom_up
+    module_function
+
+    # @param fragment [Nokogiri::HTML5::DocumentFragment]
+    # @return [Nokogiri::HTML5::DocumentFragment] the same fragment, cleaned
+    def call(fragment)
+      # Post-order, so a node's children are already clean when it is unwrapped.
+      nodes = []
+      fragment.children.each { |child| child.traverse { |node| nodes << node } }
+      nodes.each { |node| scrub(node) }
+      fragment
     end
 
-    # @param node [Nokogiri::XML::Node]
     def scrub(node)
-      return CONTINUE if node.text?
+      return if node.text?
       return node.remove unless node.element?
 
       case node.name
@@ -92,11 +143,8 @@ module Prose
       end
     end
 
-    private
-
     def scrub_link(node)
-      href = node["href"]
-      return unwrap(node) unless Prose.linkable?(href)
+      return unwrap(node) unless Prose.linkable?(node["href"])
 
       keep_only(node, %w[href])
       node["rel"] = LINK_REL
@@ -105,21 +153,18 @@ module Prose
 
     def replace_image(node)
       src = node["src"]
-      return node.replace(Nokogiri::XML::Text.new(node["alt"].to_s, node.document)) unless Prose.linkable?(src)
+      return node.replace(node.document.create_text_node(node["alt"].to_s)) unless Prose.linkable?(src)
 
-      link = Nokogiri::XML::Node.new("a", node.document)
-      link["href"] = src
-      link["rel"] = LINK_REL
-      link["target"] = "_blank"
-      link.content = node["alt"].presence || src
+      link = node.document.create_element("a", node["alt"].presence || src,
+                                          href: src, rel: LINK_REL, target: "_blank")
       node.replace(link)
     end
 
     def flatten_heading(node)
-      strong = Nokogiri::XML::Node.new("strong", node.document)
+      strong = node.document.create_element("strong")
       strong.children = node.children
       node.name = "p"
-      node.attribute_nodes.each(&:remove)
+      keep_only(node, [])
       node.children = strong
     end
 

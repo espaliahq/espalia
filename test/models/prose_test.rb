@@ -93,12 +93,26 @@ class ProseTest < ActiveSupport::TestCase
   end
 
   context ".to_plain" do
-    should "read as text on one line, with link text and no syntax" do
-      assert_equal "See the RFC and this list: a b", Prose.to_plain("See [the RFC](https://e.com)\nand this list:\n\n- a\n- **b**")
+    should "keep a link's URL beside its text, so an excerpt can still be followed" do
+      assert_equal "See the RFC (https://e.com)", Prose.to_plain("See [the RFC](https://e.com)")
+    end
+
+    should "not repeat a bare URL or an email address" do
+      assert_equal "see https://e.com and a@b.com", Prose.to_plain("see https://e.com and a@b.com")
+    end
+
+    should "keep line breaks and put list items on their own lines" do
+      assert_equal "Details:\n- bold item\n- second\n\nafter", Prose.to_plain("Details:\n- **bold** item\n- second\n\nafter")
+      assert_equal "one\ntwo", Prose.to_plain("one\ntwo")
+      assert_equal "a\n- one\n- two", Prose.to_plain("a\n\n- one\n\n- two")
     end
 
     should "keep typed angle brackets as typed" do
       assert_equal "<Component> renders wrong", Prose.to_plain("<Component> renders wrong")
+    end
+
+    should "return an empty string for blank input" do
+      assert_equal "", Prose.to_plain(nil)
     end
   end
 end

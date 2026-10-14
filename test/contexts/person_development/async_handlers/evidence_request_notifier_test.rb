@@ -87,7 +87,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     assert_equal "“Paired on the incident”", notification.inbox_body
   end
 
-  should "quote a Markdown response as the text a reader sees, not its syntax" do
+  should "quote a Markdown response as the text a reader sees, keeping the link's URL" do
     id = request!
     evidence_id = SecureRandom.uuid_v7
     @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
@@ -100,7 +100,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     end
 
     body = @assessee_user.notifications.reload.max_by(&:created_at).inbox_body
-    assert_equal "“Led the incident review”", body
+    assert_equal "“Led the incident review (https://example.com/ir)”", body
   end
 
   should "truncate a long response in the notification body" do
