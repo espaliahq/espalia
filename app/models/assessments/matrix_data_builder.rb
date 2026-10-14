@@ -142,7 +142,7 @@ class Assessments::MatrixDataBuilder
       # cells count as consistent — the level chips paint that default.
       lens: @lens,
       home_level: @home_level_ordinal,
-      assumed_below: [ @level.ordinal, @home_level_ordinal ].min,
+      assumed_below: assumed_below,
       merged_levels: levels,
       categories: categories,
       scoring: scoring,
@@ -177,7 +177,8 @@ class Assessments::MatrixDataBuilder
       disclosure: @disclosure,
       individual_ratings_frozen: lens_alignment_started?,
       alignment_locked: lens_alignment_completed?,
-      current_level_complete: current_level_complete?(categories)
+      current_level_complete: current_level_complete?(categories),
+      current_level_work: current_level_work(categories)
     }
   end
 
@@ -282,10 +283,13 @@ class Assessments::MatrixDataBuilder
         current_frequency: rating&.self_rated_frequency,
         manager_frequency: hidden ? nil : rating&.manager_rated_frequency,
         aligned_frequency: hidden ? nil : rating&.aligned_frequency,
-        # Carried-forward (seeded, unconfirmed) provenance per side — drives
-        # the lighter pill/chip treatment. Same privacy gate as the values.
-        current_frequency_carried: rating&.self_rating_carried? || false,
-        manager_frequency_carried: (!hidden && rating&.manager_rating_carried?) || false,
+        # Carried-forward (seeded, unconfirmed) values that still ask to be
+        # confirmed — drives the lighter pill/chip treatment and the "to
+        # confirm" counts. Below the floor the scale already assumes the cell
+        # met, so a carried value there asks nothing (#480). Same privacy
+        # gate as the values.
+        current_frequency_carried: asks_confirmation?(ordinal, rating&.self_rating_carried?),
+        manager_frequency_carried: !hidden && asks_confirmation?(ordinal, rating&.manager_rating_carried?),
         # Whether the record reads this cell (ADR-22).
         in_home_scope: @home_scope.include?(capability.stable_id, ordinal),
         # The started alignment that froze self and manager ratings here —
@@ -643,6 +647,29 @@ class Assessments::MatrixDataBuilder
     # Complete means VETTED: a carried-forward value doesn't count until
     # confirmed or changed (mirrors Assessments::LevelCoverage).
     cells.all? { |cell| primary_cell_frequency(cell).present? && !primary_cell_carried?(cell) }
+  end
+
+  # What is left to do at the person's current level in the viewer's
+  # perspective: cells with no value, and carried values still to confirm.
+  # A cell a started alignment froze can't be confirmed, so it isn't owed.
+  #
+  # @return [Hash{Symbol=>Integer}] :unrated, :to_confirm
+  def current_level_work(categories)
+    cells = categories.flat_map { |c| c[:capabilities] }.filter_map { |cap| cap[:cells][@level.ordinal] }
+    {
+      unrated: cells.count { |cell| primary_cell_frequency(cell).blank? },
+      to_confirm: cells.count { |cell| primary_cell_carried?(cell) && cell[:frozen_by].nil? }
+    }
+  end
+
+  # The ordinal below which an unrated cell counts as met: the lower of the
+  # level read and the home level, as {PersonDevelopment::Scoring} floors it.
+  def assumed_below
+    [ @level.ordinal, @home_level_ordinal ].min
+  end
+
+  def asks_confirmation?(ordinal, carried)
+    carried.present? && ordinal >= assumed_below
   end
 
   # The frequency that counts as "rated" for the active context.

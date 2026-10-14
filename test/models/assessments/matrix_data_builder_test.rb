@@ -385,6 +385,27 @@ class Assessments::MatrixDataBuilderTest < ActiveSupport::TestCase
       assert build_completion(:self)[:current_level_complete]
     end
 
+    should "count what is left at the current level: unrated cells and carried ones to confirm" do
+      assert_equal({ unrated: 1, to_confirm: 0 }, build_completion(:self)[:current_level_work])
+
+      rate_capability2(self_rated_frequency: "some", self_rating_source: "seeded")
+      assert_equal({ unrated: 0, to_confirm: 1 }, build_completion(:self)[:current_level_work])
+    end
+
+    should "ask to confirm a carried value at or above the floor, never below it" do
+      [ 1, 3 ].each do |ordinal|
+        create(:assessment_level_rating, tenant: @tenant, person_id: @person_id,
+          framework_id: @framework.framework_id, cycle_id: @cycle_id,
+          capability_stable_id: @capability2.stable_id, level_ordinal: ordinal,
+          self_rated_frequency: "consistent", self_rating_source: "seeded")
+      end
+      cells = build_completion(:self)[:categories].first[:capabilities]
+        .find { |cap| cap[:capability].stable_id == @capability2.stable_id }[:cells]
+
+      assert_not cells[1][:current_frequency_carried], "below the floor the scale already assumes it met"
+      assert cells[3][:current_frequency_carried]
+    end
+
     should "be false when the current level has no cells" do
       empty_level = create(:framework_level,
         role_id: @role.role_id, ordinal: 4, title: "Engineer 4", code: "E4")
