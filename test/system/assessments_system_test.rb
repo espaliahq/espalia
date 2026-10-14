@@ -1439,6 +1439,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # #480: the dashed outline was the only signal; people thought they were done.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "say To confirm on the card and pill, and confirm with Keep (#{label})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment, capability: @cap1_stable)
+
+        assert_selector "#capability-name-#{@cap1_stable}", text: "To confirm"
+        assert_selector "#rating-#{@cap1_stable}-2 [data-carried='true']", text: "confirm"
+
+        open_pill_popover("#rating-#{@cap1_stable}-2")
+        page.execute_script(<<~JS)
+          const keep = Array.from(document.querySelectorAll("#rating-#{@cap1_stable}-2 [role='menuitem']"))
+            .find((item) => item.textContent.startsWith("Keep"));
+          keep.closest("form").requestSubmit(keep);
+        JS
+
+        assert_no_selector "#capability-name-#{@cap1_stable}", text: "To confirm"
+        assert_no_selector "#rating-#{@cap1_stable}-2 [data-carried='true']"
+        ActsAsTenant.with_tenant(@tenant) do
+          assert_equal "human", AssessmentLevelRating.find_by!(cycle_id: @cycle_id, person_id: @person.id,
+            capability_stable_id: @cap1_stable, level_ordinal: 2).self_rating_source
+        end
+      end
+    end
+
     should "render the carried treatment and confirm on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment, capability: @cap1_stable)

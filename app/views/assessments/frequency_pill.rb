@@ -121,6 +121,8 @@ class Views::Assessments::FrequencyPill < Views::Base
       aria: { label: trigger_aria_label, haspopup: "menu", expanded: "false" }
     ) do
       span { phrase }
+      # The dashed outline alone was easy to miss (#480): say it in the label.
+      span(class: "font-normal", aria_hidden: "true") { "· confirm" } if @carried
       span(class: "text-[10px] leading-none", aria_hidden: "true") { "▾" }
     end
   end
@@ -140,7 +142,11 @@ class Views::Assessments::FrequencyPill < Views::Base
       role: "menu",
       data: { dropdown_target: "menu" }
     ) do
-      carried_note if @carried
+      if @carried
+        carried_note
+        keep_button
+        divider
+      end
       Views::Assessments::FrequencyPalette::ORDERED_KEYS.each do |key|
         option_button(key)
       end
@@ -149,13 +155,12 @@ class Views::Assessments::FrequencyPill < Views::Base
     end
   end
 
-  # Header line inside the popover when the value is carried forward —
-  # tells the viewer where it came from and that re-picking it confirms.
+  # Header line inside the popover when the value is carried forward — where
+  # it came from, above the Keep button that confirms it.
   def carried_note
     origin = @context == :self ? "your last cycle" : "the last cycle"
-    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300 " \
-               "border-b border-gray-100 dark:border-gray-800") do
-      plain "Carried from #{origin} — pick the same value to confirm it."
+    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300") do
+      plain "Carried from #{origin}. Keep it for this cycle, or pick another value."
     end
   end
 
@@ -183,6 +188,22 @@ class Views::Assessments::FrequencyPill < Views::Base
         span(class: "flex-1") { config[:phrase] }
         span(class: "text-[10px] text-gray-400") { "✓" } if selected
       end
+    end
+  end
+
+  # Confirming used to mean "pick the value already selected", which nobody
+  # guessed. Same request as re-picking it: the server confirms a carried
+  # value the viewer re-sends.
+  def keep_button
+    form(action: form_action, method: "post", data: { turbo_stream: "true" }, class: "contents") do
+      hidden_inputs(frequency: @current_frequency)
+      button(
+        type: "submit",
+        role: "menuitem",
+        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left font-semibold text-gray-900 " \
+               "dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700",
+        data: { action: "click->dropdown#close" }
+      ) { "Keep “#{phrase}”" }
     end
   end
 
