@@ -63,29 +63,25 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "Your response will be visible to Rep, their managers, and workspace admins", response.body
     end
 
-    should "keep the decline reason in a collapsed disclosure, apart from the reply" do
-      make_request!
-      sign_in @peer_user
-      get evidence_hub_path
-      assert_select "details[data-testid='decline-request']:not([open])", 1 do
-        assert_select "summary", text: /Decline this request/
-        assert_select "input[name='evidence_request[reason]']"
+    context "decline form on an open incoming request" do
+      setup do
+        make_request!
+        sign_in @peer_user
+        get evidence_hub_path
       end
-    end
 
-    should "label the decline reason visibly rather than by placeholder" do
-      make_request!
-      sign_in @peer_user
-      get evidence_hub_path
-      input_id = css_select("input[name='evidence_request[reason]']").first["id"]
-      assert_select "label[for='#{input_id}']", text: "Reason for declining (optional)"
-    end
+      should "keep the reason in a collapsed disclosure, apart from the reply" do
+        assert_select "details[data-testid='decline-request']:not([open])", 1 do
+          assert_select "summary", text: /Decline this request/
+          assert_select "input[name='evidence_request[reason]']"
+        end
+      end
 
-    should "keep typed decline reasons readable on the dark background" do
-      make_request!
-      sign_in @peer_user
-      get evidence_hub_path
-      assert_select "input[name='evidence_request[reason]'].dark\\:bg-gray-900.dark\\:text-gray-100"
+      should "label the reason visibly rather than by placeholder" do
+        input = css_select("input[name='evidence_request[reason]']").first
+        assert_select "label[for='#{input["id"]}']", text: "Reason for declining (optional)"
+        assert_nil input["placeholder"]
+      end
     end
 
     should "not disclose visibility when the requestee is the assessee" do

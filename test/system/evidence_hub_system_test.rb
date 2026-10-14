@@ -161,13 +161,30 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_no_field "Reason for declining (optional)"
 
     find("summary", text: "Decline this request").click
-    fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
+    js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
     click_button "Decline"
     assert_text "No one is waiting on you."
 
     sign_in_as(@report_user)
     visit evidence_hub_path
     assert_text "Declined: Haven't worked with Rep this quarter"
+  end
+
+  should "keep a typed decline reason readable in dark mode" do
+    request_id = make_request!
+    page.driver.browser.execute_cdp(
+      "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
+    )
+    sign_in_as(@peer_user)
+    visit evidence_hub_path
+    find("summary", text: "Decline this request").click
+    js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
+
+    assert_operator rendered_contrast("#decline-reason-#{request_id}"), :>=, 4.5
+  ensure
+    page.driver.browser.execute_cdp(
+      "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
+    )
   end
 
   should "navigate from authored evidence to its linkage on the assessment" do
