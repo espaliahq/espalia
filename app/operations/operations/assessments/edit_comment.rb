@@ -8,7 +8,7 @@
 # Write — :mcp_client approval. Editing your own comment is a routine,
 # author-scoped change; the MCP client's own write prompt is enough friction.
 class Operations::Assessments::EditComment < Operations::Base
-  description "Edit the body of one of your own comments on an assessment."
+  description "Edit the body of one of your own comments on an assessment." + " " + Prose::MCP_NOTE
   category :write
   approval :mcp_client
 

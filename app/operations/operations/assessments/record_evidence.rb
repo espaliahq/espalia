@@ -15,7 +15,7 @@
 # data); a manager evidencing a direct report is routine, and the MCP
 # client's own write-approval prompt is the right friction.
 class Operations::Assessments::RecordEvidence < Operations::Base
-  description "Record a piece of feedback / evidence against a capability × level on an assessment."
+  description "Record a piece of feedback / evidence against a capability × level on an assessment." + " " + Prose::MCP_NOTE
   category :write
   approval :mcp_client
 

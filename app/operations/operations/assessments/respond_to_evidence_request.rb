@@ -6,7 +6,7 @@
 #
 # Write — :mcp_client. Same friction as recording evidence directly.
 class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
-  description "Respond to a feedback / evidence request by providing the requested feedback."
+  description "Respond to a feedback / evidence request by providing the requested feedback." + " " + Prose::MCP_NOTE
   category :write
   approval :mcp_client
 

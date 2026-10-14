@@ -48,6 +48,10 @@ class Views::Assessments::Comments::Thread < Views::Base
 
   private
 
+  def composer_hint_id
+    "comment-hint-#{@capability_stable_id}-#{@level_ordinal}"
+  end
+
   def dom_id
     "comments-thread-#{@capability_stable_id}-#{@level_ordinal}"
   end
@@ -190,7 +194,7 @@ class Views::Assessments::Comments::Thread < Views::Base
         rows: 2,
         required: true,
         placeholder: "Add a comment…",
-        aria: { label: "Add a comment" },
+        aria: { label: "Add a comment", describedby: composer_hint_id },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -205,8 +209,8 @@ class Views::Assessments::Comments::Thread < Views::Base
         # and ctrlKey as the submit modifier so we don't need to detect
         # the platform server-side. Mac users read this as "⌘+Enter",
         # PC/Linux users read it as "Ctrl+Enter".
-        span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
-          plain "⌘/Ctrl+Enter to post"
+        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") do
+          plain "#{Prose::COMPOSER_HINT} · ⌘/Ctrl+Enter to post"
         end
         button(
           type: "submit",

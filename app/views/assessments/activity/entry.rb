@@ -430,8 +430,8 @@ class Views::Assessments::Activity::Entry < Views::Base
       bits = [ frequency_label_or_nil, payload_value(:comment).to_s.strip.presence ].compact
       bits.any? ? bits.join(" · ") : nil
     when "evidence_recorded"
-      content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
-      content.strip.presence
+      content = @entry.payload.respond_to?(:content) ? @entry.payload.content : nil
+      Prose.to_plain(content).presence
     when "evidence_relinked", "evidence_linked"
       [ valence_label_or_nil, payload_value(:rationale).to_s.strip.presence ].compact
         .join(" · ").presence
@@ -444,7 +444,7 @@ class Views::Assessments::Activity::Entry < Views::Base
       reason.to_s.strip.presence
     when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
-      body.to_s.strip.presence
+      Prose.to_plain(body).presence
     when "rating_revisit_requested", "exploration_started", "exploration_closed"
       payload_value(:note).to_s.strip.presence
     end

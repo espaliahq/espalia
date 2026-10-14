@@ -87,6 +87,22 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     assert_equal "“Paired on the incident”", notification.inbox_body
   end
 
+  should "quote a Markdown response as the text a reader sees, not its syntax" do
+    id = request!
+    evidence_id = SecureRandom.uuid_v7
+    @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
+      capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 2, source: "peer",
+      evidence_type: "peer_feedback", content: "**Led** the [incident review](https://example.com/ir)",
+      author_id: @peer.id, valence: "demonstrated")
+    perform_enqueued_jobs do
+      @handler.respond_to_evidence_request(@assessee.id, @framework_id, id,
+        evidence_id: evidence_id, responded_by_id: @peer.id)
+    end
+
+    body = @assessee_user.notifications.reload.max_by(&:created_at).inbox_body
+    assert_equal "“Led the incident review”", body
+  end
+
   should "truncate a long response in the notification body" do
     id = request!
     evidence_id = SecureRandom.uuid_v7

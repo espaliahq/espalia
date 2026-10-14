@@ -27,6 +27,13 @@ module Prose
   LINK_SCHEMES = %w[http https mailto].freeze
   LINK_REL = "noopener noreferrer nofollow"
 
+  # What a composer tells its author, beside the field.
+  COMPOSER_HINT = "Markdown and links work"
+
+  # The same, for an MCP tool whose text field renders through {Prose}.
+  MCP_NOTE = "The text is Markdown: links, **bold**, _italic_, lists and `code` render, " \
+             "a bare URL becomes a link, typed HTML shows as text and images render as links."
+
   module_function
 
   # @param text [String, nil]

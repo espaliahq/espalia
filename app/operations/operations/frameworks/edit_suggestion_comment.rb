@@ -6,7 +6,7 @@
 #
 # Write — :mcp_client. Same friction as posting.
 class Operations::Frameworks::EditSuggestionComment < Operations::Base
-  description "Revise your own comment on a framework suggestion's discussion thread (author only)."
+  description "Revise your own comment on a framework suggestion's discussion thread (author only)." + " " + Prose::MCP_NOTE
   category :write
   approval :mcp_client
 

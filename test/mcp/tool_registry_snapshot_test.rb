@@ -245,7 +245,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_edit_comment",
-        "description" => "Edit the body of one of your own comments on an assessment.",
+        "description" => "Edit the body of one of your own comments on an assessment. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -373,7 +374,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "assessments_post_comment",
         "description" => "Post a comment on a capability × level of an assessment (optionally as a reply). " \
                          "Pass evidence_id to comment on that evidence item's linkage at the cell instead — " \
-                         "the discussion of the feedback's relevance and valence there.",
+                         "the discussion of the feedback's relevance and valence there. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -466,7 +468,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_record_evidence",
-        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment.",
+        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -568,7 +571,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_respond_to_evidence_request",
-        "description" => "Respond to a feedback / evidence request by providing the requested feedback.",
+        "description" => "Respond to a feedback / evidence request by providing the requested feedback. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -695,7 +699,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_update_evidence",
-        "description" => "Edit an existing feedback / evidence item's type, title, content, and external reference.",
+        "description" => "Edit an existing feedback / evidence item's type, title, content, and external reference. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -909,7 +914,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_record_note",
-        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person.",
+        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1344,7 +1350,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_comment_on_suggestion",
-        "description" => "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved.",
+        "description" => "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved. " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1459,7 +1466,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_edit_suggestion_comment",
-        "description" => "Revise your own comment on a framework suggestion's discussion thread (author only).",
+        "description" => "Revise your own comment on a framework suggestion's discussion thread (author only). " \
+                         "The text is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

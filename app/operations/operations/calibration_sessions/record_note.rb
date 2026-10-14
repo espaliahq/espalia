@@ -7,7 +7,7 @@
 class Operations::CalibrationSessions::RecordNote < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
 
-  description "Record a free-text minute on a live calibration session, optionally anchored to a capability or person."
+  description "Record a free-text minute on a live calibration session, optionally anchored to a capability or person. " + Prose::MCP_NOTE
   category :write
   approval :mcp_client
 

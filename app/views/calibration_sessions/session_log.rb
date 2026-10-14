@@ -190,7 +190,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") { context } if context
         secondary = secondary_text(entry)
         if secondary
-          p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap") { secondary }
+          render Components::Kit::Prose.new(secondary, class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300")
         end
         resolution_line(entry)
         footer(entry)

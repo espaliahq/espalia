@@ -225,7 +225,11 @@ class Views::Evidence::ModalForm < Views::Base
     div do
       label(for: "evm-content", class: LABEL) { "What happened?" }
       textarea(id: "evm-content", name: "evidence[content]", rows: 4, required: @content_editable,
-               placeholder: "Describe what you observed…", class: INPUT, disabled: !@content_editable) { @evidence&.content }
+               placeholder: "Describe what you observed…", class: INPUT, disabled: !@content_editable,
+               aria: { describedby: "evm-content-hint" }) { @evidence&.content }
+      p(id: "evm-content-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        "#{Prose::COMPOSER_HINT}: **bold**, _italic_, lists and [a link](https://…). A pasted URL becomes a link."
+      end
     end
   end
 
