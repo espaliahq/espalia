@@ -195,7 +195,11 @@ without needing a lens, so an agent knows a PM3 conversation exists.
 
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
-agent can tell a low score from a barely-rated one. Perspective is resolved
+agent can tell a low score from a barely-rated one. The overall `coverage`
+adds `to_confirm_at_assessed_level`: carried values count as rated but are
+not this cycle's until confirmed, and without the count an agent asked "how
+do I finish?" could only answer "wait for alignment" (#480).
+`assessments_confirm_carried_ratings` confirms them. Perspective is resolved
 by the shared `Assessments::ViewerContext`, so the self-assessment privacy
 rule holds identically on both surfaces: before alignment starts, an
 assessee's payload is built from self ratings alone.

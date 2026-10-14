@@ -1229,7 +1229,7 @@ Both flags also flow through the rating controllers' Turbo Stream responses so p
 - **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Assessment Complete` / `Aligning` / `Aligned`) when a cycle is open.
 - **Manager view** — H1 is `assessee.name`; subtitle span renders the level title; same shortcode + status pill.
 
-**Status pill** (`Views::Assessments::StatusPill`, wrapped in `id="assessment-status-pill"` for Turbo replacement; the two header layouts share it via `HeaderChrome#render_status_pill`). The pill rewards finishing the current-level ratings *before* the manager-driven alignment phase: while a cycle is open and the participant is pre-alignment, it reads **"In Progress"** (amber) until **current-level coverage hits 100% with vetted (human-owned) ratings** in the viewer's perspective — carried-forward values don't count until confirmed — then **"Assessment Complete"** (green). "Complete" is `MatrixDataBuilder#current_level_complete?` — every capability with a cell at `person_level` rated under the context's primary frequency (self ratings for `:self`, manager for `:manager`); a role with no current-level cells is never complete. Because the pill lives in the static header (outside the scoring/matrix Turbo Frames), the self and manager rating controllers `turbo_stream.replace` it on every rating change so it flips live the moment the final cell is rated — no reload. `aligning`/`aligned` still win and show "Aligning"/"Aligned".
+**Status pill** (`Views::Assessments::StatusPill`, wrapped in `id="assessment-status-pill"` for Turbo replacement; the two header layouts share it via `HeaderChrome#render_status_pill`). The pill rewards finishing the current-level ratings *before* the manager-driven alignment phase: while a cycle is open and the participant is pre-alignment, it reads **"In Progress"** (amber) until **current-level coverage hits 100% with vetted (human-owned) ratings** in the viewer's perspective — carried-forward values don't count until confirmed — then **"Assessment Complete"** (green). "Complete" is `MatrixDataBuilder#current_level_complete?` — every capability with a cell at `person_level` rated under the context's primary frequency (self ratings for `:self`, manager for `:manager`); a role with no current-level cells is never complete. Because the pill lives in the static header (outside the scoring/matrix Turbo Frames), the self and manager rating controllers `turbo_stream.replace` it on every rating change so it flips live the moment the final cell is rated — no reload. `aligning`/`aligned` still win and show "Aligning"/"Aligned". Between the two, when every current-level cell holds a value but some were carried, it reads **"N to confirm"** in the dashed carried chip rather than a bare "In Progress" (#480).
 
 **Assessments list — dual-party status.** The `/assessments` list ([index_view.rb](../../app/views/assessments/index_view.rb)) represents both parties. A **Team Assessments** (report) card shows a **Self** chip and a **Manager** chip, each `Not started` / `To confirm` / `In progress` / `Complete`; when both are complete it adds a quiet "Ready to align" cue. **Completion means VETTED THIS CYCLE**: carried-forward (seeded) values never count toward `Complete` — a side whose values are entirely carried reads **`To confirm`** (dashed amber chip, the carried signal shared with the pills and level chips), and any human touch (rate / revise / confirm / clear) tips it to `In progress`. The score/hero deliberately still count carried values (they're real data); the chips and pill track the *work state* — "here's the carried picture, your job this cycle is to vet it." A person's **own** card shows the **Self** chip only — the manager's progress stays private until alignment (privacy gate). Once alignment starts, a single `Aligning` / `Aligned` chip replaces the per-side chips. "Complete" here is the **same current-level-coverage notion** as the header pill, so the Manager sub-badge and the report's "Assessment Complete" pill always agree.
 
@@ -1271,8 +1271,9 @@ seeded events alone do not trigger `started`.
 renders **distinctly from a fresh rating**, mirroring the below-level
 assumed-consistent precedent (lighter = inherited, solid = explicit): the
 `FrequencyPill` shows a dashed outline in the frequency's hue
-(`pill_carried` in the palette) with a popover note ("Carried from your
-last cycle — pick the same value to confirm it"), and a level chip whose
+(`pill_carried` in the palette), reads "Most of the time · confirm", and its
+menu leads with **"Keep “Most of the time”"** under a note naming where the
+value came from; a level chip whose
 solid fill is entirely carried uses the lighter `chip_carried` tint (split
 slices deliberately keep full tint — carried state there is visible on the
 expansion pills). Non-visual parity via `title`/aria. Provenance is
@@ -1284,6 +1285,35 @@ human; the pill solidifies); untoggle-to-clear applies only to ratings the
 person made themselves, and the popover's "Clear rating" posts an explicit
 `rating[clear]` marker since the same-frequency POST is no longer
 unambiguous.
+
+**The confirmation work is named, not implied (#480).** A dashed outline was
+the only signal, and people believed they had finished
+([#480](https://github.com/mr-yum/growth-os/issues/480)). So:
+
+- **Only cells that ask are marked.** `MatrixDataBuilder` reports a side as
+  carried only at or above the scoring floor (`assumed_below`, the lower of
+  the lens and home levels). Below it an unrated cell already reads as met
+  and nothing counts it, so a carried value there wears no dashed treatment.
+  Seeding still carries it: a lens at a lower level, or a later move to one,
+  reads the value ([#481](https://github.com/mr-yum/growth-os/issues/481)
+  explains why it isn't dropped).
+- **Each surface says it.** The status pill reads **"N to confirm"** once
+  every current-level cell holds a value (`current_level_work`); the hero
+  swaps Continue for a "N to confirm →" jump chip at that point; a carried
+  capability's name row wears **To confirm**. All three use
+  `Components::Kit::ToConfirmChip`, and "still asks" is one predicate,
+  `Concerns::RatedCount.to_confirm?` (carried on the viewer's side, not
+  frozen).
+- **A category confirms in bulk.** Its indicator cluster offers
+  "Confirm N carried", a page (`Assessments::CarriedRatingsController`)
+  listing every carried cell ticked, with its expectation and the feedback
+  recorded this cycle beside it, so the confirm is informed. It posts to
+  `Operations::Assessments::ConfirmCarriedRatings`, the same code as the
+  `assessments_confirm_carried_ratings` tool. **That operation checks each
+  cell is still carried before confirming it**: re-sending a value that is
+  already human-owned through `RateSelf` *clears* it (the untoggle), so a
+  stale list skips the cell rather than wiping it. Home role only; a lens
+  confirms through its own pills.
 
 **Bulk enrollment is a background job** (`AssessmentCycles::BulkEnrollmentJob`)
 — each enrollment replays the person's PD stream and seeds carried ratings,
@@ -1410,7 +1440,11 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/views/assessments/show_view.rb` | Self-assessment shell — unified sticky header + main column + activity sidebar |
 | `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
-| `app/views/assessments/status_pill.rb` | Header status pill — In Progress / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
+| `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
+| `app/components/kit/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
+| `app/controllers/assessments/carried_ratings_controller.rb` | A category's carried ratings: the review page (GET) and the bulk confirm (POST → `ConfirmCarriedRatings`) |
+| `app/views/assessments/carried_ratings/index_view.rb` | The review page — every carried cell ticked, with its expectation and this cycle's feedback |
+| `app/operations/operations/assessments/confirm_carried_ratings.rb` | Shared web + MCP bulk confirm — checks each cell is still carried, then confirms through `RateSelf` / `RateAsManager` |
 | `app/views/assessments/header_chrome.rb` | Shared header chrome for both show views — the lens control, the status pill or lens banner, the lens modal, and `lens_params` for frame srcs |
 | `app/views/assessments/lens_control.rb` | The shortcode chip as the lens control — the role's ladder, "Back to E3", "Another role…" (see *Role lens*) |
 | `app/views/assessments/lens_role_modal.rb` | "Read against another role" — GET form, role by family, level kept at the reader's ordinal |
