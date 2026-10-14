@@ -77,12 +77,14 @@ class Views::Assessments::Glossary
       required: {
         label: "Required",
         definition: "Some capabilities are marked Required: this role cannot be short of them. " \
-                    "Doing well elsewhere does not make up for the gap.#{required_gate_clause}"
+                    "Doing well elsewhere does not make up for the gap, and one nobody has rated " \
+                    "holds the state back until someone does.#{required_gate_clause}"
       },
       blocked: {
         label: "Blocked",
-        definition: "This capability sits far enough below what #{@current_code} expects to hold " \
-                    "the whole assessment there, whatever the others say. Talk about it first."
+        definition: "This capability's ratings sit far enough below what #{@current_code} expects to hold " \
+                    "the whole assessment there, whatever the others say. Talk about it first. " \
+                    "Only a rating can block: a capability nobody has rated shows Not rated instead."
       },
       weight: {
         label: "Weight",

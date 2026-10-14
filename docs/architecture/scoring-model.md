@@ -93,10 +93,14 @@ Resolved per capability: `binding.deficit_threshold || category.deficit_threshol
 ```
 contribution = Σ (f − expected) × weight across capped ordinals,
                with above-level credit gated as above
-deficit      = max(0, −contribution)
+deficit      = max(0, −contribution), counting rated cells only
 
 Verdict gate: deficit > deficit_threshold → capability is :blocked
 ```
+
+**Only a rating can block** ([#485](https://github.com/mr-yum/growth-os/issues/485)). An unrated cell the score counts as 0 — at or above the assessed level, where nothing is assumed — is left out of the deficit, so a capability nobody has rated is `:unrated`, never `:blocked`. Blocking used to fire on the 0 itself, so a fresh assessment showed Blocked beside "Not rated" on every card. The score is unchanged: the 0 still holds the number down, which the coverage gate and the "X of Y rated" chip already say. A "not yet" still blocks, and so does a rated gap below the assessed level while the assessed level waits on a rating.
+
+An unrated **Required** capability still holds the verdict (see *Verdicts*): the role cannot be short of it, and nothing has shown it isn't. It is reported apart from the blocked ones — `Scoring#unrated_required` — because "blocked" is a judgement and it has none.
 
 At the default 0.75 a current-level "not yet" (deficit 1.0) blocks; "some" and "most of the time" can be made up by strength elsewhere. At the previous default of 1.0 the gate could never fire — a capability's current-level deficit maxes out at exactly 1.0. Tolerance 0 marks the capability mandatory: any gap blocks, and the step gate applies.
 
@@ -108,7 +112,8 @@ The framework-wide value lives on `framework_states.deficit_threshold`; **nil me
 
 | Status | Condition |
 |--------|-----------|
-| `:blocked` | deficit > effective_deficit_threshold — blocks meeting/mastery/promotion |
+| `:blocked` | rated deficit > effective_deficit_threshold — blocks meeting/mastery/promotion |
+| `:unrated` | not blocked, but a cell the score counts as 0 has no rating yet — holds meeting/mastery/promotion only when Required |
 | `:above_cap` | consistent at ordinals beyond reference_level + overperformance_cap |
 | `:at_bar` | effective_freq at reference_level >= 1.0 (consistent) |
 | `:developing` | below bar, not blocked |
@@ -122,14 +127,15 @@ The framework-wide value lives on `framework_states.deficit_threshold`; **nil me
 ```
 level_verdict(reference_level):
   score = performance_ratio_at_level(reference_level)
-  has_blocked = any capability :blocked at reference_level
+  held = any capability at reference_level that is :blocked,
+         or :unrated and Required
 
-  :mastering  if score >= mastery_threshold AND NOT has_blocked
-  :meeting    if score >= meeting_expectation_threshold AND NOT has_blocked
+  :mastering  if score >= mastery_threshold AND NOT held
+  :meeting    if score >= meeting_expectation_threshold AND NOT held
   :below      otherwise
 
-meeting_expectations? = performance_ratio >= meeting_expectation_threshold AND NOT has_blocked
-mastering?            = performance_ratio >= mastery_threshold AND NOT has_blocked
+meeting_expectations? = performance_ratio >= meeting_expectation_threshold AND NOT held
+mastering?            = performance_ratio >= mastery_threshold AND NOT held
 agreed_level          = max(level_ordinal where effective_frequency == "consistent") — derived, never stored
 ```
 
@@ -143,7 +149,7 @@ agreed_level          = max(level_ordinal where effective_frequency == "consiste
 :underperforming  score < underperforming_threshold (default 0.80)
                   → the milestone is the current level's bar
 :progressing      underperforming_threshold ≤ score < meeting_threshold
-                  OR any capability blocked
+                  OR any capability held (blocked, or Required and unrated)
                   → still the current level's bar
 :top_of_ladder    meeting, and the role has no level above this one
                   → there is no next band to progress into
@@ -155,7 +161,7 @@ agreed_level          = max(level_ordinal where effective_frequency == "consiste
                   → the milestone is progress toward the next level
 ```
 
-Precedence: **underperforming → progressing → top_of_ladder → eligible → mastering → performing**. Blocked-precedence means a single blocker downgrades an otherwise-passing person to `:progressing`.
+Precedence: **underperforming → progressing → top_of_ladder → eligible → mastering → performing**. Blocked-precedence means a single held capability downgrades an otherwise-passing person to `:progressing`.
 
 ### `has_next_level?` and `next_level_contribution(binding)`
 
@@ -178,7 +184,7 @@ section header's number and the pass/fail a report reads can't disagree:
 ```
 pass = category_state(category_id) not in [:underperforming, :progressing]
      # i.e. category_components(id)[:score] >= meeting_expectation_threshold
-     #      AND no member capability is :blocked at person_level
+     #      AND no member capability is held at person_level
 pool = Σ raw_contribution per binding in category   # weight units, still exposed
 ```
 
@@ -198,9 +204,9 @@ only `pass`).
 Evaluated at the NEXT level with the same score formula — `level_verdict(next_level)`. Eligible when both:
 
 1. Score: `performance_ratio_at_level(next_level) >= meeting_expectation_threshold`
-2. No `:blocked` capabilities at the next level
+2. Nothing held at the next level — no `:blocked` capability (`blocked_at_next_level`) and no unrated Required one (`unrated_required_at_next_level`)
 
-With the default cap of 1 that is "score ≥ 1.95 and nothing blocked at L+1" — the same bar at every level.
+With the default cap of 1 that is "score ≥ 1.95 and nothing held at L+1" — the same bar at every level.
 
 ---
 
@@ -268,7 +274,7 @@ Two honesty guards sit above the formula, both the hero's:
 | Signal | When | Display |
 |--------|------|---------|
 | Weight chip | `binding.weight != 1.0` | Muted `×2` chip on the assessment card's name row, the hero gap list and the explainer's "Counts differently" list ([#431](https://github.com/mr-yum/growth-os/issues/431)); `×2` marker in the calibration cohort drawer |
-| Required chip | resolved `deficit_threshold == 0` (binding, then category, then framework default — the engine's `mandatory?`) | Muted "Required" chip on the same card row and explainer list, shown before any rating; the red "Blocked" badge is the later state once a gap exists |
+| Required chip | resolved `deficit_threshold == 0` (binding, then category, then framework default — the engine's `mandatory?`) | Muted "Required" chip on the same card row and explainer list, shown before any rating; the red "Blocked" badge is the later state once a rating shows a gap. Unrated, it holds the hero at Progressing with "until N Required capabilities are rated" — never Blocked |
 | Category threshold | `deficit_threshold` on a category | Not shown on any surface today; it reaches the reader only through the capabilities it makes Required |
 | Agreed level | Derived | Shown as `"Agreed: L3"` computed from aligned assessments; no direct input |
 

@@ -47,7 +47,7 @@ class Operations::Assessments::Get < Operations::Base
   #   `:current_cycle` (id, name, status, planned_end_at, and `alignments` —
   #   every role alignment has started against, home included) or nil, and
   #   `:scoring` (scale, score, state, components, thresholds, blocked
-  #   capabilities, per-category roll-up), and `:current_exploration` — the
+  #   capabilities, unrated Required capabilities, per-category roll-up), and `:current_exploration` — the
   #   open exploration of the lens role, or nil.
   def perform
     {

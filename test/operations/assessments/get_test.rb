@@ -89,7 +89,26 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
 
     should "name nothing as blocked when nothing is" do
       assert_empty call_assessment_op.dig(:scoring, :blocked)
+      assert_empty call_assessment_op.dig(:scoring, :unrated_required)
       assert_equal false, call_assessment_op.dig(:scoring, :promotion_ready)
+    end
+
+    # #485: only a rating can block; a Required capability nobody has rated
+    # is reported apart, as the reason the state is held.
+    should "report an unrated Required capability apart from the blocked ones" do
+      ActsAsTenant.with_tenant(@tenant) do
+        cat = FrameworkState::CapabilityCategory.find_by!(name: "Thinking")
+        cap = create(:framework_capability, category_id: cat.category_id, name: "Code Review")
+        create(:framework_capability_role_binding,
+          capability_id: cap.capability_id, role_id: @role.role_id, weight: 1.0, deficit_threshold: 0)
+        create(:framework_behavioural_expectation,
+          capability_id: cap.capability_id, level_ordinal: 2, description: "Reviews thoroughly")
+        @code_review = cap.stable_id
+      end
+      scoring = call_assessment_op[:scoring]
+
+      assert_empty scoring[:blocked]
+      assert_equal [ { capability_stable_id: @code_review, name: "Code Review" } ], scoring[:unrated_required]
     end
   end
 

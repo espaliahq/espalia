@@ -38,7 +38,7 @@ class Assessments::ScoreSummary
   end
 
   # @return [Hash] `{ scale:, score:, state:, components:, thresholds:,
-  #   promotion_ready:, blocked:, categories: }`
+  #   promotion_ready:, blocked:, unrated_required:, categories: }`
   def overall
     return unscorable_overall unless scorable_assignment?
 
@@ -55,6 +55,7 @@ class Assessments::ScoreSummary
       thresholds: thresholds_payload,
       promotion_ready: scored && (scoring.dig(:promotion_readiness, :eligible) || false),
       blocked: blocked_payload,
+      unrated_required: unrated_required_payload,
       categories: categories_payload
     }
   end
@@ -85,6 +86,7 @@ class Assessments::ScoreSummary
       rated_at_assessed_level: capability_rated?(stable_id),
       blocked: scoring[:capability_statuses]&.dig(stable_id) == :blocked,
       block_reason: scoring.dig(:block_reasons, stable_id),
+      unrated_required: (scoring[:unrated_required] || []).include?(stable_id),
       weight: components[:weight],
       required: components[:required]
     }
@@ -110,7 +112,7 @@ class Assessments::ScoreSummary
     {
       lens: nil, scale: nil, scored: false, unscored_reason: "assignment_structure_unavailable",
       score: nil, state: nil, components: nil, coverage: nil,
-      thresholds: thresholds_payload, promotion_ready: false, blocked: [], categories: []
+      thresholds: thresholds_payload, promotion_ready: false, blocked: [], unrated_required: [], categories: []
     }
   end
 
@@ -246,6 +248,14 @@ class Assessments::ScoreSummary
   def blocked_payload
     (scoring[:block_reasons] || {}).map do |stable_id, reason|
       { capability_stable_id: stable_id, name: capability_names[stable_id], reason: reason }
+    end
+  end
+
+  # Required capabilities holding the state only for want of a rating —
+  # apart from `blocked`, because nobody has judged them.
+  def unrated_required_payload
+    (scoring[:unrated_required] || []).map do |stable_id|
+      { capability_stable_id: stable_id, name: capability_names[stable_id] }
     end
   end
 

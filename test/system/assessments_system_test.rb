@@ -342,6 +342,25 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "button[aria-describedby='assessment-term-weight-#{@cap1_stable}']", text: "×2"
       assert_selector "button[aria-describedby='assessment-term-required-#{@cap1_stable}']", text: "Required"
     end
+
+    # #485: an unrated capability scored 0 and blocked like a "not yet", so a
+    # fresh assessment wore Blocked beside "Not rated" on every card.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "show Not rated, never Blocked, until a rating says so (#{label})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#scoring-panel"
+
+        [ @cap1_stable, @cap3_stable ].each do |stable_id|
+          assert_selector "#capability-name-#{stable_id} [data-capability-score]", text: "Not rated"
+        end
+        assert_no_selector "[id^='assessment-term-blocked-']", visible: :all
+
+        click_rating_frequency("#rating-#{@cap3_stable}-2", "Not yet")
+        assert_selector "button[aria-describedby='assessment-term-blocked-#{@cap3_stable}']", text: "Blocked"
+        assert_no_selector "#assessment-term-blocked-#{@cap1_stable}", visible: :all
+      end
+    end
   end
 
   context "category navigation" do
