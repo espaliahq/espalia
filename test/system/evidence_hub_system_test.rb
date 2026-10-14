@@ -190,6 +190,13 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # A <summary> toggles, so the JS-fallback helpers' second dispatch could
+  # close it again: one JS click, then wait for the label.
+  def open_decline_disclosure
+    page.execute_script("document.querySelector(\"[data-testid='decline-disclosure'] summary\").click()")
+    assert_field "Why are you declining? (optional)"
+  end
+
   context "declining a request" do
     setup do
       @request_id = make_request!
@@ -198,13 +205,10 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       assert_text "Rep asked you for feedback"
     end
 
-    # #476: an always-open reason box under "Provide feedback / evidence" read
-    # as the reply box, and a requestee wrote their feedback into it.
     should "keep the reason field out of sight until the requestee chooses to decline" do
       assert_no_field "Why are you declining? (optional)"
 
-      click_selector_with_js_fallback "[data-testid='decline-disclosure'] summary",
-                                      expect_text: "Why are you declining? (optional)"
+      open_decline_disclosure
       js_fill_in "Why are you declining? (optional)", with: "I didn't work with Rep this quarter.\nTry Sam instead."
       click_button_with_js_fallback "Decline request", expect_text: "Request declined."
 
@@ -220,8 +224,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
         "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
       )
       visit evidence_hub_path
-      click_selector_with_js_fallback "[data-testid='decline-disclosure'] summary",
-                                      expect_text: "Why are you declining? (optional)"
+      open_decline_disclosure
 
       assert_operator rendered_contrast("#decline-reason-#{@request_id}"), :>=, 4.5
     ensure
