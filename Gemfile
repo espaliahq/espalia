@@ -47,8 +47,8 @@ gem "omniauth-google-oauth2", "~> 1.2"
 gem "omniauth-rails_csrf_protection", "~> 2.0"
 gem "invisible_captcha", "~> 2.0"
 gem "local_time", "~> 3.0"
-gem "noticed", "~> 3.0"
-gem "pagy", "~> 43.6"
+gem "noticed", "~> 3.1"
+gem "pagy", "~> 43.7"
 gem "pundit", "~> 2.4"
 gem "typeid", "~> 0.2"
 gem "tailwindcss-rails", "~> 4.6"
@@ -75,7 +75,7 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-gem "image_processing", "~> 2.1"
+gem "image_processing", "~> 2.2"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -141,7 +141,7 @@ gem "csv", "~> 3.3"
 # `rails_event_store/all` is required instead of the umbrella's default entrypoint
 # because the latter loads the deprecated `rails_event_store_active_record` gem.
 gem "rails_event_store", "~> 3.1", require: "rails_event_store/all"
-gem "ruby_event_store-active_record", "~> 3.0"
+gem "ruby_event_store-active_record", "~> 3.2"
 
 # HTTP client for HRIS and external API integrations
 gem "faraday", "~> 2.14"

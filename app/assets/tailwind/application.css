@@ -397,6 +397,13 @@ input[type="week"] {
   pointer-events: none;
 }
 
+/* An open rename editor takes the row's whole width, so the cluster would sit
+ * over its textarea and clip a save error. None of its controls apply mid-edit;
+ * Cancel or a save brings them back (#401). */
+[data-hover-cluster="tree"]:has([data-editor-form]) .tree-actions {
+  display: none;
+}
+
 /* A control is clickable only while it is actually shown. The cluster sits OVER
  * the name now, so a hidden-but-hittable button is a tap on the name's tail
  * firing `solo` — reachable in practice on a coarse pointer at `lg` and up (a

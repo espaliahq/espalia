@@ -15,6 +15,14 @@ class Components::Kit::Badge < Components::Base
     info: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
   }.freeze
 
+  BASE = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+
+  # The full class list for a variant — for a control that has to look like
+  # a badge without being one (a `Kit::DefinitionTip` trigger).
+  # @param variant [Symbol]
+  # @return [String]
+  def self.classes(variant) = "#{BASE} #{VARIANTS[variant]}"
+
   # @param label [String] the badge text
   # @param variant [Symbol] color variant
   def initialize(label, variant: :default)
@@ -23,8 +31,6 @@ class Components::Kit::Badge < Components::Base
   end
 
   def view_template
-    span(
-      class: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium #{VARIANTS[@variant]}"
-    ) { @label }
+    span(class: self.class.classes(@variant)) { @label }
   end
 end

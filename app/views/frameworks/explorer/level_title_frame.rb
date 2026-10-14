@@ -26,12 +26,18 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
   # @param framework_id [String]
   # @param mode [Symbol] :view or :edit
   # @param added_in_draft [Boolean] wiggle the title (deferred until publish)
-  def initialize(level_id:, title:, framework_id:, mode: :view, added_in_draft: false)
+  # @param error [String, nil] a rejected inline save (Hard-Won Lesson 26 — the
+  #   422 must carry the frame, the message, and the attempted text)
+  # @param attempted_value [String, nil] the value the rejected save carried
+  def initialize(level_id:, title:, framework_id:, mode: :view, added_in_draft: false,
+                 error: nil, attempted_value: nil)
     @level_id = level_id
     @title = title
     @framework_id = framework_id
     @mode = mode
     @added_in_draft = added_in_draft
+    @error = error
+    @attempted_value = attempted_value
   end
 
   def view_template
@@ -65,6 +71,7 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
         plain_title
         render_inline_editor_pencil(aria_label: "Edit level title", scope: "hdr", collapses: false)
       end
+      render_field_editor_error(@error)
     end
   end
 
@@ -74,10 +81,11 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
     field_editor_data(
       action: framework_level_path(framework_id: @framework_id, id: @level_id),
       field: "level[title]",
-      value: @title.to_s,
+      value: (@error ? @attempted_value : @title).to_s,
       label: "Level title",
       outcome: "apply",
-      rows: 1
+      rows: 1,
+      error: @error
     )
   end
 end

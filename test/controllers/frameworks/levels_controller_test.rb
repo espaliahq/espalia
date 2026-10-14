@@ -41,12 +41,17 @@ class Frameworks::LevelsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "return unprocessable when the title is blank" do
+    # A bodyless 422 inside a frame is invisible (Hard-Won Lesson 26).
+    should "re-render the title frame at 422 with the error and the typed text" do
       sign_in @user
       patch framework_level_path(framework_id: @framework_id, id: @level_id),
-            params: { level: { title: "" } }
+            params: { level: { title: "   " } }
 
       assert_response :unprocessable_content
+      assert_select "turbo-frame#level-title-#{@level_id}" do
+        assert_select "[data-editor-error='the title can’t be blank'][data-editor-value='   ']"
+        assert_select "[role=alert]", text: "Couldn’t save: the title can’t be blank"
+      end
     end
 
     should "404 on an unknown level id (not a masked 422)" do

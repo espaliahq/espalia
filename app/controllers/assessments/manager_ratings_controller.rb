@@ -110,6 +110,7 @@ class Assessments::ManagerRatingsController < ApplicationController
           Views::Assessments::StatusPill.new(
             participant_status: matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
+            context: :manager,
             current_level_complete: matrix_data[:current_level_complete]
           ),
           layout: false

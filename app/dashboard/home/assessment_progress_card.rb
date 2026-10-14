@@ -74,6 +74,7 @@ class Home::AssessmentProgressCard < Home::Card
         status: progress&.status || "in_progress",
         self_rated_count: self_rated.count,
         self_started: self_started,
+        self_complete: progress&.self_completed_at.present?,
         lens_alignments: Assessments::LensAlignments.for(cycle_ids: [ cycle.cycle_id ], person_ids: [ person.id ])
           .fetch([ cycle.cycle_id, person.id ], [])
       }

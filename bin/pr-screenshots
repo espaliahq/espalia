@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Publishes PR screenshots to this repo's orphan `screenshots` branch and
+# prints the markdown to paste into the PR body.
+#
+#   bin/pr-screenshots <pr-number> tmp/visual/<task>/01-desktop.png [...]
+#
+# The images live under pr-<n>/ on `screenshots`, which shares no history with
+# main. The commit is built with plumbing and a throwaway index, so the working
+# tree, the index and the current branch are never touched (agents share the
+# checkout). The links are pinned to the new commit, so a later upload can't
+# change what an old PR shows, and they render for anyone who can read the repo.
+set -euo pipefail
+
+BRANCH="screenshots"
+
+if [[ $# -lt 2 || ! "$1" =~ ^[0-9]+$ ]]; then
+  echo "usage: bin/pr-screenshots <pr-number> <image>..." >&2
+  exit 64
+fi
+pr="$1"
+shift
+
+# Names are restricted rather than escaped: each becomes a URL path segment and
+# alt text verbatim, and two inputs sharing a basename would overwrite one blob.
+seen=" "
+for file in "$@"; do
+  [[ -f "$file" ]] || { echo "not a file: $file" >&2; exit 66; }
+  name="$(basename "$file")"
+  case "$name" in
+    *.png | *.jpg | *.jpeg | *.gif | *.webp) ;;
+    *) echo "only images can be published: $name" >&2; exit 65 ;;
+  esac
+  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "rename to letters, digits, '.', '_' or '-': $name" >&2; exit 65; }
+  [[ "$seen" != *" $name "* ]] || { echo "duplicate file name: $name" >&2; exit 65; }
+  seen+="$name "
+done
+
+repo="$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+index="$(mktemp)"
+trap 'rm -f "$index"' EXIT
+
+for attempt in 1 2 3; do
+  parent=""
+  if git fetch --quiet origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null; then
+    parent="$(git rev-parse "refs/remotes/origin/$BRANCH")"
+  fi
+
+  rm -f "$index"
+  if [[ -n "$parent" ]]; then
+    GIT_INDEX_FILE="$index" git read-tree "$parent"
+  else
+    GIT_INDEX_FILE="$index" git read-tree --empty
+  fi
+
+  for file in "$@"; do
+    blob="$(git hash-object -w "$file")"
+    GIT_INDEX_FILE="$index" git update-index --add --cacheinfo "100644,$blob,pr-$pr/$(basename "$file")"
+  done
+
+  tree="$(GIT_INDEX_FILE="$index" git write-tree)"
+  commit="$(git commit-tree "$tree" ${parent:+-p "$parent"} -m "screenshots: PR #$pr")"
+
+  # A plain push refuses a non-fast-forward, so a concurrent upload makes this
+  # one rebuild on top of it rather than overwrite it.
+  if git push --quiet origin "$commit:refs/heads/$BRANCH"; then
+    for file in "$@"; do
+      name="$(basename "$file")"
+      echo "![${name%.*}](https://github.com/$repo/blob/$commit/pr-$pr/$name?raw=true)"
+    done
+    exit 0
+  fi
+  echo "push to $BRANCH was rejected (attempt $attempt); retrying on the new tip" >&2
+done
+
+echo "could not publish to $BRANCH" >&2
+exit 1

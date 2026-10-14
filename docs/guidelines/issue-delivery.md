@@ -60,8 +60,10 @@ touches **before** writing code; do not rely on defaults.
     doesn't apply ([mcp-server.md](mcp-server.md)).
 11. **Open the PR with the full body**: Why / What / Measured (real numbers
     where the issue asked for them) / MCP note / Tests / Docs / Screenshots,
-    `Closes #<n>`, and the Claude Code footer. Screenshots via `gitshot`,
-    seeded dev data only.
+    `Closes #<n>`, and the Claude Code footer. Screenshots need the PR's
+    number, so open the PR first, then run `bin/pr-screenshots <n> <files…>`
+    and edit the printed links into the Screenshots section. Seeded dev data
+    only.
 12. **Track CI, then track the review.** `gh pr checks <n> --watch` in the
     foreground. Then read CodeRabbit's *unresolved review threads* over
     GraphQL — `gh pr checks` does not reveal findings, and on a **stacked** PR
