@@ -10,7 +10,11 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
     "aligned" => [ "Aligned", :success ]
   }.freeze
 
-  # @param state [Hash, nil] { cycle:, assignment:, status:, self_rated_count: }
+  # Shown before alignment once every current-level cell carries the person's
+  # own vetted rating: their part is done and the next move is the manager's.
+  READY_FOR_ALIGNMENT = [ "Ready for alignment", :success ].freeze
+
+  # @param state [Hash, nil] { cycle:, assignment:, status:, self_rated_count:, self_started:, self_complete: }
   def initialize(state:)
     @state = state
   end
@@ -38,12 +42,22 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
         end
         h2(class: "text-base font-semibold text-gray-900 dark:text-white") { @state[:cycle].name }
       end
-      label, variant = STATUS_LABELS.fetch(@state[:status], [ @state[:status].to_s.humanize, :default ])
+      label, variant = status_label
       div(class: "flex flex-col items-end gap-1") do
         render Components::Kit::Badge.new(label, variant: variant)
         lens_alignment_chips
       end
     end
+  end
+
+  def status_label
+    return READY_FOR_ALIGNMENT if ready_for_alignment?
+
+    STATUS_LABELS.fetch(@state[:status], [ @state[:status].to_s.humanize, :default ])
+  end
+
+  def ready_for_alignment?
+    @state[:self_complete] && %w[in_progress started].include?(@state[:status])
   end
 
   # "Aligning · PM3" beside the home status (ADR-22): alignment the manager
@@ -82,9 +96,11 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   # "Start" until the person themselves records a rating this cycle. Keyed off
   # the self side, not the row-level progress status — that status also flips
   # on the manager's first rating — so the verb always agrees with the
-  # assessments index's own-card CTA.
+  # assessments index's own-card CTA. "Review" once nothing is left to rate.
   # @return [String]
   def cta_verb
+    return "Review" if @state[:self_complete]
+
     @state[:self_started] ? "Continue" : "Start"
   end
 
