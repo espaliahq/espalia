@@ -396,11 +396,15 @@ class Views::Evidence::HubView < Views::Base
         span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
         span { "Decline this request" }
       end
-      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2 flex items-center gap-2") do |f|
-        f.text_field(:reason, placeholder: "Reason (optional)",
-                     class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm", aria: { label: "Decline reason" })
-        f.submit("Decline",
-                 class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
+      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2") do |f|
+        reason_id = "decline-reason-#{request.id}"
+        f.label(:reason, "Reason for declining (optional)", for: reason_id, class: "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1")
+        div(class: "flex items-center gap-2") do
+          f.text_field(:reason, id: reason_id,
+                       class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm")
+          f.submit("Decline",
+                   class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
+        end
       end
     end
   end

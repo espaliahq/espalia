@@ -73,6 +73,14 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "label the decline reason visibly rather than by placeholder" do
+      make_request!
+      sign_in @peer_user
+      get evidence_hub_path
+      input_id = css_select("input[name='evidence_request[reason]']").first["id"]
+      assert_select "label[for='#{input_id}']", text: "Reason for declining (optional)"
+    end
+
     should "not disclose visibility when the requestee is the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
         # The requester asks the assessee themselves for more evidence.
