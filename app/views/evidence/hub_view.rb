@@ -395,7 +395,7 @@ class Views::Evidence::HubView < Views::Base
   def decline_form(request)
     field_id = "decline-reason-#{request.id}"
     details(class: "group", data: { testid: "decline-disclosure" }) do
-      summary(class: "cursor-pointer select-none inline-flex items-center gap-1.5 min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
+      summary(class: "cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
         span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
         plain "Decline this request"
       end
