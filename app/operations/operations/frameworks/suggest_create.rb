@@ -22,6 +22,7 @@ class Operations::Frameworks::SuggestCreate < Operations::Base
   description "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode."
   category :write
   approval :mcp_client
+  prose_fields :rationale
 
   # Accepted proposed_attributes keys per entity type — the aggregate's
   # REQUIRED_CREATION_KEYS plus each type's optional attributes. Unknown keys

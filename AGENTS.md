@@ -457,6 +457,7 @@ test/
 | Stimulus fetch | `@rails/request.js` (never raw `fetch`) |
 | Pagination | `pagy` |
 | Nil assertions | `assert_nil value` (not `assert_equal nil, value`) |
+| Show text people wrote | `render Components::Kit::Prose.new(text)`; excerpts `Prose.to_plain(text)` |
 
 ## Behaviours and practices
 

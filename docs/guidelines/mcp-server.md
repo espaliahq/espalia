@@ -654,6 +654,18 @@ the tool description where a client reads it before calling. Worth asking of any
 surviving `perform` check: is it really a relationship, or a narrower enum you
 haven't noticed?
 
+### Text fields that render as Markdown
+
+A parameter whose text renders through `Prose` (evidence content, comment
+bodies, suggestion rationale, resolution notes — see
+[phlex-views.md](phlex-views.md)) is declared with `prose_fields :content`.
+The tool description then ends with a sentence naming the field, so an agent
+writes links rather than footnotes. Name the field: `frameworks_suggest_edit`
+renders its `rationale` but not its `value`, which is framework text
+and stays plain, so a tool-wide "text is Markdown" would mislead.
+`test/operations/registry_test.rb` fails if a declared field is not a
+parameter.
+
 ## Approval declaration cheat sheet
 
 When declaring `approval` on a new Operation, consult this table:

@@ -49,6 +49,10 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
 
   private
 
+  def composer_hint_id
+    "suggestion-comment-hint-#{@suggestion_id}"
+  end
+
   def header
     div(class: header_label_classes) do
       span { "Discussion" }
@@ -124,7 +128,7 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
         rows: 2,
         required: true,
         placeholder: "Add to the discussion…",
-        aria: { label: "Comment on this suggestion" },
+        aria: { label: "Comment on this suggestion", describedby: composer_hint_id },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -133,7 +137,8 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
           action: "keydown->comments-thread#submitOnModEnter"
         }
       ) { "" }
-      div(class: "mt-1") do
+      div(class: "mt-1 flex items-center justify-between gap-2") do
+        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
         button(
           type: "submit",
           class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"

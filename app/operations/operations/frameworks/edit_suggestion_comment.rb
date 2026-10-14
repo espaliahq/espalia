@@ -9,6 +9,7 @@ class Operations::Frameworks::EditSuggestionComment < Operations::Base
   description "Revise your own comment on a framework suggestion's discussion thread (author only)."
   category :write
   approval :mcp_client
+  prose_fields :body
 
   parameter :framework_id, String, required: true
   parameter :comment_id,   String, required: true

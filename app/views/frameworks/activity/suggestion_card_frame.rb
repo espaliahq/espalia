@@ -143,7 +143,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
                  "8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
             )
           end
-          span(class: "line-clamp-2") { sibling.rationale.to_s }
+          span(class: "line-clamp-2") { Prose.to_plain(sibling.rationale) }
         end
       end
     end
@@ -245,9 +245,10 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       end
       current_and_proposed
       if @suggestion.rationale.present?
-        p(class: "mt-2 text-[11px] text-gray-600 dark:text-gray-300 italic") do
-          "“#{@suggestion.rationale}”"
-        end
+        # A left rule marks the author's words; italics would swallow their _emphasis_.
+        render Components::Kit::Prose.new(@suggestion.rationale,
+                                          class: "mt-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700 " \
+                                                 "text-[11px] text-gray-600 dark:text-gray-300")
       end
       footer_line
     end

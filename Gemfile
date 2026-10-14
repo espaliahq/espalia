@@ -131,6 +131,9 @@ gem "json_translate"
 # Type-safe structured objects in JSONB columns
 gem "store_model", "~> 4.6"
 
+# Renders the Markdown people write in feedback and comments (#482)
+gem "commonmarker", "~> 2.10"
+
 # CSV export of feedback (no longer a default gem since Ruby 3.4)
 gem "csv", "~> 3.3"
 

@@ -11,6 +11,7 @@ class Operations::Frameworks::ResolveClarification < Operations::Base
   description "Resolve a pending clarification with a note (expectation-tier authority required)."
   category :write
   approval :mcp_client
+  prose_fields :note
 
   parameter :framework_id,  String, required: true
   parameter :suggestion_id, String, required: true

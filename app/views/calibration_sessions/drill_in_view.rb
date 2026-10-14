@@ -782,7 +782,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       end
       div(class: "mt-1.5") do
         p(class: "text-xs font-medium text-gray-900 dark:text-white") { item[:person_name] }
-        p(class: "mt-0.5 text-sm text-gray-900 dark:text-white") { item[:content].truncate(280) }
+        p(class: "mt-0.5 text-sm text-gray-900 dark:text-white") { Prose.to_plain(item[:content]).truncate(280) }
         p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") do
           item[:recorded_at].strftime("%b %-d, %Y")
         end
@@ -1268,7 +1268,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           plain item[:recorded_at].strftime("%b %-d, %Y")
         end
       end
-      p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") { item[:content].truncate(280) }
+      p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") { Prose.to_plain(item[:content]).truncate(280) }
     end
   end
 

@@ -22,6 +22,7 @@ class Operations::Frameworks::SuggestEdit < Operations::Base
   description "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal."
   category :write
   approval :mcp_client
+  prose_fields :rationale
 
   # The content entity types the suggest/approve path covers, and the fields
   # each exposes. Matches the web's four inline-edit surfaces.

@@ -9,6 +9,7 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   description "Respond to a feedback / evidence request by providing the requested feedback."
   category :write
   approval :mcp_client
+  prose_fields :content
 
   parameter :request_id,    String, required: true
   parameter :evidence_type, String, required: true, allowed: EvidenceItem::EVIDENCE_TYPES

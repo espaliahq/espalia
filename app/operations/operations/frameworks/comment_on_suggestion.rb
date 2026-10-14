@@ -15,6 +15,7 @@ class Operations::Frameworks::CommentOnSuggestion < Operations::Base
   description "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved."
   category :write
   approval :mcp_client
+  prose_fields :body
 
   parameter :framework_id,  String, required: true
   parameter :suggestion_id, String, required: true

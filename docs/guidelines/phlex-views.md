@@ -178,6 +178,30 @@ class DashboardController < ApplicationController
 end
 ```
 
+## Text people write: render it through `Kit::Prose`
+
+Feedback, comments, notes and rationale are stored exactly as typed and may
+contain Markdown. Show them with `render Components::Kit::Prose.new(text,
+class: …)` — never as a bare string in a `whitespace-pre-wrap` element, and
+never with your own `raw`. `Kit::Prose` is the only component that emits
+`::Prose` HTML, so the sanitizer's allowlist is the whole security story
+([#482](https://github.com/mr-yum/growth-os/issues/482)).
+
+- **Excerpts use `Prose.to_plain(text)`** — feed lines, notification bodies,
+  previews, anything truncated or `line-clamp`ed. It reads as the text a
+  person sees, so `**` and `[…](…)` never show as punctuation, while a link
+  keeps its URL in brackets so a Slack excerpt can still be followed.
+- **Framework content stays plain.** Expectation text, illustrations and
+  suggested values are rendered the same way everywhere the matrix shows them;
+  Markdown there would make a cell read differently in two places.
+- **The field's main composer says so.** Put `Prose::COMPOSER_HINT` beside
+  it and point the textarea's `aria-describedby` at the hint. A thread's
+  inline edit and reply forms write the same field, so they don't repeat it.
+  An MCP tool that writes such a field declares `prose_fields :name`
+  ([mcp-server.md](mcp-server.md)).
+- **The wrapper is a `div`.** Rendered Markdown contains block elements, so a
+  `<p>` parent produces invalid nesting.
+
 ## Attribute values: pass strings, not symbols
 
 Phlex dasherizes a **Symbol attribute value** the way it dasherizes keys, so

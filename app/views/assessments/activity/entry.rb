@@ -427,26 +427,26 @@ class Views::Assessments::Activity::Entry < Views::Base
   def secondary_text
     case @entry.kind
     when "self_rated", "self_rating_revised", "manager_rated", "manager_rating_revised", "assessment_aligned"
-      bits = [ frequency_label_or_nil, payload_value(:comment).to_s.strip.presence ].compact
+      bits = [ frequency_label_or_nil, Prose.to_plain(payload_value(:comment)).presence ].compact
       bits.any? ? bits.join(" · ") : nil
     when "evidence_recorded"
-      content = @entry.payload.respond_to?(:content) ? @entry.payload.content.to_s : ""
-      content.strip.presence
+      content = @entry.payload.respond_to?(:content) ? @entry.payload.content : nil
+      Prose.to_plain(content).presence
     when "evidence_relinked", "evidence_linked"
-      [ valence_label_or_nil, payload_value(:rationale).to_s.strip.presence ].compact
+      [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence ].compact
         .join(" · ").presence
     when "evidence_unlinked"
-      payload_value(:reason).to_s.strip.presence
+      Prose.to_plain(payload_value(:reason)).presence
     when "evidence_revalenced"
       revalence_secondary
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
-      reason.to_s.strip.presence
+      Prose.to_plain(reason).presence
     when "comment_posted", "evidence_link_commented"
       body = @entry.payload.respond_to?(:body) ? @entry.payload.body : nil
-      body.to_s.strip.presence
+      Prose.to_plain(body).presence
     when "rating_revisit_requested", "exploration_started", "exploration_closed"
-      payload_value(:note).to_s.strip.presence
+      Prose.to_plain(payload_value(:note)).presence
     end
   end
 

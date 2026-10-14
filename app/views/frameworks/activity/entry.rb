@@ -248,7 +248,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     count = @entry.comment_count.to_i
     return "Discuss" if count.zero?
 
-    excerpt = @entry.latest_comment.to_s.strip.truncate(60)
+    excerpt = Prose.to_plain(@entry.latest_comment).truncate(60)
     "#{count} · #{excerpt}"
   end
 
@@ -533,13 +533,13 @@ class Views::Frameworks::Activity::Entry < Views::Base
     when "suggestion_create"
       creation_preview
     when "suggestion_approved", "suggestion_rejected"
-      payload_value(:comment)
+      Prose.to_plain(payload_value(:comment)).presence
     when "suggestion_commented"
-      payload_value(:body)
+      Prose.to_plain(payload_value(:body)).presence
     when "clarification_requested"
-      payload_value(:rationale)
+      Prose.to_plain(payload_value(:rationale)).presence
     when "clarification_resolved"
-      payload_value(:note)
+      Prose.to_plain(payload_value(:note)).presence
     when "expectation_added"
       payload_value(:description)
     when "expectation_updated", "illustration_updated"

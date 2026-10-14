@@ -11,6 +11,7 @@ class Operations::Assessments::EditComment < Operations::Base
   description "Edit the body of one of your own comments on an assessment."
   category :write
   approval :mcp_client
+  prose_fields :body
 
   parameter :assignment_id, String, required: true
   parameter :comment_id,    String, required: true

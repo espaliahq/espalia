@@ -69,10 +69,11 @@ class Views::Frameworks::Explorer::RejectSuggestionModal < Views::Base
         span(class: "font-normal text-gray-500 dark:text-gray-400") { "(optional)" }
       end
       textarea(
-        id: "reject_reason", name: "comment", rows: "2",
+        id: "reject_reason", aria: { describedby: "reject_reason-hint" }, name: "comment", rows: "2",
         class: field_classes, placeholder: "Why is this being rejected?",
         data: { reject_suggestion_form_target: "reason" }
       )
+      p(id: "reject_reason-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
     end
   end
 

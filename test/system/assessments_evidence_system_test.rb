@@ -143,6 +143,51 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "Markdown in feedback and comments" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @evidence_id = SecureRandom.uuid_v7
+        pd = PersonDevelopment::CommandHandler.new
+        pd.record_evidence(
+          @person.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap_stable, level_ordinal: 1,
+          source: "self", evidence_type: "project_outcome",
+          content: "Shipped it, see https://example.com/rfc\n\n- **Led** the review",
+          author_id: @person.id, valence: "demonstrated"
+        )
+        pd.post_comment(@person.id, @framework_id, SecureRandom.uuid_v7,
+          commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+          capability_stable_id: @cap_stable, level_ordinal: 1, author_id: @person.id,
+          body: "Agreed, per [the notes](https://example.com/notes)")
+      end
+    end
+
+    should "render a pasted URL and Markdown as safe links and emphasis" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      assert_selector "#evidence-#{@evidence_id}", visible: true
+
+      within "#evidence-#{@evidence_id}" do
+        assert_selector "a[href='https://example.com/rfc'][target='_blank'][rel='noopener noreferrer nofollow']",
+                        text: "https://example.com/rfc"
+        assert_selector "li strong", text: "Led"
+        assert_no_text "**"
+      end
+      assert_selector ".md-prose a[href='https://example.com/notes']", text: "the notes"
+    end
+
+    should "tell the author Markdown works, wired to the field for screen readers" do
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      wait_for_stimulus "evidence-modal"
+      page.execute_script(<<~JS)
+        document.querySelector("#evidence-#{@evidence_id} [data-evidence-modal-mode-param='edit']").click();
+      JS
+      assert_selector "#evm-content", visible: true
+
+      assert_equal "evm-content-hint", find("#evm-content")["aria-describedby"]
+      assert_selector "#evm-content-hint", text: Prose::COMPOSER_HINT
+    end
+  end
+
   context "evidence modal" do
     # The full create flow is covered by the diff-save integration tests. The
     # system test's unique value is the Stimulus wiring: the matrix "+ Add"

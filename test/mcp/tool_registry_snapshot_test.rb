@@ -285,7 +285,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_edit_comment",
-        "description" => "Edit the body of one of your own comments on an assessment.",
+        "description" => "Edit the body of one of your own comments on an assessment. " \
+                         "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -411,9 +412,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_post_comment",
-        "description" => "Post a comment on a capability × level of an assessment (optionally as a reply). " \
-                         "Pass evidence_id to comment on that evidence item's linkage at the cell instead — " \
-                         "the discussion of the feedback's relevance and valence there.",
+        "description" => "Post a comment on a capability × level of an assessment (optionally as a reply). Pass evidence_id to comment on that evidence item's linkage at the cell instead — the discussion of the feedback's relevance and valence there. " \
+                         "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -508,7 +508,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_record_evidence",
-        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment.",
+        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment. " \
+                         "`content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -610,7 +611,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_respond_to_evidence_request",
-        "description" => "Respond to a feedback / evidence request by providing the requested feedback.",
+        "description" => "Respond to a feedback / evidence request by providing the requested feedback. " \
+                         "`content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -737,7 +739,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_update_evidence",
-        "description" => "Edit an existing feedback / evidence item's type, title, content, and external reference.",
+        "description" => "Edit an existing feedback / evidence item's type, title, content, and external reference. " \
+                         "`content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -951,7 +954,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_record_note",
-        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person.",
+        "description" => "Record a free-text minute on a live calibration session, optionally anchored to a capability or person. " \
+                         "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1227,7 +1231,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_amend_suggestion",
-        "description" => "Revise your own pending framework suggested edit (author only).",
+        "description" => "Revise your own pending framework suggested edit (author only). " \
+                         "`rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1247,7 +1252,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_approve_suggestion",
-        "description" => "Approve a pending framework suggested edit (tier authority required).",
+        "description" => "Approve a pending framework suggested edit (tier authority required). " \
+                         "`comment` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1386,7 +1392,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_comment_on_suggestion",
-        "description" => "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved.",
+        "description" => "Comment on a framework suggestion's discussion thread (optionally as a reply). Threads stay open after the suggestion is resolved. " \
+                         "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1501,7 +1508,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_edit_suggestion_comment",
-        "description" => "Revise your own comment on a framework suggestion's discussion thread (author only).",
+        "description" => "Revise your own comment on a framework suggestion's discussion thread (author only). " \
+                         "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1587,7 +1595,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_reject_suggestion",
-        "description" => "Reject a pending framework suggested edit, optionally with a reason (tier authority required).",
+        "description" => "Reject a pending framework suggested edit, optionally with a reason (tier authority required). " \
+                         "`comment` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1760,8 +1769,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_request_clarification",
-        "description" => "Ask for clarification of a capability, one of its level expectations, or a role " \
-                         "example (illustration) — opens a discussion, proposes nothing.",
+        "description" => "Ask for clarification of a capability, one of its level expectations, or a role example (illustration) — opens a discussion, proposes nothing. " \
+                         "`rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1796,7 +1805,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_resolve_clarification",
-        "description" => "Resolve a pending clarification with a note (expectation-tier authority required).",
+        "description" => "Resolve a pending clarification with a note (expectation-tier authority required). " \
+                         "`note` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1837,7 +1847,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_create",
-        "description" => "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode.",
+        "description" => "Propose creating a framework entity (example, expectation, capability, category, role, role family, level) as a suggestion — pending review by default; applied directly with approval rights in editing mode. " \
+                         "`rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1881,7 +1892,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_delete",
-        "description" => "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves.",
+        "description" => "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves. " \
+                         "`rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1901,7 +1913,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_suggest_edit",
-        "description" => "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal.",
+        "description" => "Edit framework content (capability/category name or description, expectation or example text) — applied directly with approval rights in editing mode, else proposed as a suggestion; consecutive edits amend your pending proposal. " \
+                         "`rationale` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

@@ -104,10 +104,8 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
   end
 
   def body_line
-    div(
-      class: "mt-0.5 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words",
-      data: { comments_thread_target: "displayBody" }
-    ) { @comment.body }
+    render Components::Kit::Prose.new(@comment.body, class: "mt-0.5 text-gray-700 dark:text-gray-300",
+                                                     data: { comments_thread_target: "displayBody" })
     edit_form if @can_edit
   end
 

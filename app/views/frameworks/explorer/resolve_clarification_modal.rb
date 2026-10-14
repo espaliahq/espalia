@@ -62,11 +62,12 @@ class Views::Frameworks::Explorer::ResolveClarificationModal < Views::Base
       label(for: "resolve_note",
             class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Resolution" }
       textarea(
-        id: "resolve_note", name: "note", rows: "2", required: true,
+        id: "resolve_note", aria: { describedby: "resolve_note-hint" }, name: "note", rows: "2", required: true,
         class: field_classes,
         placeholder: "e.g. Reworded the L4 expectation, or: the wording stands — here's the reading",
         data: { resolve_clarification_form_target: "note" }
       )
+      p(id: "resolve_note-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
     end
   end
 
