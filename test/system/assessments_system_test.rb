@@ -1621,6 +1621,25 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         assert_no_text "In Progress"
       end
     end
+
+    should "tell a finished assessee they are ready for alignment on the list and the home card" do
+      rate_to_unlock_hero
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap3_stable, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessments_path
+      assert_text "My Assessments"
+      assert_text "Ready for alignment"
+
+      visit root_path
+      assert_text "Review self-assessment"
+      assert_text "Ready for alignment"
+      click_link_with_js_fallback("Review self-assessment", expect_selector: "#assessment-status-pill")
+      within("#assessment-status-pill") { assert_text "Ready for alignment" }
+    end
   end
 
   context "the lowest rating" do
