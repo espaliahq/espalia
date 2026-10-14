@@ -305,7 +305,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "give an unrated current level no next-level credit at all" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], ratings: [ rated(4, "consistent") ])
       assert_in_delta(0.0, scorer.performance_ratio, 0.001)
-      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+      assert_equal :unrated, scorer.capability_statuses[CAP_A]
     end
 
     should "chain the gate along the levels for a cap of 2" do
@@ -778,12 +778,13 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
   # ── Promotion readiness ──
 
   context "#promotion_readiness" do
-    should "block at the next level when consistent there but unrated at the current level" do
+    should "hold the next level when a Required capability is consistent there but unrated at the current level" do
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], deficit_threshold: 0.0,
         ratings: [ rated(4, "consistent") ], thresholds: { meeting_expectation_threshold: 0.7 })
       result = scorer.promotion_readiness
       assert_not result[:eligible]
-      assert_includes result[:blocked_at_next_level], CAP_A
+      assert_empty result[:blocked_at_next_level]
+      assert_equal [ CAP_A ], result[:unrated_required_at_next_level]
     end
 
     should "be eligible when consistent at both the current and next level" do
@@ -792,6 +793,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       result = scorer.promotion_readiness
       assert result[:eligible]
       assert_empty result[:blocked_at_next_level]
+      assert_empty result[:unrated_required_at_next_level]
     end
 
     should "require the same share of the next band at every level" do
@@ -808,13 +810,23 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         ratings: [ rated(3, "consistent") ])
       result = scorer.promotion_readiness
       assert_not result[:eligible]
-      assert_includes result[:blocked_at_next_level], CAP_A
+      assert_empty result[:blocked_at_next_level]
+      assert_equal [ CAP_A ], result[:unrated_required_at_next_level]
     end
 
-    should "block a flexible capability whose deficit at the next level exceeds the tolerance" do
-      # Unrated at L3 and L4: −1.0 −1.0 at L4 → deficit 2.0 > 0.75.
-      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
+    should "block a flexible capability whose rated deficit at the next level exceeds the tolerance" do
+      # "Not yet" at L3 and L4: −1.0 −1.0 at L4 → deficit 2.0 > 0.75.
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(3, "none"), rated(4, "none") ])
       assert_includes scorer.promotion_readiness[:blocked_at_next_level], CAP_A
+    end
+
+    should "neither block nor hold a flexible capability nobody has rated at the next level" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
+      result = scorer.promotion_readiness
+      assert_not result[:eligible], "an unrated level still scores 0, so it can't be met"
+      assert_empty result[:blocked_at_next_level]
+      assert_empty result[:unrated_required_at_next_level]
     end
 
     should "not block a flexible capability whose deficit at the next level is within the tolerance" do
@@ -865,6 +877,78 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       reasons = scorer.block_reasons
       assert_includes reasons.keys, CAP_A
       assert_not_includes reasons.keys, CAP_B
+    end
+  end
+
+  # ── Only a rating can block ──
+
+  context "an unrated capability" do
+    should "not be blocked, though the score still counts it as 0" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
+      assert_equal :unrated, scorer.capability_statuses[CAP_A]
+      assert_empty scorer.block_reasons
+      assert_in_delta(0.0, scorer.performance_ratio, 0.001)
+    end
+
+    should "still be blocked by a \"not yet\" rating" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ rated(3, "none") ])
+      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+      assert_includes scorer.block_reasons[CAP_A], "Below expectations by 1.0 points"
+    end
+
+    should "still be blocked by a \"not yet\" below the assessed level while the assessed level is unrated" do
+      scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [ rated(2, "none") ])
+      assert_equal :blocked, scorer.capability_statuses[CAP_A]
+      assert_includes scorer.block_reasons[CAP_A], "Below expectations by 1.0 points"
+    end
+
+    should "not hold the state when it is flexible" do
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
+        thresholds: { meeting_expectation_threshold: 0.5, underperforming_threshold: 0.4 },
+        ratings: [ rated(3, "consistent") ])
+      assert_equal :unrated, scorer.capability_statuses[CAP_B]
+      assert scorer.meeting_expectations?
+      assert_equal :performing, scorer.performance_state
+      assert scorer.category_results[CAT_1][:pass]
+    end
+
+    should "hold the state at progressing when it is Required" do
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], tolerance_b: 0,
+        thresholds: { meeting_expectation_threshold: 0.5, underperforming_threshold: 0.4 },
+        ratings: [ rated(3, "consistent") ])
+      assert_equal :unrated, scorer.capability_statuses[CAP_B]
+      assert_empty scorer.block_reasons
+      assert_equal [ CAP_B ], scorer.unrated_required
+      assert_not scorer.meeting_expectations?
+      assert_equal :progressing, scorer.performance_state
+      assert_equal :progressing, scorer.category_results[CAT_1][:state]
+    end
+
+    should "stop counting once it is rated" do
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], tolerance_b: 0,
+        ratings: [ rated(3, "consistent"), rated(3, "consistent", cap: CAP_B) ])
+      assert_empty scorer.unrated_required
+      assert_equal :at_bar, scorer.capability_statuses[CAP_B]
+    end
+
+    should "read the viewer's perspective, so a manager rating doesn't fill an unrated self cell" do
+      manager_only = Rating.new(capability_stable_id: CAP_A, level_ordinal: 3,
+        aligned_frequency: nil, manager_rated_frequency: "none", self_rated_frequency: nil)
+      cap = CapStub.new(stable_id: CAP_A, category_id: CAT_1)
+      self_view = PersonDevelopment::Scoring.new(
+        level_ratings: [ manager_only ],
+        bindings: [ BindingStub.new(capability_id: "bid", weight: 1.0, capability: cap) ],
+        categories: [ CategoryStub.new(category_id: CAT_1) ],
+        person_level: 3, all_level_ordinals: [ 3 ], expectation_cells: nil, perspective: :self_only
+      )
+      assert_equal :unrated, self_view.capability_statuses[CAP_A]
+    end
+
+    should "be unrated, not blocked, at a lens level above the home level" do
+      # E2 read as E4: L3 and L4 are no longer assumed, and nobody rated them.
+      scorer = build_scorer(person_level: 4, home_level: 2, all_levels: [ 1, 2, 3, 4 ],
+        ratings: [ rated(2, "consistent") ])
+      assert_equal :unrated, scorer.capability_statuses[CAP_A]
     end
   end
 end
