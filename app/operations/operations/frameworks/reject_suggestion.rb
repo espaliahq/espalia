@@ -9,6 +9,7 @@ class Operations::Frameworks::RejectSuggestion < Operations::Base
   description "Reject a pending framework suggested edit, optionally with a reason (tier authority required)."
   category :write
   approval :mcp_client
+  prose_fields :comment
 
   parameter :framework_id,  String, required: true
   parameter :suggestion_id, String, required: true

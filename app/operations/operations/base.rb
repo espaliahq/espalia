@@ -202,7 +202,20 @@ class Operations::Base
     # @return [String, nil] human-readable description used by MCP tool listings.
     def description(text = nil)
       @description = text if text
-      @description
+      return @description if prose_fields.empty?
+
+      [ @description, Prose.mcp_note(*prose_fields) ].compact.join(" ")
+    end
+
+    # Declares text parameters that render as Markdown through {Prose}
+    # (#482), so the tool description tells clients. Named, because the same
+    # tool may also take framework text that stays plain.
+    #
+    # @param names [Array<Symbol>]
+    # @return [Array<Symbol>]
+    def prose_fields(*names)
+      @prose_fields = names.map(&:to_sym) if names.any?
+      @prose_fields || []
     end
 
     # @return [Symbol] :read | :write | :destructive

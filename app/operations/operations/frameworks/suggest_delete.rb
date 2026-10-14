@@ -19,6 +19,7 @@ class Operations::Frameworks::SuggestDelete < Operations::Base
   description "Propose deleting a framework entity (capability or example) as a pending suggestion — nothing is removed until a reviewer approves."
   category :write
   approval :mcp_client
+  prose_fields :rationale
 
   parameter :framework_id, String, required: true
   parameter :entity_type,  String, required: true,

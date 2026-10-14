@@ -21,9 +21,10 @@
 class Operations::Assessments::PostComment < Operations::Base
   description "Post a comment on a capability × level of an assessment (optionally as a reply). " \
               "Pass evidence_id to comment on that evidence item's linkage at the cell instead — " \
-              "the discussion of the feedback's relevance and valence there. " + Prose::MCP_NOTE
+              "the discussion of the feedback's relevance and valence there."
   category :write
   approval :mcp_client
+  prose_fields :body
 
   parameter :assignment_id,        String, required: true
   parameter :capability_stable_id, String, required: true

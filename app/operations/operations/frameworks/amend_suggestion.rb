@@ -12,6 +12,7 @@ class Operations::Frameworks::AmendSuggestion < Operations::Base
   description "Revise your own pending framework suggested edit (author only)."
   category :write
   approval :mcp_client
+  prose_fields :rationale
 
   parameter :framework_id,    String, required: true
   parameter :suggestion_id,   String, required: true

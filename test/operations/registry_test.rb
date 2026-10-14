@@ -39,4 +39,11 @@ class Operations::RegistryTest < ActiveSupport::TestCase
     duplicates = names.group_by(&:itself).select { |_, v| v.size > 1 }.keys
     assert_empty duplicates, "duplicate tool names: #{duplicates.inspect}"
   end
+
+  should "declare prose_fields only for parameters the operation takes" do
+    unknown = @ops.flat_map do |op|
+      (op.prose_fields - op.parameters.keys).map { |field| "#{op.name}##{field}" }
+    end
+    assert_empty unknown, "prose_fields naming no parameter: #{unknown.inspect}"
+  end
 end
