@@ -72,7 +72,12 @@ module Prose
   # @param href [String, nil]
   # @return [Boolean]
   def linkable?(href)
-    LINK_SCHEMES.include?(URI.parse(href.to_s.strip).scheme&.downcase)
+    value = href.to_s.strip
+    # Browsers drop tabs and newlines inside a URL, so "java\tscript:" would
+    # run; refuse any control character rather than trust the parse.
+    return false if value.match?(/[\x00-\x1F\x7F]/)
+
+    LINK_SCHEMES.include?(URI.parse(value).scheme&.downcase)
   rescue URI::InvalidURIError
     false
   end

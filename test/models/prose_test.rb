@@ -60,6 +60,13 @@ class ProseTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse a URL carrying a control character a browser would strip" do
+      [ "java\tscript:alert(1)", "https://e.com/\nx", "https://e.com/\u007F" ].each do |href|
+        assert_not Prose.linkable?(href), href.inspect
+      end
+      assert Prose.linkable?("https://e.com/ok")
+    end
+
     should "drop an unsafe reference definition" do
       assert_nil html("per [1]\n\n[1]: javascript:alert(1)").at_css("a")
     end
