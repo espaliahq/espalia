@@ -392,7 +392,7 @@ class Views::Evidence::HubView < Views::Base
   # Collapsed so the reason box can't be mistaken for where the reply goes.
   def decline_form(request)
     details(class: "group", data: { testid: "decline-request" }) do
-      summary(class: "cursor-pointer select-none text-sm text-gray-600 dark:text-gray-300 marker:content-none flex items-center gap-1") do
+      summary(class: "min-h-11 cursor-pointer select-none text-sm text-gray-600 dark:text-gray-300 marker:content-none flex items-center gap-1") do
         span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
         span { "Decline this request" }
       end
