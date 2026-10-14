@@ -4,11 +4,13 @@
 #
 # Wrapped in a stable `id="assessment-status-pill"` element so rating
 # controllers can Turbo-replace it the moment the final current-level cell is
-# rated — flipping "In Progress" to "Assessment Complete" without a reload.
+# rated — flipping "In Progress" to its finished label without a reload.
 #
-# "Assessment Complete" rewards finishing the current-level ratings (100%
-# coverage in the viewer's perspective); it precedes the manager-driven
-# "Aligning" / "Aligned" lifecycle phases.
+# The finished label depends on whose work the pill describes. An assessee who
+# has rated every current-level cell reads "Ready for alignment": their part is
+# done and the next step is the manager's. A manager who has rated every cell
+# reads "Assessment Complete". Both precede the manager-driven "Aligning" /
+# "Aligned" lifecycle phases.
 #
 class Views::Assessments::StatusPill < Views::Base
   WRAPPER_ID = "assessment-status-pill"
@@ -16,14 +18,16 @@ class Views::Assessments::StatusPill < Views::Base
   # @param participant_status [String, nil] cycle participation status
   # @param has_open_cycle [Boolean] whether an assessment cycle is open
   # @param current_level_complete [Boolean] all current-level cells rated
-  def initialize(participant_status:, has_open_cycle:, current_level_complete: false)
+  # @param context [Symbol] :self (the assessee's view) or :manager
+  def initialize(participant_status:, has_open_cycle:, context:, current_level_complete: false)
     @participant_status = participant_status
     @has_open_cycle = has_open_cycle
     @current_level_complete = current_level_complete
+    @context = context
   end
 
   def view_template
-    span(id: WRAPPER_ID, class: "inline-flex") { pill }
+    span(id: WRAPPER_ID, class: "inline-flex", title: title) { pill }
   end
 
   private
@@ -36,10 +40,23 @@ class Views::Assessments::StatusPill < Views::Base
       return unless @has_open_cycle
 
       if @current_level_complete
-        render Components::Kit::Badge.new("Assessment Complete", variant: :success)
+        render Components::Kit::Badge.new(complete_label, variant: :success)
       else
         render Components::Kit::Badge.new("In Progress", variant: :warning)
       end
     end
+  end
+
+  def complete_label
+    ready_for_alignment? ? "Ready for alignment" : "Assessment Complete"
+  end
+
+  def title
+    "You've rated every capability at your level. Your manager starts alignment next." if ready_for_alignment?
+  end
+
+  def ready_for_alignment?
+    @context == :self && @has_open_cycle && @current_level_complete &&
+      !%w[aligning aligned].include?(@participant_status)
   end
 end

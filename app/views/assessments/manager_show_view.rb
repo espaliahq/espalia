@@ -156,6 +156,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
+            context: :manager,
             current_level_complete: @matrix_data[:current_level_complete]
           )
           render_lens_alignment_chips
