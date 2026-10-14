@@ -658,7 +658,7 @@ class Assessments::MatrixDataBuilder
     cells = categories.flat_map { |c| c[:capabilities] }.filter_map { |cap| cap[:cells][@level.ordinal] }
     {
       unrated: cells.count { |cell| primary_cell_frequency(cell).blank? },
-      to_confirm: cells.count { |cell| primary_cell_carried?(cell) && cell[:frozen_by].nil? }
+      to_confirm: cells.count { |cell| Assessments::CarriedCell.to_confirm?(cell, @context) }
     }
   end
 

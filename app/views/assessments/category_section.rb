@@ -79,9 +79,10 @@ class Views::Assessments::CategorySection < Views::Base
   # Bulk confirm is the viewer's own side on the home role; frozen covers a
   # started alignment and a viewer without rating authority alike.
   def confirm_href
-    return if @frozen || @context == :alignment || (@lens && !@lens.home?)
-
-    assessment_carried_ratings_path(@assessment_id, category_id: @category.category_id)
+    Views::Assessments::CategoryIndicators.confirm_href(
+      assessment_id: @assessment_id, category_id: @category.category_id, context: @context,
+      frozen: @frozen, home: @lens.nil? || @lens.home?
+    )
   end
 
   def section_header

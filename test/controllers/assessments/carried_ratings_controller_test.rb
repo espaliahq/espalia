@@ -87,6 +87,18 @@ class Assessments::CarriedRatingsControllerTest < ActionDispatch::IntegrationTes
       assert_equal "seeded", rating.self_rating_source
     end
 
+    should "say there is nothing to confirm once alignment has started" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @framework.framework_id, @cycle_id,
+                                                              started_by_id: @person.id)
+      end
+
+      get assessment_carried_ratings_path(@assignment, category_id: @category.category_id)
+
+      assert_redirected_to assessment_path(@assignment)
+      assert_equal Assessments::CarriedRatingsController::NOTHING_TO_CONFIRM, flash[:alert]
+    end
+
     should "send an unknown category back to the assessment" do
       get assessment_carried_ratings_path(@assignment, category_id: SecureRandom.uuid_v7)
 

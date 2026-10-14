@@ -99,22 +99,18 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
              "text-gray-600 dark:text-gray-300") { "Nothing in this category is waiting to be confirmed." }
   end
 
-  # Every cell in the category still asking to be confirmed on the viewer's
-  # side, by capability then level.
+  # The category's cells at the person's level still asking to be confirmed
+  # on the viewer's side — the count the category link and status pill show.
   def rows
-    @rows ||= @category[:capabilities].flat_map do |cap_data|
-      cap_data[:cells].sort.filter_map do |ordinal, cell|
-        next unless Views::Assessments::Concerns::RatedCount.to_confirm?(cell, @context)
-
-        frequency = cell[@context == :manager ? :manager_frequency : :current_frequency]
-        config = Views::Assessments::FrequencyPalette.config_for(frequency)
-        {
-          stable_id: cap_data[:capability].stable_id, ordinal: ordinal, name: cap_data[:capability].name,
-          level_code: level_code(ordinal), phrase: config&.dig(:phrase),
-          expectation: cell[:expectation]&.description,
-          new_feedback: Array(cell[:evidence]).count { |item| @cycle_id && item.cycle_id == @cycle_id }
-        }
-      end
+    @rows ||= Assessments::CarriedCell.at_level(@category[:capabilities], @person_level, @context).map do |cap_data|
+      cell = cap_data[:cells][@person_level]
+      frequency = cell[@context == :manager ? :manager_frequency : :current_frequency]
+      {
+        stable_id: cap_data[:capability].stable_id, ordinal: @person_level, name: cap_data[:capability].name,
+        level_code: level_code(@person_level), phrase: Views::Assessments::FrequencyPalette.phrase_for(frequency),
+        expectation: cell[:expectation]&.description,
+        new_feedback: Array(cell[:evidence]).count { |item| @cycle_id && item.cycle_id == @cycle_id }
+      }
     end
   end
 

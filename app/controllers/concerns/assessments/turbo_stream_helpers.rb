@@ -90,7 +90,7 @@ module Assessments::TurboStreamHelpers
         person_level: matrix_data[:person_level],
         thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
         viewer_is_manager: viewer_is_manager?,
-        to_confirm: Views::Assessments::Concerns::RatedCount.to_confirm?(cell, context)
+        to_confirm: Assessments::CarriedCell.to_confirm?(cell, context)
       ),
       layout: false
     )

@@ -629,7 +629,7 @@ class Views::Assessments::HeroSummary < Views::Base
   def carried_to_confirm
     @carried_to_confirm ||= @categories
       .flat_map { |cat| cat[:capabilities] }
-      .select { |cap_data| Views::Assessments::Concerns::RatedCount.to_confirm?(cap_data[:cells][@person_level], @context) }
+      .then { |capabilities| Assessments::CarriedCell.at_level(capabilities, @person_level, @context) }
   end
 
   def next_carried_capability

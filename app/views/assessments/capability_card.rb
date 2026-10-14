@@ -201,7 +201,7 @@ class Views::Assessments::CapabilityCard < Views::Base
       person_level: @person_level,
       thresholds: @thresholds,
       viewer_is_manager: @viewer_is_manager,
-      to_confirm: Views::Assessments::Concerns::RatedCount.to_confirm?(@cells[@person_level], @context)
+      to_confirm: Assessments::CarriedCell.to_confirm?(@cells[@person_level], @context)
     )
   end
 

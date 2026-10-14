@@ -15,8 +15,12 @@ class Assessments::CarriedRatingsController < ApplicationController
 
   # GET /assessments/:assessment_id/carried_ratings?category_id=…
   def index
-    authorize @assignment, rating_predicate
+    # Viewing first: once alignment starts there is no side to confirm, and a
+    # stale link should say so rather than read as a permission failure.
+    authorize @assignment, :show?
     return redirect_to(assessment_path(@assignment), alert: NOTHING_TO_CONFIRM) unless perspective
+
+    authorize @assignment, rating_predicate
 
     matrix = Assessments::MatrixDataBuilder.for_lens(
       lens: home_lens, context: viewer_context,
@@ -35,9 +39,11 @@ class Assessments::CarriedRatingsController < ApplicationController
 
   # POST /assessments/:assessment_id/carried_ratings
   def create
-    authorize @assignment, rating_predicate
+    authorize @assignment, :show?
     back = assessment_path(@assignment, category: params[:category_id].presence)
     return redirect_to(back, alert: NOTHING_TO_CONFIRM) unless perspective
+
+    authorize @assignment, rating_predicate
 
     cells = Array(params[:cells]).filter_map do |token|
       stable_id, ordinal = token.to_s.split("|", 2)

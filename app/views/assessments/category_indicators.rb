@@ -71,6 +71,18 @@ class Views::Assessments::CategoryIndicators < Views::Base
     end
   end
 
+  # Where a category's carried ratings are confirmed in bulk, or nil when the
+  # viewer has none to confirm here: a started alignment or no rating
+  # authority (both `frozen`), or a lens, which confirms through its pills.
+  # The one gate, shared by the page and the rating responses.
+  #
+  # @return [String, nil]
+  def self.confirm_href(assessment_id:, category_id:, context:, frozen:, home:)
+    return if frozen || !home || !Assessments::CarriedCell::CARRIED_KEYS.key?(context)
+
+    Rails.application.routes.url_helpers.assessment_carried_ratings_path(assessment_id, category_id: category_id)
+  end
+
   private
 
   # Re-rendered with the cluster after every rating, so the count stays true
@@ -86,10 +98,10 @@ class Views::Assessments::CategoryIndicators < Views::Base
     end
   end
 
+  # The current level only — the same work the status pill and hero count,
+  # so the numbers on one page agree.
   def carried_count
-    @category_data[:capabilities].sum do |cap|
-      cap[:cells].count { |_, cell| Views::Assessments::Concerns::RatedCount.to_confirm?(cell, @context) }
-    end
+    Assessments::CarriedCell.at_level(@category_data[:capabilities], @person_level, @context).size
   end
 
   def counts
