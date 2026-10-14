@@ -57,7 +57,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     render Components::Kit::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
-      div(data: { controller: "activity-pane" }) do
+      div(data: { controller: "activity-pane", activity_pane_fit_viewport_value: true }) do
         assessment_layout
       end
     end
@@ -156,6 +156,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
+            context: :manager,
             current_level_complete: @matrix_data[:current_level_complete],
             work: @matrix_data[:current_level_work]
           )
@@ -329,13 +330,16 @@ class Views::Assessments::ManagerShowView < Views::Base
   def activity_sidebar
     aside(
       id: "assessment-activity-pane",
-      class: "hidden bg-gray-50 dark:bg-gray-800 overflow-auto " \
+      # The height cap subtracts the sticky header the pane sits under, or its
+      # bottom (and the feed's last entries) lands below the viewport. Both
+      # offsets are lg-only so the overlay below lg keeps its full height.
+      class: "hidden bg-gray-50 dark:bg-gray-800 overflow-auto overscroll-contain " \
              "border border-gray-200 dark:border-gray-700 " \
              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
              "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \
-             "lg:shrink-0 lg:w-80 lg:rounded-xl " \
-             "lg:sticky lg:self-start lg:max-h-[calc(100vh-2rem)]",
-      style: "top: calc(var(--sticky-header-h, 0px) + 1rem)",
+             "lg:shrink-0 lg:w-80 lg:rounded-xl lg:sticky lg:self-start " \
+             "lg:top-[calc(var(--sticky-header-h,0px)+1rem)] " \
+             "lg:max-h-[calc(100dvh-var(--sticky-header-h,0px)-2rem)]",
       data: { activity_pane_target: "pane", pane_state: "closed" }
     ) do
       # No separate sidebar header — the feed's own header carries

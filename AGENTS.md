@@ -267,6 +267,51 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 > even when the task itself exited 1. Piping hides the failure as well: rake prints it above
 > the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
+### Cloud sessions: `bin/cloud-setup`, not the devcontainer
+
+**A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
+devcontainer would rebuild its Rails image and start eight containers every session. The
+script takes about nine minutes from a cold container and six seconds once everything is in
+place. The environment's setup script runs it as root from the checkout; run it again by hand
+to restart anything that has stopped. It provides:
+
+- **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
+  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
+- **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
+  `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
+- **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:
+  `CAPYBARA_SERVER_PORT` stays unset, so one worker drives the preinstalled Playwright
+  Chromium. The script fetches the chromedriver that matches it (the image's is newer, and
+  Selenium Manager cannot reach its version index) and writes a `/usr/bin/google-chrome`
+  wrapper that adds `--no-sandbox`, which Chrome needs to run as root.
+- **A headless Chromium on `localhost:9222`**, where `.mcp.json` already points the
+  `chrome-devtools` MCP.
+- **The egress proxy's CAs in Chrome's NSS store**, so the browser can load anything off-host.
+- **The gems, the Tailwind build, the test database**, and the development database, seeded.
+
+**The tools reach the session through `/root/.local/bin`.** A session's shell takes its `PATH`
+from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already on it ahead of
+the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
+the chromedriver there.
+
+**The environment provides three things.** Network access to the hosts the script downloads
+from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
+(gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
+Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
+`db:prepare` seeds development. Tests never need it. The seed signs in the admin from
+credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
+does (names are whimsified).
+
+**A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
+gesture**: a JS-dispatched click leaves the promise pending, even with focus and permission
+granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. A real click copies.
+So a system test that copies clicks for real (`click_with_retry`), and the clipboard controller
+shows "Copied!" only once a copy succeeds, falling back to `execCommand` when `writeText` hangs.
+
+**In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
+browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
+Overmind, which the image lacks.
+
 ## Visual Verification (NON-NEGOTIABLE)
 
 System tests remain the **source of truth** and MUST represent every piece of
@@ -422,7 +467,7 @@ test/
 - *CRITICAL* **Commit each discrete change as soon as it is complete and verified — *before* starting the next separable piece of work**, even within a single task or session. Do not let two separable changes accumulate uncommitted in the working tree: splitting them apart after the fact is error-prone and sometimes infeasible once they touch the same files/lines. The moment you finish a working, tested unit and the next thing is separable, commit first, then continue (if you're on the default branch, create a feature branch before the first commit). If a request implies several separable changes, plan the commit boundaries up front and land each one before moving on, rather than batching everything into a single end-of-task commit.
 - **Run the `/code-review` skill before creating a PR (NON-NEGOTIABLE).** Review the branch diff vs main once the work is complete and committed, and land each fix as its own stacked commit on the branch before opening the PR. This is a pre-PR gate, separate from (not a replacement for) the CodeRabbit review that runs in PR CI — both apply.
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit. 
-- **Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [docs/guidelines/chrome-mcp.md](docs/guidelines/chrome-mcp.md)). GitHub has no image-upload API, so to embed them from the CLI use **[gitshot](https://github.com/vipulgupta2048/gitshot)**: `npx -y gitshot --json tmp/visual/<task>/<file>.png` uploads via the authenticated `gh` CLI (hosting the image as a Release Asset in a **public** `<your-username>/gitshot-images` repo) and prints the markdown to paste into the PR body. The local `tmp/visual/` files stay gitignored — never commit screenshots into this repo. **gitshot is pre-authorized** via `.claude/settings.json` permission rules — use it by default, without asking, for PR screenshots of non-sensitive UI. The public-repo caveat is now advisory rather than prompt-enforced, so apply it yourself: seeded/demo data only (dev names are whimsified pseudonyms, so dev-tenant screenshots qualify); for anything sensitive (real customer data, credentials, tokens in view), do NOT upload — drag the files into the GitHub PR editor by hand instead. Skip screenshots entirely for purely backend/internal changes with no visible surface.
+- **Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [docs/guidelines/chrome-mcp.md](docs/guidelines/chrome-mcp.md)). GitHub has no image-upload API, so publish them to this repo's orphan **`screenshots` branch** with `bin/pr-screenshots <pr-number> tmp/visual/<task>/<file>.png …` and paste the markdown it prints into the PR body. It needs the PR's number, so open the PR first, then publish and edit the links in. Each image lands under `pr-<n>/` on that branch, which shares no history with `main`. The commit is built with git plumbing and a throwaway index, so the working tree and the current branch are never touched. The links are pinned to the upload's commit, so a later upload can't change an old PR. Because the repo is private, the images render only for people signed in to GitHub with read access. Never commit screenshots to `main` or a feature branch; `tmp/visual/` stays gitignored. **`bin/pr-screenshots` is pre-authorized** via `.claude/settings.json`, so use it by default without asking. The branch is visible to everyone with repo access and is never cleaned up, so publish seeded or demo data only; dev names are whimsified pseudonyms, so dev-tenant screenshots qualify. Never upload a screenshot showing real customer data, credentials or tokens, by this script or by dragging it into the PR editor, which uploads it to GitHub just the same. Redact it or recapture it on seeded data, and leave it out if you can't. Name files for what they show (`desktop-1400-feed-end.png`, not `05b.png`), since the file name, without its extension, becomes the alt text. Skip screenshots entirely for purely backend/internal changes with no visible surface.
 - **`gh pr checks` does NOT reveal CodeRabbit findings.** Its CodeRabbit row reports the *check* status (e.g. "Review skipped" / "pass") which is independent of the review CodeRabbit posts as PR *review comments*. A green/"skipped" row can still hide actionable findings. Never conclude "no findings" from `gh pr checks` alone. Extraction rules (each learned the hard way):
   - **Read every CodeRabbit review *body*, not just the threads.** Findings on lines outside the PR's diff cannot be posted inline; CodeRabbit puts them in the review body under "Outside diff range comments" (`gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login=="coderabbitai") | .body'`). They are real findings with no thread to resolve — address them and say so in a PR comment. One was missed on PR #410 by reading threads alone.
   - **The source of truth for OPEN findings is GraphQL review threads, not the REST comment list.** `isResolved` only exists there: `gh api graphql -f query='query { repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 10) { nodes { author { login } body databaseId } } } } } } }'` and filter `isResolved == false`. CodeRabbit auto-resolves threads it verifies as fixed, so unresolved == still owed a fix or a reply.
@@ -450,4 +495,11 @@ test/
 - **Any read model keyed by `capability_stable_id` under a unique index must merge on collision in its `FrameworkVersionMigrated` handler.** An `evolved` survivor can already be rated/linked by the same person at the same natural key, so a plain `update_all` re-key trips the index and rolls back the publish. Follow `rekey_ratings` / `rekey_links` (keep the colliding row under the retiring id, flagged) and see ADR-17 in [adrs.md](docs/architecture/adrs.md).
 - **`gh` unauthenticated in the devcontainer? Re-run the feature hook, don't `gh auth login`.** The `gh-auth-from-host` feature bridges the host's forwarded git credential into `gh` only on `postAttachCommand`; it warns and exits 0 when the host offers nothing at that instant, and a long-lived VS Code connection never re-attaches, so one silent miss at container creation leaves `gh` logged out for the container's lifetime. Fix in place with `sh /usr/local/share/gh-auth-from-host/refresh.sh`. A container-local `gh auth login` shadows the bridge and rots when the host token rotates.
 - **A deploy that rebuilds a projection blanks its read models for a minute or two.** The pre-deploy rebuild truncates the projection's live tables and replays them while the previous release still serves traffic, so `person_development/current_assessment` reads as "every assessment is empty" until the replay finishes. `REBUILD_ON_DEPLOY` lives in the `growthos-shared` env group; it was once left set for four deploys and each one rebuilt. The hook now only rebuilds a projection whose stamp is behind `CODE_VERSION`, so a forgotten variable is inert, but still remove it after the deploy it was set for — see [projection-rebuild.md](docs/runbooks/projection-rebuild.md).
+- **Dependabot PRs merge themselves from the last job in `ci.yml`, and every guard there is load-bearing.** `dependabot-auto-merge` approves and squash-merges once every other CI job has passed on the same commit. It replaced a `workflow_run` workflow that interpolated `head_branch` into a shell (injection) while holding a write token. The rules, pinned by `test/integration/ci_workflow_test.rb`:
+  - **Trust the PR, never `github.actor`.** The actor can be made `dependabot[bot]` on someone else's PR ("Dependabot confusion"). The job checks the PR author, that the head branch lives in this repository, and that every commit is authored by Dependabot and signature-verified. GitHub lists at most 250 of a PR's commits, so a longer PR is left for review too. A human commit pushed onto a Dependabot branch therefore leaves the PR for review, while a maintainer re-running CI or reopening the PR still gets it merged.
+  - **Approve and merge only the head CI tested.** The approval is pinned with `commit_id` and the merge with `--match-head-commit`, so a push that lands after CI passed is never approved or merged unseen. `gh pr review --approve` approves whatever the head is at that moment, which is why the job calls the reviews API instead. CI ran against the head merged with main *as it was then*; main does not require branches to be up to date, so the squash can land on a newer main. Same trade-off a human merge makes.
+  - **`needs:` lists every CI job.** A job missing from it is a check Dependabot PRs merge without.
+  - **No `${{ }}` inside `run:`**, in any workflow. Pass values through `env:` and quote `"$VAR"`.
+  - **No `workflow_run`, `pull_request_target` or `issue_comment` triggers.** They run with write access on untrusted input. On `pull_request`, a fork gets a read-only token whatever the workflow requests.
+  - **The repo must let workflows approve PRs** (Settings → Actions → "Allow GitHub Actions to create and approve pull requests"). Main's one required review is satisfied by that approval. Turning on "Require review from Code Owners" with a CODEOWNERS file would block it: a workflow's approval is not a code owner's. Keep "Dismiss stale pull request approvals when new commits are pushed" on, so the pinned approval can't satisfy the review on a later head. Set the default workflow token to read-only; `ci.yml` grants write only to this job.
 - **The claude.ai GitHub MCP connector 404s on this private repo.** Use `gh` for issues, PRs, checks and review threads.

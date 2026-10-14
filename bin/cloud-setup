@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Prepares a Claude Code cloud session to run the app and the test suite, system tests
+# included, without the devcontainer. See "Cloud sessions" in AGENTS.md for why each piece
+# is here.
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RUBIES=/opt/rubies
+RUBY_BUILD=/opt/rbenv/plugins/ruby-build/bin/ruby-build
+CHROMIUM=/opt/pw-browsers/chromium
+CHROMEDRIVER_DIR=/opt/chromedriver
+CHROME_WRAPPER=/usr/bin/google-chrome
+PROXY_CA=/root/.ccr/agent-proxy-ca.crt
+NSS_DB=/root/.pki/nssdb
+CERTUTIL=/usr/bin/certutil
+# Already on the PATH a session's shell starts with, ahead of /usr/local/bin and the image's
+# Ruby 3.3 and chromedriver: the shell keeps ~/.bashrc's functions but not its PATH.
+LINK_DIR=/root/.local/bin
+
+step() { printf '\n== %s ==\n' "$*"; }
+
+if [ "$(id -u)" != 0 ] || [ "$(uname -sm)" != "Linux x86_64" ]; then
+  echo "bin/cloud-setup is for Claude Code cloud sessions (root on Linux x86_64)." >&2
+  exit 1
+fi
+
+cd "$APP_ROOT"
+
+ruby_version="$(tr -d '[:space:]' < .ruby-version)"
+# CI's database service names the Postgres major; the image ships that major from Ubuntu.
+pg_major="$(grep -m1 -oE 'image: postgres:[0-9]+' .github/workflows/ci.yml | grep -oE '[0-9]+$')"
+
+step "System packages"
+missing=""
+for pkg in "postgresql-$pg_major" libpq-dev libnss3-tools libyaml-dev libffi-dev libssl-dev zlib1g-dev libreadline-dev libvips42t64 unzip; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || missing="$missing $pkg"
+done
+if [ -n "$missing" ]; then
+  apt-get update -qq && apt-get install -y -qq --no-install-recommends $missing >/dev/null
+fi
+
+# Bundler insists on the exact patch in .ruby-version, and the image carries Ruby 3.3.
+# ruby-build compiles it from cache.ruby-lang.org, which the environment's network policy
+# must allow; a few minutes the first time, then reused while the container lives.
+step "Ruby $ruby_version"
+RUBY_PREFIX="$RUBIES/$ruby_version"
+if [ ! -x "$RUBY_PREFIX/bin/ruby" ]; then
+  mkdir -p "$RUBIES"
+  RUBY_CONFIGURE_OPTS="--disable-install-doc" MAKE_OPTS="-j$(nproc)" "$RUBY_BUILD" "$ruby_version" "$RUBY_PREFIX"
+fi
+export PATH="$RUBY_PREFIX/bin:$PATH"
+mkdir -p "$LINK_DIR"
+for tool in ruby gem bundle bundler rake irb erb; do
+  ln -sf "$RUBY_PREFIX/bin/$tool" "$LINK_DIR/$tool"
+done
+
+# The egress proxy re-signs TLS with these CAs, and Chrome reads trust from its own NSS store
+# alone. They can change between sessions, so they are replaced on every run. certutil -A
+# imports only the first certificate in a file, and the bundle holds more than one.
+if [ -f "$PROXY_CA" ]; then
+  step "The egress proxy's CAs in Chrome's trust store"
+  mkdir -p "$NSS_DB"
+  [ -f "$NSS_DB/cert9.db" ] || "$CERTUTIL" -N -d "sql:$NSS_DB" --empty-password
+  # Clear every alias an earlier run imported, so a CA the proxy has dropped stops being trusted.
+  # `|| true`: a fresh store has nothing to match, and pipefail would end the script.
+  "$CERTUTIL" -L -d "sql:$NSS_DB" | { grep -oE '^ccr-agent-proxy-[0-9]+' || true; } | sort -u |
+    while read -r stale; do
+      while "$CERTUTIL" -D -d "sql:$NSS_DB" -n "$stale" >/dev/null 2>&1; do :; done
+    done
+  ca_dir="$(mktemp -d)"
+  awk -v dir="$ca_dir" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/" n ".pem") }' "$PROXY_CA"
+  for pem in "$ca_dir"/*.pem; do
+    "$CERTUTIL" -A -d "sql:$NSS_DB" -t "C,," -n "ccr-agent-proxy-$(basename "$pem" .pem)" -i "$pem"
+  done
+  rm -rf "$ca_dir"
+fi
+
+# database.yml connects over TCP to localhost as postgres/postgres, as CI's service does.
+step "Postgres $pg_major on localhost:5432"
+pg_ctlcluster "$pg_major" main status >/dev/null 2>&1 || pg_ctlcluster "$pg_major" main start
+su postgres -s /bin/sh -c "psql -qc \"ALTER USER postgres PASSWORD 'postgres'\"" >/dev/null
+
+step "Chromedriver matching the preinstalled Chromium"
+chromium_version="$("$CHROMIUM" --version | grep -oE '[0-9]+(\.[0-9]+){3}')"
+if ! "$CHROMEDRIVER_DIR/chromedriver" --version 2>/dev/null | grep -qF "$chromium_version"; then
+  # Selenium Manager cannot fetch it: its version index (googlechromelabs.github.io) is
+  # refused, while the download host is not.
+  mkdir -p "$CHROMEDRIVER_DIR"
+  curl -fsSL -o "$CHROMEDRIVER_DIR/driver.zip" \
+    "https://storage.googleapis.com/chrome-for-testing-public/$chromium_version/linux64/chromedriver-linux64.zip"
+  unzip -o -q -j "$CHROMEDRIVER_DIR/driver.zip" -d "$CHROMEDRIVER_DIR"
+  rm "$CHROMEDRIVER_DIR/driver.zip"
+fi
+ln -sf "$CHROMEDRIVER_DIR/chromedriver" "$LINK_DIR/chromedriver"
+# Chromedriver looks for Chrome here, and Chrome refuses to run as root without --no-sandbox.
+if [ ! -e "$CHROME_WRAPPER" ] || grep -q 'bin/cloud-setup' "$CHROME_WRAPPER"; then
+  printf '#!/bin/sh\n# Written by bin/cloud-setup\nexec %s --no-sandbox "$@"\n' "$CHROMIUM" > "$CHROME_WRAPPER"
+  chmod +x "$CHROME_WRAPPER"
+fi
+
+step "Gems"
+bundle config set --global silence_root_warning true
+bundle check >/dev/null 2>&1 || bundle install --jobs 4 --quiet
+# bundle exec looks for a gem's executable on PATH, and RubyGems puts them in $RUBY_PREFIX/bin.
+for exe in $(bundle exec ruby -e 'puts Bundler.load.specs.flat_map(&:executables).uniq'); do
+  if [ -x "$RUBY_PREFIX/bin/$exe" ]; then ln -sf "$RUBY_PREFIX/bin/$exe" "$LINK_DIR/$exe"; fi
+done
+
+step "Tailwind CSS and the test database"
+bin/rails tailwindcss:build >/dev/null
+RAILS_ENV=test bin/rails db:create >/dev/null
+
+# config/master.key is gitignored. The seed reads the admin login from credentials and, with
+# the HiBob credentials in there, runs a live HRIS sync (names whimsified, emails real).
+step "Development database"
+if [ -n "${GROWTHOS_MASTER_KEY:-}" ]; then
+  (umask 077 && printf '%s' "$GROWTHOS_MASTER_KEY" > config/master.key)
+  bin/rails db:prepare >/dev/null
+else
+  echo "Skipped: set GROWTHOS_MASTER_KEY in the environment to create and seed it."
+fi
+
+step "Headless Chromium on localhost:9222 for the chrome-devtools MCP"
+if ! curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1; then
+  setsid nohup "$CHROMIUM" --headless=new --no-sandbox --remote-debugging-port=9222 \
+    --user-data-dir=/tmp/chrome-mcp about:blank >/tmp/chrome-mcp.log 2>&1 < /dev/null &
+  for _ in $(seq 1 30); do
+    curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1 && break
+    sleep 0.5
+  done
+  if ! curl -fsS --noproxy localhost http://localhost:9222/json/version >/dev/null 2>&1; then
+    echo "Chromium did not start listening on :9222:" >&2
+    cat /tmp/chrome-mcp.log >&2
+    exit 1
+  fi
+fi
+
+step "Ready"
+echo "Start the app with: bin/rails server -p 6600 (then http://localhost:6600)"

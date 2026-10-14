@@ -116,10 +116,10 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 
 | Performance state | Headline | List label | Items | Border |
 |---|---|---|---|---|
-| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | red |
-| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 lowest scores at E(n) | amber |
-| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 lowest scores **at E(n+1)** | blue |
-| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1), else 3 lowest scores there | purple |
+| `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | red |
+| `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | amber |
+| `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 weakest gaps **at E(n+1)**, then "+N more" | blue |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked at E(n+1) first, then the weakest other gaps there; 3 rows, then "+N more" | purple |
 | `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest scores at E(n) | green |
 | `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest scores at E(n) | blue |
 
@@ -144,6 +144,19 @@ sinking to the bottom of the list on a zero it could never avoid. Before
 the change a capability with no expectation at the assessed level appeared
 in the gap list at `+0.0`, which is the same "no expectation vs not rated"
 confusion the card's "No expectation at E3" copy exists to prevent.
+
+**A gap list holds only gaps, and says when it is not whole** ([#471](https://github.com/mr-yum/growth-os/issues/471)).
+A capability already demonstrated in full at the panel's level (100% or
+more, and not blocked) is never listed, so a short list is never padded
+with capabilities that owe nothing. When none are short, the panel says
+"No gaps to E4". When more are short than the three rows it shows, a final
+muted line reads "+5 more short of E4 →" and jumps to the fourth through
+the shared `ContinueAssessingLink`, at the level the panel names. Three
+rows read as the whole list without it: a reader rated one, watched a
+fourth take its place, and concluded only three stood between them and
+the level. In `:mastering`, blocked capabilities still lead and the rest
+follow, so the count covers both. "Top contributors" and "Strongest at"
+lists are not gap lists and stay three rows with no count.
 
 **Key insight — always point at the next milestone, never one already cleared.** A `:performing` person isn't trying to *meet* their level (they already do); they're on the way to the next one, and the scale says how far. A `:mastering` person is past the halfway waypoint; the question is what is still in the way of promotion. Both use **next-level** contributions, because progress past 100% is earned at the level above. At the top of the ladder there is no next band, so the panel shows what carries the score rather than a gap nobody can close.
 
@@ -995,6 +1008,14 @@ feedback can be read in situ; the controller renders it only when
 `AssessmentPolicy#show?` admits the viewer, so a peer who provided feedback on
 a colleague's assessment gets no dead link.
 
+**Decline stays out of the way of the reply.** On an incoming card, "Decline
+request" is a secondary button beside the primary "Provide feedback / evidence"
+button, and it opens its own modal with a labelled, multi-line reason field and
+a note that the requester will see it. An always-open reason box under the
+reply button read as the reply box: a requestee wrote their feedback into it
+([#476](https://github.com/mr-yum/growth-os/issues/476)). The reply itself is
+written only in the evidence modal.
+
 ## Comment notifications
 
 Every posted assessment comment — cell thread or evidence-linkage thread —
@@ -1142,6 +1163,7 @@ only the actor hears their own confirmation.
 | `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param and lens-param (`as_role` / `as_level`) merge before reload. |
 | `lens_picker_controller.js` | The "Another role…" dialog: rebuilds the level select from the chosen role's levels, keeping the reader's ordinal (nearest, lower on a tie — the same rule as `Assessments::Lens`). |
 | `activity_feed_controller.js` | Listens for `matrix:focus-changed` and narrows entries by capability + level focus. An entry about another role (`data-lens-href`) switches the page to that lens when its card isn't on the page. |
+| `activity_pane_controller.js` | Opens and closes the activity sidebar (inline on lg+, a fixed overlay below), with its cookie and `?activity=` URL state. With `fitViewport` (both assessment show views) it caps the pane's height on lg+ at the room below the pane's own top, re-measured on scroll, resize and body resize, so the feed's last entries stay on screen — see Hard-Won Lesson 19. |
 | `context_pane_controller.js` (shared with framework explorer) | Right-pane suggestion / activity panel state, URL focus sync. |
 | `continue_assessing_controller.js` | Bottom-line CTA — dispatches a window event with the next-unrated capability stable_id + level, picked up by `matrix_controller#focusUnrated`. |
 | `modal_controller.js` | Generic `Kit::Modal` controller — open/close, body-scroll-lock. **Outside-click dismissal is opt-in** (`dismissOnOutsideClick` value, default off) so a stray background click can't discard a half-filled transactional form — modals close via the × button, Cancel, Esc, or a successful submit. **Esc routes through `modal#escape`**: an overlay opting in via `data-modal-dirty-guard="<message>"` confirms before an Esc discards typed input (audit issue #315 — the evidence and request-evidence overlays opt in); × and Cancel stay immediate as explicit dismissals. **Keyboard focus follows the APG dialog contract** (audit issue #317): on open, focus moves into the dialog — the panel (`tabindex="-1"`) while a lazy frame loads, then the first field on `turbo:frame-load`; Tab/Shift+Tab wrap within the open overlay; on close, focus returns to the invoker, falling back to the ancestor dropdown's kebab when the invoking menu item is hidden. Hosts the Delegates modal (standalone) and the unified evidence modal (embedded — a lazy `#evidence-modal` frame). |
@@ -1226,12 +1248,12 @@ Both flags also flow through the rating controllers' Turbo Stream responses so p
 
 **Header layout.** Both `ShowView` and `ManagerShowView` render a single-row header (`flex flex-wrap items-baseline gap-x-3 gap-y-1`):
 
-- **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Assessment Complete` / `Aligning` / `Aligned`) when a cycle is open.
+- **Self view** — H1 is the level title; shortcode chip is `"#{role.code}#{level.ordinal}"`; status pill (`In Progress` / `Ready for alignment` / `Aligning` / `Aligned`) when a cycle is open.
 - **Manager view** — H1 is `assessee.name`; subtitle span renders the level title; same shortcode + status pill.
 
-**Status pill** (`Views::Assessments::StatusPill`, wrapped in `id="assessment-status-pill"` for Turbo replacement; the two header layouts share it via `HeaderChrome#render_status_pill`). The pill rewards finishing the current-level ratings *before* the manager-driven alignment phase: while a cycle is open and the participant is pre-alignment, it reads **"In Progress"** (amber) until **current-level coverage hits 100% with vetted (human-owned) ratings** in the viewer's perspective — carried-forward values don't count until confirmed — then **"Assessment Complete"** (green). "Complete" is `MatrixDataBuilder#current_level_complete?` — every capability with a cell at `person_level` rated under the context's primary frequency (self ratings for `:self`, manager for `:manager`); a role with no current-level cells is never complete. Because the pill lives in the static header (outside the scoring/matrix Turbo Frames), the self and manager rating controllers `turbo_stream.replace` it on every rating change so it flips live the moment the final cell is rated — no reload. `aligning`/`aligned` still win and show "Aligning"/"Aligned". Between the two, when every current-level cell holds a value but some were carried, it reads **"N to confirm"** in the dashed carried chip rather than a bare "In Progress" (#480).
+**Status pill** (`Views::Assessments::StatusPill`, wrapped in `id="assessment-status-pill"` for Turbo replacement; the two header layouts share it via `HeaderChrome#render_status_pill`). The pill rewards finishing the current-level ratings *before* the manager-driven alignment phase: while a cycle is open and the participant is pre-alignment, it reads **"In Progress"** (amber) until **current-level coverage hits 100% with vetted (human-owned) ratings** in the viewer's perspective — carried-forward values don't count until confirmed — then a green finished label that says whose move it is: **"Ready for alignment"** in the assessee's view (their part is done; the manager starts alignment next, which a `Kit::DefinitionTip` on the pill spells out on hover and keyboard focus) and **"Assessment Complete"** in the manager's. The same "Ready for alignment" shows on the Home page's "Your assessment" card, read from the projected `self_completed_at`, whose CTA then reads "Review self-assessment". "Complete" is `MatrixDataBuilder#current_level_complete?` — every capability with a cell at `person_level` rated under the context's primary frequency (self ratings for `:self`, manager for `:manager`); a role with no current-level cells is never complete. Because the pill lives in the static header (outside the scoring/matrix Turbo Frames), the self and manager rating controllers `turbo_stream.replace` it on every rating change so it flips live the moment the final cell is rated — no reload. `aligning`/`aligned` still win and show "Aligning"/"Aligned". Before either, when every current-level cell holds a value but some were carried, it reads **"N to confirm"** in the dashed carried chip rather than a bare "In Progress" (#480).
 
-**Assessments list — dual-party status.** The `/assessments` list ([index_view.rb](../../app/views/assessments/index_view.rb)) represents both parties. A **Team Assessments** (report) card shows a **Self** chip and a **Manager** chip, each `Not started` / `To confirm` / `In progress` / `Complete`; when both are complete it adds a quiet "Ready to align" cue. **Completion means VETTED THIS CYCLE**: carried-forward (seeded) values never count toward `Complete` — a side whose values are entirely carried reads **`To confirm`** (dashed amber chip, the carried signal shared with the pills and level chips), and any human touch (rate / revise / confirm / clear) tips it to `In progress`. The score/hero deliberately still count carried values (they're real data); the chips and pill track the *work state* — "here's the carried picture, your job this cycle is to vet it." A person's **own** card shows the **Self** chip only — the manager's progress stays private until alignment (privacy gate). Once alignment starts, a single `Aligning` / `Aligned` chip replaces the per-side chips. "Complete" here is the **same current-level-coverage notion** as the header pill, so the Manager sub-badge and the report's "Assessment Complete" pill always agree.
+**Assessments list — dual-party status.** The `/assessments` list ([index_view.rb](../../app/views/assessments/index_view.rb)) represents both parties. A **Team Assessments** (report) card shows a **Self** chip and a **Manager** chip, each `Not started` / `To confirm` / `In progress` / `Complete`; when both are complete it adds a quiet "Ready for alignment" cue. **Completion means VETTED THIS CYCLE**: carried-forward (seeded) values never count toward `Complete` — a side whose values are entirely carried reads **`To confirm`** (dashed amber chip, the carried signal shared with the pills and level chips), and any human touch (rate / revise / confirm / clear) tips it to `In progress`. The score/hero deliberately still count carried values (they're real data); the chips and pill track the *work state* — "here's the carried picture, your job this cycle is to vet it." A person's **own** card shows the **Self** chip only — the manager's progress stays private until alignment (privacy gate) — and the same "Ready for alignment" cue once their side is complete. The phrase means one thing everywhere: nothing on the viewer's side stands between this assessment and alignment. Once alignment starts, a single `Aligning` / `Aligned` chip replaces the per-side chips. "Complete" here is the **same current-level-coverage notion** as the header pill, so the Manager sub-badge and the report's "Assessment Complete" pill always agree.
 
 **Skip-Level Assessments section.** Below Team Assessments, a manager-of-managers gets a **Skip-Level Assessments** section listing every assignment deeper in their org subtree. The Team/skip-level split has a single source of truth — [`Assessments::ReviewableAssignments`](../../app/queries/assessments/reviewable_assignments.rb) (`team` = direct reports + active rating delegations; `skip_level` = subtree minus team) — consumed by both the web controller and the MCP `assessments_mine` operation (`direct_reports:` / `skip_level_reports:` keys), so the two surfaces cannot drift. Cards reuse the report-card layout (both-party chips + "Review assessment") and open the manager view **read-only** — the whole manager chain has view access (see *Context-Driven Rendering*), while rating stays with each person's own reporting manager. The section is **paginated with pagy** (`AssessmentsController::SKIP_LEVEL_PAGE_SIZE` per page, `?skip_page=` param, prev/next pager anchored to `#skip-level-assessments`) because a senior manager's subtree can hold hundreds of assignments.
 
@@ -1407,6 +1429,10 @@ The request modal hides a suggestion chip once it's been added to the recipient 
 ### 18. Per-card selected level needs its own *rendering* axis, separate from the single *focus* axis
 
 The selected level a card's expansion shows was originally carried by the **same** `?capability=` + `?level_ordinal=` pair that drives cell focus (ring + activity narrowing). Because that pair holds exactly ONE capability, only one card could ever show a non-default level: selecting a level on a second capability reloaded the whole matrix frame and re-rendered every other card at `@person_level` (the URL named only the new one), and the scroll-driven picker — which rewrites that pair as you scroll — *dropped* `level_ordinal` entirely, so the selection silently vanished on the next broadcast reload. The two concerns look identical (both are "a capability + a level") but have different cardinalities: **focus is singular and transient; rendered level is plural and sticky.** Conflating them caps persistence at one card and couples it to scroll. The fix is a second, additive URL axis — `levels[<stable_id>]=<ordinal>`, an accumulating map the server renders each card from (`selected_levels[stable_id] || person_level`) and that the scroll picker never touches. Lesson: when one piece of UI state is per-entity-and-sticky and another is one-at-a-time-and-transient, give them separate URL params even if each value is "a capability and a level" — don't overload one slot for both.
+
+### 19. A sticky pane under a moving header can't be sized by CSS alone
+
+The activity sidebar is sticky at `top: --sticky-header-h + 1rem` and was capped at `100vh - 2rem`, which ignored the header and left the pane's bottom, and the feed's last entries, several hundred pixels below the viewport ([#470](https://github.com/mr-yum/growth-os/issues/470)). Subtracting the header (`100dvh - --sticky-header-h - 2rem`) is right only once the pane has stuck. Before that, at the top of the page, the navbar above the header pushes the pane lower than its sticky offset, and the bottom is still off screen. `overscroll-contain` makes that worse, since the wheel can no longer move the page to reveal it. So `activity_pane_controller` measures the pane's own top and sets `max-height` to what is left below it. The CSS cap stays as the pre-JS fallback, and both offsets are `lg:`-only: an inline `top` also overrode the phone overlay's `inset-y-0`, so it opened a rem below the top of the screen.
 
 ## Performance state machine
 

@@ -19,14 +19,18 @@ class Frameworks::DepartmentsController < ApplicationController
   def update
     authorize @framework, :update_role_family?
 
-    Operations::Frameworks::RenameDepartment.call(
-      context: pundit_user,
-      params: {
-        framework_id: @framework.framework_id,
-        from: department_params[:from],
-        to: department_params[:to]
-      }
-    )
+    # Saving the editor unchanged is a no-op, not a refusal: the Operation
+    # rejects it, and a bodyless 422 would leave the editor open and silent.
+    unless department_params[:to].to_s == department_params[:from]
+      Operations::Frameworks::RenameDepartment.call(
+        context: pundit_user,
+        params: {
+          framework_id: @framework.framework_id,
+          from: department_params[:from],
+          to: department_params[:to]
+        }
+      )
+    end
 
     render_role_tree_families_frame(@framework)
   rescue Operations::Base::ParameterError

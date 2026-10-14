@@ -114,6 +114,10 @@ chrome-debug, not the app.** Navigate to **`http://rails-app:6600/`** (`rails-ap
 is the compose service name; the dev server binds `0.0.0.0`). Start the server
 with `bin/dev` if nothing answers on `:6600`.
 
+**In a Claude Code cloud session the browser and the app share one container**, so
+there it is `http://localhost:6600/`. `bin/cloud-setup` starts the browser; start the
+app with `bin/rails server -p 6600` (see "Cloud sessions" in AGENTS.md).
+
 ## Signing in
 
 Credentials live in Rails credentials — never hardcode them. Fetch the seeded

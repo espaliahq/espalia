@@ -41,16 +41,8 @@ class Settings::ConnectedClientsSystemTest < ApplicationSystemTestCase
       assert_text "Connect an assistant"
       wait_for_stimulus "clipboard"
 
-      # JS-dispatch the click — the button carries a Stimulus action, and a
-      # synchronous element.click() bypasses pointer hit-testing (and the
-      # FlakeProneClick cop) while still firing the controller's handler.
-      page.execute_script(<<~JS)
-        document
-          .querySelector("[data-controller='clipboard'] [data-action='clipboard#copy']")
-          .click();
-      JS
-
-      assert_text "Copied!"
+      # A real click: copying needs the user activation a JS-dispatched click lacks.
+      click_with_retry(expect_text: "Copied!") { first(:button, "Copy", exact_text: true).click }
     end
   end
 end

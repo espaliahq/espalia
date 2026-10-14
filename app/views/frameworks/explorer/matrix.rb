@@ -66,7 +66,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
         merged_levels: @merged_levels,
         selected_role_count: @matrix_data[:selected_roles].size,
         framework_id: @framework_id,
-        mode: @mode
+        mode: @mode,
+        can_edit_structure: @can_edit_structure
       )
       # Each group renders its own <tbody> (see MatrixCategoryGroup) — that is
       # what makes a category addressable by a Turbo Stream and movable in place.

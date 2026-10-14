@@ -370,32 +370,27 @@ class Views::Evidence::HubView < Views::Base
   # ── Respond / edit (open the unified modal) ──
 
   def respond_actions(request)
-    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3") do
+    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-2") do
       button(type: "button", data: modal_trigger_data(mode: "respond", request_id: request.id),
              class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide feedback / evidence" }
-      decline_form(request)
+      button(type: "button",
+             data: { action: "click->modal#open", modal_target_id: Views::Evidence::DeclineRequestModal.dom_id_for(request) },
+             class: "kit-btn-secondary") { "Decline request" }
     end
+    render Views::Evidence::DeclineRequestModal.new(request: request)
   end
 
   # Opens the unified evidence modal (return_to=hub) for a request/item.
   def modal_trigger_data(mode:, request_id: nil, evidence_id: nil)
     data = {
       action: "evidence-modal#load click->modal#open",
+      modal_target_id: "evidence-modal-overlay",
       evidence_modal_mode_param: mode,
       evidence_modal_return_to_param: "hub"
     }
     data[:evidence_modal_request_id_param] = request_id if request_id
     data[:evidence_modal_evidence_id_param] = evidence_id if evidence_id
     data
-  end
-
-  def decline_form(request)
-    form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "flex items-center gap-2") do |f|
-      f.text_field(:reason, placeholder: "Reason (optional)",
-                   class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm", aria: { label: "Decline reason" })
-      f.submit("Decline",
-               class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
-    end
   end
 
   # ── Chrome ──

@@ -9,6 +9,8 @@
 class Frameworks::RolesController < ApplicationController
   include Frameworks::RoleTreeFamiliesFrame
 
+  BLANK_NAME = "the name can’t be blank"
+
   before_action :set_framework
   before_action :set_role, only: [ :update ]
 
@@ -42,6 +44,8 @@ class Frameworks::RolesController < ApplicationController
     authorize @framework, :update_role?
 
     attrs = changed_role_attrs
+    return render_name_frame(error: BLANK_NAME) if inline_rename? && attrs.key?(:name) && attrs[:name].blank?
+
     if attrs.present?
       Operations::Frameworks::UpdateRole.call(
         context: pundit_user,
@@ -49,18 +53,29 @@ class Frameworks::RolesController < ApplicationController
       )
     end
 
-    if request.headers["Turbo-Frame"] == FAMILIES_FRAME
-      render_role_tree_families_frame(@framework)
+    if inline_rename?
+      render_name_frame
     else
-      render Views::Frameworks::Explorer::RoleNameFrame.new(
-        role: @role.reload, framework_id: @framework.framework_id, mode: :edit
-      ), layout: false
+      render_role_tree_families_frame(@framework)
     end
-  rescue Operations::Base::ParameterError
-    head :unprocessable_content
+  rescue Operations::Base::ParameterError => e
+    inline_rename? ? render_name_frame(error: e.message) : head(:unprocessable_content)
   end
 
   private
+
+  def inline_rename?
+    request.headers["Turbo-Frame"] != FAMILIES_FRAME
+  end
+
+  # A rejected inline rename answers 422 WITH the frame: the message plus the
+  # typed text, so the editor re-opens with it (Hard-Won Lesson 26).
+  def render_name_frame(error: nil)
+    render Views::Frameworks::Explorer::RoleNameFrame.new(
+      role: @role.reload, framework_id: @framework.framework_id, mode: :edit,
+      error: error, attempted_value: (params.dig(:role, :name).to_s if error)
+    ), layout: false, status: (error ? :unprocessable_content : :ok)
+  end
 
   # Only forward fields that actually changed (the update event is compacted,
   # so present keys read as "changed" in the activity feed). A blank name IS

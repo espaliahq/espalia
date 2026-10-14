@@ -315,23 +315,32 @@ class Views::Assessments::IndexView < Views::Base
 
     div(class: "flex flex-col items-end gap-1") do
       side_chip("Self", side_state(status[:self_complete], status[:self_human], status[:self_any]))
-      if show_manager
-        side_chip("Manager", side_state(status[:manager_complete], status[:manager_human], status[:manager_any]))
-        if status[:self_complete] && status[:manager_complete]
-          span(class: "text-xs text-gray-500 dark:text-gray-400") { "Ready to align" }
-        end
-      end
+      side_chip("Manager", side_state(status[:manager_complete], status[:manager_human], status[:manager_any])) if show_manager
+      ready_for_alignment_cue if ready_for_alignment?(status, show_manager: show_manager)
     end
+  end
+
+  # Nothing on the viewer's side stands between this card and alignment: the
+  # person's own self-assessment is done, or on a report's card both sides are.
+  def ready_for_alignment?(status, show_manager:)
+    status[:self_complete] && (!show_manager || status[:manager_complete])
+  end
+
+  def ready_for_alignment_cue
+    span(class: "text-xs text-gray-600 dark:text-gray-300") { Views::Assessments::StatusPill::READY_FOR_ALIGNMENT }
   end
 
   # "Start" until the viewer has touched a rating this cycle — carried
   # (seeded) values don't count, so the verb agrees with the Self chip's
-  # :not_started / :to_confirm work states.
+  # :not_started / :to_confirm work states. "Review" while a finished
+  # self-assessment waits for alignment, as on the home card.
   # @param assignment [PersonFrameworkAssignment]
   # @return [String]
   def self_cta_verb(assignment)
     status = @card_statuses[[ assignment.framework_id, assignment.person_id ]]
     return "Start" if status.nil?
+    return "Review" if status[:self_complete] &&
+                       AssessmentCycleProgress::INDIVIDUAL_RATING_STATUSES.include?(status[:status])
 
     state = side_state(status[:self_complete], status[:self_human], status[:self_any])
     %i[not_started to_confirm].include?(state) ? "Start" : "Continue"

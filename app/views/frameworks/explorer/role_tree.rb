@@ -64,13 +64,24 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
               department_group(dept_name, families)
             end
           end
-          add_role_family_row if @mode == :edit && @can_edit_structure
+          add_role_family_row if structure_editable?
         end
       end
     end
   end
 
   private
+
+  # Org structure has no approval tier, so every tree edit — the renames
+  # included — sits on the `edit_structure?` bar, not the suggest bar that
+  # opens edit mode.
+  def structure_editable?
+    @mode == :edit && @can_edit_structure
+  end
+
+  def structure_mode
+    structure_editable? ? :edit : :view
+  end
 
   # ── Header ──
 
@@ -171,7 +182,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       div(class: "mb-2") do
         render Views::Frameworks::Explorer::DepartmentNameFrame.new(
           department: dept_name, framework_id: @framework_id,
-          mode: (@mode == :edit && @can_edit_structure) ? :edit : :view
+          mode: structure_mode
         )
         div(class: "space-y-0.5") do
           families.sort_by(&:name).each { |rf| family_group(rf) }
@@ -228,15 +239,15 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         # cluster's box, so it is never masked.
         name_slot do
           render Views::Frameworks::Explorer::RoleFamilyNameFrame.new(
-            role_family: role_family, framework_id: @framework_id, mode: @mode
+            role_family: role_family, framework_id: @framework_id, mode: structure_mode
           )
-          if @mode == :edit
+          if structure_editable?
             div(class: "tree-actions") do
               render_inline_editor_pencil(
                 aria_label: "Edit role family name", scope: "tree", collapses: false,
                 host_frame: "role-family-name-#{role_family.role_family_id}"
               )
-              family_edit_trigger(role_family) if @can_edit_structure
+              family_edit_trigger(role_family)
             end
           end
         end
@@ -255,7 +266,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         if visible_roles.empty?
           div(class: "px-3 py-1 text-xs italic text-gray-400 dark:text-gray-500") { "No roles yet" }
         end
-        add_role_row(role_family) if @mode == :edit && @can_edit_structure
+        add_role_row(role_family) if structure_editable?
       end
     end
   end
@@ -349,11 +360,11 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       # slot, which is what wrapped almost every real role name onto two lines.
       name_slot do
         render Views::Frameworks::Explorer::RoleNameFrame.new(
-          role: role, framework_id: @framework_id, mode: @mode
+          role: role, framework_id: @framework_id, mode: structure_mode
         )
 
         div(class: "tree-actions") do
-          if @mode == :edit
+          if structure_editable?
             render_inline_editor_pencil(
               aria_label: "Edit role name", scope: "tree", collapses: false,
               host_frame: "role-name-#{role.role_id}"
@@ -373,7 +384,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
             title: "Solo — focus on this role only"
           ) { "solo" }
 
-          role_actions_kebab(role) if @mode == :edit && @can_edit_structure
+          role_actions_kebab(role) if structure_editable?
           my_ratings_link(role) if @mode == :view && @viewer_assignment_id
         end
       end

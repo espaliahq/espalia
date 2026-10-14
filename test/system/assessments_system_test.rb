@@ -1642,7 +1642,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "status pill" do
-    should "flip from In Progress to Assessment Complete when the last current-level cell is rated" do
+    should "flip from In Progress to Ready for alignment when the last current-level cell is rated" do
       # Pre-rate cap1 at E2 so only cap3 (the other E2-bound capability) is
       # left — cap2 has no level-2 cell and doesn't count toward coverage.
       rate_to_unlock_hero
@@ -1657,9 +1657,31 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       click_rating_frequency("#rating-#{@cap3_stable}-2", "Consistently")
 
       within("#assessment-status-pill") do
-        assert_text "Assessment Complete"
+        assert_text "Ready for alignment"
         assert_no_text "In Progress"
       end
+    end
+
+    should "tell a finished assessee they are ready for alignment on the list and the home card" do
+      rate_to_unlock_hero
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap3_stable, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+
+      visit assessments_path
+      assert_text "My Assessments"
+      assert_text "Ready for alignment"
+      assert_text "Review self-assessment"
+
+      visit root_path
+      assert_current_path root_path
+      home_card = "turbo-frame[id^='home-card-assessment_progress-']"
+      assert_selector home_card, text: "Ready for alignment"
+      assert_selector home_card, text: "Review self-assessment"
+      click_link_with_js_fallback("Review self-assessment", expect_selector: "#assessment-status-pill")
+      within("#assessment-status-pill") { assert_text "Ready for alignment" }
     end
   end
 

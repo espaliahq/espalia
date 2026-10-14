@@ -96,6 +96,36 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Continue self-assessment"
     end
 
+    should "tell a person who has finished rating that the next move is the manager's" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by!(cycle_id: @cycle.cycle_id, person_id: @person.id)
+          .update!(self_completed_at: Time.current)
+      end
+
+      sign_in @user
+      get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Ready for alignment"
+      assert_includes response.body, "Review self-assessment"
+      assert_not_includes response.body, "In progress"
+    end
+
+    should "show the alignment phase over a finished self-assessment once alignment starts" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by!(cycle_id: @cycle.cycle_id, person_id: @person.id)
+          .update!(self_completed_at: Time.current, status: "aligning")
+      end
+
+      sign_in @user
+      get home_card_path(card: "assessment_progress", key: @cycle.cycle_id)
+
+      assert_response :success
+      assert_includes response.body, "Aligning"
+      assert_not_includes response.body, "Ready for alignment"
+      assert_not_includes response.body, "Review self-assessment"
+    end
+
     should "ignore ratings outside the assessed role" do
       ActsAsTenant.with_tenant(@tenant) do
         create_out_of_scope_rating(person_id: @person.id, cycle: @cycle, level_ordinal: 3)

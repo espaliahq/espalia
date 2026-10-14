@@ -92,6 +92,10 @@ class Frameworks::LevelsController < ApplicationController
     authorize @framework, :update_level?
 
     attrs = changed_level_attrs
+    if !editor_request? && attrs.key?(:title) && attrs[:title].blank?
+      return render_title_frame(error: "the title can’t be blank")
+    end
+
     if attrs.present?
       # One DB transaction so an entry transfer (set + clear-others) is
       # all-or-nothing — a mid-loop failure can't leave two entry badges.
@@ -107,17 +111,24 @@ class Frameworks::LevelsController < ApplicationController
     if editor_request?
       render_editor_frame(graph_role(@role.role_id, reload: true))
     else
-      render Views::Frameworks::Explorer::LevelTitleFrame.new(
-        level_id: @level.level_id, title: attrs[:title].presence || @level.title,
-        framework_id: @framework.framework_id, mode: :edit,
-        added_in_draft: @level.added_in_draft
-      ), layout: false
+      render_title_frame(title: attrs[:title].presence || @level.title)
     end
-  rescue Operations::Base::ParameterError
-    head :unprocessable_content
+  rescue Operations::Base::ParameterError => e
+    editor_request? ? head(:unprocessable_content) : render_title_frame(error: e.message)
   end
 
   private
+
+  # A rejected inline rename answers 422 WITH the frame: the message plus the
+  # typed text, so the editor re-opens with it (Hard-Won Lesson 26).
+  def render_title_frame(title: @level.title, error: nil)
+    render Views::Frameworks::Explorer::LevelTitleFrame.new(
+      level_id: @level.level_id, title: title,
+      framework_id: @framework.framework_id, mode: :edit,
+      added_in_draft: @level.added_in_draft,
+      error: error, attempted_value: (params.dig(:level, :title).to_s if error)
+    ), layout: false, status: (error ? :unprocessable_content : :ok)
+  end
 
   def editor_request?
     request.headers["Turbo-Frame"] == EDITOR_FRAME

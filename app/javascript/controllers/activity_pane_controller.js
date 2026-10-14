@@ -28,6 +28,8 @@ import { useClickOutside, useTransition } from "stimulus-use"
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 const MOBILE_BREAKPOINT = 1024
+// Gap kept between the fitted pane's bottom and the viewport's.
+const FIT_BOTTOM_GAP_PX = 16
 
 export default class extends BaseController {
   static targets = ["pane", "toggle"]
@@ -37,7 +39,13 @@ export default class extends BaseController {
   // it; one where the feed is a companion doesn't).
   static values = {
     cookie: { type: String, default: "assessment_activity_pane_open" },
-    defaultState: { type: String, default: "closed" }
+    defaultState: { type: String, default: "closed" },
+    // lg+ only: cap the pane's height at what is left below its own top.
+    // The pane is sticky under a header that grows, shrinks and scrolls
+    // away, and until it sticks it sits lower than its sticky offset, so
+    // no CSS height can keep its bottom (and the feed's last entries) on
+    // screen in every position.
+    fitViewport: { type: Boolean, default: false }
   }
 
   connect() {
@@ -66,10 +74,13 @@ export default class extends BaseController {
 
     this.onPopState = () => this.#applyFromUrl()
     window.addEventListener("popstate", this.onPopState)
+
+    if (this.fitViewportValue) this.#observeViewport()
   }
 
   disconnect() {
     window.removeEventListener("popstate", this.onPopState)
+    this.#unobserveViewport()
     super.disconnect()
   }
 
@@ -140,9 +151,52 @@ export default class extends BaseController {
   #animate(state) {
     if (state === "open") {
       this.enter()
+      this.#scheduleFit()
     } else {
-      this.leave()
+      // Fit once the fade-out ends, which clears the inline height.
+      Promise.resolve(this.leave()).finally(() => this.#scheduleFit())
     }
+  }
+
+  #observeViewport() {
+    this.onViewportChange = () => this.#scheduleFit()
+    window.addEventListener("scroll", this.onViewportChange, { passive: true })
+    window.addEventListener("resize", this.onViewportChange)
+    // The header can change height without a scroll (a frame re-render).
+    this.bodyResizeObserver = new ResizeObserver(this.onViewportChange)
+    this.bodyResizeObserver.observe(document.body)
+    this.#scheduleFit()
+  }
+
+  #unobserveViewport() {
+    if (!this.onViewportChange) return
+    window.removeEventListener("scroll", this.onViewportChange)
+    window.removeEventListener("resize", this.onViewportChange)
+    this.bodyResizeObserver.disconnect()
+    if (this.fitFrame) cancelAnimationFrame(this.fitFrame)
+    this.fitFrame = null
+    this.onViewportChange = null
+  }
+
+  #scheduleFit() {
+    if (!this.fitViewportValue || this.fitFrame) return
+    this.fitFrame = requestAnimationFrame(() => {
+      this.fitFrame = null
+      this.#fit()
+    })
+  }
+
+  #fit() {
+    if (!this.hasPaneTarget) return
+    const pane = this.paneTarget
+    if (window.innerWidth < MOBILE_BREAKPOINT || this.#visualState() !== "open") {
+      pane.style.maxHeight = ""
+      return
+    }
+    const room = window.innerHeight - pane.getBoundingClientRect().top - FIT_BOTTOM_GAP_PX
+    // No floor: a taller pane would put its end back below the fold, where
+    // overscroll-contain stops the wheel from scrolling the page to reach it.
+    pane.style.maxHeight = `${Math.max(0, Math.floor(room))}px`
   }
 
   #applyMetadata(state) {

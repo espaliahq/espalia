@@ -115,10 +115,11 @@ module Views::Assessments::HeaderChrome
     first.present? ? "#{first}'s" : "your"
   end
 
-  def render_status_pill(participant_status:, has_open_cycle:, current_level_complete: false, work: {})
+  def render_status_pill(participant_status:, has_open_cycle:, context:, current_level_complete: false, work: {})
     render Views::Assessments::StatusPill.new(
       participant_status: participant_status,
       has_open_cycle: has_open_cycle,
+      context: context,
       current_level_complete: current_level_complete,
       work: work
     )
