@@ -154,6 +154,22 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_text "Declined"
   end
 
+  should "let the requestee decline with a reason the requester can read" do
+    make_request!
+    sign_in_as(@peer_user)
+    visit evidence_hub_path
+    assert_no_field "Reason for declining (optional)"
+
+    find("summary", text: "Decline this request").click
+    fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
+    click_button "Decline"
+    assert_text "No one is waiting on you."
+
+    sign_in_as(@report_user)
+    visit evidence_hub_path
+    assert_text "Declined: Haven't worked with Rep this quarter"
+  end
+
   should "navigate from authored evidence to its linkage on the assessment" do
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
