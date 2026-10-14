@@ -291,7 +291,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   context "team assessments list status" do
-    should "show both parties on a report card and reach Ready to align" do
+    should "show both parties on a report card and reach Ready for alignment" do
       # The report self-rated the only current-level capability in setup, so the
       # Self side is already complete; the manager hasn't rated yet.
       visit assessments_path
@@ -300,7 +300,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Manager"
       assert_text "Not started"
 
-      # Manager completes their side → both complete → Ready to align.
+      # Manager completes their side → both complete → Ready for alignment.
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.rate_as_manager(
           @report.id, @framework_id, @cap_stable,
@@ -310,7 +310,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessments_path
-      assert_text "Ready to align"
+      assert_text "Ready for alignment"
       assert_no_text "Not started"
     end
 
@@ -330,7 +330,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Team Assessments"
       assert_text "To confirm"
       # A fully-carried side must not read as Complete or trigger the align cue.
-      assert_no_text "Ready to align"
+      assert_no_text "Ready for alignment"
 
       # Confirming the carried value (human revise) vets it → Complete.
       ActsAsTenant.with_tenant(@tenant) do
@@ -343,7 +343,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       end
 
       visit assessments_path
-      assert_text "Ready to align"
+      assert_text "Ready for alignment"
       assert_no_text "To confirm"
     end
   end
