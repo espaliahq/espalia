@@ -389,23 +389,17 @@ class Views::Evidence::HubView < Views::Base
     data
   end
 
-  # Collapsed until the requestee chooses to decline: an always-open text box
-  # under "Provide feedback / evidence" read as the place to write the reply,
-  # and requestees wrote their feedback into it (#476).
+  # Collapsed so the reason box can't be mistaken for where the reply goes.
   def decline_form(request)
-    field_id = "decline-reason-#{request.id}"
-    details(class: "group", data: { testid: "decline-disclosure" }) do
-      summary(class: "cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
+    details(class: "group", data: { testid: "decline-request" }) do
+      summary(class: "cursor-pointer select-none text-sm text-gray-600 dark:text-gray-300 marker:content-none flex items-center gap-1") do
         span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
-        plain "Decline this request"
+        span { "Decline this request" }
       end
-      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2 space-y-2") do |f|
-        label(for: field_id, class: "block text-xs font-medium text-gray-700 dark:text-gray-200") { "Why are you declining? (optional)" }
-        f.text_area(:reason, id: field_id, rows: 3,
-                    class: "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-                           "text-gray-900 dark:text-gray-100 text-sm")
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { "#{request.requester&.name || "The requester"} will see your reason." }
-        f.submit("Decline request",
+      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2 flex items-center gap-2") do |f|
+        f.text_field(:reason, placeholder: "Reason (optional)",
+                     class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm", aria: { label: "Decline reason" })
+        f.submit("Decline",
                  class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
       end
     end

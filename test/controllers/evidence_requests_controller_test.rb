@@ -63,6 +63,16 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "Your response will be visible to Rep, their managers, and workspace admins", response.body
     end
 
+    should "keep the decline reason in a collapsed disclosure, apart from the reply" do
+      make_request!
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_select "details[data-testid='decline-request']:not([open])", 1 do
+        assert_select "summary", text: /Decline this request/
+        assert_select "input[name='evidence_request[reason]']"
+      end
+    end
+
     should "not disclose visibility when the requestee is the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
         # The requester asks the assessee themselves for more evidence.
