@@ -394,9 +394,10 @@ class Views::Evidence::HubView < Views::Base
   # and requestees wrote their feedback into it (#476).
   def decline_form(request)
     field_id = "decline-reason-#{request.id}"
-    details(data: { testid: "decline-disclosure" }) do
-      summary(class: "cursor-pointer select-none inline-flex items-center min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
-        "Decline this request"
+    details(class: "group", data: { testid: "decline-disclosure" }) do
+      summary(class: "cursor-pointer select-none inline-flex items-center gap-1.5 min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
+        span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
+        plain "Decline this request"
       end
       form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2 space-y-2") do |f|
         label(for: field_id, class: "block text-xs font-medium text-gray-700 dark:text-gray-200") { "Why are you declining? (optional)" }
