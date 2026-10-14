@@ -35,6 +35,7 @@ class Views::Evidence::DeclineRequestModal < Views::Base
         f.label(:reason, "Reason for declining (optional)", for: reason_id,
                 class: "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1")
         f.text_area(:reason, id: reason_id, rows: 4, class: INPUT)
+        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { "#{@request.requester&.name || "The requester"} will see your reason." }
       end
       div(class: "flex items-center justify-end gap-2") do
         button(type: "button", data: { action: "modal#close" }, class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Cancel" }

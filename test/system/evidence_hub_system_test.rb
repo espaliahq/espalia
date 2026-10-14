@@ -170,6 +170,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     assert_no_field "Reason for declining (optional)"
 
     open_decline_modal(request_id)
+    within("##{decline_modal_id(request_id)}") { assert_text "Rep will see your reason." }
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
     click_selector_with_js_fallback("##{decline_modal_id(request_id)} input[type='submit']",
                                     expect_text: "No one is waiting on you.")
@@ -229,50 +230,6 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
     ActsAsTenant.with_tenant(@tenant) do
       assert_equal "manual", EvidenceRequest.last.reminder_history.sole["kind"]
-    end
-  end
-
-  # A <summary> toggles, so the JS-fallback helpers' second dispatch could
-  # close it again: one JS click, then wait for the label.
-  def open_decline_disclosure
-    page.execute_script("document.querySelector(\"[data-testid='decline-disclosure'] summary\").click()")
-    assert_field "Why are you declining? (optional)"
-  end
-
-  context "declining a request" do
-    setup do
-      @request_id = make_request!
-      sign_in_as(@peer_user)
-      visit evidence_hub_path
-      assert_text "Rep asked you for feedback"
-    end
-
-    should "keep the reason field out of sight until the requestee chooses to decline" do
-      assert_no_field "Why are you declining? (optional)"
-
-      open_decline_disclosure
-      js_fill_in "Why are you declining? (optional)", with: "I didn't work with Rep this quarter.\nTry Sam instead."
-      click_button_with_js_fallback "Decline request", expect_text: "Request declined."
-
-      ActsAsTenant.with_tenant(@tenant) do
-        request = EvidenceRequest.find(@request_id)
-        assert_equal "declined", request.status
-        assert_equal "I didn't work with Rep this quarter.\nTry Sam instead.", request.decline_reason
-      end
-    end
-
-    should "keep the typed reason readable in dark mode" do
-      page.driver.browser.execute_cdp(
-        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
-      )
-      visit evidence_hub_path
-      open_decline_disclosure
-
-      assert_operator rendered_contrast("#decline-reason-#{@request_id}"), :>=, 4.5
-    ensure
-      page.driver.browser.execute_cdp(
-        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
-      )
     end
   end
 end
