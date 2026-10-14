@@ -80,6 +80,29 @@ class Assessments::CarriedRatingsControllerTest < ActionDispatch::IntegrationTes
       assert_equal "occasional", rating.self_rated_frequency
     end
 
+    should "show this cycle's feedback on the cell beside the tick" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "self", evidence_type: "project_outcome",
+          title: "Led the incident review", content: "Ran the review end to end", author_id: @person.id,
+          valence: "demonstrated"
+        )
+      end
+
+      get assessment_carried_ratings_path(@assignment, category_id: @category.category_id)
+
+      assert_select "li", text: /1 new feedback this cycle/
+      assert_select "li", text: /Led the incident review — Ran the review end to end/
+    end
+
+    should "ignore a cell whose level is not a whole number" do
+      post assessment_carried_ratings_path(@assignment),
+           params: { category_id: @category.category_id, cells: [ "#{@cap.stable_id}|2extra" ] }
+
+      assert_equal "seeded", rating.self_rating_source
+    end
+
     should "ask for at least one tick" do
       post assessment_carried_ratings_path(@assignment), params: { category_id: @category.category_id }
 

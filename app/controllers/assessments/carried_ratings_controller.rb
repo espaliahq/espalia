@@ -46,8 +46,9 @@ class Assessments::CarriedRatingsController < ApplicationController
     authorize @assignment, rating_predicate
 
     cells = Array(params[:cells]).filter_map do |token|
-      stable_id, ordinal = token.to_s.split("|", 2)
-      { capability_stable_id: stable_id, level_ordinal: ordinal.to_i } if stable_id.present? && ordinal.present?
+      stable_id, raw_ordinal = token.to_s.split("|", 2)
+      ordinal = Integer(raw_ordinal.to_s, 10, exception: false)
+      { capability_stable_id: stable_id, level_ordinal: ordinal } if stable_id.present? && ordinal
     end
     return redirect_to(carried_back, alert: "Tick at least one rating to confirm.") if cells.empty?
 

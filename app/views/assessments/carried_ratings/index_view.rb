@@ -5,6 +5,8 @@
 # cycle beside it — so a confirm is an informed one rather than a rubber
 # stamp (#480). Posts the ticked cells to {Assessments::CarriedRatingsController#create}.
 class Views::Assessments::CarriedRatings::IndexView < Views::Base
+  NEW_FEEDBACK_SHOWN = 3
+
   # @param assignment [PersonFrameworkAssignment]
   # @param category [Hash] one entry of `MatrixDataBuilder#build[:categories]`
   # @param context [Symbol] :self or :manager
@@ -84,14 +86,39 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
         end
         div(id: "#{id}-detail", class: "mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-300") do
           p { row[:expectation] } if row[:expectation].present?
-          p(class: row[:new_feedback].positive? ? "font-medium text-gray-900 dark:text-white" : nil) do
-            row[:new_feedback].positive? ? "#{row[:new_feedback]} new feedback this cycle" : "No new feedback this cycle"
-          end
+          new_feedback(row[:new_feedback])
           a(href: assessment_path(@assignment, capability: row[:stable_id], level_ordinal: row[:ordinal]),
             class: "inline-block underline") { "Change it on the assessment" }
         end
       end
     end
+  end
+
+  # This cycle's feedback on the cell, read where the decision is made — a
+  # count alone gave nothing to weigh before confirming.
+  def new_feedback(items)
+    if items.empty?
+      p { "No new feedback this cycle" }
+      return
+    end
+
+    p(class: "font-medium text-gray-900 dark:text-white") { "#{items.size} new feedback this cycle" }
+    ul(class: "space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2") do
+      items.first(NEW_FEEDBACK_SHOWN).each do |item|
+        li do
+          span(class: "font-medium") { item.title.presence || type_label(item) }
+          plain " — #{item.content.to_s.squish.truncate(160)}"
+        end
+      end
+      li { "and #{items.size - NEW_FEEDBACK_SHOWN} more on the assessment" } if items.size > NEW_FEEDBACK_SHOWN
+    end
+  end
+
+  # Same wording as the evidence card.
+  def type_label(item)
+    return item.custom_type_label.presence || "Other" if item.evidence_type == "other"
+
+    Views::Assessments::Evidence::Card::TYPE_LABEL[item.evidence_type] || item.evidence_type.to_s.humanize
   end
 
   def empty_state
@@ -109,7 +136,7 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
         stable_id: cap_data[:capability].stable_id, ordinal: @person_level, name: cap_data[:capability].name,
         level_code: level_code(@person_level), phrase: Views::Assessments::FrequencyPalette.phrase_for(frequency),
         expectation: cell[:expectation]&.description,
-        new_feedback: Array(cell[:evidence]).count { |item| @cycle_id && item.cycle_id == @cycle_id }
+        new_feedback: Array(cell[:evidence]).select { |item| @cycle_id && item.cycle_id == @cycle_id }
       }
     end
   end
