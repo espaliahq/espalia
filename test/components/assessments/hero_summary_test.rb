@@ -337,5 +337,4 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_not_includes html, "to confirm"
     end
   end
-
 end
