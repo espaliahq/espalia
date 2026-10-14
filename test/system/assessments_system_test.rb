@@ -1464,6 +1464,21 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "confirm a category's carried ratings from its review page (#{label})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment, capability: @cap1_stable)
+        assert_selector "#category-indicators-#{@cat_id}", text: "Confirm 1 carried"
+
+        click_link_with_js_fallback("Confirm 1 carried", expect_text: "Confirm carried ratings · Thinking")
+        assert_selector "input[name='cells[]'][value='#{@cap1_stable}|2']:checked"
+
+        click_button_with_js_fallback("Confirm ticked ratings", expect_text: "Confirmed 1 carried rating for this cycle.")
+        assert_no_selector "#capability-name-#{@cap1_stable}", text: "To confirm"
+        assert_no_selector "#category-indicators-#{@cat_id}", text: "Confirm 1 carried"
+      end
+    end
+
     should "render the carried treatment and confirm on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
       visit assessment_path(@assignment, capability: @cap1_stable)

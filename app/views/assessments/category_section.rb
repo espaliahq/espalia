@@ -76,6 +76,14 @@ class Views::Assessments::CategorySection < Views::Base
 
   private
 
+  # Bulk confirm is the viewer's own side on the home role; frozen covers a
+  # started alignment and a viewer without rating authority alike.
+  def confirm_href
+    return if @frozen || @context == :alignment || (@lens && !@lens.home?)
+
+    assessment_carried_ratings_path(@assessment_id, category_id: @category.category_id)
+  end
+
   def section_header
     # Sticky just under the unified header. `top: var(--sticky-header-h)`
     # is published by `category_nav_controller` whenever the header
@@ -111,7 +119,8 @@ class Views::Assessments::CategorySection < Views::Base
           merged_levels: @merged_levels,
           person_level: @person_level,
           thresholds: @thresholds,
-          viewer_is_manager: @viewer_is_manager
+          viewer_is_manager: @viewer_is_manager,
+          confirm_href: confirm_href
         )
       end
       if @category.description.present?

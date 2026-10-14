@@ -176,7 +176,8 @@ class Assessments::RatingsController < ApplicationController
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
             thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-            viewer_is_manager: viewer_is_manager?
+            viewer_is_manager: viewer_is_manager?,
+            confirm_href: (assessment_carried_ratings_path(@assignment, category_id: category_id) if response_lens.home?)
           ),
           layout: false
         )

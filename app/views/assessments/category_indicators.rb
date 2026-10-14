@@ -37,9 +37,13 @@ class Views::Assessments::CategoryIndicators < Views::Base
   # @param thresholds [Hash] the framework's own bands, for the definitions
   # @param viewer_is_manager [Boolean] whether the reader is the
   #   manager-side party — the definitions address them accordingly
+  # @param confirm_href [String, nil] where to confirm this category's carried
+  #   ratings in bulk; nil hides the link (a viewer who can't rate, a lens)
   def initialize(category_id:, category_score:, category_data:, merged_levels:, person_level:,
-                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false)
+                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false,
+                 confirm_href: nil)
     @category_id = category_id
+    @confirm_href = confirm_href
     @category_score = category_score
     @secondary_scores = secondary_scores
     @category_data = category_data
@@ -63,10 +67,30 @@ class Views::Assessments::CategoryIndicators < Views::Base
         end
       end
       divergent_annotations if unlocked?
+      confirm_link
     end
   end
 
   private
+
+  # Re-rendered with the cluster after every rating, so the count stays true
+  # as cells are confirmed one by one (#480).
+  def confirm_link
+    count = carried_count
+    return unless @confirm_href && count.positive?
+
+    a(href: @confirm_href, data: { turbo_frame: "_top" },
+      class: "#{Components::Kit::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
+      plain "Confirm #{count} carried"
+      span(aria: { hidden: "true" }) { "→" }
+    end
+  end
+
+  def carried_count
+    @category_data[:capabilities].sum do |cap|
+      cap[:cells].count { |_, cell| Views::Assessments::Concerns::RatedCount.to_confirm?(cell, @context) }
+    end
+  end
 
   def counts
     @counts ||= @category_data ? category_rated_count(@category_data, @context) : { rated: 0, total: 0 }

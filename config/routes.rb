@@ -157,6 +157,9 @@ Rails.application.routes.draw do
     resources :ratings, only: [ :create ], controller: "assessments/ratings"
     resources :manager_ratings, only: [ :create ], controller: "assessments/manager_ratings"
     resources :alignment_ratings, only: [ :create ], controller: "assessments/alignment_ratings"
+    # Review a category's ratings carried from the last cycle and confirm
+    # the ticked ones in one go (#480).
+    resources :carried_ratings, only: [ :index, :create ], controller: "assessments/carried_ratings"
     resource :alignment_start, only: [ :create ], controller: "assessments/alignment_starts"
     resource :alignment_completion, only: [ :create ], controller: "assessments/alignment_completions"
     resource :alignment_reopening, only: [ :create ], controller: "assessments/alignment_reopenings"
