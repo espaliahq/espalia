@@ -123,6 +123,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Aligning"
       assert_not_includes response.body, "Ready for alignment"
+      assert_not_includes response.body, "Review self-assessment"
     end
 
     should "ignore ratings outside the assessed role" do

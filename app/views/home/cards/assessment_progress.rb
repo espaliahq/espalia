@@ -12,7 +12,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
 
   # Shown before alignment once every current-level cell carries the person's
   # own vetted rating: their part is done and the next move is the manager's.
-  READY_FOR_ALIGNMENT = [ "Ready for alignment", :success ].freeze
+  READY_FOR_ALIGNMENT = [ Views::Assessments::StatusPill::READY_FOR_ALIGNMENT, :success ].freeze
 
   # @param state [Hash, nil] { cycle:, assignment:, status:, self_rated_count:, self_started:, self_complete: }
   def initialize(state:)
@@ -57,7 +57,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   end
 
   def ready_for_alignment?
-    @state[:self_complete] && %w[in_progress started].include?(@state[:status])
+    @state[:self_complete] && AssessmentCycleProgress::INDIVIDUAL_RATING_STATUSES.include?(@state[:status])
   end
 
   # "Aligning · PM3" beside the home status (ADR-22): alignment the manager
@@ -96,10 +96,11 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   # "Start" until the person themselves records a rating this cycle. Keyed off
   # the self side, not the row-level progress status — that status also flips
   # on the manager's first rating — so the verb always agrees with the
-  # assessments index's own-card CTA. "Review" once nothing is left to rate.
+  # assessments index's own-card CTA. "Review" only while the person waits
+  # for alignment — once it starts there is work to do again.
   # @return [String]
   def cta_verb
-    return "Review" if @state[:self_complete]
+    return "Review" if ready_for_alignment?
 
     @state[:self_started] ? "Continue" : "Start"
   end
