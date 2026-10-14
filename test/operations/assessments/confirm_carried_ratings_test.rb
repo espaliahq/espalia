@@ -111,10 +111,21 @@ class Operations::Assessments::ConfirmCarriedRatingsTest < ActiveSupport::TestCa
     assert_raises(Pundit::NotAuthorizedError) { confirm([ cell ], perspective: "manager") }
   end
 
+  should "confirm a cell listed twice once, never untoggling it" do
+    seed("occasional")
+
+    result = confirm([ cell, cell ])
+
+    assert_equal 1, result[:confirmed].size
+    assert_equal "occasional", row.self_rated_frequency
+    assert_equal "human", row.self_rating_source
+  end
+
   should "reject a malformed cell as a parameter error" do
     assert_raises(Operations::Base::ParameterError) do
       confirm([ { "capability_stable_id" => @cap.stable_id, "level_ordinal" => 2, "frequency" => "some" } ])
     end
     assert_raises(Operations::Base::ParameterError) { confirm([ { "capability_stable_id" => @cap.stable_id } ]) }
+    assert_raises(Operations::Base::ParameterError) { confirm([ [ @cap.stable_id, 2 ] ]) }
   end
 end

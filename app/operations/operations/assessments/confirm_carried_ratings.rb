@@ -3,12 +3,12 @@
 # Confirms ratings carried forward from the last cycle, unchanged, for this
 # cycle — the same as re-picking each value on its pill (#480).
 #
-# Each cell is checked to be still carried on the named side, then confirmed
-# through {RateSelf} / {RateAsManager}, so the policy, frozen-cell and
-# lens checks are the same code a single confirm runs. The check matters:
-# re-sending a value that is already human-owned CLEARS it (the untoggle),
-# so a stale list must never reach the rating tool for such a cell. Cells
-# that fail any check are skipped with the reason, never fatal to the rest.
+# Each cell is confirmed through {RateSelf} / {RateAsManager} with their
+# explicit `confirm`, so the policy, frozen-cell and lens checks are the same
+# code a single confirm runs. The explicit flag matters: re-sending a value
+# that is already human-owned would otherwise CLEAR it (the untoggle), and a
+# stale list or a repeated cell would do exactly that. Cells that fail any
+# check are skipped with the reason, never fatal to the rest.
 #
 # Write — :mcp_client approval, despite touching many records: every effect
 # is one an allowed :mcp_client rating call already has, no value changes
@@ -73,11 +73,12 @@ class Operations::Assessments::ConfirmCarriedRatings < Operations::Base
     frequency, carried = side_of(row)
     return "not carried" unless frequency.present? && carried
 
-    DELEGATES.fetch(perspective).new(context: context, params: {
+    operation = DELEGATES.fetch(perspective).new(context: context, params: {
       assignment_id: assignment.id, capability_stable_id: cell[:capability_stable_id],
-      level_ordinal: cell[:level_ordinal], frequency: frequency
-    }).call
-    nil
+      level_ordinal: cell[:level_ordinal], frequency: frequency, confirm: true
+    })
+    operation.call
+    operation.changed? ? nil : "not carried"
   rescue Pundit::NotAuthorizedError, Operations::Base::ParameterError => e
     e.message
   end
@@ -104,7 +105,11 @@ class Operations::Assessments::ConfirmCarriedRatings < Operations::Base
   # (-32602), never an internal error (mcp-server.md, Lesson 13).
   def cells
     @cells ||= params[:cells].map do |raw|
-      cell = raw.respond_to?(:to_h) ? raw.to_h.transform_keys(&:to_s) : {}
+      unless raw.is_a?(Hash) || raw.is_a?(ActionController::Parameters)
+        raise Operations::Base::ParameterError, "each cell must be an object"
+      end
+
+      cell = raw.to_h.transform_keys(&:to_s)
       unknown = cell.keys - %w[capability_stable_id level_ordinal]
       raise Operations::Base::ParameterError, "unknown cell keys: #{unknown.join(', ')}" if unknown.any?
 
@@ -115,7 +120,7 @@ class Operations::Assessments::ConfirmCarriedRatings < Operations::Base
       end
 
       { capability_stable_id: stable_id, level_ordinal: ordinal }
-    end
+    end.uniq
   end
 
   def assignment

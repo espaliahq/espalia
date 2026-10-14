@@ -448,6 +448,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
             "clear"                => { "type" => "boolean" },
+            "confirm"              => { "type" => "boolean" },
             "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
@@ -474,6 +475,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
             "clear"                => { "type" => "boolean" },
+            "confirm"              => { "type" => "boolean" },
             "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],

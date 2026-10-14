@@ -35,6 +35,10 @@ class Operations::Assessments::RateAsManager < Operations::Base
   parameter :rationale, String
   # Explicit clear (no-op if already empty) — see RateSelf.
   parameter :clear, :boolean
+  # Explicit confirm of a carried value: a no-op once it is no longer carried.
+  # Without it, re-sending the shown value confirms a carried rating but
+  # CLEARS a human one, so a double-click or a stale page must say confirm.
+  parameter :confirm, :boolean
   # The role whose cells the manager is reading; blank = the home role.
   parameter :as_role_id, String
 
@@ -81,6 +85,8 @@ class Operations::Assessments::RateAsManager < Operations::Base
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], cycle_id: cycle_id, rated_by_id: rated_by_id
       )
+    elsif params[:confirm].present? && !(existing_freq == params[:frequency] && existing&.manager_rating_carried?)
+      @changed = false
     elsif existing_freq == params[:frequency] && existing&.manager_rating_carried?
       # Confirming a carried-forward (seeded) value — same gesture as the
       # web: re-emit as human so the provenance flips.

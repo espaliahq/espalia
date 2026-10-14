@@ -38,6 +38,10 @@ class Operations::Assessments::RateSelf < Operations::Base
   # current frequency confirms a carried value or untoggle-clears a human
   # one — so a client that MEANS clear should say so.
   parameter :clear, :boolean
+  # Explicit confirm of a carried value: a no-op once it is no longer carried.
+  # Without it, re-sending the shown value confirms a carried rating but
+  # CLEARS a human one, so a double-click or a stale page must say confirm.
+  parameter :confirm, :boolean
   # The role whose cells the rater is reading; blank = the home role.
   parameter :as_role_id, String
 
@@ -85,6 +89,8 @@ class Operations::Assessments::RateSelf < Operations::Base
         assignment.person_id, assignment.framework_id, params[:capability_stable_id],
         level_ordinal: params[:level_ordinal], cycle_id: cycle_id
       )
+    elsif params[:confirm].present? && !(existing_freq == params[:frequency] && existing&.self_rating_carried?)
+      @changed = false
     elsif existing_freq == params[:frequency] && existing&.self_rating_carried?
       # Confirming a carried-forward (seeded) value — same gesture as the
       # web: re-emit as human so the provenance flips.

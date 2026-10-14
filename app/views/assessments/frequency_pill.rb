@@ -192,11 +192,11 @@ class Views::Assessments::FrequencyPill < Views::Base
   end
 
   # Confirming used to mean "pick the value already selected", which nobody
-  # guessed. Same request as re-picking it: the server confirms a carried
-  # value the viewer re-sends.
+  # guessed. The explicit marker makes a second click, or a stale tab, a
+  # no-op instead of the untoggle that would clear a confirmed rating.
   def keep_button
     form(action: form_action, method: "post", data: { turbo_stream: "true" }, class: "contents") do
-      hidden_inputs(frequency: @current_frequency)
+      hidden_inputs(frequency: @current_frequency, confirm: true)
       button(
         type: "submit",
         role: "menuitem",
@@ -233,12 +233,13 @@ class Views::Assessments::FrequencyPill < Views::Base
     div(class: "my-1 border-t border-gray-100 dark:border-gray-800")
   end
 
-  def hidden_inputs(frequency:, clear: false)
+  def hidden_inputs(frequency:, clear: false, confirm: false)
     input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
     input(type: "hidden", name: "rating[capability_stable_id]", value: @capability_stable_id)
     input(type: "hidden", name: "rating[level_ordinal]", value: @level_ordinal)
     input(type: "hidden", name: "rating[frequency]", value: frequency)
     input(type: "hidden", name: "rating[clear]", value: "1") if clear
+    input(type: "hidden", name: "rating[confirm]", value: "1") if confirm
     input(type: "hidden", name: "rating[category_id]", value: @category_id) if @category_id
     @lens_params.each { |name, value| input(type: "hidden", name: name.to_s, value: value) }
   end

@@ -73,6 +73,15 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
     end
   end
 
+  def confirm_op(frequency)
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Assessments::RateSelf.call(context: @context, params: {
+        assignment_id: @assignment.id, capability_stable_id: @cap.stable_id, level_ordinal: 2,
+        frequency: frequency, confirm: true
+      })
+    end
+  end
+
   def reload_rating
     ActsAsTenant.with_tenant(@tenant) do
       AssessmentLevelRating.find_by(
@@ -137,6 +146,28 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
       result = call_op(frequency: "occasional", clear: true)
 
       assert_nil result[:frequency]
+    end
+  end
+
+  # #480: Keep sends confirm, so a double-click or a stale tab can't untoggle
+  # the rating the first click confirmed.
+  context "explicit confirm" do
+    should "confirm a carried value, then leave it alone when sent again" do
+      seed_carried_rating("occasional")
+
+      confirm_op("occasional")
+      assert_equal "human", reload_rating.self_rating_source
+
+      confirm_op("occasional")
+      assert_equal "occasional", reload_rating.self_rated_frequency, "a repeated confirm must not clear the rating"
+    end
+
+    should "change nothing for a value that was never carried" do
+      call_op(frequency: "some")
+
+      confirm_op("some")
+
+      assert_equal "some", reload_rating.self_rated_frequency
     end
   end
 

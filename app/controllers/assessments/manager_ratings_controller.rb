@@ -26,7 +26,7 @@ class Assessments::ManagerRatingsController < ApplicationController
     # 404 that has changed nothing, not a saved rating with no response.
     response_lens
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear, :confirm ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
 
@@ -38,6 +38,7 @@ class Assessments::ManagerRatingsController < ApplicationController
       comment: rating_params[:comment],
       rationale: "Updated during manager assessment",
       clear: rating_params[:clear].presence,
+      confirm: rating_params[:confirm].presence,
       as_role_id: params[:as_role].presence
     })
     begin
