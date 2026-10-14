@@ -401,7 +401,8 @@ class Views::Evidence::HubView < Views::Base
         f.label(:reason, "Reason for declining (optional)", for: reason_id, class: "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1")
         div(class: "flex items-center gap-2") do
           f.text_field(:reason, id: reason_id,
-                       class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 text-sm")
+                       class: "flex-1 rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
+                              "text-gray-900 dark:text-gray-100 text-sm")
           f.submit("Decline",
                    class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
         end

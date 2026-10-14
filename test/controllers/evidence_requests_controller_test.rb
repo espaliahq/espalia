@@ -81,6 +81,13 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_select "label[for='#{input_id}']", text: "Reason for declining (optional)"
     end
 
+    should "keep typed decline reasons readable on the dark background" do
+      make_request!
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_select "input[name='evidence_request[reason]'].dark\\:bg-gray-900.dark\\:text-gray-100"
+    end
+
     should "not disclose visibility when the requestee is the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
         # The requester asks the assessee themselves for more evidence.
