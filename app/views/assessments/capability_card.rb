@@ -200,7 +200,8 @@ class Views::Assessments::CapabilityCard < Views::Base
       merged_levels: @merged_levels,
       person_level: @person_level,
       thresholds: @thresholds,
-      viewer_is_manager: @viewer_is_manager
+      viewer_is_manager: @viewer_is_manager,
+      to_confirm: Views::Assessments::Concerns::RatedCount.to_confirm?(@cells[@person_level], @context)
     )
   end
 

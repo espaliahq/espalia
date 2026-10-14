@@ -35,9 +35,12 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   # @param thresholds [Hash] the framework's own bands, for the definitions
   # @param viewer_is_manager [Boolean] whether the reader is the
   #   manager-side party — the definitions address them accordingly
+  # @param to_confirm [Boolean] the assessed-level value was carried from the
+  #   last cycle and still asks to be confirmed (#480)
   def initialize(capability:, score:, rated:, blocked:, block_reason:, merged_levels:, person_level:,
-                 thresholds: {}, viewer_is_manager: false)
+                 thresholds: {}, viewer_is_manager: false, to_confirm: false)
     @capability = capability
+    @to_confirm = to_confirm
     @score = score
     @rated = rated
     @blocked = blocked
@@ -56,6 +59,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
       weight_chip(@score&.dig(:weight), suffix: @capability.stable_id)
       required_chip(@score&.dig(:required), suffix: @capability.stable_id)
       blocked_badge if @blocked
+      to_confirm_chip if @to_confirm
       score_summary
     end
   end
@@ -73,6 +77,13 @@ class Views::Assessments::CapabilityNameRow < Views::Base
                        "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded"
       )
     end
+  end
+
+  def to_confirm_chip
+    render Components::Kit::ToConfirmChip.new(
+      "To confirm", compact: true,
+      title: "Carried from the last cycle — pick the same value to confirm it, or change it"
+    )
   end
 
   def score_summary

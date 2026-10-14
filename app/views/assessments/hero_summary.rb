@@ -159,6 +159,7 @@ class Views::Assessments::HeroSummary < Views::Base
           next_level_lens_link
           continue_assessing_cta(target) if target && can_rate?
           coverage_chip if @context != :alignment && !coverage_complete?
+          to_confirm_chip if coverage_complete? && can_rate?
         end
         # Gloss + divergent secondary verdicts share one line as long
         # as they fit; flex-wrap drops the secondaries below on narrow
@@ -365,6 +366,21 @@ class Views::Assessments::HeroSummary < Views::Base
     span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
       "#{current_level_rated} of #{current_level_total} rated"
     end
+  end
+
+  # Once every cell holds a value, the work left is confirming the carried
+  # ones; this chip names it and jumps to the first (#480). Before then the
+  # Continue CTA leads, so the two never compete.
+  def to_confirm_chip
+    target = next_carried_capability
+    return unless target
+
+    render Views::Assessments::ContinueAssessingLink.new(
+      capability_stable_id: target[:capability].stable_id,
+      level_ordinal: @person_level,
+      label: "#{carried_to_confirm.size} to confirm",
+      classes: "#{Components::Kit::ToConfirmChip::CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950"
+    )
   end
 
   # ── Coverage helpers ──
@@ -606,6 +622,18 @@ class Views::Assessments::HeroSummary < Views::Base
         cell = cap_data[:cells][@person_level]
         cell && primary_cell_frequency(cell).blank? && rateable_here?(cell)
       end
+  end
+
+  # Current-level capabilities whose value was carried from the last cycle
+  # and can still be confirmed here.
+  def carried_to_confirm
+    @carried_to_confirm ||= @categories
+      .flat_map { |cat| cat[:capabilities] }
+      .select { |cap_data| Views::Assessments::Concerns::RatedCount.to_confirm?(cap_data[:cells][@person_level], @context) }
+  end
+
+  def next_carried_capability
+    carried_to_confirm.first
   end
 
   # A cell another role's alignment froze (ADR-22) is read-only, so

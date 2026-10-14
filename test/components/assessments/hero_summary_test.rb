@@ -58,7 +58,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
   def render_hero(state:, components:, person_level: 3, levels: LEVELS, statuses: {}, readiness: nil,
                   scores: { "cap-a" => 1.0 }, next_scores: { "cap-a" => 0.25 }, context: :self,
-                  cells: nil, self_scoring: nil)
+                  cells: nil, self_scoring: nil, viewer_can_rate: false)
     cap = CAP.new(stable_id: "cap-a", name: "Strategic Thinking")
     cells ||= { person_level => {
       current_frequency: "consistent", manager_frequency: "consistent", aligned_frequency: "consistent"
@@ -80,7 +80,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       scoring: scoring, self_scoring: self_scoring || scoring, manager_scoring: scoring,
       categories: categories, person_level: person_level,
       merged_levels: levels, assessment_id: SecureRandom.uuid_v7, context: context,
-      viewer_can_rate: false
+      viewer_can_rate: viewer_can_rate
     ).call
   end
 
@@ -317,4 +317,25 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_includes html, "They&#39;re meeting E3 expectations."
     end
   end
+
+  # #480: with every cell holding a value, the work left was invisible.
+  context "carried ratings left to confirm" do
+    should "name them and jump to the first once every cell has a value" do
+      html = render_hero(state: :performing, components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
+                         cells: { 3 => { current_frequency: "consistent", current_frequency_carried: true } },
+                         viewer_can_rate: true)
+      link = Nokogiri::HTML5.fragment(html).at_css("a[href='#cell-cap-a-3']")
+
+      assert_equal "1 to confirm→", link&.text
+      assert_includes link["class"], "border-dashed"
+    end
+
+    should "not offer it to a viewer who can't rate" do
+      html = render_hero(state: :performing, components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 },
+                         cells: { 3 => { current_frequency: "consistent", current_frequency_carried: true } })
+
+      assert_not_includes html, "to confirm"
+    end
+  end
+
 end
