@@ -160,10 +160,10 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_no_field "Reason for declining (optional)"
 
-    find("summary", text: "Decline this request").click
+    click_selector_with_js_fallback("[data-testid='decline-request'] summary",
+                                    expect_selector: "[data-testid='decline-request'][open]")
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
-    click_button "Decline"
-    assert_text "No one is waiting on you."
+    click_button_with_js_fallback "Decline", expect_text: "No one is waiting on you."
 
     sign_in_as(@report_user)
     visit evidence_hub_path
@@ -177,7 +177,8 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     )
     sign_in_as(@peer_user)
     visit evidence_hub_path
-    find("summary", text: "Decline this request").click
+    click_selector_with_js_fallback("[data-testid='decline-request'] summary",
+                                    expect_selector: "[data-testid='decline-request'][open]")
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
 
     assert_operator rendered_contrast("#decline-reason-#{request_id}"), :>=, 4.5
