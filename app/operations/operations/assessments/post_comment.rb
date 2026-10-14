@@ -24,6 +24,7 @@ class Operations::Assessments::PostComment < Operations::Base
               "the discussion of the feedback's relevance and valence there."
   category :write
   approval :mcp_client
+  prose_fields :body
 
   parameter :assignment_id,        String, required: true
   parameter :capability_stable_id, String, required: true

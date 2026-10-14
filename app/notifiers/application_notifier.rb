@@ -121,7 +121,7 @@ class ApplicationNotifier < Noticed::Event
     # @param text [String, nil]
     # @return [String, nil] nil when there is nothing to quote
     def quoted_excerpt(text)
-      text = text.to_s.strip
+      text = Prose.to_plain(text)
       return nil if text.blank?
 
       "“#{text.truncate(ApplicationNotifier::EXCERPT_LIMIT, omission: "…")}”"

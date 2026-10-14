@@ -279,9 +279,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       title = @suggestion.kind == "clarification" ? "The question" : "Rationale"
       render Components::Kit::Card.new(title: title) do |card|
         card.body do
-          p(class: "text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap") do
-            @suggestion.rationale
-          end
+          render Components::Kit::Prose.new(@suggestion.rationale, class: "text-sm text-gray-700 dark:text-gray-300")
         end
       end
     end
@@ -313,8 +311,8 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
                 dt(class: "text-gray-600 dark:text-gray-300") do
                   @suggestion.status == "resolved" ? "Resolution" : "Comment"
                 end
-                dd(class: "mt-0.5 text-gray-900 dark:text-white whitespace-pre-wrap") do
-                  @suggestion.reviewer_comment
+                dd(class: "mt-0.5 text-gray-900 dark:text-white") do
+                  render Components::Kit::Prose.new(@suggestion.reviewer_comment)
                 end
               end
             end

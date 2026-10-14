@@ -15,6 +15,7 @@ class Operations::Frameworks::ApproveSuggestion < Operations::Base
   description "Approve a pending framework suggested edit (tier authority required)."
   category :write
   approval :mcp_client
+  prose_fields :comment
 
   parameter :framework_id,  String, required: true
   parameter :suggestion_id, String, required: true

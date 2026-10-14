@@ -219,11 +219,8 @@ class Views::Assessments::Evidence::Card < Views::Base
   # focused cell"). When the card is on screen the
   # user has explicitly focused this cell, so render the full content —
   # clamping to two lines hides the very text they came to read.
-  # `whitespace-pre-wrap` preserves any line breaks the author entered.
   def content_line
-    p(class: "mt-0.5 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words") do
-      @item.content
-    end
+    render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-gray-700 dark:text-gray-300")
   end
 
   def footer_line

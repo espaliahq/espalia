@@ -70,6 +70,10 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
 
   private
 
+  def composer_hint_id
+    "link-comment-hint-#{@item.id}-#{@capability_stable_id}-#{@level_ordinal}"
+  end
+
   def withdrawn?
     @item.withdrawn?
   end
@@ -220,7 +224,7 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
         rows: 2,
         required: true,
         placeholder: "Discuss this feedback's relevance to this behaviour…",
-        aria: { label: "Comment on this feedback linkage" },
+        aria: { label: "Comment on this feedback linkage", describedby: composer_hint_id },
         class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
                "focus:outline-none focus:ring-2 focus:ring-primary",
@@ -231,8 +235,8 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
       ) { "" }
 
       div(class: "mt-1 flex items-center justify-between gap-2") do
-        span(class: "text-[10px] text-gray-600 dark:text-gray-300") do
-          plain "⌘/Ctrl+Enter to post"
+        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") do
+          plain "#{Prose::COMPOSER_HINT} · ⌘/Ctrl+Enter to post"
         end
         button(
           type: "submit",

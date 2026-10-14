@@ -17,6 +17,7 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
   description "Edit an existing feedback / evidence item's type, title, content, and external reference."
   category :write
   approval :mcp_client
+  prose_fields :content
 
   parameter :assignment_id, String, required: true
   parameter :evidence_id,   String, required: true

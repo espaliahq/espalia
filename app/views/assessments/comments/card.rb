@@ -151,12 +151,9 @@ class Views::Assessments::Comments::Card < Views::Base
 
   def body_line
     # The card only renders inside the focused expanded cell — render the
-    # full body. `whitespace-pre-wrap` preserves line breaks the author
-    # entered; `break-words` keeps long URLs from blowing out the column.
-    div(
-      class: "mt-0.5 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words",
-      data: { comments_thread_target: "displayBody" }
-    ) { @comment.body }
+    # full body.
+    render Components::Kit::Prose.new(@comment.body, class: "mt-0.5 text-gray-700 dark:text-gray-300",
+                                                     data: { comments_thread_target: "displayBody" })
     edit_form if @can_edit
   end
 

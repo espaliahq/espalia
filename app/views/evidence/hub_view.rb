@@ -159,7 +159,7 @@ class Views::Evidence::HubView < Views::Base
       elsif request.status == "responded"
         response_card(request)
       elsif request.status == "declined" && request.decline_reason.present?
-        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{request.decline_reason}" }
+        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{Prose.to_plain(request.decline_reason)}" }
       end
     end
   end
@@ -192,7 +192,7 @@ class Views::Evidence::HubView < Views::Base
         span(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Response from #{item.author&.name || "a colleague"}" }
         span(class: "text-xs text-gray-600 dark:text-gray-300") { response_type_label(item) }
       end
-      p(class: "text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line") { item.content }
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
       applies_to_line(response[:links])
       div(class: "flex items-center gap-4") do
@@ -237,7 +237,7 @@ class Views::Evidence::HubView < Views::Base
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
       end
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
-      p(class: "text-sm text-gray-700 dark:text-gray-200 whitespace-pre-line") { item.content }
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
       authored_actions(item, detail)
     end
@@ -322,7 +322,7 @@ class Views::Evidence::HubView < Views::Base
   def message_line(request)
     return if request.message.blank?
 
-    p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
+    p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{Prose.to_plain(request.message)}”" }
   end
 
   # On every open request card: the request's life so far — when it was asked

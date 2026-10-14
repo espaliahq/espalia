@@ -21,6 +21,7 @@ class Operations::Frameworks::RequestClarification < Operations::Base
               "example (illustration) — opens a discussion, proposes nothing."
   category :write
   approval :mcp_client
+  prose_fields :rationale
 
   parameter :framework_id,    String,  required: true
   # capability_id or illustration_id identifies the anchor — AT LEAST one, not
