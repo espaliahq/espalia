@@ -158,7 +158,11 @@ module Prose
 
     def replace_image(node)
       src = node["src"]
-      return node.replace(node.document.create_text_node(node["alt"].to_s)) unless Prose.linkable?(src)
+      # Inside a link the image is that link's text; a second anchor there
+      # would nest, and the browser would split the outer link around it.
+      if node.ancestors("a").any? || !Prose.linkable?(src)
+        return node.replace(node.document.create_text_node(node["alt"].to_s))
+      end
 
       link = node.document.create_element("a", node["alt"].presence || src,
                                           href: src, rel: LINK_REL, target: "_blank")

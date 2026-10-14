@@ -79,6 +79,13 @@ class ProseTest < ActiveSupport::TestCase
       assert_equal "pixel", fragment.at_css("a").text
     end
 
+    should "keep a linked image's link, rather than nesting a second one inside it" do
+      links = html("[![report](https://e.com/image.png)](https://e.com/report)").css("a")
+
+      assert_equal [ "https://e.com/report" ], links.map { |link| link["href"] }
+      assert_equal "report", links.first.text
+    end
+
     should "keep a heading's text as a bold paragraph" do
       fragment = html("# 3 priority items")
 
