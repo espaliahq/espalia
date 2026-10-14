@@ -159,7 +159,7 @@ class Views::Evidence::HubView < Views::Base
       elsif request.status == "responded"
         response_card(request)
       elsif request.status == "declined" && request.decline_reason.present?
-        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{request.decline_reason}" }
+        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{Prose.to_plain(request.decline_reason)}" }
       end
     end
   end
@@ -322,7 +322,7 @@ class Views::Evidence::HubView < Views::Base
   def message_line(request)
     return if request.message.blank?
 
-    p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{request.message}”" }
+    p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{Prose.to_plain(request.message)}”" }
   end
 
   # On every open request card: the request's life so far — when it was asked

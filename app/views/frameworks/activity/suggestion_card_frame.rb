@@ -245,8 +245,10 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       end
       current_and_proposed
       if @suggestion.rationale.present?
+        # A left rule marks the author's words; italics would swallow their _emphasis_.
         render Components::Kit::Prose.new(@suggestion.rationale,
-                                          class: "mt-2 text-[11px] text-gray-600 dark:text-gray-300 italic")
+                                          class: "mt-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700 " \
+                                                 "text-[11px] text-gray-600 dark:text-gray-300")
       end
       footer_line
     end

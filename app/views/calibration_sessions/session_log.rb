@@ -311,12 +311,13 @@ class Views::CalibrationSessions::SessionLog < Views::Base
       label(for: "session-note", class: "block text-xs font-semibold uppercase " \
                                         "text-gray-600 dark:text-gray-300") { "Add a note" }
       textarea(
-        id: "session-note", name: "body", rows: "2", required: true,
+        id: "session-note", aria: { describedby: "session-note-hint" }, name: "body", rows: "2", required: true,
         class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
         placeholder: "A minute for the room — e.g. “add Priya to the org-wide session”"
       )
+      p(id: "session-note-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
       button(
         type: "submit",
         class: "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm " \

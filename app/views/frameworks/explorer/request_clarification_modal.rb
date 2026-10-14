@@ -92,11 +92,12 @@ class Views::Frameworks::Explorer::RequestClarificationModal < Views::Base
       label(for: "clarification_rationale",
             class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Your question" }
       textarea(
-        id: "clarification_rationale", name: "clarification[rationale]", rows: "3", required: true,
+        id: "clarification_rationale", aria: { describedby: "clarification_rationale-hint" }, name: "clarification[rationale]", rows: "3", required: true,
         class: field_classes,
         placeholder: "e.g. Is third-party integration the right example at this level?",
         data: { request_clarification_form_target: "question" }
       )
+      p(id: "clarification_rationale-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
     end
   end
 
