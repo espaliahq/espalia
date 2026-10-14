@@ -8,7 +8,9 @@
 #
 # "Assessment Complete" rewards finishing the current-level ratings (100%
 # coverage in the viewer's perspective); it precedes the manager-driven
-# "Aligning" / "Aligned" lifecycle phases.
+# "Aligning" / "Aligned" lifecycle phases. When every cell holds a value but
+# some were carried from the last cycle, it says how many are left to confirm
+# rather than a bare "In Progress" that reads as finished work undone (#480).
 #
 class Views::Assessments::StatusPill < Views::Base
   WRAPPER_ID = "assessment-status-pill"
@@ -16,10 +18,12 @@ class Views::Assessments::StatusPill < Views::Base
   # @param participant_status [String, nil] cycle participation status
   # @param has_open_cycle [Boolean] whether an assessment cycle is open
   # @param current_level_complete [Boolean] all current-level cells rated
-  def initialize(participant_status:, has_open_cycle:, current_level_complete: false)
+  # @param work [Hash] the builder's `current_level_work` — :unrated, :to_confirm
+  def initialize(participant_status:, has_open_cycle:, current_level_complete: false, work: {})
     @participant_status = participant_status
     @has_open_cycle = has_open_cycle
     @current_level_complete = current_level_complete
+    @work = work || {}
   end
 
   def view_template
@@ -27,6 +31,10 @@ class Views::Assessments::StatusPill < Views::Base
   end
 
   private
+
+  def only_confirmations_left?
+    @work[:unrated].to_i.zero? && @work[:to_confirm].to_i.positive?
+  end
 
   def pill
     case @participant_status
@@ -37,6 +45,11 @@ class Views::Assessments::StatusPill < Views::Base
 
       if @current_level_complete
         render Components::Kit::Badge.new("Assessment Complete", variant: :success)
+      elsif only_confirmations_left?
+        render Components::Kit::ToConfirmChip.new(
+          "#{@work[:to_confirm]} to confirm",
+          title: "Carried from the last cycle — confirm each one or change it to complete your assessment"
+        )
       else
         render Components::Kit::Badge.new("In Progress", variant: :warning)
       end

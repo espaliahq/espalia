@@ -360,12 +360,9 @@ class Views::Assessments::IndexView < Views::Base
     div(class: "flex items-center gap-1.5") do
       span(class: "text-xs text-gray-500 dark:text-gray-400") { label }
       if variant == :to_confirm
-        span(
-          class: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " \
-                 "border border-dashed border-amber-500 dark:border-amber-400 " \
-                 "text-amber-800 dark:text-amber-300",
-          title: "Carried from the previous cycle — open the assessment to confirm or change"
-        ) { text }
+        render Components::Kit::ToConfirmChip.new(
+          text, title: "Carried from the previous cycle — open the assessment to confirm or change"
+        )
       else
         render Components::Kit::Badge.new(text, variant: variant)
       end
