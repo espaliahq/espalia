@@ -1636,8 +1636,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Review self-assessment"
 
       visit root_path
-      assert_text "Review self-assessment"
-      assert_text "Ready for alignment"
+      assert_current_path root_path
+      home_card = "turbo-frame[id^='home-card-assessment_progress-']"
+      assert_selector home_card, text: "Ready for alignment"
+      assert_selector home_card, text: "Review self-assessment"
       click_link_with_js_fallback("Review self-assessment", expect_selector: "#assessment-status-pill")
       within("#assessment-status-pill") { assert_text "Ready for alignment" }
     end
