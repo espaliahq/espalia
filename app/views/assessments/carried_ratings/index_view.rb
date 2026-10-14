@@ -107,7 +107,7 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
       items.first(NEW_FEEDBACK_SHOWN).each do |item|
         li do
           span(class: "font-medium") { item.title.presence || type_label(item) }
-          plain " — #{item.content.to_s.squish.truncate(160)}"
+          plain " — #{Prose.to_plain(item.content).squish.truncate(160)}"
         end
       end
       li { "and #{items.size - NEW_FEEDBACK_SHOWN} more on the assessment" } if items.size > NEW_FEEDBACK_SHOWN
