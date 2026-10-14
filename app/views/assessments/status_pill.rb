@@ -14,6 +14,9 @@
 #
 class Views::Assessments::StatusPill < Views::Base
   WRAPPER_ID = "assessment-status-pill"
+  READY_FOR_ALIGNMENT = "Ready for alignment"
+  READY_FOR_ALIGNMENT_DEFINITION =
+    "You've rated every capability at your level. Your manager starts alignment next."
 
   # @param participant_status [String, nil] cycle participation status
   # @param has_open_cycle [Boolean] whether an assessment cycle is open
@@ -27,7 +30,7 @@ class Views::Assessments::StatusPill < Views::Base
   end
 
   def view_template
-    span(id: WRAPPER_ID, class: "inline-flex", title: title) { pill }
+    span(id: WRAPPER_ID, class: "inline-flex") { pill }
   end
 
   private
@@ -39,24 +42,24 @@ class Views::Assessments::StatusPill < Views::Base
     else
       return unless @has_open_cycle
 
-      if @current_level_complete
-        render Components::Kit::Badge.new(complete_label, variant: :success)
-      else
+      if !@current_level_complete
         render Components::Kit::Badge.new("In Progress", variant: :warning)
+      elsif @context == :self
+        ready_for_alignment
+      else
+        render Components::Kit::Badge.new("Assessment Complete", variant: :success)
       end
     end
   end
 
-  def complete_label
-    ready_for_alignment? ? "Ready for alignment" : "Assessment Complete"
-  end
-
-  def title
-    "You've rated every capability at your level. Your manager starts alignment next." if ready_for_alignment?
-  end
-
-  def ready_for_alignment?
-    @context == :self && @has_open_cycle && @current_level_complete &&
-      !%w[aligning aligned].include?(@participant_status)
+  # Says whose move it is on hover AND keyboard focus — a `title` would leave
+  # keyboard and screen-reader users with the label alone.
+  def ready_for_alignment
+    render Components::Kit::DefinitionTip.new(
+      READY_FOR_ALIGNMENT,
+      definition: READY_FOR_ALIGNMENT_DEFINITION,
+      id: "#{WRAPPER_ID}-definition",
+      trigger_class: "min-h-6 #{Components::Kit::Badge.classes(:success)}"
+    )
   end
 end

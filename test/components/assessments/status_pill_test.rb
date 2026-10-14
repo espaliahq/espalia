@@ -17,8 +17,12 @@ class Views::Assessments::StatusPillTest < ActiveSupport::TestCase
     should "read Ready for alignment once every current-level cell is rated" do
       html = render_pill(context: :self)
 
-      assert_includes html, "Ready for alignment"
-      assert_includes html, "Your manager starts alignment next."
+      doc = Nokogiri::HTML5.fragment(html)
+      trigger = doc.at_css("button[aria-describedby]")
+
+      assert_equal "Ready for alignment", trigger&.text&.strip
+      assert_includes doc.at_css("##{trigger["aria-describedby"]}").text, "Your manager starts alignment next."
+      assert_nil doc.at_css("[title]"), "a title is unreachable by keyboard; the definition tip carries it"
       assert_not_includes html, "Assessment Complete"
     end
 
