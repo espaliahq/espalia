@@ -39,6 +39,15 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     id
   end
 
+  def decline_modal_id(request_id)
+    "decline-request-modal-#{request_id}"
+  end
+
+  def open_decline_modal(request_id)
+    click_selector_with_js_fallback("button[data-modal-target-id='#{decline_modal_id(request_id)}']",
+                                    expect_selector: "##{decline_modal_id(request_id)}")
+  end
+
   should "let the requestee respond with evidence" do
     make_request!
     sign_in_as(@peer_user)
@@ -155,15 +164,15 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
   end
 
   should "let the requestee decline with a reason the requester can read" do
-    make_request!
+    request_id = make_request!
     sign_in_as(@peer_user)
     visit evidence_hub_path
     assert_no_field "Reason for declining (optional)"
 
-    click_selector_with_js_fallback("[data-testid='decline-request'] summary",
-                                    expect_selector: "[data-testid='decline-request'][open]")
+    open_decline_modal(request_id)
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
-    click_button_with_js_fallback "Decline", expect_text: "No one is waiting on you."
+    click_selector_with_js_fallback("##{decline_modal_id(request_id)} input[type='submit']",
+                                    expect_text: "No one is waiting on you.")
 
     sign_in_as(@report_user)
     visit evidence_hub_path
@@ -177,8 +186,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     )
     sign_in_as(@peer_user)
     visit evidence_hub_path
-    click_selector_with_js_fallback("[data-testid='decline-request'] summary",
-                                    expect_selector: "[data-testid='decline-request'][open]")
+    open_decline_modal(request_id)
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
 
     assert_operator rendered_contrast("#decline-reason-#{request_id}"), :>=, 4.5

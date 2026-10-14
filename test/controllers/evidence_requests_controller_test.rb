@@ -70,17 +70,18 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
         get evidence_hub_path
       end
 
-      should "keep the reason in a collapsed disclosure, apart from the reply" do
-        assert_select "details[data-testid='decline-request']:not([open])", 1 do
-          assert_select "summary", text: /Decline this request/
-          assert_select "input[name='evidence_request[reason]']"
+      should "offer a secondary Decline request button that opens a hidden reason dialog" do
+        trigger = css_select("button.kit-btn-secondary[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline request" }
+        assert trigger, "expected a secondary Decline request button"
+        assert_select "[role='dialog'].hidden##{trigger["data-modal-target-id"]}" do
+          assert_select "textarea[name='evidence_request[reason]']"
         end
       end
 
       should "label the reason visibly rather than by placeholder" do
-        input = css_select("input[name='evidence_request[reason]']").first
-        assert_select "label[for='#{input["id"]}']", text: "Reason for declining (optional)"
-        assert_nil input["placeholder"]
+        field = css_select("[name='evidence_request[reason]']").first
+        assert_select "label[for='#{field["id"]}']", text: "Reason for declining (optional)"
+        assert_nil field["placeholder"]
       end
     end
 
