@@ -63,6 +63,28 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "Your response will be visible to Rep, their managers, and workspace admins", response.body
     end
 
+    context "decline form on an open incoming request" do
+      setup do
+        make_request!
+        sign_in @peer_user
+        get evidence_hub_path
+      end
+
+      should "offer a secondary Decline request button that opens a hidden reason dialog" do
+        trigger = css_select("button.kit-btn-secondary[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline request" }
+        assert trigger, "expected a secondary Decline request button"
+        assert_select "[role='dialog'].hidden##{trigger["data-modal-target-id"]}" do
+          assert_select "textarea[name='evidence_request[reason]']"
+        end
+      end
+
+      should "label the reason visibly rather than by placeholder" do
+        field = css_select("[name='evidence_request[reason]']").first
+        assert_select "label[for='#{field["id"]}']", text: "Reason for declining (optional)"
+        assert_nil field["placeholder"]
+      end
+    end
+
     should "not disclose visibility when the requestee is the assessee" do
       ActsAsTenant.with_tenant(@tenant) do
         # The requester asks the assessee themselves for more evidence.

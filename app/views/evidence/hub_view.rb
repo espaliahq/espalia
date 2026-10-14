@@ -370,45 +370,27 @@ class Views::Evidence::HubView < Views::Base
   # ── Respond / edit (open the unified modal) ──
 
   def respond_actions(request)
-    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3") do
+    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-2") do
       button(type: "button", data: modal_trigger_data(mode: "respond", request_id: request.id),
              class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide feedback / evidence" }
-      decline_form(request)
+      button(type: "button",
+             data: { action: "click->modal#open", modal_target_id: Views::Evidence::DeclineRequestModal.dom_id_for(request) },
+             class: "kit-btn-secondary") { "Decline request" }
     end
+    render Views::Evidence::DeclineRequestModal.new(request: request)
   end
 
   # Opens the unified evidence modal (return_to=hub) for a request/item.
   def modal_trigger_data(mode:, request_id: nil, evidence_id: nil)
     data = {
       action: "evidence-modal#load click->modal#open",
+      modal_target_id: "evidence-modal-overlay",
       evidence_modal_mode_param: mode,
       evidence_modal_return_to_param: "hub"
     }
     data[:evidence_modal_request_id_param] = request_id if request_id
     data[:evidence_modal_evidence_id_param] = evidence_id if evidence_id
     data
-  end
-
-  # Collapsed until the requestee chooses to decline: an always-open text box
-  # under "Provide feedback / evidence" read as the place to write the reply,
-  # and requestees wrote their feedback into it (#476).
-  def decline_form(request)
-    field_id = "decline-reason-#{request.id}"
-    details(class: "group", data: { testid: "decline-disclosure" }) do
-      summary(class: "cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 min-h-11 text-sm text-gray-600 dark:text-gray-300 hover:underline") do
-        span(class: "transition-transform group-open:rotate-90", aria: { hidden: "true" }) { "▸" }
-        plain "Decline this request"
-      end
-      form_with(url: decline_evidence_request_path(request), method: :post, scope: :evidence_request, class: "mt-2 space-y-2") do |f|
-        label(for: field_id, class: "block text-xs font-medium text-gray-700 dark:text-gray-200") { "Why are you declining? (optional)" }
-        f.text_area(:reason, id: field_id, rows: 3,
-                    class: "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-                           "text-gray-900 dark:text-gray-100 text-sm")
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { "#{request.requester&.name || "The requester"} will see your reason." }
-        f.submit("Decline request",
-                 class: "inline-flex items-center min-h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer")
-      end
-    end
   end
 
   # ── Chrome ──
