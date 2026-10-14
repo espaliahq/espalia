@@ -88,8 +88,10 @@ class Views::Assessments::CategoryIndicators < Views::Base
   # Re-rendered with the cluster after every rating, so the count stays true
   # as cells are confirmed one by one (#480).
   def confirm_link
+    return unless @confirm_href
+
     count = carried_count
-    return unless @confirm_href && count.positive?
+    return unless count.positive?
 
     a(href: @confirm_href, data: { turbo_frame: "_top" },
       class: "#{Components::Kit::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
