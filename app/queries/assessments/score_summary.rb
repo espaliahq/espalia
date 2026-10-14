@@ -137,6 +137,9 @@ class Assessments::ScoreSummary
     {
       rated_at_assessed_level: counts[:rated],
       total_at_assessed_level: counts[:total],
+      # Rated cells whose value was carried from the last cycle and still
+      # waits to be confirmed — "rated" but not yet this cycle's work (#480).
+      to_confirm_at_assessed_level: matrix_data.dig(:current_level_work, :to_confirm).to_i,
       unlocks_at: (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
     }
   end
