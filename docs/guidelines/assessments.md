@@ -1008,6 +1008,13 @@ feedback can be read in situ; the controller renders it only when
 `AssessmentPolicy#show?` admits the viewer, so a peer who provided feedback on
 a colleague's assessment gets no dead link.
 
+**Decline stays out of the way of the reply.** On an incoming card the reason
+box is collapsed behind a "Decline this request" disclosure, with a visible
+label and a multi-line field. Shown open under "Provide feedback / evidence",
+it read as the reply box: a requestee wrote their feedback into it
+([#476](https://github.com/mr-yum/growth-os/issues/476)). The reply itself is
+written only in the evidence modal.
+
 ## Comment notifications
 
 Every posted assessment comment — cell thread or evidence-linkage thread —
