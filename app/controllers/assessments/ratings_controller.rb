@@ -23,7 +23,7 @@ class Assessments::RatingsController < ApplicationController
     # 404 that has changed nothing, not a saved rating with no response.
     response_lens
 
-    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear ])
+    rating_params = params.expect(rating: [ :capability_stable_id, :level_ordinal, :frequency, :comment, :category_id, :clear, :confirm ])
     capability_stable_id = rating_params[:capability_stable_id]
     level_ordinal = Integer(rating_params[:level_ordinal], exception: false)
 
@@ -35,6 +35,7 @@ class Assessments::RatingsController < ApplicationController
       comment: rating_params[:comment],
       rationale: "Updated during self-assessment",
       clear: rating_params[:clear].presence,
+      confirm: rating_params[:confirm].presence,
       as_role_id: params[:as_role].presence
     })
     begin
@@ -112,7 +113,8 @@ class Assessments::RatingsController < ApplicationController
             participant_status: matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
             context: :self,
-            current_level_complete: matrix_data[:current_level_complete]
+            current_level_complete: matrix_data[:current_level_complete],
+            work: matrix_data[:current_level_work]
           ),
           layout: false
         )
@@ -176,7 +178,11 @@ class Assessments::RatingsController < ApplicationController
             merged_levels: matrix_data[:merged_levels],
             person_level: matrix_data[:person_level],
             thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-            viewer_is_manager: viewer_is_manager?
+            viewer_is_manager: viewer_is_manager?,
+            confirm_href: Views::Assessments::CategoryIndicators.confirm_href(
+              assessment_id: @assignment.id, category_id: category_id, context: :self,
+              frozen: matrix_data[:individual_ratings_frozen], home: response_lens.home?
+            )
           ),
           layout: false
         )

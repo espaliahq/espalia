@@ -37,9 +37,13 @@ class Views::Assessments::CategoryIndicators < Views::Base
   # @param thresholds [Hash] the framework's own bands, for the definitions
   # @param viewer_is_manager [Boolean] whether the reader is the
   #   manager-side party — the definitions address them accordingly
+  # @param confirm_href [String, nil] where to confirm this category's carried
+  #   ratings in bulk; nil hides the link (a viewer who can't rate, a lens)
   def initialize(category_id:, category_score:, category_data:, merged_levels:, person_level:,
-                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false)
+                 secondary_scores: [], context: :self, thresholds: {}, viewer_is_manager: false,
+                 confirm_href: nil)
     @category_id = category_id
+    @confirm_href = confirm_href
     @category_score = category_score
     @secondary_scores = secondary_scores
     @category_data = category_data
@@ -63,10 +67,44 @@ class Views::Assessments::CategoryIndicators < Views::Base
         end
       end
       divergent_annotations if unlocked?
+      confirm_link
     end
   end
 
+  # Where a category's carried ratings are confirmed in bulk, or nil when the
+  # viewer has none to confirm here: a started alignment or no rating
+  # authority (both `frozen`), or a lens, which confirms through its pills.
+  # The one gate, shared by the page and the rating responses.
+  #
+  # @return [String, nil]
+  def self.confirm_href(assessment_id:, category_id:, context:, frozen:, home:)
+    return if frozen || !home || !Assessments::CarriedCell::CARRIED_KEYS.key?(context)
+
+    Rails.application.routes.url_helpers.assessment_carried_ratings_path(assessment_id, category_id: category_id)
+  end
+
   private
+
+  # Re-rendered with the cluster after every rating, so the count stays true
+  # as cells are confirmed one by one (#480).
+  def confirm_link
+    return unless @confirm_href
+
+    count = carried_count
+    return unless count.positive?
+
+    a(href: @confirm_href, data: { turbo_frame: "_top" },
+      class: "#{Components::Kit::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
+      plain "Confirm #{count} carried"
+      span(aria: { hidden: "true" }) { "→" }
+    end
+  end
+
+  # The current level only — the same work the status pill and hero count,
+  # so the numbers on one page agree.
+  def carried_count
+    Assessments::CarriedCell.at_level(@category_data[:capabilities], @person_level, @context).size
+  end
 
   def counts
     @counts ||= @category_data ? category_rated_count(@category_data, @context) : { rated: 0, total: 0 }

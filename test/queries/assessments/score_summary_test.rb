@@ -134,6 +134,19 @@ class Assessments::ScoreSummaryTest < ActiveSupport::TestCase
       assert overall[:scored], "1 of 2 rated is at the unlock point"
     end
 
+    # #480: "rated" alone hid that a carried value still needed confirming,
+    # so an agent told Grace her assessment was waiting on alignment.
+    should "count the rated cells still waiting to be confirmed" do
+      overall = ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.where(person_id: @person.id).where.not(manager_rated_frequency: nil)
+          .update_all(manager_rating_source: "seeded")
+        Assessments::ScoreSummary.new(assignment: @assignment, context: :manager).overall
+      end
+
+      assert_equal 1, overall.dig(:coverage, :to_confirm_at_assessed_level)
+      assert_equal 1, overall.dig(:coverage, :rated_at_assessed_level), "a carried value still counts as rated"
+    end
+
     should "withhold the score while the viewer has rated nothing" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentLevelRating.where(person_id: @person.id).update_all(manager_rated_frequency: nil)

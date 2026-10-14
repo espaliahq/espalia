@@ -121,6 +121,8 @@ class Views::Assessments::FrequencyPill < Views::Base
       aria: { label: trigger_aria_label, haspopup: "menu", expanded: "false" }
     ) do
       span { phrase }
+      # The dashed outline alone was easy to miss (#480): say it in the label.
+      span(class: "font-normal", aria_hidden: "true") { "· confirm" } if @carried
       span(class: "text-[10px] leading-none", aria_hidden: "true") { "▾" }
     end
   end
@@ -140,7 +142,11 @@ class Views::Assessments::FrequencyPill < Views::Base
       role: "menu",
       data: { dropdown_target: "menu" }
     ) do
-      carried_note if @carried
+      if @carried
+        carried_note
+        keep_button
+        divider
+      end
       Views::Assessments::FrequencyPalette::ORDERED_KEYS.each do |key|
         option_button(key)
       end
@@ -149,13 +155,12 @@ class Views::Assessments::FrequencyPill < Views::Base
     end
   end
 
-  # Header line inside the popover when the value is carried forward —
-  # tells the viewer where it came from and that re-picking it confirms.
+  # Header line inside the popover when the value is carried forward — where
+  # it came from, above the Keep button that confirms it.
   def carried_note
     origin = @context == :self ? "your last cycle" : "the last cycle"
-    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300 " \
-               "border-b border-gray-100 dark:border-gray-800") do
-      plain "Carried from #{origin} — pick the same value to confirm it."
+    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300") do
+      plain "Carried from #{origin}. Keep it for this cycle, or pick another value."
     end
   end
 
@@ -186,6 +191,22 @@ class Views::Assessments::FrequencyPill < Views::Base
     end
   end
 
+  # Confirming used to mean "pick the value already selected", which nobody
+  # guessed. The explicit marker makes a second click, or a stale tab, a
+  # no-op instead of the untoggle that would clear a confirmed rating.
+  def keep_button
+    form(action: form_action, method: "post", data: { turbo_stream: "true" }, class: "contents") do
+      hidden_inputs(frequency: @current_frequency, confirm: true)
+      button(
+        type: "submit",
+        role: "menuitem",
+        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left font-semibold text-gray-900 " \
+               "dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700",
+        data: { action: "click->dropdown#close" }
+      ) { "Keep “#{phrase}”" }
+    end
+  end
+
   def clear_button
     # Explicit `rating[clear]` marker: the implicit same-frequency
     # untoggle can't be trusted here any more — on a carried rating the
@@ -212,12 +233,13 @@ class Views::Assessments::FrequencyPill < Views::Base
     div(class: "my-1 border-t border-gray-100 dark:border-gray-800")
   end
 
-  def hidden_inputs(frequency:, clear: false)
+  def hidden_inputs(frequency:, clear: false, confirm: false)
     input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
     input(type: "hidden", name: "rating[capability_stable_id]", value: @capability_stable_id)
     input(type: "hidden", name: "rating[level_ordinal]", value: @level_ordinal)
     input(type: "hidden", name: "rating[frequency]", value: frequency)
     input(type: "hidden", name: "rating[clear]", value: "1") if clear
+    input(type: "hidden", name: "rating[confirm]", value: "1") if confirm
     input(type: "hidden", name: "rating[category_id]", value: @category_id) if @category_id
     @lens_params.each { |name, value| input(type: "hidden", name: name.to_s, value: value) }
   end

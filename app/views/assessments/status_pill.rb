@@ -10,7 +10,9 @@
 # has rated every current-level cell reads "Ready for alignment": their part is
 # done and the next step is the manager's. A manager who has rated every cell
 # reads "Assessment Complete". Both precede the manager-driven "Aligning" /
-# "Aligned" lifecycle phases.
+# "Aligned" lifecycle phases. When every cell holds a value but some were
+# carried from the last cycle, it says how many are left to confirm rather
+# than a bare "In Progress" that reads as finished work undone (#480).
 #
 class Views::Assessments::StatusPill < Views::Base
   WRAPPER_ID = "assessment-status-pill"
@@ -22,11 +24,13 @@ class Views::Assessments::StatusPill < Views::Base
   # @param has_open_cycle [Boolean] whether an assessment cycle is open
   # @param current_level_complete [Boolean] all current-level cells rated
   # @param context [Symbol] :self (the assessee's view) or :manager
-  def initialize(participant_status:, has_open_cycle:, context:, current_level_complete: false)
+  # @param work [Hash] the builder's `current_level_work` — :unrated, :to_confirm
+  def initialize(participant_status:, has_open_cycle:, context:, current_level_complete: false, work: {})
     @participant_status = participant_status
     @has_open_cycle = has_open_cycle
     @current_level_complete = current_level_complete
     @context = context
+    @work = work || {}
   end
 
   def view_template
@@ -42,7 +46,12 @@ class Views::Assessments::StatusPill < Views::Base
     else
       return unless @has_open_cycle
 
-      if !@current_level_complete
+      if !@current_level_complete && only_confirmations_left?
+        render Components::Kit::ToConfirmChip.new(
+          "#{@work[:to_confirm]} to confirm",
+          title: "Carried from the last cycle — confirm each one or change it to complete the assessment"
+        )
+      elsif !@current_level_complete
         render Components::Kit::Badge.new("In Progress", variant: :warning)
       elsif @context == :self
         ready_for_alignment
@@ -50,6 +59,10 @@ class Views::Assessments::StatusPill < Views::Base
         render Components::Kit::Badge.new("Assessment Complete", variant: :success)
       end
     end
+  end
+
+  def only_confirmations_left?
+    @work[:unrated].to_i.zero? && @work[:to_confirm].to_i.positive?
   end
 
   # Says whose move it is on hover AND keyboard focus — a `title` would leave

@@ -7,9 +7,10 @@ require "test_helper"
 # step is the manager's. A manager who has finished their own ratings still
 # reads "Assessment Complete".
 class Views::Assessments::StatusPillTest < ActiveSupport::TestCase
-  def render_pill(context:, complete: true, status: "started", open: true)
+  def render_pill(context:, complete: true, status: "started", open: true, work: {})
     Views::Assessments::StatusPill.new(
-      participant_status: status, has_open_cycle: open, context: context, current_level_complete: complete
+      participant_status: status, has_open_cycle: open, context: context, current_level_complete: complete,
+      work: work
     ).call
   end
 
@@ -47,6 +48,25 @@ class Views::Assessments::StatusPillTest < ActiveSupport::TestCase
 
       assert_includes html, "Assessment Complete"
       assert_not_includes html, "Ready for alignment"
+    end
+  end
+
+  # #480: "In Progress" over an assessment whose every cell holds a carried
+  # value read as finished work left undone.
+  context "carried ratings still to confirm" do
+    should "say how many are left when nothing else is" do
+      html = render_pill(context: :self, complete: false, work: { unrated: 0, to_confirm: 3 })
+
+      assert_equal "3 to confirm", Nokogiri::HTML5.fragment(html).text.strip
+    end
+
+    should "stay In Progress while any cell has no value" do
+      assert_includes render_pill(context: :manager, complete: false, work: { unrated: 2, to_confirm: 3 }),
+                      "In Progress"
+    end
+
+    should "give way to the finished label once every cell is vetted" do
+      assert_includes render_pill(context: :self, work: { unrated: 0, to_confirm: 0 }), "Ready for alignment"
     end
   end
 end

@@ -16,11 +16,11 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   SCORE = { prior: 1.0, current: 0.5, next: 0.5, score: 1.0, bands_above: 1,
             scorable: true, state: :performing }.freeze
 
-  def name_row(score:, rated: true, blocked: false)
+  def name_row(score:, rated: true, blocked: false, to_confirm: false)
     Views::Assessments::CapabilityNameRow.new(
       capability: CAP.new(stable_id: "cap-a", name: "Strategic Thinking"),
       score: score, rated: rated, blocked: blocked, block_reason: blocked ? "Below expectations by 1.0 points" : nil,
-      merged_levels: LEVELS, person_level: 3
+      merged_levels: LEVELS, person_level: 3, to_confirm: to_confirm
     ).call
   end
 
@@ -48,6 +48,12 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
   end
 
   context "CapabilityNameRow" do
+    # #480: a dashed outline on the pill was the only sign a value was carried.
+    should "say To confirm when the assessed-level value was carried and still asks" do
+      assert_includes name_row(score: SCORE, to_confirm: true), "To confirm"
+      assert_not_includes name_row(score: SCORE), "To confirm"
+    end
+
     should "show a weight chip only when the capability's weight is not 1" do
       weighted = name_row(score: SCORE.merge(weight: 2.0))
       assert_includes weighted, "×2"

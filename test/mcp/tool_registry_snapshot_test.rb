@@ -187,6 +187,46 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_confirm_carried_ratings",
+        "description" => "Confirm ratings carried forward from the last cycle, unchanged, as this cycle's rating — the same as re-picking each value. perspective self confirms your own ratings, manager the manager ratings you give. Only cells whose value on that side is still carried are confirmed; the rest are listed under skipped with the reason. To change a value use assessments_rate_self or assessments_rate_as_manager instead.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => {
+              "type" => "string"
+            },
+            "perspective" => {
+              "type" => "string",
+              "enum" => [ "self", "manager" ]
+            },
+            "cells" => {
+              "type" => "array",
+              "minItems" => 1,
+              "items" => {
+                "type" => "object",
+                "properties" => {
+                  "capability_stable_id" => {
+                    "type" => "string"
+                  },
+                  "level_ordinal" => {
+                    "type" => "integer"
+                  }
+                },
+                "required" => [ "capability_stable_id", "level_ordinal" ],
+                "additionalProperties" => false
+              }
+            }
+          },
+          "required" => [ "assignment_id", "perspective", "cells" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "assessments_decline_evidence_request",
         "description" => "Decline a pending feedback / evidence request.",
         "inputSchema" => {
@@ -323,7 +363,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_get",
-        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it.",
+        "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it. Carried-forward ratings count as rated but are not this cycle's until confirmed: scoring.coverage.to_confirm_at_assessed_level says how many wait, and assessments_confirm_carried_ratings confirms them.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -408,6 +448,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
             "clear"                => { "type" => "boolean" },
+            "confirm"              => { "type" => "boolean" },
             "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
@@ -434,6 +475,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "comment"              => { "type" => "string" },
             "rationale"            => { "type" => "string" },
             "clear"                => { "type" => "boolean" },
+            "confirm"              => { "type" => "boolean" },
             "as_role_id"           => { "type" => "string" }
           },
           "required" => %w[assignment_id capability_stable_id level_ordinal frequency],
