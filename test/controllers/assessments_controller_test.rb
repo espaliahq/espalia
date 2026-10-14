@@ -56,6 +56,13 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "flip the own-card CTA to Continue once a self rating lands" do
+      # A second current-level capability, so one rating leaves the
+      # self-assessment unfinished.
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:framework_capability, category_id: @cap.category_id, name: "Execution")
+        create(:framework_capability_role_binding, capability_id: other.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation, capability_id: other.capability_id, level_ordinal: 2)
+      end
       rate(@cap, "consistent")
 
       sign_in @user
@@ -64,6 +71,18 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "Continue self-assessment"
       assert_not_includes response.body, "Start self-assessment"
+    end
+
+    should "offer a review once the self-assessment is ready for alignment" do
+      rate(@cap, "consistent")
+
+      sign_in @user
+      get assessments_path
+
+      assert_response :success
+      assert_includes response.body, "Ready for alignment"
+      assert_includes response.body, "Review self-assessment"
+      assert_not_includes response.body, "Continue self-assessment"
     end
 
     should "ignore ratings outside the assessed role" do
