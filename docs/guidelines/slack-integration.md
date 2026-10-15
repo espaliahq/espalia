@@ -21,6 +21,52 @@ is the source of truth for scopes, the command, the shortcut and the request
 URLs; `Slack::BOT_SCOPES` must match it, since the install grants what that
 list says, not what the manifest says.
 
+## Rolling out a manifest change
+
+The manifest in the repo does nothing until it is applied to the Slack app
+in Slack's own settings. Two kinds of change, and they cost different things:
+
+- **Config** (a slash command, a shortcut, a request URL, an event
+  subscription that needs no new scope) takes effect for every connected
+  workspace the moment the manifest is saved. No reinstall.
+- **A new bot scope** reaches a workspace only when that workspace
+  re-authorises the app: an installed token never gains scopes. `commands`
+  and `im:history` were pre-granted for exactly this reason, so a workspace
+  connected after that grant is already covered; one connected before it
+  must reconnect.
+
+The steps, for whoever holds the GrowthOS Slack app:
+
+1. Open [api.slack.com/apps](https://api.slack.com/apps) and pick
+   **GrowthOS**. Under **Features → App Manifest**, replace the YAML with
+   `app/integrations/slack/manifest.yml` and save. Slack diffs the two and
+   lists what changes; request URLs are validated on save (the Events API URL
+   is challenge-verified, which `Slack::EventsController` answers). The
+   format is documented in the
+   [manifest reference](https://docs.slack.dev/reference/app-manifest).
+2. Check the surfaces the manifest declares landed: **Features → Slash
+   Commands** shows `/growthos` pointing at `/slack/commands`
+   ([slash commands](https://docs.slack.dev/interactivity/implementing-slash-commands));
+   **Features → Interactivity & Shortcuts** shows the request URL and the
+   options load URL both at `/slack/interactions`, and the message shortcut
+   "Give feedback on this message"
+   ([shortcuts](https://docs.slack.dev/interactivity/implementing-shortcuts)).
+3. Compare **Features → OAuth & Permissions → Bot Token Scopes** with
+   `Slack::BOT_SCOPES`. The install grants that constant, not the manifest,
+   so the two must agree ([scopes reference](https://docs.slack.dev/reference/scopes)).
+4. If a scope was added, or a workspace was connected before `commands` was
+   granted, reconnect that workspace from GrowthOS: **Integrations → Slack →
+   Disconnect**, then **Connect Slack**. The OAuth flow asks for
+   `Slack::BOT_SCOPES` afresh and stores the new token; a reconnect also
+   clears cached Slack ids, which re-resolve by email on next contact. A
+   workspace that is missing a scope fails loudly: `missing_scope` from
+   Slack's API, and the command answers "dispatch_failed" in Slack.
+5. Prove it in the workspace: `/growthos feedback` opens the modal, the
+   message shortcut appears in a message's **More actions** menu, and a
+   submission DMs a confirmation. The signing secret in Rails credentials
+   must be the app's current one (**Settings → Basic Information → App
+   Credentials**), or every inbound request is refused with 401.
+
 ## Inbound requests
 
 Three session-less endpoints, all authenticated by the request **signature**
