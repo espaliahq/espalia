@@ -97,12 +97,10 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     roles_removed: "Removed from a role",
     roles_added: "Added to a role",
     levels_added: "Levels added",
+    levels_moved: "Levels moved",
     expectations_added: "Expectations added"
   }.freeze
 
-  # The one place the person confirming can see what goes live. It used to
-  # list only archives, so a draft that took three capabilities off a role
-  # read "nothing to migrate" (#497).
   def changes_section
     groups = CHANGE_HEADINGS.keys.filter_map { |kind| [ kind, @changes[kind] ] if @changes[kind].present? }
 
@@ -150,31 +148,36 @@ class Views::Frameworks::PublicationReviewView < Views::Base
       plain " · #{item[:roles].to_sentence}" if item[:roles].any?
     when :capabilities_archived
       strong(class: "font-medium") { item[:capability] }
-      reach(item[:open_cycle_people])
+      reach(item[:open_cycle_people], "one of its roles")
     when :categories_archived
       strong(class: "font-medium") { item[:category] }
     when :roles_removed
       strong(class: "font-medium") { item[:capability] }
       plain " from #{item[:role]}"
-      reach(item[:open_cycle_people])
+      reach(item[:open_cycle_people], "that role")
     when :roles_added
       strong(class: "font-medium") { item[:capability] }
       plain " to #{item[:role]}"
     when :levels_added
       strong(class: "font-medium") { item[:level] }
       plain " #{item[:title]} · #{item[:role]}"
+    when :levels_moved
+      strong(class: "font-medium") { item[:level] }
+      plain " #{item[:title]} · #{item[:role]} — from L#{item[:from]} to L#{item[:to]}"
     when :expectations_added
       strong(class: "font-medium") { item[:capability] }
       plain " · L#{item[:level_ordinal]}"
     end
   end
 
-  # How many current assessments the change reaches the moment it publishes.
-  def reach(people)
+  # Counted by role, not by whether the capability has an expectation at each
+  # person's level, so it says "hold", never "affects".
+  def reach(people, held)
     return if people.zero?
 
     span(class: "text-gray-600 dark:text-gray-300") do
-      plain " — #{people} #{'person'.pluralize(people)} in the open cycle"
+      plain " — #{people} #{people == 1 ? 'person' : 'people'} in the open cycle " \
+            "#{people == 1 ? 'holds' : 'hold'} #{held}"
     end
   end
 

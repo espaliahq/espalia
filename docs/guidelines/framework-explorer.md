@@ -650,16 +650,20 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
     message for this draft. Edits made to the draft between the request and
     the job running are published with it — the job re-checks the gate, so a
     newly retired capability without a mapping fails the publish and says so.
-  - **The review page says what the version changes** (#497). "What changes
+  - **The review page says what the version changes**
+    ([#497](https://github.com/mr-yum/growth-os/issues/497)). "What changes
     in vN" lists every shape-changing difference between the draft and the
     published framework — capabilities and categories added or archived,
-    roles a capability gains or loses, levels and expectations added — with
-    the open-cycle people a removal or archive reaches.
+    roles a capability gains or loses, levels added or moved, expectations
+    added — with how many open-cycle people hold a role a removal or archive
+    touches (snapshot role, else assignment, as every assessment reader
+    resolves it).
     `Frameworks::DraftChangesQuery` diffs the edit-mode graph against the
     published read model rather than walking events, comparing bindings by
     (capability, role): a binding removed and re-added mints a new id but
     changes nothing for an assessment. An archive is listed once, not once
-    per role it drops. The page reads it through
+    per role it drops, and its archived list is `RetiringCapabilitiesQuery`'s,
+    so it can't disagree with the mapping form below it. The page reads it through
     `Operations::Frameworks::DraftChanges` (MCP `frameworks_draft_changes`),
     so an agent can read what it is about to publish. Before this, the page
     listed only archives, and a draft that took three capabilities off a role

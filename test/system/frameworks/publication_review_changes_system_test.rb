@@ -49,7 +49,7 @@ class Frameworks::PublicationReviewChangesSystemTest < ApplicationSystemTestCase
       assert_text "What changes in v2"
       within "[data-draft-change='roles_removed']" do
         assert_text "Removed from a role (1)"
-        assert_text "System Design from Analytics Engineer — 2 people in the open cycle"
+        assert_text "System Design from Analytics Engineer — 2 people in the open cycle hold that role"
         assert_text "Ratings already made on these are kept"
       end
       assert_no_text "nothing to migrate"
