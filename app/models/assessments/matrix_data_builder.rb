@@ -47,10 +47,10 @@ class Assessments::MatrixDataBuilder
     ).build
   end
 
-  # The active categories with only what the lens role reads preloaded: its
-  # bound capabilities, their expectations and its own illustrations. Loading
-  # the whole framework and filtering in Ruby cost most of a build — 997
-  # illustrations instantiated for the 137 one role shows (#487).
+  # The active categories, preloaded with only what the lens role reads: its
+  # bound capabilities, their expectations at its levels, and its own
+  # illustrations (#487). The associations are marked loaded with that subset,
+  # so the tree must not leave this builder.
   #
   # @param framework_id [String]
   # @param lens [Assessments::Lens]
@@ -61,11 +61,13 @@ class Assessments::MatrixDataBuilder
     preload(categories, :capabilities,
             FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
     capabilities = categories.flat_map(&:capabilities)
-    preload(capabilities, :expectations)
+    preload(capabilities, :expectations,
+            FrameworkState::BehaviouralExpectation.where(level_ordinal: lens.role.levels.map(&:ordinal)))
     preload(capabilities.flat_map(&:expectations), :illustrations,
             FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
     categories
   end
+  private_class_method :lens_tree
 
   def self.preload(records, association, scope = nil)
     ActiveRecord::Associations::Preloader.new(records: records, associations: association, scope: scope).call
@@ -90,7 +92,9 @@ class Assessments::MatrixDataBuilder
   # @param person_id [String] UUID
   # @param cycle_id [String, nil] UUID of the assessment cycle whose ratings
   #   should be shown. When nil, the builder returns no ratings (empty matrix).
-  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded
+  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded;
+  #   either the whole framework or {.lens_tree}'s subset — the builder filters
+  #   to the role either way
   # @param participant_status [String, nil] current cycle participant lifecycle
   #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
   #   Sourced from the current OPEN cycle's participation, so the terminal
