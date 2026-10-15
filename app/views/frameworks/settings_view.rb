@@ -55,12 +55,13 @@ class Views::Frameworks::SettingsView < Views::Base
     {
       key: :deficit_threshold,
       label: "Deficit Threshold",
-      description: "The weighted deficit above which a capability is flagged as 'blocked'. " \
+      description: "The weighted deficit in a capability's ratings above which it is flagged as " \
+                   "'blocked'; an unrated capability is never blocked. " \
                    "At #{'%.2f' % PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD} a 'not yet' " \
                    "at the assessed level blocks, while 'some' and 'most of " \
                    "the time' can be made up by strength elsewhere. Blocked capabilities prevent " \
                    "meeting-expectations and mastery verdicts. Set to 0 to make every capability " \
-                   "required: any gap blocks, and nothing above the level counts until it is " \
+                   "required: any rated gap blocks, and nothing above the level counts until it is " \
                    "consistent.",
       type: :decimal,
       step: "0.01",

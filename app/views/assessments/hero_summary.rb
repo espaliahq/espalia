@@ -564,8 +564,8 @@ class Views::Assessments::HeroSummary < Views::Base
       # order the engine collected it, so taking the first three could
       # both omit a worse one and show them out of order.
       # Blocked is a next-level fact, so it only leads a list scored there.
-      blocked = gap_ordinal == @person_level ? [] : primary_scoring.dig(:promotion_readiness, :blocked_at_next_level) || []
-      gaps = ranked_gaps(gap_scores, caps_by_id, lead_ids: blocked)
+      # An unrated capability holds promotion just the same.
+      gaps = ranked_gaps(gap_scores, caps_by_id, lead_ids: gap_ordinal == @person_level ? [] : holding_next_level)
       { state_label: "#{state_label(:mastering)} #{current_code} · #{progress_label}",
         **gap_list(gaps, gap_code, gap_ordinal),
         border: "border-purple-300 dark:border-purple-700",
@@ -709,13 +709,30 @@ class Views::Assessments::HeroSummary < Views::Base
         "Eligible for promotion to #{next_label}"
       end
     else
-      blocked = readiness[:blocked_at_next_level] || []
-      if blocked.any?
-        span(class: "text-xs text-gray-600 dark:text-gray-300") do
-          "Blocked by #{blocked.size} #{'capability'.pluralize(blocked.size)} at #{next_label}"
-        end
+      reasons = [ blocked_phrase(readiness[:blocked_at_next_level]),
+                  unrated_phrase(readiness[:unrated_at_next_level]) ].compact
+      if reasons.any?
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{reasons.join(' · ')} at #{next_label}" }
       end
     end
+  end
+
+  def holding_next_level
+    readiness = primary_scoring[:promotion_readiness] || {}
+    (readiness[:blocked_at_next_level] || []) + (readiness[:unrated_at_next_level] || [])
+  end
+
+  def blocked_phrase(ids)
+    return if ids.blank?
+
+    "Blocked by #{ids.size} #{'capability'.pluralize(ids.size)}"
+  end
+
+  # Never "blocked": nobody has judged these, they only lack a rating.
+  def unrated_phrase(ids)
+    return if ids.blank?
+
+    "#{ids.size} #{'capability'.pluralize(ids.size)} to rate"
   end
 
   def continue_assessing_cta(target)
@@ -742,18 +759,36 @@ class Views::Assessments::HeroSummary < Views::Base
     when :performing
       "#{subject} meeting #{current_code} expectations."
     when :progressing
-      blocked = (primary_scoring[:capability_statuses] || {}).values.count(:blocked)
-      if blocked.positive?
-        "#{subject} held back at #{current_code} by #{blocked} blocked #{'capability'.pluralize(blocked)}."
-      else
-        "#{subject} close to #{current_code} expectations."
-      end
+      progressing_headline
     else
       return "#{subject} below #{current_code} expectations." if off_record?
 
       "Below #{current_code} expectations — focus areas highlighted below."
     end
   end
+
+  # A blocked capability is a judgement; an unrated one is only waiting, and
+  # the headline promises the rating unlocks the level only when the score
+  # already clears the bar — otherwise rating it may not be enough.
+  def progressing_headline
+    blocked = (primary_scoring[:capability_statuses] || {}).values.count(:blocked)
+    unrated = (primary_scoring[:unrated] || []).size
+    to_rate = "#{unrated} #{'capability'.pluralize(unrated)} still to rate"
+
+    if blocked.positive?
+      held = "#{subject} held back at #{current_code} by #{blocked} blocked #{'capability'.pluralize(blocked)}"
+      unrated.positive? ? "#{held}, with #{to_rate}." : "#{held}."
+    elsif unrated.positive? && primary_scoring[:performance_ratio].to_f >= meeting_bar
+      "#{subject} held at #{current_code} until #{unrated} #{'capability'.pluralize(unrated)} " \
+        "#{unrated == 1 ? 'is' : 'are'} rated."
+    elsif unrated.positive?
+      "#{subject} close to #{current_code} expectations, with #{to_rate}."
+    else
+      "#{subject} close to #{current_code} expectations."
+    end
+  end
+
+  def meeting_bar = @meeting_threshold || PersonDevelopment::Scoring::DEFAULT_MEETING_EXPECTATION_THRESHOLD
 
   # The score's parts in one line — "94% of E3 demonstrated · 38% of the
   # way to E4 · 5% missing below E3" — so the headline number never has to

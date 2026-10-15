@@ -162,8 +162,14 @@ needs and a screen does not:
 Note the ceiling is **not** fixed at 200: the over-performance cap decides
 how many bands sit above the assessed level, so a cap of 2 tops out at 300.
 And 200 is not promotion readiness — that is evaluated separately at the
-next level and needs the meeting threshold plus no blocked capability. The
-tool descriptions say "level-independent scale" for both reasons.
+next level and needs the meeting threshold plus nothing held there (no
+blocked capability, none unrated). The tool descriptions say
+"level-independent scale" for both reasons.
+
+**`blocked` and `unrated` are separate lists.** Only a rating can block
+([#485](https://github.com/mr-yum/growth-os/issues/485)): a capability nobody
+has rated is never in `blocked`. It still holds the state, so `scoring.unrated`
+names it, and an agent explaining a Progressing state reads both.
 
 A capability's score also carries `weight` and `required` — the two binding
 facts its card wears as chips ([#431](https://github.com/mr-yum/growth-os/issues/431)) — so an agent can explain a score the

@@ -38,7 +38,7 @@ class Assessments::ScoreSummary
   end
 
   # @return [Hash] `{ scale:, score:, state:, components:, thresholds:,
-  #   promotion_ready:, blocked:, categories: }`
+  #   promotion_ready:, blocked:, unrated:, categories: }`
   def overall
     return unscorable_overall unless scorable_assignment?
 
@@ -55,6 +55,7 @@ class Assessments::ScoreSummary
       thresholds: thresholds_payload,
       promotion_ready: scored && (scoring.dig(:promotion_readiness, :eligible) || false),
       blocked: blocked_payload,
+      unrated: unrated_payload,
       categories: categories_payload
     }
   end
@@ -110,7 +111,7 @@ class Assessments::ScoreSummary
     {
       lens: nil, scale: nil, scored: false, unscored_reason: "assignment_structure_unavailable",
       score: nil, state: nil, components: nil, coverage: nil,
-      thresholds: thresholds_payload, promotion_ready: false, blocked: [], categories: []
+      thresholds: thresholds_payload, promotion_ready: false, blocked: [], unrated: [], categories: []
     }
   end
 
@@ -246,6 +247,14 @@ class Assessments::ScoreSummary
   def blocked_payload
     (scoring[:block_reasons] || {}).map do |stable_id, reason|
       { capability_stable_id: stable_id, name: capability_names[stable_id], reason: reason }
+    end
+  end
+
+  # Capabilities holding the state only for want of a rating — apart from
+  # `blocked`, because nobody has judged them.
+  def unrated_payload
+    (scoring[:unrated] || []).map do |stable_id|
+      { capability_stable_id: stable_id, name: capability_names[stable_id] }
     end
   end
 

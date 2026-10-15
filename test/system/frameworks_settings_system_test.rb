@@ -42,7 +42,7 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       assert_text "mastering their level"
       assert_text "minimum score"
       assert_text "levels above a person's assessed level"
-      assert_text "weighted deficit above which a capability"
+      assert_text "weighted deficit in a capability's ratings"
     end
 
     should "save custom values and show them on reload" do

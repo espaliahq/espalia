@@ -80,6 +80,12 @@ class Views::Assessments::GlossaryTest < ActiveSupport::TestCase
       assert_includes glossary.definition(:carried), "confirm or change"
     end
 
+    should "say only a rating can block, and what an unrated capability does instead" do
+      assert_includes glossary.definition(:blocked), "Only a rating can block"
+      assert_includes glossary.definition(:not_rated), "never blocks anything by itself"
+      assert_includes glossary.definition(:state), "one nobody has rated yet"
+    end
+
     should "define every term it offers" do
       glossary.keys.each do |key|
         assert glossary.label(key).present?, "#{key} has no label"

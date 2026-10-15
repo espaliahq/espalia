@@ -499,7 +499,8 @@ class Assessments::MatrixDataBuilder
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,
-      block_reasons: scoring.block_reasons
+      block_reasons: scoring.block_reasons,
+      unrated: scoring.unrated
     }
     if bindings
 
