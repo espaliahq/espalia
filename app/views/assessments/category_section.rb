@@ -67,7 +67,7 @@ class Views::Assessments::CategorySection < Views::Base
   end
 
   def view_template
-    return capability_cards if @only_capability
+    return only_capability_card if @only_capability
 
     section(
       id: "category-#{@category.category_id}",
@@ -148,42 +148,45 @@ class Views::Assessments::CategorySection < Views::Base
   end
 
   def capability_cards
-    statuses = primary_scoring_for_context[:capability_statuses] || {}
-    reasons  = primary_scoring_for_context[:block_reasons] || {}
-
     div(class: "space-y-3") do
-      @category_data[:capabilities].each do |cap_data|
-        stable_id = cap_data[:capability].stable_id
-        next if @only_capability && stable_id != @only_capability
-
-        render Views::Assessments::CapabilityCard.new(
-          capability_data: cap_data,
-          merged_levels: @merged_levels,
-          person_level: @person_level,
-          thresholds: @thresholds,
-          assessment_id: @assessment_id,
-          context: @context,
-          viewer_is_manager: @viewer_is_manager,
-          category: @category,
-          scoring: primary_scoring_for_context,
-          blocked: statuses[stable_id] == :blocked,
-          block_reason: reasons[stable_id],
-          expanded_capability_id: @expanded_capability_id,
-          focused_level_ordinal: @focused_level_ordinal,
-          selected_levels: @selected_levels,
-          category_id: @category.category_id,
-          frozen: @frozen,
-          alignment_locked: @alignment_locked,
-          viewer_person_id: @viewer_person_id,
-          can_create_evidence: @can_create_evidence,
-          can_request_evidence: @can_request_evidence,
-          can_relink_others_evidence: @can_relink_others_evidence,
-          can_comment: @can_comment,
-          viewer_is_tenant_admin: @viewer_is_tenant_admin,
-          lens: @lens
-        )
-      end
+      @category_data[:capabilities].each { |cap_data| capability_card(cap_data) }
     end
+  end
+
+  # The bare card, so a Turbo Stream replace swaps the card for a card.
+  def only_capability_card
+    cap_data = @category_data[:capabilities].find { |cap| cap[:capability].stable_id == @only_capability }
+    capability_card(cap_data) if cap_data
+  end
+
+  def capability_card(cap_data)
+    stable_id = cap_data[:capability].stable_id
+    render Views::Assessments::CapabilityCard.new(
+      capability_data: cap_data,
+      merged_levels: @merged_levels,
+      person_level: @person_level,
+      thresholds: @thresholds,
+      assessment_id: @assessment_id,
+      context: @context,
+      viewer_is_manager: @viewer_is_manager,
+      category: @category,
+      scoring: primary_scoring_for_context,
+      blocked: primary_scoring_for_context.dig(:capability_statuses, stable_id) == :blocked,
+      block_reason: primary_scoring_for_context.dig(:block_reasons, stable_id),
+      expanded_capability_id: @expanded_capability_id,
+      focused_level_ordinal: @focused_level_ordinal,
+      selected_levels: @selected_levels,
+      category_id: @category.category_id,
+      frozen: @frozen,
+      alignment_locked: @alignment_locked,
+      viewer_person_id: @viewer_person_id,
+      can_create_evidence: @can_create_evidence,
+      can_request_evidence: @can_request_evidence,
+      can_relink_others_evidence: @can_relink_others_evidence,
+      can_comment: @can_comment,
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @lens
+    )
   end
 
   def primary_scoring_for_context

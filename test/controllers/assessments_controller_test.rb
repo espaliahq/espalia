@@ -407,6 +407,9 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Execution", "no other card"
       assert_not_includes response.body, %(data-controller="matrix"), "no matrix wrapper"
       assert_not_includes response.body, "<section", "no category section around the card"
+      assert_match(/<template>\s*<div[^>]*id="capability-card-#{@cap.stable_id}"/, response.body,
+        "the stream's payload is the card itself, so each swap replaces a card with a card")
+      assert_includes response.body, %(data-focused="false"), "the client places the focus ring"
     end
 
     should "default to the person's level" do

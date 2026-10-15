@@ -149,9 +149,12 @@ class AssessmentsController < ApplicationController
     stable_id = params.expect(:capability)
     return head(:not_found) unless capability_in_matrix?(stable_id)
 
+    # The ring is the client's to place: focus may have moved on by the time
+    # this lands, so the card arrives unfocused and the controller re-stamps it.
+    args = matrix_view_args.except(:framework, :assignment, :active_category_id)
+      .merge(expanded_capability_id: nil, expanded_level_ordinal: nil)
     html = render_to_string(
-      Views::Assessments::AssessmentMatrix.new(**matrix_view_args.except(:framework, :assignment, :active_category_id),
-                                               assessment_id: @assignment.id, only_capability: stable_id),
+      Views::Assessments::AssessmentMatrix.new(**args, assessment_id: @assignment.id, only_capability: stable_id),
       layout: false
     )
     render turbo_stream: turbo_stream.replace(Views::Assessments::CapabilityCard.dom_id_for(stable_id), html)
