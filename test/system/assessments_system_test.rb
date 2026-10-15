@@ -660,8 +660,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # The eyebrow ("THINKING") and capability name ("Problem Solving")
       # must be in view, not pushed under the sticky chrome.
-      offset, diagnostics = settled_card_offset(@cap2_stable) { |o| o >= -5 }
-      assert offset >= -5,
+      clears_chrome = ->(offset) { offset >= -5 }
+      offset, diagnostics = settled_card_offset(@cap2_stable, &clears_chrome)
+      assert clears_chrome.call(offset),
         "Top of capability card should sit at or below the effective sticky chrome " \
         "(offset=#{offset}, diagnostics=#{diagnostics.inspect})"
     end
@@ -676,8 +677,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # Close enough below the chrome that the eyebrow and name show without
       # scrolling up: the card's scroll-margin leaves a 12px gap.
-      offset, diagnostics = settled_card_offset(@cap2_stable) { |o| o.between?(0, 30) }
-      assert offset.between?(0, 30),
+      just_below_chrome = ->(offset) { offset.between?(0, 30) }
+      offset, diagnostics = settled_card_offset(@cap2_stable, &just_below_chrome)
+      assert just_below_chrome.call(offset),
         "Capability card top should land 0-30px below the effective sticky " \
         "header bottom (unified + section). offset=#{offset}, " \
         "diagnostics=#{diagnostics.inspect}"
@@ -1874,7 +1876,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   # the frame lands, which a slow worker can push past any fixed sleep (#501).
   def prepare_chip_scroll(from:)
     visit assessment_path(@assignment)
-    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+    # Turbo marks the frame complete before it clears busy, and the chip
+    # takes the whole-frame path until both have happened.
+    assert_selector "turbo-frame#assessment-matrix[complete]:not([busy])", visible: :all
     wait_for_stimulus "matrix"
 
     page.execute_script(
@@ -1884,35 +1888,44 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     sleep 0.4
   end
 
-  # How far the card's top sits below the sticky chrome — the unified header
-  # plus the category heading pinned under it — once the scroll has stopped.
-  # The click starts a smooth scroll and a settle pass re-snaps it 600ms
-  # later, so one reading after a fixed sleep can land mid-flight. Polls until
-  # `landed` holds on two readings at the same scroll position; on timeout,
-  # returns the last reading for the failure message.
-  def settled_card_offset(stable_id, &landed)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
-    previous = nil
+  # How far the card's top sits below the sticky chrome (the unified header
+  # plus the category heading pinned under it) once the scroll has stopped.
+  # The click starts a smooth scroll, and a settle pass re-snaps it 600ms
+  # later, so a single reading can land mid-flight. This polls until `landed`
+  # holds on two readings at the same scroll position, no sooner than
+  # `settle_after` (the settle pass must get its turn). On timeout it returns
+  # the last reading for the failure message.
+  def settled_card_offset(stable_id, settle_after: 1.0, &landed)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    deadline = started + Capybara.default_max_wait_time
+    previous_scroll_y = nil
     loop do
+      # Null while a card swap is mid-render; the next reading finds it.
       diagnostics = page.evaluate_script(<<~JS)
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{stable_id}"]');
-          var section = card.closest("section[data-category-id]");
-          var sectionHeader = section.querySelector(":scope > [data-section-header]");
-          var header = document.getElementById('assessment-sticky-header');
+          if (!card) return null;
+          var sectionHeader = card.closest("section[data-category-id]")
+            ?.querySelector(":scope > [data-section-header]");
           return {
             card_top: card.getBoundingClientRect().top,
-            header_bottom: header.getBoundingClientRect().bottom,
+            header_bottom: document.getElementById('assessment-sticky-header').getBoundingClientRect().bottom,
             section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0,
             scroll_y: window.scrollY
           };
         })()
       JS
-      offset = diagnostics["card_top"] - diagnostics["header_bottom"] - diagnostics["section_header_height"]
-      settled = previous && previous["scroll_y"] == diagnostics["scroll_y"] && landed.call(offset)
-      return [ offset, diagnostics ] if settled || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      if diagnostics
+        offset = diagnostics["card_top"] - diagnostics["header_bottom"] - diagnostics["section_header_height"]
+        on_target = landed.call(offset)
+        settled = on_target && previous_scroll_y == diagnostics["scroll_y"] && now - started >= settle_after
+        return [ offset, diagnostics ] if settled || now > deadline
 
-      previous = landed.call(offset) ? diagnostics : nil
+        previous_scroll_y = on_target ? diagnostics["scroll_y"] : nil
+      elsif now > deadline
+        flunk "Capability card #{stable_id} never reappeared"
+      end
       sleep 0.25
     end
   end
