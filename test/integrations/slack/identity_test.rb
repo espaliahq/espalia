@@ -24,6 +24,15 @@ class Slack::IdentityTest < ActiveSupport::TestCase
     assert_equal "U_NEW", @giver_tu.reload.slack_user_id
   end
 
+  should "never match a membership on a blank Slack id" do
+    create(:tenant_user, tenant: @tenant, user: create(:user), role: :member, slack_user_id: nil) # a member with no cached id
+    with_fake_slack do
+      identity = Slack::Identity.resolve(team_id: SlackFixture::TEAM_ID, slack_user_id: nil)
+      assert_not identity.connected?
+      assert_not identity.member?
+    end
+  end
+
   should "tell a Person without an account apart from a stranger" do
     fake = SlackFixture::FakeClient.new(emails: { "U_NIA" => "newcomer@example.com", "U_GHOST" => "ghost@example.com" })
     nia = Slack::Identity.resolve(team_id: TEAM_ID, slack_user_id: "U_NIA", client: fake)

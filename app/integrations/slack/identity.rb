@@ -28,6 +28,9 @@ class Slack::Identity
   # @param client [Slack::Client, nil] injectable for tests
   # @return [Slack::Identity]
   def self.resolve(team_id:, slack_user_id:, client: nil)
+    # A nil id would match any membership with no cached Slack id, and act as them.
+    return new(tenant: nil) if team_id.blank? || slack_user_id.blank?
+
     tenant = Tenant.find_by(slack_team_id: team_id)
     return new(tenant: nil) if tenant.nil? || !tenant.slack_connected?
 
