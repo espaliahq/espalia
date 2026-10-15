@@ -146,6 +146,5 @@ class Mcp::FrameworkSerializer
   def active_capabilities(category)
     category.capabilities
       .reject { |c| c.respond_to?(:status) && c.status == "archived" }
-      .sort_by(&:name)
   end
 end
