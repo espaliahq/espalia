@@ -348,13 +348,18 @@ class AssessmentsController < ApplicationController
     EvidenceRequestPolicy.new(pundit_user, @assignment).request?
   end
 
-  # Feedback given about this person with no cell yet. Shown as a notice to
-  # the viewers who see all the assessment's evidence; a peer, who sees only
-  # their own items, is never told what others gave.
+  # Feedback given about this person with no cell yet, for a viewer who can
+  # place it (the assessee, the manager side — EvidencePolicy#add_link?). An
+  # admin sees all the evidence but may not decide where it belongs, so the
+  # notice would ask them to do what the hub refuses; a peer sees only their
+  # own items and is never told what others gave.
   def unplaced_feedback_count
-    return 0 unless viewer_sees_all_evidence?
+    return 0 unless current_person && viewer_sees_all_evidence?
 
-    EvidenceItem.unplaced.for_person(@assignment.person_id).for_framework(@assignment.framework_id).count
+    items = EvidenceItem.unplaced.for_person(@assignment.person_id).for_framework(@assignment.framework_id).to_a
+    return 0 if items.empty? || !EvidencePolicy.new(pundit_user, items.first).add_link?
+
+    items.size
   end
 
   # Whether the current viewer is permitted to post comments on this

@@ -24,8 +24,11 @@ class EvidenceHubController < ApplicationController
     completed_outgoing = outgoing.resolved.recent_first.to_a
 
     authored = EvidenceItem.active.where(author_id: current_person.id).order(recorded_at: :desc).limit(50).to_a
-    to_place_about_me = EvidenceItem.unplaced.for_person(current_person.id).includes(:author).order(:recorded_at).to_a
-    to_place_for_team = EvidenceItem.unplaced.where(person_id: managed_person_ids).includes(:author).order(:recorded_at).to_a
+    # Items the viewer gave are under "Feedback you've given" with their own
+    # Place affordance, so they are not listed twice.
+    to_place = EvidenceItem.unplaced.where.not(author_id: current_person.id).includes(:author).order(:recorded_at)
+    to_place_about_me = to_place.for_person(current_person.id).to_a
+    to_place_for_team = to_place.exists? ? to_place.where(person_id: managed_person_ids).to_a : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
@@ -60,7 +63,8 @@ class EvidenceHubController < ApplicationController
 
   # Everyone whose unplaced feedback the viewer may place from here: their
   # whole org subtree plus anyone they hold an active rating delegation for —
-  # the same set EvidencePolicy#add_link? admits on the manager side.
+  # the same set EvidencePolicy#add_link? admits on the manager side. Walked
+  # only when something is unplaced at all; the subtree can be large.
   def managed_person_ids
     current_person.all_reports.pluck(:id) +
       ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id)

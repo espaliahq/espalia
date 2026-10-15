@@ -13,7 +13,9 @@ class Views::Assessments::UnplacedFeedbackNotice < Views::Base
   end
 
   def view_template
-    div(role: "status", data: { testid: "unplaced-feedback-notice" },
+    # Static content, not a live region: the page's rating announcements own
+    # that role, and a region present at load is never announced anyway.
+    section(aria: { label: "Feedback waiting to be placed" }, data: { testid: "unplaced-feedback-notice" },
         class: "mb-4 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 " \
                "px-4 py-3 flex flex-wrap items-center justify-between gap-2") do
       p(class: "text-sm text-amber-800 dark:text-amber-200") { sentence }

@@ -71,7 +71,7 @@ module EvidenceDiffSubmit
       end,
       **content_params(p)
     })
-    TouchedCells.new(desired_cells(p), result[:evidence_id])
+    TouchedCells.new(cells, result[:evidence_id])
   end
 
   def diff_respond(p)

@@ -139,6 +139,18 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
     end
   end
 
+  context "unplaced feedback" do
+    should "count the items waiting to be placed, for a viewer who sees the evidence" do
+      assert_equal 0, call_assessment_op.dig(:unplaced_feedback, :count)
+      ActsAsTenant.with_tenant(@tenant) do
+        peer = create(:person, tenant: @tenant, name: "Peer")
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
+          source: "peer", evidence_type: "peer_feedback", content: "Great call", author_id: peer.id)
+      end
+      assert_equal 1, call_assessment_op.dig(:unplaced_feedback, :count)
+    end
+  end
+
   context "structure" do
     should "embed the framework payload under :framework" do
       assert_equal "Eng", call_assessment_op.dig(:framework, :name)

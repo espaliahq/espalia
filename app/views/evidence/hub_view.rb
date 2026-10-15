@@ -296,9 +296,11 @@ class Views::Evidence::HubView < Views::Base
 
   # ── Authored evidence (edit / withdraw) — a Completed subsection ──
 
+  # Anchored like the to-place cards: an item the viewer gave unplaced is
+  # listed only here, and its notification link lands on it.
   def authored_card(item)
     detail = @authored_details.fetch(item.id, {})
-    card do
+    card(dom_id: EvidenceItem.dom_id(item.id)) do
       div do
         p(class: "text-sm font-medium text-gray-900 dark:text-white") { authored_cell_label(item, detail) }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }

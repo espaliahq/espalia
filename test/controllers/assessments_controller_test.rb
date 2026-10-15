@@ -212,6 +212,20 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "not show the notice to a tenant admin outside the chain, who cannot place" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          source: "manager", evidence_type: "observation", content: "Calm under pressure", author_id: @manager.id)
+      end
+      sign_in admin_user
+      get assessment_path(@assignment)
+      assert_response :success
+      assert_select "[data-testid='unplaced-feedback-notice']", count: 0
+    end
+
     should "name the report in the unplaced-feedback notice" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,

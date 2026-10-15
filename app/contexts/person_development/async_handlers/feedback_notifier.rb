@@ -98,6 +98,6 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
 
   def assessment_path(item, link)
     assessment_cell_path(item.person_id, item.framework_id,
-      capability_stable_id: link&.capability_stable_id, level_ordinal: link&.level_ordinal)
+      capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal)
   end
 end

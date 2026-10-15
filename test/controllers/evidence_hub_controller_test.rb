@@ -83,6 +83,19 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "p", text: "Feedback, not yet placed on a capability"
     end
 
+    should "list a manager's own unplaced item about a report once, under what they gave" do
+      own = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(@assessee.id, @framework_id, own,
+          source: "manager", evidence_type: "observation", content: "Calm under pressure", author_id: @manager.id)
+      end
+      sign_in @manager_user
+      get evidence_hub_path
+      assert_select "##{EvidenceItem.dom_id(own)}", count: 1
+      assert_select "section#feedback-to-place ##{EvidenceItem.dom_id(own)}", count: 0
+      assert_select "p", text: "Feedback, not yet placed on a capability"
+    end
+
     should "drop a placed item from the list" do
       ActsAsTenant.with_tenant(@tenant) do
         cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
