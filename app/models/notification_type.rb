@@ -65,6 +65,18 @@ class NotificationType
       description: "Your manager or another participant comments on your assessment.",
       defaults: { in_app: true, slack: true, email: false }
     ),
+    feedback_received: Definition.new(
+      key: :feedback_received,
+      label: "New feedback on your assessment",
+      description: "A colleague or your manager records feedback on your assessment, placed on a capability or for you to place.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
+    team_feedback_received: Definition.new(
+      key: :team_feedback_received,
+      label: "New feedback on a report's assessment",
+      description: "Someone records feedback on the assessment of someone you manage.",
+      defaults: { in_app: true, slack: true, email: false }
+    ),
     team_assessment_commented: Definition.new(
       key: :team_assessment_commented,
       label: "A report commented on their assessment",

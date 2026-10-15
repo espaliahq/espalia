@@ -54,6 +54,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
       forbidden = [
         PersonDevelopment::AsyncHandlers::EvidenceRequestNotifier,
         PersonDevelopment::AsyncHandlers::CommentNotifier,
+        PersonDevelopment::AsyncHandlers::FeedbackNotifier,
         PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
         PersonDevelopment::AsyncHandlers::LensAlignmentNotifier,
         PersonDevelopment::AsyncHandlers::ExplorationNotifier

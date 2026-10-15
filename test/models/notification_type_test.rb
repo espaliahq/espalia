@@ -25,6 +25,16 @@ class NotificationTypeTest < ActiveSupport::TestCase
     end
   end
 
+  context "feedback received" do
+    should "register both audiences, escalating to Slack by default" do
+      keys = NotificationType.all.map(&:key)
+      assert_includes keys, :feedback_received
+      assert_includes keys, :team_feedback_received
+      assert NotificationType.enabled?({}, :feedback_received, :slack)
+      assert NotificationType.enabled?({}, :team_feedback_received, :slack)
+    end
+  end
+
   context ".enabled?" do
     should "fall back to the registry default when no override is present" do
       assert NotificationType.enabled?({}, :evidence_requested, :slack)
