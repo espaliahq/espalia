@@ -41,7 +41,7 @@ class Assessments::MatrixDataBuilder
       categories: FrameworkState::CapabilityCategory
         .where(framework_id: assignment.framework_id, status: "active")
         .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-        .order(:ordinal),
+        .order(:ordinal, :created_at, :id),
       participant_status: status,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
       context: context,

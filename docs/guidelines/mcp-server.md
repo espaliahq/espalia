@@ -660,6 +660,20 @@ the tool description where a client reads it before calling. Worth asking of any
 surviving `perform` check: is it really a relationship, or a narrower enum you
 haven't noticed?
 
+### 16. A payload lists things in the order the page shows them
+
+The serializer sorted each category's capabilities by name, a choice made
+before capabilities could be reordered. Once a category was reordered the web
+and the MCP disagreed, and an agent asked to "follow GrowthOS's order" had no
+way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
+is part of the content: a reader compares the two side by side. Keep the read
+model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,
+id]`, categories the same) rather than re-sorting. Role families don't match
+yet: the payload sorts them by name, while the role tree groups them by
+department first.
+`test/operations/assessments/get_test.rb` pins the capability order against
+the order `Assessments::MatrixDataBuilder` renders.
+
 ### Text fields that render as Markdown
 
 A parameter whose text renders through `Prose` (evidence content, comment

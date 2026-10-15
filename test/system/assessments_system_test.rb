@@ -956,6 +956,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         )
       end
       visit assessment_path(@assignment)
+      # The frame's load replaces the cards; a kebab focused before it lands
+      # is gone by the time the contrast is read.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
 
       # Two share the label: the list header's, and the card's, which only
@@ -963,6 +966,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
       card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
       page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
+      assert_selector "#{card_kebab}:focus", visible: :all
       assert_operator rendered_contrast(card_kebab), :>=, 3
     end
   end
