@@ -14,7 +14,9 @@
 # volunteered without a capability in mind. It has no link rows until the
 # recipient, their manager or the author places it (see the {.unplaced}
 # scope); until then it appears on the hub, never in a cell. The first
-# placement becomes the origin, so a placed-later item reads like any other.
+# placement becomes the origin, so a placed-later item reads like any other;
+# `recorded_unplaced` keeps the fact that someone else chose the cell, for
+# the feed to say so.
 #
 # Materialised from PersonDevelopment evidence events
 # ({EvidenceRecorded}, {EvidenceUpdated}, {EvidenceWithdrawn}, and the

@@ -373,11 +373,18 @@ class Views::Assessments::Activity::Entry < Views::Base
     return unplaced_evidence_summary(subject) if unplaced_entry?
 
     label = capability_label
+    verb = placed_later?(item) ? "gave #{subject}, placed later on" : "recorded #{subject} on"
     if (name = evidence_author_name)
-      "#{name} recorded #{subject} on #{label}"
+      "#{name} #{verb} #{label}"
     else
-      "Recorded #{subject} on #{label}"
+      "#{verb.sub(/\A\w+/, &:capitalize)} #{label}"
     end
+  end
+
+  # An item given without a cell reads from the cell its placement gave it,
+  # but the author never chose that cell; the copy says so.
+  def placed_later?(item)
+    item.respond_to?(:recorded_unplaced) && item.recorded_unplaced
   end
 
   # An unplaced item has no cell to name; the entry says so rather than
