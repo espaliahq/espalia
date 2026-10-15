@@ -9,10 +9,10 @@
 #
 # The author is never told about their own feedback, self feedback tells
 # nobody, and the requester of a request this item answers is left out —
-# EvidenceRequestNotifier already tells them it was answered (the response
-# publishes with the item, so the request already names it here). An unplaced
-# item's copy asks the recipient to place it and links to the assessment,
-# whose feed shows it; a placed item links to its cell.
+# EvidenceRequestNotifier already tells them it was answered (the response's
+# event names its request, so this never waits on the request's projection).
+# An unplaced item's copy asks the recipient to place it and links to its card
+# on the hub, where placing happens; a placed item links to its cell.
 #
 # Runs via SolidQueue (prepended AsyncHandler). NOT a projection — it
 # dispatches side effects and must never be registered in
@@ -71,7 +71,7 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
       placed: link.present?,
       context: link ? cell_label(item, link) : "Not yet placed on a capability — place it to show it on the assessment",
       content: item.content,
-      url: assessment_path(item, link)
+      url: link ? assessment_path(item, link) : EvidenceItem.hub_path(item.id)
     }
   end
 

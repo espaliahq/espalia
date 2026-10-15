@@ -23,7 +23,8 @@ class Views::Evidence::HubView < Views::Base
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
   # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
   #   to the item's first linkage (absent when the viewer may not see it)
-  def initialize(open_incoming:, open_outgoing:, completed_incoming: [], completed_outgoing: [],
+  def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false,
+                 completed_incoming: [], completed_outgoing: [],
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
                  in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [])
     @open_incoming = open_incoming
@@ -31,6 +32,9 @@ class Views::Evidence::HubView < Views::Base
     @completed_incoming = completed_incoming
     @completed_outgoing = completed_outgoing
     @authored = authored
+    @to_place_about_me = to_place_about_me
+    @to_place_for_team = to_place_for_team
+    @open_give_step = open_give_step
     @cell_details = cell_details
     @authored_details = authored_details
     @responses = responses
@@ -42,9 +46,11 @@ class Views::Evidence::HubView < Views::Base
 
   def view_template
     render Components::Kit::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(data: { controller: "modal evidence-modal", action: "keydown.esc@window->modal#escape" }) do
+      div(data: { controller: "modal evidence-modal evidence-hub", evidence_hub_auto_open_value: @open_give_step.to_s,
+                  action: "keydown.esc@window->modal#escape" }) do
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
+          to_place_group
           open_requests_group
           completed_requests_group
         end
@@ -56,12 +62,73 @@ class Views::Evidence::HubView < Views::Base
   private
 
   def header
-    div do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback / Evidence" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
-        "Requests for feedback addressed to you, ones you've sent, and the feedback you've provided."
+    div(class: "flex flex-wrap items-start justify-between gap-3") do
+      div do
+        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback / Evidence" }
+        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+          "Feedback waiting to be placed, requests addressed to you, ones you've sent, and the feedback you've given."
+        end
+      end
+      # Volunteer feedback to anyone with an assessment: the modal opens on
+      # the "who is it for?" step. The hub controller clicks this same button
+      # when the page arrives with ?give=1, so the two paths can't drift.
+      button(type: "button",
+             data: modal_trigger_data(mode: "give").merge(evidence_hub_target: "autoTrigger"),
+             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") do
+        "Give feedback"
       end
     end
+  end
+
+  # ── Feedback to place ──
+
+  # Items given without a capability in mind: about the viewer, and about the
+  # people they manage. Either may place them (EvidencePolicy#add_link?); the
+  # edit modal opens with an empty "Applies to" block.
+  def to_place_group
+    return if @to_place_about_me.empty? && @to_place_for_team.empty?
+
+    section(id: "feedback-to-place", class: "scroll-mt-20") do
+      group_heading("Feedback to place")
+      p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
+        "Given without a capability in mind. Until it is placed, it shows on no card and counts nowhere."
+      end
+      div(class: "space-y-8") do
+        unless @to_place_about_me.empty?
+          subsection("About you") do
+            div(class: "space-y-4") { @to_place_about_me.each { |item| to_place_card(item) } }
+          end
+        end
+        unless @to_place_for_team.empty?
+          subsection("About your reports") do
+            div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item) } }
+          end
+        end
+      end
+    end
+  end
+
+  def to_place_card(item)
+    detail = @cell_details.fetch(item.id, {})
+    card(dom_id: EvidenceItem.dom_id(item.id)) do
+      p(class: "text-xs text-gray-600 dark:text-gray-300") { to_place_scope_label(item, detail) }
+      p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+      external_link(item)
+      div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
+        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") do
+          "Place on a capability"
+        end
+      end
+    end
+  end
+
+  # "From Jordan · 3 Oct 2026 · on Alex's assessment" — the assessment named
+  # only for a report's item; the "About you" subsection already says whose.
+  def to_place_scope_label(item, detail)
+    whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && item.person_id != item.author_id)
+    [ "From #{item.author&.name || 'a colleague'}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
   end
 
   # ── Open / completed request groups ──

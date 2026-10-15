@@ -45,9 +45,11 @@ class Views::Evidence::ModalForm < Views::Base
   # @param evidence [EvidenceItem, nil]
   # @param request [EvidenceRequest, nil]
   # @param return_to [String, nil] "hub" or "assessment:<id>" — picks the submit endpoint
+  # @param recipient [Hash, nil] { name:, scope: } — whose assessment this lands on, for
+  #   the forms with no cell card (volunteered :new, :edit of an unplaced item)
   def initialize(mode:, assignment_id:, content_editable:, seed_cell: nil, context_block: nil,
                  scope_line: nil, link_options: [], level_options: [], linked_cells: [],
-                 expectation_map: {}, evidence: nil, request: nil, return_to: nil)
+                 expectation_map: {}, evidence: nil, request: nil, return_to: nil, recipient: nil)
     @mode = mode.to_sym
     @assignment_id = assignment_id
     @seed_cell = seed_cell
@@ -61,13 +63,17 @@ class Views::Evidence::ModalForm < Views::Base
     @evidence = evidence
     @request = request
     @return_to = return_to
+    @recipient = recipient
   end
 
   def view_template
     turbo_frame_tag("evidence-modal") do
-      div(class: "p-5", data: { controller: "evidence-modal" }) do
+      # The flag is a string: Phlex renders a bare attribute for `true`, and a
+      # Stimulus Boolean reads "false" as false but an empty value as true.
+      div(class: "p-5", data: { controller: "evidence-modal", evidence_modal_allow_unplaced_value: allow_unplaced?.to_s }) do
         header
         context_card if @context_block
+        recipient_line if @recipient
         hub_scope_line if @scope_line
         visibility_note
         # _top so the submit isn't captured by the #evidence-modal frame: the
@@ -102,7 +108,31 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def title
+    return "Give feedback" if volunteered?
+
     { new: "Add feedback / evidence", edit: "Edit feedback / evidence", respond: "Provide feedback / evidence" }.fetch(@mode)
+  end
+
+  # A :new with no cell — feedback volunteered from the hub or Slack, not
+  # written from a cell on the assessment.
+  def volunteered?
+    @mode == :new && @seed_cell.nil?
+  end
+
+  # Whether the form may be submitted with no "Applies to" row: volunteered
+  # feedback, and the edit of an item still unplaced. Everywhere else an item
+  # must keep at least one row.
+  def allow_unplaced?
+    volunteered? || (@mode == :edit && @linked_cells.empty?)
+  end
+
+  # Whose assessment, for a form with no cell card.
+  def recipient_line
+    p(class: "text-sm text-gray-700 dark:text-gray-200 mb-3") do
+      plain "For "
+      span(class: "font-medium text-gray-900 dark:text-white") { @recipient[:name] }
+      plain " · #{@recipient[:scope]}" if @recipient[:scope]
+    end
   end
 
   # Writing-prompt context for :new / :respond — the behaviour being written
@@ -147,9 +177,13 @@ class Views::Evidence::ModalForm < Views::Base
   # (EvidencePolicy view rules). Skipped when the requestee IS the assessee —
   # writing on your own assessment needs no warning.
   def visibility_note
-    return unless @mode == :respond && @request && @request.requestee_person_id != @request.person_id
+    assessee = if @mode == :respond && @request && @request.requestee_person_id != @request.person_id
+      @context_block[:assessee_name].presence || "the assessee"
+    elsif volunteered? && @recipient
+      @recipient[:name]
+    end
+    return if assessee.nil?
 
-    assessee = @context_block[:assessee_name].presence || "the assessee"
     div(class: "rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-2 mb-4",
         data: { testid: "visibility-note" }) do
       p(class: "text-xs text-blue-800 dark:text-blue-200") do
@@ -260,11 +294,22 @@ class Views::Evidence::ModalForm < Views::Base
   def links_section
     div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
       span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1") { "Applies to" }
+      unplaced_hint if allow_unplaced?
       div(class: "space-y-2", data: { evidence_modal_target: "linkRows" }) do
         seed_row if @seed_cell
         @linked_cells.each { |cell| link_row(cell) }
       end
       picker_row
+    end
+  end
+
+  # Feedback may be saved with no row: the recipient or their manager places
+  # it later. Said before the picker so nobody hunts for a capability they
+  # can't name.
+  def unplaced_hint
+    whose = @recipient ? @recipient[:name] : "the person"
+    p(class: "text-xs text-gray-600 dark:text-gray-300 mb-2", data: { testid: "unplaced-hint" }) do
+      "Not sure which capability this speaks to? Save without one — #{whose} or their manager can place it."
     end
   end
 
@@ -312,7 +357,7 @@ class Views::Evidence::ModalForm < Views::Base
   # server-rendered disabled when only one link exists; the Stimulus
   # controller keeps the state current as rows are added/removed.
   def remove_button
-    last = @seed_cell.nil? && @linked_cells.size == 1
+    last = @seed_cell.nil? && @linked_cells.size == 1 && !allow_unplaced?
     button(type: "button", aria: { label: "Remove link" }, data: { action: "evidence-modal#removeLink" },
            disabled: last,
            title: (last ? "Feedback must apply to at least one behaviour — withdraw it instead" : nil),
@@ -386,6 +431,8 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def submit_label
+    return "Give feedback" if volunteered?
+
     { new: "Add feedback / evidence", edit: "Save changes", respond: "Provide feedback / evidence" }.fetch(@mode)
   end
 
@@ -404,6 +451,8 @@ class Views::Evidence::ModalForm < Views::Base
       "/assessments/#{@assignment_id}/evidence/save"
     elsif @mode == :respond
       "/evidence_requests/#{@request.id}/respond"
+    elsif @mode == :new
+      "/evidence_items"
     else
       "/evidence_items/#{@evidence.id}"
     end

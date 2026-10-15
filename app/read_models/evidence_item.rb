@@ -133,6 +133,21 @@ class EvidenceItem < ApplicationRecord
     "peer_to_peer"
   end
 
+  # The hub anchor for one item — where an unplaced item is placed, and
+  # where a notification about one lands.
+  #
+  # @param id [String]
+  # @return [String]
+  def self.hub_path(id)
+    "/evidence##{dom_id(id)}"
+  end
+
+  # @param id [String]
+  # @return [String]
+  def self.dom_id(id)
+    "evidence-item-#{id}"
+  end
+
   # Whether this evidence has been withdrawn.
   #
   # @return [Boolean]

@@ -102,6 +102,7 @@ class AssessmentsController < ApplicationController
         active_delegations: load_active_delegations(policy),
         candidate_delegates: load_candidate_delegates(policy),
         viewer_can_rate: policy.rating_participant?,
+        unplaced_feedback_count: unplaced_feedback_count,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -125,6 +126,7 @@ class AssessmentsController < ApplicationController
         activity_entries: activity_entries,
         exploration: lens_exploration,
         can_explore: policy.start_exploration?,
+        unplaced_feedback_count: unplaced_feedback_count,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -344,6 +346,15 @@ class AssessmentsController < ApplicationController
     return false unless current_person
 
     EvidenceRequestPolicy.new(pundit_user, @assignment).request?
+  end
+
+  # Feedback given about this person with no cell yet. Shown as a notice to
+  # the viewers who see all the assessment's evidence; a peer, who sees only
+  # their own items, is never told what others gave.
+  def unplaced_feedback_count
+    return 0 unless viewer_sees_all_evidence?
+
+    EvidenceItem.unplaced.for_person(@assignment.person_id).for_framework(@assignment.framework_id).count
   end
 
   # Whether the current viewer is permitted to post comments on this

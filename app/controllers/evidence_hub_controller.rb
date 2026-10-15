@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-# The current person's evidence-request hub: requests addressed to them
-# (incoming — respond / decline) and requests they made (outgoing — cancel).
-# This is the surface notifications deep-link to.
+# The current person's feedback hub: requests addressed to them (incoming —
+# respond / decline), requests they made (outgoing — cancel), feedback waiting
+# to be placed on a capability (about them, and about their reports), the
+# feedback they've given, and the way to give more. This is the surface
+# notifications deep-link to.
 class EvidenceHubController < ApplicationController
   before_action :require_person
 
@@ -22,11 +24,13 @@ class EvidenceHubController < ApplicationController
     completed_outgoing = outgoing.resolved.recent_first.to_a
 
     authored = EvidenceItem.active.where(author_id: current_person.id).order(recorded_at: :desc).limit(50).to_a
+    to_place_about_me = EvidenceItem.unplaced.for_person(current_person.id).includes(:author).order(:recorded_at).to_a
+    to_place_for_team = EvidenceItem.unplaced.where(person_id: managed_person_ids).includes(:author).order(:recorded_at).to_a
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
     # evidence ids are all distinct UUIDs, so a single id-keyed hash serves both.
-    details = Evidence::CellContextResolver.new(all_requests + authored).by_id
+    details = Evidence::CellContextResolver.new(all_requests + authored + to_place_about_me + to_place_for_team).by_id
     responses = responses_for(completed_outgoing)
 
     render Views::Evidence::HubView.new(
@@ -35,6 +39,9 @@ class EvidenceHubController < ApplicationController
       completed_incoming: completed_incoming,
       completed_outgoing: completed_outgoing,
       authored: authored,
+      to_place_about_me: to_place_about_me,
+      to_place_for_team: to_place_for_team,
+      open_give_step: params[:give].present?,
       cell_details: details,
       authored_details: details,
       responses: responses,
@@ -49,6 +56,14 @@ class EvidenceHubController < ApplicationController
 
   def require_person
     head :forbidden unless current_person
+  end
+
+  # Everyone whose unplaced feedback the viewer may place from here: their
+  # whole org subtree plus anyone they hold an active rating delegation for —
+  # the same set EvidencePolicy#add_link? admits on the manager side.
+  def managed_person_ids
+    current_person.all_reports.pluck(:id) +
+      ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id)
   end
 
   # For responded outgoing requests, load the evidence the requestee provided

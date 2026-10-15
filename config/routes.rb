@@ -139,10 +139,13 @@ Rails.application.routes.draw do
       post :nudge
     end
   end
-  resources :evidence_items, only: [ :update, :destroy ]
+  resources :evidence_items, only: [ :create, :update, :destroy ]
 
-  # Unified evidence modal body (server-rendered into the #evidence-modal frame).
-  resource :evidence_modal, only: [ :show ], controller: "evidence_modal"
+  # Unified evidence modal body (server-rendered into the #evidence-modal frame),
+  # and the "who is it for?" step's typeahead when feedback is volunteered.
+  resource :evidence_modal, only: [ :show ], controller: "evidence_modal" do
+    get :recipients
+  end
 
   # The web app manifest is a static file (public/manifest.json — nothing in it
   # is per-request), and the service worker stays off: nothing needs offline or

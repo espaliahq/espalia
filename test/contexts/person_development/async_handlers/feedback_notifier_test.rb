@@ -78,8 +78,7 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
       mine = @assessee_user.notifications.reload
       assert_equal "Jordan gave you feedback to place", mine.first.inbox_title
       assert_match(/Not yet placed on a capability/, mine.first.inbox_body)
-      assert_not_nil id
-      assert_equal "/assessments/#{@assignment_id}", mine.first.inbox_url
+      assert_equal "/evidence#evidence-item-#{id}", mine.first.inbox_url
       assert_equal "Jordan gave Alex feedback to place", @manager_user.notifications.reload.first.inbox_title
     end
   end
