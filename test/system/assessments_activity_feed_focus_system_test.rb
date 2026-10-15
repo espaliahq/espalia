@@ -687,6 +687,16 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # A real click event through the Stimulus action, so the test covers the
+  # binding and the selection the browser holds when the click lands.
+  def dispatch_header_click(selector)
+    page.execute_script(<<~JS)
+      document.querySelector(#{selector.to_json}).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+      )
+    JS
+  end
+
   context "selecting a capability name" do
     [ [ "desktop", DESKTOP_SIZE ], [ "mobile", [ 375, 812 ] ] ].each do |label, size|
       should "copy the name without toggling focus on #{label}" do
@@ -709,11 +719,11 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
         JS
         assert_includes page.evaluate_script("window.getSelection().toString()"), "Problem Solving"
 
-        click_card_header(@cap2_stable)
+        dispatch_header_click(header)
         assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
 
         page.execute_script("window.getSelection().removeAllRanges()")
-        click_card_header(@cap2_stable)
+        dispatch_header_click(header)
         assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
       end
     end

@@ -759,8 +759,8 @@ export default class extends BaseController {
     // child in future — guard defensively.
     const onInteractive = !!event.target.closest("button, a, input, textarea, form, [contenteditable]")
     if (onInteractive) return
-    // A drag or double-click that selects the capability name ends in a
-    // click too; copying the name must not toggle focus.
+    // A drag that selects the capability name ends in a click too;
+    // copying the name must not toggle focus.
     if (this.#selectsTextIn(event.currentTarget)) return
 
     event.stopPropagation()

@@ -668,8 +668,9 @@ and the MCP disagreed, and an agent asked to "follow GrowthOS's order" had no
 way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
 is part of the content: a reader compares the two side by side. Keep the read
 model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,
-id]`) rather than re-sorting, and when the web sorts something (the role tree
-is alphabetical), sort the payload the same way.
+id]`, categories the same) rather than re-sorting. Role families don't match
+yet: the payload sorts them by name, while the role tree groups them by
+department first.
 `test/operations/assessments/get_test.rb` pins the capability order against
 the order `Assessments::MatrixDataBuilder` renders.
 
