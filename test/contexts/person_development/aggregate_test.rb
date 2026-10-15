@@ -1179,6 +1179,18 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_match /Cannot remove the only link/, err.message
     end
 
+    should "carry the request it answers, and nil otherwise" do
+      @aggregate.record_evidence(@evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id)
+      assert_nil @aggregate.unpublished_events.to_a.last.data[:request_id]
+
+      request_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(SecureRandom.uuid_v7,
+        capability_stable_id: @cap_sid, level_ordinal: 3, valence: "demonstrated", request_id: request_id,
+        source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id)
+      assert_equal request_id, @aggregate.unpublished_events.to_a.last.data[:request_id]
+    end
+
     should "raise when only one half of the cell is given" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,

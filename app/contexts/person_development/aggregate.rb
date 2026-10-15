@@ -898,12 +898,16 @@ class PersonDevelopment::Aggregate
   #   { capability_stable_id:, level_ordinal:, valence: }, applied as
   #   EvidenceLinkAdded in the same aggregate transaction. Duplicates (of
   #   the first link or each other) are rejected.
+  # @param request_id [String, nil] the evidence request this item answers,
+  #   when it is recorded as a response — carried on the event so a reader
+  #   of EvidenceRecorded knows without waiting for the request's own event
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, source:, evidence_type:, content:, author_id:,
                       capability_stable_id: nil, level_ordinal: nil, valence: nil,
                       feedback_direction: default_feedback_direction(source),
                       custom_type_label: nil, title: nil,
-                      external_reference: nil, additional_links: [], cycle_id: @current_cycle_id)
+                      external_reference: nil, additional_links: [], cycle_id: @current_cycle_id,
+                      request_id: nil)
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
@@ -931,7 +935,8 @@ class PersonDevelopment::Aggregate
       author_id: author_id,
       feedback_direction: feedback_direction,
       valence: valence,
-      cycle_id: cycle_id
+      cycle_id: cycle_id,
+      request_id: request_id
     }))
 
     Array(additional_links).each do |link|

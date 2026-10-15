@@ -38,4 +38,26 @@ module PersonDevelopment::AsyncHandlers::AssessmentNotificationRecipients
   def user_for(person_id)
     Person.find_by(id: person_id)&.ensure_user!
   end
+
+  # @return [String, nil] the capability's name within the framework
+  def capability_name_for(capability_stable_id, framework_id)
+    FrameworkState::Capability
+      .joins(:category)
+      .where(stable_id: capability_stable_id)
+      .merge(FrameworkState::CapabilityCategory.where(framework_id: framework_id))
+      .pick(:name)
+  end
+
+  # The assessment, focused on one cell through the existing deep-link
+  # params when a cell is given; the same path renders self or manager
+  # context per viewer.
+  #
+  # @return [String]
+  def assessment_cell_path(person_id, framework_id, capability_stable_id: nil, level_ordinal: nil)
+    assignment_id = PersonFrameworkAssignment.where(person_id: person_id, framework_id: framework_id).pick(:id)
+    return "/assessments" if assignment_id.nil?
+    return "/assessments/#{assignment_id}" if capability_stable_id.nil?
+
+    "/assessments/#{assignment_id}?capability=#{capability_stable_id}&level_ordinal=#{level_ordinal}"
+  end
 end

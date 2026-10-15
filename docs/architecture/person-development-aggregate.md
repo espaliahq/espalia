@@ -83,8 +83,12 @@ Assessment cycle:
 Evidence and feedback:
   EvidenceRecorded { evidence_id, capability_stable_id?, level_ordinal?, source,
                      evidence_type, custom_type_label?, title?, content,
-                     external_reference?, author_id, cycle_id?, valence? }
+                     external_reference?, author_id, cycle_id?, valence?, request_id? }
     ← The cell and its valence are nil together for an UNPLACED item (see above).
+    ← request_id names the request this item answers (record_evidence_for_request
+      publishes it with EvidenceRequestResponded in one unit of work). A reader of
+      this event alone — the feedback notifier — can tell a response from
+      volunteered feedback without the request's own event having been projected.
     ← cycle_id is assigned when the feedback is first provided and is immutable.
       Relinking an existing item in a later cycle does not change its attribution
       or count it as newly provided feedback. Evidence recorded outside a cycle,

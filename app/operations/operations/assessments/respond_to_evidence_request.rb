@@ -38,8 +38,9 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
     evidence_id = SecureRandom.uuid_v7
     handler = PersonDevelopment::CommandHandler.new
 
-    handler.record_evidence(
-      evidence_request.person_id, evidence_request.framework_id, evidence_id,
+    handler.record_evidence_for_request(
+      evidence_request.person_id, evidence_request.framework_id, evidence_request.id, evidence_id,
+      responded_by_id: context.person.id,
       capability_stable_id: evidence_request.capability_stable_id,
       level_ordinal: evidence_request.level_ordinal,
       source: derive_source,
@@ -51,10 +52,6 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
       valence: params[:valence],
       external_reference: params[:external_reference],
       cycle_id: evidence_request.cycle_id
-    )
-    handler.respond_to_evidence_request(
-      evidence_request.person_id, evidence_request.framework_id, evidence_request.id,
-      evidence_id: evidence_id, responded_by_id: context.person.id
     )
 
     { request_id: evidence_request.id, status: "responded", evidence_id: evidence_id }

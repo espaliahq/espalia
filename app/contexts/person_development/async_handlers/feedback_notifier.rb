@@ -9,7 +9,8 @@
 #
 # The author is never told about their own feedback, self feedback tells
 # nobody, and the requester of a request this item answers is left out —
-# EvidenceRequestNotifier already tells them it was answered. An unplaced
+# EvidenceRequestNotifier already tells them it was answered (the response
+# publishes with the item, so the request already names it here). An unplaced
 # item's copy asks the recipient to place it and links to the assessment,
 # whose feed shows it; a placed item links to its cell.
 #
@@ -31,15 +32,15 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
       item = EvidenceItem.find_by(id: event.data[:evidence_id])
       next if item.nil? || item.source == "self"
 
-      notify_recipients(item)
+      notify_recipients(item, event.data[:request_id])
     end
   end
 
   private
 
-  def notify_recipients(item)
+  def notify_recipients(item, request_id)
     params = presentation(item)
-    skipped = [ item.author_id, *answered_requester_ids(item) ]
+    skipped = [ item.author_id, *answered_requester_ids(item, request_id) ]
 
     unless skipped.include?(item.person_id)
       deliver(FeedbackReceivedNotifier, item, item.person_id, params)
@@ -74,20 +75,15 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
     }
   end
 
-  # Whoever asked the author for feedback that this item answers: the request
-  # it is recorded against once the response is projected, or — because that
-  # projection can land a moment after this runs — a request to the author
-  # still pending on the very cell the item was placed on. A pending request
-  # on another cell is unrelated, and its requester is told like anyone else.
-  def answered_requester_ids(item)
+  # Whoever asked for the feedback this item answers. The event names the
+  # request it responds to (record_evidence_for_request), so this never
+  # depends on the request's own event having been projected first — the
+  # two publish together, but this job can run between them. Ordinary
+  # feedback on a cell someone happens to have asked about tells them like
+  # anyone else.
+  def answered_requester_ids(item, request_id)
     scope = EvidenceRequest.for_assessment(item.person_id, item.framework_id)
-    answered = scope.where(evidence_id: item.id)
-    link = first_link(item)
-    if link
-      answered = answered.or(scope.pending.where(requestee_person_id: item.author_id,
-        capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal))
-    end
-    answered.pluck(:requested_by_id)
+    scope.where(evidence_id: item.id).or(scope.where(id: request_id)).pluck(:requested_by_id)
   end
 
   def first_link(item)
@@ -97,22 +93,11 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
   end
 
   def cell_label(item, link)
-    name = FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: link.capability_stable_id)
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: item.framework_id))
-      .pick(:name)
-    [ name, "L#{link.level_ordinal}" ].compact.join(" · ")
+    [ capability_name_for(link.capability_stable_id, item.framework_id), "L#{link.level_ordinal}" ].compact.join(" · ")
   end
 
-  # The assessment, focused on the item's first cell through the existing
-  # deep-link params when it has one; the same path renders self or manager
-  # context per viewer, and its feed carries an unplaced item.
   def assessment_path(item, link)
-    assignment_id = PersonFrameworkAssignment.where(person_id: item.person_id, framework_id: item.framework_id).pick(:id)
-    return "/assessments" if assignment_id.nil?
-    return "/assessments/#{assignment_id}" if link.nil?
-
-    "/assessments/#{assignment_id}?capability=#{link.capability_stable_id}&level_ordinal=#{link.level_ordinal}"
+    assessment_cell_path(item.person_id, item.framework_id,
+      capability_stable_id: link&.capability_stable_id, level_ordinal: link&.level_ordinal)
   end
 end

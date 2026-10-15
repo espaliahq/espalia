@@ -108,12 +108,8 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   #   existing `?capability=` + `?level_ordinal=` deep-link params. The same
   #   path renders self or manager context per viewer.
   def deep_link(comment)
-    assignment_id = PersonFrameworkAssignment
-      .where(person_id: comment.person_id, framework_id: comment.framework_id)
-      .pick(:id)
-    return "/assessments" if assignment_id.nil?
-
-    "/assessments/#{assignment_id}?capability=#{comment.capability_stable_id}&level_ordinal=#{comment.level_ordinal}"
+    assessment_cell_path(comment.person_id, comment.framework_id,
+      capability_stable_id: comment.capability_stable_id, level_ordinal: comment.level_ordinal)
   end
 
   def evidence_author_name(comment)
@@ -123,11 +119,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   end
 
   def capability_name(comment)
-    FrameworkState::Capability
-      .joins(:category)
-      .where(stable_id: comment.capability_stable_id)
-      .merge(FrameworkState::CapabilityCategory.where(framework_id: comment.framework_id))
-      .first&.name
+    capability_name_for(comment.capability_stable_id, comment.framework_id)
   end
 
   # @return [User, nil] the User behind a person, provisioning one lazily so

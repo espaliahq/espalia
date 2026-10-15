@@ -105,29 +105,38 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
   # A `def` inside a `context` is invisible to `should` (testing.md), so the
   # request helper lives on the class.
   def request!(level_ordinal:)
-    @handler.request_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
+    id = SecureRandom.uuid_v7
+    @handler.request_evidence(@assessee.id, @framework_id, id,
       requested_by_id: @manager.id, requestee_person_id: @peer.id,
       capability_stable_id: @cap.stable_id, level_ordinal: level_ordinal)
     perform_enqueued_jobs
     @manager_user.notifications.reload.destroy_all
+    id
   end
 
   context "feedback that answers a request" do
     should "leave the requester to the answered notification" do
+      request_id = request!(level_ordinal: 2)
+
+      perform_enqueued_jobs do
+        @handler.record_evidence_for_request(@assessee.id, @framework_id, request_id, SecureRandom.uuid_v7,
+          responded_by_id: @peer.id, source: "peer", evidence_type: "peer_feedback", content: "Answered.",
+          author_id: @peer.id, capability_stable_id: @cap.stable_id, level_ordinal: 2, valence: "demonstrated")
+      end
+
+      assert_equal 1, @assessee_user.notifications.reload.size
+      theirs = @manager_user.notifications.reload
+      assert_equal 1, theirs.size
+      assert_match(/answered your feedback request/, theirs.first.inbox_title)
+    end
+
+    should "still tell a requester about ordinary feedback on the cell they asked about" do
       request!(level_ordinal: 2)
 
       perform_enqueued_jobs { record!(author: @peer, source: "peer") }
 
-      assert_equal 1, @assessee_user.notifications.reload.size
-      assert_empty @manager_user.notifications.reload
-    end
-
-    should "still tell a requester about feedback on a different cell than they asked for" do
-      request!(level_ordinal: 3)
-
-      perform_enqueued_jobs { record!(author: @peer, source: "peer") }
-
       assert_equal 1, @manager_user.notifications.reload.size
+      assert_equal "Jordan gave Alex feedback", @manager_user.notifications.first.inbox_title
     end
   end
 end

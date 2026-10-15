@@ -35,6 +35,9 @@
 #   @option data [String, nil] :cycle_id assessment cycle this evidence was
 #     provided for; absent on historical events and evidence recorded outside
 #     a cycle
+#   @option data [String, nil] :request_id the evidence request this item
+#     answers, when recorded as a response; nil otherwise and on events
+#     published before it was carried
 #   @option data [String] :valence the origin link's valence — one of
 #     EvidenceLink::VALENCES. Required on new events; absent on events
 #     published before valence existed (consumers must tolerate nil).
