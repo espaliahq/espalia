@@ -102,7 +102,7 @@ Before enough current-level capabilities are rated, the hero does **not** show a
 
 The left column carries the verdict headline, a one-line gloss, and the "bottom line" (promotion pill + Continue CTA). The right column carries the big percentage and the **score bar** — the scale made visible (ADR-21): a two-segment 0–200 track whose left half is the assessed level and right half the next one, tick-labelled with the level codes ("100% · E3", "200% · E4"); at the top of the ladder it is a single 0–100 segment. Both columns sit side-by-side so the card is just tall enough to fit whichever side is taller.
 
-The **verdict headline** follows `performance_state` ("You're meeting E3 expectations." / "well on the way to E4." / "held back at E3 by 1 blocked capability." / "held at E3 until 2 Required capabilities are rated." / "meeting E8 expectations — the top of the ladder."), and the **gloss** names the score's parts from `scoring[:components]` — "94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3" — so the headline number never has to be reverse-engineered. Colour tiers read the framework's configured thresholds (`underperforming_threshold` is threaded in alongside the other two); nothing hard-codes 0.8.
+The **verdict headline** follows `performance_state` ("You're meeting E3 expectations." / "well on the way to E4." / "held back at E3 by 1 blocked capability." / "held at E3 until 2 capabilities are rated." / "meeting E8 expectations — the top of the ladder."), and the **gloss** names the score's parts from `scoring[:components]` — "94% of E3 demonstrated · 38% of the way to E4 · 5% missing below E3" — so the headline number never has to be reverse-engineered. Colour tiers read the framework's configured thresholds (`underperforming_threshold` is threaded in alongside the other two); nothing hard-codes 0.8.
 
 Under the big percentage, a tiny secondary line (`#hero-secondary-percents`) shows the other perspectives' percentages (`Self: 118% · Mgr: 101%`), each carrying the shared amber divergence dot when it lands in a different state than the primary. **A secondary perspective is a number, never a second state word** — the gloss used to append "· Self: Below expectations" beside a line that already read "Self: 10%", saying the same thing twice in more space. The state vocabulary is the primary verdict's job, once, at the top of the card; every other altitude (category header, capability card, secondary perspective) is a quick indicator and shows the percentage alone. In alignment — where both Self and Mgr appear — they are ordered **viewer-first** (the viewer's own perspective leads): `Mgr: … · Self: …` for the manager-side viewer, `Self: … · Mgr: …` for the assessee. This is the **same viewer-aware ordering as the split chip** (see *Misalignment → diagonal split*) so the two surfaces tell one story; it's driven by the same `viewer_is_manager:` flag threaded into `HeroSummary`. (In the manager view the only secondary is "Self", so there's nothing to reorder.)
 
@@ -119,7 +119,7 @@ A **single** panel framed by `performance_state`. The state picks the headline, 
 | `:underperforming` | "Underperforming at E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | red |
 | `:progressing` | "Progressing toward E(n)" | "Gap to E(n)" | 3 weakest gaps at E(n), then "+N more" | amber |
 | `:performing` | "Performing at E(n) · 38% of the way to E(n+1)" | "Gap to E(n+1)" | 3 weakest gaps **at E(n+1)**, then "+N more" | blue |
-| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked and unrated Required at E(n+1) first, then the weakest other gaps there; 3 rows, then "+N more" | purple |
+| `:mastering` | "Mastering E(n) · 62% of the way to E(n+1)" | "Gap to E(n+1)" | blocked and unrated at E(n+1) first, then the weakest other gaps there; 3 rows, then "+N more" | purple |
 | `:eligible` | "Eligible for promotion to E(n+1)" | "Top contributors" | 3 highest scores at E(n) | green |
 | `:top_of_ladder` | "Meeting E(n) · top of the ladder" | "Strongest at E(n)" | 3 highest scores at E(n) | blue |
 
@@ -405,7 +405,12 @@ Three rules, each load-bearing:
   The Blocked badge reads the engine's `:blocked` status, which counts rated
   cells only, so "Not rated" never sits beside it on an unrated card. It used
   to: the unrated 0 blocked like a "not yet", and a fresh assessment wore
-  Blocked on every card.
+  Blocked on every card. An unrated capability still holds the state — or
+  leaving one unrated would beat rating it "not yet" — and the hero says so
+  without the word: "held at E3 until 2 capabilities are rated" when the
+  score clears the bar, "close to E3 expectations, with 2 capabilities still
+  to rate" when it doesn't, so it never promises a rating will lift a score
+  that is short anyway.
 - **The colour is the state, not the number.** The percent takes
   `tone_text(state)` from the engine's per-capability state (blocked →
   amber), so a card can't read green while the hero says held back. The
@@ -1446,7 +1451,7 @@ Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md
 ```
 :underperforming  score < underperforming_threshold (default 0.80)
 :progressing      underperforming_threshold ≤ score < meeting_threshold
-                  OR any capability held (blocked, or Required and unrated)
+                  OR any capability held (blocked, or unrated)
 :top_of_ladder    meeting, and no level above this one
 :eligible         promotion_readiness[:eligible]
 :mastering        score ≥ mastery_threshold (default 1.50) AND not eligible

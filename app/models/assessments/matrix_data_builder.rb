@@ -500,7 +500,7 @@ class Assessments::MatrixDataBuilder
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,
       block_reasons: scoring.block_reasons,
-      unrated_required: scoring.unrated_required
+      unrated: scoring.unrated
     }
     if bindings
 

@@ -784,7 +784,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       result = scorer.promotion_readiness
       assert_not result[:eligible]
       assert_empty result[:blocked_at_next_level]
-      assert_equal [ CAP_A ], result[:unrated_required_at_next_level]
+      assert_equal [ CAP_A ], result[:unrated_at_next_level]
     end
 
     should "be eligible when consistent at both the current and next level" do
@@ -793,7 +793,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       result = scorer.promotion_readiness
       assert result[:eligible]
       assert_empty result[:blocked_at_next_level]
-      assert_empty result[:unrated_required_at_next_level]
+      assert_empty result[:unrated_at_next_level]
     end
 
     should "require the same share of the next band at every level" do
@@ -811,7 +811,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       result = scorer.promotion_readiness
       assert_not result[:eligible]
       assert_empty result[:blocked_at_next_level]
-      assert_equal [ CAP_A ], result[:unrated_required_at_next_level]
+      assert_equal [ CAP_A ], result[:unrated_at_next_level]
     end
 
     should "block a flexible capability whose rated deficit at the next level exceeds the tolerance" do
@@ -821,12 +821,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_includes scorer.promotion_readiness[:blocked_at_next_level], CAP_A
     end
 
-    should "neither block nor hold a flexible capability nobody has rated at the next level" do
+    should "hold, not block, a flexible capability nobody has rated at the next level" do
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [])
       result = scorer.promotion_readiness
-      assert_not result[:eligible], "an unrated level still scores 0, so it can't be met"
+      assert_not result[:eligible]
       assert_empty result[:blocked_at_next_level]
-      assert_empty result[:unrated_required_at_next_level]
+      assert_equal [ CAP_A ], result[:unrated_at_next_level]
     end
 
     should "not block a flexible capability whose deficit at the next level is within the tolerance" do
@@ -902,14 +902,27 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_includes scorer.block_reasons[CAP_A], "Below expectations by 1.0 points"
     end
 
-    should "not hold the state when it is flexible" do
+    should "hold the state at progressing when it is flexible" do
       scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
         thresholds: { meeting_expectation_threshold: 0.5, underperforming_threshold: 0.4 },
         ratings: [ rated(3, "consistent") ])
       assert_equal :unrated, scorer.capability_statuses[CAP_B]
-      assert scorer.meeting_expectations?
-      assert_equal :performing, scorer.performance_state
-      assert scorer.category_results[CAT_1][:pass]
+      assert_not scorer.meeting_expectations?
+      assert_equal :progressing, scorer.performance_state
+      assert_equal [ CAP_B ], scorer.unrated
+    end
+
+    # The score clears the bar either way, so if an unrated cell did not
+    # hold, leaving it unrated would pass where an honest "not yet" blocks.
+    should "never read better than a \"not yet\" on the same cell" do
+      thresholds = { meeting_expectation_threshold: 0.5, underperforming_threshold: 0.4 }
+      unrated = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], thresholds: thresholds,
+        ratings: [ rated(3, "consistent") ])
+      not_yet = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], thresholds: thresholds,
+        ratings: [ rated(3, "consistent"), rated(3, "none", cap: CAP_B) ])
+      assert_equal :blocked, not_yet.capability_statuses[CAP_B]
+      assert_equal not_yet.performance_state, unrated.performance_state
+      assert_equal not_yet.meeting_expectations?, unrated.meeting_expectations?
     end
 
     should "hold the state at progressing when it is Required" do
@@ -918,7 +931,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         ratings: [ rated(3, "consistent") ])
       assert_equal :unrated, scorer.capability_statuses[CAP_B]
       assert_empty scorer.block_reasons
-      assert_equal [ CAP_B ], scorer.unrated_required
+      assert_equal [ CAP_B ], scorer.unrated
       assert_not scorer.meeting_expectations?
       assert_equal :progressing, scorer.performance_state
       assert_equal :progressing, scorer.category_results[CAT_1][:state]
@@ -927,7 +940,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "stop counting once it is rated" do
       scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], tolerance_b: 0,
         ratings: [ rated(3, "consistent"), rated(3, "consistent", cap: CAP_B) ])
-      assert_empty scorer.unrated_required
+      assert_empty scorer.unrated
       assert_equal :at_bar, scorer.capability_statuses[CAP_B]
     end
 

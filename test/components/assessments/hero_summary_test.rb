@@ -59,7 +59,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
   def render_hero(state:, components:, person_level: 3, levels: LEVELS, statuses: {}, readiness: nil,
                   scores: { "cap-a" => 1.0 }, next_scores: { "cap-a" => 0.25 }, context: :self,
-                  cells: nil, self_scoring: nil, viewer_can_rate: false, unrated_required: [])
+                  cells: nil, self_scoring: nil, viewer_can_rate: false, unrated: [])
     cap = CAP.new(stable_id: "cap-a", name: "Strategic Thinking")
     cells ||= { person_level => {
       current_frequency: "consistent", manager_frequency: "consistent", aligned_frequency: "consistent"
@@ -72,7 +72,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       meeting_expectations: components[:score] >= 0.95,
       mastering: components[:score] >= 1.5,
       capability_statuses: statuses,
-      unrated_required: unrated_required,
+      unrated: unrated,
       capability_scores: scored(scores),
       capability_scores_at_next_level: scored(next_scores),
       promotion_readiness: readiness
@@ -369,33 +369,33 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     end
 
     # #485: an unrated capability is not a judgement, so it is never counted
-    # as blocked — but a Required one still holds the state, and says why.
-    should "say a Required capability waits on a rating, never that it is blocked" do
-      html = render_hero(state: :progressing, statuses: { "cap-a" => :unrated }, unrated_required: [ "cap-a" ],
+    # as blocked — but it still holds the state, and the headline says why.
+    should "say the state waits on a rating, never that it is blocked" do
+      html = render_hero(state: :progressing, statuses: { "cap-a" => :unrated }, unrated: [ "cap-a" ],
                          components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
-      assert_includes html, "You&#39;re held at E3 until 1 Required capability is rated."
+      assert_includes html, "You&#39;re held at E3 until 1 capability is rated."
       assert_not_includes html, "blocked"
     end
 
-    should "name blocked and unrated Required capabilities apart" do
-      html = render_hero(state: :progressing, statuses: { "cap-a" => :blocked, "cap-b" => :unrated, "cap-c" => :unrated },
-                         unrated_required: [ "cap-b", "cap-c" ],
-                         components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
-      assert_includes html, "You&#39;re held back at E3 by 1 blocked capability, with 2 Required capabilities still to rate."
+    should "not promise a rating lifts a score below the bar" do
+      html = render_hero(state: :progressing, statuses: { "cap-a" => :unrated }, unrated: [ "cap-a" ],
+                         components: { prior: 1.0, current: 0.85, next: 0.0, score: 0.85 })
+      assert_includes html, "You&#39;re close to E3 expectations, with 1 capability still to rate."
+      assert_not_includes html, "until"
     end
 
-    should "not count an unrated flexible capability as holding anything back" do
-      html = render_hero(state: :progressing, statuses: { "cap-a" => :unrated },
-                         components: { prior: 1.0, current: 0.9, next: 0.0, score: 0.9 })
-      assert_includes html, "You&#39;re close to E3 expectations."
+    should "name blocked and unrated capabilities apart" do
+      html = render_hero(state: :progressing, statuses: { "cap-a" => :blocked, "cap-b" => :unrated, "cap-c" => :unrated },
+                         unrated: [ "cap-b", "cap-c" ],
+                         components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
+      assert_includes html, "You&#39;re held back at E3 by 1 blocked capability, with 2 capabilities still to rate."
     end
 
     should "say what promotion waits on without calling an unrated capability blocked" do
       html = render_hero(state: :performing,
-                         readiness: { eligible: false, blocked_at_next_level: [], unrated_required_at_next_level: [ "cap-a" ] },
+                         readiness: { eligible: false, blocked_at_next_level: [ "cap-b" ], unrated_at_next_level: [ "cap-a", "cap-c" ] },
                          components: { prior: 1.0, current: 1.0, next: 0.4, score: 1.4 })
-      assert_includes html, "1 Required capability to rate at E4"
-      assert_not_includes html, "Blocked by"
+      assert_includes html, "Blocked by 1 capability · 2 capabilities to rate at E4"
     end
 
     should "colour the number and bar by state" do

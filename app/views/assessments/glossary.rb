@@ -77,8 +77,7 @@ class Views::Assessments::Glossary
       required: {
         label: "Required",
         definition: "Some capabilities are marked Required: this role cannot be short of them. " \
-                    "Doing well elsewhere does not make up for the gap, and one nobody has rated " \
-                    "holds the state back until someone does.#{required_gate_clause}"
+                    "Doing well elsewhere does not make up for the gap.#{required_gate_clause}"
       },
       blocked: {
         label: "Blocked",
@@ -93,8 +92,9 @@ class Views::Assessments::Glossary
       },
       not_rated: {
         label: "Not rated",
-        definition: "A capability nobody has rated yet has no answer. It is not a zero and not a " \
-                    "judgement — it waits for a rating rather than counting as one."
+        definition: "A capability nobody has rated yet has no answer. On its card it is not a zero, " \
+                    "and it is not a judgement, so it can never be blocked. Until it is rated, though, " \
+                    "#{@current_code} can't be met."
       },
       no_expectation: {
         label: "No expectation",
@@ -150,7 +150,7 @@ class Views::Assessments::Glossary
   end
 
   def blocked_clause
-    "A blocked capability holds the state back, whatever the number says."
+    "A blocked capability, or one nobody has rated yet, holds the state back, whatever the number says."
   end
 
   def word(state) = Views::Assessments::StateLabels.for(state, tenant: @tenant)
