@@ -26,7 +26,9 @@ import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
   static targets = ["frame", "typeSelect", "customLabel", "linkRows", "linkCapability", "linkLevel", "expectations", "levels", "valences"]
-  static values = { url: { type: String, default: "/evidence_modal" } }
+  // allowUnplaced: the form may be submitted with no "Applies to" row —
+  // volunteered feedback, or an edit of an item still unplaced.
+  static values = { url: { type: String, default: "/evidence_modal" }, allowUnplaced: Boolean }
 
   // PAGE: point the lazy frame at the render endpoint for this trigger.
   load(event) {
@@ -198,11 +200,12 @@ export default class extends BaseController {
 
   // An item must keep at least one link: when a single row remains, its
   // remove button (if it has one — the :new/:respond seed row doesn't)
-  // locks. Re-enables as soon as a second row is staged.
+  // locks. Re-enables as soon as a second row is staged. Not when the form
+  // may be saved unplaced — then every row is removable.
   #updateRemoveButtons() {
     if (!this.hasLinkRowsTarget) return
     const rows = this.linkRowsTarget.querySelectorAll("[data-link-row]")
-    const lock = rows.length === 1
+    const lock = rows.length === 1 && !this.allowUnplacedValue
     rows.forEach((row) => {
       const button = row.querySelector("button[data-action*='removeLink']")
       if (!button) return

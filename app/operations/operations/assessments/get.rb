@@ -55,8 +55,20 @@ class Operations::Assessments::Get < Operations::Base
       assignment: assignment_payload,
       current_cycle: cycle_payload(assignment.current_open_cycle),
       scoring: score_summary.overall,
-      current_exploration: current_exploration
+      current_exploration: current_exploration,
+      unplaced_feedback: unplaced_feedback
     }
+  end
+
+  # Feedback recorded with no capability yet — the web's "waiting to be
+  # placed" notice, as a count, for a viewer who may place it (the same rule
+  # the notice uses: Assessments::UnplacedFeedback). Nil otherwise; the items
+  # themselves come from assessments_evidence_list with no capability.
+  #
+  # @return [Hash, nil] `{ count: }`
+  def unplaced_feedback
+    count = Assessments::UnplacedFeedback.count_for(assignment: assignment, context: context)
+    count && { count: count }
   end
 
   private

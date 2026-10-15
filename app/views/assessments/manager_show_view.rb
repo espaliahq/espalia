@@ -19,9 +19,10 @@ class Views::Assessments::ManagerShowView < Views::Base
                  activity_entries: [],
                  exploration: nil, can_explore: false,
                  can_manage_delegates: false, active_delegations: [], candidate_delegates: [],
-                 viewer_can_rate: true,
+                 viewer_can_rate: true, unplaced_feedback_count: 0,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
+    @unplaced_feedback_count = unplaced_feedback_count
     @assessee = assessee
     @framework = framework
     @matrix_data = matrix_data
@@ -82,6 +83,9 @@ class Views::Assessments::ManagerShowView < Views::Base
       div(id: "assessment-live-status", role: "status", class: "sr-only") { }
 
       sticky_header
+      if @unplaced_feedback_count.positive?
+        render Views::Assessments::UnplacedFeedbackNotice.new(count: @unplaced_feedback_count, whose: @assessee.name)
+      end
       div(class: "flex gap-6 items-start") do
         div(class: "flex-1 min-w-0") { main_section }
         activity_sidebar

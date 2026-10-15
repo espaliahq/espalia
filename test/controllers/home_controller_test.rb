@@ -38,6 +38,12 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to new_user_session_path
     end
 
+    should "offer the way to give feedback unasked, whatever the cards say" do
+      sign_in @user
+      get root_path
+      assert_select "a[data-testid='home-give-feedback'][href='#{evidence_hub_path(give: 1)}']", text: "Give someone feedback →"
+    end
+
     should "render the empty state for a user with nothing to act on" do
       bare_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do

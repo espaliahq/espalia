@@ -85,6 +85,64 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "POST /evidence_items" do
+    setup do
+      @assignment = ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.for_person(@author.id).first }
+    end
+
+    should "record volunteered feedback unplaced when no row is staged" do
+      sign_in @other_user
+      post evidence_items_path, params: { return_to: "hub", evidence: {
+        assignment_id: @assignment.id, evidence_type: "peer_feedback", content: "Ran the incident call calmly."
+      } }
+      assert_redirected_to evidence_hub_path
+      assert_equal "Feedback recorded — not yet placed on a capability.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.unplaced.for_person(@author.id).sole
+        assert_equal @other.id, item.author_id
+        assert_equal "peer", item.source
+      end
+    end
+
+    should "place volunteered feedback on the staged rows, first row leading" do
+      sign_in @other_user
+      first, second = "#{@cap.stable_id}|2", "#{@cap2.stable_id}|2"
+      post evidence_items_path, params: { return_to: "hub", evidence: {
+        assignment_id: @assignment.id, evidence_type: "peer_feedback", content: "Weighs options well.",
+        desired_links: [ first, second ],
+        link_valences: { first => "demonstrated", second => "growth_area" }
+      } }
+      assert_redirected_to evidence_hub_path
+      assert_equal "Feedback recorded.", flash[:notice]
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.active.where(author_id: @other.id).sole
+        assert_equal @cap.stable_id, item.capability_stable_id
+        assert_equal 2, EvidenceLink.active.where(evidence_id: item.id).count
+      end
+    end
+
+    should "refuse a malformed primary cell rather than reading it as unplaced" do
+      sign_in @other_user
+      post evidence_items_path, params: { return_to: "hub", evidence: {
+        assignment_id: @assignment.id, evidence_type: "peer_feedback", content: "x", primary_cell: "garbage"
+      } }
+      assert_redirected_to evidence_hub_path
+      assert_match(/primary cell/, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceItem.where(author_id: @other.id) }
+    end
+
+    should "refuse a staged row with no valence before writing anything" do
+      sign_in @other_user
+      post evidence_items_path, params: { return_to: "hub", evidence: {
+        assignment_id: @assignment.id, evidence_type: "peer_feedback", content: "x",
+        desired_links: [ "#{@cap.stable_id}|2" ]
+      } }
+      assert_redirected_to evidence_hub_path
+      assert_match(/Select what the feedback says/, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceItem.where(author_id: @other.id) }
+    end
+  end
+
   context "PATCH /evidence_items/:id" do
     should "let the author edit their evidence" do
       sign_in @author_user

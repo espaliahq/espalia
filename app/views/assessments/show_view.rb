@@ -37,9 +37,10 @@ class Views::Assessments::ShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
-                 exploration: nil, can_explore: false,
+                 exploration: nil, can_explore: false, unplaced_feedback_count: 0,
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
+    @unplaced_feedback_count = unplaced_feedback_count
     @framework = framework
     @matrix_data = matrix_data
     @active_category_id = active_category_id
@@ -92,6 +93,9 @@ class Views::Assessments::ShowView < Views::Base
       div(id: "assessment-live-status", role: "status", class: "sr-only") { }
 
       sticky_header
+      if @unplaced_feedback_count.positive?
+        render Views::Assessments::UnplacedFeedbackNotice.new(count: @unplaced_feedback_count, whose: "you")
+      end
       # Main + activity sit side-by-side. When the activity sidebar
       # is `hidden`, the main pane gets the full width; when shown,
       # it compresses to make room.

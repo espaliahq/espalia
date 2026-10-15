@@ -922,15 +922,38 @@ shared by web, MCP and Slack:
   handler also skips anyone with a request to the author still pending, in
   case the response is projected a moment after the item, on the same
   cell). An unplaced item's copy asks the recipient to place it and links to
-  the assessment, whose feed carries it; a placed one links to its cell.
+  its card on the hub (`EvidenceItem.hub_path`); a placed one links to its
+  cell.
   Both notifiers share `AssessmentNotificationRecipients` with the comment
   notifier (manager side, dedup on retry, provisioning a never-signed-in
   recipient).
 
-The web entry points (a "Give feedback" flow on the hub and the Home card,
-and a "waiting to be placed" list for the recipient and their manager) are
-[#503](https://github.com/mr-yum/growth-os/issues/503); the Slack command and
-message shortcut are [#504](https://github.com/mr-yum/growth-os/issues/504).
+**On the web** ([#503](https://github.com/mr-yum/growth-os/issues/503)):
+
+- **"Give feedback"** on the hub header (and "Give feedback →" on the Home
+  card, which opens it on arrival via `?give=1` and the `evidence-hub`
+  controller). The unified evidence modal opens on a first step — `mode=give`,
+  `Views::Evidence::RecipientPickerForm`: the directory's suggestions plus a
+  debounced search (`GET /evidence_modal/recipients`, reusing the
+  `person-picker` controller's typeahead only). Each row is a link targeting
+  the `evidence-modal` frame, so picking someone swaps in the `:new` form for
+  their assignment without the modal closing. That form has no seed cell: it
+  says who it is for, carries the same visibility note the respond form
+  shows, and its "Applies to" block may be left empty
+  (`data-evidence-modal-allow-unplaced-value`, which also lifts the
+  last-row lock). `EvidenceItemsController#create` runs the usual diff; the
+  first staged row leads, or the item is recorded unplaced.
+- **"Feedback to place"** on the hub: items about the viewer and, for the
+  manager side (`Person#all_reports` plus active delegations), about their
+  reports, each with "Place on a capability" — the edit modal with an empty
+  block, content disabled for a non-author. Cards are anchored
+  `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
+  notification lands. The assessment page shows
+  `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
+  evidence, linking to that section.
+
+The Slack command and message shortcut are
+[#504](https://github.com/mr-yum/growth-os/issues/504).
 
 ## Requesting evidence (cell-scoped)
 
@@ -1069,7 +1092,9 @@ UTC (`Time.zone`) until tenants carry a zone. `Reporting::CycleMonth` owns the
 key format, the label, and the months list that both the select and the MCP
 payload's `available_months` render.
 
-**Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): "Open
+**Hub layout** ([hub_view.rb](../../app/views/evidence/hub_view.rb)): the
+"Give feedback" entry in the header → "Feedback to place" (see *Proactive
+feedback*) → "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
 (subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
@@ -1645,7 +1670,10 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state — error + Retry in place of a stuck "Loading…" (see the controllers table) |
 | `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — Retry, plus an optional Close for modals (whose own ×/Cancel went down with the hidden frame). Callers pass `subject:` ("the form", "the discussion") and the sentence — including whether its tail says "close this" — is built from `subject:` + `closeable:`, so the copy can't promise an exit the site doesn't render. Owns `BUTTON_CLASSES`, the canonical secondary-button treatment the evidence forms' `SECONDARY_BTN` point at |
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
-| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock) + the capability/level picker (see *The unified "Applies to" block*) |
+| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock, lifted when the item may stay unplaced) + the capability/level picker (see *The unified "Applies to" block*) |
+| `app/views/evidence/recipient_picker_form.rb` / `recipient_row.rb` / `recipient_candidates_frame.rb` | The "Give feedback" step: who is it for? Suggestions + typeahead over the recipient directory; each row navigates the `evidence-modal` frame to the `:new` form (see *Proactive feedback*) |
+| `app/views/assessments/unplaced_feedback_notice.rb` | "N pieces of feedback about you are waiting to be placed" on the assessment, linking to the hub's "Feedback to place" |
+| `app/javascript/controllers/evidence_hub_controller.js` | Clicks the hub's "Give feedback" trigger on arrival when the URL carries `?give=1` |
 | `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see *Evidence-link valence*) |
 | `app/views/assessments/evidence/link_thread_frame.rb` | One linkage's discussion thread (lazy frame in the evidence card's disclosure) — lifecycle rows + comment cards + composer + removed/withdrawn notices (see *Evidence-linkage discussion threads*) |
 | `app/queries/assessments/evidence_link_thread_query.rb` | Assembles a linkage thread — comments + stream-read lifecycle entries (linked / revalenced / removed / withdrawn) |

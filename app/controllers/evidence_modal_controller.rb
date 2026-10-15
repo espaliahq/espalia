@@ -6,9 +6,13 @@
 # and the framework-scoped link options server-side.
 #
 # Modes:
-#   new     — record fresh evidence for a cell (content editable). The cell
-#             seeds the "Applies to" block as a fixed row and renders the
-#             writing-prompt card up top.
+#   give    — the first step of volunteering feedback: who is it for? A search
+#             over the recipient directory; picking a row navigates the frame
+#             to :new for that person's assignment.
+#   new     — record fresh evidence (content editable). With a cell, it seeds
+#             the "Applies to" block as a fixed row and renders the
+#             writing-prompt card up top; without one, the block starts
+#             empty and the item may be saved unplaced.
 #   edit    — edit an item (content editable iff author; otherwise link-only).
 #             ALL active links — the origin cell included — render as uniform,
 #             removable "Applies to" rows; there is no top context card. The
@@ -22,11 +26,20 @@ class EvidenceModalController < ApplicationController
   # GET /evidence_modal
   def show
     case params[:mode]
+    when "give"    then render_give
     when "new"     then render_new
     when "edit"    then render_edit
     when "respond" then render_respond
     else head :bad_request
     end
+  end
+
+  # GET /evidence_modal/recipients?q= — the give step's typeahead frame.
+  def recipients
+    authorize PersonFrameworkAssignment, :index?
+    entries = recipient_directory.call(params[:q], limit: Assessments::FeedbackRecipients::DEFAULT_LIMIT)
+    render Views::Evidence::RecipientCandidatesFrame.new(entries: entries, query: params[:q], return_to: params[:return_to]),
+           layout: false
   end
 
   private
@@ -35,13 +48,29 @@ class EvidenceModalController < ApplicationController
     head :forbidden unless current_person
   end
 
+  def render_give
+    authorize PersonFrameworkAssignment, :index?
+    render Views::Evidence::RecipientPickerForm.new(
+      suggestions: recipient_directory.suggestions,
+      candidates_url: recipients_evidence_modal_path(return_to: params[:return_to]),
+      return_to: params[:return_to]
+    ), layout: false
+  end
+
+  def recipient_directory
+    Assessments::FeedbackRecipients.new(giver: current_person)
+  end
+
+  # A cell seeds the form when the trigger names one (the assessment page);
+  # the give step names none, and the item may then be saved unplaced.
   def render_new
     assignment = PersonFrameworkAssignment.find(params.expect(:assignment_id))
     authorize assignment, :create?, policy_class: EvidencePolicy
-    render_modal(
-      mode: :new, assignment: assignment, content_editable: true,
-      seed_cell: { capability_stable_id: params[:capability_stable_id], level_ordinal: params[:level_ordinal].to_i }
-    )
+    seed_cell = if params[:capability_stable_id].present?
+      { capability_stable_id: params[:capability_stable_id], level_ordinal: params[:level_ordinal].to_i }
+    end
+    render_modal(mode: :new, assignment: assignment, content_editable: true, seed_cell: seed_cell,
+                 recipient: (Person.find_by(id: assignment.person_id) if seed_cell.nil?))
   end
 
   def render_edit
@@ -53,6 +82,7 @@ class EvidenceModalController < ApplicationController
     links = ordered_links(item)
     render_modal(
       mode: :edit, assignment: assignment, evidence: item, content_editable: policy.update?,
+      recipient: (Person.find_by(id: assignment.person_id) if links.empty?),
       linked_coords: links.map { |cap, level, _| [ cap, level ] },
       link_valences: links.to_h { |cap, level, valence| [ [ cap, level ], valence ] }
     )
@@ -71,7 +101,7 @@ class EvidenceModalController < ApplicationController
   # @param linked_coords [Array<Array(String, Integer)>] ALL active (cap, level) pairs (:edit)
   # @param link_valences [Hash{Array(String, Integer)=>String,nil}] current valence per active link
   def render_modal(mode:, assignment:, content_editable:, seed_cell: nil, evidence: nil, request: nil,
-                   linked_coords: [], link_valences: {})
+                   linked_coords: [], link_valences: {}, recipient: nil)
     options = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id)
     expectation_map = options.expectation_map
 
@@ -92,8 +122,21 @@ class EvidenceModalController < ApplicationController
       context_block: seed_cell && prompt_context(assignment, seed_cell),
       scope_line: scope_line(assignment),
       link_options: options.link_options, level_options: options.level_options,
-      linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to]
+      linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to],
+      recipient: recipient_block(assignment, recipient)
     ), layout: false
+  end
+
+  # Whose assessment the feedback lands on, for the forms that have no cell
+  # card to say so: the give step's :new, and an :edit of an unplaced item.
+  # Nil when the viewer IS the assessee — writing on your own assessment needs
+  # no introduction and no visibility warning.
+  def recipient_block(assignment, recipient)
+    return nil if recipient.nil? || recipient.id == current_person.id
+
+    role = FrameworkState::Role.where(role_id: assignment.role_id).pick(:name)
+    level = FrameworkState::Level.where(level_id: assignment.level_id).pick(:code)
+    { name: recipient.name, scope: [ role, level ].compact.join(" · ").presence }
   end
 
   # Active discussion-comment counts per linked cell (:edit only) — the

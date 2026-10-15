@@ -1,0 +1,36 @@
+# frozen_string_literal: true
+
+# Says, on the assessment itself, that feedback is waiting to be placed on a
+# capability — it is invisible to every card and score until someone does —
+# and points at the hub, where placing happens. Rendered for viewers who see
+# all the assessment's evidence (the assessee, the manager side, admins).
+class Views::Assessments::UnplacedFeedbackNotice < Views::Base
+  # @param count [Integer] unplaced items on this assessment (> 0)
+  # @param whose [String] "you" for the assessee, otherwise the assessee's name
+  def initialize(count:, whose:)
+    @count = count
+    @whose = whose
+  end
+
+  def view_template
+    # Static content, not a live region: the page's rating announcements own
+    # that role, and a region present at load is never announced anyway.
+    section(aria: { label: "Feedback waiting to be placed" }, data: { testid: "unplaced-feedback-notice" },
+        class: "mb-4 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 " \
+               "px-4 py-3 flex flex-wrap items-center justify-between gap-2") do
+      p(class: "text-sm text-amber-800 dark:text-amber-200") { sentence }
+      a(href: evidence_hub_path(anchor: "feedback-to-place"),
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-amber-900 dark:text-amber-100 hover:underline") do
+        @count == 1 ? "Place it →" : "Place them →"
+      end
+    end
+  end
+
+  private
+
+  def sentence
+    pieces = @count == 1 ? "1 piece of feedback" : "#{@count} pieces of feedback"
+    verb = @count == 1 ? "is" : "are"
+    "#{pieces} about #{@whose} #{verb} waiting to be placed on a capability — until then it shows on no card and counts nowhere."
+  end
+end

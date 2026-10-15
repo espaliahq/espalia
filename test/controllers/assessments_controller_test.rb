@@ -151,6 +151,22 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "GET /assessments/:id" do
+    should "tell the assessee about feedback waiting to be placed, and say nothing when there is none" do
+      sign_in @user
+      get assessment_path(@assignment)
+      assert_select "[data-testid='unplaced-feedback-notice']", count: 0
+
+      ActsAsTenant.with_tenant(@tenant) do
+        peer = create(:person, tenant: @tenant, name: "Peer")
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          source: "peer", evidence_type: "peer_feedback", content: "Calm under pressure", author_id: peer.id)
+      end
+      get assessment_path(@assignment)
+      assert_select "[data-testid='unplaced-feedback-notice']", text: /1 piece of feedback about you is waiting/ do
+        assert_select "a[href='#{evidence_hub_path(anchor: "feedback-to-place")}']", text: "Place it →"
+      end
+    end
+
     should "render assessment matrix for assigned framework" do
       sign_in @user
       get assessment_path(@assignment)
@@ -194,6 +210,30 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
         create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager)
         @person.update!(manager: @manager)
       end
+    end
+
+    should "not show the notice to a tenant admin outside the chain, who cannot place" do
+      admin_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          source: "manager", evidence_type: "observation", content: "Calm under pressure", author_id: @manager.id)
+      end
+      sign_in admin_user
+      get assessment_path(@assignment)
+      assert_response :success
+      assert_select "[data-testid='unplaced-feedback-notice']", count: 0
+    end
+
+    should "name the report in the unplaced-feedback notice" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+          source: "manager", evidence_type: "observation", content: "Calm under pressure", author_id: @manager.id)
+      end
+      sign_in @manager_user
+      get assessment_path(@assignment)
+      assert_select "[data-testid='unplaced-feedback-notice']", text: /about Test User is waiting/
     end
 
     should "render manager assessment view for direct report" do

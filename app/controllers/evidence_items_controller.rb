@@ -1,13 +1,28 @@
 # frozen_string_literal: true
 
-# Edit / withdraw evidence you've authored, from the evidence hub. Peer
-# evidence often lives on an assessment the author can't otherwise view, so
-# the hub is the author's home for managing it. Dispatches the shared
-# Operations (web + MCP parity); author-only via {EvidencePolicy}.
+# Give, edit and withdraw evidence from the evidence hub. Peer evidence often
+# lives on an assessment the author can't otherwise view, so the hub is the
+# author's home for managing it — and, since feedback can be volunteered, for
+# giving it. Dispatches the shared Operations (web + MCP parity), gated by
+# {EvidencePolicy}.
 class EvidenceItemsController < ApplicationController
   include EvidenceDiffSubmit
 
   before_action :require_person
+
+  # POST /evidence_items — the unified modal's :new submit from the hub:
+  # feedback volunteered to a colleague, placed on the rows staged in the
+  # form or recorded unplaced when there are none.
+  def create
+    assignment = PersonFrameworkAssignment.find(params.expect(evidence: [ :assignment_id ])[:assignment_id])
+    authorize assignment, :create?, policy_class: EvidencePolicy
+
+    touched = apply_evidence_diff
+    notice = touched.cells.empty? ? "Feedback recorded — not yet placed on a capability." : "Feedback recorded."
+    redirect_to evidence_hub_path, notice: notice, status: :see_other
+  rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
+    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+  end
 
   # PATCH /evidence_items/:id — the unified modal's edit submit (content and/or
   # links). The diff emits only what changed (no edited_at bump for links-only).

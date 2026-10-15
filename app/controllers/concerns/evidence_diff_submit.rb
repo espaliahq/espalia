@@ -46,12 +46,24 @@ module EvidenceDiffSubmit
 
   # ── Modes ──
 
+  # The seed cell is the first link when the form had one; a volunteered
+  # form has none, so the first staged row leads — or, with no rows at all,
+  # the item is recorded unplaced.
   def diff_new(p)
-    primary = parse_cell(p[:primary_cell])
-    raise Operations::Base::ParameterError, "Missing or malformed primary cell" if primary.nil?
+    cells = desired_cells(p)
+    primary = parse_cell(p[:primary_cell]) || cells.first
+    if p[:primary_cell].present? && parse_cell(p[:primary_cell]).nil?
+      raise Operations::Base::ParameterError, "Missing or malformed primary cell"
+    end
+    if primary.nil?
+      result = Operations::Assessments::RecordEvidence.call(context: pundit_user, params: {
+        assignment_id: p[:assignment_id], **content_params(p)
+      })
+      return TouchedCells.new([], result[:evidence_id])
+    end
 
     valences = link_valences(p)
-    extras = desired_cells(p) - [ primary ]
+    extras = cells - [ primary ]
 
     result = Operations::Assessments::RecordEvidence.call(context: pundit_user, params: {
       assignment_id: p[:assignment_id],
@@ -62,7 +74,7 @@ module EvidenceDiffSubmit
       end,
       **content_params(p)
     })
-    TouchedCells.new(desired_cells(p), result[:evidence_id])
+    TouchedCells.new(cells, result[:evidence_id])
   end
 
   def diff_respond(p)
