@@ -40,10 +40,14 @@ class Frameworks::DraftChangesQuery
   end
 
   # The same list the mapping form below it shows, so the two can't disagree.
+  # Counted over the roles it is published with: a role removed earlier in the
+  # draft still holds people the archive reaches.
   def capabilities_archived
     Frameworks::RetiringCapabilitiesQuery.new(@framework).call.map do |entry|
       capability = entry[:capability]
-      { capability: capability.name, open_cycle_people: open_cycle_people(capability.bindings.map(&:role_id)) }
+      role_ids = capability.bindings.map(&:role_id) +
+                 published_bindings.select { |b| b.capability_id == capability.capability_id }.map(&:role_id)
+      { capability: capability.name, open_cycle_people: open_cycle_people(role_ids) }
     end
   end
 

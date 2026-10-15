@@ -78,6 +78,16 @@ class Frameworks::DraftChangesQueryTest < ActiveSupport::TestCase
     assert_empty result[:roles_removed]
   end
 
+  should "count an archive over the roles it is published with, even one removed earlier in the draft" do
+    within_tenant do
+      @handler.remove_capability_role_binding(@framework_id, @design_ae)
+      @handler.archive_capability(@framework_id, @design_id, reason: "x")
+    end
+
+    assert_equal [ { capability: "System Design", open_cycle_people: 4 } ],
+                 within_tenant { changes.call[:capabilities_archived] }
+  end
+
   should "list nothing more for a capability being archived than the archive" do
     within_tenant do
       family = FrameworkState::Role.find_by!(role_id: @ae).role_family_id
