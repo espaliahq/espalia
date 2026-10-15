@@ -687,6 +687,38 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "selecting a capability name" do
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", [ 375, 812 ] ] ].each do |label, size|
+      should "copy the name without toggling focus on #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        wait_for_stimulus "matrix"
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+        lock_scroll_focus_picker
+
+        header = "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'] " \
+                 "[data-action*='matrix#focusCapability']"
+        assert_not_equal "none", page.evaluate_script("getComputedStyle(document.querySelector(#{header.to_json})).userSelect")
+
+        page.execute_script(<<~JS)
+          const name = document.getElementById("capability-name-#{@cap2_stable}");
+          const range = document.createRange();
+          range.selectNodeContents(name);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        JS
+        assert_includes page.evaluate_script("window.getSelection().toString()"), "Problem Solving"
+
+        click_card_header(@cap2_stable)
+        assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='false']"
+
+        page.execute_script("window.getSelection().removeAllRanges()")
+        click_card_header(@cap2_stable)
+        assert_selector "[data-matrix-target='card'][data-capability-stable-id='#{@cap2_stable}'][data-focused='true']"
+      end
+    end
+  end
+
   context "rating entry summary" do
     should "include the capability name so each entry is readable at a glance" do
       visit assessment_path(@assignment)
