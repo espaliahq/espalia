@@ -925,8 +925,7 @@ export default class extends BaseController {
       // card on a later frame — wait for it, so what follows sees the new card.
       const response = await get(url.toString(), { responseKind: "turbo-stream" })
       if (!(response.ok && response.isTurboStream)) return false
-      await this.#cardReplaced(stableId, card)
-      return true
+      return await this.#cardReplaced(stableId, card)
     } catch {
       return false
     } finally {
@@ -934,12 +933,14 @@ export default class extends BaseController {
     }
   }
 
+  // False when the card never arrives — the swap then counts as failed.
   async #cardReplaced(stableId, previous) {
     for (let frame = 0; frame < 60; frame++) {
       const live = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
-      if (live && live !== previous) return
+      if (live && live !== previous) return true
       await new Promise(resolve => requestAnimationFrame(resolve))
     }
+    return false
   }
 
   // The browser URL is the selected-level map's source of truth: a broadcast

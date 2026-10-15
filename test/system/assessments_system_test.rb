@@ -773,7 +773,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert page.evaluate_script("window.__matrixRoot.isConnected")
       assert_includes page.current_url, CGI.escape("levels[#{@cap1_stable}]") + "=1"
 
+      page.execute_script("window.__beforeReload = true")
       visit page.current_url
+      assert page.evaluate_script("window.__beforeReload !== true"), "the page must actually reload"
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       assert_text "Asks clarifying questions to understand problems"
       assert_text "Delivers small tasks reliably"
     end
