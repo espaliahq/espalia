@@ -69,6 +69,36 @@ class Assessments::RoleScopeTest < ActiveSupport::TestCase
     end
   end
 
+  context ".reusing" do
+    should "hand back the scope built earlier in the block" do
+      Assessments::RoleScope.reusing do
+        first = role_scope(@engineer)
+        assert_same first, role_scope(@engineer)
+        assert_same first, Assessments::RoleScope.for_roles(role_ids: [ @engineer.role_id, @manager.role_id ],
+                                                            framework_id: @framework_id)[@engineer.role_id]
+      end
+    end
+
+    should "build fresh outside a block, and after one ends" do
+      assert_not_same role_scope(@engineer), role_scope(@engineer)
+      Assessments::RoleScope.reusing { role_scope(@engineer) }
+      assert_not_same role_scope(@engineer), role_scope(@engineer)
+    end
+
+    should "keep the outer block's scopes through a nested one" do
+      Assessments::RoleScope.reusing do
+        first = role_scope(@engineer)
+        Assessments::RoleScope.reusing { assert_same first, role_scope(@engineer) }
+        assert_same first, role_scope(@engineer)
+      end
+    end
+
+    should "forget its scopes when the block raises" do
+      assert_raises(RuntimeError) { Assessments::RoleScope.reusing { role_scope(@engineer); raise "boom" } }
+      assert_not_same role_scope(@engineer), role_scope(@engineer)
+    end
+  end
+
   context ".for_people" do
     setup do
       @cycle = create(:assessment_cycle, tenant: @tenant, framework_id: @framework_id, framework_version: 1)

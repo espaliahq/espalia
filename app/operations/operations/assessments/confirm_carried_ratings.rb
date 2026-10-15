@@ -57,9 +57,13 @@ class Operations::Assessments::ConfirmCarriedRatings < Operations::Base
 
     rows = existing_rows(cycle.cycle_id)
     result = { cycle_id: cycle.cycle_id, perspective: perspective, confirmed: [], skipped: [] }
-    cells.each do |cell|
-      reason = confirm(cell, rows[[ cell[:capability_stable_id], cell[:level_ordinal] ]])
-      reason ? result[:skipped] << cell.merge(reason: reason) : result[:confirmed] << cell
+    # Each cell's write resolves a lens and checks coverage — the same role
+    # scope every time, so build it once for the batch.
+    Assessments::RoleScope.reusing do
+      cells.each do |cell|
+        reason = confirm(cell, rows[[ cell[:capability_stable_id], cell[:level_ordinal] ]])
+        reason ? result[:skipped] << cell.merge(reason: reason) : result[:confirmed] << cell
+      end
     end
     result
   end
