@@ -233,7 +233,7 @@ class Views::Evidence::HubView < Views::Base
     detail = @authored_details.fetch(item.id, {})
     card do
       div do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:name] || "Capability" }
+        p(class: "text-sm font-medium text-gray-900 dark:text-white") { authored_cell_label(item, detail) }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
       end
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
@@ -243,9 +243,18 @@ class Views::Evidence::HubView < Views::Base
     end
   end
 
+  # An item recorded without a cell has no capability to name; say so
+  # rather than falling back to a placeholder that reads like one.
+  def authored_cell_label(item, detail)
+    return "Feedback, not yet placed on a capability" if item.capability_stable_id.nil?
+
+    detail[:name] || "Capability"
+  end
+
   def authored_scope_label(item, detail)
     whose = item.person_id == item.author_id ? "your assessment" : "#{detail[:assessee_name] || "a colleague"}'s assessment"
-    [ detail[:role], level_short(detail, item.level_ordinal), "on #{whose}" ].compact.join(" · ")
+    level = level_short(detail, item.level_ordinal) if item.level_ordinal
+    [ detail[:role], level, "on #{whose}" ].compact.join(" · ")
   end
 
   def authored_type_label(item)
