@@ -27,6 +27,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param only_capability [String, nil] renders just that capability's card,
+  #   without the section around it
   def initialize(category_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, scoring: {}, self_scoring: nil,
                  manager_scoring: nil, aligned_scoring: nil,
@@ -36,8 +38,9 @@ class Views::Assessments::CategorySection < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil, only_capability: nil)
     @lens = lens
+    @only_capability = only_capability
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -64,6 +67,8 @@ class Views::Assessments::CategorySection < Views::Base
   end
 
   def view_template
+    return capability_cards if @only_capability
+
     section(
       id: "category-#{@category.category_id}",
       class: "scroll-mt-40",
@@ -149,6 +154,8 @@ class Views::Assessments::CategorySection < Views::Base
     div(class: "space-y-3") do
       @category_data[:capabilities].each do |cap_data|
         stable_id = cap_data[:capability].stable_id
+        next if @only_capability && stable_id != @only_capability
+
         render Views::Assessments::CapabilityCard.new(
           capability_data: cap_data,
           merged_levels: @merged_levels,

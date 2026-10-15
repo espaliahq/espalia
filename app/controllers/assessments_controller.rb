@@ -16,7 +16,7 @@ class AssessmentsController < ApplicationController
   SKIP_LEVEL_PAGE_SIZE = 12
 
   before_action :require_person
-  before_action :set_assignment, only: [ :show, :matrix, :scoring ]
+  before_action :set_assignment, only: [ :show, :matrix, :scoring, :capability_card ]
 
   # GET /assessments
   def index
@@ -136,23 +136,25 @@ class AssessmentsController < ApplicationController
   def matrix
     authorize @assignment, :matrix?
     load_assessment_data
-    render Views::Assessments::AssessmentMatrixFrameView.new(
-      framework: @framework,
-      matrix_data: @matrix_data,
-      assignment: @assignment,
-      context: assessment_context,
-      viewer_is_manager: manager_viewing?,
-      active_category_id: resolve_active_category_id,
-      expanded_capability_id: params[:capability],
-      expanded_level_ordinal: focused_level_ordinal_param,
-      selected_levels: selected_levels_param,
-      viewer_person_id: current_person&.id,
-      can_create_evidence: viewer_can_create_evidence?,
-        can_request_evidence: viewer_can_request_evidence?,
-      can_relink_others_evidence: viewer_can_relink_others_evidence?,
-      can_comment: viewer_can_comment?,
-      viewer_is_tenant_admin: viewer_is_tenant_admin?
-    ), layout: false
+    render Views::Assessments::AssessmentMatrixFrameView.new(**matrix_view_args), layout: false
+  end
+
+  # GET /assessments/:id/capability_card
+  #
+  # One card, rendered through the same path as the matrix frame and
+  # narrowed to `?capability=`, as a Turbo Stream replacing it in place.
+  def capability_card
+    authorize @assignment, :matrix?
+    load_assessment_data
+    stable_id = params.expect(:capability)
+    return head(:not_found) unless capability_in_matrix?(stable_id)
+
+    html = render_to_string(
+      Views::Assessments::AssessmentMatrix.new(**matrix_view_args.except(:framework, :assignment, :active_category_id),
+                                               assessment_id: @assignment.id, only_capability: stable_id),
+      layout: false
+    )
+    render turbo_stream: turbo_stream.replace(Views::Assessments::CapabilityCard.dom_id_for(stable_id), html)
   end
 
   # GET /assessments/:id/scoring
@@ -206,6 +208,34 @@ class AssessmentsController < ApplicationController
     else
       redirect_to assessments_path, alert: "Assessment not found."
     end
+  end
+
+  # The matrix frame's arguments, shared with the single-card render so the
+  # two can't drift.
+  #
+  # @return [Hash]
+  def matrix_view_args
+    {
+      framework: @framework,
+      matrix_data: @matrix_data,
+      assignment: @assignment,
+      context: assessment_context,
+      viewer_is_manager: manager_viewing?,
+      active_category_id: resolve_active_category_id,
+      expanded_capability_id: params[:capability],
+      expanded_level_ordinal: focused_level_ordinal_param,
+      selected_levels: selected_levels_param,
+      viewer_person_id: current_person&.id,
+      can_create_evidence: viewer_can_create_evidence?,
+      can_request_evidence: viewer_can_request_evidence?,
+      can_relink_others_evidence: viewer_can_relink_others_evidence?,
+      can_comment: viewer_can_comment?,
+      viewer_is_tenant_admin: viewer_is_tenant_admin?
+    }
+  end
+
+  def capability_in_matrix?(stable_id)
+    @matrix_data[:categories].any? { |c| c[:capabilities].any? { |cap| cap[:capability].stable_id == stable_id } }
   end
 
   # Whether current_person is viewing a direct report's assessment.

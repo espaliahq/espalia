@@ -7,6 +7,10 @@
 # horizontal level strip + optional expansion panel for the focused level.
 #
 class Views::Assessments::CapabilityCard < Views::Base
+  # @param stable_id [String]
+  # @return [String] the card's element id — the single-card swap's target
+  def self.dom_id_for(stable_id) = "capability-card-#{stable_id}"
+
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
@@ -101,6 +105,7 @@ class Views::Assessments::CapabilityCard < Views::Base
       # text wraps differently) so `matrix_controller#scrollCardUnderHeader`
       # overrides scroll-margin-top with the measured section height
       # right before scrolling.
+      id: self.class.dom_id_for(@capability.stable_id),
       style: "scroll-margin-top: calc(var(--sticky-header-h, 0px) + 12px)",
       data: {
         matrix_target: "card",

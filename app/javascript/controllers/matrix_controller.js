@@ -57,7 +57,10 @@ export default class extends BaseController {
   static values = {
     basePath: String,
     urlSync: { type: Boolean, default: false },
-    activeCategoryId: { type: String, default: "" }
+    activeCategoryId: { type: String, default: "" },
+    // Assessment cards only: where one card is fetched at a newly picked
+    // level (#488). Absent in the framework explorer.
+    cardUrl: { type: String, default: "" }
   }
 
   connect() {
@@ -853,8 +856,83 @@ export default class extends BaseController {
     this.#applyCardFocus(stableId, "cell")
     this.#dispatchFocusEvent({ ...this.currentFocus })
 
-    this.#reloadMatrixWithFocus(stableId, ordinal)
-    this.#scrollCardUnderHeader(stableId)
+    if (this.cardUrlValue) {
+      // Swap just this card (#488): reloading the whole matrix to change one
+      // card cost ~440 KB and a long main-thread block per click. The card's
+      // top doesn't move when its contents change, so the scroll can start now.
+      this.#pushFocusToUrl(stableId, ordinal)
+      this.#loadCard(stableId, ordinal)
+      this.#scrollCardUnderHeader(stableId, { awaitFrameLoad: false })
+    } else {
+      this.#reloadMatrixWithFocus(stableId, ordinal)
+      this.#scrollCardUnderHeader(stableId)
+    }
+  }
+
+  // One fetch per card at a time; a click that lands while one is in flight
+  // queues its level, so the card always ends on the last level picked.
+  async #loadCard(stableId, ordinal) {
+    this._cardLoads ||= new Map()
+    const pending = this._cardLoads.get(stableId)
+    if (pending) {
+      pending.next = ordinal
+      return
+    }
+    const load = { next: ordinal }
+    this._cardLoads.set(stableId, load)
+    try {
+      while (load.next != null) {
+        const target = load.next
+        load.next = null
+        if (!(await this.#fetchCard(stableId, target))) {
+          // Whatever failed — network, a session bounce, a card no longer in
+          // scope — the whole-frame reload has the recovery paths already.
+          this.#reloadMatrixWithFocus(stableId, target)
+          return
+        }
+      }
+    } finally {
+      this._cardLoads.delete(stableId)
+    }
+  }
+
+  async #fetchCard(stableId, ordinal) {
+    const url = new URL(this.cardUrlValue, window.location.origin)
+    url.searchParams.set("capability", stableId)
+    url.searchParams.set("level_ordinal", ordinal.toString())
+    const card = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+    card?.setAttribute("aria-busy", "true")
+    try {
+      // request.js renders a turbo-stream response itself, replacing the card.
+      const response = await get(url.toString(), { responseKind: "turbo-stream" })
+      return response.ok && response.isTurboStream
+    } catch {
+      return false
+    } finally {
+      card?.removeAttribute("aria-busy")
+    }
+  }
+
+  // The browser URL is the selected-level map's source of truth: a broadcast
+  // reload and the whole-frame paths below read it back.
+  #pushFocusToUrl(stableId, ordinal) {
+    const browserUrl = new URL(window.location)
+    browserUrl.searchParams.set("capability", stableId)
+    browserUrl.searchParams.set("level_ordinal", ordinal.toString())
+    browserUrl.searchParams.set(`levels[${stableId}]`, ordinal.toString())
+    window.history.pushState({}, "", browserUrl)
+  }
+
+  // A card swap updates only the browser URL, so a whole-frame reload built
+  // from the frame's own `src` takes the selected levels from there.
+  #withBrowserLevels(url) {
+    for (const key of [...url.searchParams.keys()]) {
+      if (key.startsWith("levels[")) url.searchParams.delete(key)
+    }
+    new URL(window.location).searchParams.forEach((value, key) => {
+      if (key.startsWith("levels[")) url.searchParams.append(key, value)
+    })
+    return url
   }
 
   // After a chip click reloads the matrix frame, scroll the capability
@@ -950,7 +1028,7 @@ export default class extends BaseController {
     if (!currentSrc) return
 
     let url
-    try { url = new URL(currentSrc, window.location.origin) } catch { return }
+    try { url = this.#withBrowserLevels(new URL(currentSrc, window.location.origin)) } catch { return }
 
     // `capability` + `level_ordinal` drive the single focused cell (ring +
     // activity narrowing). `levels[<stable>]=<ord>` is the *per-capability*
@@ -1841,9 +1919,11 @@ export default class extends BaseController {
 
     if (next === this._focusedCard) return
 
-    if (this._focusedCard && this._focusedCard.isConnected) {
-      this._focusedCard.dataset.focused = "false"
-    }
+    // A swapped card (#488) arrives as a new node the server already stamped,
+    // so clear by attribute, not by the node remembered last time.
+    this.cardTargets.forEach(card => {
+      if (card !== next && card.dataset.focused === "true") card.dataset.focused = "false"
+    })
     if (next) {
       next.dataset.focused = "true"
     }
@@ -2295,7 +2375,7 @@ export default class extends BaseController {
     if (!currentSrc) return
 
     let url
-    try { url = new URL(currentSrc, window.location.origin) } catch { return }
+    try { url = this.#withBrowserLevels(new URL(currentSrc, window.location.origin)) } catch { return }
     url.searchParams.set("category", categoryId)
     if (capabilityStableId) url.searchParams.set("capability", capabilityStableId)
     if (level === "cell" && levelOrdinal != null) {
