@@ -39,13 +39,24 @@ class Assessments::MatrixDataBuilderRoleTreeTest < ActiveSupport::TestCase
     ).build
   end
 
+  # Everything the views read, with records reduced to their ids.
   def digest(data)
-    data[:categories].map do |category|
+    categories = data[:categories].map do |category|
       [ category[:category].category_id, category[:capabilities].map do |cap|
-        [ cap[:capability].stable_id, cap[:in_home_role],
-          cap[:cells].transform_values { |cell| [ cell[:expectation].expectation_id, cell[:illustrations].map(&:illustration_id) ] } ]
+        [ cap[:capability].stable_id, cap[:in_home_role], cap[:weight],
+          cap[:cells].transform_values do |cell|
+            cell.except(:expectation, :illustrations, :evidence, :comments)
+              .merge(expectation: cell[:expectation].expectation_id, illustrations: cell[:illustrations].map(&:illustration_id))
+          end ]
       end ]
     end
+    { categories: categories, **data.slice(:scoring, :self_scoring, :manager_scoring, :aligned_scoring, :emphasised_capabilities,
+                                           :total_cells, :rated_cells, :current_level_complete, :current_level_work) }
+  end
+
+  def example_descriptions(data)
+    data[:categories].flat_map { |c| c[:capabilities].flat_map { |cap| cap[:cells].values.flat_map { |cell| cell[:illustrations] } } }
+      .map(&:description).uniq
   end
 
   def instantiated
@@ -66,8 +77,7 @@ class Assessments::MatrixDataBuilderRoleTreeTest < ActiveSupport::TestCase
       data = build(@lens)
       names = data[:categories].flat_map { |c| c[:capabilities].map { |cap| cap[:capability].name } }
       assert_equal [ "Critical Thinking", "Systems Design" ], names.sort
-      examples = data[:categories].flat_map { |c| c[:capabilities].flat_map { |cap| cap[:cells].values.flat_map { |cell| cell[:illustrations] } } }
-      assert_equal [ "E example" ], examples.map(&:description).uniq
+      assert_equal [ "E example" ], example_descriptions(data)
     end
 
     should "not load capabilities or examples another role reads" do
@@ -88,7 +98,9 @@ class Assessments::MatrixDataBuilderRoleTreeTest < ActiveSupport::TestCase
     end
 
     should "load the lens role's examples, not the home role's" do
-      counts = instantiated { build(@lens) }
+      data = nil
+      counts = instantiated { data = build(@lens) }
+      assert_equal [ "PM example" ], example_descriptions(data)
       assert_equal 6, counts["FrameworkState::RoleIllustration"]
     end
   end
