@@ -650,6 +650,20 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
     message for this draft. Edits made to the draft between the request and
     the job running are published with it — the job re-checks the gate, so a
     newly retired capability without a mapping fails the publish and says so.
+  - **The review page says what the version changes** (#497). "What changes
+    in vN" lists every shape-changing difference between the draft and the
+    published framework — capabilities and categories added or archived,
+    roles a capability gains or loses, levels and expectations added — with
+    the open-cycle people a removal or archive reaches.
+    `Frameworks::DraftChangesQuery` diffs the edit-mode graph against the
+    published read model rather than walking events, comparing bindings by
+    (capability, role): a binding removed and re-added mints a new id but
+    changes nothing for an assessment. An archive is listed once, not once
+    per role it drops. The page reads it through
+    `Operations::Frameworks::DraftChanges` (MCP `frameworks_draft_changes`),
+    so an agent can read what it is about to publish. Before this, the page
+    listed only archives, and a draft that took three capabilities off a role
+    read "nothing to migrate".
   - **Publish-review mappings are ONE form.** Every retiring capability's row
     (type + survivor) posts together to `MigrationMappingsController#create`
     as `migration_mappings[<i>][…]` → `Operations::Frameworks::DefineMigrationMappings`,
@@ -2604,7 +2618,7 @@ line (§9).
 | `app/views/frameworks/explorer/archive_category_modal.rb` | Shared archive-category modal (confirm + optional reason; no migration mapping) — opened by the header kebab |
 | `app/views/frameworks/explorer/binding_editor_modal.rb` | Shared "Edit roles" modal (embedded) — body is the `binding-editor` Turbo Frame; opened by the row kebab. Same `frame-error` + `Kit::FrameLoadError` wiring as the level-editor modal (audit issue #365) — the frame-failure machinery is documented in [assessments.md](assessments.md)'s Stimulus controllers table, where it was extracted from the evidence modal |
 | `app/views/frameworks/explorer/binding_editor_frame.rb` | Binding-editor frame body — lists role bindings (weight + Remove) + add-role form; re-renders in place on each action |
-| `app/views/frameworks/publication_review_view.rb` | Publish-review page — one form for every retiring capability's mapping, the latest publish request's state, and the confirm that requests the background publish |
+| `app/views/frameworks/publication_review_view.rb` | Publish-review page — what the version changes, one form for every retiring capability's mapping, the latest publish request's state, and the confirm that requests the background publish |
 | `app/views/frameworks/explorer/expectation_text_frame.rb` | Expectation text + edit-mode inline editor |
 | `app/views/frameworks/explorer/concerns/suggestion_decoration.rb` | Shared decoration class helper (wavy underline / strikethrough) + the squiggle's open-card click affordance (§10) |
 | `app/views/frameworks/explorer/concerns/menu_items.rb` | The grid's kebab triggers — `render_menu_trigger` + `approval_menu_data`; the menu itself is built client-side (§11a, #380) |
@@ -2689,6 +2703,8 @@ line (§9).
 | `app/controllers/frameworks/publications_controller.rb` | Publish-review page (`new`, via `Frameworks::RetiringCapabilitiesQuery`) + request the publish (`create` → `PublishVersion`, which records a `FrameworkPublication` and enqueues the job) |
 | `app/controllers/frameworks/migration_mappings_controller.rb` | Save every migration mapping on the publish-review page in one submit (POST → `DefineMigrationMappings`) |
 | `app/operations/operations/frameworks/define_migration_mappings.rb` | Batch mapping save shared by the review page and MCP — triages unchanged / undecided / incomplete rows, writes the rest atomically |
+| `app/queries/frameworks/draft_changes_query.rb` | What publishing the draft changes — a graph-vs-published diff, bindings compared by (capability, role), with open-cycle reach |
+| `app/operations/operations/frameworks/draft_changes.rb` | Shared web + MCP read (`frameworks_draft_changes`) over that query — the review page's "What changes in vN" |
 | `app/queries/frameworks/retiring_capabilities_query.rb` | Retiring capabilities + their mappings from the edit-mode graph — the review page's rows and the publish request's gate |
 | `app/models/framework_publication.rb` | A publish request and its outcome; one unfinished row per framework holds the in-flight lock |
 | `app/jobs/frameworks/publish_version_job.rb` | Runs the publish as the requester, records the outcome, notifies them (`FrameworkPublishedNotifier`) |

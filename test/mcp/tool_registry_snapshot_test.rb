@@ -1507,6 +1507,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "frameworks_draft_changes",
+        "description" => "What publishing the open draft would change (capabilities, categories, role " \
+          "bindings, levels, expectations) and how many open-cycle people each change reaches.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "framework_id" => { "type" => "string" }
+          },
+          "required" => [ "framework_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "frameworks_edit_suggestion_comment",
         "description" => "Revise your own comment on a framework suggestion's discussion thread (author only). " \
                          "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
