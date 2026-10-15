@@ -93,6 +93,24 @@ class Assessments::RoleScopeTest < ActiveSupport::TestCase
       end
     end
 
+    should "load only the roles it hasn't built yet" do
+      Assessments::RoleScope.reusing do
+        engineer = role_scope(@engineer)
+        both = Assessments::RoleScope.for_roles(role_ids: [ @engineer.role_id, @manager.role_id ], framework_id: @framework_id)
+        assert_same engineer, both[@engineer.role_id]
+        assert_equal Set[[ @shared.stable_id, 1 ], [ @shared.stable_id, 2 ], [ @people_only.stable_id, 2 ]],
+                     both[@manager.role_id].cells
+      end
+    end
+
+    should "drop its scopes after a framework write" do
+      Assessments::RoleScope.reusing do
+        first = role_scope(@engineer)
+        Frameworks::Repository.new.with_framework(@framework_id) { |_aggregate| }
+        assert_not_same first, role_scope(@engineer)
+      end
+    end
+
     should "forget its scopes when the block raises" do
       assert_raises(RuntimeError) { Assessments::RoleScope.reusing { role_scope(@engineer); raise "boom" } }
       assert_not_same role_scope(@engineer), role_scope(@engineer)

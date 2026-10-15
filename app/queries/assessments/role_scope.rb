@@ -12,9 +12,8 @@
 #
 # Built fresh on every call rather than cached per request: the projection
 # runs readers on every rating event, and during a replay the framework's
-# shape changes between one event and the next. A unit of work that can't
-# change the framework — a rating request, a bulk confirm — opts in to
-# reuse with {.reusing}.
+# shape changes between one event and the next. A rating request or a bulk
+# confirm opts in to reuse with {.reusing}.
 #
 # @example
 #   scope = Assessments::RoleScope.for(role_id: role.role_id, framework_id: framework_id)
@@ -40,7 +39,7 @@ class Assessments::RoleScope
     role_ids = role_ids.compact.uniq
     return {} if role_ids.empty?
 
-    memo = ActiveSupport::IsolatedExecutionState[:role_scope_memo]
+    memo = CurrentRoleScopes.memo
     return load_roles(role_ids:, framework_id:) unless memo
 
     missing = role_ids.reject { |id| memo.key?([ id, framework_id ]) }
@@ -48,19 +47,21 @@ class Assessments::RoleScope
     role_ids.index_with { |id| memo.fetch([ id, framework_id ]) }
   end
 
-  # Reuses every scope built inside the block. Only for work that writes no
-  # framework events: a rating request builds the same role's scope three
-  # times (the page's lens, the write's lens, the projection's coverage).
+  # Reuses every scope built inside the block. A framework write empties it
+  # ({Frameworks::Repository#with_framework}), so a block that writes one
+  # still reads fresh scopes afterwards. A rating builds the same role's
+  # scope three times: the page's lens, the write's lens and the
+  # projection's coverage check.
   #
   # @yield the unit of work
   def self.reusing
-    return yield if ActiveSupport::IsolatedExecutionState[:role_scope_memo]
+    return yield if CurrentRoleScopes.memo
 
     begin
-      ActiveSupport::IsolatedExecutionState[:role_scope_memo] = {}
+      CurrentRoleScopes.memo = {}
       yield
     ensure
-      ActiveSupport::IsolatedExecutionState[:role_scope_memo] = nil
+      CurrentRoleScopes.memo = nil
     end
   end
 
