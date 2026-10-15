@@ -59,7 +59,7 @@ Activity:     /assessments/:id/activity?capability=<stable_id>&level_ordinal=<n>
 - `level_ordinal` only honoured when `capability` is also present.
 - **`levels[<stable_id>]=<ordinal>` is the per-capability selected-level map** — the **rendering** axis, distinct from the single-cell **focus** axis (`capability`/`level_ordinal`). Each capability card's expansion panel renders the level the viewer last selected for THAT capability; the map **accumulates** one entry per capability the user picks a level on. This is what makes a level selection persist *independently per capability* across scrolling, rating, and live broadcast reloads — selecting a level on one capability never resets another (the old single-slot model did). `AssessmentsController#selected_levels_param` parses it (and folds in the legacy single `capability`/`level_ordinal` pair, so deep-links / the Continue CTA / activity-feed navigation still render the focused card at the requested level); `CapabilityCard` resolves its displayed ordinal as `selected_levels[stable_id] || person_level`. **The scroll-driven capability picker only ever touches `capability`/`level_ordinal`, never the map** — so scrolling can't disturb a rendered level. The map is threaded into the matrix frame `src` (`matrix_frame_params`) and re-merged onto the `src` on every broadcast reload (`assessment_sync_controller#mergeFocusParams`, alongside `capability`/`level_ordinal`), so a rating/alignment broadcast keeps every card on its selected level. URL length grows only with explicitly-changed capabilities (default-level cards aren't in the map).
 - Every capability card auto-focuses the person's current level on render (the expansion panel is always visible for `@person_level`). A `levels[<stable_id>]` entry (or, for back-compat, the focused `?capability=` + `?level_ordinal=` pair folded into the map) overrides — the card's expansion panel renders for the selected level instead.
-- `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** `history.pushState` per focus change, so Back/Forward maps 1:1 to visible focus changes. `matrix_controller#reloadMatrixWithFocus` additionally merges `levels[<stable_id>]=<ordinal>` into both the frame `src` and the browser URL on every chip click (accumulating), so the per-capability map stays current for reloads and sharing.
+- `matrix_controller#syncFocusToUrl` writes `capability` and `level_ordinal` together in **one** `history.pushState` per focus change, so Back/Forward maps 1:1 to visible focus changes. A chip click also merges `levels[<stable_id>]=<ordinal>` into the browser URL (accumulating). **The browser URL is the map's source of truth**: a chip click swaps one card without touching the matrix frame's `src` (see *Level strip*), so every path that reloads the whole frame — broadcasts (`assessment_sync_controller#mergeFocusParams`), `#reloadMatrixWithFocus`, `#navigateToCategoryTab` — reads the `levels[...]` entries back from the browser URL rather than from the frame's own `src`.
 - Category chip clicks update the URL with `?category=` and dispatch a `matrix:focus-changed` event at category level so the activity feed narrows.
 
 ## Hero Summary — three bands
@@ -377,7 +377,7 @@ Structure: `card_header` (eyebrow + name + signed delta + add-evidence) + `Level
 
 Every card auto-focuses the person's current level on first render — the expansion panel is *always* visible for `@person_level`. The viewer overrides a card's level by clicking a chip; that selection is remembered **per capability** in the `levels[<stable_id>]` URL map (see *URL-driven state*), so `CapabilityCard` resolves its displayed level as `selected_levels[stable_id] || @person_level`. Selections are independent and persistent across scrolling / rating / reloads — picking a level on one card never resets another. There is no longer a "default" state with the strip but no panel.
 
-There is no `×` close button. The previous design had one to drop back to "no level focused"; with auto-focus there's nothing meaningful to close *to*. Re-focusing means clicking a different level chip — handled by `matrix_controller#focusChip`, which sets the URL and reloads the matrix frame.
+There is no `×` close button. The previous design had one to drop back to "no level focused"; with auto-focus there's nothing meaningful to close *to*. Re-focusing means clicking a different level chip — handled by `matrix_controller#focusChip`, which sets the URL and swaps that one card.
 
 ### The capability's own score — `CapabilityNameRow`
 
@@ -444,7 +444,14 @@ same scale.
 
 ### Level strip — `LevelStrip` + `LevelChip`
 
-A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is colored by frequency × level position (same color rules the old matrix cells used). The assessee's current-level chip carries a badge — **"YOU" in self context, "CURRENT" in manager / alignment context** (the level belongs to the report, so "YOU" would mislead the manager) — and a darker outline when focused. Click dispatches `click->matrix#focusChip`, which sets `?capability=` + `?level_ordinal=`, reloads the matrix frame, and smooth-scrolls the card under both sticky headers (unified + category section).
+A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is colored by frequency × level position (same color rules the old matrix cells used). The assessee's current-level chip carries a badge — **"YOU" in self context, "CURRENT" in manager / alignment context** (the level belongs to the report, so "YOU" would mislead the manager) — and a darker outline when focused. Click dispatches `click->matrix#focusChip`, which sets `?capability=` + `?level_ordinal=` + `levels[<stable_id>]`, swaps **that one card** for the newly picked level, and smooth-scrolls the card under both sticky headers (unified + category section).
+
+**A chip click never reloads the matrix ([#488](https://github.com/mr-yum/growth-os/issues/488)).** It used to: every click refetched the whole frame (~420 KB, every card, a ~100 ms main-thread block), and someone rating their current and next level does that once per capability. Now `#loadCard` fetches `GET /assessments/:id/capability_card?capability=&level_ordinal=` with `@rails/request.js`; the response is a Turbo Stream replacing `#capability-card-<stable_id>` (`CapabilityCard.dom_id_for`). Rules:
+
+- **One render path.** The endpoint renders `AssessmentMatrix` with `only_capability:`, the matrix frame's own arguments (`AssessmentsController#matrix_view_args`) narrowed to one card, so the card can't drift from the one the frame renders. The URL, lens params included, rides on the matrix root as `data-matrix-card-url-value`; the framework explorer has none and keeps its own behaviour.
+- **The last click wins.** One fetch per card at a time; a click during a fetch queues its level, so the card always ends on the level last picked.
+- **Any failure falls back to the whole-frame reload** — a network drop, a session bounce (the fetch follows the redirect to an HTML page, which isn't a stream), a card no longer in scope (404). That path already has the recovery UI.
+- **The scroll starts at click time.** A card's top doesn't move when its contents change, so it doesn't wait for the response.
 
 The chip strip wraps `overflow-x-auto -mx-4 px-4` so it scrolls horizontally on narrow viewports without breaking the card's padded edges.
 
@@ -1158,7 +1165,7 @@ only the actor hears their own confirmation.
 
 | Controller | Responsibility |
 |---|---|
-| `matrix_controller.js` | Chip-click focus, card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=` for focus; accumulating `levels[<stable_id>]` map for per-capability rendered level), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
+| `matrix_controller.js` | Chip-click focus and the single-card swap (`#loadCard`), card-header click focus (capability), scroll-driven capability focus via IntersectionObserver, smooth-scroll-under-sticky-headers, URL sync (`?capability=` + `?level_ordinal=` for focus; accumulating `levels[<stable_id>]` map for per-capability rendered level), URL-first focus restoration on connect, `data-focused` stamping on cards, sibling card dimming when a card is URL-focused. Shared with the framework explorer (table-mode methods live there). |
 | `category_nav_controller.js` | Publishes `--sticky-header-h` via `getBoundingClientRect().height` + `Math.ceil` + `ResizeObserver`. Smooth-scrolls to category sections on chip click. Updates the active chip on scroll (suppressed for 900ms after a chip click — see *Category navigation*). |
 | `assessment_sync_controller.js` | ActionCable sync, self-submit suppression window, dual-frame reload, focus-param and lens-param (`as_role` / `as_level`) merge before reload. |
 | `lens_picker_controller.js` | The "Another role…" dialog: rebuilds the level select from the chosen role's levels, keeping the reader's ordinal (nearest, lower on a tie — the same rule as `Assessments::Lens`). |
@@ -1434,6 +1441,10 @@ The selected level a card's expansion shows was originally carried by the **same
 
 The activity sidebar is sticky at `top: --sticky-header-h + 1rem` and was capped at `100vh - 2rem`, which ignored the header and left the pane's bottom, and the feed's last entries, several hundred pixels below the viewport ([#470](https://github.com/mr-yum/growth-os/issues/470)). Subtracting the header (`100dvh - --sticky-header-h - 2rem`) is right only once the pane has stuck. Before that, at the top of the page, the navbar above the header pushes the pane lower than its sticky offset, and the bottom is still off screen. `overscroll-contain` makes that worse, since the wheel can no longer move the page to reveal it. So `activity_pane_controller` measures the pane's own top and sets `max-height` to what is left below it. The CSS cap stays as the pre-JS fallback, and both offsets are `lg:`-only: an inline `top` also overrode the phone overlay's `inset-y-0`, so it opened a rem below the top of the screen.
 
+### 20. A swapped card is a new node — never remember a card by its element
+
+`#applyCardFocus` used to remember the focused card as a DOM node and clear only that node on the next focus change. Once a chip click swapped a card in place ([#488](https://github.com/mr-yum/growth-os/issues/488)), the replacement was a different node that the server had already stamped `data-focused="true"`; the remembered node was detached, so scrolling to another card left two rings. It now clears by attribute across `cardTargets`. Anything else that holds a card element across an interaction has the same problem: re-find it by `data-capability-stable-id`.
+
 ## Performance state machine
 
 Defined in `PersonDevelopment::Scoring#performance_state`. See [scoring-model.md](../architecture/scoring-model.md) for the canonical definition. Summary:
@@ -1526,7 +1537,7 @@ Precedence: underperforming → progressing → top_of_ladder → eligible → m
 | `app/components/kit/modal.rb` | Reusable modal (standalone w/ trigger, or embedded); hosts the Delegates + evidence modals |
 | `app/views/assessments/delegations/frame.rb` | `delegations-list` Turbo Frame — add-form + active-delegate list (revoke) |
 | **Controllers** | |
-| `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / activity — self/manager/alignment context routing; index unions delegated reports; show loads delegates |
+| `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / capability_card (one card, for a chip click) / activity — self/manager/alignment context routing; index unions delegated reports; show loads delegates |
 | `app/controllers/assessments/delegations_controller.rb` | Grant / revoke a manager-rating delegation (Turbo Frame; dispatches `Operations::Assessments::{Delegate,Revoke}…`) |
 | `app/controllers/assessments/ratings_controller.rb` | Self-rating POST (rate_self, revise, clear) |
 | `app/controllers/assessments/manager_ratings_controller.rb` | Manager-rating POST (rate_as_manager, revise, clear) |
