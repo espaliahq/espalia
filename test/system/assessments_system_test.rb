@@ -1889,10 +1889,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     deadline = started + Capybara.default_max_wait_time
     previous_scroll_y = nil
-    offset = diagnostics = nil
+    last = nil
     loop do
       # Null while a card swap is mid-render; the next reading finds it.
-      diagnostics = page.evaluate_script(<<~JS)
+      reading = page.evaluate_script(<<~JS)
         (function() {
           var card = document.querySelector('[data-capability-stable-id="#{stable_id}"]');
           if (!card) return null;
@@ -1907,19 +1907,25 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         })()
       JS
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      if diagnostics
-        offset = diagnostics["card_top"] - diagnostics["header_bottom"] - diagnostics["section_header_height"]
+      if reading
+        offset = reading["card_top"] - reading["header_bottom"] - reading["section_header_height"]
+        last = [ offset, reading ]
         on_target = landed.call(offset)
-        return pass if on_target && previous_scroll_y == diagnostics["scroll_y"] && now - started >= settle_after
+        return pass if on_target && previous_scroll_y == reading["scroll_y"] && now - started >= settle_after
 
-        previous_scroll_y = on_target ? diagnostics["scroll_y"] : nil
+        previous_scroll_y = on_target ? reading["scroll_y"] : nil
+      else
+        # A settled pair must be two readings of the same card.
+        previous_scroll_y = nil
       end
       break if now > deadline
 
       sleep 0.25
     end
+    flunk "Capability card #{stable_id} never rendered" unless last
+
     flunk "Capability card top should #{expectation} once scrolling stops " \
-          "(offset=#{offset.inspect}, diagnostics=#{diagnostics.inspect})"
+          "(offset=#{last[0]}, diagnostics=#{last[1].inspect})"
   end
 
   # Rates one current-level capability (cap1) so the assessment clears the
