@@ -81,8 +81,9 @@ class Views::Assessments::Glossary
       },
       blocked: {
         label: "Blocked",
-        definition: "This capability sits far enough below what #{@current_code} expects to hold " \
-                    "the whole assessment there, whatever the others say. Talk about it first."
+        definition: "This capability's ratings sit far enough below what #{@current_code} expects to hold " \
+                    "the whole assessment there, whatever the others say. Talk about it first. " \
+                    "Only a rating can block: a capability nobody has rated shows Not rated instead."
       },
       weight: {
         label: "Weight",
@@ -91,8 +92,9 @@ class Views::Assessments::Glossary
       },
       not_rated: {
         label: "Not rated",
-        definition: "A capability nobody has rated yet has no answer. It is not a zero and not a " \
-                    "judgement — it waits for a rating rather than counting as one."
+        definition: "A capability nobody has rated yet has no answer. On its card it is not a zero, " \
+                    "and a missing rating is not a judgement, so it never blocks anything by itself. " \
+                    "Until it is rated, though, #{@current_code} can't be met."
       },
       no_expectation: {
         label: "No expectation",
@@ -148,7 +150,7 @@ class Views::Assessments::Glossary
   end
 
   def blocked_clause
-    "A blocked capability holds the state back, whatever the number says."
+    "A blocked capability, or one nobody has rated yet, holds the state back, whatever the number says."
   end
 
   def word(state) = Views::Assessments::StateLabels.for(state, tenant: @tenant)

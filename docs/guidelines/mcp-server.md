@@ -162,8 +162,14 @@ needs and a screen does not:
 Note the ceiling is **not** fixed at 200: the over-performance cap decides
 how many bands sit above the assessed level, so a cap of 2 tops out at 300.
 And 200 is not promotion readiness — that is evaluated separately at the
-next level and needs the meeting threshold plus no blocked capability. The
-tool descriptions say "level-independent scale" for both reasons.
+next level and needs the meeting threshold plus nothing held there (no
+blocked capability, none unrated). The tool descriptions say
+"level-independent scale" for both reasons.
+
+**`blocked` and `unrated` are separate lists.** Only a rating can block
+([#485](https://github.com/mr-yum/growth-os/issues/485)): a capability nobody
+has rated is never in `blocked`. It still holds the state, so `scoring.unrated`
+names it, and an agent explaining a Progressing state reads both.
 
 A capability's score also carries `weight` and `required` — the two binding
 facts its card wears as chips ([#431](https://github.com/mr-yum/growth-os/issues/431)) — so an agent can explain a score the
@@ -653,6 +659,20 @@ it in the schema, deletes the check, and moves the remove + add guidance into
 the tool description where a client reads it before calling. Worth asking of any
 surviving `perform` check: is it really a relationship, or a narrower enum you
 haven't noticed?
+
+### 16. A payload lists things in the order the page shows them
+
+The serializer sorted each category's capabilities by name, a choice made
+before capabilities could be reordered. Once a category was reordered the web
+and the MCP disagreed, and an agent asked to "follow GrowthOS's order" had no
+way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
+is part of the content: a reader compares the two side by side. Keep the read
+model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,
+id]`, categories the same) rather than re-sorting. Role families don't match
+yet: the payload sorts them by name, while the role tree groups them by
+department first.
+`test/operations/assessments/get_test.rb` pins the capability order against
+the order `Assessments::MatrixDataBuilder` renders.
 
 ### Text fields that render as Markdown
 

@@ -342,6 +342,26 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "button[aria-describedby='assessment-term-weight-#{@cap1_stable}']", text: "×2"
       assert_selector "button[aria-describedby='assessment-term-required-#{@cap1_stable}']", text: "Required"
     end
+
+    # #485: an unrated capability scored 0 and blocked like a "not yet", so a
+    # fresh assessment wore Blocked beside "Not rated" on every card.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "show Not rated, never Blocked, until a rating says so (#{label})" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_selector "#scoring-panel"
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+
+        [ @cap1_stable, @cap3_stable ].each do |stable_id|
+          assert_selector "#capability-name-#{stable_id} [data-capability-score]", text: "Not rated"
+        end
+        assert_no_selector "[id^='assessment-term-blocked-']", visible: :all
+
+        click_rating_frequency("#rating-#{@cap3_stable}-2", "Not yet")
+        assert_selector "button[aria-describedby='assessment-term-blocked-#{@cap3_stable}']", text: "Blocked"
+        assert_no_selector "#assessment-term-blocked-#{@cap1_stable}", visible: :all
+      end
+    end
   end
 
   context "category navigation" do
@@ -936,6 +956,9 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         )
       end
       visit assessment_path(@assignment)
+      # The frame's load replaces the cards; a kebab focused before it lands
+      # is gone by the time the contrast is read.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
 
       # Two share the label: the list header's, and the card's, which only
@@ -943,6 +966,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
       card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
       page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
+      assert_selector "#{card_kebab}:focus", visible: :all
       assert_operator rendered_contrast(card_kebab), :>=, 3
     end
   end

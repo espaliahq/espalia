@@ -77,12 +77,19 @@
 #
 #   contribution = Σ (f − expected) × weight across capped ordinals, with
 #                  above-level credit gated as above
-#   deficit      = max(0, −contribution)
+#   deficit      = max(0, −contribution), counting only RATED cells
 #   Verdict gate: deficit > threshold → capability is :blocked
 #
 #   At the default 0.75 a current-level "not yet" (deficit 1.0) blocks; "some"
 #   and "most of the time" can be made up elsewhere. Tolerance 0 marks the
 #   capability mandatory ("Required").
+#
+#   Only a rating can block. An unrated cell the score counts as 0 is left
+#   out of the deficit, and a capability with one and no evidenced block is
+#   :unrated instead. The score still counts the 0, and an unrated
+#   capability still holds the verdict: nothing has shown the level is met,
+#   and if it didn't hold, leaving a cell unrated would pass where rating it
+#   "not yet" blocks.
 #
 # == Category gate
 #
@@ -91,11 +98,13 @@
 #
 # == Verdicts
 #
-#   meeting_expectations? = score >= meeting_expectation_threshold AND no :blocked
-#   mastering?            = score >= mastery_threshold AND no :blocked
+#   A capability holds a level when it is :blocked or :unrated there.
+#
+#   meeting_expectations? = score >= meeting_expectation_threshold AND nothing held
+#   mastering?            = score >= mastery_threshold AND nothing held
 #   promotion_readiness   = the same score evaluated with L+1 as the reference
-#                           level >= meeting_expectation_threshold AND no
-#                           :blocked capabilities at L+1
+#                           level >= meeting_expectation_threshold AND nothing
+#                           held at L+1
 #
 #   `performance_ratio` IS `performance_ratio_at_level(person_level)` — one
 #   formula, so the hero, the level chips and promotion readiness can never
@@ -245,15 +254,14 @@ class PersonDevelopment::Scoring
     @capability_scores_at[reference_level] ||= @bindings.to_h do |binding|
       sid = binding.capability.stable_id
       components = capability_components_at(binding, reference_level)
-      blocked = capability_statuses(reference_level: reference_level)[sid] == :blocked
-      state = state_for(components[:score], blocked: blocked, eligible: false,
+      state = state_for(components[:score], blocked: holding?(binding, reference_level), eligible: false,
                         at_top: ordinals_above(reference_level).empty?)
       [ sid, components.merge(state: state) ]
     end
   end
 
   # The state vocabulary applied to one capability: its own score against
-  # the framework's thresholds, blocked → progressing, eligible when it
+  # the framework's thresholds, held → progressing, eligible when it
   # clears the next level on its own.
   #
   # @param binding [#capability, #weight]
@@ -261,11 +269,10 @@ class PersonDevelopment::Scoring
   def capability_state(binding)
     @capability_state ||= {}
     @capability_state[binding.capability.stable_id] ||= begin
-      sid = binding.capability.stable_id
       eligible = has_next_level? &&
         components_over([ binding ], next_level_ordinal)[:score] >= @meeting_expectation_threshold &&
-        capability_statuses(reference_level: next_level_ordinal)[sid] != :blocked
-      state_for(capability_components(binding)[:score], blocked: capability_statuses[sid] == :blocked, eligible: eligible)
+        !holding?(binding, next_level_ordinal)
+      state_for(capability_components(binding)[:score], blocked: holding?(binding, @person_level), eligible: eligible)
     end
   end
 
@@ -286,7 +293,7 @@ class PersonDevelopment::Scoring
   end
 
   # The five-state vocabulary applied to one category: its own score
-  # against the same thresholds, any blocked member forcing :progressing,
+  # against the same thresholds, any held member forcing :progressing,
   # and :eligible when its members clear the next level as a group.
   #
   # @param category_id [String]
@@ -295,11 +302,11 @@ class PersonDevelopment::Scoring
     @category_state ||= {}
     @category_state[category_id] ||= begin
       members = bindings_in(category_id)
-      blocked = members.any? { |b| capability_statuses[b.capability.stable_id] == :blocked }
       eligible = has_next_level? &&
         components_over(members, next_level_ordinal)[:score] >= @meeting_expectation_threshold &&
-        members.none? { |b| capability_statuses(reference_level: next_level_ordinal)[b.capability.stable_id] == :blocked }
-      state_for(category_components(category_id)[:score], blocked: blocked, eligible: eligible)
+        members.none? { |b| holding?(b, next_level_ordinal) }
+      state_for(category_components(category_id)[:score], blocked: members.any? { |b| holding?(b, @person_level) },
+                eligible: eligible)
     end
   end
 
@@ -307,16 +314,16 @@ class PersonDevelopment::Scoring
   #
   # @return [Boolean]
   def meeting_expectations?
-    performance_ratio >= @meeting_expectation_threshold && !any_blocked?(@person_level)
+    performance_ratio >= @meeting_expectation_threshold && !any_holding?(@person_level)
   end
 
   # Whether the person is past the mastery waypoint on the way to the next
-  # level (default: halfway, 1.5). Blocked capabilities prevent mastery
+  # level (default: halfway, 1.5). A held capability prevents mastery
   # regardless of score.
   #
   # @return [Boolean]
   def mastering?
-    performance_ratio >= @mastery_threshold && !any_blocked?(@person_level)
+    performance_ratio >= @mastery_threshold && !any_holding?(@person_level)
   end
 
   # Unified performance state for the assessment narrative, picked so the
@@ -325,8 +332,8 @@ class PersonDevelopment::Scoring
   #
   #   :underperforming — score < underperforming_threshold (0.80)
   #   :progressing     — score < meeting_expectation_threshold (0.95) OR any
-  #                      capability blocked → the milestone is still the
-  #                      current level's bar
+  #                      capability held (blocked, or unrated)
+  #                      → the milestone is still the current level's bar
   #   :top_of_ladder   — meeting, and the role has no level above this one:
   #                      there is no next band to progress into
   #   :eligible        — meets the next level's expectations (promotion
@@ -358,7 +365,9 @@ class PersonDevelopment::Scoring
 
   # Per-capability status at the given reference level.
   #
-  # :blocked     — deficit > effective_deficit_threshold (blocks meeting/mastery/promotion)
+  # :blocked     — rated deficit > effective_deficit_threshold (blocks meeting/mastery/promotion)
+  # :unrated     — not blocked, but a cell the score counts as 0 has no rating
+  #                yet; holds meeting/mastery/promotion without being a judgement
   # :above_cap   — consistent at ordinals beyond reference_level + overperformance_cap
   # :at_bar      — effective_freq at reference_level >= 1.0 (consistent)
   # :developing  — below bar, not blocked
@@ -388,11 +397,11 @@ class PersonDevelopment::Scoring
   # @return [Symbol] :mastering, :meeting, or :below
   def level_verdict(reference_level)
     ratio = performance_ratio_at_level(reference_level)
-    has_blocked = any_blocked?(reference_level)
+    held = any_holding?(reference_level)
 
-    if ratio >= @mastery_threshold && !has_blocked
+    if ratio >= @mastery_threshold && !held
       :mastering
-    elsif ratio >= @meeting_expectation_threshold && !has_blocked
+    elsif ratio >= @meeting_expectation_threshold && !held
       :meeting
     else
       :below
@@ -408,13 +417,24 @@ class PersonDevelopment::Scoring
     @block_reasons[reference_level] ||= compute_block_reasons(reference_level)
   end
 
+  # The capabilities holding the verdict at a level only because nobody has
+  # rated them yet — named apart from the blocked ones, because "blocked" is
+  # a judgement and these have none.
+  #
+  # @param reference_level [Integer] defaults to person's assessed level
+  # @return [Array<String>] stable_ids
+  def unrated(reference_level: @person_level)
+    capability_statuses(reference_level: reference_level).select { |_, status| status == :unrated }.keys
+  end
+
   # Promotion readiness result. Eligible when the score evaluated at the
-  # next level meets meeting_expectation_threshold AND no capabilities are
-  # blocked there. With the default cap of 1 that is "score ≥ 1.95 and
-  # nothing blocked at L+1".
+  # next level meets meeting_expectation_threshold AND nothing is held
+  # there. With the default cap of 1 that is "score ≥ 1.95, and nothing
+  # blocked or unrated at L+1".
   #
   # @return [Hash] { eligible: bool, meets_score_threshold: bool,
-  #   blocked_at_next_level: Array<String> (stable_ids) }
+  #   blocked_at_next_level: Array<String> (stable_ids),
+  #   unrated_at_next_level: Array<String> (stable_ids) }
   def promotion_readiness
     @promotion_readiness ||= compute_promotion_readiness
   end
@@ -623,13 +643,15 @@ class PersonDevelopment::Scoring
   # @param binding [#capability_id, #weight, #capability]
   # @param reference_level [Integer]
   # @return [Float]
-  def raw_contribution_at_level(binding, reference_level)
+  # `evidenced: true` counts rated cells only — the block gate's view, in
+  # which an unrated cell owes nothing (see the class docs).
+  def raw_contribution_at_level(binding, reference_level, evidenced: false)
     @raw_contribution_at_level ||= {}
-    @raw_contribution_at_level[[ binding.capability.stable_id, reference_level ]] ||=
-      compute_raw_contribution(binding, reference_level)
+    @raw_contribution_at_level[[ binding.capability.stable_id, reference_level, evidenced ]] ||=
+      compute_raw_contribution(binding, reference_level, evidenced: evidenced)
   end
 
-  def compute_raw_contribution(binding, reference_level)
+  def compute_raw_contribution(binding, reference_level, evidenced: false)
     stable_id = binding.capability.stable_id
     weight    = binding.weight.to_f
     above     = ordinals_above(reference_level).first(overperformance_cap_for(binding))
@@ -638,6 +660,8 @@ class PersonDevelopment::Scoring
       next 0.0 unless cell?(stable_id, ordinal)
 
       if ordinal <= reference_level
+        next 0.0 if evidenced && awaiting_rating?(stable_id, ordinal)
+
         (effective_frequency(stable_id, ordinal) - 1.0) * weight
       elsif above.include?(ordinal)
         gated_credit(binding, reference_level, ordinal) * weight
@@ -663,8 +687,7 @@ class PersonDevelopment::Scoring
   def compute_capability_statuses(reference_level)
     @bindings.to_h do |binding|
       stable_id    = binding.capability.stable_id
-      contribution = raw_contribution_at_level(binding, reference_level)
-      deficit      = [ 0.0, -contribution ].max
+      deficit      = evidenced_deficit(binding, reference_level)
       threshold    = deficit_threshold_for(binding)
       cap          = overperformance_cap_for(binding)
       freq         = effective_frequency(stable_id, reference_level)
@@ -672,6 +695,8 @@ class PersonDevelopment::Scoring
       status =
         if deficit > threshold
           :blocked
+        elsif awaiting_rating_through?(stable_id, reference_level)
+          :unrated
         elsif ordinals_above(reference_level).drop(cap).any? { |o| effective_frequency(stable_id, o) >= FREQUENCY["consistent"] }
           :above_cap
         elsif freq >= FREQUENCY["consistent"]
@@ -684,13 +709,23 @@ class PersonDevelopment::Scoring
     end
   end
 
-  def any_blocked?(reference_level)
-    capability_statuses(reference_level: reference_level).values.any? { |s| s == :blocked }
+  def evidenced_deficit(binding, reference_level)
+    [ 0.0, -raw_contribution_at_level(binding, reference_level, evidenced: true) ].max
+  end
+
+  # Whether a capability keeps a level from being met: blocked by its
+  # ratings, or waiting on one.
+  def holding?(binding, reference_level)
+    %i[blocked unrated].include?(capability_statuses(reference_level: reference_level)[binding.capability.stable_id])
+  end
+
+  def any_holding?(reference_level)
+    @bindings.any? { |b| holding?(b, reference_level) }
   end
 
   # See {#performance_state} for the state vocabulary + precedence.
   def compute_performance_state
-    state_for(performance_ratio, blocked: any_blocked?(@person_level), eligible: promotion_readiness[:eligible])
+    state_for(performance_ratio, blocked: any_holding?(@person_level), eligible: promotion_readiness[:eligible])
   end
 
   # The state machine as a pure function of a score, so a category reads
@@ -712,7 +747,9 @@ class PersonDevelopment::Scoring
 
   def compute_promotion_readiness
     next_level = next_level_ordinal
-    return { eligible: false, meets_score_threshold: false, blocked_at_next_level: [] } unless next_level
+    unless next_level
+      return { eligible: false, meets_score_threshold: false, blocked_at_next_level: [], unrated_at_next_level: [] }
+    end
 
     verdict     = level_verdict(next_level)
     next_ratio  = performance_ratio_at_level(next_level)
@@ -722,7 +759,8 @@ class PersonDevelopment::Scoring
     {
       eligible:              verdict != :below,
       meets_score_threshold: meets_score,
-      blocked_at_next_level: blocked
+      blocked_at_next_level: blocked,
+      unrated_at_next_level: unrated(reference_level: next_level)
     }
   end
 
@@ -731,8 +769,7 @@ class PersonDevelopment::Scoring
   def compute_block_reasons(reference_level)
     @bindings.each_with_object({}) do |binding, reasons|
       stable_id    = binding.capability.stable_id
-      contribution = raw_contribution_at_level(binding, reference_level)
-      deficit      = [ 0.0, -contribution ].max
+      deficit      = evidenced_deficit(binding, reference_level)
       threshold    = deficit_threshold_for(binding)
 
       next unless deficit > threshold
@@ -799,6 +836,20 @@ class PersonDevelopment::Scoring
   # Whether a behavioural expectation exists for the capability at the level.
   def cell?(stable_id, ordinal)
     @expectation_cells.nil? || @expectation_cells.include?([ stable_id, ordinal ])
+  end
+
+  # A cell the score counts as 0 only because it has no rating in this
+  # perspective — at or above the level unrated cells stop being assumed.
+  def awaiting_rating?(stable_id, ordinal)
+    ordinal >= @assumed_below && frequency_value_for_perspective(@level_ratings[[ stable_id, ordinal ]]).nil?
+  end
+
+  # Whether any cell up to and including the reference level is still
+  # waiting on a rating.
+  def awaiting_rating_through?(stable_id, reference_level)
+    @all_level_ordinals.any? do |ordinal|
+      ordinal <= reference_level && cell?(stable_id, ordinal) && awaiting_rating?(stable_id, ordinal)
+    end
   end
 
   # Builds a lookup index: [stable_id, level_ordinal] => rating record

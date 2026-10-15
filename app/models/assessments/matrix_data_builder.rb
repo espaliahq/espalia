@@ -57,7 +57,7 @@ class Assessments::MatrixDataBuilder
   # @return [Array<FrameworkState::CapabilityCategory>]
   def self.lens_tree(framework_id:, lens:)
     categories = FrameworkState::CapabilityCategory
-      .where(framework_id: framework_id, status: "active").order(:ordinal).to_a
+      .where(framework_id: framework_id, status: "active").order(:ordinal, :created_at, :id).to_a
     preload(categories, :capabilities,
             FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
     capabilities = categories.flat_map(&:capabilities)
@@ -525,7 +525,8 @@ class Assessments::MatrixDataBuilder
       category_results: scoring.category_results,
       promotion_readiness: scoring.promotion_readiness,
       capability_statuses: scoring.capability_statuses,
-      block_reasons: scoring.block_reasons
+      block_reasons: scoring.block_reasons,
+      unrated: scoring.unrated
     }
     if bindings
 

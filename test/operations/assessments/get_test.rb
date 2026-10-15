@@ -43,6 +43,33 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
     ActsAsTenant.with_tenant(@tenant) { Operations::Frameworks::Get.call(context: @context, params: { framework_id: @framework_id }) }
   end
 
+  context "the capability order" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        cat = FrameworkState::CapabilityCategory.find_by!(name: "Thinking")
+        FrameworkState::Capability.find_by!(name: "Critical Thinking").update!(ordinal: 3)
+        create(:framework_capability, category_id: cat.category_id, name: "Strategic Thinking", ordinal: 1)
+        create(:framework_capability, category_id: cat.category_id, name: "Data Informed", ordinal: 2)
+        cat.capabilities.reload.each do |cap|
+          create(:framework_capability_role_binding, capability_id: cap.capability_id, role_id: @role.role_id)
+          create(:framework_behavioural_expectation, capability_id: cap.capability_id, level_ordinal: 2)
+        end
+      end
+    end
+
+    should "match the order the assessment page renders" do
+      page_order = ActsAsTenant.with_tenant(@tenant) do
+        Assessments::MatrixDataBuilder
+          .for_lens(lens: Assessments::Lens.home(@assignment), context: :self)
+          .dig(:categories, 0, :capabilities).map { |c| c[:capability].name }
+      end
+
+      assert_equal [ "Strategic Thinking", "Data Informed", "Critical Thinking" ], page_order
+      assert_equal page_order,
+        call_assessment_op.dig(:framework, :categories, 0, :capabilities).map { |c| c[:name] }
+    end
+  end
+
   context "the scoring roll-up" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
@@ -89,7 +116,26 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
 
     should "name nothing as blocked when nothing is" do
       assert_empty call_assessment_op.dig(:scoring, :blocked)
+      assert_empty call_assessment_op.dig(:scoring, :unrated)
       assert_equal false, call_assessment_op.dig(:scoring, :promotion_ready)
+    end
+
+    # #485: only a rating can block; a capability nobody has rated is
+    # reported apart, as the reason the state is held.
+    should "report an unrated capability apart from the blocked ones" do
+      ActsAsTenant.with_tenant(@tenant) do
+        cat = FrameworkState::CapabilityCategory.find_by!(name: "Thinking")
+        cap = create(:framework_capability, category_id: cat.category_id, name: "Code Review")
+        create(:framework_capability_role_binding,
+          capability_id: cap.capability_id, role_id: @role.role_id, weight: 1.0)
+        create(:framework_behavioural_expectation,
+          capability_id: cap.capability_id, level_ordinal: 2, description: "Reviews thoroughly")
+        @code_review = cap.stable_id
+      end
+      scoring = call_assessment_op[:scoring]
+
+      assert_empty scoring[:blocked]
+      assert_equal [ { capability_stable_id: @code_review, name: "Code Review" } ], scoring[:unrated]
     end
   end
 
