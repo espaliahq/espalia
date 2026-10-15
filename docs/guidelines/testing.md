@@ -551,6 +551,26 @@ end
 
 **When NOT needed:** Frames without `src:` (eager-rendered only) or frames whose inner content is already verified by an earlier `assert_text` on something only the loaded version would render.
 
+## Measuring a Scroll: Wait for It to Stop
+
+**Read a scroll position only once the page has stopped scrolling, and never
+after a fixed `sleep`.** A smooth scroll takes as long as the browser needs,
+and the assessment chip's scroll ends with a settle pass 600ms later. A chip
+clicked before the matrix frame's own load lands also waits for that load
+before scrolling at all. A slow worker can stretch either past any fixed sleep,
+and the reading then describes a scroll that hasn't happened yet: the card
+sits exactly where the test put it. That is how the chip-scroll tests failed
+under a full parallel precommit and passed alone
+([#501](https://github.com/mr-yum/growth-os/issues/501)).
+
+- Wait for the eager frame (`turbo-frame#…[complete]`) and its controller
+  (`wait_for_stimulus`) before arranging the page and clicking.
+- Poll until the condition holds on two readings at the same `scrollY`. The
+  assessment tests' `settled_card_offset` is the example.
+- Reproduce a timing flake by slowing the server rather than the browser. 8x
+  CPU throttling never failed these tests; a 1.5s delay prepended to the frame
+  action failed both every time.
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.
