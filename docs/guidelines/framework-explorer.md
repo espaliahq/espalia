@@ -627,8 +627,12 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
 - **Draft pill** (`vN draft`, teal) + **Publish button** — header, edit-mode +
   draft-open only; Publish links to the publish-review page where mappings are
   validated before the version is cut, and is the ONE edit-mode action that
-  stays a full navigation. Both are `DraftStatus` slots with stable ids, so a
-  shape-changing write streams them (§11b). (Draft lifecycle: see ADR-16/17.)
+  stays a full navigation. Both are `DraftStatus` slots with stable ids. A
+  shape-changing write streams them to the actor (§11b), and the projection
+  broadcasts them whenever a draft opens (`broadcast_draft_status_opened`, on
+  `DraftVersionStarted`): the pill over `framework_activity`, the button over
+  `framework_publishers`, which the page subscribes to only for a viewer with
+  publish rights (Lesson 40). (Draft lifecycle: see ADR-16/17.)
   - **Publishing runs in the background.** `Operations::Frameworks::PublishVersion`
     now *requests* a publish: it checks the ADR-17 gate, records a
     `FrameworkPublication` and enqueues `Frameworks::PublishVersionJob` (the
@@ -2430,6 +2434,30 @@ uses to keep an open kebab visible). The general rule: **when you gate
 `pointer-events` on a container, enumerate the popups that live inside it** —
 a fixed/absolute popup is not outside the subtree just because it is outside
 the box.
+
+### 40. Announce a draft from the event, not from each write
+
+Removing a role binding through **Edit roles…** opens a draft, but the
+binding editor answers only its own frame, so the header showed no draft and
+no Publish button until a reload. An admin removed three bindings, saw them
+applied in the editor, and never published; the assessments kept showing the
+capabilities ([#496](https://github.com/mr-yum/growth-os/issues/496)). The
+levels editor's add row, a shape-changing approval and every MCP write had the
+same gap, and every *other* viewer's header was stale on all of them.
+
+Streaming `draft_status_streams` from each write can't close that: it only
+reaches the actor, and it needs every new write path to remember. The draft
+opens exactly once, as `DraftVersionStarted`, so the projection broadcasts both
+slots from there, mirroring the clear on `FrameworkVersionPublished`.
+
+The Publish button is per-viewer, and a broadcast isn't. It goes out on its own
+`framework_publishers` stream, which `ShowView` subscribes to only when
+`can_publish`. Turbo signs stream names server-side, so nobody else can join
+it, and nobody is sent a button they couldn't use.
+
+The binding editor's system test had asserted `assert_text(/draft/i)` all
+along, and it passed with the bug present: the activity feed's "Opened a
+draft" entry satisfied it. Assert on the header slots themselves.
 
 
 ## Activity feed coverage (NON-NEGOTIABLE)

@@ -60,6 +60,39 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
     Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
   end
 
+  # The mirror of {#broadcast_draft_status_cleared}. A draft opens from many
+  # writes that answer only their own frame — a binding edit, the levels
+  # editor, an approval, any MCP call — and every other viewer's explorer is
+  # stale too, so announcing it from the event is the one place that reaches
+  # them all. The badge rides the activity stream every edit-mode viewer holds;
+  # the Publish button rides one only publish-rights viewers subscribe to.
+  #
+  # @param framework_id [String, nil] no-op when nil
+  def broadcast_draft_status_opened(framework_id)
+    return if Projections::Replayer.replay_mode?
+    return unless framework_id
+
+    framework = FrameworkState::Framework.find_by(framework_id: framework_id)
+    return unless framework
+
+    broadcast_draft_slot(framework, :badge, "framework_activity")
+    broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
+                         publishing: FrameworkPublication.in_flight_for?(framework_id))
+  rescue => e
+    Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
+  end
+
+  def broadcast_draft_slot(framework, slot, stream, publishing: false)
+    Turbo::StreamsChannel.broadcast_replace_to(
+      stream, framework.framework_id,
+      target: slot == :badge ? Views::Frameworks::Explorer::DraftStatus::BADGE_ID : Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
+      html: ApplicationController.render(
+        Views::Frameworks::Explorer::DraftStatus.new(framework: framework, slot: slot, publishing: publishing),
+        layout: false
+      )
+    )
+  end
+
   # The header badge lives OUTSIDE the context pane's Turbo Frame, so the pane's
   # reload could never update it — it kept its page-load value until a full
   # reload (a suggestion landed, the feed showed it, the badge still said 6).

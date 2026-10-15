@@ -989,6 +989,36 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       assert_equal [ [ "framework_activity", @framework_id ] ] * 2, broadcasts
     end
 
+    context "when a draft opens" do
+      setup do
+        emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+        @event = Frameworks::Events::DraftVersionStarted.new(
+          data: { framework_id: @framework_id, target_version: 5, started_by: @author_person.id },
+          metadata: { tenant_id: @tenant.id })
+      end
+
+      should "show the draft pill to edit-mode viewers and the Publish button to publishers only" do
+        sent = []
+        Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target], kw[:html] ] }) do
+          within_tenant { @projection.call(@event) }
+        end
+
+        badge = sent.find { |_, target, _| target == "framework-draft-badge" }
+        publish = sent.find { |_, target, _| target == "framework-publish-action" }
+        assert_equal "framework_activity", badge.first
+        assert_includes badge.last, "v5 draft"
+        assert_equal "framework_publishers", publish.first
+        assert_includes publish.last, "Publish v5"
+      end
+
+      should "stay silent during replay" do
+        broadcasts = capture_activity_broadcasts do
+          Projections::Replayer.with_replay_mode { within_tenant { @projection.call(@event) } }
+        end
+        assert_empty broadcasts
+      end
+    end
+
     should "stay silent during replay" do
       event = Frameworks::Events::CapabilityUpdated.new(
         data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "X" },

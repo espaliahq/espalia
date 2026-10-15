@@ -13,6 +13,9 @@
 class Views::Frameworks::Explorer::DraftStatus < Views::Base
   BADGE_ID = "framework-draft-badge"
   PUBLISH_ID = "framework-publish-action"
+  # Only publish-rights viewers subscribe, so a broadcast Publish button never
+  # reaches anyone who couldn't use it.
+  PUBLISHERS_STREAM = "framework_publishers"
 
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
   # @param slot [Symbol] :badge (the draft pill) or :publish (the Publish button)

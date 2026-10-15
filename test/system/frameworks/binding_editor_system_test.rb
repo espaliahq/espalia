@@ -58,6 +58,25 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   end
 
   # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
+  # Submit the data-turbo-confirm Remove form via requestSubmit() (the
+  # documented JS-submit remedy for the flaky confirm-form click on starved
+  # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
+  def remove_only_binding
+    auto_confirm do
+      page.execute_script(
+        'document.querySelector("#binding-editor form[data-turbo-confirm]").requestSubmit();'
+      )
+    end
+  end
+
+  # The pill and the Publish button sit outside the editor's frame; only the
+  # draft-opened broadcast reaches them (#496). The activity feed also says
+  # "draft", so assert the header slots themselves.
+  def assert_header_shows_draft
+    assert_selector "#framework-draft-badge", text: "v2 draft"
+    assert_selector "#framework-publish-action a", text: "Publish v2"
+  end
+
   def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
@@ -86,7 +105,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
         assert_no_text "New in draft"
         assert_selector "span.decoration-amber-400", text: "Engineering Manager"
       end
-      assert_text(/draft/i) # the header draft pill — a draft was auto-opened
+      assert_header_shows_draft
     end
 
     # Audit issue #365: an un-handled frame failure rendered Turbo's own
@@ -137,25 +156,48 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       assert_selector "turbo-frame#binding-editor", visible: true
     end
 
-    should "remove the only role binding, un-scoping the capability" do
-      open_binding_editor
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "remove the only role binding and show the draft it opened in the header (#{label})" do
+        open_binding_editor(size: size)
+        assert_no_selector "#framework-publish-action a"
 
-      within "#binding-editor" do
-        assert_text "Software Engineer"
+        remove_only_binding
+
+        within "#binding-editor" do
+          assert_text "Not bound to any role yet."
+        end
+        assert_header_shows_draft
       end
-      # Submit the data-turbo-confirm Remove form via requestSubmit() (the
-      # documented JS-submit remedy for the flaky confirm-form click on starved
-      # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
-      auto_confirm do
-        page.execute_script(
-          'document.querySelector("#binding-editor form[data-turbo-confirm]").requestSubmit();'
+    end
+  end
+
+  # #496: the bar to edit a binding is lower than the bar to publish, so the
+  # draft a role lead opens must reach their header without its Publish button.
+  context "as a role lead without publish rights" do
+    setup do
+      @lead_user = FactoryBot.create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        lead = FactoryBot.create(:person, tenant: @tenant, email: @lead_user.email)
+        FactoryBot.create(:tenant_user, tenant: @tenant, user: @lead_user, person: lead, role: :member)
+        Frameworks::CommandHandler.new.add_collaborator(
+          @framework_id, lead.id.to_s, "role_lead", scope_type: "role", scope_id: @role_e, added_by: lead.id.to_s
         )
       end
+    end
 
-      within "#binding-editor" do
-        assert_text "Not bound to any role yet."
-      end
-      assert_text(/draft/i)
+    should "show the draft pill but never the Publish button" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@lead_user)
+      visit edit_framework_path(@framework_id)
+      wait_for_stimulus "matrix"
+      trigger_binding_editor
+      assert_selector "turbo-frame#binding-editor", visible: true
+      assert_text "Software Engineer"
+
+      remove_only_binding
+
+      assert_selector "#framework-draft-badge", text: "v2 draft"
+      assert_no_selector "#framework-publish-action a"
     end
   end
 
