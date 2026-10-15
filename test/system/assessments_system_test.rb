@@ -653,98 +653,27 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "fully reveal the capability name and eyebrow under the sticky header after chip click" do
-      visit assessment_path(@assignment)
-      assert_selector "#scoring-panel"
+      prepare_chip_scroll(from: 1200)
 
-      page.execute_script(
-        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
-      )
-      page.execute_script("window.scrollTo(0, 1200)")
-      sleep 0.4
-
-      page.execute_script(<<~JS)
-        document.getElementById('cell-#{@cap2_stable}-1').click();
-      JS
-      sleep 1.0
+      # JS-dispatch so Capybara doesn't scroll the chip into view for us.
+      page.execute_script("document.getElementById('cell-#{@cap2_stable}-1').click()")
 
       # The eyebrow ("THINKING") and capability name ("Problem Solving")
-      # must be in view, not pushed under the sticky chrome. The
-      # EFFECTIVE blocker is the unified header AND the sticky category
-      # section header that pins underneath it — both cover the top.
-      diagnostics = page.evaluate_script(<<~JS)
-        (function() {
-          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
-          var section = card.closest("section[data-category-id]");
-          var sectionHeader = section.querySelector(":scope > [data-section-header]");
-          var header = document.getElementById('assessment-sticky-header');
-          return {
-            card_top: card.getBoundingClientRect().top,
-            header_bottom: header.getBoundingClientRect().bottom,
-            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0
-          };
-        })()
-      JS
-      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
-      offset = diagnostics["card_top"] - effective_blocker_bottom
-      assert offset >= -5,
-        "Top of capability card should sit at or below the effective sticky chrome " \
-        "(offset=#{offset}, diagnostics=#{diagnostics.inspect})"
+      # must be in view, not pushed under the sticky chrome.
+      assert_card_settles(@cap2_stable, "sit at or below the effective sticky chrome") { |offset| offset >= -5 }
     end
 
     should "smooth scroll the capability card into view when a chip is clicked" do
-      visit assessment_path(@assignment)
-      assert_selector "#scoring-panel"
+      # From scrollY=0 the header is expanded and cap2 (Problem Solving) is
+      # below the fold, so the hero collapses mid-scroll and moves the target
+      # — the race the post-scroll settle pass exists for.
+      prepare_chip_scroll(from: 0)
 
-      # Set up: starting from scrollY=0 (header expanded) and clicking a
-      # chip on a card BELOW the fold is the scenario that exposes the
-      # sticky-hero-compacts-mid-scroll race. The smooth-scroll target is
-      # computed against the expanded header height; mid-flight the hero
-      # compacts (scrollY crosses 80) and the scroll-compensation kick
-      # fights the animation, leaving the card top hidden behind the
-      # final-state header.
-      page.execute_script(
-        "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
-      )
-      page.execute_script("window.scrollTo(0, 0)")
-      sleep 0.4
+      page.execute_script("document.getElementById('cell-#{@cap2_stable}-1').click()")
 
-      # Click a chip on cap2 (Problem Solving) — below the fold from
-      # scrollY=0. JS-dispatch so Capybara doesn't scroll it for us.
-      page.execute_script(<<~JS)
-        document.getElementById('cell-#{@cap2_stable}-1').click();
-      JS
-      sleep 1.5
-
-      # After the chip click, the cap2 CARD top must sit just below the
-      # sticky header bottom — close enough that the eyebrow and name
-      # are immediately visible without forcing the user to scroll up.
-      # We allow 0–30px of breathing room (the card has 12px of declared
-      # scroll-margin-top above its top edge); anything outside that
-      # window is a regression.
-      # Measure against the EFFECTIVE blocking top — unified header
-      # bottom + category section header height. The category section
-      # heading is itself sticky (pinned just under the unified header),
-      # so card top must clear both, not just the unified header.
-      diagnostics = page.evaluate_script(<<~JS)
-        (function() {
-          var card = document.querySelector('[data-capability-stable-id="#{@cap2_stable}"]');
-          var section = card.closest("section[data-category-id]");
-          var sectionHeader = section.querySelector(":scope > [data-section-header]");
-          var header = document.getElementById('assessment-sticky-header');
-          return {
-            card_top: card.getBoundingClientRect().top,
-            header_bottom: header.getBoundingClientRect().bottom,
-            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0,
-            scroll_y: window.scrollY
-          };
-        })()
-      JS
-      effective_blocker_bottom = diagnostics["header_bottom"] + diagnostics["section_header_height"]
-      offset = diagnostics["card_top"] - effective_blocker_bottom
-      assert offset.between?(0, 30),
-        "Capability card top should land 0-30px below the effective sticky " \
-        "header bottom (unified + section). offset=#{offset}, " \
-        "diagnostics=#{diagnostics.inspect}"
+      # Close enough below the chrome that the eyebrow and name show without
+      # scrolling up: the card's scroll-margin leaves a 12px gap.
+      assert_card_settles(@cap2_stable, "land 0-30px below the effective sticky chrome") { |offset| offset.between?(0, 30) }
     end
 
     # A chip click swaps that one card (#488): the matrix and the other cards
@@ -1932,6 +1861,72 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # The matrix frame renders inline and then swaps in its own load. A chip
+  # clicked before that load takes the whole-frame path and scrolls only once
+  # the frame lands, which a slow worker can push past any fixed sleep (#501).
+  def prepare_chip_scroll(from:)
+    visit assessment_path(@assignment)
+    # Turbo marks the frame complete before it clears busy, and the chip
+    # takes the whole-frame path until both have happened.
+    assert_selector "turbo-frame#assessment-matrix[complete]:not([busy])", visible: :all
+    wait_for_stimulus "matrix"
+
+    page.execute_script(
+      "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+    )
+    page.execute_script("window.scrollTo(0, #{from})")
+    sleep 0.4
+  end
+
+  # Asserts the card's top lands where `landed` says, measured below the sticky
+  # chrome (the unified header plus the category heading pinned under it),
+  # once the scroll has stopped. The click starts a smooth scroll, and a settle
+  # pass re-snaps it 600ms later, so a single reading can land mid-flight. This
+  # passes only when `landed` holds on two readings at the same scroll
+  # position, no sooner than `settle_after` (the settle pass must get its turn).
+  def assert_card_settles(stable_id, expectation, settle_after: 1.0, &landed)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    deadline = started + Capybara.default_max_wait_time
+    previous_scroll_y = nil
+    last = nil
+    loop do
+      # Null while a card swap is mid-render; the next reading finds it.
+      reading = page.evaluate_script(<<~JS)
+        (function() {
+          var card = document.querySelector('[data-capability-stable-id="#{stable_id}"]');
+          if (!card) return null;
+          var sectionHeader = card.closest("section[data-category-id]")
+            ?.querySelector(":scope > [data-section-header]");
+          return {
+            card_top: card.getBoundingClientRect().top,
+            header_bottom: document.getElementById('assessment-sticky-header').getBoundingClientRect().bottom,
+            section_header_height: sectionHeader ? sectionHeader.offsetHeight : 0,
+            scroll_y: window.scrollY
+          };
+        })()
+      JS
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      if reading
+        offset = reading["card_top"] - reading["header_bottom"] - reading["section_header_height"]
+        last = [ offset, reading ]
+        on_target = landed.call(offset)
+        return pass if on_target && previous_scroll_y == reading["scroll_y"] && now - started >= settle_after
+
+        previous_scroll_y = on_target ? reading["scroll_y"] : nil
+      else
+        # A settled pair must be two readings of the same card.
+        previous_scroll_y = nil
+      end
+      break if now > deadline
+
+      sleep 0.25
+    end
+    flunk "Capability card #{stable_id} never rendered" unless last
+
+    flunk "Capability card top should #{expectation} once scrolling stops " \
+          "(offset=#{last[0]}, diagnostics=#{last[1].inspect})"
+  end
 
   # Rates one current-level capability (cap1) so the assessment clears the
   # 50% coverage threshold (1 of 2 E2-bound caps) and the hero swaps from the
