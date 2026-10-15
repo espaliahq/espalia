@@ -566,7 +566,7 @@ under a full parallel precommit and passed alone
 - Wait for the eager frame (`turbo-frame#…[complete]`) and its controller
   (`wait_for_stimulus`) before arranging the page and clicking.
 - Poll until the condition holds on two readings at the same `scrollY`. The
-  assessment tests' `settled_card_offset` is the example.
+  assessment tests' `assert_card_settles` is the example.
 - Reproduce a timing flake by slowing the server rather than the browser. 8x
   CPU throttling never failed these tests; a 1.5s delay prepended to the frame
   action failed both every time.

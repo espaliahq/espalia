@@ -660,11 +660,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # The eyebrow ("THINKING") and capability name ("Problem Solving")
       # must be in view, not pushed under the sticky chrome.
-      clears_chrome = ->(offset) { offset >= -5 }
-      offset, diagnostics = settled_card_offset(@cap2_stable, &clears_chrome)
-      assert clears_chrome.call(offset),
-        "Top of capability card should sit at or below the effective sticky chrome " \
-        "(offset=#{offset}, diagnostics=#{diagnostics.inspect})"
+      assert_card_settles(@cap2_stable, "sit at or below the effective sticky chrome") { |offset| offset >= -5 }
     end
 
     should "smooth scroll the capability card into view when a chip is clicked" do
@@ -677,12 +673,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # Close enough below the chrome that the eyebrow and name show without
       # scrolling up: the card's scroll-margin leaves a 12px gap.
-      just_below_chrome = ->(offset) { offset.between?(0, 30) }
-      offset, diagnostics = settled_card_offset(@cap2_stable, &just_below_chrome)
-      assert just_below_chrome.call(offset),
-        "Capability card top should land 0-30px below the effective sticky " \
-        "header bottom (unified + section). offset=#{offset}, " \
-        "diagnostics=#{diagnostics.inspect}"
+      assert_card_settles(@cap2_stable, "land 0-30px below the effective sticky chrome") { |offset| offset.between?(0, 30) }
     end
 
     # A chip click swaps that one card (#488): the matrix and the other cards
@@ -1888,17 +1879,17 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     sleep 0.4
   end
 
-  # How far the card's top sits below the sticky chrome (the unified header
-  # plus the category heading pinned under it) once the scroll has stopped.
-  # The click starts a smooth scroll, and a settle pass re-snaps it 600ms
-  # later, so a single reading can land mid-flight. This polls until `landed`
-  # holds on two readings at the same scroll position, no sooner than
-  # `settle_after` (the settle pass must get its turn). On timeout it returns
-  # the last reading for the failure message.
-  def settled_card_offset(stable_id, settle_after: 1.0, &landed)
+  # Asserts the card's top lands where `landed` says, measured below the sticky
+  # chrome (the unified header plus the category heading pinned under it),
+  # once the scroll has stopped. The click starts a smooth scroll, and a settle
+  # pass re-snaps it 600ms later, so a single reading can land mid-flight. This
+  # passes only when `landed` holds on two readings at the same scroll
+  # position, no sooner than `settle_after` (the settle pass must get its turn).
+  def assert_card_settles(stable_id, expectation, settle_after: 1.0, &landed)
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     deadline = started + Capybara.default_max_wait_time
     previous_scroll_y = nil
+    offset = diagnostics = nil
     loop do
       # Null while a card swap is mid-render; the next reading finds it.
       diagnostics = page.evaluate_script(<<~JS)
@@ -1919,15 +1910,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       if diagnostics
         offset = diagnostics["card_top"] - diagnostics["header_bottom"] - diagnostics["section_header_height"]
         on_target = landed.call(offset)
-        settled = on_target && previous_scroll_y == diagnostics["scroll_y"] && now - started >= settle_after
-        return [ offset, diagnostics ] if settled || now > deadline
+        return pass if on_target && previous_scroll_y == diagnostics["scroll_y"] && now - started >= settle_after
 
         previous_scroll_y = on_target ? diagnostics["scroll_y"] : nil
-      elsif now > deadline
-        flunk "Capability card #{stable_id} never reappeared"
       end
+      break if now > deadline
+
       sleep 0.25
     end
+    flunk "Capability card top should #{expectation} once scrolling stops " \
+          "(offset=#{offset.inspect}, diagnostics=#{diagnostics.inspect})"
   end
 
   # Rates one current-level capability (cap1) so the assessment clears the
