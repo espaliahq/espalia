@@ -2,7 +2,9 @@
 
 # Lists the active evidence attached to one capability on an assessment —
 # the read drill-in that closes the assessment → capability → evidence
-# traversal. Optionally narrows to a single capability × level cell.
+# traversal. Optionally narrows to a single capability × level cell. With
+# no capability it lists the UNPLACED items instead: feedback recorded
+# without a cell, waiting for someone to place it.
 #
 # Evidence content lives on {EvidenceItem}; the (capability, level)
 # coordinates an item demonstrates live on {EvidenceLink} (one item can
@@ -16,22 +18,26 @@
 # active item. Withdrawn items and removed links are omitted (matching the
 # matrix's `.active` scope).
 class Operations::Assessments::EvidenceList < Operations::Base
-  description "List active feedback / evidence on an assessment for one capability (optionally one level). " \
+  description "List active feedback / evidence on an assessment for one capability (optionally one level), " \
+              "or — with no capability — the unplaced items still waiting to be placed on one. " \
               "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
               "the capability_stable_id argument. Each item carries its full set of linked cells."
   category :read
   approval :none
 
   parameter :assignment_id,        String, required: true
-  parameter :capability_stable_id, String, required: true
+  parameter :capability_stable_id, String
   parameter :level_ordinal,        Integer
+
+  dependent_required :level_ordinal, requires: :capability_stable_id
 
   def policy_check
     authorize assignment, :index?, policy_class: EvidencePolicy
   end
 
-  # @return [Hash] `{ capability_stable_id:, level_ordinal:, evidence: [...] }`
-  #   where each evidence entry carries `{ evidence_id, evidence_type,
+  # @return [Hash] `{ capability_stable_id:, level_ordinal:, unplaced:, evidence: [...] }`
+  #   — `unplaced: true` (and nil coordinates) when listing the items with no
+  #   cell yet — where each evidence entry carries `{ evidence_id, evidence_type,
   #   custom_type_label, title, content, source, author{id,name},
   #   external_reference|nil, recorded_at, edited_at|nil, links[] }`. `links`
   #   is every active `{ capability_stable_id, level_ordinal, valence }` the item is
@@ -41,8 +47,9 @@ class Operations::Assessments::EvidenceList < Operations::Base
     links_by_evidence = active_links_for(found.map(&:id))
 
     {
-      capability_stable_id: capability.stable_id,
+      capability_stable_id: unplaced? ? nil : capability.stable_id,
       level_ordinal: params[:level_ordinal],
+      unplaced: unplaced?,
       evidence: found.map { |item| item_payload(item, links_by_evidence[item.id] || []) }
     }
   end
@@ -51,6 +58,10 @@ class Operations::Assessments::EvidenceList < Operations::Base
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+  end
+
+  def unplaced?
+    params[:capability_stable_id].blank?
   end
 
   # Resolve the capability within the assignment's framework, accepting
@@ -72,6 +83,11 @@ class Operations::Assessments::EvidenceList < Operations::Base
   # were recorded. Driven off {EvidenceLink} (an item appears in a cell
   # because it has an active link there), not the item's origin columns.
   def items
+    if unplaced?
+      return EvidenceItem.unplaced.for_person(assignment.person_id).for_framework(assignment.framework_id)
+        .includes(:author).order(:recorded_at).to_a
+    end
+
     links = EvidenceLink.active
       .for_person(assignment.person_id)
       .for_framework(assignment.framework_id)

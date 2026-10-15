@@ -305,7 +305,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_evidence_list",
-        "description" => "List active feedback / evidence on an assessment for one capability (optionally one level). " \
+        "description" => "List active feedback / evidence on an assessment for one capability (optionally one level), " \
+                         "or — with no capability — the unplaced items still waiting to be placed on one. " \
                          "Accepts either capability_id (version-specific) or stable_id (cross-version) in " \
                          "the capability_stable_id argument. Each item carries its full set of linked cells.",
         "inputSchema" => {
@@ -315,8 +316,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "capability_stable_id" => { "type" => "string" },
             "level_ordinal"        => { "type" => "integer" }
           },
-          "required" => %w[assignment_id capability_stable_id],
-          "additionalProperties" => false
+          "required" => %w[assignment_id],
+          "additionalProperties" => false,
+          "dependentRequired" => { "level_ordinal" => [ "capability_stable_id" ] }
         },
         "annotations" => {
           "readOnlyHint"    => true,
@@ -353,6 +355,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "status"        => { "type" => "string", "enum" => %w[open closed all] }
           },
           "required" => [ "assignment_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_feedback_recipients",
+        "description" => "Find colleagues you can give feedback to: people with a framework assignment, by name or email, " \
+                         "or your manager, peers and reports when no query is given. Each row carries the assignment_id " \
+                         "to pass to assessments_record_evidence; a peer cannot read the assessment itself.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "query" => { "type" => "string" },
+            "limit" => { "type" => "integer" }
+          },
+          "required" => [],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -508,7 +530,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_record_evidence",
-        "description" => "Record a piece of feedback / evidence against a capability × level on an assessment. " \
+        "description" => "Record a piece of feedback / evidence on an assessment — against a capability × level, or " \
+                         "with no cell at all when you don't know which expectation it speaks to: the recipient or their " \
+                         "manager places it later. Find a colleague's assignment_id with assessments_feedback_recipients. " \
                          "`content` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
         "inputSchema" => {
           "type" => "object",
@@ -535,9 +559,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
               }
             }
           },
-          "required" => %w[assignment_id capability_stable_id level_ordinal evidence_type content valence],
+          "required" => %w[assignment_id evidence_type content],
           "additionalProperties" => false,
-          **custom_type_label_conditional
+          "allOf" => [
+            custom_type_label_conditional,
+            { "dependentRequired" => {
+              "capability_stable_id" => %w[level_ordinal valence],
+              "level_ordinal"        => [ "capability_stable_id" ],
+              "valence"              => [ "capability_stable_id" ],
+              "additional_links"     => [ "capability_stable_id" ]
+            } }
+          ]
         },
         "annotations" => {
           "readOnlyHint"    => false,

@@ -92,6 +92,44 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
     end
   end
 
+  context "unplaced feedback — no cell given" do
+    should "record the item with no links and say so" do
+      result = call_op(ctx: @manager_ctx, capability_stable_id: nil, level_ordinal: nil, valence: nil)
+
+      assert_equal false, result[:placed]
+      assert_nil result[:capability_stable_id]
+      assert_nil result[:level_ordinal]
+      assert_empty result[:links]
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(result[:evidence_id])
+        assert item.unplaced?
+        assert_equal "manager", item.source
+      end
+    end
+
+    should "reject half a cell, or a valence or extra links with no cell" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @manager_ctx, level_ordinal: nil, valence: nil)
+      end
+      assert_match(/level_ordinal/, err.message)
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @manager_ctx, capability_stable_id: nil, level_ordinal: nil)
+      end
+      assert_match(/capability_stable_id/, err.message)
+
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @manager_ctx, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+          additional_links: [ { capability_stable_id: @cap.stable_id, level_ordinal: 2, valence: "demonstrated" } ])
+      end
+      assert_match(/capability_stable_id/, err.message)
+    end
+
+    should "report placed: true for a placed item" do
+      assert_equal true, call_op(ctx: @report_ctx)[:placed]
+    end
+  end
+
   context "manager evidencing a direct report" do
     should "derive source = 'manager' (never trusted from input)" do
       result = call_op(ctx: @manager_ctx)
