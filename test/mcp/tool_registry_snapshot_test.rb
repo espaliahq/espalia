@@ -313,7 +313,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {
             "assignment_id"        => { "type" => "string" },
-            "capability_stable_id" => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
             "level_ordinal"        => { "type" => "integer" }
           },
           "required" => %w[assignment_id],

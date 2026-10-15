@@ -26,7 +26,8 @@ class Operations::Assessments::EvidenceList < Operations::Base
   approval :none
 
   parameter :assignment_id,        String, required: true
-  parameter :capability_stable_id, String
+  # Omitted means "the unplaced items"; blank is a mistake, as in record_evidence.
+  parameter :capability_stable_id, String, allow_blank: false
   parameter :level_ordinal,        Integer
 
   dependent_required :level_ordinal, requires: :capability_stable_id
@@ -61,7 +62,7 @@ class Operations::Assessments::EvidenceList < Operations::Base
   end
 
   def unplaced?
-    params[:capability_stable_id].blank?
+    params[:capability_stable_id].nil?
   end
 
   # Resolve the capability within the assignment's framework, accepting

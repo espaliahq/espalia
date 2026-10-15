@@ -32,16 +32,18 @@ class Assessments::FeedbackRecipients
   # @param query [String, nil] matched against name or email; blank → {#suggestions}
   # @param limit [Integer]
   # @return [Array<Recipient>]
+  # `limit` caps rows, and a person assessed in several frameworks is several
+  # rows, so the people fetched are a ceiling and the rows are cut after.
   def call(query, limit: DEFAULT_LIMIT)
     limit = limit.to_i.clamp(1, MAX_LIMIT)
     return suggestions.first(limit) if query.blank?
 
-    term = "%#{sanitize_like(query.strip)}%"
+    term = "%#{Person.sanitize_sql_like(query.strip)}%"
     people = selectable
       .where("people.name ILIKE :t OR people.email ILIKE :t", t: term)
       .order(:name)
       .limit(limit)
-    recipients_for(people.to_a)
+    recipients_for(people.to_a).first(limit)
   end
 
   # The giver's org neighbours who hold an assignment: manager first, then
@@ -97,9 +99,5 @@ class Assessments::FeedbackRecipients
 
   def manager_ids
     @manager_ids ||= giver.manager_chain.map(&:id).to_set
-  end
-
-  def sanitize_like(value)
-    value.gsub(/[\\%_]/) { |char| "\\#{char}" }
   end
 end

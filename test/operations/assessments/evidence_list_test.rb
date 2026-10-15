@@ -103,6 +103,13 @@ class Operations::Assessments::EvidenceListTest < ActiveSupport::TestCase
       assert_empty call_op(assignment_id: @assignment.id)[:evidence]
     end
 
+    should "refuse a blank capability as a mistake rather than listing unplaced items" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(assignment_id: @assignment.id, capability_stable_id: "", level_ordinal: 2)
+      end
+      assert_match(/capability_stable_id/, err.message)
+    end
+
     should "refuse a level without a capability" do
       err = assert_raises(Operations::Base::ParameterError) do
         call_op(assignment_id: @assignment.id, level_ordinal: 2)

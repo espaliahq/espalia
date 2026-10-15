@@ -46,7 +46,9 @@ class Operations::Assessments::FeedbackRecipientsTest < ActiveSupport::TestCase
 
   context "search" do
     should "match name or email, excluding the giver, the unassigned and the inactive" do
-      assert_equal [ "Priya Peer", "Priyanka Stranger" ], names(call_op(query: "pri"))
+      # Order-insensitive: the name sort follows the database's collation, and
+      # CI's locale ranks "Priyanka" before "Priya " where a byte order does not.
+      assert_equal [ "Priya Peer", "Priyanka Stranger" ], names(call_op(query: "pri")).sort
       assert_equal [ "Rafael Report" ], names(call_op(query: "rafa@"))
       assert_empty names(call_op(query: "Gia"))
       assert_empty names(call_op(query: "Una"))
@@ -67,9 +69,17 @@ class Operations::Assessments::FeedbackRecipientsTest < ActiveSupport::TestCase
       assert_empty names(call_op(query: "%"))
     end
 
-    should "cap the limit" do
-      result = call_op(query: "e", limit: 1)
-      assert_equal 1, result[:recipients].size
+    should "cap the rows, counting a person assessed twice as two" do
+      ActsAsTenant.with_tenant(@tenant) do
+        other_framework = SecureRandom.uuid_v7
+        create(:framework_state, framework_id: other_framework, name: "Design")
+        rf = create(:framework_role_family, framework_id: other_framework, name: "Design")
+        role = create(:framework_role, role_family_id: rf.role_family_id, name: "Designer", code: "D", track: "ic")
+        level = create(:framework_level, role_id: role.role_id, ordinal: 1, title: "Junior", code: "D1")
+        PersonDevelopment::CommandHandler.new.assign_to_framework(@peer.id, other_framework, role.role_id, level.level_id)
+      end
+      assert_equal 1, call_op(query: "e", limit: 1)[:recipients].size
+      assert_equal 2, call_op(query: "Priya Peer")[:recipients].size
     end
   end
 
