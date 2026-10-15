@@ -42,6 +42,7 @@ export default class extends BaseController {
     if (p.capabilityStableId) q.set("capability_stable_id", p.capabilityStableId)
     if (p.levelOrdinal != null && p.levelOrdinal !== "") q.set("level_ordinal", p.levelOrdinal)
     if (p.returnTo) q.set("return_to", p.returnTo)
+    if (p.draftToken) q.set("draft_token", p.draftToken)
     // No un-hiding of a previously-failed frame here: `sourceURLChanged`
     // clears `complete` and (the frame having been loaded once already)
     // fetches immediately regardless of visibility, and `frame-error` takes

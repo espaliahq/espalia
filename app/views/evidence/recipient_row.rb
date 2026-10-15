@@ -9,13 +9,16 @@ class Views::Evidence::RecipientRow < Views::Base
 
   # @param recipient [Assessments::FeedbackRecipients::Recipient]
   # @param return_to [String]
-  def initialize(recipient:, return_to:)
+  # @param draft_token [String, nil]
+  def initialize(recipient:, return_to:, draft_token: nil)
     @recipient = recipient
     @return_to = return_to
+    @draft_token = draft_token
   end
 
   def view_template
-    a(href: evidence_modal_path(mode: "new", assignment_id: @recipient.assignment.id, return_to: @return_to),
+    a(href: evidence_modal_path(mode: "new", assignment_id: @recipient.assignment.id, return_to: @return_to,
+                                draft_token: @draft_token),
       data: { turbo_frame: "evidence-modal", recipient_row: "", person_id: @recipient.person.id },
       class: "flex w-full items-center justify-between gap-3 min-h-11 px-3 py-2 rounded-md " \
              "hover:bg-gray-50 dark:hover:bg-gray-800") do

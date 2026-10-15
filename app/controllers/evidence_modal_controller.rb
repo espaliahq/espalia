@@ -38,7 +38,8 @@ class EvidenceModalController < ApplicationController
   def recipients
     authorize PersonFrameworkAssignment, :index?
     entries = recipient_directory.call(params[:q], limit: Assessments::FeedbackRecipients::DEFAULT_LIMIT)
-    render Views::Evidence::RecipientCandidatesFrame.new(entries: entries, query: params[:q], return_to: params[:return_to]),
+    render Views::Evidence::RecipientCandidatesFrame.new(entries: entries, query: params[:q], return_to: params[:return_to],
+                                                         draft_token: params[:draft_token]),
            layout: false
   end
 
@@ -52,8 +53,8 @@ class EvidenceModalController < ApplicationController
     authorize PersonFrameworkAssignment, :index?
     render Views::Evidence::RecipientPickerForm.new(
       suggestions: recipient_directory.suggestions,
-      candidates_url: recipients_evidence_modal_path(return_to: params[:return_to]),
-      return_to: params[:return_to]
+      candidates_url: recipients_evidence_modal_path(return_to: params[:return_to], draft_token: params[:draft_token]),
+      return_to: params[:return_to], draft_token: params[:draft_token]
     ), layout: false
   end
 
@@ -70,7 +71,15 @@ class EvidenceModalController < ApplicationController
       { capability_stable_id: params[:capability_stable_id], level_ordinal: params[:level_ordinal].to_i }
     end
     render_modal(mode: :new, assignment: assignment, content_editable: true, seed_cell: seed_cell,
-                 recipient: (Person.find_by(id: assignment.person_id) if seed_cell.nil?))
+                 recipient: (Person.find_by(id: assignment.person_id) if seed_cell.nil?),
+                 draft: draft)
+  end
+
+  # A Slack draft the signed-in author is finishing: only theirs, only while open.
+  def draft
+    return nil if params[:draft_token].blank?
+
+    FeedbackDraft.open_for(token: params[:draft_token], email: current_user.email)
   end
 
   def render_edit
@@ -100,7 +109,7 @@ class EvidenceModalController < ApplicationController
   # @param linked_coords [Array<Array(String, Integer)>] ALL active (cap, level) pairs (:edit)
   # @param link_valences [Hash{Array(String, Integer)=>String,nil}] current valence per active link
   def render_modal(mode:, assignment:, content_editable:, seed_cell: nil, evidence: nil, request: nil,
-                   linked_coords: [], link_valences: {}, recipient: nil)
+                   linked_coords: [], link_valences: {}, recipient: nil, draft: nil)
     options = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id)
     expectation_map = options.expectation_map
 
@@ -122,7 +131,7 @@ class EvidenceModalController < ApplicationController
       scope_line: scope_line(assignment),
       link_options: options.link_options, level_options: options.level_options,
       linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to],
-      recipient: recipient_block(assignment, recipient, evidence)
+      recipient: recipient_block(assignment, recipient, evidence), draft: draft
     ), layout: false
   end
 

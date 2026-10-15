@@ -10,10 +10,12 @@ class Views::Evidence::RecipientCandidatesFrame < Views::Base
   # @param entries [Array<Assessments::FeedbackRecipients::Recipient>]
   # @param query [String, nil]
   # @param return_to [String]
-  def initialize(entries:, query:, return_to:)
+  # @param draft_token [String, nil]
+  def initialize(entries:, query:, return_to:, draft_token: nil)
     @entries = entries
     @query = query
     @return_to = return_to
+    @draft_token = draft_token
   end
 
   def view_template
@@ -32,7 +34,9 @@ class Views::Evidence::RecipientCandidatesFrame < Views::Base
         end
       else
         div(class: "divide-y divide-gray-100 dark:divide-gray-800") do
-          @entries.each { |recipient| render Views::Evidence::RecipientRow.new(recipient: recipient, return_to: @return_to) }
+          @entries.each do |recipient|
+            render Views::Evidence::RecipientRow.new(recipient: recipient, return_to: @return_to, draft_token: @draft_token)
+          end
         end
       end
     end

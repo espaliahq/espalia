@@ -23,6 +23,10 @@ Rails.application.routes.draw do
   # can be verified; real events are acked and dropped until the evidence-reply
   # handler is built. See Slack::EventsController.
   post "/slack/events", to: "slack/events#create", as: :slack_events
+  # The /growthos slash command and interactive payloads (the feedback modal's
+  # typeahead and submission, the message shortcut). Same trust model.
+  post "/slack/commands", to: "slack/commands#create", as: :slack_commands
+  post "/slack/interactions", to: "slack/interactions#create", as: :slack_interactions
 
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
@@ -125,6 +129,8 @@ Rails.application.routes.draw do
   # Evidence-request hub — incoming (respond/decline) and outgoing (cancel),
   # plus edit/withdraw of evidence you've authored.
   get "evidence", to: "evidence_hub#show", as: :evidence_hub
+  # A Slack feedback draft's link: sign in, then the hub with the modal filled.
+  get "evidence/drafts/:token", to: "evidence/drafts#show", as: :evidence_draft
   # Request-creation modal (assignment-scoped, read-only renders): the form
   # frame and the debounced typeahead candidates frame.
   get "assessments/:assignment_id/evidence_request_modal",

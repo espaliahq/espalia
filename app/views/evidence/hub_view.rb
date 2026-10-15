@@ -23,7 +23,7 @@ class Views::Evidence::HubView < Views::Base
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
   # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
   #   to the item's first linkage (absent when the viewer may not see it)
-  def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false,
+  def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false, draft: nil,
                  completed_incoming: [], completed_outgoing: [],
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
                  in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [])
@@ -35,6 +35,7 @@ class Views::Evidence::HubView < Views::Base
     @to_place_about_me = to_place_about_me
     @to_place_for_team = to_place_for_team
     @open_give_step = open_give_step
+    @draft = draft
     @cell_details = cell_details
     @authored_details = authored_details
     @responses = responses
@@ -73,10 +74,23 @@ class Views::Evidence::HubView < Views::Base
       # the "who is it for?" step. The hub controller clicks this same button
       # when the page arrives with ?give=1, so the two paths can't drift.
       button(type: "button",
-             data: modal_trigger_data(mode: "give").merge(evidence_hub_target: "autoTrigger"),
+             data: give_trigger_data.merge(evidence_hub_target: "autoTrigger"),
              class: "shrink-0 inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") do
         "Give feedback"
       end
+    end
+  end
+
+  # The give step; with a Slack draft, straight to its recipient's form when
+  # the draft names one, filled from it either way.
+  def give_trigger_data
+    if @draft&.assignment_id
+      modal_trigger_data(mode: "new").merge(evidence_modal_assignment_id_param: @draft.assignment_id,
+                                            evidence_modal_draft_token_param: @draft.token)
+    elsif @draft
+      modal_trigger_data(mode: "give").merge(evidence_modal_draft_token_param: @draft.token)
+    else
+      modal_trigger_data(mode: "give")
     end
   end
 

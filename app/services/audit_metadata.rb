@@ -44,7 +44,7 @@
 # is set, and is a transparent no-op otherwise. This keeps Operations
 # safe to call from tests and rake tasks that never seed metadata.
 module AuditMetadata
-  ACTING_VIA = %i[web mcp hris system].freeze
+  ACTING_VIA = %i[web mcp hris slack system].freeze
 
   STORE_KEY = :audit_metadata
   private_constant :STORE_KEY
@@ -54,7 +54,7 @@ module AuditMetadata
   # Block form. Restores any prior context on exit so nested calls
   # (e.g. an HRIS sync that invokes an Operation) behave predictably.
   #
-  # @param acting_via [Symbol] :web | :mcp | :hris | :system
+  # @param acting_via [Symbol] :web | :mcp | :hris | :slack | :system
   # @param actor_id [String, nil] uuid of the Person triggering the write
   # @param impersonator_id [String, nil] uuid of the real Person when an
   #   impersonation session is active

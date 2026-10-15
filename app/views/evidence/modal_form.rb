@@ -47,9 +47,10 @@ class Views::Evidence::ModalForm < Views::Base
   # @param return_to [String, nil] "hub" or "assessment:<id>" — picks the submit endpoint
   # @param recipient [Hash, nil] { name:, scope: } — whose assessment this lands on, for
   #   the forms with no cell card (volunteered :new, :edit of an unplaced item)
+  # @param draft [FeedbackDraft, nil] a Slack draft to prefill a volunteered :new from
   def initialize(mode:, assignment_id:, content_editable:, seed_cell: nil, context_block: nil,
                  scope_line: nil, link_options: [], level_options: [], linked_cells: [],
-                 expectation_map: {}, evidence: nil, request: nil, return_to: nil, recipient: nil)
+                 expectation_map: {}, evidence: nil, request: nil, return_to: nil, recipient: nil, draft: nil)
     @mode = mode.to_sym
     @assignment_id = assignment_id
     @seed_cell = seed_cell
@@ -64,6 +65,7 @@ class Views::Evidence::ModalForm < Views::Base
     @request = request
     @return_to = return_to
     @recipient = recipient
+    @draft = draft
   end
 
   def view_template
@@ -197,6 +199,7 @@ class Views::Evidence::ModalForm < Views::Base
     input(type: "hidden", name: "evidence[evidence_id]", value: @evidence&.id) if @evidence
     input(type: "hidden", name: "evidence[request_id]", value: @request&.id) if @request
     input(type: "hidden", name: "return_to", value: @return_to)
+    input(type: "hidden", name: "draft_token", value: @draft.token) if @draft
     # The seed cell (:new / :respond only) — the record_evidence origin. Its
     # desired-link entry rides on the fixed seed row. :edit submits no seed;
     # the server diffs the desired set against current links.
@@ -260,7 +263,7 @@ class Views::Evidence::ModalForm < Views::Base
       label(for: "evm-content", class: LABEL) { "What happened?" }
       textarea(id: "evm-content", name: "evidence[content]", rows: 4, required: @content_editable,
                placeholder: "Describe what you observed…", class: INPUT, disabled: !@content_editable,
-               aria: { describedby: "evm-content-hint" }) { @evidence&.content }
+               aria: { describedby: "evm-content-hint" }) { @evidence&.content || @draft&.content }
       p(id: "evm-content-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
         "#{Prose::COMPOSER_HINT}: **bold**, _italic_, lists and [a link](https://…). A pasted URL becomes a link."
       end
@@ -272,12 +275,12 @@ class Views::Evidence::ModalForm < Views::Base
       div do
         label(for: "evm-sys", class: LABEL) { "Link to (optional)" }
         select(id: "evm-sys", name: "evidence[external_reference][system]", class: INPUT, disabled: !@content_editable) do
-          SYSTEM_OPTIONS.each { |text, value| option(value: value, selected: value == @evidence&.external_reference&.system) { text } }
+          SYSTEM_OPTIONS.each { |text, value| option(value: value, selected: value == external_reference&.system) { text } }
         end
       end
       div do
         label(for: "evm-url", class: LABEL) { "URL" }
-        input(id: "evm-url", type: "url", name: "evidence[external_reference][url]", value: @evidence&.external_reference&.url,
+        input(id: "evm-url", type: "url", name: "evidence[external_reference][url]", value: external_reference&.url,
               placeholder: "https://", class: INPUT, disabled: !@content_editable)
       end
     end
@@ -437,7 +440,11 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def selected_type
-    @evidence&.evidence_type.presence || "peer_feedback"
+    @evidence&.evidence_type.presence || @draft&.evidence_type.presence || "peer_feedback"
+  end
+
+  def external_reference
+    @evidence&.external_reference || @draft&.external_reference
   end
 
   def seed_token

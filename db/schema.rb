@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_15_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -303,6 +303,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_000001) do
     t.index ["status"], name: "index_evidence_requests_on_status"
     t.index ["tenant_id", "cycle_id", "person_id"], name: "idx_evidence_requests_tenant_cycle_person"
     t.index ["tenant_id"], name: "index_evidence_requests_on_tenant_id"
+  end
+
+  create_table "feedback_drafts", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "token", null: false
+    t.string "author_email", null: false
+    t.uuid "recipient_person_id"
+    t.uuid "assignment_id"
+    t.text "content", null: false
+    t.string "evidence_type", null: false
+    t.jsonb "external_reference", default: {}, null: false
+    t.string "source", default: "slack", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "consumed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_feedback_drafts_on_tenant_id"
+    t.index ["token"], name: "index_feedback_drafts_on_token", unique: true
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -818,6 +836,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_000001) do
   add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
+  add_foreign_key "feedback_drafts", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"
