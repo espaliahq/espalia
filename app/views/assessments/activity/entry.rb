@@ -370,11 +370,23 @@ class Views::Assessments::Activity::Entry < Views::Base
     item = @entry.payload
     title = item.respond_to?(:title) ? item.title.to_s : ""
     subject = title.strip.empty? ? "feedback" : "“#{title.strip}”"
+    return unplaced_evidence_summary(subject) if @entry.capability_stable_id.nil? && @entry.level_ordinal.nil?
+
     label = capability_label
     if (name = evidence_author_name)
       "#{name} recorded #{subject} on #{label}"
     else
       "Recorded #{subject} on #{label}"
+    end
+  end
+
+  # An unplaced item has no cell to name; the entry says so rather than
+  # inventing a coordinate, and stays framework-scoped until it is placed.
+  def unplaced_evidence_summary(subject)
+    if (name = evidence_author_name)
+      "#{name} gave #{subject}, not yet placed on a capability"
+    else
+      "Gave #{subject}, not yet placed on a capability"
     end
   end
 

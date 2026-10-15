@@ -12,10 +12,11 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
 
   # occurred_at is nil so the footer's time_ago_in_words helper isn't invoked
   # in this context-free unit render — only the summary line is under test.
-  def render_entry(kind:, payload:, capability_name: "Critical Thinking", level_ordinal: 2)
+  def render_entry(kind:, payload:, capability_name: "Critical Thinking", level_ordinal: 2,
+                   capability_stable_id: SecureRandom.uuid_v7)
     entry = Assessments::ActivityFeedQuery::Entry.new(
       id: SecureRandom.uuid_v7, kind: kind, occurred_at: nil, payload: payload,
-      capability_stable_id: SecureRandom.uuid_v7, level_ordinal: level_ordinal,
+      capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
       capability_name: capability_name
     )
     Views::Assessments::Activity::Entry.new(entry: entry).call
@@ -38,6 +39,14 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       item = Item.new(title: "", content: "Shipped X.", author: Person.new("Ada"))
       html = render_entry(kind: "evidence_recorded", payload: item)
       assert_includes html, "Ada recorded feedback on Critical Thinking · L2"
+    end
+
+    should "say an unplaced item has no capability yet, and not make it focusable" do
+      item = Item.new(title: "", content: "Great call.", author: Person.new("Ada"))
+      html = render_entry(kind: "evidence_recorded", payload: item,
+        capability_name: nil, level_ordinal: nil, capability_stable_id: nil)
+      assert_includes html, "Ada gave feedback, not yet placed on a capability"
+      refute_includes html, "focusEntry"
     end
   end
 

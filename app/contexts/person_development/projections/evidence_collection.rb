@@ -221,6 +221,10 @@ class PersonDevelopment::Projections::EvidenceCollection
     )
     item.save!
 
+    # An unplaced item carries no capability on the event and starts with
+    # no link row; its first EvidenceLinkAdded places it.
+    return if event.data[:capability_stable_id].nil?
+
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
                 linked_by_id: event.data[:author_id], valence: event.data[:valence])
   end

@@ -216,6 +216,30 @@ class Assessments::ActivityFeedQueryTest < ActiveSupport::TestCase
     end
   end
 
+  context "unplaced evidence" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @unplaced_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @assessee.id, @framework_id, @unplaced_id,
+          source: "peer", evidence_type: "peer_feedback", content: "Great incident call",
+          author_id: @peer.id
+        )
+      end
+      @entries = run_query(viewer: @assessee, sees_all: true, context: :self,
+        alignment_started: false)
+    end
+
+    should "surface the item as a framework-scoped evidence entry with no cell" do
+      entry = @entries.find { |e| e.id == "evidence_recorded:#{@unplaced_id}" }
+      assert_not_nil entry
+      assert_equal "evidence_recorded", entry.kind
+      assert_nil entry.capability_stable_id
+      assert_nil entry.level_ordinal
+      assert_nil entry.capability_name
+    end
+  end
+
   # `EvidenceRelinked` is no longer emitted (the user-facing "move" action
   # was dropped in favour of add-link + remove-link), but historical streams
   # still contain it and the activity feed must keep rendering those entries.

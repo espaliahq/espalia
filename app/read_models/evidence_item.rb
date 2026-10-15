@@ -10,6 +10,11 @@
 # feed anchors evidence-recorded/withdrawn entries on them. The assessment
 # matrix reads from {EvidenceLink} for the full set of cells.
 #
+# Both origin columns are nil for an item recorded UNPLACED — feedback
+# volunteered without a capability in mind. It has no link rows until the
+# recipient, their manager or the author places it (see the {.unplaced}
+# scope); until then it appears on the hub, never in a cell.
+#
 # Materialised from PersonDevelopment evidence events
 # ({EvidenceRecorded}, {EvidenceUpdated}, {EvidenceWithdrawn}, and the
 # link/relink events that touch {EvidenceLink}) by
@@ -84,9 +89,8 @@ class EvidenceItem < ApplicationRecord
 
   validates :person_id, presence: true
   validates :framework_id, presence: true
-  validates :capability_stable_id, presence: true
-  validates :level_ordinal, presence: true,
-            numericality: { only_integer: true, greater_than_or_equal_to: 1 }
+  validates :level_ordinal, numericality: { only_integer: true, greater_than_or_equal_to: 1 }, allow_nil: true
+  validate :origin_cell_is_whole
   validates :source, presence: true, inclusion: { in: SOURCES }
   validates :feedback_direction, inclusion: { in: FEEDBACK_DIRECTIONS }, allow_nil: true
   validates :evidence_type, presence: true, inclusion: { in: EVIDENCE_TYPES }
@@ -104,6 +108,10 @@ class EvidenceItem < ApplicationRecord
   scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :for_capability, ->(stable_id) { where(capability_stable_id: stable_id) }
   scope :at_level, ->(ordinal) { where(level_ordinal: ordinal) }
+  # Active items with no link row at all. Only an item recorded unplaced can
+  # be here: the aggregate refuses to remove a placed item's last link, and a
+  # framework migration that strips every link withdraws the item.
+  scope :unplaced, -> { active.where.missing(:evidence_links) }
 
   # Classifies feedback from the provider to the recipient at recording time.
   # A manager source includes active rating delegates acting in manager
@@ -127,5 +135,21 @@ class EvidenceItem < ApplicationRecord
   # @return [Boolean]
   def withdrawn?
     link_status == "withdrawn"
+  end
+
+  # Whether this item is still waiting to be placed on a capability × level.
+  # Prefer the {.unplaced} scope over calling this across a list.
+  #
+  # @return [Boolean]
+  def unplaced?
+    !withdrawn? && !evidence_links.active.exists?
+  end
+
+  private
+
+  def origin_cell_is_whole
+    return if capability_stable_id.present? == level_ordinal.present?
+
+    errors.add(:base, "capability_stable_id and level_ordinal must be set together")
   end
 end

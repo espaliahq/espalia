@@ -630,8 +630,9 @@ class PersonDevelopment::CommandHandler
   # @param cycle_id [String, nil, Object] explicit cycle attribution, or the
   #   current aggregate cycle when omitted
   def record_evidence(person_id, framework_id, evidence_id,
-                      capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, valence:, custom_type_label: nil, title: nil,
+                      source:, evidence_type:, content:, author_id:,
+                      capability_stable_id: nil, level_ordinal: nil, valence: nil,
+                      custom_type_label: nil, title: nil,
                       external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       attributes = {
