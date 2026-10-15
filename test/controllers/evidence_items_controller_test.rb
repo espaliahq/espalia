@@ -121,6 +121,16 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "refuse a malformed primary cell rather than reading it as unplaced" do
+      sign_in @other_user
+      post evidence_items_path, params: { return_to: "hub", evidence: {
+        assignment_id: @assignment.id, evidence_type: "peer_feedback", content: "x", primary_cell: "garbage"
+      } }
+      assert_redirected_to evidence_hub_path
+      assert_match(/primary cell/, flash[:alert])
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceItem.where(author_id: @other.id) }
+    end
+
     should "refuse a staged row with no valence before writing anything" do
       sign_in @other_user
       post evidence_items_path, params: { return_to: "hub", evidence: {

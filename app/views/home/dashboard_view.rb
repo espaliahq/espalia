@@ -39,10 +39,14 @@ class Views::Home::DashboardView < Views::Base
 
   private
 
+  # The way to give feedback unasked sits here, not on a card: the requests
+  # card renders only when someone has asked, and feedback can't wait for that.
   def greeting
     h1(class: "mb-1 text-2xl font-semibold text-gray-900 dark:text-white") { "Home" }
     p(class: "mb-6 text-sm text-gray-600 dark:text-gray-300") do
-      "Your next actions across GrowthOS."
+      plain "Your next actions across GrowthOS. "
+      a(href: evidence_hub_path(give: 1), class: "font-medium text-primary-ink hover:underline",
+        data: { testid: "home-give-feedback" }) { "Give someone feedback →" }
     end
   end
 

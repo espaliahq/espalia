@@ -149,6 +149,22 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
       end
       assert_equal 1, call_assessment_op.dig(:unplaced_feedback, :count)
     end
+
+    should "withhold the count from a tenant admin outside the chain, as the web does" do
+      admin_user = create(:user)
+      admin_ctx = ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        tu = create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+        peer = create(:person, tenant: @tenant, name: "Peer")
+        PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework_id, SecureRandom.uuid_v7,
+          source: "peer", evidence_type: "peer_feedback", content: "Great call", author_id: peer.id)
+        AuthorizationContext.new(user: admin_user, tenant_user: tu, person: admin)
+      end
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::Get.call(context: admin_ctx, params: { assignment_id: @assignment.id })
+      end
+      assert_nil result[:unplaced_feedback]
+    end
   end
 
   context "structure" do
