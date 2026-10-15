@@ -12,6 +12,9 @@
 # manager rating only).
 #
 class AssessmentPolicy < ApplicationPolicy
+  # Participation statuses that still take ratings.
+  LIVE_STATUSES = %w[enrolled started aligning aligned].freeze
+
   # @return [Boolean]
   def index? = person.present?
 
@@ -179,9 +182,10 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def individual_ratings_editable?
-    return true if current_open_cycle_participation.nil? # no participant row yet — pre-cycle edits permitted
+    participation = current_open_cycle_participation
+    return true if participation.nil? # no participant row yet — pre-cycle edits permitted
 
-    live_participation?
+    LIVE_STATUSES.include?(participation.status)
   end
 
   def alignment_in_progress?
@@ -226,7 +230,7 @@ class AssessmentPolicy < ApplicationPolicy
 
   # An open-cycle participation still taking part.
   def live_participation?
-    %w[enrolled started aligning aligned].include?(current_open_cycle_participation&.status)
+    LIVE_STATUSES.include?(current_open_cycle_participation&.status)
   end
 
   # The current user's person matches the assignment's person.
