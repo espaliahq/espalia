@@ -18,9 +18,6 @@ class Assessments::ManagerRatingsController < ApplicationController
 
   before_action :require_person
   before_action :set_assignment
-  # A rating writes no framework events, so its lenses and the projection's
-  # coverage check can share one role scope.
-  around_action ->(_, action) { Assessments::RoleScope.reusing(&action) }, only: :create
 
   # POST /assessments/:assessment_id/manager_ratings
   def create

@@ -41,6 +41,18 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
   def percents_in(html) = html.to_s.scan(/([+\u2212]?\d+)%/).flatten
 
   context "POST /assessments/:assessment_id/ratings" do
+    # The page's lens, the write's lens and the projection's coverage check
+    # all read the same role, so the request builds its scope once (#489).
+    should "build the role's scope once for the whole request" do
+      sign_in @user
+      assert_queries_match(/FROM "framework_capability_role_bindings"/, count: 1) do
+        post assessment_ratings_path(@assignment), params: {
+          rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "some" }
+        }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+      end
+      assert_response :success
+    end
+
     should "create a new self-rating and return turbo stream" do
       sign_in @user
       post assessment_ratings_path(@assignment), params: {

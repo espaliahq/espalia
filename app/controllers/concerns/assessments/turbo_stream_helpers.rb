@@ -13,6 +13,12 @@
 module Assessments::TurboStreamHelpers
   extend ActiveSupport::Concern
 
+  included do
+    # The response re-reads the page's lens after the write; one role scope
+    # serves it, the write's lens and the projection's coverage check.
+    around_action ->(_, action) { Assessments::RoleScope.reusing(&action) }, only: :create
+  end
+
   private
 
   # The lens the page was read through when the rating was made — the pill's

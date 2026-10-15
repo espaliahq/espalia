@@ -16,6 +16,10 @@
 # Including Operations declare `parameter :as_role_id, String` and read
 # `assignment`.
 module Operations::Assessments::RatingCell
+  # A rating writes no framework events, so the write's lens and the
+  # projection's coverage check share one role scope — over MCP as on the web.
+  def call = Assessments::RoleScope.reusing { super }
+
   private
 
   # @return [Assessments::Lens] the lens the write is made through
