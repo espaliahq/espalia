@@ -856,7 +856,7 @@ export default class extends BaseController {
     this.#applyCardFocus(stableId, "cell")
     this.#dispatchFocusEvent({ ...this.currentFocus })
 
-    if (this.cardUrlValue) {
+    if (this.cardUrlValue && this.#matrixFrameSettled()) {
       // Swap just this card (#488): reloading the whole matrix to change one
       // card cost ~440 KB and a long main-thread block per click. The card's
       // top doesn't move when its contents change, so the scroll can start now.
@@ -871,15 +871,19 @@ export default class extends BaseController {
 
   // One fetch per card at a time; a click that lands while one is in flight
   // queues its level, so the card always ends on the last level picked.
+  // The queue lives on the frame, which outlives this controller across a
+  // broadcast reload, so a second instance can't start a racing fetch.
   async #loadCard(stableId, ordinal) {
-    this._cardLoads ||= new Map()
-    const pending = this._cardLoads.get(stableId)
+    const host = this.element.closest("turbo-frame") || this
+    host._cardLoads ||= new Map()
+    const loads = host._cardLoads
+    const pending = loads.get(stableId)
     if (pending) {
       pending.next = ordinal
       return
     }
     const load = { next: ordinal }
-    this._cardLoads.set(stableId, load)
+    loads.set(stableId, load)
     try {
       while (load.next != null) {
         const target = load.next
@@ -887,13 +891,24 @@ export default class extends BaseController {
         if (!(await this.#fetchCard(stableId, target))) {
           // Whatever failed — network, a session bounce, a card no longer in
           // scope — the whole-frame reload has the recovery paths already.
-          this.#reloadMatrixWithFocus(stableId, target)
+          // The click already pushed its history entry.
+          this.#reloadMatrixWithFocus(stableId, load.next ?? target, { history: "replace" })
           return
         }
+        // The card arrives unfocused; the ring goes where focus is now.
+        this._focusedCard = null
+        this.#applyCardFocus(this.currentFocus?.capabilityStableId, this.currentFocus?.level)
       }
     } finally {
-      this._cardLoads.delete(stableId)
+      loads.delete(stableId)
     }
+  }
+
+  // A swap made while the frame is still loading — its first load, or a
+  // broadcast reload — would be overwritten when that load lands.
+  #matrixFrameSettled() {
+    const frame = this.element.closest("turbo-frame")
+    return !frame || (frame.hasAttribute("complete") && !frame.hasAttribute("busy"))
   }
 
   async #fetchCard(stableId, ordinal) {
@@ -903,13 +918,24 @@ export default class extends BaseController {
     const card = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
     card?.setAttribute("aria-busy", "true")
     try {
-      // request.js renders a turbo-stream response itself, replacing the card.
+      // request.js hands a turbo-stream response to Turbo, which replaces the
+      // card on a later frame — wait for it, so what follows sees the new card.
       const response = await get(url.toString(), { responseKind: "turbo-stream" })
-      return response.ok && response.isTurboStream
+      if (!(response.ok && response.isTurboStream)) return false
+      await this.#cardReplaced(stableId, card)
+      return true
     } catch {
       return false
     } finally {
       card?.removeAttribute("aria-busy")
+    }
+  }
+
+  async #cardReplaced(stableId, previous) {
+    for (let frame = 0; frame < 60; frame++) {
+      const live = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+      if (live && live !== previous) return
+      await new Promise(resolve => requestAnimationFrame(resolve))
     }
   }
 
@@ -1019,7 +1045,7 @@ export default class extends BaseController {
     }
   }
 
-  #reloadMatrixWithFocus(stableId, ordinal) {
+  #reloadMatrixWithFocus(stableId, ordinal, { history = "push" } = {}) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
     if (!frame) return
@@ -1059,7 +1085,7 @@ export default class extends BaseController {
       browserUrl.searchParams.delete("capability")
       browserUrl.searchParams.delete("level_ordinal")
     }
-    window.history.pushState({}, "", browserUrl)
+    window.history[history === "replace" ? "replaceState" : "pushState"]({}, "", browserUrl)
   }
 
   scrollToCategory(event) {
@@ -1905,11 +1931,12 @@ export default class extends BaseController {
   // that includes a specific capability (capability OR cell). Framework-
   // and category-level focus clear the ring across every card.
   //
-  // Diffs against `_focusedCard` so scroll-driven updates only touch
-  // the two cards that actually changed — not every card on the page.
-  // Iterating ~100 cardTargets per RAF tick during scroll otherwise
-  // burns frames on attribute writes that the CSS data-variant selector
-  // has to revalidate.
+  // Returns early while the focused card is unchanged, so scroll-driven
+  // updates write nothing until focus moves, and then only to the cards that
+  // carry a ring — writing ~100 cards per RAF tick burns frames on attribute
+  // writes the CSS data-variant selector has to revalidate. It clears by
+  // attribute rather than by the node remembered last time, because a
+  // swapped card (#488) arrives as a new node.
   #applyCardFocus(capabilityStableId, level) {
     if (!this.hasCardTarget) return
     const wantsRing = (level === "capability" || level === "cell") && !!capabilityStableId
@@ -1919,10 +1946,8 @@ export default class extends BaseController {
 
     if (next === this._focusedCard) return
 
-    // A swapped card (#488) arrives as a new node the server already stamped,
-    // so clear by attribute, not by the node remembered last time.
-    this.cardTargets.forEach(card => {
-      if (card !== next && card.dataset.focused === "true") card.dataset.focused = "false"
+    this.element.querySelectorAll("[data-matrix-target~='card'][data-focused='true']").forEach(card => {
+      if (card !== next) card.dataset.focused = "false"
     })
     if (next) {
       next.dataset.focused = "true"

@@ -744,9 +744,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_text "Synthesises information from multiple sources"
       assert page.evaluate_script("window.__matrixRoot.isConnected && window.__otherCard.isConnected"),
         "the matrix and the other cards must not be re-rendered"
+      assert_selector "#capability-card-#{@cap1_stable}[data-focused='true']"
 
       click_selector_with_js_fallback("#cell-#{@cap3_stable}-1", expect_text: "Delivers small tasks reliably")
       assert_text "Asks clarifying questions to understand problems"
+      assert_selector "#capability-card-#{@cap3_stable}[data-focused='true']"
+      assert_selector "[data-focused='true'][data-matrix-target='card']", count: 1
       assert page.evaluate_script("window.__matrixRoot.isConnected")
       assert_includes page.current_url, CGI.escape("levels[#{@cap1_stable}]") + "=1"
 
