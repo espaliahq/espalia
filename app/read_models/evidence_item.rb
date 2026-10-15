@@ -112,7 +112,9 @@ class EvidenceItem < ApplicationRecord
   # Active items with no ACTIVE link. Only an item recorded unplaced can be
   # here: the aggregate refuses to remove a placed item's last link, and a
   # framework migration that strips every link withdraws the item.
-  scope :unplaced, -> { active.where.not(id: EvidenceLink.active.select(:evidence_id)) }
+  scope :unplaced, -> {
+    active.where.not(EvidenceLink.active.where("evidence_links.evidence_id = evidence_items.id").arel.exists)
+  }
 
   # Classifies feedback from the provider to the recipient at recording time.
   # A manager source includes active rating delegates acting in manager

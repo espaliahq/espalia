@@ -94,6 +94,17 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_not item.unplaced?
         assert_not_includes EvidenceItem.unplaced, item
       end
+
+      # Re-applying the origin-less EvidenceRecorded (an at-least-once replay)
+      # must not take the adopted origin away again.
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", feedback_direction: "peer_to_peer", evidence_type: "peer_feedback",
+        custom_type_label: nil, title: nil, content: "Great incident call",
+        external_reference: nil, author_id: @author.id)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "0190f4b2-0000-7000-8000-000000000001", EvidenceItem.find(evidence_id).capability_stable_id
+      end
     end
 
     should "store the origin link's valence, and leave it nil for pre-valence events" do

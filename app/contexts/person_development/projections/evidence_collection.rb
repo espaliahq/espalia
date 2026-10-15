@@ -201,13 +201,19 @@ class PersonDevelopment::Projections::EvidenceCollection
     # replay to the columns' existing nil values, so these additive
     # attributions need no version bump.
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
+    # An unplaced item re-processed after its first placement keeps the origin
+    # that placement gave it; only a cell on the event, or a fresh row, sets it.
+    origin = if item.new_record? || event.data[:capability_stable_id]
+      { capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal] }
+    else
+      {}
+    end
     item.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
       cycle_id: event.data[:cycle_id],
-      capability_stable_id: event.data[:capability_stable_id],
-      level_ordinal: event.data[:level_ordinal],
+      **origin,
       source: event.data[:source],
       feedback_direction: event.data[:feedback_direction],
       evidence_type: event.data[:evidence_type],
