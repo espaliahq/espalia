@@ -38,10 +38,7 @@ class Assessments::MatrixDataBuilder
       lens: lens,
       person_id: assignment.person_id,
       cycle_id: assignment.current_open_cycle&.cycle_id,
-      categories: FrameworkState::CapabilityCategory
-        .where(framework_id: assignment.framework_id, status: "active")
-        .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-        .order(:ordinal),
+      categories: lens_tree(framework_id: assignment.framework_id, lens: lens),
       participant_status: status,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
       context: context,
@@ -49,6 +46,31 @@ class Assessments::MatrixDataBuilder
       viewer_sees_all_evidence: viewer_sees_all_evidence
     ).build
   end
+
+  # The active categories with only what the lens role reads preloaded: its
+  # bound capabilities, their expectations and its own illustrations. Loading
+  # the whole framework and filtering in Ruby cost most of a build — 997
+  # illustrations instantiated for the 137 one role shows (#487).
+  #
+  # @param framework_id [String]
+  # @param lens [Assessments::Lens]
+  # @return [Array<FrameworkState::CapabilityCategory>]
+  def self.lens_tree(framework_id:, lens:)
+    categories = FrameworkState::CapabilityCategory
+      .where(framework_id: framework_id, status: "active").order(:ordinal).to_a
+    preload(categories, :capabilities,
+            FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
+    capabilities = categories.flat_map(&:capabilities)
+    preload(capabilities, :expectations)
+    preload(capabilities.flat_map(&:expectations), :illustrations,
+            FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
+    categories
+  end
+
+  def self.preload(records, association, scope = nil)
+    ActiveRecord::Associations::Preloader.new(records: records, associations: association, scope: scope).call
+  end
+  private_class_method :preload
 
   # @param framework [FrameworkState::Framework]
   # @param role [FrameworkState::Role, nil] the role to read against; taken
