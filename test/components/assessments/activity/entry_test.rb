@@ -8,7 +8,7 @@ require "test_helper"
 # generic, actor-less phrasing for unattributed (historical) entries.
 class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
   Person = Struct.new(:name)
-  Item   = Struct.new(:title, :content, :author, :withdrawn_by, keyword_init: true)
+  Item   = Struct.new(:title, :content, :author, :withdrawn_by, :recorded_unplaced, keyword_init: true)
 
   # occurred_at is nil so the footer's time_ago_in_words helper isn't invoked
   # in this context-free unit render — only the summary line is under test.
@@ -46,6 +46,12 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       html = render_entry(kind: "evidence_withdrawn", payload: item,
         capability_name: nil, level_ordinal: nil, capability_stable_id: nil)
       assert_includes html, "Ada withdrew feedback that was never placed on a capability"
+    end
+
+    should "say the cell was chosen later for an item given without one" do
+      item = Item.new(title: "", content: "Great call.", author: Person.new("Ada"), recorded_unplaced: true)
+      html = render_entry(kind: "evidence_recorded", payload: item)
+      assert_includes html, "Ada gave feedback, placed later on Critical Thinking · L2"
     end
 
     should "say an unplaced item has no capability yet, and not make it focusable" do

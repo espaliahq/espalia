@@ -204,7 +204,8 @@ class PersonDevelopment::Projections::EvidenceCollection
     # An unplaced item re-processed after its first placement keeps the origin
     # that placement gave it; only a cell on the event, or a fresh row, sets it.
     origin = if item.new_record? || event.data[:capability_stable_id]
-      { capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal] }
+      { capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal],
+        recorded_unplaced: event.data[:capability_stable_id].nil? }
     else
       {}
     end
