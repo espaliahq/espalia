@@ -350,6 +350,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         page.driver.browser.manage.window.resize_to(*size)
         visit assessment_path(@assignment)
         assert_selector "#scoring-panel"
+        assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
 
         [ @cap1_stable, @cap3_stable ].each do |stable_id|
           assert_selector "#capability-name-#{stable_id} [data-capability-score]", text: "Not rated"
