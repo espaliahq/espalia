@@ -78,7 +78,8 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
       mine = @assessee_user.notifications.reload
       assert_equal "Jordan gave you feedback to place", mine.first.inbox_title
       assert_match(/Not yet placed on a capability/, mine.first.inbox_body)
-      assert_equal "/evidence#evidence-item-#{id}", mine.first.inbox_url
+      assert_not_nil id
+      assert_equal "/assessments/#{@assignment_id}", mine.first.inbox_url
       assert_equal "Jordan gave Alex feedback to place", @manager_user.notifications.reload.first.inbox_title
     end
   end
@@ -101,17 +102,32 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
     end
   end
 
+  # A `def` inside a `context` is invisible to `should` (testing.md), so the
+  # request helper lives on the class.
+  def request!(level_ordinal:)
+    @handler.request_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
+      requested_by_id: @manager.id, requestee_person_id: @peer.id,
+      capability_stable_id: @cap.stable_id, level_ordinal: level_ordinal)
+    perform_enqueued_jobs
+    @manager_user.notifications.reload.destroy_all
+  end
+
   context "feedback that answers a request" do
     should "leave the requester to the answered notification" do
-      @handler.request_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
-        requested_by_id: @manager.id, requestee_person_id: @peer.id,
-        capability_stable_id: @cap.stable_id, level_ordinal: 2)
-      @manager_user.notifications.reload.destroy_all
+      request!(level_ordinal: 2)
 
       perform_enqueued_jobs { record!(author: @peer, source: "peer") }
 
       assert_equal 1, @assessee_user.notifications.reload.size
       assert_empty @manager_user.notifications.reload
+    end
+
+    should "still tell a requester about feedback on a different cell than they asked for" do
+      request!(level_ordinal: 3)
+
+      perform_enqueued_jobs { record!(author: @peer, source: "peer") }
+
+      assert_equal 1, @manager_user.notifications.reload.size
     end
   end
 end

@@ -10,14 +10,15 @@
 # The author is never told about their own feedback, self feedback tells
 # nobody, and the requester of a request this item answers is left out —
 # EvidenceRequestNotifier already tells them it was answered. An unplaced
-# item's copy asks the recipient to place it and links to the hub, where
-# placing happens; a placed item links to its cell.
+# item's copy asks the recipient to place it and links to the assessment,
+# whose feed shows it; a placed item links to its cell.
 #
 # Runs via SolidQueue (prepended AsyncHandler). NOT a projection — it
 # dispatches side effects and must never be registered in
 # Projections::Registry (replaying it would re-send notifications).
 class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
   prepend RailsEventStore::AsyncHandler
+  include PersonDevelopment::AsyncHandlers::AssessmentNotificationRecipients
 
   # @return [Array<Class>] events this handler subscribes to
   def self.handled_events
@@ -45,7 +46,7 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
       skipped << item.person_id
     end
 
-    manager_side_ids(item).each do |person_id|
+    manager_side_ids_for(item.person_id, item.framework_id).each do |person_id|
       next if skipped.include?(person_id)
 
       deliver(TeamFeedbackReceivedNotifier, item, person_id, params)
@@ -54,63 +55,48 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
   end
 
   def deliver(notifier_class, item, person_id, params)
-    user = Person.find_by(id: person_id)&.ensure_user!
+    user = user_for(person_id)
     return if user.nil?
     return if already_delivered?(notifier_class, user, item)
 
     notifier_class.with(record: item, tenant_id: item.tenant_id, **params).deliver(user)
   end
 
-  # RES async handlers run at-least-once; the Noticed event's polymorphic
-  # `record` keys the dedup check per (recipient, type, item) so a retried
-  # job never re-notifies anyone.
-  def already_delivered?(notifier_class, user, item)
-    Noticed::Notification
-      .where(recipient: user)
-      .joins(:event)
-      .where(noticed_events: { type: notifier_class.name, record_type: "EvidenceItem", record_id: item.id })
-      .exists?
-  end
-
   def presentation(item)
-    placed = !item.unplaced?
+    link = first_link(item)
     {
       author_name: item.author&.name,
       assessee_name: Person.where(id: item.person_id).pick(:name),
-      placed: placed,
-      context: placed ? cell_label(item) : "Not yet placed on a capability — place it to show it on the assessment",
+      placed: link.present?,
+      context: link ? cell_label(item, link) : "Not yet placed on a capability — place it to show it on the assessment",
       content: item.content,
-      url: placed ? cell_path(item) : EvidenceItem.hub_path(item.id)
+      url: assessment_path(item, link)
     }
   end
 
-  # Whoever asked the author for feedback on this assessment: the request
-  # this item answered once it is projected, and any request from the author
-  # still pending — the response may be projected a moment after this runs.
+  # Whoever asked the author for feedback that this item answers: the request
+  # it is recorded against once the response is projected, or — because that
+  # projection can land a moment after this runs — a request to the author
+  # still pending on the very cell the item was placed on. A pending request
+  # on another cell is unrelated, and its requester is told like anyone else.
   def answered_requester_ids(item)
-    EvidenceRequest
-      .for_assessment(item.person_id, item.framework_id)
-      .where(evidence_id: item.id)
-      .or(EvidenceRequest.for_assessment(item.person_id, item.framework_id).pending
-        .where(requestee_person_id: item.author_id))
-      .pluck(:requested_by_id)
+    scope = EvidenceRequest.for_assessment(item.person_id, item.framework_id)
+    answered = scope.where(evidence_id: item.id)
+    link = first_link(item)
+    if link
+      answered = answered.or(scope.pending.where(requestee_person_id: item.author_id,
+        capability_stable_id: link.capability_stable_id, level_ordinal: link.level_ordinal))
+    end
+    answered.pluck(:requested_by_id)
   end
 
-  def manager_side_ids(item)
-    manager_id = RecordedReportingManager.manager_id_for(item.person_id, item.framework_id) ||
-                 Person.where(id: item.person_id).pick(:manager_id)
-    delegate_ids = ManagerAssessmentDelegation.active
-      .for_person(item.person_id)
-      .for_framework(item.framework_id)
-      .pluck(:delegate_person_id)
+  def first_link(item)
+    return @first_link if defined?(@first_link)
 
-    ([ manager_id ] + delegate_ids).compact.uniq
+    @first_link = EvidenceLink.active.where(evidence_id: item.id).order(:linked_at).first
   end
 
-  def cell_label(item)
-    link = EvidenceLink.active.where(evidence_id: item.id).order(:linked_at).first
-    return nil if link.nil?
-
+  def cell_label(item, link)
     name = FrameworkState::Capability
       .joins(:category)
       .where(stable_id: link.capability_stable_id)
@@ -119,12 +105,13 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
     [ name, "L#{link.level_ordinal}" ].compact.join(" · ")
   end
 
-  # The item's first cell on the assessment, focused through the existing
-  # deep-link params; the same path renders self or manager context per viewer.
-  def cell_path(item)
+  # The assessment, focused on the item's first cell through the existing
+  # deep-link params when it has one; the same path renders self or manager
+  # context per viewer, and its feed carries an unplaced item.
+  def assessment_path(item, link)
     assignment_id = PersonFrameworkAssignment.where(person_id: item.person_id, framework_id: item.framework_id).pick(:id)
-    link = EvidenceLink.active.where(evidence_id: item.id).order(:linked_at).first
-    return EvidenceItem.hub_path(item.id) if assignment_id.nil? || link.nil?
+    return "/assessments" if assignment_id.nil?
+    return "/assessments/#{assignment_id}" if link.nil?
 
     "/assessments/#{assignment_id}?capability=#{link.capability_stable_id}&level_ordinal=#{link.level_ordinal}"
   end

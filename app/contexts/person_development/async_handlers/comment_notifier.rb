@@ -24,6 +24,7 @@
 # Projections::Registry (replaying it would re-send notifications).
 class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   prepend RailsEventStore::AsyncHandler
+  include PersonDevelopment::AsyncHandlers::AssessmentNotificationRecipients
 
   # @return [Array<Class>] events this handler subscribes to
   def self.handled_events
@@ -60,7 +61,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
 
     return unless comment.author_id == comment.person_id
 
-    manager_side_ids(comment).each do |person_id|
+    manager_side_ids_for(comment.person_id, comment.framework_id).each do |person_id|
       next if notified.include?(person_id)
 
       deliver(TeamAssessmentCommentedNotifier, comment, person_id, context, url)
@@ -84,46 +85,11 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
     ).deliver(user)
   end
 
-  # RES async handlers run at-least-once — a retried job after a partial
-  # fan-out must not re-notify recipients already delivered to (nor re-arm
-  # their delayed Slack escalation). The Noticed event's polymorphic `record`
-  # (the comment) keys the persisted dedup check per (recipient, type,
-  # comment).
-  #
-  # @return [Boolean]
-  def already_delivered?(notifier_class, user, comment)
-    Noticed::Notification
-      .where(recipient: user)
-      .joins(:event)
-      .where(noticed_events: {
-        type: notifier_class.name,
-        record_type: "PersonDevelopmentComment",
-        record_id: comment.id
-      })
-      .exists?
-  end
-
   # @return [String, nil] the author of the comment this one replies to
   def parent_author_id(comment)
     return nil if comment.parent_id.nil?
 
     comment.parent&.author_id
-  end
-
-  # The recorded reporting manager (falling back to the live org chart when
-  # nothing is recorded yet) plus active rating delegates — the manager side
-  # of the assessment conversation.
-  #
-  # @return [Array<String>]
-  def manager_side_ids(comment)
-    manager_id = RecordedReportingManager.manager_id_for(comment.person_id, comment.framework_id) ||
-                 Person.where(id: comment.person_id).pick(:manager_id)
-    delegate_ids = ManagerAssessmentDelegation.active
-      .for_person(comment.person_id)
-      .for_framework(comment.framework_id)
-      .pluck(:delegate_person_id)
-
-    ([ manager_id ] + delegate_ids).compact.uniq
   end
 
   # Where in the assessment the conversation lives — "«Capability» · L«n»",
@@ -166,7 +132,4 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
 
   # @return [User, nil] the User behind a person, provisioning one lazily so
   #   the notification reaches an HRIS-imported person who has never logged in.
-  def user_for(person_id)
-    Person.find_by(id: person_id)&.ensure_user!
-  end
 end
