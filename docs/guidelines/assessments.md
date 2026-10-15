@@ -882,6 +882,51 @@ Rules — all deliberate:
   carries role-scoped `illustrations` per valid cell, so server-rendered and
   JS-staged rows render the same disclosure without extra fetches.
 
+## Proactive feedback — anyone, on anyone, placed or not
+
+Feedback does not have to be asked for. `EvidencePolicy#create?` has always
+admitted any member with a Person record, so a peer could record feedback on
+any colleague with a framework assignment; what was missing was the way in,
+and the way to say it without knowing the framework
+([#502](https://github.com/mr-yum/growth-os/issues/502)). Three pieces, all
+shared by web, MCP and Slack:
+
+- **The recipient directory.** `Assessments::FeedbackRecipients` finds people
+  with an assignment by name or email, or offers the giver's manager, peers
+  and reports when there is no query, one row per assignment, each with the
+  giver's relationship (`report` / `manager` / `peer`). It is the only read a
+  peer has: `AssessmentPolicy#show?` still denies them the assessment page,
+  and `assessments_mine` lists only what the caller owns or reviews. Web and
+  MCP (`assessments_feedback_recipients`) share it.
+- **Unplaced items.** An item recorded with no capability × level has no
+  origin cell and no links (`EvidenceItem.unplaced`): a colleague knows what
+  happened but not which expectation it speaks to. The recipient, their
+  manager chain, an active delegate or the author places it through the
+  ordinary add-link path (`EvidencePolicy#add_link?`); until then it appears
+  on the hub and in the activity feed as a framework-scoped entry ("gave
+  feedback, not yet placed on a capability"), never in a cell and never in a
+  score. The last-link rule protects a *placed* item only: an unplaced item
+  has nothing to remove, and its first link puts it under the rule. The
+  aggregate refuses half a cell, a valence with no cell, and additional
+  links with no first link. `EvidenceRecorded` carries nil coordinates for
+  the new shape; every historical event has a cell, so the projection needed
+  no `CODE_VERSION` bump.
+- **The recipient is told.** `PersonDevelopment::AsyncHandlers::FeedbackNotifier`
+  turns `EvidenceRecorded` into `feedback_received` (the recipient) and
+  `team_feedback_received` (the recorded reporting manager plus active
+  delegates), in-app and Slack by default. Never the author, never for self
+  feedback, and not the requester of a request the item answers — that
+  requester already gets "answered" (see *Reminders and nudges*; the
+  handler also skips anyone with a request to the author still pending, in
+  case the response is projected a moment after the item). An unplaced
+  item's copy asks the recipient to place it and links to the hub
+  (`EvidenceItem.hub_path`); a placed one links to its cell.
+
+The web entry points (a "Give feedback" flow on the hub and the Home card,
+and a "waiting to be placed" list for the recipient and their manager) are
+[#503](https://github.com/mr-yum/growth-os/issues/503); the Slack command and
+message shortcut are [#504](https://github.com/mr-yum/growth-os/issues/504).
+
 ## Requesting evidence (cell-scoped)
 
 A manager (or the assessee, or an active rating delegate, or a tenant admin —

@@ -31,11 +31,17 @@ Assignment:
 Evidence (one piece of evidence can be linked to MANY capability × level
 cells — multi-linkage. Content lives on EvidenceRecorded/Updated; the set of
 links is maintained by EvidenceLinkAdded/Removed):
-  EvidenceRecorded { id, capability_stable_id, level_ordinal, source, evidence_type,
-                     custom_type_label?, title?, content, external_reference?, author_id }
+  EvidenceRecorded { id, capability_stable_id?, level_ordinal?, source, evidence_type,
+                     custom_type_label?, title?, content, external_reference?, author_id,
+                     valence? }
     ← Creates the item AND its FIRST link. The capability_stable_id/level_ordinal
       here are the item's ORIGIN link (also the read-model EvidenceItem columns
       the activity feed anchors on).
+    ← UNPLACED: capability_stable_id, level_ordinal and valence all nil — feedback
+      volunteered without a capability in mind. No link until add_evidence_link
+      places it (anyone EvidencePolicy#add_link? admits). A cell is both halves
+      or neither; a valence or additional_links without a cell are refused.
+      Every event published before unplaced feedback carries a cell.
     source: self | manager | peer
     evidence_type: peer_feedback | project_outcome | code_review | design_review |
                    customer_feedback | incident_response | presentation | mentoring | other
@@ -45,8 +51,9 @@ links is maintained by EvidenceLinkAdded/Removed):
     ← Attaches the item to an additional cell; it then surfaces there too.
   EvidenceLinkRemoved { evidence_id, capability_stable_id, level_ordinal,
                         removed_by_id, reason? }
-    ← Detaches one link. DOMAIN INVARIANT: an active item must always keep ≥1
-      link — removing the last link is rejected (withdraw the item instead).
+    ← Detaches one link. DOMAIN INVARIANT: a PLACED active item must always keep
+      ≥1 link — removing the last link is rejected (withdraw the item instead).
+      An unplaced item has no link to remove; its first link puts it under the rule.
   EvidenceRelinked { evidence_id, previous_capability_stable_id, previous_level_ordinal,
                      new_capability_stable_id, new_level_ordinal, relinked_by_id, rationale? }
     ← HISTORICAL ONLY — no longer emitted (the user-facing "move" action was
