@@ -629,21 +629,9 @@ class PersonDevelopment::CommandHandler
   #   level_ordinal:, valence: } links applied atomically alongside the first link
   # @param cycle_id [String, nil, Object] explicit cycle attribution, or the
   #   current aggregate cycle when omitted
-  def record_evidence(person_id, framework_id, evidence_id,
-                      capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, valence:, custom_type_label: nil, title: nil,
-                      external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE)
+  def record_evidence(person_id, framework_id, evidence_id, **evidence_attributes)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
-      attributes = {
-        capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
-        source: source, evidence_type: evidence_type, content: content,
-        author_id: author_id, valence: valence, custom_type_label: custom_type_label,
-        feedback_direction: feedback_direction_for(source:, author_id:, person_id:),
-        title: title, external_reference: external_reference,
-        additional_links: additional_links
-      }
-      attributes[:cycle_id] = cycle_id unless cycle_id.equal?(CURRENT_CYCLE)
-      aggregate.record_evidence(evidence_id, **attributes)
+      aggregate.record_evidence(evidence_id, **evidence_attributes_for(person_id, **evidence_attributes))
     end
   end
 
@@ -777,6 +765,20 @@ class PersonDevelopment::CommandHandler
     end
   end
 
+  # Records the evidence that answers a request and marks the request
+  # responded in ONE unit of work, so both events publish together: a reader
+  # of EvidenceRecorded (the feedback notifier) then always finds the request
+  # already pointing at the item, never a moment before.
+  #
+  # @param evidence_attributes [Hash] the keyword arguments #record_evidence takes
+  def record_evidence_for_request(person_id, framework_id, request_id, evidence_id, responded_by_id:, **evidence_attributes)
+    @repository.with_person_development(person_id, framework_id) do |aggregate|
+      aggregate.record_evidence(evidence_id, request_id: request_id,
+        **evidence_attributes_for(person_id, **evidence_attributes))
+      aggregate.respond_to_evidence_request(request_id, evidence_id: evidence_id, responded_by_id: responded_by_id)
+    end
+  end
+
   # Declines a pending evidence request.
   #
   # @param declined_by_id [String] the requestee
@@ -874,6 +876,25 @@ class PersonDevelopment::CommandHandler
   def home_role_id(person_id, framework_id, cycle_id)
     Assessments::RoleScope.home_role_ids(cycle_id: cycle_id, framework_id: framework_id,
                                          person_ids: [ person_id ])[person_id]
+  end
+
+  # The aggregate's record_evidence arguments from the handler's: the direction
+  # derived from the live relationship, the cycle left to the aggregate unless
+  # the caller pins one.
+  def evidence_attributes_for(person_id, source:, evidence_type:, content:, author_id:,
+                              capability_stable_id: nil, level_ordinal: nil, valence: nil,
+                              custom_type_label: nil, title: nil,
+                              external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE)
+    attributes = {
+      capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
+      source: source, evidence_type: evidence_type, content: content,
+      author_id: author_id, valence: valence, custom_type_label: custom_type_label,
+      feedback_direction: feedback_direction_for(source:, author_id:, person_id:),
+      title: title, external_reference: external_reference,
+      additional_links: additional_links
+    }
+    attributes[:cycle_id] = cycle_id unless cycle_id.equal?(CURRENT_CYCLE)
+    attributes
   end
 
   def feedback_direction_for(source:, author_id:, person_id:)

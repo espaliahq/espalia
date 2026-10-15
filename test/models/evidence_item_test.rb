@@ -15,6 +15,29 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
 
+    should "accept an item with no origin cell, but not one with half a cell" do
+      ActsAsTenant.with_tenant(@tenant) do
+        unplaced = build(:evidence_item, tenant: @tenant, capability_stable_id: nil, level_ordinal: nil)
+        half = build(:evidence_item, tenant: @tenant, level_ordinal: nil)
+
+        assert unplaced.valid?, unplaced.errors.full_messages.to_sentence
+        assert_not half.valid?
+        assert half.errors[:base].any?
+      end
+    end
+
+    should "count an item whose only link rows are removed as unplaced" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant)
+        item.evidence_links.update_all(link_status: "removed", removed_at: Time.current)
+        placed = create(:evidence_item, tenant: @tenant)
+
+        assert_includes EvidenceItem.unplaced, item
+        assert_not_includes EvidenceItem.unplaced, placed
+        assert item.unplaced?
+      end
+    end
+
     should "require source from SOURCES" do
       ActsAsTenant.with_tenant(@tenant) do
         item = build(:evidence_item, tenant: @tenant, source: "garbage")

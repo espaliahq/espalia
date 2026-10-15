@@ -197,6 +197,19 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     )
   end
 
+  should "list feedback the viewer gave without a cell as not yet placed" do
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Ran the incident call calmly.",
+        author_id: @peer.id)
+    end
+    sign_in_as(@peer_user)
+    visit evidence_hub_path
+    assert_text "Feedback, not yet placed on a capability"
+    assert_text "SWE · on Rep's assessment"
+    assert_no_text "Lnil"
+  end
+
   should "navigate from authored evidence to its linkage on the assessment" do
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,

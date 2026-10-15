@@ -74,6 +74,50 @@ class Operations::Assessments::EvidenceListTest < ActiveSupport::TestCase
     end
   end
 
+  context "unplaced items" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @unplaced_id = SecureRandom.uuid_v7
+        @pd.record_evidence(@person.id, @framework_id, @unplaced_id,
+          source: "self", evidence_type: "observation", content: "Not sure where this goes", author_id: @person.id)
+      end
+    end
+
+    should "list them when no capability is given, and keep them out of a capability's list" do
+      result = call_op(assignment_id: @assignment.id)
+      assert_equal true, result[:unplaced]
+      assert_nil result[:capability_stable_id]
+      assert_equal [ @unplaced_id ], result[:evidence].map { |e| e[:evidence_id] }
+      assert_empty result[:evidence].first[:links]
+
+      placed = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id)
+      assert_equal false, placed[:unplaced]
+      refute_includes placed[:evidence].map { |e| e[:evidence_id] }, @unplaced_id
+    end
+
+    should "drop an item from the unplaced list once it is placed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @pd.add_evidence_link(@person.id, @framework_id, @unplaced_id,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, linked_by_id: @person.id, valence: "demonstrated")
+      end
+      assert_empty call_op(assignment_id: @assignment.id)[:evidence]
+    end
+
+    should "refuse a blank capability as a mistake rather than listing unplaced items" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(assignment_id: @assignment.id, capability_stable_id: "", level_ordinal: 2)
+      end
+      assert_match(/capability_stable_id/, err.message)
+    end
+
+    should "refuse a level without a capability" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(assignment_id: @assignment.id, level_ordinal: 2)
+      end
+      assert_match(/capability_stable_id/, err.message)
+    end
+  end
+
   context "item payload" do
     should "carry content, author, and the full set of active links" do
       item = call_op(assignment_id: @assignment.id, capability_stable_id: @cap.stable_id)[:evidence].first

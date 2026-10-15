@@ -1155,6 +1155,67 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_nil event.data[:cycle_id]
     end
 
+    should "record an unplaced item when no cell is given, and place it through add_evidence_link" do
+      @aggregate.record_evidence(@evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "Great incident call",
+        author_id: @author_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of PersonDevelopment::Events::EvidenceRecorded, event
+      assert_nil event.data[:capability_stable_id]
+      assert_nil event.data[:level_ordinal]
+      assert_nil event.data[:valence]
+      assert_equal "peer_to_peer", event.data[:feedback_direction]
+
+      @aggregate.add_evidence_link(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3, linked_by_id: @author_id, valence: "demonstrated")
+      assert_kind_of PersonDevelopment::Events::EvidenceLinkAdded, @aggregate.unpublished_events.to_a.last
+
+      # Placed now: the last-link rule applies from here on.
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.remove_evidence_link(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 3, removed_by_id: @author_id)
+      end
+      assert_match /Cannot remove the only link/, err.message
+    end
+
+    should "carry the request it answers, and nil otherwise" do
+      @aggregate.record_evidence(@evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id)
+      assert_nil @aggregate.unpublished_events.to_a.last.data[:request_id]
+
+      request_id = SecureRandom.uuid_v7
+      @aggregate.record_evidence(SecureRandom.uuid_v7,
+        capability_stable_id: @cap_sid, level_ordinal: 3, valence: "demonstrated", request_id: request_id,
+        source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id)
+      assert_equal request_id, @aggregate.unpublished_events.to_a.last.data[:request_id]
+    end
+
+    should "raise when only one half of the cell is given" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, source: "peer", evidence_type: "peer_feedback",
+          content: "x", author_id: @author_id, valence: "demonstrated")
+      end
+      assert_match /both a capability and a level/, err.message
+    end
+
+    should "raise when a valence or additional links arrive without a cell" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          valence: "demonstrated")
+      end
+      assert_match /Valence needs a capability and level/, err.message
+
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id,
+          additional_links: [ { capability_stable_id: @cap_sid, level_ordinal: 3, valence: "demonstrated" } ])
+      end
+      assert_match /Additional links need a first link/, err.message
+    end
+
     should "attribute evidence to the current cycle unless an explicit cycle is supplied" do
       current_cycle_id = SecureRandom.uuid_v7
       original_cycle_id = SecureRandom.uuid_v7

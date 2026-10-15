@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -219,7 +219,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
 
   create_table "evidence_items", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "author_id", null: false
-    t.uuid "capability_stable_id", null: false
+    t.uuid "capability_stable_id"
     t.text "content", null: false
     t.datetime "created_at", null: false
     t.string "custom_type_label"
@@ -230,7 +230,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
     t.jsonb "external_reference", default: {}, null: false
     t.string "feedback_direction"
     t.uuid "framework_id", null: false
-    t.integer "level_ordinal", null: false
+    t.integer "level_ordinal"
     t.string "link_status", default: "active", null: false
     t.uuid "person_id", null: false
     t.datetime "recorded_at", null: false
@@ -241,6 +241,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_000003) do
     t.text "withdrawal_reason"
     t.datetime "withdrawn_at"
     t.uuid "withdrawn_by_id"
+    t.boolean "recorded_unplaced", default: false, null: false
     t.index ["author_id"], name: "index_evidence_items_on_author_id"
     t.index ["edited_by_id"], name: "idx_evidence_items_edited_by_id", where: "(edited_by_id IS NOT NULL)"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_items_anchor"

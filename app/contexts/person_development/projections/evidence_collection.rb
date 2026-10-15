@@ -201,13 +201,20 @@ class PersonDevelopment::Projections::EvidenceCollection
     # replay to the columns' existing nil values, so these additive
     # attributions need no version bump.
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
+    # An unplaced item re-processed after its first placement keeps the origin
+    # that placement gave it; only a cell on the event, or a fresh row, sets it.
+    origin = if item.new_record? || event.data[:capability_stable_id]
+      { capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal],
+        recorded_unplaced: event.data[:capability_stable_id].nil? }
+    else
+      {}
+    end
     item.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
       cycle_id: event.data[:cycle_id],
-      capability_stable_id: event.data[:capability_stable_id],
-      level_ordinal: event.data[:level_ordinal],
+      **origin,
       source: event.data[:source],
       feedback_direction: event.data[:feedback_direction],
       evidence_type: event.data[:evidence_type],
@@ -221,6 +228,10 @@ class PersonDevelopment::Projections::EvidenceCollection
     )
     item.save!
 
+    # An unplaced item carries no capability on the event and starts with
+    # no link row; its first EvidenceLinkAdded places it.
+    return if event.data[:capability_stable_id].nil?
+
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
                 linked_by_id: event.data[:author_id], valence: event.data[:valence])
   end
@@ -228,6 +239,17 @@ class PersonDevelopment::Projections::EvidenceCollection
   def handle_link_added(event)
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
                 linked_by_id: event.data[:linked_by_id], valence: event.data[:valence])
+    adopt_origin_from_first_placement(event)
+  end
+
+  # An item recorded unplaced has no origin; its first placement becomes it,
+  # so every reader anchored on the origin columns (the feed, the hub, the
+  # reporting joins) sees the cell the item now lives in. Deterministic on
+  # replay: the first EvidenceLinkAdded after an origin-less EvidenceRecorded
+  # always wins.
+  def adopt_origin_from_first_placement(event)
+    EvidenceItem.where(id: event.data[:evidence_id], capability_stable_id: nil)
+      .update_all(capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal])
   end
 
   def handle_link_revalenced(event)

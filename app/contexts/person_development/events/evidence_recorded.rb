@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
-# Event emitted when evidence is recorded against a (capability, level)
-# coordinate on a person's development stream.
+# Event emitted when evidence is recorded on a person's development stream,
+# placed against a (capability, level) coordinate or — when volunteered by
+# someone who knows what happened but not which expectation it speaks to —
+# unplaced, with no coordinate and no link until add_evidence_link places it.
 #
 # Evidence is qualitative context — it does not feed scoring (per ADR-10
 # and scoring-model.md). It surfaces in the assessment matrix expanded
@@ -15,8 +17,10 @@
 # @!attribute [r] data
 #   @return [Hash] event data
 #   @option data [String] :evidence_id UUID v7 of the evidence item
-#   @option data [String] :capability_stable_id stable UUID of the capability
-#   @option data [Integer] :level_ordinal the level being evidenced
+#   @option data [String, nil] :capability_stable_id stable UUID of the
+#     capability; nil (with :level_ordinal and :valence nil) records the item
+#     unplaced. Always present on events published before unplaced feedback.
+#   @option data [Integer, nil] :level_ordinal the level being evidenced
 #   @option data [String] :source "self" | "manager" | "peer"
 #   @option data [String] :evidence_type one of EvidenceItem::EVIDENCE_TYPES
 #   @option data [String, nil] :custom_type_label free text label, only
@@ -31,6 +35,9 @@
 #   @option data [String, nil] :cycle_id assessment cycle this evidence was
 #     provided for; absent on historical events and evidence recorded outside
 #     a cycle
+#   @option data [String, nil] :request_id the evidence request this item
+#     answers, when recorded as a response; nil otherwise and on events
+#     published before it was carried
 #   @option data [String] :valence the origin link's valence — one of
 #     EvidenceLink::VALENCES. Required on new events; absent on events
 #     published before valence existed (consumers must tolerate nil).

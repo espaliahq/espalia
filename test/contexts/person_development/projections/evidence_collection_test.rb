@@ -54,6 +54,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal "active", item.link_status
         assert_not_nil item.recorded_at
 
+        assert_not item.recorded_unplaced
         # The first link is materialised alongside the content row.
         link = EvidenceLink.find_by(evidence_id: evidence_id)
         assert_equal cap_sid, link.capability_stable_id
@@ -62,6 +63,49 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal @author.id, link.linked_by_id
         assert_equal @person_id, link.person_id
         assert_equal @framework_id, link.framework_id
+      end
+    end
+
+    should "create an unplaced item with no link row when the event carries no cell" do
+      evidence_id = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", feedback_direction: "peer_to_peer", evidence_type: "peer_feedback",
+        custom_type_label: nil, title: nil, content: "Great incident call",
+        external_reference: nil, author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(evidence_id)
+        assert_nil item.capability_stable_id
+        assert_nil item.level_ordinal
+        assert_equal "active", item.link_status
+        assert_equal 0, EvidenceLink.where(evidence_id: evidence_id).count
+        assert_includes EvidenceItem.unplaced, item
+        assert item.unplaced?
+      end
+
+      # The first placement becomes the origin, so origin-anchored readers see it.
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: evidence_id, capability_stable_id: "0190f4b2-0000-7000-8000-000000000001",
+        level_ordinal: 4, linked_by_id: @author.id, valence: "demonstrated")
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(evidence_id)
+        assert_equal "0190f4b2-0000-7000-8000-000000000001", item.capability_stable_id
+        assert_equal 4, item.level_ordinal
+        assert item.recorded_unplaced, "the fact that someone else chose the cell survives placement"
+        assert_not item.unplaced?
+        assert_not_includes EvidenceItem.unplaced, item
+      end
+
+      # Re-applying the origin-less EvidenceRecorded (an at-least-once replay)
+      # must not take the adopted origin away again.
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: evidence_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", feedback_direction: "peer_to_peer", evidence_type: "peer_feedback",
+        custom_type_label: nil, title: nil, content: "Great incident call",
+        external_reference: nil, author_id: @author.id)
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "0190f4b2-0000-7000-8000-000000000001", EvidenceItem.find(evidence_id).capability_stable_id
       end
     end
 
@@ -543,8 +587,20 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       append_and_project(PersonDevelopment::Events::EvidenceWithdrawn,
         evidence_id: ev1_id, withdrawn_by_id: @author.id, reason: "Test")
 
+      # ev3 is recorded unplaced and placed afterwards — the one shape that
+      # starts with no link row.
+      ev3_id = SecureRandom.uuid_v7
+      append_and_project(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: ev3_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil,
+        title: nil, content: "unplaced", external_reference: nil,
+        author_id: @author.id, feedback_direction: "peer_to_peer")
+      append_and_project(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: ev3_id, capability_stable_id: cap_sid, level_ordinal: 2,
+        linked_by_id: @author.id, valence: "demonstrated")
+
       before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
-      assert_equal 2, before_snapshot[:evidence_items].size
+      assert_equal 3, before_snapshot[:evidence_items].size
 
       PersonDevelopment::Projections::EvidenceCollection.reset!(tenant: @tenant)
       ActsAsTenant.with_tenant(@tenant) { assert_equal 0, EvidenceItem.count }

@@ -867,12 +867,17 @@ class PersonDevelopment::Aggregate
   # aggregate must be assigned to a framework, but does not need to be in a
   # cycle.
 
-  # Records a new piece of evidence with at least one (capability, level)
-  # link, plus any number of additional links applied atomically.
+  # Records a new piece of evidence. With a (capability, level) it is
+  # PLACED: the item carries that first link, plus any additional links
+  # applied atomically. Without one it is UNPLACED: feedback volunteered by
+  # someone who knows what happened but not which expectation it speaks to,
+  # recorded with no links and placed later through add_evidence_link by
+  # anyone EvidencePolicy#add_link? admits.
   #
   # @param evidence_id [String] caller-supplied UUID v7 (caller owns idempotency)
-  # @param capability_stable_id [String] stable UUID of the capability (first link)
-  # @param level_ordinal [Integer] the level being evidenced (first link)
+  # @param capability_stable_id [String, nil] stable UUID of the capability
+  #   (first link); nil with level_ordinal nil records the item unplaced
+  # @param level_ordinal [Integer, nil] the level being evidenced (first link)
   # @param source [String] "self" | "manager" | "peer"
   # @param evidence_type [String] one of EVIDENCE_TYPES
   # @param content [String] the body of the evidence (required)
@@ -884,20 +889,25 @@ class PersonDevelopment::Aggregate
   # @param custom_type_label [String, nil] free text, only when evidence_type == "other"
   # @param title [String, nil] optional one-line summary
   # @param external_reference [Hash, nil] { system:, url:, external_id:, metadata: }
-  # @param valence [String] the origin link's valence — one of
-  #   EVIDENCE_VALENCES. Required: every NEW link carries the linker's
-  #   judgment (historical links stay nil forever; that's write-time law,
-  #   not a data invariant).
+  # @param valence [String, nil] the origin link's valence — one of
+  #   EVIDENCE_VALENCES. Required with a cell: every NEW link carries the
+  #   linker's judgment (historical links stay nil forever; that's write-time
+  #   law, not a data invariant). Must be nil for an unplaced item — there is
+  #   no link for it to describe.
   # @param additional_links [Array<Hash>] extra links, each
   #   { capability_stable_id:, level_ordinal:, valence: }, applied as
   #   EvidenceLinkAdded in the same aggregate transaction. Duplicates (of
   #   the first link or each other) are rejected.
+  # @param request_id [String, nil] the evidence request this item answers,
+  #   when it is recorded as a response — carried on the event so a reader
+  #   of EvidenceRecorded knows without waiting for the request's own event
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
-  def record_evidence(evidence_id, capability_stable_id:, level_ordinal:, source:, evidence_type:,
-                      content:, author_id:, valence:,
+  def record_evidence(evidence_id, source:, evidence_type:, content:, author_id:,
+                      capability_stable_id: nil, level_ordinal: nil, valence: nil,
                       feedback_direction: default_feedback_direction(source),
                       custom_type_label: nil, title: nil,
-                      external_reference: nil, additional_links: [], cycle_id: @current_cycle_id)
+                      external_reference: nil, additional_links: [], cycle_id: @current_cycle_id,
+                      request_id: nil)
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
@@ -905,7 +915,7 @@ class PersonDevelopment::Aggregate
       raise CommandError, "Invalid feedback direction: #{feedback_direction}"
     end
     raise CommandError, "Invalid evidence type: #{evidence_type}" unless EVIDENCE_TYPES.include?(evidence_type)
-    raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
+    ensure_evidence_origin!(capability_stable_id, level_ordinal, valence, additional_links)
     raise CommandError, "Custom type label required when evidence_type is 'other'" if
       evidence_type == "other" && custom_type_label.to_s.strip.empty?
     raise CommandError, "Custom type label only allowed when evidence_type is 'other'" if
@@ -925,7 +935,8 @@ class PersonDevelopment::Aggregate
       author_id: author_id,
       feedback_direction: feedback_direction,
       valence: valence,
-      cycle_id: cycle_id
+      cycle_id: cycle_id,
+      request_id: request_id
     }))
 
     Array(additional_links).each do |link|
@@ -972,9 +983,11 @@ class PersonDevelopment::Aggregate
   # Removes one of an evidence item's (capability, level) links. The item
   # stops appearing in that cell but keeps its other links.
   #
-  # An active evidence item must always retain at least one link —
+  # A PLACED evidence item must always retain at least one link —
   # removing the last link is rejected (withdraw the item instead). This
-  # is a domain invariant; the UI also prevents the action.
+  # is a domain invariant; the UI also prevents the action. An unplaced
+  # item has no link to remove, so the rule never meets it; its first
+  # add_evidence_link places it and the rule applies from then on.
   #
   # @param evidence_id [String] UUID of the evidence to unlink
   # @param capability_stable_id [String] the link's capability
@@ -1362,6 +1375,21 @@ class PersonDevelopment::Aggregate
   # Direct aggregate callers cannot inspect the org chart. The command handler
   # supplies the exact value; this source-based default keeps lower-level
   # domain calls classified for self, manager, and lateral feedback.
+  # A cell is both halves or neither. With a cell the valence is the first
+  # link's and is required; without one there is no link for a valence or
+  # for additional links to follow.
+  def ensure_evidence_origin!(capability_stable_id, level_ordinal, valence, additional_links)
+    if capability_stable_id.nil? && level_ordinal.nil?
+      raise CommandError, "Valence needs a capability and level to describe" unless valence.nil?
+      raise CommandError, "Additional links need a first link to follow" if Array(additional_links).any?
+      return
+    end
+    if capability_stable_id.nil? || level_ordinal.nil?
+      raise CommandError, "Placing evidence needs both a capability and a level"
+    end
+    raise CommandError, "Invalid evidence valence: #{valence}" unless EVIDENCE_VALENCES.include?(valence)
+  end
+
   def default_feedback_direction(source)
     {
       "self" => "self",
@@ -1711,13 +1739,14 @@ class PersonDevelopment::Aggregate
   # `event.data[:valence]` on those simply returns nil (Lesson 15: keys
   # here must match what the commands above publish).
   on PersonDevelopment::Events::EvidenceRecorded do |event|
-    origin = [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
+    # An unplaced item (no capability on the event) starts with no links.
+    origin = event.data[:capability_stable_id] && [ event.data[:capability_stable_id], event.data[:level_ordinal] ]
     @evidence[event.data[:evidence_id]] = {
-      links: { origin => event.data[:valence] },
+      links: origin ? { origin => event.data[:valence] } : {},
       # Every cell this item was EVER linked to — removal doesn't erase
       # membership. Backs the evidence_link comment-thread anchor, which
       # stays valid after the link is removed (post_comment above).
-      ever_linked: Set.new([ origin ]),
+      ever_linked: Set.new([ origin ].compact),
       status: "active"
     }
   end

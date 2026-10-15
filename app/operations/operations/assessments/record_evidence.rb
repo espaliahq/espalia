@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-# Records a new piece of evidence against one capability × level on the
-# named assignment. Mirrors the web EvidenceController#create — same
-# validations on type / custom label / external reference, same
+# Records a new piece of evidence on the named assignment — against one
+# capability × level, or UNPLACED when the caller gives no cell: the
+# recipient, their manager or the author places it later with
+# `assessments_add_evidence_link`. Mirrors the web EvidenceController#create —
+# same validations on type / custom label / external reference, same
 # {EvidencePolicy#create?} authorisation, same {PersonDevelopment::CommandHandler#record_evidence}
 # dispatch.
 #
@@ -15,23 +17,26 @@
 # data); a manager evidencing a direct report is routine, and the MCP
 # client's own write-approval prompt is the right friction.
 class Operations::Assessments::RecordEvidence < Operations::Base
-  description "Record a piece of feedback / evidence against a capability × level on an assessment."
+  description "Record a piece of feedback / evidence on an assessment — against a capability × level, or " \
+              "with no cell at all when you don't know which expectation it speaks to: the recipient or their " \
+              "manager places it later. Find a colleague's assignment_id with assessments_feedback_recipients."
   category :write
   approval :mcp_client
   prose_fields :content
 
   parameter :assignment_id,        String, required: true
-  parameter :capability_stable_id, String, required: true
-  parameter :level_ordinal,        Integer, required: true
+  # A blank cell is a mistake, never "unplaced": omit the cell for that.
+  parameter :capability_stable_id, String, allow_blank: false
+  parameter :level_ordinal,        Integer
   parameter :evidence_type, String, required: true,
                                     allowed: EvidenceItem::EVIDENCE_TYPES
   parameter :custom_type_label, String
   parameter :title, String
   parameter :content, String, required: true
   # The origin link's valence — the recorder's judgment of what the
-  # evidence says about the behaviour at that cell. Required on every new
-  # link; narrative metadata only, never a scoring input.
-  parameter :valence, String, required: true, allowed: EvidenceLink::VALENCES
+  # evidence says about the behaviour at that cell. Required with a cell;
+  # narrative metadata only, never a scoring input.
+  parameter :valence, String, allowed: EvidenceLink::VALENCES, allow_blank: false
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
   # Optional extra cells this evidence also demonstrates. The first link is
   # the required capability_stable_id/level_ordinal/valence above; these
@@ -51,6 +56,13 @@ class Operations::Assessments::RecordEvidence < Operations::Base
 
   # The read model requires a label for the 'other' type.
   requires_when :custom_type_label, if: :evidence_type, equals: "other"
+  # A cell is both halves plus its valence, or nothing; extra links follow a
+  # first one. The same rule the aggregate enforces, said in the schema.
+  dependent_required :capability_stable_id, requires: :level_ordinal
+  dependent_required :capability_stable_id, requires: :valence
+  dependent_required :level_ordinal, requires: :capability_stable_id
+  dependent_required :valence, requires: :capability_stable_id
+  dependent_required :additional_links, requires: :capability_stable_id
 
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
@@ -58,17 +70,19 @@ class Operations::Assessments::RecordEvidence < Operations::Base
     authorize assignment, :create?, policy_class: EvidencePolicy
   end
 
-  # @return [Hash] `{ evidence_id, person_id, framework_id,
+  # @return [Hash] `{ evidence_id, person_id, framework_id, placed,
   #   capability_stable_id, level_ordinal, evidence_type, source,
   #   recorded_at, links }` — the durable identifying fields plus the
   #   resolved `source` so the LLM can confirm how the system
   #   categorised the caller's relationship to the assessee, and `links`
   #   (every active `{ capability_stable_id, level_ordinal, valence }` the
-  #   item is attached to).
+  #   item is attached to — empty, with `placed: false`, for an unplaced item).
   def perform
     validate_external_reference!
-    validate_level_ordinal!
-    validate_capability_in_framework!(params[:capability_stable_id])
+    if placed?
+      validate_level_ordinal!
+      validate_capability_in_framework!(params[:capability_stable_id])
+    end
     additional_links = normalize_additional_links!
 
     evidence_id = SecureRandom.uuid_v7
@@ -94,6 +108,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       evidence_id: item.id,
       person_id: item.person_id,
       framework_id: item.framework_id,
+      placed: placed?,
       capability_stable_id: item.capability_stable_id,
       level_ordinal: item.level_ordinal,
       evidence_type: item.evidence_type,
@@ -112,6 +127,10 @@ class Operations::Assessments::RecordEvidence < Operations::Base
 
   def assignment
     @assignment ||= PersonFrameworkAssignment.find(params[:assignment_id])
+  end
+
+  def placed?
+    params[:capability_stable_id].present?
   end
 
   # Coerces + validates the optional additional_links param into the

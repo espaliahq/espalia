@@ -223,6 +223,18 @@ guiding rule when completing a surface: if the web can do it, the MCP write
 tool should exist too — a half-exposed feature (write with no read, or
 create with no edit/withdraw) is the gap to avoid.
 
+**Feedback can be volunteered, not only requested.** `assessments_feedback_recipients`
+is the directory a peer needs: people with a framework assignment, by name
+or email, or the caller's manager, peers and reports with no query, each row
+carrying the `assignment_id` for `assessments_record_evidence`. That write
+takes the cell optionally — the schema's `dependentRequired` says capability,
+level and valence come together or not at all, and `additional_links` need a
+first link — and an item recorded with no cell is **unplaced**: the recipient
+or their manager places it later with `assessments_add_evidence_link`.
+`assessments_evidence_list` with no capability lists the unplaced items
+(`unplaced: true`). A peer still cannot read the assessment; the directory is
+the whole of what they see ([assessments.md → Proactive feedback](assessments.md)).
+
 ### 4. Shape parity via shared serializers
 
 Assessment payloads are **strict supersets** of framework payloads —
@@ -715,6 +727,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
+| `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
 | `app/operations/operations/assessments/alignment_lens.rb` | The role an alignment milestone acts on, and the per-role policy check Pundit's `authorize` can't pass (ADR-22) |

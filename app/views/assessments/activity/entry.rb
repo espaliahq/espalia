@@ -370,22 +370,46 @@ class Views::Assessments::Activity::Entry < Views::Base
     item = @entry.payload
     title = item.respond_to?(:title) ? item.title.to_s : ""
     subject = title.strip.empty? ? "feedback" : "“#{title.strip}”"
+    return unplaced_evidence_summary(subject) if unplaced_entry?
+
     label = capability_label
+    verb = placed_later?(item) ? "gave #{subject}, placed later on" : "recorded #{subject} on"
     if (name = evidence_author_name)
-      "#{name} recorded #{subject} on #{label}"
+      "#{name} #{verb} #{label}"
     else
-      "Recorded #{subject} on #{label}"
+      "#{verb.sub(/\A\w+/, &:capitalize)} #{label}"
+    end
+  end
+
+  # An item given without a cell reads from the cell its placement gave it,
+  # but the author never chose that cell; the copy says so.
+  def placed_later?(item)
+    item.respond_to?(:recorded_unplaced) && item.recorded_unplaced
+  end
+
+  # An unplaced item has no cell to name; the entry says so rather than
+  # inventing a coordinate, and stays framework-scoped until it is placed.
+  def unplaced_evidence_summary(subject)
+    if (name = evidence_author_name)
+      "#{name} gave #{subject}, not yet placed on a capability"
+    else
+      "Gave #{subject}, not yet placed on a capability"
     end
   end
 
   # "<Actor> withdrew feedback on <cap · Lx>", falling back to a generic
   # "Withdrew …" when the withdrawer is unknown (historical / unattributed).
   def evidence_withdrawn_summary
+    where = unplaced_entry? ? "that was never placed on a capability" : "on #{capability_label}"
     if (name = evidence_withdrawer_name)
-      "#{name} withdrew feedback on #{capability_label}"
+      "#{name} withdrew feedback #{where}"
     else
-      "Withdrew feedback on #{capability_label}"
+      "Withdrew feedback #{where}"
     end
+  end
+
+  def unplaced_entry?
+    @entry.capability_stable_id.nil? && @entry.level_ordinal.nil?
   end
 
   # "<Actor> linked feedback to <cap · Lx>" / "… unlinked feedback from …",
