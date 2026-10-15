@@ -405,7 +405,9 @@ Three rules, each load-bearing:
   The Blocked badge reads the engine's `:blocked` status, which counts rated
   cells only, so "Not rated" never sits beside it on an unrated card. It used
   to: the unrated 0 blocked like a "not yet", and a fresh assessment wore
-  Blocked on every card. An unrated capability still holds the state — or
+  Blocked on every card. The two can still appear together for a reason: a
+  rated "not yet" below the assessed level blocks while the assessed level
+  waits on its rating. An unrated capability still holds the state — or
   leaving one unrated would beat rating it "not yet" — and the hero says so
   without the word: "held at E3 until 2 capabilities are rated" when the
   score clears the bar, "close to E3 expectations, with 2 capabilities still

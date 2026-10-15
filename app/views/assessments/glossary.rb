@@ -93,8 +93,8 @@ class Views::Assessments::Glossary
       not_rated: {
         label: "Not rated",
         definition: "A capability nobody has rated yet has no answer. On its card it is not a zero, " \
-                    "and it is not a judgement, so it can never be blocked. Until it is rated, though, " \
-                    "#{@current_code} can't be met."
+                    "and a missing rating is not a judgement, so it never blocks anything by itself. " \
+                    "Until it is rated, though, #{@current_code} can't be met."
       },
       no_expectation: {
         label: "No expectation",
