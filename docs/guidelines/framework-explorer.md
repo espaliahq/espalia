@@ -2462,9 +2462,14 @@ it. Two details matter:
   broadcast from inside a write that then rolls back would offer a Publish
   button for a draft that doesn't exist.
 
-The subscription is decided at page load, so someone who loses publish rights
-mid-session keeps receiving the button until they reload. The review page's
-policy still refuses them.
+The subscription is decided at page load, so rights that change mid-session
+take effect on the next load: someone who loses them keeps receiving the
+button (the review page's policy still refuses them), and someone who gains
+them sees the pill without it. The button shows "Publishing…" only for a
+request against the open draft's own version (`FrameworkPublication.publishing?`);
+the framework-wide `in_flight_for?` is the lock, and a previous version's
+request that hasn't recorded its finish must not disable the next draft's
+button.
 
 The binding editor's system test had asserted `assert_text(/draft/i)` all
 along, and it passed with the bug present: the activity feed's "Opened a

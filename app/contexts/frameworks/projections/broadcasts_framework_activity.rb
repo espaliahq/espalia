@@ -63,28 +63,28 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
     return if Projections::Replayer.replay_mode?
     return unless framework_id
 
+    # The block runs at commit, outside the projection's tenant scope.
+    tenant = ActsAsTenant.current_tenant
     ActiveRecord.after_all_transactions_commit do
-      framework = FrameworkState::Framework.find_by(framework_id: framework_id)
-      next unless framework
+      ActsAsTenant.with_tenant(tenant) do
+        framework = FrameworkState::Framework.find_by(framework_id: framework_id)
+        next unless framework
 
-      publishing = visible && FrameworkPublication.in_flight_for?(framework_id)
-      broadcast_draft_slot(framework, :badge, "framework_activity", visible: visible)
-      broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
-                           visible: visible, publishing: publishing)
+        broadcast_draft_slot(framework, :badge, Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
+                             "framework_activity", visible: visible)
+        broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
+                             Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
+                             visible: visible, publishing: visible && FrameworkPublication.publishing?(framework))
+      end
     rescue => e
       Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
     end
   end
 
-  DRAFT_SLOT_TARGETS = {
-    badge: Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
-    publish: Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID
-  }.freeze
-
-  def broadcast_draft_slot(framework, slot, stream, visible:, publishing: false)
+  def broadcast_draft_slot(framework, slot, target, stream, visible:, publishing: false)
     Turbo::StreamsChannel.broadcast_replace_to(
       stream, framework.framework_id,
-      target: DRAFT_SLOT_TARGETS.fetch(slot),
+      target: target,
       html: ApplicationController.render(
         Views::Frameworks::Explorer::DraftStatus.new(
           framework: framework, slot: slot, visible: visible, publishing: publishing

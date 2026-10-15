@@ -92,7 +92,7 @@ module Frameworks::WriteResponse
       turbo_stream.replace(
         Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
         draft_status_html(framework, :publish, visible: can_publish,
-                          publishing: can_publish && FrameworkPublication.in_flight_for?(framework.framework_id))
+                          publishing: can_publish && FrameworkPublication.publishing?(framework))
       )
     ]
   end

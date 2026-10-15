@@ -54,6 +54,18 @@ class FrameworkPublication < ApplicationRecord
     in_flight.exists?(framework_id: framework_id)
   end
 
+  # Whether the open draft itself is being published — what the Publish
+  # button shows. Narrower than {in_flight_for?}: a request for the previous
+  # version that hasn't recorded its finish yet must not disable the button
+  # on the draft that opened after it.
+  #
+  # @param framework [FrameworkState::Framework]
+  # @return [Boolean]
+  def self.publishing?(framework)
+    framework.draft? &&
+      in_flight.exists?(framework_id: framework.framework_id, draft_version: framework.draft_version)
+  end
+
   # The most recent request for a given draft — what the review page reports.
   #
   # @param framework_id [String]

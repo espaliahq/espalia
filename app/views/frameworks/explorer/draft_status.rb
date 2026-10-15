@@ -16,7 +16,8 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   BADGE_ID = "framework-draft-badge"
   PUBLISH_ID = "framework-publish-action"
   # Only viewers with publish rights when the page loaded subscribe, so a
-  # broadcast Publish button doesn't reach suggest-only collaborators.
+  # broadcast Publish button doesn't reach suggest-only collaborators. Rights
+  # that change mid-session take effect on the next load, in either direction.
   PUBLISHERS_STREAM = "framework_publishers"
 
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
@@ -25,7 +26,7 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   #   mode for the pill, edit mode + publish rights for the button. A hidden
   #   slot still renders its (empty) anchor so a later stream can find it.
   # @param publishing [Boolean] a publish of this draft is queued or running
-  #   ({FrameworkPublication.in_flight_for?}) — the button renders disabled so
+  #   ({FrameworkPublication.publishing?}) — the button renders disabled so
   #   nobody requests it twice.
   def initialize(framework:, slot:, visible: true, publishing: false)
     @framework = framework

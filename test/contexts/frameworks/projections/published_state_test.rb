@@ -1026,17 +1026,37 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
         assert_not_includes targets, "framework-publish-action"
       end
 
-      should "clear the Publish slot on the same stream that opened it" do
+      # Sent while the read model still says a draft is open, so the slot must
+      # come out empty because it is a clear, not because there is no draft.
+      should "clear both slots, the Publish one on the stream that opened it" do
+        within_tenant { @projection.call(@event) }
         sent = []
         published = Frameworks::Events::FrameworkVersionPublished.new(
           data: { framework_id: @framework_id, version: 5, published_by: "tester" },
           metadata: { tenant_id: @tenant.id })
-        Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target] ] }) do
+        Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target], kw[:html] ] }) do
           within_tenant { @projection.send(:broadcast_framework_activity, published) }
         end
 
-        assert_includes sent, [ "framework_publishers", "framework-publish-action" ]
-        assert_not_includes sent, [ "framework_activity", "framework-publish-action" ]
+        publishes = sent.select { |_, target, _| target == "framework-publish-action" }
+        assert_equal [ "framework_publishers" ], publishes.map(&:first)
+        assert_not_includes publishes.first.last, "Publish"
+        assert_not_includes sent.find { |_, target, _| target == "framework-draft-badge" }.last, "v5 draft"
+      end
+
+      should "show Publishing only for a request against the draft that opened" do
+        # v4's publish committed but hasn't recorded its finish yet.
+        previous = within_tenant do
+          create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 4)
+        end
+        assert_includes publish_slot_html, "Publish v5"
+        assert_not_includes publish_slot_html, "Publishing"
+
+        within_tenant do
+          previous.update!(finished_at: Time.current)
+          create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 5)
+        end
+        assert_includes publish_slot_html, "Publishing v5…"
       end
 
       should "stay silent during replay" do
@@ -1068,6 +1088,15 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       yield
     end
     broadcasts
+  end
+
+  # The Publish slot the draft-opened broadcast sends for @event.
+  def publish_slot_html
+    sent = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*_args, **kw) { sent << kw }) do
+      within_tenant { @projection.call(@event) }
+    end
+    sent.find { |kw| kw[:target] == "framework-publish-action" }[:html]
   end
 
   # Captures which DOM ids the block's broadcasts replace.

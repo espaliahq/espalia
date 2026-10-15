@@ -57,7 +57,6 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     wait_for_stimulus "matrix"
   end
 
-  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
   # Submit the data-turbo-confirm Remove form via requestSubmit() (the
   # documented JS-submit remedy for the flaky confirm-form click on starved
   # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
@@ -83,6 +82,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     end
   end
 
+  # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
   def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
