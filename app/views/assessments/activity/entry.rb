@@ -370,7 +370,7 @@ class Views::Assessments::Activity::Entry < Views::Base
     item = @entry.payload
     title = item.respond_to?(:title) ? item.title.to_s : ""
     subject = title.strip.empty? ? "feedback" : "“#{title.strip}”"
-    return unplaced_evidence_summary(subject) if @entry.capability_stable_id.nil? && @entry.level_ordinal.nil?
+    return unplaced_evidence_summary(subject) if unplaced_entry?
 
     label = capability_label
     if (name = evidence_author_name)
@@ -393,11 +393,16 @@ class Views::Assessments::Activity::Entry < Views::Base
   # "<Actor> withdrew feedback on <cap · Lx>", falling back to a generic
   # "Withdrew …" when the withdrawer is unknown (historical / unattributed).
   def evidence_withdrawn_summary
+    where = unplaced_entry? ? "that was never placed on a capability" : "on #{capability_label}"
     if (name = evidence_withdrawer_name)
-      "#{name} withdrew feedback on #{capability_label}"
+      "#{name} withdrew feedback #{where}"
     else
-      "Withdrew feedback on #{capability_label}"
+      "Withdrew feedback #{where}"
     end
+  end
+
+  def unplaced_entry?
+    @entry.capability_stable_id.nil? && @entry.level_ordinal.nil?
   end
 
   # "<Actor> linked feedback to <cap · Lx>" / "… unlinked feedback from …",

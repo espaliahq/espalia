@@ -41,6 +41,13 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       assert_includes html, "Ada recorded feedback on Critical Thinking · L2"
     end
 
+    should "say a withdrawn item was never placed when it had no cell" do
+      item = Item.new(title: "", content: "x", author: nil, withdrawn_by: Person.new("Ada"))
+      html = render_entry(kind: "evidence_withdrawn", payload: item,
+        capability_name: nil, level_ordinal: nil, capability_stable_id: nil)
+      assert_includes html, "Ada withdrew feedback that was never placed on a capability"
+    end
+
     should "say an unplaced item has no capability yet, and not make it focusable" do
       item = Item.new(title: "", content: "Great call.", author: Person.new("Ada"))
       html = render_entry(kind: "evidence_recorded", payload: item,

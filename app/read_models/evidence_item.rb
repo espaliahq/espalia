@@ -13,7 +13,8 @@
 # Both origin columns are nil for an item recorded UNPLACED — feedback
 # volunteered without a capability in mind. It has no link rows until the
 # recipient, their manager or the author places it (see the {.unplaced}
-# scope); until then it appears on the hub, never in a cell.
+# scope); until then it appears on the hub, never in a cell. The first
+# placement becomes the origin, so a placed-later item reads like any other.
 #
 # Materialised from PersonDevelopment evidence events
 # ({EvidenceRecorded}, {EvidenceUpdated}, {EvidenceWithdrawn}, and the
@@ -108,10 +109,10 @@ class EvidenceItem < ApplicationRecord
   scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
   scope :for_capability, ->(stable_id) { where(capability_stable_id: stable_id) }
   scope :at_level, ->(ordinal) { where(level_ordinal: ordinal) }
-  # Active items with no link row at all. Only an item recorded unplaced can
-  # be here: the aggregate refuses to remove a placed item's last link, and a
+  # Active items with no ACTIVE link. Only an item recorded unplaced can be
+  # here: the aggregate refuses to remove a placed item's last link, and a
   # framework migration that strips every link withdraws the item.
-  scope :unplaced, -> { active.where.missing(:evidence_links) }
+  scope :unplaced, -> { active.where.not(id: EvidenceLink.active.select(:evidence_id)) }
 
   # Classifies feedback from the provider to the recipient at recording time.
   # A manager source includes active rating delegates acting in manager
@@ -128,21 +129,6 @@ class EvidenceItem < ApplicationRecord
     return "report_to_manager" if author&.managed_by?(recipient)
 
     "peer_to_peer"
-  end
-
-  # The hub anchor for one item — where an unplaced item is placed, and
-  # where a notification about one lands.
-  #
-  # @param id [String]
-  # @return [String]
-  def self.hub_path(id)
-    "/evidence##{dom_id(id)}"
-  end
-
-  # @param id [String]
-  # @return [String]
-  def self.dom_id(id)
-    "evidence-item-#{id}"
   end
 
   # Whether this evidence has been withdrawn.

@@ -26,6 +26,18 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
 
+    should "count an item whose only link rows are removed as unplaced" do
+      ActsAsTenant.with_tenant(@tenant) do
+        item = create(:evidence_item, tenant: @tenant)
+        item.evidence_links.update_all(link_status: "removed", removed_at: Time.current)
+        placed = create(:evidence_item, tenant: @tenant)
+
+        assert_includes EvidenceItem.unplaced, item
+        assert_not_includes EvidenceItem.unplaced, placed
+        assert item.unplaced?
+      end
+    end
+
     should "require source from SOURCES" do
       ActsAsTenant.with_tenant(@tenant) do
         item = build(:evidence_item, tenant: @tenant, source: "garbage")

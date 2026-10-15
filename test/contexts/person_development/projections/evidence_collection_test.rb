@@ -82,6 +82,18 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_includes EvidenceItem.unplaced, item
         assert item.unplaced?
       end
+
+      # The first placement becomes the origin, so origin-anchored readers see it.
+      emit(PersonDevelopment::Events::EvidenceLinkAdded,
+        evidence_id: evidence_id, capability_stable_id: "0190f4b2-0000-7000-8000-000000000001",
+        level_ordinal: 4, linked_by_id: @author.id, valence: "demonstrated")
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(evidence_id)
+        assert_equal "0190f4b2-0000-7000-8000-000000000001", item.capability_stable_id
+        assert_equal 4, item.level_ordinal
+        assert_not item.unplaced?
+        assert_not_includes EvidenceItem.unplaced, item
+      end
     end
 
     should "store the origin link's valence, and leave it nil for pre-valence events" do
