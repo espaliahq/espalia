@@ -61,6 +61,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
   # documented JS-submit remedy for the flaky confirm-form click on starved
   # CI — testing.md). auto_confirm stubs window.confirm so Turbo proceeds.
   def remove_only_binding
+    assert_selector "#binding-editor form[data-turbo-confirm]"
     auto_confirm do
       page.execute_script(
         'document.querySelector("#binding-editor form[data-turbo-confirm]").requestSubmit();'

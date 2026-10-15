@@ -859,9 +859,8 @@ class Frameworks::Projections::PublishedState
 
     framework_id = framework_id_for_broadcast(event)
     broadcast_framework_activity_signal(framework_id)
-    case event
-    when Frameworks::Events::FrameworkVersionPublished then broadcast_draft_status_cleared(framework_id)
-    when Frameworks::Events::DraftVersionStarted then broadcast_draft_status_opened(framework_id)
+    if event.is_a?(Frameworks::Events::FrameworkVersionPublished) || event.is_a?(Frameworks::Events::DraftVersionStarted)
+      broadcast_draft_status(framework_id)
     end
   end
 

@@ -31,35 +31,22 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
     Rails.logger.warn("[#{self.class.name}] Activity broadcast failed: #{e.message}")
   end
 
-  # A published version closes the draft, so every open explorer must drop
-  # the `vN draft` pill and the Publish button — both sit outside every Turbo
-  # Frame. Rendered hidden (`visible: false`) so the replacement is the same
-  # empty anchor for every viewer regardless of their rights or of a draft
-  # re-opened in the meantime; whoever published, the header stops lying.
+  # The `vN draft` pill and the Publish button sit outside every Turbo Frame,
+  # and a draft opens or closes from many writes that answer only their own
+  # frame — a binding edit, the levels editor, an approval, a publish job, any
+  # MCP call — while every other viewer's explorer is stale too. So the
+  # projection sends both slots whenever a draft opens or closes.
+  #
+  # Each message renders the framework as it stands at commit, not "opened"
+  # or "cleared": messages from separate writes can arrive out of order, and
+  # a stale clear landing after the next draft opened would otherwise blank
+  # it. Sent only after commit, so a write that rolls back announces nothing.
+  # The badge rides the activity stream every edit-mode viewer holds; the
+  # Publish slot rides the publishers stream every time, because ActionCable
+  # orders messages within a subscription, not across two.
   #
   # @param framework_id [String, nil] no-op when nil
-  def broadcast_draft_status_cleared(framework_id)
-    broadcast_draft_status(framework_id, visible: false)
-  end
-
-  # The mirror of {#broadcast_draft_status_cleared}. A draft opens from many
-  # writes that answer only their own frame — a binding edit, the levels
-  # editor, an approval, any MCP call — and every other viewer's explorer is
-  # stale too, so announcing it from the event is the one place that reaches
-  # them all.
-  #
-  # @param framework_id [String, nil] no-op when nil
-  def broadcast_draft_status_opened(framework_id)
-    broadcast_draft_status(framework_id, visible: true)
-  end
-
-  # Both slots, sent once the write commits: a draft announced from inside a
-  # transaction that then rolls back would offer a Publish button for a draft
-  # that never existed. The badge rides the activity stream every edit-mode
-  # viewer holds. The Publish slot rides the publishers stream for opens AND
-  # clears, because ActionCable doesn't order messages across subscriptions — a
-  # clear on one stream could land after the next draft's button on the other.
-  def broadcast_draft_status(framework_id, visible:)
+  def broadcast_draft_status(framework_id)
     return if Projections::Replayer.replay_mode?
     return unless framework_id
 
@@ -71,23 +58,23 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
         next unless framework
 
         broadcast_draft_slot(framework, :badge, Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
-                             "framework_activity", visible: visible)
+                             "framework_activity")
         broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
                              Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
-                             visible: visible, publishing: visible && FrameworkPublication.publishing?(framework))
+                             publishing: FrameworkPublication.publishing?(framework))
       end
     rescue => e
       Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
     end
   end
 
-  def broadcast_draft_slot(framework, slot, target, stream, visible:, publishing: false)
+  def broadcast_draft_slot(framework, slot, target, stream, publishing: false)
     Turbo::StreamsChannel.broadcast_replace_to(
       stream, framework.framework_id,
       target: target,
       html: ApplicationController.render(
         Views::Frameworks::Explorer::DraftStatus.new(
-          framework: framework, slot: slot, visible: visible, publishing: publishing
+          framework: framework, slot: slot, publishing: publishing
         ),
         layout: false
       )

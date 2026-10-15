@@ -629,8 +629,8 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   validated before the version is cut, and is the ONE edit-mode action that
   stays a full navigation. Both are `DraftStatus` slots with stable ids. A
   shape-changing write streams them to the actor (§11b), and the projection
-  broadcasts them whenever a draft opens (`broadcast_draft_status_opened`, on
-  `DraftVersionStarted`): the pill over `framework_activity`, the button over
+  broadcasts them whenever a draft opens or closes (`broadcast_draft_status`, on
+  `DraftVersionStarted` and `FrameworkVersionPublished`): the pill over `framework_activity`, the button over
   `framework_publishers`, which the page subscribes to only for a viewer with
   publish rights (Lesson 40). Both broadcasts wait for the write to commit. (Draft lifecycle: see ADR-16/17.)
   - **Publishing runs in the background.** `Operations::Frameworks::PublishVersion`
@@ -647,10 +647,10 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
     UI, and a row abandoned by a dead worker is reaped after
     `FrameworkPublication::STALE_AFTER`. The requester gets a
     `framework_published` notification with the outcome. The
-    `FrameworkVersionPublished` event's projection broadcasts both
-    `DraftStatus` slots empty (`broadcast_draft_status_cleared`) on the same
-    streams that open them, so an open explorer drops the pill and button
-    whoever published. The review page shows the last attempt's failure
+    `FrameworkVersionPublished` event's projection re-broadcasts both
+    `DraftStatus` slots (`broadcast_draft_status`) on the same streams that
+    open them, so an open explorer drops the pill and button whoever
+    published. The review page shows the last attempt's failure
     message for this draft. Edits made to the draft between the request and
     the job running are published with it — the job re-checks the gate, so a
     newly retired capability without a mapping fails the publish and says so.
@@ -2458,6 +2458,11 @@ it. Two details matter:
 - **Opens and clears go on the same stream.** ActionCable orders messages
   within a subscription, not across two, so a clear sent on the activity
   stream could land after the next draft's button and erase it.
+- **Each message renders the current state, not "opened" or "cleared".**
+  Messages from separate writes still race each other, so a clear from a
+  publish could land after the next draft opened. Rendered from the
+  framework as it stands at commit, a late clear shows that newer draft
+  instead of blanking it.
 - **Send after commit** (`ActiveRecord.after_all_transactions_commit`). A
   broadcast from inside a write that then rolls back would offer a Publish
   button for a draft that doesn't exist.
