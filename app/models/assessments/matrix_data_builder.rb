@@ -38,10 +38,7 @@ class Assessments::MatrixDataBuilder
       lens: lens,
       person_id: assignment.person_id,
       cycle_id: assignment.current_open_cycle&.cycle_id,
-      categories: FrameworkState::CapabilityCategory
-        .where(framework_id: assignment.framework_id, status: "active")
-        .includes(capabilities: [ :bindings, { expectations: :illustrations } ])
-        .order(:ordinal, :created_at, :id),
+      categories: lens_tree(framework_id: assignment.framework_id, lens: lens),
       participant_status: status,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
       context: context,
@@ -49,6 +46,33 @@ class Assessments::MatrixDataBuilder
       viewer_sees_all_evidence: viewer_sees_all_evidence
     ).build
   end
+
+  # The active categories, preloaded with only what the lens role reads: its
+  # bound capabilities, their expectations at its levels, and its own
+  # illustrations (#487). The associations are marked loaded with that subset,
+  # so the tree must not leave this builder.
+  #
+  # @param framework_id [String]
+  # @param lens [Assessments::Lens]
+  # @return [Array<FrameworkState::CapabilityCategory>]
+  def self.lens_tree(framework_id:, lens:)
+    categories = FrameworkState::CapabilityCategory
+      .where(framework_id: framework_id, status: "active").order(:ordinal, :created_at, :id).to_a
+    preload(categories, :capabilities,
+            FrameworkState::Capability.where(capability_id: lens.scope.bindings.map(&:capability_id)))
+    capabilities = categories.flat_map(&:capabilities)
+    preload(capabilities, :expectations,
+            FrameworkState::BehaviouralExpectation.where(level_ordinal: lens.role.levels.map(&:ordinal)))
+    preload(capabilities.flat_map(&:expectations), :illustrations,
+            FrameworkState::RoleIllustration.where(role_id: lens.role.role_id))
+    categories
+  end
+  private_class_method :lens_tree
+
+  def self.preload(records, association, scope = nil)
+    ActiveRecord::Associations::Preloader.new(records: records, associations: association, scope: scope).call
+  end
+  private_class_method :preload
 
   # @param framework [FrameworkState::Framework]
   # @param role [FrameworkState::Role, nil] the role to read against; taken
@@ -68,7 +92,9 @@ class Assessments::MatrixDataBuilder
   # @param person_id [String] UUID
   # @param cycle_id [String, nil] UUID of the assessment cycle whose ratings
   #   should be shown. When nil, the builder returns no ratings (empty matrix).
-  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded
+  # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded;
+  #   either the whole framework or {.lens_tree}'s subset — the builder filters
+  #   to the role either way
   # @param participant_status [String, nil] current cycle participant lifecycle
   #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
   #   Sourced from the current OPEN cycle's participation, so the terminal
