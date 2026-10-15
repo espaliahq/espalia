@@ -11,7 +11,7 @@
 notification to its recipient over the tenant's workspace, after the in-app
 copy has had its minute to be read ([assessments.md → Comment
 notifications](assessments.md)). **Inbound** is the feedback modal: the
-`/growthos feedback` slash command and the "Give feedback on this message"
+`/growthos feedback` slash command and the "Feedback on this message"
 shortcut open it, and its submission records evidence as the Slack user.
 
 The app is installed per tenant (`Tenant#connect_slack!` keeps the bot token
@@ -49,7 +49,7 @@ The steps, for whoever holds the GrowthOS Slack app:
    ([slash commands](https://docs.slack.dev/interactivity/implementing-slash-commands));
    **Features → Interactivity & Shortcuts** shows the request URL and the
    options load URL both at `/slack/interactions`, and the message shortcut
-   "Give feedback on this message"
+   "Feedback on this message"
    ([shortcuts](https://docs.slack.dev/interactivity/implementing-shortcuts)).
 3. Compare **Features → OAuth & Permissions → Bot Token Scopes** with
    `Slack::BOT_SCOPES`. The install grants that constant, not the manifest,

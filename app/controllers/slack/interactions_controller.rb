@@ -62,7 +62,7 @@ class Slack::InteractionsController < ActionController::Base
     end
   end
 
-  # "Give feedback on this message": open the modal with the message's text
+  # "Feedback on this message": open the modal with the message's text
   # and permalink already in it.
   def shortcut
     return head :ok unless payload["callback_id"] == Slack::Feedback::MESSAGE_SHORTCUT

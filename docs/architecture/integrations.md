@@ -154,7 +154,7 @@ In development, `db/seeds.rb` runs the sync synchronously after seeding the fram
 
 Installed per tenant (OAuth v2, `Tenant#connect_slack!`). Outbound: Noticed
 notifications DM'd by `SlackDeliveryMethod` after the in-app copy's grace
-period. Inbound: `/growthos feedback` and the "Give feedback on this message"
+period. Inbound: `/growthos feedback` and the "Feedback on this message"
 shortcut open a modal whose submission records evidence as the Slack user —
 identity by workspace id and the member's cached or email-resolved Slack id,
 writes through the same `Operations::Assessments::RecordEvidence` the web and
