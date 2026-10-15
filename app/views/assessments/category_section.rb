@@ -27,6 +27,8 @@ class Views::Assessments::CategorySection < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
+  # @param only_capability [String, nil] renders just that capability's card,
+  #   without the section around it
   def initialize(category_data:, merged_levels:, person_level:, assessment_id:, thresholds: {},
                  context: :self, viewer_is_manager: false, scoring: {}, self_scoring: nil,
                  manager_scoring: nil, aligned_scoring: nil,
@@ -36,8 +38,9 @@ class Views::Assessments::CategorySection < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false, lens: nil)
+                 can_comment: false, viewer_is_tenant_admin: false, lens: nil, only_capability: nil)
     @lens = lens
+    @only_capability = only_capability
     @category_data = category_data
     @category = category_data[:category]
     @merged_levels = merged_levels
@@ -64,6 +67,8 @@ class Views::Assessments::CategorySection < Views::Base
   end
 
   def view_template
+    return only_capability_card if @only_capability
+
     section(
       id: "category-#{@category.category_id}",
       class: "scroll-mt-40",
@@ -143,40 +148,45 @@ class Views::Assessments::CategorySection < Views::Base
   end
 
   def capability_cards
-    statuses = primary_scoring_for_context[:capability_statuses] || {}
-    reasons  = primary_scoring_for_context[:block_reasons] || {}
-
     div(class: "space-y-3") do
-      @category_data[:capabilities].each do |cap_data|
-        stable_id = cap_data[:capability].stable_id
-        render Views::Assessments::CapabilityCard.new(
-          capability_data: cap_data,
-          merged_levels: @merged_levels,
-          person_level: @person_level,
-          thresholds: @thresholds,
-          assessment_id: @assessment_id,
-          context: @context,
-          viewer_is_manager: @viewer_is_manager,
-          category: @category,
-          scoring: primary_scoring_for_context,
-          blocked: statuses[stable_id] == :blocked,
-          block_reason: reasons[stable_id],
-          expanded_capability_id: @expanded_capability_id,
-          focused_level_ordinal: @focused_level_ordinal,
-          selected_levels: @selected_levels,
-          category_id: @category.category_id,
-          frozen: @frozen,
-          alignment_locked: @alignment_locked,
-          viewer_person_id: @viewer_person_id,
-          can_create_evidence: @can_create_evidence,
-          can_request_evidence: @can_request_evidence,
-          can_relink_others_evidence: @can_relink_others_evidence,
-          can_comment: @can_comment,
-          viewer_is_tenant_admin: @viewer_is_tenant_admin,
-          lens: @lens
-        )
-      end
+      @category_data[:capabilities].each { |cap_data| capability_card(cap_data) }
     end
+  end
+
+  # The bare card, so a Turbo Stream replace swaps the card for a card.
+  def only_capability_card
+    cap_data = @category_data[:capabilities].find { |cap| cap[:capability].stable_id == @only_capability }
+    capability_card(cap_data) if cap_data
+  end
+
+  def capability_card(cap_data)
+    stable_id = cap_data[:capability].stable_id
+    render Views::Assessments::CapabilityCard.new(
+      capability_data: cap_data,
+      merged_levels: @merged_levels,
+      person_level: @person_level,
+      thresholds: @thresholds,
+      assessment_id: @assessment_id,
+      context: @context,
+      viewer_is_manager: @viewer_is_manager,
+      category: @category,
+      scoring: primary_scoring_for_context,
+      blocked: primary_scoring_for_context.dig(:capability_statuses, stable_id) == :blocked,
+      block_reason: primary_scoring_for_context.dig(:block_reasons, stable_id),
+      expanded_capability_id: @expanded_capability_id,
+      focused_level_ordinal: @focused_level_ordinal,
+      selected_levels: @selected_levels,
+      category_id: @category.category_id,
+      frozen: @frozen,
+      alignment_locked: @alignment_locked,
+      viewer_person_id: @viewer_person_id,
+      can_create_evidence: @can_create_evidence,
+      can_request_evidence: @can_request_evidence,
+      can_relink_others_evidence: @can_relink_others_evidence,
+      can_comment: @can_comment,
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @lens
+    )
   end
 
   def primary_scoring_for_context

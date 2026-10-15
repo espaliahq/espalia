@@ -747,6 +747,56 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "diagnostics=#{diagnostics.inspect}"
     end
 
+    # A chip click swaps that one card (#488): the matrix and the other cards
+    # are the same DOM nodes afterwards, and every card keeps its own level.
+    should "swap only the clicked card, keep each card's level, and survive a reload" do
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      # The page's inline matrix is replaced once the frame's own load lands.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "matrix"
+      page.execute_script(<<~JS)
+        window.__matrixRoot = document.querySelector("[data-controller~='matrix'][data-matrix-card-url-value]");
+        window.__otherCard = document.getElementById("capability-card-#{@cap2_stable}");
+      JS
+
+      click_selector_with_js_fallback("#cell-#{@cap1_stable}-1", expect_text: "Asks clarifying questions to understand problems")
+      assert_no_text "Synthesises information from multiple sources"
+      assert page.evaluate_script("window.__matrixRoot.isConnected && window.__otherCard.isConnected"),
+        "the matrix and the other cards must not be re-rendered"
+      assert_selector "#capability-card-#{@cap1_stable}[data-focused='true']"
+
+      click_selector_with_js_fallback("#cell-#{@cap3_stable}-1", expect_text: "Delivers small tasks reliably")
+      assert_text "Asks clarifying questions to understand problems"
+      assert_selector "#capability-card-#{@cap3_stable}[data-focused='true']"
+      assert_selector "[data-focused='true'][data-matrix-target='card']", count: 1
+      assert page.evaluate_script("window.__matrixRoot.isConnected")
+      assert_includes page.current_url, CGI.escape("levels[#{@cap1_stable}]") + "=1"
+
+      page.execute_script("window.__beforeReload = true")
+      visit page.current_url
+      assert page.evaluate_script("window.__beforeReload !== true"), "the page must actually reload"
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      assert_text "Asks clarifying questions to understand problems"
+      assert_text "Delivers small tasks reliably"
+    end
+
+    should "swap the clicked card on a phone too" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+      assert_selector "#scoring-panel"
+      # The page's inline matrix is replaced once the frame's own load lands.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "matrix"
+      page.execute_script(<<~JS)
+        window.__matrixRoot = document.querySelector("[data-controller~='matrix'][data-matrix-card-url-value]");
+      JS
+
+      click_selector_with_js_fallback("#cell-#{@cap3_stable}-1", expect_text: "Delivers small tasks reliably")
+      assert_no_text "Owns medium-scope features end-to-end"
+      assert page.evaluate_script("window.__matrixRoot.isConnected")
+    end
+
     should "render each level code only once (no duplicated labels under the chips)" do
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"

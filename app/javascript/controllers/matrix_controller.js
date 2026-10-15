@@ -57,7 +57,10 @@ export default class extends BaseController {
   static values = {
     basePath: String,
     urlSync: { type: Boolean, default: false },
-    activeCategoryId: { type: String, default: "" }
+    activeCategoryId: { type: String, default: "" },
+    // Assessment cards only: where one card is fetched at a newly picked
+    // level (#488). Absent in the framework explorer.
+    cardUrl: { type: String, default: "" }
   }
 
   connect() {
@@ -856,8 +859,110 @@ export default class extends BaseController {
     this.#applyCardFocus(stableId, "cell")
     this.#dispatchFocusEvent({ ...this.currentFocus })
 
-    this.#reloadMatrixWithFocus(stableId, ordinal)
-    this.#scrollCardUnderHeader(stableId)
+    if (this.cardUrlValue && this.#matrixFrameSettled()) {
+      // Swap just this card (#488): reloading the whole matrix to change one
+      // card cost ~440 KB and a long main-thread block per click. The card's
+      // top doesn't move when its contents change, so the scroll can start now.
+      this.#pushFocusToUrl(stableId, ordinal)
+      this.#loadCard(stableId, ordinal)
+      this.#scrollCardUnderHeader(stableId, { awaitFrameLoad: false })
+    } else {
+      this.#reloadMatrixWithFocus(stableId, ordinal)
+      this.#scrollCardUnderHeader(stableId)
+    }
+  }
+
+  // One fetch per card at a time; a click that lands while one is in flight
+  // queues its level, so the card always ends on the last level picked.
+  // The queue lives on the frame, which outlives this controller across a
+  // broadcast reload, so a second instance can't start a racing fetch.
+  async #loadCard(stableId, ordinal) {
+    const host = this.element.closest("turbo-frame") || this
+    host._cardLoads ||= new Map()
+    const loads = host._cardLoads
+    const pending = loads.get(stableId)
+    if (pending) {
+      pending.next = ordinal
+      return
+    }
+    const load = { next: ordinal }
+    loads.set(stableId, load)
+    try {
+      while (load.next != null) {
+        const target = load.next
+        load.next = null
+        if (!(await this.#fetchCard(stableId, target))) {
+          // Whatever failed — network, a session bounce, a card no longer in
+          // scope — the whole-frame reload has the recovery paths already.
+          // The click already pushed its history entry.
+          this.#reloadMatrixWithFocus(stableId, load.next ?? target, { history: "replace" })
+          return
+        }
+        // The card arrives unfocused; the ring goes where focus is now.
+        this._focusedCard = null
+        this.#applyCardFocus(this.currentFocus?.capabilityStableId, this.currentFocus?.level)
+      }
+    } finally {
+      loads.delete(stableId)
+    }
+  }
+
+  // A swap made while the frame is still loading — its first load, or a
+  // broadcast reload — would be overwritten when that load lands.
+  #matrixFrameSettled() {
+    const frame = this.element.closest("turbo-frame")
+    return !frame || (frame.hasAttribute("complete") && !frame.hasAttribute("busy"))
+  }
+
+  async #fetchCard(stableId, ordinal) {
+    const url = new URL(this.cardUrlValue, window.location.origin)
+    url.searchParams.set("capability", stableId)
+    url.searchParams.set("level_ordinal", ordinal.toString())
+    const card = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+    card?.setAttribute("aria-busy", "true")
+    try {
+      // request.js hands a turbo-stream response to Turbo, which replaces the
+      // card on a later frame — wait for it, so what follows sees the new card.
+      const response = await get(url.toString(), { responseKind: "turbo-stream" })
+      if (!(response.ok && response.isTurboStream)) return false
+      return await this.#cardReplaced(stableId, card)
+    } catch {
+      return false
+    } finally {
+      card?.removeAttribute("aria-busy")
+    }
+  }
+
+  // False when the card never arrives — the swap then counts as failed.
+  async #cardReplaced(stableId, previous) {
+    for (let frame = 0; frame < 60; frame++) {
+      const live = this.cardTargets.find(c => c.dataset.capabilityStableId === stableId)
+      if (live && live !== previous) return true
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    }
+    return false
+  }
+
+  // The browser URL is the selected-level map's source of truth: a broadcast
+  // reload and the whole-frame paths below read it back.
+  #pushFocusToUrl(stableId, ordinal) {
+    const browserUrl = new URL(window.location)
+    browserUrl.searchParams.set("capability", stableId)
+    browserUrl.searchParams.set("level_ordinal", ordinal.toString())
+    browserUrl.searchParams.set(`levels[${stableId}]`, ordinal.toString())
+    window.history.pushState({}, "", browserUrl)
+  }
+
+  // A card swap updates only the browser URL, so a whole-frame reload built
+  // from the frame's own `src` takes the selected levels from there.
+  #withBrowserLevels(url) {
+    for (const key of [...url.searchParams.keys()]) {
+      if (key.startsWith("levels[")) url.searchParams.delete(key)
+    }
+    new URL(window.location).searchParams.forEach((value, key) => {
+      if (key.startsWith("levels[")) url.searchParams.append(key, value)
+    })
+    return url
   }
 
   // After a chip click reloads the matrix frame, scroll the capability
@@ -944,7 +1049,7 @@ export default class extends BaseController {
     }
   }
 
-  #reloadMatrixWithFocus(stableId, ordinal) {
+  #reloadMatrixWithFocus(stableId, ordinal, { history = "push" } = {}) {
     const frame = this.element.closest("turbo-frame") ||
                   this.element.querySelector("turbo-frame")
     if (!frame) return
@@ -953,7 +1058,7 @@ export default class extends BaseController {
     if (!currentSrc) return
 
     let url
-    try { url = new URL(currentSrc, window.location.origin) } catch { return }
+    try { url = this.#withBrowserLevels(new URL(currentSrc, window.location.origin)) } catch { return }
 
     // `capability` + `level_ordinal` drive the single focused cell (ring +
     // activity narrowing). `levels[<stable>]=<ord>` is the *per-capability*
@@ -984,7 +1089,7 @@ export default class extends BaseController {
       browserUrl.searchParams.delete("capability")
       browserUrl.searchParams.delete("level_ordinal")
     }
-    window.history.pushState({}, "", browserUrl)
+    window.history[history === "replace" ? "replaceState" : "pushState"]({}, "", browserUrl)
   }
 
   scrollToCategory(event) {
@@ -1830,11 +1935,12 @@ export default class extends BaseController {
   // that includes a specific capability (capability OR cell). Framework-
   // and category-level focus clear the ring across every card.
   //
-  // Diffs against `_focusedCard` so scroll-driven updates only touch
-  // the two cards that actually changed — not every card on the page.
-  // Iterating ~100 cardTargets per RAF tick during scroll otherwise
-  // burns frames on attribute writes that the CSS data-variant selector
-  // has to revalidate.
+  // Returns early while the focused card is unchanged, so scroll-driven
+  // updates write nothing until focus moves, and then only to the cards that
+  // carry a ring — writing ~100 cards per RAF tick burns frames on attribute
+  // writes the CSS data-variant selector has to revalidate. It clears by
+  // attribute rather than by the node remembered last time, because a
+  // swapped card (#488) arrives as a new node.
   #applyCardFocus(capabilityStableId, level) {
     if (!this.hasCardTarget) return
     const wantsRing = (level === "capability" || level === "cell") && !!capabilityStableId
@@ -1844,9 +1950,9 @@ export default class extends BaseController {
 
     if (next === this._focusedCard) return
 
-    if (this._focusedCard && this._focusedCard.isConnected) {
-      this._focusedCard.dataset.focused = "false"
-    }
+    this.element.querySelectorAll("[data-matrix-target~='card'][data-focused='true']").forEach(card => {
+      if (card !== next) card.dataset.focused = "false"
+    })
     if (next) {
       next.dataset.focused = "true"
     }
@@ -2298,7 +2404,7 @@ export default class extends BaseController {
     if (!currentSrc) return
 
     let url
-    try { url = new URL(currentSrc, window.location.origin) } catch { return }
+    try { url = this.#withBrowserLevels(new URL(currentSrc, window.location.origin)) } catch { return }
     url.searchParams.set("category", categoryId)
     if (capabilityStableId) url.searchParams.set("capability", capabilityStableId)
     if (level === "cell" && levelOrdinal != null) {

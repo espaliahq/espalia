@@ -381,6 +381,66 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  def get_card(**params)
+    get capability_card_assessment_path(@assignment, **params), headers: { "Accept" => "text/vnd.turbo-stream.html" }
+  end
+
+  context "GET /assessments/:id/capability_card" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @other_cap = create(:framework_capability, category_id: @cap.category_id, name: "Execution")
+        create(:framework_capability_role_binding, capability_id: @other_cap.capability_id, role_id: @role.role_id)
+        create(:framework_behavioural_expectation,
+          capability_id: @other_cap.capability_id, level_ordinal: 2, description: "Ships reliably")
+      end
+    end
+
+    should "replace just that card, at the level asked for" do
+      sign_in @user
+      get_card(capability: @cap.stable_id, level_ordinal: 1)
+
+      assert_response :success
+      assert_equal "text/vnd.turbo-stream.html", response.media_type
+      assert_includes response.body, %(action="replace" target="capability-card-#{@cap.stable_id}")
+      assert_includes response.body, "Asks good questions"
+      assert_not_includes response.body, "Synthesises information"
+      assert_not_includes response.body, "Execution", "no other card"
+      assert_not_includes response.body, %(data-controller="matrix"), "no matrix wrapper"
+      assert_not_includes response.body, "<section", "no category section around the card"
+      assert_match(/<template>\s*<div[^>]*id="capability-card-#{@cap.stable_id}"/, response.body,
+        "the stream's payload is the card itself, so each swap replaces a card with a card")
+      assert_includes response.body, %(data-focused="false"), "the client places the focus ring"
+    end
+
+    should "default to the person's level" do
+      sign_in @user
+      get_card(capability: @cap.stable_id)
+
+      assert_response :success
+      assert_includes response.body, "Synthesises information"
+    end
+
+    should "404 for a capability the matrix doesn't show" do
+      sign_in @user
+      get_card(capability: SecureRandom.uuid_v7)
+
+      assert_response :not_found
+    end
+
+    should "deny a viewer who may not see the assessment" do
+      other_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: other_user.email, name: "Outsider")
+        create(:tenant_user, tenant: @tenant, user: other_user, person: other)
+      end
+      sign_in other_user
+      get_card(capability: @cap.stable_id)
+
+      assert_response :redirect
+      assert_not_includes response.body, "Asks good questions"
+    end
+  end
+
   context "GET /assessments/:id/matrix — unauthorized" do
     setup do
       @other_user = create(:user, password: "password123")
