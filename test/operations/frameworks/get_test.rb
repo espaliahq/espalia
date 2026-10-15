@@ -71,6 +71,15 @@ class Operations::Frameworks::GetTest < ActiveSupport::TestCase
         delivery[:capabilities].map { |c| c[:name] }
     end
 
+    should "list categories without an ordinal last, in the order they were added" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_capability_category, framework_id: @framework_id, name: "Zeta", ordinal: nil)
+        create(:framework_capability_category, framework_id: @framework_id, name: "Alpha", ordinal: nil)
+      end
+
+      assert_equal [ "Thinking", "Zeta", "Alpha" ], call_op[:categories].map { |c| c[:name] }
+    end
+
     should "omit archived categories from the payload" do
       ActsAsTenant.with_tenant(@tenant) do
         archived = create(:framework_capability_category, framework_id: @framework_id,

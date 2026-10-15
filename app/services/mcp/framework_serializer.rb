@@ -140,11 +140,10 @@ class Mcp::FrameworkSerializer
     FrameworkState::CapabilityCategory
       .where(framework_id: @framework.framework_id, status: "active")
       .includes(:capabilities)
-      .order(:ordinal)
+      .order(:ordinal, :created_at, :id)
   end
 
   def active_capabilities(category)
-    category.capabilities
-      .reject { |c| c.respond_to?(:status) && c.status == "archived" }
+    category.capabilities.select { |c| c.status == "active" }
   end
 end
