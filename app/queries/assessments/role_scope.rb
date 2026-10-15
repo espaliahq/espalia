@@ -12,7 +12,8 @@
 #
 # Built fresh on every call rather than cached per request: the projection
 # runs readers on every rating event, and during a replay the framework's
-# shape changes between one event and the next.
+# shape changes between one event and the next. A rating request or a bulk
+# confirm opts in to reuse with {.reusing}.
 #
 # @example
 #   scope = Assessments::RoleScope.for(role_id: role.role_id, framework_id: framework_id)
@@ -38,6 +39,34 @@ class Assessments::RoleScope
     role_ids = role_ids.compact.uniq
     return {} if role_ids.empty?
 
+    memo = CurrentRoleScopes.memo
+    return load_roles(role_ids:, framework_id:) unless memo
+
+    missing = role_ids.reject { |id| memo.key?([ id, framework_id ]) }
+    load_roles(role_ids: missing, framework_id:).each { |id, scope| memo[[ id, framework_id ]] = scope } if missing.any?
+    role_ids.index_with { |id| memo.fetch([ id, framework_id ]) }
+  end
+
+  # Reuses every scope built inside the block. A framework write empties it
+  # ({Frameworks::Repository#with_framework}), so a block that writes one
+  # still reads fresh scopes afterwards. A rating builds the same role's
+  # scope three times: the page's lens, the write's lens and the
+  # projection's coverage check.
+  #
+  # @yield the unit of work
+  def self.reusing
+    return yield if CurrentRoleScopes.memo
+
+    begin
+      CurrentRoleScopes.memo = {}
+      yield
+    ensure
+      CurrentRoleScopes.memo = nil
+    end
+  end
+
+  # @return [Hash{String => Assessments::RoleScope}]
+  def self.load_roles(role_ids:, framework_id:)
     bindings = FrameworkState::CapabilityRoleBinding
       .joins(capability: :category)
       .where(role_id: role_ids)
@@ -55,6 +84,7 @@ class Assessments::RoleScope
       new(role_id: role_id, framework_id: framework_id, bindings: role_bindings, cells: role_cells)
     end
   end
+  private_class_method :load_roles
 
   # Each person's home-role scope for a cycle: the role their enrollment
   # snapshot assesses them at (ADR-19), falling back to the live assignment

@@ -194,6 +194,15 @@ class Operations::Assessments::RateSelfTest < ActiveSupport::TestCase
     end
   end
 
+  context "role scope" do
+    # The write's lens and the projection's coverage check read the same role (#489).
+    should "build the role's scope once per call" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_queries_match(/FROM "framework_capability_role_bindings"/, count: 1) { call_op(frequency: "some") }
+      end
+    end
+  end
+
   context "preconditions" do
     should "raise ParameterError when no open cycle exists" do
       ActsAsTenant.with_tenant(@tenant) do

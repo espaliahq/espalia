@@ -179,9 +179,9 @@ class AssessmentPolicy < ApplicationPolicy
   #
   # @return [Boolean]
   def individual_ratings_editable?
-    return true if current_open_cycle_participation.nil? # no participant row yet — pre-cycle edits permitted
-
-    live_participation?
+    participation = current_open_cycle_participation
+    # No participant row yet: pre-cycle edits are permitted.
+    participation.nil? || participation.takes_ratings?
   end
 
   def alignment_in_progress?
@@ -226,7 +226,7 @@ class AssessmentPolicy < ApplicationPolicy
 
   # An open-cycle participation still taking part.
   def live_participation?
-    %w[enrolled started aligning aligned].include?(current_open_cycle_participation&.status)
+    current_open_cycle_participation&.takes_ratings? || false
   end
 
   # The current user's person matches the assignment's person.

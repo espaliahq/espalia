@@ -129,6 +129,13 @@ class AssessmentCycleParticipation
     "enrolled"
   end
 
+  # Whether the participation still takes self and manager ratings.
+  #
+  # @return [Boolean]
+  def takes_ratings?
+    %w[enrolled started aligning aligned].include?(status)
+  end
+
   # @return [Boolean] whether alignment ratings can be recorded.
   def alignment_in_progress?
     status == "aligning"

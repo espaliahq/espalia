@@ -69,26 +69,7 @@ class Frameworks::Repository
   # @yield [Frameworks::Aggregate] the loaded aggregate
   # @return [Object] the block's return value
   def with_framework(framework_id, &block)
-    if (batch = self.class.current_batch)
-      return call_in_batch(batch, framework_id, &block)
-    end
-
-    stream = EventStreamNaming.framework_stream(framework_id)
-    tenant = current_tenant!
-    result = nil
-
-    ActiveRecord::Base.transaction do
-      @event_store.with_metadata(tenant_id: tenant.id) do
-        @repository.with_aggregate(Frameworks::Aggregate.new, stream) do |aggregate|
-          result = block.call(aggregate)
-          # AggregateRoot::Repository#with_aggregate saves events on block
-          # exit. We run the snapshot here so it sees the post-command state
-          # *and* lands in the same outer AR transaction as the event write.
-          snapshot_after(aggregate)
-        end
-      end
-    end
-    result
+    with_fresh_role_scopes { write_framework(framework_id, &block) }
   end
 
   # Unit-of-work for bulk writes (seeding, imports): loads the aggregate
@@ -137,6 +118,37 @@ class Frameworks::Repository
   end
 
   private
+
+  # A write can change which cells a role reads, so scopes reused for the
+  # current unit of work ({Assessments::RoleScope.reusing}) are dropped after it.
+  def with_fresh_role_scopes
+    yield
+  ensure
+    CurrentRoleScopes.memo&.clear
+  end
+
+  def write_framework(framework_id, &block)
+    if (batch = self.class.current_batch)
+      return call_in_batch(batch, framework_id, &block)
+    end
+
+    stream = EventStreamNaming.framework_stream(framework_id)
+    tenant = current_tenant!
+    result = nil
+
+    ActiveRecord::Base.transaction do
+      @event_store.with_metadata(tenant_id: tenant.id) do
+        @repository.with_aggregate(Frameworks::Aggregate.new, stream) do |aggregate|
+          result = block.call(aggregate)
+          # AggregateRoot::Repository#with_aggregate saves events on block
+          # exit. We run the snapshot here so it sees the post-command state
+          # *and* lands in the same outer AR transaction as the event write.
+          snapshot_after(aggregate)
+        end
+      end
+    end
+    result
+  end
 
   # Runs one {#with_framework} call against the active batch's in-memory
   # aggregate. Guards the assumptions the deferred store relies on:
