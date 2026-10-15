@@ -83,6 +83,19 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "p", text: "Feedback, not yet placed on a capability"
     end
 
+    should "list a report's item for an active rating delegate on that framework" do
+      delegate_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        delegate = create(:person, tenant: @tenant, email: delegate_user.email, name: "Devon")
+        create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate, role: :member)
+        PersonDevelopment::CommandHandler.new.delegate_manager_rating(@assessee.id, @framework_id, delegate.id,
+          granted_by_id: @manager.id)
+      end
+      sign_in delegate_user
+      get evidence_hub_path
+      assert_select "section#feedback-to-place h3", text: /About your reports/
+    end
+
     should "list a manager's own unplaced item about a report once, under what they gave" do
       own = SecureRandom.uuid_v7
       ActsAsTenant.with_tenant(@tenant) do

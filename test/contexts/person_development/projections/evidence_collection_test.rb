@@ -54,6 +54,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_equal "active", item.link_status
         assert_not_nil item.recorded_at
 
+        assert_not item.recorded_unplaced
         # The first link is materialised alongside the content row.
         link = EvidenceLink.find_by(evidence_id: evidence_id)
         assert_equal cap_sid, link.capability_stable_id
@@ -91,6 +92,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         item = EvidenceItem.find(evidence_id)
         assert_equal "0190f4b2-0000-7000-8000-000000000001", item.capability_stable_id
         assert_equal 4, item.level_ordinal
+        assert item.recorded_unplaced, "the fact that someone else chose the cell survives placement"
         assert_not item.unplaced?
         assert_not_includes EvidenceItem.unplaced, item
       end

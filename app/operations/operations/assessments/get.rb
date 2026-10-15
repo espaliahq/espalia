@@ -61,15 +61,14 @@ class Operations::Assessments::Get < Operations::Base
   end
 
   # Feedback recorded with no capability yet — the web's "waiting to be
-  # placed" notice, as a count, for the viewers who see all the assessment's
-  # evidence. Nil for a peer, who is told nothing of others' items; the items
+  # placed" notice, as a count, for a viewer who may place it (the same rule
+  # the notice uses: Assessments::UnplacedFeedback). Nil otherwise; the items
   # themselves come from assessments_evidence_list with no capability.
   #
   # @return [Hash, nil] `{ count: }`
   def unplaced_feedback
-    return nil unless EvidencePolicy.new(context, assignment).index?
-
-    { count: EvidenceItem.unplaced.for_person(assignment.person_id).for_framework(assignment.framework_id).count }
+    count = Assessments::UnplacedFeedback.count_for(assignment: assignment, context: context)
+    count && { count: count }
   end
 
   private

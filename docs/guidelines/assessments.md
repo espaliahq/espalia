@@ -922,7 +922,8 @@ shared by web, MCP and Slack:
   handler also skips anyone with a request to the author still pending, in
   case the response is projected a moment after the item, on the same
   cell). An unplaced item's copy asks the recipient to place it and links to
-  the assessment, whose feed carries it; a placed one links to its cell.
+  its card on the hub (`EvidenceItem.hub_path`); a placed one links to its
+  cell.
   Both notifiers share `AssessmentNotificationRecipients` with the comment
   notifier (manager side, dedup on retry, provisioning a never-signed-in
   recipient).

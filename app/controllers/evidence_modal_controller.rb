@@ -91,6 +91,7 @@ class EvidenceModalController < ApplicationController
     links = ordered_links(item)
     render_modal(
       mode: :edit, assignment: assignment, evidence: item, content_editable: policy.update?,
+      recipient: (Person.find_by(id: assignment.person_id) if links.empty?),
       linked_coords: links.map { |cap, level, _| [ cap, level ] },
       link_valences: links.to_h { |cap, level, valence| [ [ cap, level ], valence ] }
     )
@@ -131,7 +132,7 @@ class EvidenceModalController < ApplicationController
       scope_line: scope_line(assignment),
       link_options: options.link_options, level_options: options.level_options,
       linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to],
-      recipient: recipient_block(assignment, recipient, evidence), draft: draft
+      recipient: recipient_block(assignment, recipient), draft: draft
     ), layout: false
   end
 
@@ -139,17 +140,12 @@ class EvidenceModalController < ApplicationController
   # card to say so: the give step's :new, and an :edit of an unplaced item.
   # Nil when the viewer IS the assessee — writing on your own assessment needs
   # no introduction and no visibility warning.
-  def recipient_block(assignment, recipient, evidence)
-    recipient ||= Person.find_by(id: assignment.person_id) if evidence && linked_cells_empty?(evidence)
+  def recipient_block(assignment, recipient)
     return nil if recipient.nil? || recipient.id == current_person.id
 
     role = FrameworkState::Role.where(role_id: assignment.role_id).pick(:name)
     level = FrameworkState::Level.where(level_id: assignment.level_id).pick(:code)
     { name: recipient.name, scope: [ role, level ].compact.join(" · ").presence }
-  end
-
-  def linked_cells_empty?(evidence)
-    !EvidenceLink.active.where(evidence_id: evidence.id).exists?
   end
 
   # Active discussion-comment counts per linked cell (:edit only) — the

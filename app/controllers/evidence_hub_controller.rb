@@ -28,7 +28,7 @@ class EvidenceHubController < ApplicationController
     # Place affordance, so they are not listed twice.
     to_place = EvidenceItem.unplaced.where.not(author_id: current_person.id).includes(:author).order(:recorded_at)
     to_place_about_me = to_place.for_person(current_person.id).to_a
-    to_place_for_team = to_place.exists? ? to_place.where(person_id: managed_person_ids).to_a : []
+    to_place_for_team = to_place.exists? ? placeable_for_team(to_place) : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
@@ -70,13 +70,15 @@ class EvidenceHubController < ApplicationController
     @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
   end
 
-  # Everyone whose unplaced feedback the viewer may place from here: their
-  # whole org subtree plus anyone they hold an active rating delegation for —
-  # the same set EvidencePolicy#add_link? admits on the manager side. Walked
-  # only when something is unplaced at all; the subtree can be large.
-  def managed_person_ids
-    current_person.all_reports.pluck(:id) +
-      ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id)
+  # The unplaced items the viewer may place for others: anyone in their org
+  # subtree, plus a delegation's person on THAT framework only — the same set
+  # EvidencePolicy#add_link? admits on the manager side. Filtered in memory:
+  # unplaced items are few, and the subtree is walked only when some exist.
+  def placeable_for_team(scope)
+    report_ids = current_person.all_reports.pluck(:id).to_set
+    delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id)
+      .pluck(:person_id, :framework_id).to_set
+    scope.to_a.select { |item| report_ids.include?(item.person_id) || delegated.include?([ item.person_id, item.framework_id ]) }
   end
 
   # For responded outgoing requests, load the evidence the requestee provided

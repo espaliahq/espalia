@@ -52,6 +52,9 @@ module EvidenceDiffSubmit
   def diff_new(p)
     cells = desired_cells(p)
     primary = parse_cell(p[:primary_cell]) || cells.first
+    if p[:primary_cell].present? && parse_cell(p[:primary_cell]).nil?
+      raise Operations::Base::ParameterError, "Missing or malformed primary cell"
+    end
     if primary.nil?
       result = Operations::Assessments::RecordEvidence.call(context: pundit_user, params: {
         assignment_id: p[:assignment_id], **content_params(p)
