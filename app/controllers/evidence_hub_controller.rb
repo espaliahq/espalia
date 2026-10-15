@@ -44,7 +44,8 @@ class EvidenceHubController < ApplicationController
       authored: authored,
       to_place_about_me: to_place_about_me,
       to_place_for_team: to_place_for_team,
-      open_give_step: params[:give].present?,
+      open_give_step: params[:give].present? || draft.present?,
+      draft: draft,
       cell_details: details,
       authored_details: details,
       responses: responses,
@@ -59,6 +60,14 @@ class EvidenceHubController < ApplicationController
 
   def require_person
     head :forbidden unless current_person
+  end
+
+  # A Slack draft the author arrived with (Evidence::DraftsController): the
+  # modal opens on arrival, filled from it. Theirs only, and only while open.
+  def draft
+    return @draft if defined?(@draft)
+
+    @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
   end
 
   # The unplaced items the viewer may place for others: anyone in their org

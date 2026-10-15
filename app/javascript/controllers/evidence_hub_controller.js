@@ -24,6 +24,7 @@ export default class extends BaseController {
     // The ask is consumed: a reload or Back must not reopen the modal.
     const url = new URL(window.location.href)
     url.searchParams.delete("give")
+    url.searchParams.delete("draft")
     window.history.replaceState(window.history.state, "", url)
 
     // Next frame, so the modal and evidence-modal controllers on the wrapper

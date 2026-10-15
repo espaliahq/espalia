@@ -18,10 +18,12 @@ class Views::Evidence::RecipientPickerForm < Views::Base
   # @param suggestions [Array<Assessments::FeedbackRecipients::Recipient>]
   # @param candidates_url [String] the typeahead endpoint (renders {RecipientCandidatesFrame})
   # @param return_to [String] "hub" — threaded into the `:new` form's submit
-  def initialize(suggestions:, candidates_url:, return_to:)
+  # @param draft_token [String, nil] a Slack draft to carry into the `:new` form
+  def initialize(suggestions:, candidates_url:, return_to:, draft_token: nil)
     @suggestions = suggestions
     @candidates_url = candidates_url
     @return_to = return_to
+    @draft_token = draft_token
   end
 
   def view_template
@@ -39,7 +41,8 @@ class Views::Evidence::RecipientPickerForm < Views::Base
           input(id: "give-feedback-search", type: "search", placeholder: "Search by name or email…", class: INPUT,
                 autofocus: true, data: { person_picker_target: "search", action: "input->person-picker#search" })
           div(class: "absolute left-0 right-0 top-full mt-1 z-20") do
-            render Views::Evidence::RecipientCandidatesFrame.new(entries: [], query: nil, return_to: @return_to)
+            render Views::Evidence::RecipientCandidatesFrame.new(entries: [], query: nil, return_to: @return_to,
+                                                                 draft_token: @draft_token)
           end
         end
         suggestions_block
@@ -63,7 +66,9 @@ class Views::Evidence::RecipientPickerForm < Views::Base
     div(class: "mt-4") do
       span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "People you work with" }
       div(class: "mt-1 divide-y divide-gray-100 dark:divide-gray-800") do
-        @suggestions.each { |recipient| render Views::Evidence::RecipientRow.new(recipient: recipient, return_to: @return_to) }
+        @suggestions.each do |recipient|
+          render Views::Evidence::RecipientRow.new(recipient: recipient, return_to: @return_to, draft_token: @draft_token)
+        end
       end
     end
   end

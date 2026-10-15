@@ -12,10 +12,9 @@ module Slack
   # authorize URL's `scope` param) — not the manifest — so it must carry every
   # scope we want the token to hold. The first four power today's outbound DM
   # notifications (Slack requires `users:read` as a companion to
-  # `users:read.email`); `commands` and `im:history` are pre-granted so the
-  # planned inbound features (a /growthos slash command, free-text DM-reply
-  # capture) can ship as config-only changes with NO reinstall. Keep in sync with
-  # app/integrations/slack/manifest.yml.
+  # `users:read.email`); `commands` carries the /growthos command and the
+  # message shortcut, and `im:history` is pre-granted for free-text DM-reply
+  # capture. Keep in sync with app/integrations/slack/manifest.yml.
   BOT_SCOPES = %w[chat:write users:read users:read.email im:write commands im:history].freeze
 
   # @return [Hash] { client_id:, client_secret:, signing_secret: }

@@ -2,9 +2,10 @@
 
 # Minimal Slack Web API client scoped to a single workspace's bot token.
 #
-# Only the surface the notification feature needs: resolve a user by email,
-# open a DM channel, and post a message. The OAuth code exchange is a class
-# method (it authenticates with the app's client credentials, not a bot token).
+# The surface the notifications and the feedback modal need: resolve a user
+# by email or id, open a DM channel, post a message, open a modal, fetch a
+# message permalink. The OAuth code exchange is a class method (it
+# authenticates with the app's client credentials, not a bot token).
 #
 # Slack always responds HTTP 200 with an `ok` boolean; on `ok: false` we raise
 # {Slack::Errors::ApiError} (or AuthenticationError for token problems).
@@ -57,6 +58,41 @@ class Slack::Client
     payload = { channel: channel, text: text }
     payload[:blocks] = blocks if blocks
     post("chat.postMessage", **payload)
+  end
+
+  # The email Slack holds for a user — the key GrowthOS matches a member on.
+  # Nil when Slack withholds it (a guest, a deactivated account).
+  #
+  # @param slack_user_id [String]
+  # @return [String, nil]
+  def user_email(slack_user_id)
+    get("users.info", user: slack_user_id).dig("user", "profile", "email").presence
+  rescue Slack::Errors::ApiError => e
+    return nil if e.code == "user_not_found"
+
+    raise
+  end
+
+  # Open a modal in response to an interaction. Slack honours the trigger_id
+  # for three seconds, so call this before any slower work.
+  #
+  # @param trigger_id [String]
+  # @param view [Hash] a Block Kit modal view
+  # @return [Hash] the Slack response
+  def open_view(trigger_id:, view:)
+    post("views.open", trigger_id: trigger_id, view: view)
+  end
+
+  # A permanent link to one message, for the external reference of feedback
+  # given from a message shortcut.
+  #
+  # @param channel [String]
+  # @param message_ts [String]
+  # @return [String, nil]
+  def permalink(channel:, message_ts:)
+    get("chat.getPermalink", channel: channel, message_ts: message_ts)["permalink"]
+  rescue Slack::Errors::ApiError
+    nil
   end
 
   # Exchange an OAuth authorization code for a bot token (install flow).
