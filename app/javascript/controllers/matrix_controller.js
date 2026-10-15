@@ -762,6 +762,9 @@ export default class extends BaseController {
     // child in future — guard defensively.
     const onInteractive = !!event.target.closest("button, a, input, textarea, form, [contenteditable]")
     if (onInteractive) return
+    // A drag that selects the capability name ends in a click too;
+    // copying the name must not toggle focus.
+    if (this.#selectsTextIn(event.currentTarget)) return
 
     event.stopPropagation()
     const card = event.currentTarget.closest("[data-matrix-target='card']")
@@ -2497,5 +2500,10 @@ export default class extends BaseController {
   #restoreRowDimming() {
     const expandedRow = this.expandedRowTargets.find(r => !r.classList.contains("hidden"))
     this.#updateRowDimming(expandedRow?.dataset.capabilityId || null)
+  }
+
+  #selectsTextIn(element) {
+    const selection = window.getSelection()
+    return !!selection && !selection.isCollapsed && selection.containsNode(element, true)
   }
 }

@@ -57,6 +57,29 @@ class Operations::Frameworks::GetTest < ActiveSupport::TestCase
       assert_equal %i[id stable_id name].sort, capability.keys.sort
     end
 
+    should "list each category's capabilities in the framework's order, not by name" do
+      ActsAsTenant.with_tenant(@tenant) do
+        cat = create(:framework_capability_category, framework_id: @framework_id, name: "Delivery", ordinal: 2)
+        create(:framework_capability, category_id: cat.category_id, name: "Strategic Thinking", ordinal: 1)
+        create(:framework_capability, category_id: cat.category_id, name: "Data Informed", ordinal: 2)
+        create(:framework_capability, category_id: cat.category_id, name: "Commit, Deliver, Celebrate", ordinal: 3)
+        create(:framework_capability, category_id: cat.category_id, name: "Added Later", ordinal: nil)
+      end
+
+      delivery = call_op[:categories].find { |c| c[:name] == "Delivery" }
+      assert_equal [ "Strategic Thinking", "Data Informed", "Commit, Deliver, Celebrate", "Added Later" ],
+        delivery[:capabilities].map { |c| c[:name] }
+    end
+
+    should "list categories without an ordinal last, in the order they were added" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_capability_category, framework_id: @framework_id, name: "Zeta", ordinal: nil)
+        create(:framework_capability_category, framework_id: @framework_id, name: "Alpha", ordinal: nil)
+      end
+
+      assert_equal [ "Thinking", "Zeta", "Alpha" ], call_op[:categories].map { |c| c[:name] }
+    end
+
     should "omit archived categories from the payload" do
       ActsAsTenant.with_tenant(@tenant) do
         archived = create(:framework_capability_category, framework_id: @framework_id,

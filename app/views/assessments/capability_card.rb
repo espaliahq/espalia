@@ -151,7 +151,7 @@ class Views::Assessments::CapabilityCard < Views::Base
     # they wouldn't double-fire, but scoping to the header is the
     # cleaner contract.
     div(
-      class: "min-w-0 mb-3 cursor-pointer select-none",
+      class: "min-w-0 mb-3 cursor-pointer",
       data: { action: "click->matrix#focusCapability" }
     ) do
       eyebrow
