@@ -70,6 +70,10 @@ class Slack::Identity
   # @return [Boolean] known to HRIS but never signed in
   def person_only? = tenant_user.nil? && person.present?
 
+  # @return [Boolean] may open the modal and pick a recipient — a member acts
+  #   now, a person-only giver's submission becomes a draft
+  def can_give? = member? || person_only?
+
   # @return [AuthorizationContext] for Operations, built like the MCP server's
   def authorization_context
     AuthorizationContext.new(user: tenant_user.user, tenant_user: tenant_user, person: person)

@@ -41,16 +41,23 @@ both directions agree. Three outcomes, each with its own answer:
 
 - a **member** acts now, through an `AuthorizationContext` built the way the
   MCP server builds one, with `AuditMetadata.with(acting_via: :slack)`;
-- a **Person with no account** (HRIS-imported, never signed in) is told to
-  submit anyway: the submission becomes a `FeedbackDraft` and they are DM'd
+- a **Person with no account** (HRIS-imported, never signed in) gets the
+  modal too; their submission becomes a `FeedbackDraft` and they are DM'd
   its link (below);
 - anyone else is told no account matches their Slack email.
 
 **Three seconds.** Slack discards a `trigger_id` after three seconds and
 expects the HTTP answer in the same window, so the command and shortcut
 handlers resolve the identity and call `views.open` and nothing else; the
-work happens on submission. A slash command's error is the JSON response
-itself (`response_type: ephemeral`); a shortcut's goes by DM.
+work happens on submission, and every DM goes through `Slack::DmJob` so two
+slow Slack calls never hold a submission open long enough for Slack to retry
+it. A slash command's error is the JSON response itself (`response_type:
+ephemeral`); a shortcut's goes by DM.
+
+**Once per signed request.** The verifier's five-minute window would let a
+retried or captured request reach the write twice; `SlackSignedRequest`
+claims each signature in the cache for that window and answers a repeat with
+an empty 200.
 
 ## The feedback modal
 

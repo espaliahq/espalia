@@ -101,12 +101,8 @@ module Slack::Feedback
     Result.new(errors: {}, draft: draft)
   end
 
-  def not_a_member_message(identity)
-    if identity.person_only?
-      "GrowthOS knows you from HR but you haven't signed in yet. Submit the form anyway and you'll get a link to finish after signing in."
-    else
-      "No GrowthOS account matches your Slack email. Ask a workspace admin to add you."
-    end
+  def not_a_member_message(_identity)
+    "No GrowthOS account matches your Slack email. Ask a workspace admin to add you."
   end
 
   def confirm(identity, assignment, placed:)
@@ -115,8 +111,15 @@ module Slack::Feedback
     dm(identity.tenant, identity.tenant_user.slack_user_id, text, url: absolute_url("/evidence"), button: "Open in GrowthOS")
   end
 
-  # A DM, by Slack user id or by email, with an optional button. Best effort.
+  # A DM, by Slack user id or by email, with an optional button — queued, so
+  # the inbound request answers inside Slack's window whatever Slack's own
+  # API latency is.
   def dm(tenant, slack_user_id, text, email: nil, url: nil, button: nil)
+    Slack::DmJob.perform_later(tenant.id, slack_user_id, text, email: email, url: url, button: button)
+  end
+
+  # The DM itself, from the job. Best effort.
+  def deliver_dm(tenant, slack_user_id, text, email: nil, url: nil, button: nil)
     slack_client = client(tenant)
     slack_user_id ||= slack_client.lookup_user_id_by_email(email) if email.present?
     return if slack_user_id.blank?

@@ -54,6 +54,18 @@ class SlackDraftDeepLinkTest < ActionDispatch::IntegrationTest
     ActsAsTenant.with_tenant(@tenant) { assert_equal 1, EvidenceItem.unplaced.for_person(@recipient.id).count }
   end
 
+  should "refuse an account that owns the email but belongs to another workspace" do
+    other_tenant = create(:tenant)
+    user = create(:user, password: "password123", email: "newcomer@example.com")
+    ActsAsTenant.with_tenant(other_tenant) do
+      create(:tenant_user, tenant: other_tenant, user: user, person: create(:person, tenant: other_tenant, email: user.email), role: :member)
+    end
+    post user_session_path, params: { user: { email: "newcomer@example.com", password: "password123" } }
+    get @draft.path
+    assert_redirected_to evidence_hub_path
+    assert_match(/isn't a member of the workspace/, flash[:alert])
+  end
+
   should "refuse another account's draft, and a consumed one" do
     sign_in_user = @giver_user
     post user_session_path, params: { user: { email: sign_in_user.email, password: "password123" } }

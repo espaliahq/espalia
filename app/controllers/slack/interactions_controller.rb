@@ -39,7 +39,7 @@ class Slack::InteractionsController < ActionController::Base
 
   # The recipient external_select asks for options as the giver types.
   def suggest
-    return render(json: { options: [] }) unless identity.member? && payload["action_id"] == Slack::FeedbackModal::RECIPIENT_ACTION
+    return render(json: { options: [] }) unless identity.can_give? && payload["action_id"] == Slack::FeedbackModal::RECIPIENT_ACTION
 
     recipients = ActsAsTenant.with_tenant(identity.tenant) do
       Assessments::FeedbackRecipients.new(giver: identity.person)
@@ -68,7 +68,7 @@ class Slack::InteractionsController < ActionController::Base
     return head :ok unless payload["callback_id"] == Slack::Feedback::MESSAGE_SHORTCUT
     return head :ok unless identity.connected?
 
-    unless identity.member?
+    unless identity.can_give?
       Slack::Feedback.dm(identity.tenant, payload.dig("user", "id"), Slack::Feedback.not_a_member_message(identity))
       return head :ok
     end

@@ -40,13 +40,28 @@ class Slack::CommandsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  should "tell an HRIS-known person who never signed in that a link will follow, and a stranger to ask an admin" do
+  should "open the modal for an HRIS-known person who never signed in, and tell a stranger to ask an admin" do
     with_fake_slack do |fake|
       post_command(text: "feedback", user_id: "U_NIA")
-      assert_match(/haven't signed in yet/, response.parsed_body["text"])
+      assert_response :success
+      assert_equal 1, fake.calls.count { |c| c.first == :open_view }
       post_command(text: "feedback", user_id: "U_GHOST")
       assert_match(/No GrowthOS account/, response.parsed_body["text"])
-      assert_empty fake.calls.select { |c| c.first == :open_view }
+      assert_equal 1, fake.calls.count { |c| c.first == :open_view }
+    end
+  end
+
+  should "answer a replayed request with nothing, and record nothing twice" do
+    with_fake_slack do |fake|
+      body = { command: "/growthos", text: "feedback", user_id: "U_JORDAN", team_id: TEAM_ID, trigger_id: "trig.1" }.to_query
+      headers = signed_slack_headers(body).merge("CONTENT_TYPE" => "application/x-www-form-urlencoded")
+      Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+        Slack.stub(:oauth_config, { signing_secret: SECRET }) do
+          2.times { post slack_commands_path, params: body, headers: headers }
+        end
+      end
+      assert_response :success
+      assert_equal 1, fake.calls.count { |c| c.first == :open_view }
     end
   end
 

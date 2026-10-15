@@ -112,10 +112,20 @@ class Slack::InteractionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "block_suggestion by an HRIS-known person who never signed in" do
+    should "offer recipients, so the draft path is reachable" do
+      with_fake_slack do
+        post_interaction({ type: "block_suggestion", team: { id: TEAM_ID }, user: { id: "U_NIA" },
+                           action_id: Slack::FeedbackModal::RECIPIENT_ACTION, value: "ale" })
+        assert_equal [ @assignment.id ], response.parsed_body["options"].map { |o| o["value"] }
+      end
+    end
+  end
+
   context "view_submission by an HRIS-known person who never signed in" do
     should "keep a draft bound to their email and DM them the sign-in link" do
       with_fake_slack do |fake|
-        post_interaction(submission(user_id: "U_NIA", assignment_id: @assignment.id, content: "Great call."))
+        perform_enqueued_jobs { post_interaction(submission(user_id: "U_NIA", assignment_id: @assignment.id, content: "Great call.")) }
         assert_equal "clear", response.parsed_body["response_action"]
 
         draft = ActsAsTenant.with_tenant(@tenant) { FeedbackDraft.sole }
@@ -148,8 +158,10 @@ class Slack::InteractionsControllerTest < ActionDispatch::IntegrationTest
 
     should "DM a stranger instead of opening anything" do
       with_fake_slack do |fake|
-        post_interaction({ type: "message_action", callback_id: Slack::Feedback::MESSAGE_SHORTCUT, trigger_id: "t",
-                           team: { id: TEAM_ID }, user: { id: "U_GHOST" }, channel: { id: "C1" }, message: { text: "x", ts: "1.2" } })
+        perform_enqueued_jobs do
+          post_interaction({ type: "message_action", callback_id: Slack::Feedback::MESSAGE_SHORTCUT, trigger_id: "t",
+                             team: { id: TEAM_ID }, user: { id: "U_GHOST" }, channel: { id: "C1" }, message: { text: "x", ts: "1.2" } })
+        end
         assert_response :success
         assert_empty fake.calls.select { |c| c.first == :open_view }
         assert fake.calls.any? { |c| c.first == :post_dm && c[2].include?("No GrowthOS account") }

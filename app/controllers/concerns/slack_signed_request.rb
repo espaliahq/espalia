@@ -14,10 +14,24 @@ module SlackSignedRequest
     skip_forgery_protection
   end
 
+  # Slack retries a request it did not hear back from inside the window the
+  # signature's timestamp allows, and a captured request can be replayed in
+  # it; either would reach the write twice. The signature is unique to one
+  # body and timestamp, so claiming it once is the replay guard.
+  REPLAY_WINDOW = Slack::RequestVerifier::MAX_SKEW_SECONDS.seconds
+
   private
 
   def verify_slack_signature!
-    head :unauthorized unless slack_signature_valid?
+    return head :unauthorized unless slack_signature_valid?
+
+    head :ok unless claim_slack_request!
+  end
+
+  # @return [Boolean] false when this signed request was already accepted
+  def claim_slack_request!
+    key = "slack:request:#{request.headers["X-Slack-Signature"]}"
+    Rails.cache.write(key, true, unless_exist: true, expires_in: REPLAY_WINDOW)
   end
 
   # @return [Boolean] whether the request is a genuine, fresh, signed Slack call.
