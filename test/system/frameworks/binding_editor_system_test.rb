@@ -77,6 +77,12 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
     assert_selector "#framework-publish-action a", text: "Publish v2"
   end
 
+  def subscribed_streams
+    all("turbo-cable-stream-source", visible: :all).map do |source|
+      Turbo::StreamsChannel.verified_stream_name(source["signed-stream-name"])
+    end
+  end
+
   def trigger_binding_editor
     assert_selector "button[aria-label='Capability actions']", visible: :all
     page.execute_script('document.querySelector("button[aria-label=\'Capability actions\']").click();')
@@ -198,6 +204,10 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
 
       assert_selector "#framework-draft-badge", text: "v2 draft"
       assert_no_selector "#framework-publish-action a"
+      # The absence above can't wait for a button that arrives late, so prove
+      # the page never joined the stream that carries it.
+      assert_not_includes subscribed_streams, "#{Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM}:#{@framework_id}"
+      assert_includes subscribed_streams, "framework_activity:#{@framework_id}"
     end
   end
 

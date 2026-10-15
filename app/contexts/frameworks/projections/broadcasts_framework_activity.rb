@@ -39,55 +39,56 @@ module Frameworks::Projections::BroadcastsFrameworkActivity
   #
   # @param framework_id [String, nil] no-op when nil
   def broadcast_draft_status_cleared(framework_id)
-    return if Projections::Replayer.replay_mode?
-    return unless framework_id
-
-    framework = FrameworkState::Framework.find_by(framework_id: framework_id)
-    return unless framework
-
-    { badge: Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
-      publish: Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID }.each do |slot, target|
-      Turbo::StreamsChannel.broadcast_replace_to(
-        "framework_activity", framework_id,
-        target: target,
-        html: ApplicationController.render(
-          Views::Frameworks::Explorer::DraftStatus.new(framework: framework, slot: slot, visible: false),
-          layout: false
-        )
-      )
-    end
-  rescue => e
-    Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
+    broadcast_draft_status(framework_id, visible: false)
   end
 
   # The mirror of {#broadcast_draft_status_cleared}. A draft opens from many
   # writes that answer only their own frame — a binding edit, the levels
   # editor, an approval, any MCP call — and every other viewer's explorer is
   # stale too, so announcing it from the event is the one place that reaches
-  # them all. The badge rides the activity stream every edit-mode viewer holds;
-  # the Publish button rides one only publish-rights viewers subscribe to.
+  # them all.
   #
   # @param framework_id [String, nil] no-op when nil
   def broadcast_draft_status_opened(framework_id)
+    broadcast_draft_status(framework_id, visible: true)
+  end
+
+  # Both slots, sent once the write commits: a draft announced from inside a
+  # transaction that then rolls back would offer a Publish button for a draft
+  # that never existed. The badge rides the activity stream every edit-mode
+  # viewer holds. The Publish slot rides the publishers stream for opens AND
+  # clears, because ActionCable doesn't order messages across subscriptions — a
+  # clear on one stream could land after the next draft's button on the other.
+  def broadcast_draft_status(framework_id, visible:)
     return if Projections::Replayer.replay_mode?
     return unless framework_id
 
-    framework = FrameworkState::Framework.find_by(framework_id: framework_id)
-    return unless framework
+    ActiveRecord.after_all_transactions_commit do
+      framework = FrameworkState::Framework.find_by(framework_id: framework_id)
+      next unless framework
 
-    broadcast_draft_slot(framework, :badge, "framework_activity")
-    broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
-                         publishing: FrameworkPublication.in_flight_for?(framework_id))
-  rescue => e
-    Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
+      publishing = visible && FrameworkPublication.in_flight_for?(framework_id)
+      broadcast_draft_slot(framework, :badge, "framework_activity", visible: visible)
+      broadcast_draft_slot(framework, :publish, Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM,
+                           visible: visible, publishing: publishing)
+    rescue => e
+      Rails.logger.warn("[#{self.class.name}] Draft status broadcast failed: #{e.message}")
+    end
   end
 
-  def broadcast_draft_slot(framework, slot, stream, publishing: false)
+  DRAFT_SLOT_TARGETS = {
+    badge: Views::Frameworks::Explorer::DraftStatus::BADGE_ID,
+    publish: Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID
+  }.freeze
+
+  def broadcast_draft_slot(framework, slot, stream, visible:, publishing: false)
     Turbo::StreamsChannel.broadcast_replace_to(
       stream, framework.framework_id,
-      target: slot == :badge ? Views::Frameworks::Explorer::DraftStatus::BADGE_ID : Views::Frameworks::Explorer::DraftStatus::PUBLISH_ID,
+      target: DRAFT_SLOT_TARGETS.fetch(slot),
       html: ApplicationController.render(
-        Views::Frameworks::Explorer::DraftStatus.new(framework: framework, slot: slot, publishing: publishing),
+        Views::Frameworks::Explorer::DraftStatus.new(
+          framework: framework, slot: slot, visible: visible, publishing: publishing
+        ),
         layout: false
       )
     )

@@ -1003,12 +1003,40 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
           within_tenant { @projection.call(@event) }
         end
 
-        badge = sent.find { |_, target, _| target == "framework-draft-badge" }
-        publish = sent.find { |_, target, _| target == "framework-publish-action" }
-        assert_equal "framework_activity", badge.first
-        assert_includes badge.last, "v5 draft"
-        assert_equal "framework_publishers", publish.first
-        assert_includes publish.last, "Publish v5"
+        badges = sent.select { |_, target, _| target == "framework-draft-badge" }
+        publishes = sent.select { |_, target, _| target == "framework-publish-action" }
+        assert_equal [ "framework_activity" ], badges.map(&:first)
+        assert_includes badges.first.last, "v5 draft"
+        # Exactly once, and never on the activity stream every collaborator holds.
+        assert_equal [ "framework_publishers" ], publishes.map(&:first)
+        assert_includes publishes.first.last, "Publish v5"
+      end
+
+      should "send nothing when the write that opened the draft rolls back" do
+        targets = capture_activity_broadcast_targets do
+          within_tenant do
+            ActiveRecord::Base.transaction(requires_new: true) do
+              @projection.call(@event)
+              raise ActiveRecord::Rollback
+            end
+          end
+        end
+
+        assert_not_includes targets, "framework-draft-badge"
+        assert_not_includes targets, "framework-publish-action"
+      end
+
+      should "clear the Publish slot on the same stream that opened it" do
+        sent = []
+        published = Frameworks::Events::FrameworkVersionPublished.new(
+          data: { framework_id: @framework_id, version: 5, published_by: "tester" },
+          metadata: { tenant_id: @tenant.id })
+        Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target] ] }) do
+          within_tenant { @projection.send(:broadcast_framework_activity, published) }
+        end
+
+        assert_includes sent, [ "framework_publishers", "framework-publish-action" ]
+        assert_not_includes sent, [ "framework_activity", "framework-publish-action" ]
       end
 
       should "stay silent during replay" do

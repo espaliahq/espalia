@@ -2,9 +2,11 @@
 
 # The two header affordances a **shape-changing** write flips: the `vN draft`
 # pill next to the framework name, and the Publish button in the action
-# cluster. Both live outside the matrix Turbo Frame, so a write that
-# auto-opens a draft (add capability, add level, archive) has to stream them
-# explicitly — otherwise the header silently lies until the next full load.
+# cluster. Both live outside the matrix Turbo Frame. The projection
+# broadcasts them whenever a draft opens or closes
+# (BroadcastsFrameworkActivity#broadcast_draft_status), so no write path has
+# to remember to; the write-response streams only give the actor the same
+# answer without waiting on ActionCable.
 #
 # Rendered as two addressable slots rather than one block because they sit at
 # opposite ends of the header row; the shared class keeps their "is there a
@@ -13,8 +15,8 @@
 class Views::Frameworks::Explorer::DraftStatus < Views::Base
   BADGE_ID = "framework-draft-badge"
   PUBLISH_ID = "framework-publish-action"
-  # Only publish-rights viewers subscribe, so a broadcast Publish button never
-  # reaches anyone who couldn't use it.
+  # Only viewers with publish rights when the page loaded subscribe, so a
+  # broadcast Publish button doesn't reach suggest-only collaborators.
   PUBLISHERS_STREAM = "framework_publishers"
 
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]

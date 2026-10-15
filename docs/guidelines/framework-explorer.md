@@ -632,7 +632,7 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
   broadcasts them whenever a draft opens (`broadcast_draft_status_opened`, on
   `DraftVersionStarted`): the pill over `framework_activity`, the button over
   `framework_publishers`, which the page subscribes to only for a viewer with
-  publish rights (Lesson 40). (Draft lifecycle: see ADR-16/17.)
+  publish rights (Lesson 40). Both broadcasts wait for the write to commit. (Draft lifecycle: see ADR-16/17.)
   - **Publishing runs in the background.** `Operations::Frameworks::PublishVersion`
     now *requests* a publish: it checks the ADR-17 gate, records a
     `FrameworkPublication` and enqueues `Frameworks::PublishVersionJob` (the
@@ -648,9 +648,9 @@ MatrixCategoryGroup → MatrixRow`. `#publish?` is narrower still (owner / edito
     `FrameworkPublication::STALE_AFTER`. The requester gets a
     `framework_published` notification with the outcome. The
     `FrameworkVersionPublished` event's projection broadcasts both
-    `DraftStatus` slots empty over the `framework_activity` stream
-    (`broadcast_draft_status_cleared`), so an open explorer drops the pill and
-    button whoever published. The review page shows the last attempt's failure
+    `DraftStatus` slots empty (`broadcast_draft_status_cleared`) on the same
+    streams that open them, so an open explorer drops the pill and button
+    whoever published. The review page shows the last attempt's failure
     message for this draft. Edits made to the draft between the request and
     the job running are published with it — the job re-checks the gate, so a
     newly retired capability without a mapping fails the publish and says so.
@@ -2452,8 +2452,19 @@ slots from there, mirroring the clear on `FrameworkVersionPublished`.
 
 The Publish button is per-viewer, and a broadcast isn't. It goes out on its own
 `framework_publishers` stream, which `ShowView` subscribes to only when
-`can_publish`. Turbo signs stream names server-side, so nobody else can join
-it, and nobody is sent a button they couldn't use.
+`can_publish`; Turbo signs stream names server-side, so nobody else can join
+it. Two details matter:
+
+- **Opens and clears go on the same stream.** ActionCable orders messages
+  within a subscription, not across two, so a clear sent on the activity
+  stream could land after the next draft's button and erase it.
+- **Send after commit** (`ActiveRecord.after_all_transactions_commit`). A
+  broadcast from inside a write that then rolls back would offer a Publish
+  button for a draft that doesn't exist.
+
+The subscription is decided at page load, so someone who loses publish rights
+mid-session keeps receiving the button until they reload. The review page's
+policy still refuses them.
 
 The binding editor's system test had asserted `assert_text(/draft/i)` all
 along, and it passed with the bug present: the activity feed's "Opened a
@@ -2584,7 +2595,7 @@ line (§9).
 | `test/performance/explorer_payload_test.rb` | Byte + structural ceilings on the matrix frame and one expanded row — runs in the default suite |
 | `app/views/frameworks/explorer/write_status.rb` | The persistent `role="status"` toast region (updated, never replaced, so it stays announceable) |
 | `app/views/frameworks/explorer/write_status_message.rb` | One transient toast — applied (`:ok`) vs refused (`:error`), auto-dismissed by the shared `flash` controller |
-| `app/views/frameworks/explorer/draft_status.rb` | The `vN draft` pill and the Publish button as two addressable slots — streamed by every shape-changing write |
+| `app/views/frameworks/explorer/draft_status.rb` | The `vN draft` pill and the Publish button as two addressable slots — broadcast by the projection when a draft opens or closes, and streamed to the actor by every shape-changing write |
 | `app/views/frameworks/explorer/pending_count_badge.rb` | The header's "N pending" badge — replaced from the `framework_activity` broadcast so it can't lag the pane |
 | `app/views/frameworks/explorer/archive_illustration_modal.rb` | Shared archive-example modal (confirm + optional reason) — replaced the menu's native `confirm()` |
 | `app/javascript/controllers/archive_illustration_form_controller.js` | Prefills that modal from the illustration kebab's trigger dataset |
@@ -2696,7 +2707,7 @@ line (§9).
 | `app/controllers/frameworks_controller.rb` | show / matrix / edit / edit_matrix actions (mode-aware) + `expanded_row` / `edit_expanded_row` (one capability's lazily fetched expanded row) |
 | `app/controllers/frameworks/activity_controller.rb` | `GET /frameworks/:id/activity` — renders the activity-feed panel (focus-narrowed); at suggestion focus renders the card instead (`#render_suggestion_card` + `#sibling_discussions` + `#discussion_permalink`, §8/§12a/§13); Turbo Stream branch serves the load-older batches |
 | `app/contexts/frameworks/projections/published_state.rb` | `broadcast_framework_activity` nudges the per-framework activity stream (replay-guarded) |
-| `app/contexts/frameworks/projections/broadcasts_framework_activity.rb` | The shared nudge — the pane's sync signal AND the header's pending badge, so the two agree within one broadcast |
+| `app/contexts/frameworks/projections/broadcasts_framework_activity.rb` | The shared nudge — the pane's sync signal AND the header's pending badge, so the two agree within one broadcast; plus the draft pill and Publish button when a draft opens or closes |
 | `app/operations/operations/frameworks/recent_activity.rb` | MCP read-parity tool over `ActivityFeedQuery` |
 | `app/controllers/frameworks/suggestions_controller.rb` | Standalone suggestion list + detail; create/approve/reject/amend/withdraw all dispatch `Operations::Frameworks::*` (create → `SuggestCreate`/`SuggestDelete`, always pending). approve/reject are inline-aware — `inline=1` (feed/grid) → surgical Turbo Stream, else 204; non-inline → redirect (§12) |
 | `app/controllers/frameworks/illustrations_controller.rb` | Inline edit/create on illustrations (PATCH → `SuggestEdit`, POST → `SuggestCreate` with the edit/suggest toggle) |
