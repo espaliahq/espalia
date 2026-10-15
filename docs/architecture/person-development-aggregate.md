@@ -81,9 +81,10 @@ Assessment cycle:
   AssessmentCycleCompleted { cycle_id }
 
 Evidence and feedback:
-  EvidenceRecorded { evidence_id, capability_stable_id, level_ordinal, source,
+  EvidenceRecorded { evidence_id, capability_stable_id?, level_ordinal?, source,
                      evidence_type, custom_type_label?, title?, content,
-                     external_reference?, author_id, cycle_id?, valence }
+                     external_reference?, author_id, cycle_id?, valence? }
+    ← The cell and its valence are nil together for an UNPLACED item (see above).
     ← cycle_id is assigned when the feedback is first provided and is immutable.
       Relinking an existing item in a later cycle does not change its attribution
       or count it as newly provided feedback. Evidence recorded outside a cycle,

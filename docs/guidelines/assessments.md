@@ -905,7 +905,9 @@ shared by web, MCP and Slack:
   ordinary add-link path (`EvidencePolicy#add_link?`); until then it appears
   on the hub and in the activity feed as a framework-scoped entry ("gave
   feedback, not yet placed on a capability"), never in a cell and never in a
-  score. The last-link rule protects a *placed* item only: an unplaced item
+  score. The first placement becomes the item's origin cell, so the feed,
+  the hub and the reporting joins read a placed-later item like any other.
+  The last-link rule protects a *placed* item only: an unplaced item
   has nothing to remove, and its first link puts it under the rule. The
   aggregate refuses half a cell, a valence with no cell, and additional
   links with no first link. `EvidenceRecorded` carries nil coordinates for
@@ -918,9 +920,12 @@ shared by web, MCP and Slack:
   feedback, and not the requester of a request the item answers — that
   requester already gets "answered" (see *Reminders and nudges*; the
   handler also skips anyone with a request to the author still pending, in
-  case the response is projected a moment after the item). An unplaced
-  item's copy asks the recipient to place it and links to the hub
-  (`EvidenceItem.hub_path`); a placed one links to its cell.
+  case the response is projected a moment after the item, on the same
+  cell). An unplaced item's copy asks the recipient to place it and links to
+  the assessment, whose feed carries it; a placed one links to its cell.
+  Both notifiers share `AssessmentNotificationRecipients` with the comment
+  notifier (manager side, dedup on retry, provisioning a never-signed-in
+  recipient).
 
 The web entry points (a "Give feedback" flow on the hub and the Home card,
 and a "waiting to be placed" list for the recipient and their manager) are
