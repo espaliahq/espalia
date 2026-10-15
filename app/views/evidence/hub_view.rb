@@ -63,7 +63,7 @@ class Views::Evidence::HubView < Views::Base
 
   def header
     div(class: "flex flex-wrap items-start justify-between gap-3") do
-      div do
+      div(class: "flex-1 min-w-64") do
         h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback / Evidence" }
         p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
           "Feedback waiting to be placed, requests addressed to you, ones you've sent, and the feedback you've given."
@@ -74,7 +74,7 @@ class Views::Evidence::HubView < Views::Base
       # when the page arrives with ?give=1, so the two paths can't drift.
       button(type: "button",
              data: modal_trigger_data(mode: "give").merge(evidence_hub_target: "autoTrigger"),
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") do
+             class: "shrink-0 inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") do
         "Give feedback"
       end
     end
@@ -96,22 +96,22 @@ class Views::Evidence::HubView < Views::Base
       div(class: "space-y-8") do
         unless @to_place_about_me.empty?
           subsection("About you") do
-            div(class: "space-y-4") { @to_place_about_me.each { |item| to_place_card(item) } }
+            div(class: "space-y-4") { @to_place_about_me.each { |item| to_place_card(item, about_viewer: true) } }
           end
         end
         unless @to_place_for_team.empty?
           subsection("About your reports") do
-            div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item) } }
+            div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item, about_viewer: false) } }
           end
         end
       end
     end
   end
 
-  def to_place_card(item)
+  def to_place_card(item, about_viewer:)
     detail = @cell_details.fetch(item.id, {})
     card(dom_id: EvidenceItem.dom_id(item.id)) do
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { to_place_scope_label(item, detail) }
+      p(class: "text-xs text-gray-600 dark:text-gray-300") { to_place_scope_label(item, detail, about_viewer: about_viewer) }
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
       render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
@@ -126,8 +126,8 @@ class Views::Evidence::HubView < Views::Base
 
   # "From Jordan · 3 Oct 2026 · on Alex's assessment" — the assessment named
   # only for a report's item; the "About you" subsection already says whose.
-  def to_place_scope_label(item, detail)
-    whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && item.person_id != item.author_id)
+  def to_place_scope_label(item, detail, about_viewer:)
+    whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && !about_viewer)
     [ "From #{item.author&.name || 'a colleague'}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
   end
 

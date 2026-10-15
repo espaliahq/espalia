@@ -29,8 +29,10 @@ class Views::Evidence::RecipientRow < Views::Base
 
   private
 
+  # The email leads so a row that matched on it, not the name, explains itself.
   def secondary
     assignment = @recipient.assignment
-    [ assignment.role&.name, assignment.level&.code, RELATIONSHIP_LABELS[@recipient.relationship] ].compact.join(" · ")
+    [ @recipient.person.email, assignment.role&.name, assignment.level&.code,
+      RELATIONSHIP_LABELS[@recipient.relationship] ].compact.join(" · ")
   end
 end

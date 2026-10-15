@@ -64,6 +64,7 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
         end
       end
       assert_select "p", text: /From Jordan/
+      assert_select "p", text: /on Alex's assessment/, count: 0
     end
 
     should "list a report's unplaced item for their manager, naming the report" do
