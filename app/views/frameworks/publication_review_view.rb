@@ -17,8 +17,10 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   # @param retiring [Array<Hash>] { capability:, mapping: } for each retiring capability
   # @param survivors [Array<Hash>] { name:, stable_id: } survivor candidates
   # @param publication [FrameworkPublication, nil] the latest publish request for this draft
-  def initialize(framework:, retiring:, survivors:, publication: nil, user: nil, current_tenant: nil, tenants: [])
+  # @param changes [Hash{Symbol => Array<Hash>}] {Frameworks::DraftChangesQuery#call}
+  def initialize(framework:, retiring:, survivors:, changes:, publication: nil, user: nil, current_tenant: nil, tenants: [])
     @framework = framework
+    @changes = changes
     @retiring = retiring
     @survivors = survivors
     @publication = publication
@@ -34,6 +36,7 @@ class Views::Frameworks::PublicationReviewView < Views::Base
       div(class: "max-w-2xl mx-auto px-4 py-8 space-y-6") do
         header
         publication_status
+        changes_section
         retiring_section
         confirm_section
       end
@@ -54,8 +57,8 @@ class Views::Frameworks::PublicationReviewView < Views::Base
         plain "Publish v#{@framework.draft_version}"
       end
       p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
-        plain "Review what happens to retired capabilities, then publish. Publishing " \
-              "makes the draft live and migrates in-flight assessments — it cannot be undone."
+        plain "Review what this version changes, then publish. Publishing makes the draft " \
+              "live and changes in-flight assessments — it cannot be undone."
       end
     end
   end
@@ -87,13 +90,99 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     end
   end
 
-  def retiring_section
-    if @retiring.empty?
-      p(class: "rounded-md bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
-        plain "No capabilities are being retired in this draft — nothing to migrate."
+  CHANGE_HEADINGS = {
+    capabilities_added: "Capabilities added",
+    capabilities_archived: "Capabilities archived",
+    categories_archived: "Categories archived",
+    roles_removed: "Removed from a role",
+    roles_added: "Added to a role",
+    levels_added: "Levels added",
+    levels_moved: "Levels moved",
+    expectations_added: "Expectations added"
+  }.freeze
+
+  def changes_section
+    groups = CHANGE_HEADINGS.keys.filter_map { |kind| [ kind, @changes[kind] ] if @changes[kind].present? }
+
+    section(class: "space-y-3", aria_labelledby: "draft-changes-heading") do
+      h2(id: "draft-changes-heading", class: "text-lg font-semibold text-gray-900 dark:text-white") do
+        plain "What changes in v#{@framework.draft_version}"
       end
-      return
+      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+        plain "These wait for you to publish. Renames, rewordings and examples are already live."
+      end
+
+      if groups.empty?
+        p(class: "rounded-md bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
+          plain "Nothing in this draft is waiting to be published."
+        end
+      else
+        div(class: "rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700") do
+          groups.each { |kind, items| change_group(kind, items) }
+        end
+      end
     end
+  end
+
+  def change_group(kind, items)
+    div(class: "px-4 py-3", data: { draft_change: kind.to_s }) do
+      h3(class: "text-sm font-semibold text-gray-900 dark:text-white") do
+        plain "#{CHANGE_HEADINGS.fetch(kind)} (#{items.size})"
+      end
+      ul(class: "mt-2 space-y-1.5 text-sm text-gray-700 dark:text-gray-200") do
+        items.each { |item| li { change_line(kind, item) } }
+      end
+      if kind == :roles_removed
+        p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
+          plain "Ratings already made on these are kept, but stop counting for that role."
+        end
+      end
+    end
+  end
+
+  def change_line(kind, item)
+    case kind
+    when :capabilities_added
+      strong(class: "font-medium") { item[:capability] }
+      plain " in #{item[:category]}"
+      plain " · #{item[:roles].to_sentence}" if item[:roles].any?
+    when :capabilities_archived
+      strong(class: "font-medium") { item[:capability] }
+      reach(item[:open_cycle_people], "one of its roles")
+    when :categories_archived
+      strong(class: "font-medium") { item[:category] }
+    when :roles_removed
+      strong(class: "font-medium") { item[:capability] }
+      plain " from #{item[:role]}"
+      reach(item[:open_cycle_people], "that role")
+    when :roles_added
+      strong(class: "font-medium") { item[:capability] }
+      plain " to #{item[:role]}"
+    when :levels_added
+      strong(class: "font-medium") { item[:level] }
+      plain " #{item[:title]} · #{item[:role]}"
+    when :levels_moved
+      strong(class: "font-medium") { item[:level] }
+      plain " #{item[:title]} · #{item[:role]} — from L#{item[:from]} to L#{item[:to]}"
+    when :expectations_added
+      strong(class: "font-medium") { item[:capability] }
+      plain " · L#{item[:level_ordinal]}"
+    end
+  end
+
+  # Counted by role, not by whether the capability has an expectation at each
+  # person's level, so it says "hold", never "affects".
+  def reach(people, held)
+    return if people.zero?
+
+    span(class: "text-gray-600 dark:text-gray-300") do
+      plain " — #{people} #{people == 1 ? 'person' : 'people'} in the open cycle " \
+            "#{people == 1 ? 'holds' : 'hold'} #{held}"
+    end
+  end
+
+  def retiring_section
+    return if @retiring.empty?
 
     div(class: "space-y-3") do
       render Components::Kit::SectionHeading.new(

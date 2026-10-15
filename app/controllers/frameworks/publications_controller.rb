@@ -2,8 +2,9 @@
 
 # The web surface for publishing a framework's current draft.
 #
-# `new` is the review page — every capability being retired with its
-# migration mapping, plus the state of the latest publish request. `create`
+# `new` is the review page — what the version changes, every capability being
+# retired with its migration mapping, and the state of the latest publish
+# request. `create`
 # dispatches {Operations::Frameworks::PublishVersion}, which checks the
 # publish gate, records a {FrameworkPublication} and enqueues the background
 # job; the same operation serves an MCP agent's in-app approval, so both
@@ -22,6 +23,9 @@ class Frameworks::PublicationsController < ApplicationController
       framework: @framework,
       retiring: retiring.call,
       survivors: retiring.survivors,
+      changes: Operations::Frameworks::DraftChanges.call(
+        context: pundit_user, params: { framework_id: @framework.framework_id }
+      )[:changes],
       publication: FrameworkPublication.latest_for(@framework.framework_id, @framework.draft_version),
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,

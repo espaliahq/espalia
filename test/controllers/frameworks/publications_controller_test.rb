@@ -30,7 +30,7 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_includes response.body, "Publish v1"
-      assert_includes response.body, "No capabilities are being retired"
+      assert_includes response.body, "Nothing in this draft is waiting to be published."
     end
 
     should "list a retiring capability that still needs a mapping" do
@@ -71,7 +71,7 @@ class Frameworks::PublicationsControllerTest < ActionDispatch::IntegrationTest
       get new_framework_publication_path(framework_id: @framework_id)
 
       assert_response :success
-      assert_includes response.body, "No capabilities are being retired"
+      assert_includes response.body, "Nothing in this draft is waiting to be published."
       assert_not_includes response.body, "Legacy Systems"
 
       # …and the gate does not block v3 on the v2 archive either.

@@ -359,7 +359,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
         # owner confirms. The publish itself runs in a background job, so the
         # header immediately shows the disabled "Publishing" state instead of
         # a second Publish button.
-        click_link_with_js_fallback("Publish v2", expect_text: "No capabilities are being retired")
+        click_link_with_js_fallback("Publish v2", expect_text: "What changes in v2")
         click_button_with_js_fallback("Confirm & publish v2", expect_text: "Publishing v2 in the background")
         assert_text "v2 draft"
         assert_button "Publishing v2…", disabled: true
