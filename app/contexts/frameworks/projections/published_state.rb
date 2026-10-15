@@ -859,7 +859,9 @@ class Frameworks::Projections::PublishedState
 
     framework_id = framework_id_for_broadcast(event)
     broadcast_framework_activity_signal(framework_id)
-    broadcast_draft_status_cleared(framework_id) if event.is_a?(Frameworks::Events::FrameworkVersionPublished)
+    if event.is_a?(Frameworks::Events::FrameworkVersionPublished) || event.is_a?(Frameworks::Events::DraftVersionStarted)
+      broadcast_draft_status(framework_id)
+    end
   end
 
   # Resolved-suggestion events (approve/reject/withdraw/amend) carry no

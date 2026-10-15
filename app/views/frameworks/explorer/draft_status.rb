@@ -2,9 +2,11 @@
 
 # The two header affordances a **shape-changing** write flips: the `vN draft`
 # pill next to the framework name, and the Publish button in the action
-# cluster. Both live outside the matrix Turbo Frame, so a write that
-# auto-opens a draft (add capability, add level, archive) has to stream them
-# explicitly — otherwise the header silently lies until the next full load.
+# cluster. Both live outside the matrix Turbo Frame. The projection
+# broadcasts them whenever a draft opens or closes
+# (BroadcastsFrameworkActivity#broadcast_draft_status), so no write path has
+# to remember to; the write-response streams only give the actor the same
+# answer without waiting on ActionCable.
 #
 # Rendered as two addressable slots rather than one block because they sit at
 # opposite ends of the header row; the shared class keeps their "is there a
@@ -13,6 +15,10 @@
 class Views::Frameworks::Explorer::DraftStatus < Views::Base
   BADGE_ID = "framework-draft-badge"
   PUBLISH_ID = "framework-publish-action"
+  # Only viewers with publish rights when the page loaded subscribe, so a
+  # broadcast Publish button doesn't reach suggest-only collaborators. Rights
+  # that change mid-session take effect on the next load, in either direction.
+  PUBLISHERS_STREAM = "framework_publishers"
 
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
   # @param slot [Symbol] :badge (the draft pill) or :publish (the Publish button)
@@ -20,7 +26,7 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   #   mode for the pill, edit mode + publish rights for the button. A hidden
   #   slot still renders its (empty) anchor so a later stream can find it.
   # @param publishing [Boolean] a publish of this draft is queued or running
-  #   ({FrameworkPublication.in_flight_for?}) — the button renders disabled so
+  #   ({FrameworkPublication.publishing?}) — the button renders disabled so
   #   nobody requests it twice.
   def initialize(framework:, slot:, visible: true, publishing: false)
     @framework = framework

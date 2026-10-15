@@ -119,7 +119,7 @@ class FrameworksController < ApplicationController
       # change, and must not inflate the header's pending-change badge.
       pending_suggestion_count: @framework.suggested_edits.pending.proposals.count,
       mode: mode,
-      publishing: mode == :edit && fw_policy.publish? && FrameworkPublication.in_flight_for?(@framework.framework_id),
+      publishing: mode == :edit && fw_policy.publish? && FrameworkPublication.publishing?(@framework),
       can_edit: fw_policy.edit?,
       can_publish: fw_policy.publish?,
       # The header's rename pencil — admin / owner only; the frame itself

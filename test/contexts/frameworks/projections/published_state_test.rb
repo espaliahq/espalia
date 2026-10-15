@@ -989,6 +989,89 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       assert_equal [ [ "framework_activity", @framework_id ] ] * 2, broadcasts
     end
 
+    context "when a draft opens" do
+      setup do
+        emit(Frameworks::Events::FrameworkCreated, framework_id: @framework_id, name: "Design Growth")
+        @event = Frameworks::Events::DraftVersionStarted.new(
+          data: { framework_id: @framework_id, target_version: 5, started_by: @author_person.id },
+          metadata: { tenant_id: @tenant.id })
+      end
+
+      should "show the draft pill to edit-mode viewers and the Publish button to publishers only" do
+        sent = []
+        Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target], kw[:html] ] }) do
+          within_tenant { @projection.call(@event) }
+        end
+
+        badges = sent.select { |_, target, _| target == "framework-draft-badge" }
+        publishes = sent.select { |_, target, _| target == "framework-publish-action" }
+        assert_equal [ "framework_activity" ], badges.map(&:first)
+        assert_includes badges.first.last, "v5 draft"
+        # Exactly once, and never on the activity stream every collaborator holds.
+        assert_equal [ "framework_publishers" ], publishes.map(&:first)
+        assert_includes publishes.first.last, "Publish v5"
+      end
+
+      should "send nothing when the write that opened the draft rolls back" do
+        targets = capture_activity_broadcast_targets do
+          within_tenant do
+            ActiveRecord::Base.transaction(requires_new: true) do
+              @projection.call(@event)
+              raise ActiveRecord::Rollback
+            end
+          end
+        end
+
+        assert_not_includes targets, "framework-draft-badge"
+        assert_not_includes targets, "framework-publish-action"
+      end
+
+      should "clear both slots after a publish, the Publish one on the stream that opened it" do
+        within_tenant do
+          @projection.call(@event)
+          FrameworkState::Framework.find_by!(framework_id: @framework_id).update!(draft_in_progress: false)
+        end
+
+        sent = broadcasts_for_publish
+        publishes = sent.select { |_, target, _| target == "framework-publish-action" }
+        assert_equal [ "framework_publishers" ], publishes.map(&:first)
+        assert_not_includes publishes.first.last, "Publish"
+        assert_not_includes sent.find { |_, target, _| target == "framework-draft-badge" }.last, "v5 draft"
+      end
+
+      # A publish's clear can land after the next draft opened: it shows that
+      # draft rather than blanking it.
+      should "not let a late clear blank a draft that opened since" do
+        within_tenant { @projection.call(@event) }
+
+        sent = broadcasts_for_publish
+        assert_includes sent.find { |_, target, _| target == "framework-draft-badge" }.last, "v5 draft"
+        assert_includes sent.find { |_, target, _| target == "framework-publish-action" }.last, "Publish v5"
+      end
+
+      should "show Publishing only for a request against the draft that opened" do
+        # v4's publish committed but hasn't recorded its finish yet.
+        previous = within_tenant do
+          create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 4)
+        end
+        assert_includes publish_slot_html, "Publish v5"
+        assert_not_includes publish_slot_html, "Publishing"
+
+        within_tenant do
+          previous.update!(finished_at: Time.current)
+          create(:framework_publication, tenant: @tenant, framework_id: @framework_id, draft_version: 5)
+        end
+        assert_includes publish_slot_html, "Publishing v5…"
+      end
+
+      should "stay silent during replay" do
+        broadcasts = capture_activity_broadcasts do
+          Projections::Replayer.with_replay_mode { within_tenant { @projection.call(@event) } }
+        end
+        assert_empty broadcasts
+      end
+    end
+
     should "stay silent during replay" do
       event = Frameworks::Events::CapabilityUpdated.new(
         data: { framework_id: @framework_id, capability_id: SecureRandom.uuid_v7, name: "X" },
@@ -1010,6 +1093,27 @@ class Frameworks::Projections::PublishedStateTest < ActiveSupport::TestCase
       yield
     end
     broadcasts
+  end
+
+  # What the projection broadcasts for a publish of v5, as [stream, target, html].
+  def broadcasts_for_publish
+    published = Frameworks::Events::FrameworkVersionPublished.new(
+      data: { framework_id: @framework_id, version: 5, published_by: "tester" },
+      metadata: { tenant_id: @tenant.id })
+    sent = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*args, **kw) { sent << [ args.first, kw[:target], kw[:html] ] }) do
+      within_tenant { @projection.send(:broadcast_framework_activity, published) }
+    end
+    sent
+  end
+
+  # The Publish slot the draft-opened broadcast sends for @event.
+  def publish_slot_html
+    sent = []
+    Turbo::StreamsChannel.stub(:broadcast_replace_to, ->(*_args, **kw) { sent << kw }) do
+      within_tenant { @projection.call(@event) }
+    end
+    sent.find { |kw| kw[:target] == "framework-publish-action" }[:html]
   end
 
   # Captures which DOM ids the block's broadcasts replace.

@@ -695,6 +695,9 @@ class Views::Frameworks::ShowView < Views::Base
       # signal element below; the context-pane controller observes it and
       # reloads the feed frame for every edit-mode viewer (incl. the actor).
       turbo_stream_from "framework_activity", @framework.framework_id
+      if @can_publish
+        turbo_stream_from Views::Frameworks::Explorer::DraftStatus::PUBLISHERS_STREAM, @framework.framework_id
+      end
       div(id: "framework-activity-sync-signal", class: "hidden",
           data: { context_pane_target: "signal" })
 
