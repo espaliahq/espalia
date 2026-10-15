@@ -46,7 +46,7 @@ Cross-cutting "who/how/which-request" provenance lives in **metadata**, set once
 
 | Metadata key | Meaning | Seeded by |
 |---|---|---|
-| `acting_via` | `web` / `mcp` / `hris` / `system` — the surface (`system` = a scheduled job acting on its own, e.g. the evidence-request reminder sweep) | `ApplicationController`, `Mcp::ServerController`, HRIS adapter, sweep jobs |
+| `acting_via` | `web` / `mcp` / `hris` / `slack` / `system` — the surface (`slack` = the feedback modal's submission; `system` = a scheduled job acting on its own, e.g. the evidence-request reminder sweep) | `ApplicationController`, `Mcp::ServerController`, HRIS adapter, `Slack::Feedback`, sweep jobs |
 | `actor_id` | uuid of the Person who triggered the write (nil for system syncs) | same |
 | `client_application_id` | Doorkeeper application uuid (MCP only) | `Mcp::ServerController` |
 | `correlation_id` | id shared by every event one request/sync produced | request id (web/MCP) · job id or fresh uuid (HRIS) |

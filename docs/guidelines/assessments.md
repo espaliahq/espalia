@@ -951,8 +951,12 @@ shared by web, MCP and Slack:
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
 
-The Slack command and message shortcut are
-[#504](https://github.com/mr-yum/growth-os/issues/504).
+**From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
+`/growthos feedback` and the "Give feedback on this message" shortcut open a
+modal that records through the same Operation, placed at the recipient's
+current level or unplaced; a giver who has never signed in gets a draft link
+that opens the hub's modal prefilled after sign-in. See
+[slack-integration.md](slack-integration.md).
 
 ## Requesting evidence (cell-scoped)
 

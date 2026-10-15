@@ -25,7 +25,7 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
-| `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md) |
+| `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md), [slack-integration.md](docs/guidelines/slack-integration.md) |
 | `app/contexts/` | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | `app/read_models/` | [event-sourcing.md](docs/guidelines/event-sourcing.md), [rails-models.md](docs/guidelines/rails-models.md) |
 | `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
@@ -84,6 +84,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Framework Explorer UX | @docs/guidelines/framework-explorer.md |
 | Assessment UX | @docs/guidelines/assessments.md |
 | HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
+| Slack (notifications, the feedback modal, inbound endpoints) | @docs/guidelines/slack-integration.md |
 | Events / aggregates / projections / read models | @docs/guidelines/event-sourcing.md + @docs/runbooks/projection-rebuild.md |
 | Production incidents / 500s on Render | @docs/runbooks/production-diagnostics.md |
 | MCP server / Operations / OAuth / DCR | @docs/guidelines/mcp-server.md |

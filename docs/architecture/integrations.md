@@ -150,6 +150,19 @@ In development, `db/seeds.rb` runs the sync synchronously after seeding the fram
 
 ---
 
+## Slack
+
+Installed per tenant (OAuth v2, `Tenant#connect_slack!`). Outbound: Noticed
+notifications DM'd by `SlackDeliveryMethod` after the in-app copy's grace
+period. Inbound: `/growthos feedback` and the "Give feedback on this message"
+shortcut open a modal whose submission records evidence as the Slack user —
+identity by workspace id and the member's cached or email-resolved Slack id,
+writes through the same `Operations::Assessments::RecordEvidence` the web and
+MCP use, stamped `acting_via: slack`. A Person who has never signed in gets a
+`FeedbackDraft` and a link that opens the hub's modal prefilled after their
+first sign-in. The how-to, the trust model and the three-second rule are in
+[docs/guidelines/slack-integration.md](../guidelines/slack-integration.md).
+
 ## Notifications
 
 RES async handlers dispatched via Solid Queue. Adapter pattern for Slack, Teams, email.
