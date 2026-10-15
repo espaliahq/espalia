@@ -538,13 +538,13 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "type" => "object",
           "properties" => {
             "assignment_id"        => { "type" => "string" },
-            "capability_stable_id" => { "type" => "string" },
+            "capability_stable_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
             "level_ordinal"        => { "type" => "integer" },
             "evidence_type"        => { "type" => "string", "enum" => EvidenceItem::EVIDENCE_TYPES },
             "custom_type_label"    => { "type" => "string" },
             "title"                => { "type" => "string" },
             "content"              => { "type" => "string" },
-            "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES },
+            "valence"              => { "type" => "string", "enum" => EvidenceLink::VALENCES, "minLength" => 1, "pattern" => "\\S" },
             "external_reference"   => external_reference_schema,
             "additional_links"     => {
               "type" => "array",

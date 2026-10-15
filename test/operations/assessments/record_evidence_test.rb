@@ -125,6 +125,13 @@ class Operations::Assessments::RecordEvidenceTest < ActiveSupport::TestCase
       assert_match(/capability_stable_id/, err.message)
     end
 
+    should "reject a blank capability as a mistake rather than reading it as unplaced" do
+      err = assert_raises(Operations::Base::ParameterError) do
+        call_op(ctx: @manager_ctx, capability_stable_id: "")
+      end
+      assert_match(/capability_stable_id/, err.message)
+    end
+
     should "report placed: true for a placed item" do
       assert_equal true, call_op(ctx: @report_ctx)[:placed]
     end

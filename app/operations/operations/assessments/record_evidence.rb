@@ -25,7 +25,8 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   prose_fields :content
 
   parameter :assignment_id,        String, required: true
-  parameter :capability_stable_id, String
+  # A blank cell is a mistake, never "unplaced": omit the cell for that.
+  parameter :capability_stable_id, String, allow_blank: false
   parameter :level_ordinal,        Integer
   parameter :evidence_type, String, required: true,
                                     allowed: EvidenceItem::EVIDENCE_TYPES
@@ -35,7 +36,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
   # The origin link's valence — the recorder's judgment of what the
   # evidence says about the behaviour at that cell. Required with a cell;
   # narrative metadata only, never a scoring input.
-  parameter :valence, String, allowed: EvidenceLink::VALENCES
+  parameter :valence, String, allowed: EvidenceLink::VALENCES, allow_blank: false
   parameter :external_reference, Hash, schema: ExternalReference.json_schema
   # Optional extra cells this evidence also demonstrates. The first link is
   # the required capability_stable_id/level_ordinal/valence above; these

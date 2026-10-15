@@ -83,11 +83,20 @@ class Assessments::FeedbackRecipients
     end
   end
 
+  # One walk of the giver's chain and one of their subtree, however many rows.
   def relationship_to(person)
-    return "report" if person.managed_by?(giver)
-    return "manager" if giver.managed_by?(person)
+    return "report" if report_ids.include?(person.id)
+    return "manager" if manager_ids.include?(person.id)
 
     "peer"
+  end
+
+  def report_ids
+    @report_ids ||= giver.all_reports.pluck(:id).to_set
+  end
+
+  def manager_ids
+    @manager_ids ||= giver.manager_chain.map(&:id).to_set
   end
 
   def sanitize_like(value)
