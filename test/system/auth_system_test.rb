@@ -3,6 +3,8 @@
 require "application_system_test_case"
 
 class AuthSystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -24,6 +26,49 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_selector "button[type='submit']", text: "Log in"
       assert_text "Create an account"
       assert_text "Forgot your password?"
+    end
+  end
+
+  context "sign in page layout" do
+    should "fit the desktop viewport with the brand mark" do
+      visit new_user_session_path
+
+      assert_selector "svg[data-brand-mark]"
+      assert_no_sideways_scroll
+    end
+
+    should "fit the mobile viewport with 44px controls" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit new_user_session_path
+      screenshot("sign_in_page_mobile")
+
+      assert_selector "svg[data-brand-mark]"
+      assert_no_sideways_scroll
+      [ "#user_email", "#user_password", "button[type='submit']", "a" ].each do |css|
+        all(css).each do |control|
+          height = page.evaluate_script("arguments[0].getBoundingClientRect().height", control)
+          assert_operator height, :>=, 44, "#{css} (#{control.text.presence || control[:id]}) is #{height}px tall"
+        end
+      end
+    end
+  end
+
+  context "sign in page contrast" do
+    should "clear AA for the Log in button and the divider in light mode" do
+      visit new_user_session_path
+      assert_text "Sign in to your account"
+
+      assert_contrast_clears_aa
+    end
+
+    should "clear AA for the Log in button and the divider in dark mode" do
+      emulate_color_scheme("dark")
+      visit new_user_session_path
+      assert_text "Sign in to your account"
+
+      assert_contrast_clears_aa
+    ensure
+      emulate_color_scheme("light")
     end
   end
 
@@ -88,5 +133,26 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       assert_current_path root_path
     end
+  end
+
+  private
+
+  def assert_no_sideways_scroll
+    widths = page.evaluate_script("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
+    assert_operator widths[0], :<=, widths[1], "the page scrolls sideways (scrollWidth #{widths[0]} > #{widths[1]})"
+  end
+
+  def assert_contrast_clears_aa
+    log_in_css = "#{SIGN_IN_FORM_SELECTOR} button[type='submit']"
+    assert_selector log_in_css, text: "Log in"
+
+    assert_operator rendered_contrast(log_in_css), :>=, 4.5
+    assert_operator rendered_contrast("#sign-in-divider"), :>=, 4.5
+  end
+
+  def emulate_color_scheme(scheme)
+    page.driver.browser.execute_cdp(
+      "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: scheme } ]
+    )
   end
 end

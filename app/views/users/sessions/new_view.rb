@@ -6,6 +6,12 @@
 # styled form fields, flash error display, and helper links.
 class Views::Users::Sessions::NewView < Views::Base
   include Phlex::Rails::Helpers::Routes
+  include Phlex::Rails::Helpers::ContentFor
+
+  FONT_URL = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap"
+
+  BUTTON_CLASSES = "inline-flex w-full items-center justify-center gap-2 h-11 sm:h-10 px-4 rounded-lg " \
+                   "text-sm/5 font-semibold cursor-pointer"
 
   # @param resource [User] the Devise resource (an unsaved User instance)
   # @param flash [ActionDispatch::Flash::FlashHash] the current request flash
@@ -15,8 +21,12 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def view_template
-    div(class: "min-h-screen bg-primary flex items-center justify-center p-4") do
-      div(class: "w-full max-w-sm") do
+    font_links
+
+    main(class: "auth-page relative isolate overflow-hidden min-h-screen flex items-center justify-center p-4 " \
+                "bg-(--auth-surface) text-(--auth-content) antialiased") do
+      backdrop
+      div(class: "w-full max-w-100 flex flex-col gap-6") do
         branding
         auth_card
       end
@@ -25,16 +35,50 @@ class Views::Users::Sessions::NewView < Views::Base
 
   private
 
+  def font_links
+    content_for(:head, view_context.safe_join([
+      view_context.tag.link(rel: "preconnect", href: "https://fonts.googleapis.com"),
+      view_context.tag.link(rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: ""),
+      view_context.tag.link(rel: "stylesheet", href: FONT_URL)
+    ]))
+  end
+
+  def backdrop
+    span(class: "auth-blob size-[420px] left-[30%] top-[30%] sm:size-[56vmax] sm:left-[36%] sm:top-[34%]",
+      aria: { hidden: "true" })
+    span(class: "auth-blob size-[400px] left-[74%] top-1/2 sm:size-[52vmax] sm:left-[64%] sm:top-[46%]",
+      aria: { hidden: "true" })
+    span(class: "auth-blob size-[380px] left-[44%] top-[76%] sm:size-[50vmax] sm:left-1/2",
+      aria: { hidden: "true" })
+  end
+
   def branding
-    div(class: "text-center mb-8") do
-      h1(class: "text-3xl font-bold text-white tracking-tight") { "GrowthOS" }
-      p(class: "text-white/70 mt-1 text-sm") { "Career growth for your team" }
+    div(class: "flex flex-col items-center gap-3 text-center") do
+      brand_mark
+      h1(class: "text-2xl/7 font-bold") { "GrowthOS" }
+      p(class: "text-base/5 text-(--auth-content-muted)") { "Career growth for your team" }
+    end
+  end
+
+  def brand_mark
+    svg(class: "size-10", viewBox: "166.5 148.5 730 730", aria: { hidden: "true" }, focusable: "false",
+      data: { brand_mark: true }) do |s|
+      s.g(fill: "currentColor") do
+        s.path(d: "M223,847 H777 A28,28 0 0 0 805,819 V408 A28,28 0 0 0 777,380 H633 A28,28 0 0 0 605,408 V506 " \
+                  "A14,14 0 0 1 591,520 H428 A28,28 0 0 0 400,548 V636 A14,14 0 0 1 386,650 H223 A28,28 0 0 0 " \
+                  "195,678 V819 A28,28 0 0 0 223,847 Z")
+        s.path(d: "M688,400 V330 C688,235 765,180 868,180 C870,300 812,380 726,380 V400 Z")
+      end
     end
   end
 
   def auth_card
-    div(class: "bg-white rounded-2xl shadow-xl p-8") do
-      h2(class: "text-lg font-semibold text-gray-900 mb-6") { "Sign in to your account" }
+    section(
+      class: "flex flex-col gap-5 p-4 sm:p-6 rounded-lg border border-(--auth-border-subtle) " \
+             "bg-(--auth-surface)/78 backdrop-blur-[24px] backdrop-saturate-[1.2]",
+      aria: { labelledby: "sign-in-title" }
+    ) do
+      h2(id: "sign-in-title", class: "text-lg/5 font-bold") { "Sign in to your account" }
       flash_alert
       google_button
       divider
@@ -47,14 +91,10 @@ class Views::Users::Sessions::NewView < Views::Base
     form(
       action: user_google_oauth2_omniauth_authorize_path,
       method: :post,
-      class: "mb-4",
       data: { turbo: "false" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "w-full inline-flex items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
-      ) do
+      button(type: "submit", class: "#{BUTTON_CLASSES} bg-(--auth-neutral-subtle) text-(--auth-content)") do
         google_logo
         span { "Continue with Google" }
       end
@@ -62,7 +102,7 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def google_logo
-    svg(class: "h-5 w-5", viewBox: "0 0 48 48", aria: { hidden: "true" }) do |s|
+    svg(class: "size-5 shrink-0", viewBox: "0 0 48 48", aria: { hidden: "true" }) do |s|
       s.path(fill: "#FFC107", d: "M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z")
       s.path(fill: "#FF3D00", d: "M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.4 6.3 14.7z")
       s.path(fill: "#4CAF50", d: "M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.6 39.6 16.2 44 24 44z")
@@ -71,25 +111,36 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def divider
-    div(class: "relative my-4") do
-      div(class: "absolute inset-0 flex items-center", aria: { hidden: "true" }) do
-        div(class: "w-full border-t border-gray-200")
-      end
-      div(class: "relative flex justify-center") do
-        span(class: "bg-white px-2 text-xs uppercase tracking-wider text-gray-400") { "or" }
-      end
-    end
+    div(
+      id: "sign-in-divider",
+      class: "flex items-center gap-3 text-xs/[14px] font-semibold uppercase tracking-[.04em] " \
+             "text-(--auth-content-muted) before:flex-1 before:border-t before:border-(--auth-or-line) " \
+             "after:flex-1 after:border-t after:border-(--auth-or-line)",
+      aria: { hidden: "true" }
+    ) { "or" }
   end
 
   def flash_alert
     return unless @flash[:alert]
 
     div(
-      class: "mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700",
+      class: "flex items-start gap-2 p-3 rounded-lg border border-(--auth-danger-muted) bg-(--auth-danger-subtle) " \
+             "text-sm/[18px] text-(--auth-danger)",
       role: "alert"
     ) do
-      span(class: "mt-0.5 shrink-0", aria: { hidden: "true" }) { "⚠" }
+      alert_icon
       span { @flash[:alert] }
+    end
+  end
+
+  def alert_icon
+    svg(
+      class: "size-4 shrink-0 mt-px", viewBox: "0 0 24 24", aria: { hidden: "true" },
+      fill: "none", stroke: "currentColor", stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round"
+    ) do |s|
+      s.circle(cx: "12", cy: "12", r: "9")
+      s.path(d: "M12 7.5v5")
+      s.path(d: "M12 16.5h.01")
     end
   end
 
@@ -97,58 +148,62 @@ class Views::Users::Sessions::NewView < Views::Base
     form(
       action: user_session_path,
       method: :post,
-      class: "space-y-4"
+      class: "flex flex-col gap-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
 
-      form_field("Email", :email, "user[email]", type: :email, autocomplete: "email")
+      form_field("Email", :email, "user[email]", type: :email, autocomplete: "email", placeholder: "you@company.com")
       form_field("Password", :password, "user[password]", type: :password, autocomplete: "current-password")
       remember_me_field
       submit_button
     end
   end
 
-  def form_field(label_text, id, name, type:, autocomplete: nil)
-    div do
-      label(for: "user_#{id}", class: "block text-sm font-medium text-gray-700 mb-1") { label_text }
+  def form_field(label_text, id, name, type:, autocomplete: nil, placeholder: nil)
+    div(class: "flex flex-col gap-1.5") do
+      label(for: "user_#{id}", class: "text-sm/5 font-semibold") { label_text }
       input(
         id: "user_#{id}",
         name: name,
         type: type,
         autocomplete: autocomplete,
+        placeholder: placeholder,
         required: true,
-        class: "block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        class: "auth-input w-full h-11 sm:h-10 px-3 rounded-lg border border-(--auth-border-default) " \
+               "bg-(--auth-surface) text-sm/[18px] text-(--auth-content) placeholder:text-(--auth-content-subtle)"
       )
     end
   end
 
   def remember_me_field
-    div(class: "flex items-center gap-2") do
+    label(for: "user_remember_me", class: "flex items-center gap-2 min-h-11 sm:min-h-0 text-sm/[18px]") do
       input(
         id: "user_remember_me",
         name: "user[remember_me]",
         type: "checkbox",
         value: "1",
-        class: "h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+        class: "auth-check"
       )
-      label(for: "user_remember_me", class: "text-sm text-gray-600") { "Remember me" }
+      plain "Remember me"
     end
   end
 
   def submit_button
     button(
       type: "submit",
-      class: "w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 transition-colors"
+      class: "#{BUTTON_CLASSES} bg-(--auth-neutral-strong) text-(--auth-neutral-inverse)"
     ) { "Log in" }
   end
 
   def footer_links
-    div(class: "mt-6 space-y-2 text-center text-sm") do
-      div do
-        a(href: new_user_registration_path, class: "text-primary-ink hover:underline font-medium") { "Create an account" }
-      end
-      div do
-        a(href: new_user_password_path, class: "text-gray-500 hover:text-gray-700") { "Forgot your password?" }
+    div(class: "flex flex-col items-center text-center text-sm/[18px]") do
+      a(
+        href: new_user_registration_path,
+        class: "inline-flex items-center min-h-11 text-sm/5 font-semibold underline underline-offset-3 " \
+               "decoration-(--auth-border-default)"
+      ) { "Create an account" }
+      a(href: new_user_password_path, class: "inline-flex items-center min-h-11 text-(--auth-content-muted)") do
+        "Forgot your password?"
       end
     end
   end
