@@ -23,7 +23,7 @@ class Views::Users::Sessions::NewView < Views::Base
   def view_template
     font_links
 
-    main(class: "auth-page relative isolate overflow-hidden min-h-screen flex items-center justify-center p-4 " \
+    main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-screen flex items-center justify-center p-4 " \
                 "bg-(--auth-surface) text-(--auth-content) antialiased") do
       backdrop
       div(class: "w-full max-w-100 flex flex-col gap-6") do
@@ -152,14 +152,14 @@ class Views::Users::Sessions::NewView < Views::Base
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
 
-      form_field("Email", :email, "user[email]", type: :email, autocomplete: "email", placeholder: "you@company.com")
+      form_field("Email", :email, "user[email]", type: :email, autocomplete: "email")
       form_field("Password", :password, "user[password]", type: :password, autocomplete: "current-password")
       remember_me_field
       submit_button
     end
   end
 
-  def form_field(label_text, id, name, type:, autocomplete: nil, placeholder: nil)
+  def form_field(label_text, id, name, type:, autocomplete: nil)
     div(class: "flex flex-col gap-1.5") do
       label(for: "user_#{id}", class: "text-sm/5 font-semibold") { label_text }
       input(
@@ -167,10 +167,9 @@ class Views::Users::Sessions::NewView < Views::Base
         name: name,
         type: type,
         autocomplete: autocomplete,
-        placeholder: placeholder,
         required: true,
-        class: "auth-input w-full h-11 sm:h-10 px-3 rounded-lg border border-(--auth-border-default) " \
-               "bg-(--auth-surface) text-sm/[18px] text-(--auth-content) placeholder:text-(--auth-content-subtle)"
+        class: "w-full h-11 sm:h-10 px-3 rounded-lg border border-(--auth-control-edge) " \
+               "bg-(--auth-surface) text-sm/[18px] text-(--auth-content)"
       )
     end
   end

@@ -35,6 +35,7 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       assert_selector "svg[data-brand-mark]"
       assert_no_sideways_scroll
+      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']" ]) { |height| height == 40 }
     end
 
     should "fit the mobile viewport with 44px controls" do
@@ -44,27 +45,25 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       assert_selector "svg[data-brand-mark]"
       assert_no_sideways_scroll
-      [ "#user_email", "#user_password", "button[type='submit']", "a" ].each do |css|
-        all(css).each do |control|
-          height = page.evaluate_script("arguments[0].getBoundingClientRect().height", control)
-          assert_operator height, :>=, 44, "#{css} (#{control.text.presence || control[:id]}) is #{height}px tall"
-        end
-      end
+      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
+                               "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
     end
   end
 
   context "sign in page contrast" do
-    should "clear AA for the Log in button and the divider in light mode" do
+    should "clear AA for its text in light mode" do
       visit new_user_session_path
       assert_text "Sign in to your account"
 
       assert_contrast_clears_aa
     end
 
-    should "clear AA for the Log in button and the divider in dark mode" do
+    should "clear AA for its text in dark mode" do
       emulate_color_scheme("dark")
       visit new_user_session_path
       assert_text "Sign in to your account"
+      log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
+      assert_equal "rgb(251, 251, 255)", log_in_fill, "the dark theme didn't apply"
 
       assert_contrast_clears_aa
     ensure
@@ -101,6 +100,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       # The URL doesn't change (POST and GET share the same path), so
       # assert_current_path would pass immediately without waiting.
       assert_selector "[role='alert']", text: "Invalid email or password."
+      assert_operator rendered_contrast("[role='alert']"), :>=, 4.5
       screenshot("invalid_credentials_error")
       assert_current_path new_user_session_path
     end
@@ -142,12 +142,24 @@ class AuthSystemTest < ApplicationSystemTestCase
     assert_operator widths[0], :<=, widths[1], "the page scrolls sideways (scrollWidth #{widths[0]} > #{widths[1]})"
   end
 
+  def log_in_css = "#{SIGN_IN_FORM_SELECTOR} button[type='submit']"
+
   def assert_contrast_clears_aa
-    log_in_css = "#{SIGN_IN_FORM_SELECTOR} button[type='submit']"
     assert_selector log_in_css, text: "Log in"
 
-    assert_operator rendered_contrast(log_in_css), :>=, 4.5
-    assert_operator rendered_contrast("#sign-in-divider"), :>=, 4.5
+    [ log_in_css, "#sign-in-divider", ".auth-page p", "a[href='#{new_user_registration_path}']",
+      "a[href='#{new_user_password_path}']" ].each do |css|
+      assert_operator rendered_contrast(css), :>=, 4.5, "#{css} fails AA"
+    end
+  end
+
+  def assert_control_heights(selectors)
+    selectors.each do |css|
+      all(css).each do |control|
+        height = page.evaluate_script("arguments[0].getBoundingClientRect().height", control)
+        assert yield(height), "#{css} (#{control.text.presence || control[:id]}) is #{height}px tall"
+      end
+    end
   end
 
   def emulate_color_scheme(scheme)
