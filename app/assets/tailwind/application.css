@@ -980,7 +980,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   --auth-neutral-subtle: #f4f5f6;
   --auth-neutral-muted: #cfd1d4;
   --auth-neutral-strong: #0c1014;
-  --auth-neutral-strong-hover: #15191d;
+  --auth-neutral-strong-hover: #292d31;
   --auth-neutral-inverse: #ffffff;
   --auth-focus-ring: #202328;
   --auth-danger: #d02115;
@@ -1004,7 +1004,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
     --auth-neutral-subtle: #201f32;
     --auth-neutral-muted: #56566c;
     --auth-neutral-strong: #fbfbff;
-    --auth-neutral-strong-hover: #ededf2;
+    --auth-neutral-strong-hover: #d1d1d8;
     --auth-neutral-inverse: #0a0917;
     --auth-focus-ring: #e5e6ed;
     --auth-danger: #f1a39d;
