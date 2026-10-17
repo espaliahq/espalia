@@ -73,3 +73,8 @@ first.
 Edit the `STEPS` / `LEAF` path data (and `COLOR`) in `bin/build-icons`, then
 regenerate. Keep the mark's bounding box centred at (531.5, 513.5) in the
 1024 box, or update `CX` / `CY` — every crop is computed from that centre.
+
+The sign-in page draws the mark inline, in the text colour rather than teal, so
+it follows light and dark mode
+(`Views::Users::Sessions::NewView#brand_mark`). Its two paths are a copy of
+`STEPS` / `LEAF`: change them there too.
