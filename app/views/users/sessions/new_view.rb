@@ -11,7 +11,7 @@ class Views::Users::Sessions::NewView < Views::Base
   FONT_URL = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap"
 
   BUTTON_CLASSES = "inline-flex w-full items-center justify-center gap-2 h-11 sm:h-10 px-4 rounded-lg " \
-                   "text-sm/5 font-semibold cursor-pointer"
+                   "text-sm/5 font-semibold cursor-pointer transition-colors duration-200"
 
   # @param resource [User] the Devise resource (an unsaved User instance)
   # @param flash [ActionDispatch::Flash::FlashHash] the current request flash
@@ -94,7 +94,10 @@ class Views::Users::Sessions::NewView < Views::Base
       data: { turbo: "false" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(type: "submit", class: "#{BUTTON_CLASSES} bg-(--auth-neutral-subtle) text-(--auth-content)") do
+      button(
+        type: "submit",
+        class: "#{BUTTON_CLASSES} bg-(--auth-neutral-subtle) hover:bg-(--auth-neutral-muted) text-(--auth-content)"
+      ) do
         google_logo
         span { "Continue with Google" }
       end
@@ -190,7 +193,8 @@ class Views::Users::Sessions::NewView < Views::Base
   def submit_button
     button(
       type: "submit",
-      class: "#{BUTTON_CLASSES} bg-(--auth-neutral-strong) text-(--auth-neutral-inverse)"
+      class: "#{BUTTON_CLASSES} bg-(--auth-neutral-strong) hover:bg-(--auth-neutral-strong-hover) " \
+             "text-(--auth-neutral-inverse)"
     ) { "Log in" }
   end
 
@@ -199,11 +203,13 @@ class Views::Users::Sessions::NewView < Views::Base
       a(
         href: new_user_registration_path,
         class: "inline-flex items-center min-h-11 text-sm/5 font-semibold underline underline-offset-3 " \
-               "decoration-(--auth-border-default)"
+               "decoration-(--auth-border-default) hover:decoration-current transition-colors duration-200"
       ) { "Create an account" }
-      a(href: new_user_password_path, class: "inline-flex items-center min-h-11 text-(--auth-content-muted)") do
-        "Forgot your password?"
-      end
+      a(
+        href: new_user_password_path,
+        class: "inline-flex items-center min-h-11 text-(--auth-content-muted) hover:underline underline-offset-3 " \
+               "decoration-current/20"
+      ) { "Forgot your password?" }
     end
   end
 end

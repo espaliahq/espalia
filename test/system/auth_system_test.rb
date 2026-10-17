@@ -5,6 +5,28 @@ require "application_system_test_case"
 class AuthSystemTest < ApplicationSystemTestCase
   include ContrastHelpers
 
+  HOVER_FILL_JS = <<~JS
+    (el => {
+      const hoverClass = [ ...el.classList ].find(c => c.startsWith("hover:bg-"))
+      if (!hoverClass) return { base: null, hover: null }
+      const selector = `.${CSS.escape(hoverClass)}:hover`
+      const rules = []
+      const walk = list => [ ...list ].forEach(r => {
+        if (r.selectorText) rules.push(r)
+        if (r.cssRules) walk(r.cssRules)
+      })
+      for (const sheet of document.styleSheets) { try { walk(sheet.cssRules) } catch (e) {} }
+      const rule = rules.find(r => r.selectorText === selector)
+      if (!rule) return { base: getComputedStyle(el).backgroundColor, hover: null }
+      const probe = document.createElement("span")
+      probe.style.backgroundColor = rule.style.backgroundColor
+      el.appendChild(probe)
+      const hover = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return { base: getComputedStyle(el).backgroundColor, hover }
+    })(arguments[0])
+  JS
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -54,6 +76,8 @@ class AuthSystemTest < ApplicationSystemTestCase
     should "clear AA for its text in light mode" do
       visit new_user_session_path
       assert_text "Sign in to your account"
+      log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
+      assert_equal "rgb(12, 16, 20)", log_in_fill, "the light theme didn't apply"
 
       assert_contrast_clears_aa
     end
@@ -68,6 +92,21 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_contrast_clears_aa
     ensure
       emulate_color_scheme("light")
+    end
+  end
+
+  context "sign in page hover states" do
+    # The test browser reports `hover: none`, so Tailwind's hover rules never
+    # match a real hover there; read the rule each button would apply instead.
+    should "give both buttons a different fill on hover" do
+      visit new_user_session_path
+
+      [ log_in_css, "button[type='submit']" ].each do |css|
+        button = find(css, match: :first)
+        fills = page.evaluate_script(HOVER_FILL_JS, button)
+        assert fills["hover"], "#{button.text} has no hover fill"
+        assert_not_equal fills["base"], fills["hover"], "#{button.text} keeps its fill on hover"
+      end
     end
   end
 
@@ -147,8 +186,9 @@ class AuthSystemTest < ApplicationSystemTestCase
   def assert_contrast_clears_aa
     assert_selector log_in_css, text: "Log in"
 
-    [ log_in_css, "#sign-in-divider", ".auth-page p", "a[href='#{new_user_registration_path}']",
-      "a[href='#{new_user_password_path}']" ].each do |css|
+    [ log_in_css, "button[type='submit']", "#sign-in-divider", ".auth-page h1", ".auth-page h2", ".auth-page p",
+      "label[for='user_email']", "label[for='user_remember_me']", "#user_email",
+      "a[href='#{new_user_registration_path}']", "a[href='#{new_user_password_path}']" ].each do |css|
       assert_operator rendered_contrast(css), :>=, 4.5, "#{css} fails AA"
     end
   end

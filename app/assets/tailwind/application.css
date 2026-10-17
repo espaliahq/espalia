@@ -969,7 +969,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 
 /* The sign-in page (#514): Bento's tokens and type, scoped to `.auth-page`
  * so nothing else picks them up. The view reads the tokens through
- * `bg-(--auth-…)` utilities; only what a utility can't say lives here. */
+ * `bg-(--auth-…)` utilities. */
 .auth-page {
   --auth-surface: #ffffff;
   --auth-content: #0c1014;
@@ -978,7 +978,9 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   --auth-border-default: #cfd1d4;
   --auth-border-subtle: #f4f5f6;
   --auth-neutral-subtle: #f4f5f6;
+  --auth-neutral-muted: #cfd1d4;
   --auth-neutral-strong: #0c1014;
+  --auth-neutral-strong-hover: #15191d;
   --auth-neutral-inverse: #ffffff;
   --auth-focus-ring: #202328;
   --auth-danger: #d02115;
@@ -1000,7 +1002,9 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
     --auth-border-default: #56566c;
     --auth-border-subtle: #424257;
     --auth-neutral-subtle: #201f32;
+    --auth-neutral-muted: #56566c;
     --auth-neutral-strong: #fbfbff;
+    --auth-neutral-strong-hover: #ededf2;
     --auth-neutral-inverse: #0a0917;
     --auth-focus-ring: #e5e6ed;
     --auth-danger: #f1a39d;
