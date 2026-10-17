@@ -9,6 +9,7 @@ class Views::Users::Sessions::NewView < Views::Base
   include Phlex::Rails::Helpers::ContentFor
 
   FONT_URL = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap"
+  BROWSER_THEME_COLOR = "#6b58da"
 
   BUTTON_CLASSES = "inline-flex w-full items-center justify-center gap-2 h-11 sm:h-10 px-4 rounded-lg " \
                    "text-sm/5 font-semibold cursor-pointer transition-colors duration-200"
@@ -22,6 +23,7 @@ class Views::Users::Sessions::NewView < Views::Base
 
   def view_template
     font_links
+    content_for(:theme_color, view_context.tag.meta(name: "theme-color", content: BROWSER_THEME_COLOR))
 
     main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-screen flex items-center justify-center p-4 " \
                 "bg-(--auth-surface) text-(--auth-content) antialiased") do

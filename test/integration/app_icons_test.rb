@@ -43,12 +43,22 @@ class AppIconsTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "replace the theme colour with the sign-in page's own" do
+      assert_select "meta[name='theme-color']", count: 1
+      assert_select "meta[name='theme-color'][content='#{Views::Users::Sessions::NewView::BROWSER_THEME_COLOR}']"
+      assert_select "meta[name='application-name'][content='GrowthOS']"
+    end
+  end
+
+  context "the layout head on a page without its own theme colour" do
+    setup { get new_user_password_path }
+
     should "declare the default theme colour per colour scheme when no tenant is active" do
+      assert_response :success
       assert_select "meta[name='theme-color'][media='(prefers-color-scheme: light)']" \
                     "[content='#{Tenant::DEFAULT_NAV_BG_COLOR}']"
       assert_select "meta[name='theme-color'][media='(prefers-color-scheme: dark)']" \
                     "[content='#{Tenant::DEFAULT_NAV_BG_COLOR_DARK}']"
-      assert_select "meta[name='application-name'][content='GrowthOS']"
     end
   end
 

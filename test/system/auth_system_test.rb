@@ -56,6 +56,8 @@ class AuthSystemTest < ApplicationSystemTestCase
       visit new_user_session_path
 
       assert_selector "svg[data-brand-mark]"
+      assert_selector "meta[name='theme-color']", visible: false, count: 1
+      assert_selector "meta[name='theme-color'][content='#6b58da']", visible: false
       assert_no_sideways_scroll
       assert_control_heights([ "#user_email", "#user_password", "button[type='submit']" ]) { |height| height == 40 }
     end

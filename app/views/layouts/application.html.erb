@@ -6,8 +6,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="application-name" content="GrowthOS">
     <% theme_tenant = current_tenant if defined?(current_tenant) %>
-    <meta name="theme-color" content="<%= Tenant.browser_theme_color(theme_tenant, :light) %>" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="<%= Tenant.browser_theme_color(theme_tenant, :dark) %>" media="(prefers-color-scheme: dark)">
+    <% if content_for?(:theme_color) %>
+      <%= yield :theme_color %>
+    <% else %>
+      <meta name="theme-color" content="<%= Tenant.browser_theme_color(theme_tenant, :light) %>" media="(prefers-color-scheme: light)">
+      <meta name="theme-color" content="<%= Tenant.browser_theme_color(theme_tenant, :dark) %>" media="(prefers-color-scheme: dark)">
+    <% end %>
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
