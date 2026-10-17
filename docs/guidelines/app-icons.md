@@ -78,5 +78,6 @@ regenerate. Keep the mark's bounding box centred at (531.5, 513.5) in the
 
 The sign-in page draws the mark inline, in the text colour rather than teal, so
 it follows light and dark mode
-(`Views::Users::Sessions::NewView#brand_mark`). Its two paths are a copy of
-`STEPS` / `LEAF`: change them there too.
+(`Views::Users::Sessions::NewView::MARK_PATHS`). Those paths are a copy of
+`STEPS` / `LEAF`: change both. `test/integration/app_icons_test.rb` fails when
+they differ.

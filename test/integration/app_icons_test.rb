@@ -62,6 +62,15 @@ class AppIconsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "the sign-in page's brand mark" do
+    should "draw the same paths as bin/build-icons" do
+      script = Rails.root.join("bin/build-icons").read
+      source = %w[STEPS LEAF].map { |name| script[/^const #{name} = "([^"]+)";$/, 1] }
+
+      assert_equal source, Views::Users::Sessions::NewView::MARK_PATHS
+    end
+  end
+
   context "GET /manifest.json" do
     setup { get "/manifest.json" }
 

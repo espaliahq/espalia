@@ -52,14 +52,15 @@ class AuthSystemTest < ApplicationSystemTestCase
   end
 
   context "sign in page layout" do
-    should "fit the desktop viewport with the brand mark" do
+    should "fit the desktop viewport with the brand mark and 44px controls" do
       visit new_user_session_path
 
       assert_selector "svg[data-brand-mark]"
       assert_selector "meta[name='theme-color']", visible: false, count: 1
       assert_selector "meta[name='theme-color'][content='#6b58da']", visible: false
       assert_no_sideways_scroll
-      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']" ]) { |height| height == 40 }
+      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
+                               "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
     end
 
     should "fit the mobile viewport with 44px controls" do

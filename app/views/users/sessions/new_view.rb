@@ -11,7 +11,15 @@ class Views::Users::Sessions::NewView < Views::Base
   FONT_URL = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap"
   BROWSER_THEME_COLOR = "#6b58da"
 
-  BUTTON_CLASSES = "inline-flex w-full items-center justify-center gap-2 h-11 sm:h-10 px-4 rounded-lg " \
+  # Copies of STEPS and LEAF in bin/build-icons; test/integration/app_icons_test.rb keeps them equal.
+  MARK_PATHS = [
+    "M223,847 H777 A28,28 0 0 0 805,819 V408 A28,28 0 0 0 777,380 H633 A28,28 0 0 0 605,408 V506 " \
+    "A14,14 0 0 1 591,520 H428 A28,28 0 0 0 400,548 V636 A14,14 0 0 1 386,650 H223 A28,28 0 0 0 " \
+    "195,678 V819 A28,28 0 0 0 223,847 Z",
+    "M688,400 V330 C688,235 765,180 868,180 C870,300 812,380 726,380 V400 Z"
+  ].freeze
+
+  BUTTON_CLASSES = "inline-flex w-full items-center justify-center gap-2 h-11 px-4 rounded-lg " \
                    "text-sm/5 font-semibold cursor-pointer transition-colors duration-200"
 
   # @param resource [User] the Devise resource (an unsaved User instance)
@@ -25,7 +33,7 @@ class Views::Users::Sessions::NewView < Views::Base
     font_links
     content_for(:theme_color, view_context.tag.meta(name: "theme-color", content: BROWSER_THEME_COLOR))
 
-    main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-screen flex items-center justify-center p-4 " \
+    main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-dvh flex items-center justify-center p-4 " \
                 "bg-(--auth-surface) text-(--auth-content) antialiased") do
       backdrop
       div(class: "w-full max-w-100 flex flex-col gap-6") do
@@ -66,10 +74,7 @@ class Views::Users::Sessions::NewView < Views::Base
     svg(class: "size-10", viewBox: "166.5 148.5 730 730", aria: { hidden: "true" }, focusable: "false",
       data: { brand_mark: true }) do |s|
       s.g(fill: "currentColor") do
-        s.path(d: "M223,847 H777 A28,28 0 0 0 805,819 V408 A28,28 0 0 0 777,380 H633 A28,28 0 0 0 605,408 V506 " \
-                  "A14,14 0 0 1 591,520 H428 A28,28 0 0 0 400,548 V636 A14,14 0 0 1 386,650 H223 A28,28 0 0 0 " \
-                  "195,678 V819 A28,28 0 0 0 223,847 Z")
-        s.path(d: "M688,400 V330 C688,235 765,180 868,180 C870,300 812,380 726,380 V400 Z")
+        MARK_PATHS.each { |d| s.path(d:) }
       end
     end
   end
@@ -173,14 +178,14 @@ class Views::Users::Sessions::NewView < Views::Base
         type: type,
         autocomplete: autocomplete,
         required: true,
-        class: "w-full h-11 sm:h-10 px-3 rounded-lg border border-(--auth-control-edge) " \
+        class: "w-full h-11 px-3 rounded-lg border border-(--auth-control-edge) " \
                "bg-(--auth-surface) text-sm/[18px] text-(--auth-content)"
       )
     end
   end
 
   def remember_me_field
-    label(for: "user_remember_me", class: "flex items-center gap-2 min-h-11 sm:min-h-0 text-sm/[18px]") do
+    label(for: "user_remember_me", class: "flex items-center gap-2 min-h-11 text-sm/[18px]") do
       input(
         id: "user_remember_me",
         name: "user[remember_me]",
@@ -209,8 +214,7 @@ class Views::Users::Sessions::NewView < Views::Base
       ) { "Create an account" }
       a(
         href: new_user_password_path,
-        class: "inline-flex items-center min-h-11 text-(--auth-content-muted) hover:underline underline-offset-3 " \
-               "decoration-current/20"
+        class: "inline-flex items-center min-h-11 text-(--auth-content-muted) hover:underline underline-offset-3"
       ) { "Forgot your password?" }
     end
   end
