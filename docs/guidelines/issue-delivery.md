@@ -104,6 +104,12 @@ calls with a long timeout so the call blocks. Anything genuinely backgrounded
 work or end your turn and wait. Never `sleep`, tail a file in a loop, or
 re-check for a result that will arrive on its own.
 
+CodeRabbit is the exception: its review arrives with no notification, so it has
+to be checked for. Once CI is green, wait a few minutes, then read the
+unresolved threads and the review bodies; re-check once after each push, and
+keep retrying the trigger while a review is rate-limited (see
+[Reading a PR's review](#reading-a-prs-review-what-coderabbit-can-hide)).
+
 ## Working alongside other agents
 
 Subagents share your checkout, your dev database and your dev server on
