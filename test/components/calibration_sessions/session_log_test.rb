@@ -36,7 +36,7 @@ class Views::CalibrationSessions::SessionLogTest < ActiveSupport::TestCase
     html = render_log(3)
 
     assert_includes html, "Note number 0"
-    assert_not_includes html, "most recent outcomes"
+    assert_not_includes html, "most recent entries"
   end
 
   should "render only the newest RENDER_LIMIT and say so" do
@@ -46,7 +46,7 @@ class Views::CalibrationSessions::SessionLogTest < ActiveSupport::TestCase
     assert_includes html, "Note number #{limit + 4}", "the newest entry is rendered"
     assert_not_includes html, "Note number 0", "the oldest falls outside the cap"
     assert_equal limit, html.scan("Note number ").size
-    assert_includes html, "Showing the #{limit} most recent outcomes.",
+    assert_includes html, "Showing the #{limit} most recent entries.",
       "a truncated log says so rather than just stopping"
   end
 
@@ -68,5 +68,7 @@ class Views::CalibrationSessions::SessionLogTest < ActiveSupport::TestCase
     assert_includes html, "Restored the session from the archive"
     assert_equal 3, html.scan(%(data-kind-group="lifecycle")).size,
       "lifecycle lines only show under All — no chip claims them"
+    assert_includes html, "No outcomes recorded yet", "housekeeping lines are not outcomes"
+    assert_not_includes html, "framework-activity-target=\"filterChip\"", "no chips to filter outcomes that don't exist"
   end
 end

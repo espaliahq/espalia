@@ -97,9 +97,9 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   def view_template
     div(class: "p-4", id: "session-log", data: { controller: "framework-activity" }) do
       header
-      if entries.empty?
-        empty_state
-      else
+      # A session with only renames / archive lines still has no outcomes.
+      empty_state unless any_outcomes?
+      if entries.any?
         ul(class: "mt-3 space-y-1") do
           entries.each { |entry| entry_row(entry) }
         end
@@ -113,6 +113,10 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def entries
     @entries ||= (@log[:entries] || []).first(RENDER_LIMIT)
+  end
+
+  def any_outcomes?
+    entries.any? { |entry| !LIFECYCLE_KINDS.include?(entry[:kind]) }
   end
 
   def truncated?
@@ -134,7 +138,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         aria: { label: "Close the session log" }
       ) { span(aria: { hidden: "true" }) { "✕" } }
     end
-    div(class: "mt-2") { filter_chips } if entries.any?
+    div(class: "mt-2") { filter_chips } if any_outcomes?
   end
 
   def filter_chips
@@ -165,7 +169,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   # indistinguishable from one with nothing older in it.
   def older_note
     p(class: "mt-3 text-[11px] text-gray-600 dark:text-gray-300") do
-      "Showing the #{RENDER_LIMIT} most recent outcomes."
+      "Showing the #{RENDER_LIMIT} most recent entries."
     end
   end
 
