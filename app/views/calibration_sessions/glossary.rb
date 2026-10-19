@@ -24,6 +24,13 @@ module Views::CalibrationSessions::Glossary
                   "on the 0–3 frequency scale. Only cells at each person's own " \
                   "assessed level count."
     },
+    rater_mean: {
+      label: "mean",
+      definition: "A rater's mean manager rating on this capability across " \
+                  "everyone they rate in the session, on the 0–3 frequency scale " \
+                  "(Not yet is 0, Consistently is 3). Only each person's own " \
+                  "assessed level counts, so levels are never mixed."
+    },
     reports: {
       label: "Reports",
       definition: "How many of this rater's reports are in the session, and how " \

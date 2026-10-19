@@ -17,6 +17,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::PeopleNames
+  include Views::CalibrationSessions::LanePacking
 
   # The score's own scale (ADR-21): 100 is meeting the assessed level, 200 is
   # demonstrating the next one in full.
@@ -186,22 +187,14 @@ class Views::CalibrationSessions::CohortView < Views::Base
          title: "Cohort median: #{median_pct}%")
   end
 
-  # dot => lane. Greedy packing: each dot (already sorted by score) takes
-  # the first lane whose last occupant is at least LANE_NUDGE_PCT away;
-  # a dense cluster stacks downward instead of smearing into a pile. At
-  # MAX_LANES the densest ties do overlap — countable is the goal, not a
-  # beeswarm.
+  # dot => lane. At MAX_LANES the densest ties do overlap — countable is
+  # the goal, not a beeswarm. Distance is measured on the RENDERED
+  # position: two overperformers at 210% and 240% both draw at the 200%
+  # cap, so the raw pcts would call them "far apart" and stack their tap
+  # targets exactly.
   def lanes(plotted)
-    lane_edges = []
-    plotted.map do |dot|
-      # Distance on the RENDERED position: two overperformers at 210% and
-      # 240% both draw at the 200% cap, so measuring the raw pcts would
-      # call them "far apart" and stack their tap targets exactly.
-      pct = dot[:pct].clamp(0, AXIS_MAX_PCT)
-      lane = lane_edges.index { |edge| (pct - edge).abs >= LANE_NUDGE_PCT }
-      lane ||= lane_edges.size < MAX_LANES ? lane_edges.size : (pct.round % MAX_LANES)
-      lane_edges[lane] = pct
-      [ dot, lane ]
+    pack_lanes(plotted, nudge: LANE_NUDGE_PCT, max_lanes: MAX_LANES) do |dot|
+      dot[:pct].clamp(0, AXIS_MAX_PCT)
     end
   end
 

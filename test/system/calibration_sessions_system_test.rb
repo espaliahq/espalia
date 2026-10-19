@@ -524,6 +524,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id)
     assert_text "AT-LEVEL RATINGS BY LEVEL"
     assert_drill_in_axis
+    # The divergence-board row the room clicked: each rater's mean, flagged.
+    within("[data-orientation-row]") do
+      assert_text "raters disagree"
+      assert_selector "[data-rater-id='#{@em_1.id}'][title^='Mia Manager — mean 3.00']"
+      assert_selector "[data-rater-id='#{@em_2.id}']"
+    end
     # Level header beside the axis on desktop, stacked above it on a phone.
     header, axis = page.evaluate_script(<<~JS)
       (() => {

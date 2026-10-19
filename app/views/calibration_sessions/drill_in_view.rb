@@ -19,6 +19,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::ComparisonDrawerChrome
   include Views::CalibrationSessions::PeopleNames
+  include Views::CalibrationSessions::LanePacking
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
 
@@ -31,6 +32,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # narrower than one target per column, so neighbouring columns can't.
   LANE_HEIGHT = 44
   AXIS_COLUMNS = "grid-cols-[repeat(4,minmax(2.75rem,1fr))]"
+  # The orientation row's rater-mean dots: not links, so they only need to
+  # be legible — 22px discs, a lane each time two land within ~one disc.
+  MEAN_LANE_NUDGE = 3.5
+  MEAN_LANE_HEIGHT = 26
   # Room above the track for the tick labels — the `h-[18px]` rows match.
   TICK_LABEL_HEIGHT = 18
 
@@ -54,11 +59,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # @param pinned_cards [Hash{String => Hash}] person_id => PersonCard data
   # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
   #   as unclear (facilitator/admin AND the session is live)
+  # @param orientation [Hash, nil] this capability's divergence-board row,
+  #   `{ rater_means:, flagged: }`; nil when it has no comparable row
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  person_focus_ordinal: nil, person_action: nil,
                  request_candidates: nil,
                  view: nil, wall: nil, wall_filters: {}, pin_ids: [], pinned_cards: {},
-                 session_log: nil, can_note: false,
+                 session_log: nil, can_note: false, orientation: nil,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
     @stats = stats
@@ -69,6 +76,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @can_flag = can_flag
     @request_candidates = request_candidates
     @session_log = session_log
+    @orientation = orientation
     @can_note = can_note
     @view = view
     @wall = wall
@@ -358,9 +366,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         card.body do
           # The container query, not the viewport: the session log panel
           # takes width from this column on a wide screen.
-          div(class: "@container p-3 sm:p-6") do
+          div(class: "@container px-3 pb-3 sm:px-6 sm:pb-6") do
             grid_heading
             rater_legend
+            orientation_row
             if @stats[:ordinals].empty?
               p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
                 "Nobody in the population is enrolled at a level yet."
@@ -427,6 +436,72 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
            aria: { hidden: "true" })
       plain rater_name(rater_id)
+    end
+  end
+
+  # The divergence-board row the room clicked to get here: each rater's
+  # mean on this capability across every level, on the same 0–3 ticks as
+  # the level rows below, with the ⚠ badge when the board flags it.
+  def orientation_row
+    div(
+      class: "mt-4 grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
+             "border-t border-gray-100 dark:border-gray-700 py-4",
+      data: { orientation_row: "true" }
+    ) do
+      div(class: "min-w-0 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "flex flex-wrap items-center gap-x-1") do
+          plain "All levels · each rater's"
+          defined_term(:rater_mean)
+        end
+        p(class: "-mt-2") { "The row you clicked on the divergence board." }
+        if @orientation&.dig(:flagged)
+          div(class: "mt-1") do
+            defined_term(:raters_disagree, suffix: @stats[:capability][:stable_id],
+                         trigger_class: BADGE_TRIGGER)
+          end
+        end
+      end
+      div(class: "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-1") do
+        div
+        if @orientation
+          rater_means_axis(@orientation[:rater_means])
+        else
+          p(class: "self-center text-xs italic text-gray-600 dark:text-gray-300") do
+            "Fewer than two raters have rated this capability — nothing to compare yet."
+          end
+        end
+      end
+    end
+  end
+
+  def rater_means_axis(rater_means)
+    position = ->(stats_hash) { (12.5 + (stats_hash[:mean] * 25)).clamp(0, 100).round(1) }
+    placed = pack_lanes(rater_means.sort_by { |_, stats_hash| stats_hash[:mean] }, nudge: MEAN_LANE_NUDGE) do |(_, stats_hash)|
+      position.call(stats_hash)
+    end
+    lanes = (placed.map(&:last).max || 0) + 1
+    summary = rater_means.map do |rater_id, stats_hash|
+      "#{rater_name(rater_id)} #{sprintf('%.1f', stats_hash[:mean])} (n #{stats_hash[:n]})"
+    end.join(", ")
+
+    div(class: "relative min-w-0", style: "height: #{(lanes * MEAN_LANE_HEIGHT) + 4}px",
+        role: "img", aria: { label: "#{@stats[:capability][:name]} rater means: #{summary}" }) do
+      span(class: "absolute inset-x-0 top-[13px] h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700")
+      FREQUENCY_POSITIONS.each_value do |left|
+        span(class: "absolute top-[13px] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full " \
+                    "bg-gray-300 dark:bg-gray-600", style: "left: #{left}%")
+      end
+      placed.each do |(rater_id, stats_hash), lane|
+        index = rater_index(rater_id)
+        div(
+          class: "absolute flex h-[22px] w-[22px] -translate-x-1/2 items-center justify-center rounded-full " \
+                 "border-2 border-white dark:border-gray-800 text-[9px] font-semibold " \
+                 "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}",
+          style: "left: #{position.call(stats_hash)}%; top: #{2 + (lane * MEAN_LANE_HEIGHT)}px",
+          title: "#{rater_name(rater_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})",
+          data: { rater_id: rater_id }
+        ) { initials(rater_name(rater_id)) }
+      end
     end
   end
 

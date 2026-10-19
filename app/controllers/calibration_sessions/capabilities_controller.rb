@@ -23,7 +23,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
 
     stats = CalibrationSessions::DrillInStats.new(
       session: @session, capability_stable_id: params.expect(:id),
-      visible_person_ids: visible_person_ids
+      visible_person_ids: visible_person_ids, population_seeds: population_seeds
     ).call
     if stats.nil?
       redirect_to calibration_session_path(@session), alert: "Capability not found in this framework."
@@ -57,6 +57,9 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       stats: stats,
       people: Person.where(id: people_ids).index_by(&:id),
       session_log: session_log,
+      # The grid sits outside the pane frame, so a frame request never shows
+      # it — the same reason the log is skipped.
+      orientation: (orientation_row(stats) unless pane_frame_request?),
       can_note: @session.started? && policy(@session).flag_expectation?,
       person_card: person_card,
       person_focus_ordinal: focus_ordinal,
@@ -81,6 +84,29 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # Turbo asks for one frame by name; the side panel isn't in it.
   def pane_frame_request?
     request.headers["Turbo-Frame"] == "calibration-bottom-pane"
+  end
+
+  # The request's one attribution (recorded managers, delegations,
+  # assignments), shared by the drill-in and the board's statistics.
+  def population_seeds
+    @population_seeds ||= CalibrationSessions::PopulationSeeds.new(
+      framework_id: @session.framework_id,
+      participant_ids: @session.participants.pluck(:person_id),
+      facilitator_id: @session.facilitator_id
+    )
+  end
+
+  # This capability's divergence-board row — each rater's mean and the
+  # "raters disagree" flag — so the drill-in opens on the row the room just
+  # clicked. nil when fewer than two raters have rated it (the board lists
+  # no row then either).
+  #
+  # @return [Hash, nil] `{ rater_means:, flagged: }`
+  def orientation_row(stats)
+    CalibrationSessions::OverviewStats.new(session: @session, population_seeds: population_seeds)
+      .call[:capabilities]
+      .find { |row| row[:stable_id] == stats[:capability][:stable_id] }
+      &.slice(:rater_means, :flagged)
   end
 
   # @return [String, nil] "wall" / nil

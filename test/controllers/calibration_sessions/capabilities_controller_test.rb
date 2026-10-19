@@ -97,6 +97,8 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes ivy["title"], "L3 · Consistently"
       assert_includes css_select("a[data-person-id='#{@omar.id}']").first["aria-label"], "unrated"
       assert_select "p[data-silent-raters]", count: 0
+      # One rater: the board has no row to orient by, and says so.
+      assert_select "[data-orientation-row]", text: /nothing to compare yet/
     end
 
     should "render the person card with ratings and evidence when a dot is opened" do
