@@ -60,7 +60,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     { icon: :shield, title: "One person drives alignment",
       body: "Only your reporting manager starts, completes or re-opens it." },
     { icon: :check, title: "Carried isn't confirmed",
-      body: "Last cycle's ratings show dashed until you say they still hold." }
+      body: "Last cycle's ratings at your level and above show dashed until you say they still hold." }
   ].freeze
 
   # The example in the "score unlocks" ring.
@@ -213,7 +213,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
           "Your role, level and manager come from your HR system or an admin." ],
         [ :admin, "Admin opens a cycle and enrols the cohort", "Everyone in it gets the same window to assess." ],
         [ :growthos, "Last cycle's ratings come with you",
-          "Nothing starts blank. Carried ratings wait for you to confirm them." ]
+          "Nothing starts blank. Carried ratings at your level and above wait for you to confirm them." ]
       ]
     ) { framework_slice }
   end
