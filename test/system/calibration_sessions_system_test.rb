@@ -228,7 +228,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Quinn Alderberry hasn't rated yet — not on the board."
     assert_no_text "RATER TENDENCY"
 
-    # ── Score by cohort ──
+    # ── Score by level ──
     # JS-dispatched so Selenium's scroll-into-view can't touch scrollY, and
     # in a SHORT viewport so the fixture page actually scrolls: the frame
     # swap must leave the room's scroll position alone — the entire reason
@@ -237,10 +237,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     page.execute_script("window.scrollTo(0, 300)")
     assert_operator page.evaluate_script("window.scrollY"), :>=, 300,
                     "the instrument needs a page that scrolls"
-    click_with_retry(expect_text: "SCORE BY COHORT") do
+    click_with_retry(expect_text: "SCORE BY LEVEL") do
       page.execute_script(<<~JS)
         [...document.querySelectorAll("a[role='tab']")]
-          .find((a) => a.textContent.includes("Score by cohort")).click()
+          .find((a) => a.textContent.includes("Score by level")).click()
       JS
     end
     assert page.evaluate_script("window.__staying === true"),
@@ -282,7 +282,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     assert_selector "[data-drawer-card='#{nia_id}']", count: 1
     assert_selector "a[href*='capabilities'][href*='pins%5B%5D=#{nia_id}']"
-    click_link_with_js_fallback("Score by cohort", expect_text: "SCORE BY COHORT")
+    click_link_with_js_fallback("Score by level", expect_text: "SCORE BY LEVEL")
 
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
@@ -297,7 +297,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── The cohort axis on a phone: scrolls inside its own container ──
     page.driver.browser.manage.window.resize_to(375, 812)
     visit calibration_session_path(@live_session_id, view: "cohort")
-    assert_text "SCORE BY COHORT"
+    assert_text "SCORE BY LEVEL"
     overflowing = page.evaluate_script(<<~JS)
       (() => {
         const wrap = document.querySelector(".overflow-x-auto");
@@ -319,7 +319,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # the cohort tab renders it directly (the ?view= param is shareable),
     # then over to the strip for the vocabulary check.
     visit calibration_session_path(@live_session_id, view: "cohort")
-    assert_text "SCORE BY COHORT"
+    assert_text "SCORE BY LEVEL"
     click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
 
     # ── The vocabulary defines itself, by KEYBOARD ──

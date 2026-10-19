@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# One person's cohort face in the comparison drawer: their % of expected
+# One person's level face in the comparison drawer: their % of expected
 # (or the coverage gate's honest copy), what pulls the score down and up
 # (each row linking into the capability drill-in with their card open),
 # and the rater-tendency context line — the session page's presentation

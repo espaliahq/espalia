@@ -3,13 +3,13 @@
 # The calibration overview for one session: the rater tendency strip
 # (mean vs org, rating distribution, self-gap, evidence backing), the
 # capability divergence board ranked by tendency-corrected disagreement,
-# and the level cohorts (per-person % of expected, manager-only — the
+# and the people grouped by assessed level (per-person % of expected, manager-only — the
 # assessment's own number). "Where are my raters most inconsistent?" and
 # "who is rated high or low against their level peers?" as data.
 class Operations::CalibrationSessions::Overview < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
 
-  description "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing), capabilities ranked by tendency-corrected rater disagreement, and level cohorts of per-person % of expected (100 = meeting the level, 200 = demonstrating the next level in full; manager ratings only; a coverage-gated person carries pct: null with rated/total/unlock_target — not rated yet, never a low score)."
+  description "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing), capabilities ranked by tendency-corrected rater disagreement, and people grouped by assessed level, each with a per-person % of expected (100 = meeting the level, 200 = demonstrating the next level in full; manager ratings only; a coverage-gated person carries pct: null with rated/total/unlock_target — not rated yet, never a low score)."
   category :read
   approval :none
 

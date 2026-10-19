@@ -222,7 +222,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  context "the Score by cohort tab" do
+  context "the Score by level tab" do
     setup do
       sign_in @facilitator_user
       ActsAsTenant.with_tenant(@tenant) do
@@ -285,7 +285,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # Tabs + content live inside the pane frame, so a tab or dot click
       # swaps in place instead of scrolling the room back to the top.
       assert_select "turbo-frame#calibration-overview-pane a[role='tab']", count: 3
-      assert_select "a[role='tab'][aria-selected='true']", text: "Score by cohort"
+      assert_select "a[role='tab'][aria-selected='true']", text: "Score by level"
       # Ivy: 100%, entirely carried → dashed disclosure on the dot.
       assert_select "a[aria-label*='Ivy IC — 100% of expected']"
       assert_includes response.body, "1 of 1 ratings carried forward"
