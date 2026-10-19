@@ -5,6 +5,8 @@
 # an example; the chips and colours are the assessment screen's own, so what
 # a person learns here is what they will see there.
 class Views::AssessmentGuides::ShowView < Views::Base
+  include Views::Assessments::Concerns::ScoreScale
+
   Palette = Views::Assessments::FrequencyPalette
 
   # Stroke paths on a 24×24 grid. One-off glyphs for this page, so they stay
@@ -62,6 +64,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
 
   # The example in the "score unlocks" ring.
   EXAMPLE_LEVEL_SIZE = 12
+  # The example score's state: 132% is meeting E3 and a third of E4.
+  EXAMPLE_STATE = :performing
 
   CARD = "rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6"
   MUTED = "text-gray-600 dark:text-gray-300"
@@ -461,16 +465,14 @@ class Views::AssessmentGuides::ShowView < Views::Base
     div(class: CARD) do
       h3(class: CARD_TITLE) { "Your score" }
       p(class: "flex flex-wrap items-baseline gap-x-3") do
-        span(class: "text-4xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400") { "132%" }
-        span(class: "font-semibold text-gray-900 dark:text-white") do
-          "#{Views::Assessments::StateLabels.for(:performing, tenant: @current_tenant)} at E3"
-        end
+        span(class: "text-4xl font-extrabold tracking-tight #{tone_text(EXAMPLE_STATE)}") { "132%" }
+        span(class: "font-semibold text-gray-900 dark:text-white") { "#{state_label(EXAMPLE_STATE)} at E3" }
       end
       p(class: "mt-1 text-sm #{MUTED}") { "Meeting E3 in full, and 32% of the way to E4." }
       div(class: "relative mt-5 grid grid-cols-2 gap-1", aria: { hidden: "true" }) do
-        span(class: "h-3.5 rounded-full bg-blue-500 dark:bg-blue-400")
+        span(class: "h-3.5 rounded-full #{tone_bar(EXAMPLE_STATE)}")
         span(class: "h-3.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800") do
-          span(class: "block h-full w-[32%] bg-blue-500 dark:bg-blue-400")
+          span(class: "block h-full w-[32%] #{tone_bar(EXAMPLE_STATE)}")
         end
         span(class: "absolute -top-1.5 left-[66%] h-6 w-1 -translate-x-1/2 rounded bg-gray-900 dark:bg-white")
       end
