@@ -225,7 +225,7 @@ Nil values in the nullable columns (`mastery_threshold`, `meeting_expectation_th
 
 ### Hero summary
 
-The number, a two-segment bar (0–100 the assessed level, 100–200 the next, labelled with the level codes; a single segment at the top of the ladder), a state-driven verdict, and a gloss naming the components. See [assessments.md](../guidelines/assessments.md#hero-summary--three-bands). Colour tiers read the framework's configured thresholds — never a hard-coded number.
+The number, a two-segment bar (0–100 the assessed level, 100–200 the next, labelled with the level codes; a single segment at the top of the ladder), a state-driven verdict, and a gloss naming the components. See [assessments.md](../guidelines/assessments/scoring.md#hero-summary--three-bands). Colour tiers read the framework's configured thresholds — never a hard-coded number.
 
 ### One scale at three altitudes
 
