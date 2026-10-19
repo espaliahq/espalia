@@ -134,6 +134,22 @@ export default class extends BaseController {
     } finally {
       this.checking = false
     }
+    // A drawer that closed while this check was in flight left its held
+    // reload for now.
+    this.#applyPending()
+  }
+
+  // One reload at a time: a held reload never overlaps a check or another
+  // reload, so the room never gets two toasts for one change.
+  async #applyPending() {
+    if (this.checking || !this.pending || this.#held()) return
+
+    this.checking = true
+    try {
+      await this.#reload(this.pending)
+    } finally {
+      this.checking = false
+    }
   }
 
   async #reload(changes) {
@@ -191,11 +207,11 @@ export default class extends BaseController {
     // drawer drag mutates its style on every pointermove, so the check runs
     // at most once a frame.
     this.observer = new MutationObserver(() => {
-      if (this.checkQueued) return
-      this.checkQueued = true
+      if (this.releaseQueued) return
+      this.releaseQueued = true
       requestAnimationFrame(() => {
-        this.checkQueued = false
-        if (this.pending && !this.#held()) this.#reload(this.pending)
+        this.releaseQueued = false
+        this.#applyPending()
       })
     })
     this.observer.observe(this.element, {
