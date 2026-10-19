@@ -115,8 +115,10 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     @entries ||= (@log[:entries] || []).first(RENDER_LIMIT)
   end
 
+  # Over the whole feed, not the rendered slice: a page of renames must not
+  # hide an older outcome behind "No outcomes recorded yet".
   def any_outcomes?
-    entries.any? { |entry| !LIFECYCLE_KINDS.include?(entry[:kind]) }
+    (@log[:entries] || []).any? { |entry| !LIFECYCLE_KINDS.include?(entry[:kind]) }
   end
 
   def truncated?

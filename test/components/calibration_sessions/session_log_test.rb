@@ -71,4 +71,20 @@ class Views::CalibrationSessions::SessionLogTest < ActiveSupport::TestCase
     assert_includes html, "No outcomes recorded yet", "housekeeping lines are not outcomes"
     assert_not_includes html, "framework-activity-target=\"filterChip\"", "no chips to filter outcomes that don't exist"
   end
+
+  should "not claim there are no outcomes when the cap hides the only one" do
+    limit = Views::CalibrationSessions::SessionLog::RENDER_LIMIT
+    at = Time.zone.parse("2026-08-01 09:00")
+    renames = Array.new(limit) do |index|
+      { kind: "session_renamed", at: at + (index + 1).minutes, actor_id: ACTOR_ID, name: "Name #{index}" }
+    end
+    html = view_context.render(Views::CalibrationSessions::SessionLog.new(
+      session: CalibrationSession.new,
+      log: { entries: renames.reverse + [ entry(0) ], suggestions: {}, capability_names: {}, acted: Set.new },
+      people: { ACTOR_ID => Person.new(name: "Dana Dept") },
+      can_note: false
+    ))
+
+    assert_not_includes html, "No outcomes recorded yet"
+  end
 end
