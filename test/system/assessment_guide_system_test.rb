@@ -62,6 +62,19 @@ class AssessmentGuideSystemTest < ApplicationSystemTestCase
       assert_equal tops.sort, tops
       assert_equal 4, tops.uniq.size, "expected the four steps stacked, got tops #{tops}"
       assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, MOBILE_SIZE.first
+
+      # Each header's text on one line, inside its own cell.
+      misfits = page.evaluate_script(<<~JS)
+        Array.from(document.querySelectorAll("[data-guide-level-header]")).filter((cell) => {
+          const range = document.createRange()
+          range.selectNodeContents(cell)
+          const text = range.getBoundingClientRect()
+          const box = cell.getBoundingClientRect()
+          const lines = new Set(Array.from(range.getClientRects()).map((r) => Math.round(r.top))).size
+          return lines > 1 || text.left < box.left - 1 || text.right > box.right + 1
+        }).map((cell) => cell.textContent)
+      JS
+      assert_empty misfits, "level headers no longer fit their columns"
     end
 
     should "jump to a step from the step list" do

@@ -229,8 +229,10 @@ class Views::AssessmentGuides::ShowView < Views::Base
         role: "img", aria: { label: "Four capabilities across levels E1 to E5, with E3 highlighted as your level" }) do
         div
         levels.each do |code|
-          div(class: "pb-1 text-center font-bold #{code == 'E3' ? 'text-teal-700 dark:text-teal-300' : MUTED}") do
-            code == "E3" ? "E3 · you" : code
+          div(class: "pb-1 text-center font-bold #{code == 'E3' ? 'text-teal-700 dark:text-teal-300' : MUTED}",
+            data: { guide_level_header: true }) do
+            plain code
+            span(class: "hidden sm:inline") { " · you" } if code == "E3"
           end
         end
         capabilities.each do |name|
