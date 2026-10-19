@@ -86,6 +86,10 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "To confirm"
       assert_not_includes response.body, "In progress"
+      # The readiness card counts the carried cell as rated, and names the
+      # work left — the old people-count bar read this as 0 of 1.
+      assert_includes response.body, "100% rated"
+      assert_includes response.body, "All 1 to confirm"
     end
 
     should "ignore ratings outside the assessed role in the readiness badges" do

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Assembles the calibration overview for one session: the rater tendency
-# strip and the capability divergence board
+# Assembles the calibration overview for one session: the readiness card,
+# the rater tendency strip and the capability divergence board
 # (docs/architecture/calibration-sessions.md, "Overview").
 #
 # All statistics are computed over **at-level manager ratings** — each
@@ -12,10 +12,16 @@
 # rating is 0.6 bands below the org mean" needs no scoring-model caveats.
 #
 # Only population members attributed to a *participant* rater (via the
-# same recorded-manager/delegation semantics as the seed) contribute —
-# reference people whose rater isn't in the room are excluded from
-# tendency statistics by design (you can't calibrate someone in
-# absentia).
+# same recorded-manager/delegation semantics as the seed) contribute to the
+# tendency and divergence statistics — reference people whose rater isn't
+# in the room are excluded by design (you can't calibrate someone in
+# absentia). Readiness covers the whole population, reference people
+# included: their ratings are still something the room reads.
+#
+# Readiness is cell coverage, not people coverage. Every percentage on the
+# card shares one denominator — a person's at-level cells, the role scope
+# at their assessed level — so rating coverage, the carried share and
+# evidence coverage add up and move with every single rating.
 #
 # The two failure modes stay separable:
 # - **spread** — raw between-rater disagreement on a capability.
@@ -58,11 +64,25 @@ class CalibrationSessions::OverviewStats
     @population_seeds = population_seeds
   end
 
-  # @return [Hash] `{ org_mean:, raters: [...], capabilities: [...], insufficient_capability_count: }`
+  # @return [Hash] `{ org_mean:, raters: [...], capabilities: [...],
+  #   insufficient_capability_count:, readiness: {...} }`
   #   Raters: `{ participant_id:, report_count:, rated_count:, cell_count:, mean:,
   #   org_delta:, distribution: {frequency => count}, self_gap:, evidence_pct:,
-  #   carried_count:, small_n: }` — `carried_count` counts this rater's cells
-  #   seeded from a prior cycle, out of `cell_count`.
+  #   carried_count:, small_n:, cell_total:, unrated_count:, evidence_cell_count:,
+  #   coverage_pct:, carried_pct:, evidence_coverage_pct:, ready_state: }` —
+  #   `cell_count` is rated at-level cells and `carried_count` the ones seeded
+  #   from a prior cycle; `evidence_pct` is backed cells over RATED cells.
+  #   The coverage fields share one denominator, `cell_total` (every at-level
+  #   cell of this rater's reports): `coverage_pct` = rated, `carried_pct` =
+  #   carried, `evidence_coverage_pct` = cells with ≥1 active evidence link.
+  #   Fractions 0–1, nil when `cell_total` is 0. `ready_state` names the work
+  #   left — see {.ready_state}.
+  #   Readiness: the population-wide totals on the same denominator
+  #   (`{ cell_total:, cell_count:, carried_count:, unrated_count:, evidence_cell_count:,
+  #   coverage_pct:, carried_pct:, evidence_coverage_pct:, reference: [...] }`),
+  #   where `reference` holds one row per out-of-session rater
+  #   (`{ rater_id:, person_count:, ...same coverage fields }`, `rater_id`
+  #   nil when nobody is recorded as the person's manager).
   #   Capabilities (sorted most-divergent first): `{ stable_id:, name:, category_name:,
   #   rater_means: {participant_id => {mean:, n:}}, spread:, residual_spread:,
   #   divergence_score:, flagged:, carried_count:, cell_count: }` — here
@@ -79,6 +99,22 @@ class CalibrationSessions::OverviewStats
     @call ||= build
   end
 
+  # The work a rater (or the whole population) has left, by precedence:
+  # an unrated cell outranks a carried one, because confirming needs a value
+  # to confirm.
+  #
+  # @param cell_total [Integer]
+  # @param rated [Integer]
+  # @param carried [Integer]
+  # @return [String] "no_cells" | "unrated" | "to_confirm" | "ready"
+  def self.ready_state(cell_total:, rated:, carried:)
+    return "no_cells" if cell_total.zero?
+    return "unrated" if rated < cell_total
+    return "to_confirm" if carried.positive?
+
+    "ready"
+  end
+
   private
 
   def build
@@ -91,7 +127,8 @@ class CalibrationSessions::OverviewStats
       org_mean: org_mean,
       raters: raters,
       capabilities: capabilities,
-      insufficient_capability_count: @insufficient_capability_count || 0
+      insufficient_capability_count: @insufficient_capability_count || 0,
+      readiness: readiness
     }
   end
 
@@ -119,10 +156,11 @@ class CalibrationSessions::OverviewStats
     )).attribution.slice(*calibrant_ids)
   end
 
-  # person_id => assessed level ordinal (cycle enrollment snapshot).
+  # person_id => assessed level ordinal (cycle enrollment snapshot), for the
+  # whole population — readiness covers reference people too.
   def assessed_ordinals
     @assessed_ordinals ||= AssessmentCycleEnrollment.active
-      .where(cycle_id: @session.cycle_id, person_id: rater_for.keys)
+      .where(cycle_id: @session.cycle_id, person_id: calibrant_ids)
       .pluck(:person_id, :level_ordinal).to_h
   end
 
@@ -130,8 +168,20 @@ class CalibrationSessions::OverviewStats
   # another role's capability never enters a rater's tendency.
   def role_scopes
     @role_scopes ||= Assessments::RoleScope.for_people(
-      cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: rater_for.keys
+      cycle_id: @session.cycle_id, framework_id: @session.framework_id, person_ids: calibrant_ids
     )
+  end
+
+  # person_id => the capability stable_ids of their at-level cells: the one
+  # denominator every readiness percentage shares. A person not enrolled in
+  # the cycle has no assessed level, so no cells.
+  def at_level_cells
+    @at_level_cells ||= calibrant_ids.index_with do |person_id|
+      ordinal = assessed_ordinals[person_id]
+      next Set.new unless ordinal
+
+      role_scopes.fetch(person_id).at_level(ordinal).cells.to_set(&:first)
+    end
   end
 
   # One entry per manager-rated at-level cell:
@@ -145,7 +195,16 @@ class CalibrationSessions::OverviewStats
   # this cycle and a disagreement between two unexamined numbers are both
   # things the room should discount rather than debate.
   def rated_cells
-    @rated_cells ||= AssessmentLevelRating
+    @rated_cells ||= population_rated_cells.filter_map do |cell|
+      rater_id = rater_for[cell[:person_id]]
+      cell.merge(rater_id: rater_id) if rater_id
+    end
+  end
+
+  # The same cells for the whole population, before attribution — readiness
+  # counts a reference person's ratings, the tendency stats never do.
+  def population_rated_cells
+    @population_rated_cells ||= AssessmentLevelRating
       .for_cycle(@session.cycle_id)
       .within(role_scopes)
       .where(level_ordinal: assessed_ordinals.values.uniq)
@@ -159,7 +218,6 @@ class CalibrationSessions::OverviewStats
 
         {
           person_id: person_id,
-          rater_id: rater_for.fetch(person_id),
           capability_stable_id: stable_id,
           frequency: manager_frequency,
           value: FREQUENCY_VALUES.fetch(manager_frequency),
@@ -186,20 +244,78 @@ class CalibrationSessions::OverviewStats
         participant_id: participant_id,
         report_count: report_ids.size,
         rated_count: cells.map { |c| c[:person_id] }.uniq.size,
-        cell_count: cells.size,
         mean: rater_mean,
         org_delta: rater_mean && org_mean ? (rater_mean - org_mean).round(2) : nil,
         distribution: FREQUENCY_VALUES.keys.index_with { |f| cells.count { |c| c[:frequency] == f } },
         self_gap: gaps.any? ? mean(gaps) : nil,
         evidence_pct: evidence_pct(cells),
-        # How much of this rater's tendency is inherited rather than vetted
-        # this cycle. Disclosure only: a carried rating is still the rater's
-        # rating, so this NEVER softens the tendency it reports — it tells
-        # the room the owner has work to do confirming it.
-        carried_count: cells.count { |c| c[:carried] },
         small_n: cells.size < SMALL_N
-      }
+      }.merge(coverage_for(report_ids))
     end
+  end
+
+  # ── readiness ──
+
+  def readiness
+    attributed = rater_for.keys.to_set
+    reference_ids = calibrant_ids.reject { |person_id| attributed.include?(person_id) }
+
+    coverage_for(calibrant_ids).merge(
+      reference: reference_ids.group_by { |person_id| reference_rater_ids[person_id] }
+        .map { |rater_id, ids| { rater_id: rater_id, person_count: ids.size }.merge(coverage_for(ids)) }
+    )
+  end
+
+  # Coverage over a set of people's at-level cells, every share on that one
+  # denominator so the bar segments add up.
+  def coverage_for(person_ids)
+    total = person_ids.sum { |person_id| at_level_cells.fetch(person_id, Set.new).size }
+    cells = person_ids.flat_map { |person_id| rated_by_person.fetch(person_id, []) }
+    rated = cells.size
+    carried = cells.count { |c| c[:carried] }
+    backed = person_ids.sum do |person_id|
+      ordinal = assessed_ordinals[person_id]
+      at_level_cells.fetch(person_id, Set.new).count do |stable_id|
+        backed_cell_keys.include?([ person_id, stable_id, ordinal ])
+      end
+    end
+
+    {
+      cell_total: total,
+      cell_count: rated,
+      # How much is inherited rather than vetted this cycle. Disclosure
+      # only: a carried rating is still the rater's rating, so this NEVER
+      # softens the tendency it sits beside — it tells the room the owner
+      # has work to do confirming it.
+      carried_count: carried,
+      unrated_count: total - rated,
+      evidence_cell_count: backed,
+      coverage_pct: share(rated, total),
+      carried_pct: share(carried, total),
+      evidence_coverage_pct: share(backed, total),
+      ready_state: self.class.ready_state(cell_total: total, rated: rated, carried: carried)
+    }
+  end
+
+  def rated_by_person
+    @rated_by_person ||= population_rated_cells.group_by { |cell| cell[:person_id] }
+  end
+
+  # The manager a reference person's ratings belong to — recorded reporting
+  # manager first, the live org chart otherwise (PopulationSeeds' rule).
+  def reference_rater_ids
+    @reference_rater_ids ||= begin
+      recorded = RecordedReportingManager.for_framework(@session.framework_id)
+        .where(person_id: calibrant_ids).pluck(:person_id, :manager_id).to_h
+      live = Person.where(id: calibrant_ids - recorded.keys).pluck(:id, :manager_id).to_h
+      live.merge(recorded)
+    end
+  end
+
+  def share(part, total)
+    return nil if total.zero?
+
+    (part.to_f / total).round(2)
   end
 
   # Fraction of this rater's rated at-level cells carrying ≥1 active
@@ -216,7 +332,7 @@ class CalibrationSessions::OverviewStats
   def backed_cell_keys
     @backed_cell_keys ||= begin
       links = EvidenceLink
-        .where(link_status: "active", framework_id: @session.framework_id, person_id: rater_for.keys)
+        .where(link_status: "active", framework_id: @session.framework_id, person_id: calibrant_ids)
         .pluck(:evidence_id, :person_id, :capability_stable_id, :level_ordinal)
       active_evidence_ids = EvidenceItem.active.where(id: links.map(&:first).uniq).pluck(:id).to_set
       links.filter_map do |evidence_id, person_id, stable_id, ordinal|

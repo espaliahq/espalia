@@ -84,7 +84,9 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Mia Manager's reports (1)"
     assert_text "Ivy IC"
     assert_text "Omar IC"
-    assert_text "0 of 2 manager-rated"
+    # Readiness is cell coverage; nobody is enrolled yet, so there are no
+    # cells to rate and nobody is fully rated.
+    assert_text "0 of 2 people fully rated"
     assert_text "not enrolled in the cycle"
 
     # Remove a calibrant — they surface as an explicit re-add suggestion
@@ -300,7 +302,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "SCORE BY COHORT"
     overflowing = page.evaluate_script(<<~JS)
       (() => {
-        const wrap = document.querySelector(".overflow-x-auto");
+        const wrap = [...document.querySelectorAll(".overflow-x-auto")]
+          .find((el) => el.querySelector("a[aria-label*='% of expected']"));
         return wrap.scrollWidth > wrap.clientWidth &&
                document.documentElement.scrollWidth <= window.innerWidth + 1;
       })()
@@ -308,7 +311,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert overflowing, "the axis scrolls inside its wrapper, never the page body"
     # A dot is still reachable after scrolling the wrapper.
     page.execute_script(<<~JS)
-      const wrap = document.querySelector(".overflow-x-auto");
+      const wrap = [...document.querySelectorAll(".overflow-x-auto")]
+        .find((el) => el.querySelector("a[aria-label*='% of expected']"));
       wrap.scrollLeft = wrap.scrollWidth;
       [...wrap.querySelectorAll("a[aria-label*='% of expected']")].at(-1).click();
     JS

@@ -106,9 +106,13 @@ class CalibrationSessionsController < ApplicationController
     seeds = population_seeds(participant_ids) if participant_ids.any?
     seed_groups = seeds ? seeds.call : {}
     session_log = session_log_data(@session)
+    stats = if participant_ids.any? || calibrant_ids.any?
+      CalibrationSessions::OverviewStats.new(session: @session, population_seeds: seeds).call
+    end
+    reference_rater_ids = stats ? stats[:readiness][:reference].filter_map { |row| row[:rater_id] } : []
 
     people_ids = (participant_ids + calibrant_ids + [ @session.facilitator_id ] +
-                  log_person_ids(session_log)).uniq
+                  reference_rater_ids + log_person_ids(session_log)).uniq
 
     # Only when something will render from it: the cohort tab, or the
     # comparison drawer (person/pins ride every tab). A draft hit on
@@ -146,7 +150,7 @@ class CalibrationSessionsController < ApplicationController
       groups: population_groups(seed_groups, calibrant_ids),
       suggestions: suggested_additions(seed_groups, calibrant_ids, participant_ids),
       readiness: readiness_for(calibrant_ids),
-      stats: participant_ids.any? ? CalibrationSessions::OverviewStats.new(session: @session, population_seeds: seeds).call : nil,
+      stats: stats,
       overview_view: overview_view,
       cohorts: cohorts&.call&.dig(:cohorts),
       drawer_cards: drawer_cards,
@@ -234,7 +238,8 @@ class CalibrationSessionsController < ApplicationController
   end
 
   # Enrollment + manager-rating readiness for the population on the
-  # session's cycle. Per-person flags drive badges; counts drive the bar.
+  # session's cycle — the per-person flags behind the population list's
+  # badges. The readiness card's coverage comes from OverviewStats.
   # partially_rated_ids distinguishes "the manager has touched some cells"
   # (In progress) from untouched — manager_completed_at only stamps at
   # FULL current-level VETTED coverage (carried/seeded values don't

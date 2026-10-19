@@ -37,9 +37,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
   # @param calibrant_ids [Array<String>]
   # @param groups [Array<[String, Array<String>]>] [participant_id (nil = other), member person_ids]
   # @param suggestions [Array<Person>] seed people not yet in the population
-  # @param readiness [Hash] { enrolled_ids:, manager_complete_ids: }
+  # @param readiness [Hash] per-person flags: { enrolled_ids:, manager_complete_ids:,
+  #   partially_rated_ids:, carried_only_ids: } (the card's totals come from stats)
   # @param add_calibrant_candidates [Array<Person>]
-  # @param stats [Hash, nil] OverviewStats result (nil when no participants)
+  # @param stats [Hash, nil] OverviewStats result (nil when the session has no members)
   def initialize(session:, cycle:, people:, participant_ids:, calibrant_ids:,
                  groups:, suggestions:, readiness:, stats:,
                  add_calibrant_candidates:,
@@ -100,7 +101,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
       ) do
         div(class: "min-w-0 flex-1") do
           header_row
-          readiness_bar
+          readiness_card
           overview_section unless @session.draft?
           agenda_card if @session.draft?
           div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
@@ -172,28 +173,16 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  def readiness_bar
-    total = @calibrant_ids.size
-    rated = (@readiness[:manager_complete_ids] & @calibrant_ids).size
-    unenrolled = total - (@readiness[:enrolled_ids] & @calibrant_ids).size
-
-    div(class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 px-4 py-3") do
-      div(class: "flex flex-wrap items-center gap-x-4 gap-y-1 text-sm") do
-        span(class: "font-medium text-gray-900 dark:text-white") { "Readiness" }
-        span(class: "text-gray-600 dark:text-gray-300") { "#{rated} of #{total} manager-rated" }
-        if unenrolled.positive?
-          span(class: "text-amber-700 dark:text-amber-300") { "#{unenrolled} not enrolled in the cycle" }
-        end
-      end
-      div(
-        class: "mt-2 h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700",
-        role: "progressbar",
-        aria: { valuenow: rated, valuemin: 0, valuemax: [ total, 1 ].max, label: "Manager-rated coverage" }
-      ) do
-        pct = total.zero? ? 0 : ((rated.to_f / total) * 100).round
-        div(class: "h-1.5 rounded-full bg-primary", style: "width: #{pct}%")
-      end
-    end
+  def readiness_card
+    render Views::CalibrationSessions::ReadinessCard.new(
+      readiness: @stats&.dig(:readiness),
+      raters: @stats ? @stats[:raters] : [],
+      people: @people,
+      people_total: @calibrant_ids.size,
+      fully_rated_count: (@readiness[:manager_complete_ids] & @calibrant_ids).size,
+      unenrolled_count: @calibrant_ids.size - (@readiness[:enrolled_ids] & @calibrant_ids).size,
+      open: @session.draft?
+    )
   end
 
   def participants_card
