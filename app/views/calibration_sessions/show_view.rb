@@ -19,7 +19,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
   OVERVIEW_TABS = [
     [ "tendency", "Rater tendency" ],
     [ "divergence", "Capability divergence" ],
-    [ "cohort", "Score by cohort" ]
+    [ "cohort", "Score by level" ]
   ].freeze
 
   # The dashed carried vocabulary, kept as the term's own trigger styling.

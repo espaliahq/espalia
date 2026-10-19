@@ -3,7 +3,7 @@
 # Per-person overall scores for a calibration session, grouped into level
 # cohorts — "who is being rated higher and lower than their peers at the
 # same level, and by whom" (docs/architecture/calibration-sessions.md →
-# "Score by cohort").
+# "Score by level").
 #
 # The metric is the assessment hero's own number: `% of expected`
 # (Scoring#performance_ratio), computed at `perspective: :manager_only` so
