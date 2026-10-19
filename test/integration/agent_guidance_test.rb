@@ -16,7 +16,7 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   DIRECTORY_BUDGET = 100_000
 
   STARTUP_FILES = %w[CLAUDE.md .claude/CLAUDE.md].freeze
-  SKIPPED_DIRS = %r{\A(node_modules|vendor|tmp|log|storage|coverage)/}
+  SKIPPED_DIRS = %r{\A(\.git|node_modules|vendor|tmp|log|storage|coverage)/}
   IMPORT = %r{(?:\A|[\s|(,])@([^\s`|),]+\.\w+)}
 
   context "the files every session loads" do
@@ -74,7 +74,7 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   def relatives(paths) = paths.map { relative(it) }
 
   def instruction_files
-    (Rails.root.glob("{**/,.github/**/}{AGENTS,CLAUDE}.md") + STARTUP_FILES.map { root(it) })
+    (Rails.root.glob("**/{AGENTS,CLAUDE}.md", File::FNM_DOTMATCH) + STARTUP_FILES.map { root(it) })
       .select(&:exist?).reject { relative(it).match?(SKIPPED_DIRS) }.uniq
   end
 
