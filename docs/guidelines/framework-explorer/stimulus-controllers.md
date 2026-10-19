@@ -137,6 +137,14 @@ Host contract (see the controller's header comment for the full list):
   / `updateSelection` / `updateSearch` confirm before re-fetching the matrix out
   from under an open editor.
 
+**Reused outside the explorer.** The calibration session page's name pencil
+(`Views::CalibrationSessions::SessionNameFrame`) rides the same editor. Mount
+`field-editor` and a `FieldEditorTemplate` on an element *around* the host's
+Turbo Frame, with the `turbo:frame-render` / `frame-missing` /
+`fetch-request-error` actions: those events fire on the frame and bubble up, so
+a controller mounted inside the frame never hears the 422 re-render it needs to
+re-open the editor.
+
 `inline_editor_controller.js` (the old per-element display/form toggle) stays in
 place **only** for the non-explorer hosts that use `<select>` / `<input type=date>`
 rather than a textarea — the assessment-cycle settings frames. Don't add new

@@ -50,6 +50,7 @@ export default class extends BaseController {
     // frame own that state exactly — including an unpin that empties it — so
     // only the opted-in ones get the live values merged back in.
     if (link.dataset.paneKeepState === "true") this.#keepState(url)
+    this.#keepGridState(url)
 
     event.preventDefault()
     this.#load(url)
@@ -67,7 +68,7 @@ export default class extends BaseController {
     const current = new URL(window.location.href)
     const carried = [
       ...current.searchParams.getAll("pins[]").map(value => [ "pins[]", value ]),
-      ...[ "person", "person_level", "view", "wall_level", "wall_valence", "wall_rater" ]
+      ...[ "person", "person_level", "view", "wall_level", "wall_valence", "wall_rater", "rater" ]
         .filter(key => current.searchParams.get(key))
         .map(key => [ key, current.searchParams.get(key) ])
     ]
@@ -93,6 +94,7 @@ export default class extends BaseController {
     }
     const url = new URL(form.action, window.location.origin)
     url.search = params.toString()
+    this.#keepGridState(url)
     this.#load(url)
   }
 
@@ -116,6 +118,15 @@ export default class extends BaseController {
       url.searchParams.delete(key)
       if (live.get(key)) url.searchParams.set(key, live.get(key))
     }
+  }
+
+  // The grid's own state — the rater filter — belongs to the grid, which
+  // sits outside the frame and changes without a request, so EVERY pane
+  // URL takes it from the live one; no link can know it.
+  #keepGridState(url) {
+    const rater = new URL(window.location.href).searchParams.get("rater")
+    url.searchParams.delete("rater")
+    if (rater) url.searchParams.set("rater", rater)
   }
 
   #load(url, { push = true } = {}) {

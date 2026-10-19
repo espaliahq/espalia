@@ -175,4 +175,35 @@ class AssessmentCycles::CalibrationCommandHandler
       session.close(reason: reason, closed_by_id: closed_by_id)
     end
   end
+
+  # Archives a closed session. No-op when already archived.
+  #
+  # @param session_id [String]
+  # @param archived_by_id [String, nil]
+  def archive_session(session_id, archived_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.archive(archived_by_id: archived_by_id)
+    end
+  end
+
+  # Restores an archived session. No-op when it isn't archived.
+  #
+  # @param session_id [String]
+  # @param unarchived_by_id [String, nil]
+  def unarchive_session(session_id, unarchived_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.unarchive(unarchived_by_id: unarchived_by_id)
+    end
+  end
+
+  # Renames a session (any status). No-op when the stripped name is unchanged.
+  #
+  # @param session_id [String]
+  # @param name [String]
+  # @param renamed_by_id [String, nil]
+  def rename_session(session_id, name, renamed_by_id: nil)
+    @repository.with_calibration_session(session_id) do |session|
+      session.rename(name, renamed_by_id: renamed_by_id)
+    end
+  end
 end

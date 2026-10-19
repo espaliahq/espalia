@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Score by cohort — the third overview tab: every calibrated person as an
+# Score by level — the third overview tab: every calibrated person as an
 # initialed dot on a 0–200% axis, grouped by assessed level and coloured by
 # WHO rated them, so "Raj's people cluster low" is pre-attentive before a
 # single number is read (docs/architecture/calibration-sessions.md →
-# "Score by cohort").
+# "Score by level").
 #
 # The axis grammar is the divergence board's — positioned initialed dots on
 # a track — and the metric is the assessment hero's own "% of expected"
@@ -17,13 +17,14 @@ class Views::CalibrationSessions::CohortView < Views::Base
   include Views::CalibrationSessions::Glossary
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::PeopleNames
+  include Views::CalibrationSessions::LanePacking
 
   # The score's own scale (ADR-21): 100 is meeting the assessed level, 200 is
   # demonstrating the next one in full.
   AXIS_MAX_PCT = 200
   # Dots closer than this (in % points) stack into further lanes instead of
   # overlapping — the board's exactly-overlapping-dots nit, addressed here.
-  # A real cohort clusters hard (twenty people between 75 and 100), so the
+  # A real level clusters hard (twenty people between 75 and 100), so the
   # packing is greedy k-lane, not a two-lane flip-flop.
   # ≥ the 44px tap-target LINK at the track's 480px min width (20% of a
   # 0–200 axis ≈ 48px there) — a "far enough for the same lane" that still
@@ -55,7 +56,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
     render Components::Kit::Card.new do |card|
       card.body do
         h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-          "Score by cohort"
+          "Score by level"
         end
         div(class: "mt-1 flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
           defined_term(:pct_of_expected)
@@ -76,7 +77,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   def empty_state
     p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
-      "Nobody in the population is enrolled at a level yet — cohorts fill in from the cycle's enrollments."
+      "Nobody in the population is enrolled at a level yet — levels fill in from the cycle's enrollments."
     end
   end
 
@@ -183,25 +184,17 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def median_tick(median_pct)
     span(class: "absolute top-[24px] h-[18px] w-0.5 rounded bg-gray-900 dark:bg-white opacity-60",
          style: "left: #{position_pct(median_pct)}%",
-         title: "Cohort median: #{median_pct}%")
+         title: "Level median: #{median_pct}%")
   end
 
-  # dot => lane. Greedy packing: each dot (already sorted by score) takes
-  # the first lane whose last occupant is at least LANE_NUDGE_PCT away;
-  # a dense cluster stacks downward instead of smearing into a pile. At
-  # MAX_LANES the densest ties do overlap — countable is the goal, not a
-  # beeswarm.
+  # dot => lane. At MAX_LANES the densest ties do overlap — countable is
+  # the goal, not a beeswarm. Distance is measured on the RENDERED
+  # position: two overperformers at 210% and 240% both draw at the 200%
+  # cap, so the raw pcts would call them "far apart" and stack their tap
+  # targets exactly.
   def lanes(plotted)
-    lane_edges = []
-    plotted.map do |dot|
-      # Distance on the RENDERED position: two overperformers at 210% and
-      # 240% both draw at the 200% cap, so measuring the raw pcts would
-      # call them "far apart" and stack their tap targets exactly.
-      pct = dot[:pct].clamp(0, AXIS_MAX_PCT)
-      lane = lane_edges.index { |edge| (pct - edge).abs >= LANE_NUDGE_PCT }
-      lane ||= lane_edges.size < MAX_LANES ? lane_edges.size : (pct.round % MAX_LANES)
-      lane_edges[lane] = pct
-      [ dot, lane ]
+    pack_lanes(plotted, nudge: LANE_NUDGE_PCT, max_lanes: MAX_LANES) do |dot|
+      dot[:pct].clamp(0, AXIS_MAX_PCT)
     end
   end
 
@@ -234,7 +227,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # Rater colour, or the neutral fill for a dot rated outside the room.
   def dot_fill(dot)
     index = rater_index(dot[:rater_id])
-    index ? rater_dot_class(index) : "bg-gray-500 dark:bg-gray-400"
+    index ? rater_dot_class(index) : NOT_IN_SESSION_FILL
   end
 
   def dot_description(dot, name)

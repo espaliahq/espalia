@@ -210,6 +210,13 @@ controller silently receives no `as_role` param. Anything that becomes a param
 name or an id must be a String (`name: key.to_s`), which matters most when the
 names come from a hash of symbols (e.g. `Assessments::Lens#to_params`).
 
+## `format` is not `Kernel#format` inside a view
+
+A Phlex view inherits a `format` method of its own, so
+`format("%.1f", mean)` in a component raises `ArgumentError: wrong number of
+arguments (given 2, expected 0)` at render. Use `sprintf` (or
+`Kernel.format`), as the calibration views do.
+
 ## Conditional Rendering by Permission (NON-NEGOTIABLE)
 
 **Never query policies or check roles directly in views.** Controllers resolve permissions and pass boolean flags.

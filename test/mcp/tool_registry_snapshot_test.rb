@@ -850,6 +850,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_archive",
+        "description" => "Archive a closed calibration session — hides it from the default list; nothing is deleted " \
+                         "and calibration_sessions_unarchive restores it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_close",
         "description" => "Close a calibration session (terminal — a closed session becomes the follow-through record).",
         "inputSchema" => {
@@ -952,11 +970,13 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_list",
-        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle.",
+        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one " \
+                         "assessment cycle. Archived sessions are omitted unless include_archived is true.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string" }
+            "cycle_id"         => { "type" => "string" },
+            "include_archived" => { "type" => "boolean" }
           },
           "required" => [],
           "additionalProperties" => false
@@ -969,7 +989,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_overview",
-        "description" => "Calibration overview for a session — per-rater tendency (mean vs org, distribution, self-gap, evidence backing), capabilities ranked by tendency-corrected rater disagreement, and level cohorts of per-person % of expected (100 = meeting the level, 200 = demonstrating the next level in full; manager ratings only; a coverage-gated person carries pct: null with rated/total/unlock_target — not rated yet, never a low score).",
+        "description" => "Calibration overview for a session — readiness per rater and for the whole population (readiness.reference groups people whose rater is not in the session), as fractions of cell_total, the at-level cells: coverage_pct rated, carried_pct carried from last cycle and not yet confirmed, evidence_coverage_pct with at least one active evidence link, and ready_state (ready | to_confirm | unrated | no_cells); per-rater tendency (mean vs org, distribution, self-gap; evidence_pct is the backed share of RATED cells), capabilities ranked by tendency-corrected rater disagreement, and people grouped by assessed level, each with a per-person % of expected (100 = meeting the level, 200 = demonstrating the next level in full; manager ratings only; a coverage-gated person carries pct: null with rated/total/unlock_target — not rated yet, never a low score).",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1042,6 +1062,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_rename",
+        "description" => "Rename a calibration session (any status; the session log records the previous name).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "name"       => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[session_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_request_evidence",
         "description" => "Ask a colleague for feedback / evidence on a capability × level from a live calibration session.",
         "inputSchema" => {
@@ -1088,6 +1126,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "calibration_sessions_start",
         "description" => "Start a calibration session — freezes the participants and the calibrant population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_unarchive",
+        "description" => "Restore an archived calibration session to the default list (it stays closed). " \
+                         "Only closed sessions can be archived or restored.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

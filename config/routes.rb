@@ -294,8 +294,14 @@ Rails.application.routes.draw do
       get :participant_candidates
     end
     member do
+      # The live page's poll: has anything behind its numbers moved?
+      get :freshness
       post :start, to: "calibration_sessions/starts#create"
       post :close, to: "calibration_sessions/closes#create"
+      # Reversible: a closed session leaves the default list and comes back.
+      post :archive, to: "calibration_sessions/archives#create"
+      post :unarchive, to: "calibration_sessions/unarchives#create"
+      patch :name, to: "calibration_sessions/names#update"
     end
     # :id on both nested resources is the person_id being added/removed.
     resources :participants, only: [ :create, :destroy ],
