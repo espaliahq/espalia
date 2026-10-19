@@ -144,9 +144,9 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def session_card(session)
     div(
       id: "calibration-session-card-#{session.id}",
-      class: "relative rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 " \
+      class: "relative rounded-lg border border-gray-200 dark:border-gray-700 " \
              "shadow-xs p-5 transition-colors hover:border-primary/60 " \
-             "#{'bg-gray-50 dark:bg-gray-900' if session.archived?}"
+             "#{session.archived? ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}"
     ) do
       div(class: "flex items-start justify-between gap-3") do
         div(class: "min-w-0 flex flex-wrap items-center gap-2") do
