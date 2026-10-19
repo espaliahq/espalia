@@ -850,6 +850,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_archive",
+        "description" => "Archive a closed calibration session — hides it from the default list; nothing is deleted " \
+                         "and calibration_sessions_unarchive restores it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_close",
         "description" => "Close a calibration session (terminal — a closed session becomes the follow-through record).",
         "inputSchema" => {
@@ -952,11 +970,13 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_list",
-        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle.",
+        "description" => "List calibration sessions you facilitate (admins see all), optionally filtered to one " \
+                         "assessment cycle. Archived sessions are omitted unless include_archived is true.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string" }
+            "cycle_id"         => { "type" => "string" },
+            "include_archived" => { "type" => "boolean" }
           },
           "required" => [],
           "additionalProperties" => false
@@ -1042,6 +1062,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_rename",
+        "description" => "Rename a calibration session (any status; the session log records the previous name).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "name"       => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[session_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_request_evidence",
         "description" => "Ask a colleague for feedback / evidence on a capability × level from a live calibration session.",
         "inputSchema" => {
@@ -1088,6 +1126,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "calibration_sessions_start",
         "description" => "Start a calibration session — freezes the participants and the calibrant population.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" }
+          },
+          "required" => %w[session_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
+        "name" => "calibration_sessions_unarchive",
+        "description" => "Restore an archived calibration session to the default list (it stays closed). " \
+                         "Only closed sessions can be archived or restored.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

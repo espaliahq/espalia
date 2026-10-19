@@ -51,6 +51,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
                  overview_view: "tendency", cohorts: nil,
                  drawer_cards: [], drawer_person_id: nil, pin_ids: [],
                  session_log: nil, can_note: false,
+                 can_rename: false, can_restore: false,
                  freshness_stamp: nil, rendered_at: Time.current,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
@@ -70,6 +71,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
     @can_curate = can_curate
     @can_start = can_start
     @can_close = can_close
+    @can_rename = can_rename
+    @can_restore = can_restore
     @overview_view = overview_view
     @cohorts = cohorts
     @drawer_cards = drawer_cards
@@ -147,11 +150,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
           "← Calibration"
         end
         div(class: "mt-1 flex flex-wrap items-center gap-3") do
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @session.name }
+          session_name
           render Components::Kit::Badge.new(
             STATUS_LABELS.fetch(@session.status, @session.status),
             variant: STATUS_VARIANTS.fetch(@session.status, :default)
           )
+          render Components::Kit::Badge.new("Archived", variant: :default) if @session.archived?
         end
         p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
           plain @cycle&.name || "Cycle unavailable"
@@ -160,6 +164,27 @@ class Views::CalibrationSessions::ShowView < Views::Base
         freshness_line
       end
       action_cluster
+    end
+  end
+
+  # The name and its pencil. The shared inline editor (`field-editor`) is
+  # mounted around the frame, not inside it, because it listens for the
+  # frame's own render events to re-open after a rejected save.
+  def session_name
+    frame = Views::CalibrationSessions::SessionNameFrame.new(session: @session, can_rename: @can_rename)
+    return render(frame) unless @can_rename
+
+    div(
+      class: "min-w-0 max-w-full max-sm:w-full",
+      data: {
+        controller: "field-editor",
+        action: "turbo:frame-render->field-editor#frameRendered " \
+                "turbo:frame-missing->field-editor#frameMissing " \
+                "turbo:fetch-request-error->field-editor#fetchError"
+      }
+    ) do
+      render Views::Frameworks::Explorer::FieldEditorTemplate.new
+      render frame
     end
   end
 
@@ -172,6 +197,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
              data: { turbo_confirm: "Starting freezes the participants and population for the whole session. Start now?" }) do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
           button(type: "submit", class: primary_button_classes) { "Start session" }
+        end
+      end
+      if @can_restore
+        form(action: unarchive_calibration_session_path(@session), method: "post") do
+          input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+          button(type: "submit", class: secondary_button_classes) { "Restore" }
         end
       end
       if @can_close

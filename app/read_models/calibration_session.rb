@@ -41,6 +41,8 @@ class CalibrationSession < ApplicationRecord
   scope :closed, -> { where(status: "closed") }
   scope :not_closed, -> { where.not(status: "closed") }
   scope :for_cycle, ->(cycle_id) { where(cycle_id: cycle_id) }
+  scope :archived, -> { where.not(archived_at: nil) }
+  scope :unarchived, -> { where(archived_at: nil) }
 
   # Participant (rater) membership rows.
   #
@@ -75,5 +77,13 @@ class CalibrationSession < ApplicationRecord
   # @return [Boolean]
   def closed?
     status == "closed"
+  end
+
+  # Whether the session has been put away — hidden from the default list,
+  # reversible. Only a closed session can be archived.
+  #
+  # @return [Boolean]
+  def archived?
+    archived_at.present?
   end
 end

@@ -48,6 +48,22 @@ class CalibrationSessionPolicy < ApplicationPolicy
     facilitator? || tenant_admin?
   end
 
+  # Archive / restore a closed session — reversible, nothing deleted. Both
+  # need the session closed; which one applies (archived or not) is the
+  # caller's call, so a retried archive reaches the aggregate's no-op.
+  def archive?
+    (facilitator? || tenant_admin?) && closed_record?
+  end
+
+  def unarchive?
+    archive?
+  end
+
+  # A name is a label, so it can change in any status.
+  def rename?
+    facilitator? || tenant_admin?
+  end
+
   # Live-session outcomes (flagging an expectation as unclear). The flag is
   # raised on the SESSION's authority — deliberately independent of framework
   # collaborator roles; the facilitator holds the room.
@@ -67,6 +83,10 @@ class CalibrationSessionPolicy < ApplicationPolicy
     return false unless person
 
     person.manages_managers?
+  end
+
+  def closed_record?
+    record.respond_to?(:closed?) && record.closed?
   end
 
   def facilitator?

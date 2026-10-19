@@ -15,12 +15,15 @@ class CalibrationSessionsController < ApplicationController
   before_action :set_session, only: [ :show, :freshness ]
 
   # GET /calibration_sessions
+  #
+  # Archived sessions stay out of the list unless `?archived=1` asks for them.
   def index
     authorize CalibrationSession, :index?
     @page_title = "Calibration"
 
-    sessions = visible_sessions.order(created_at: :desc).to_a
-    cycles = AssessmentCycle.where(cycle_id: sessions.map(&:cycle_id)).index_by(&:cycle_id)
+    show_archived = params[:archived] == "1"
+    visible = visible_sessions
+    sessions = (show_archived ? visible : visible.unarchived).order(created_at: :desc).to_a
     member_counts = CalibrationSessionMember
       .where(session_id: sessions.map(&:id))
       .group(:session_id, :member_type)
@@ -28,8 +31,13 @@ class CalibrationSessionsController < ApplicationController
 
     render Views::CalibrationSessions::IndexView.new(
       sessions: sessions,
-      cycles: cycles,
+      cycles: AssessmentCycle.where(cycle_id: sessions.map(&:cycle_id)).index_by(&:cycle_id),
       member_counts: member_counts,
+      outcome_counts: CalibrationSessions::SessionOutcomes.counts_for(sessions.reject(&:draft?)),
+      people: Person.where(id: sessions.filter_map(&:archived_by_id)).index_by(&:id),
+      permissions: sessions.to_h { |session| [ session.id, card_permissions(session) ] },
+      archived_count: show_archived ? sessions.count(&:archived?) : visible.archived.count,
+      show_archived: show_archived,
       can_define: policy(CalibrationSession).define?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -165,6 +173,8 @@ class CalibrationSessionsController < ApplicationController
       can_close: !@session.closed? && policy(@session).close?,
       session_log: session_log,
       can_note: @session.started? && policy(@session).flag_expectation?,
+      can_rename: policy(@session).rename?,
+      can_restore: @session.archived? && policy(@session).unarchive?,
       freshness_stamp: freshness_stamp,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -203,6 +213,16 @@ class CalibrationSessionsController < ApplicationController
   # drift from what CalibrationSessionPolicy grants.
   def admin_viewer?
     pundit_user.tenant_admin?
+  end
+
+  # What the index card's kebab may offer for one session.
+  def card_permissions(session)
+    session_policy = policy(session)
+    {
+      rename: session_policy.rename?,
+      archive: !session.archived? && session_policy.archive?,
+      restore: session.archived? && session_policy.unarchive?
+    }
   end
 
   def visible_sessions
