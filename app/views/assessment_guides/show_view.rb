@@ -6,6 +6,7 @@
 # a person learns here is what they will see there.
 class Views::AssessmentGuides::ShowView < Views::Base
   include Views::Assessments::Concerns::ScoreScale
+  include Views::Evidence::Valence
 
   Palette = Views::Assessments::FrequencyPalette
 
@@ -338,22 +339,20 @@ class Views::AssessmentGuides::ShowView < Views::Base
       h3(class: CARD_TITLE) { "Feedback, pinned to a behaviour" }
       ul(class: "space-y-3") do
         feedback_card("Broke the migration into three safe steps and wrote down why.",
-          "Demonstrates", "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-          "Critical Thinking · E3")
+          "demonstrated", "Critical Thinking · E3")
         feedback_card("Could pull stakeholders in earlier on cross-team work.",
-          "Growth area", "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-          "Collaboration · E3")
+          "growth_area", "Collaboration · E3")
       end
     end
   end
 
-  def feedback_card(quote, valence, valence_classes, cell)
+  def feedback_card(quote, valence, cell)
     li(class: "flex gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3") do
       avatar(:colleagues)
       div(class: "text-sm") do
         p(class: "text-gray-900 dark:text-gray-100") { "“#{quote}”" }
         p(class: "mt-1.5 flex flex-wrap items-center gap-2") do
-          span(class: "rounded-full px-2 py-0.5 text-xs font-semibold #{valence_classes}") { valence }
+          valence_badge(valence)
           span(class: "text-xs #{MUTED}") { cell }
         end
       end
