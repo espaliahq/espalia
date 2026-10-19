@@ -80,6 +80,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Reach for a service object | [service-objects.md](docs/guidelines/service-objects.md) |
 | Add or change a permission, policy or `authorize` call | [authorization.md](docs/guidelines/authorization.md) |
 | Write or fix a test | [testing.md](docs/guidelines/testing.md) |
+| Set up or debug the environment: a cloud session, a second worktree, the macOS host, `gh` auth, or timing something in development | [dev-environment.md](docs/guidelines/dev-environment.md) |
 | Verify a front-end change in the browser (mandatory for every one) | [chrome-mcp.md](docs/guidelines/chrome-mcp.md) |
 | Change the favicon, app icon or web manifest | [app-icons.md](docs/guidelines/app-icons.md) |
 | Change the framework explorer (`/frameworks/:id`, `/edit`) | [framework-explorer.md](docs/guidelines/framework-explorer.md), then the companion its *Where everything lives* map names for your change |
@@ -275,50 +276,7 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 > even when the task itself exited 1. Piping hides the failure as well: rake prints it above
 > the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
-### Cloud sessions: `bin/cloud-setup`, not the devcontainer
-
-**A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
-devcontainer would rebuild its Rails image and start eight containers every session. The
-script takes about nine minutes from a cold container and six seconds once everything is in
-place. The environment's setup script runs it as root from the checkout; run it again by hand
-to restart anything that has stopped. It provides:
-
-- **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
-  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
-- **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
-  `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
-- **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:
-  `CAPYBARA_SERVER_PORT` stays unset, so one worker drives the preinstalled Playwright
-  Chromium. The script fetches the chromedriver that matches it (the image's is newer, and
-  Selenium Manager cannot reach its version index) and writes a `/usr/bin/google-chrome`
-  wrapper that adds `--no-sandbox`, which Chrome needs to run as root.
-- **A headless Chromium on `localhost:9222`**, where `.mcp.json` already points the
-  `chrome-devtools` MCP.
-- **The egress proxy's CAs in Chrome's NSS store**, so the browser can load anything off-host.
-- **The gems, the Tailwind build, the test database**, and the development database, seeded.
-
-**The tools reach the session through `/root/.local/bin`.** A session's shell takes its `PATH`
-from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already on it ahead of
-the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
-the chromedriver there.
-
-**The environment provides three things.** Network access to the hosts the script downloads
-from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
-(gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
-Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
-`db:prepare` seeds development. Tests never need it. The seed signs in the admin from
-credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
-does (names are whimsified).
-
-**A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
-gesture**: a JS-dispatched click leaves the promise pending, even with focus and permission
-granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. A real click copies.
-So a system test that copies clicks for real (`click_with_retry`), and the clipboard controller
-shows "Copied!" only once a copy succeeds, falling back to `execCommand` when `writeText` hangs.
-
-**In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
-browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
-Overmind, which the image lacks.
+**In a Claude Code cloud session the app is at `http://localhost:6600`** (start it with `bin/rails server -p 6600`; `bin/dev` needs Overmind, which the image lacks). How `bin/cloud-setup` provides Ruby, Postgres and Chrome, the second-worktree setup, and running on the macOS host are in [dev-environment.md](docs/guidelines/dev-environment.md).
 
 ## Visual Verification (NON-NEGOTIABLE)
 
@@ -486,13 +444,9 @@ test/
 
 > **CRITICAL**: Any important learnings, add them here.
 
-- **A delegated agent shares your working tree, your database and your dev server.** Subagents (the `Agent` tool, the `chrome-driver` agent, a `/code-review` angle) run in the SAME checkout as the session that launched them — there is no copy-on-write. So while one is working, do NOT `git checkout`, `git pull`, `git stash` or rebase in the orchestrating session: the agent's next `Read` or test run sees a tree it never asked for, and a half-applied rebase can be attributed to its edits. Same for `bin/dev` on port 6600 and the dev database — one browser driver at a time, and a seed reset while another agent is mid-flow invalidates its run. If you must work on another branch concurrently, use a throwaway `git worktree add /tmp/wt-<name> <branch>` (or launch the agent with `isolation: "worktree"`) and delete it afterwards. Read-only agents are safe to overlap; writers are not.
-- **A second worktree needs its own database and ports, and the host is `postgres`, not `localhost`.** Prefix every command with `DATABASE_URL=postgresql://postgres:postgres@postgres/<name>` (plus `CAPYBARA_SERVER_PORT` for system tests; parallel workers derive `<name>-N` and `port+N`) and run the dev server on another port with `-b 0.0.0.0`, so the browser container reaches `http://rails-app:<port>`. Clone the seeded dev database with `createdb -h postgres -U postgres -T growth_os_development <name>` — `pg_dump` in the devcontainer is v15 against a v16 server and refuses; the template copy needs no open connections to the source.
+- **A delegated agent shares your working tree, your database and your dev server.** Subagents (the `Agent` tool, the `chrome-driver` agent, a `/code-review` angle) run in the SAME checkout as the session that launched them — there is no copy-on-write. So while one is working, do NOT `git checkout`, `git pull`, `git stash` or rebase in the orchestrating session: the agent's next `Read` or test run sees a tree it never asked for, and a half-applied rebase can be attributed to its edits. Same for `bin/dev` on port 6600 and the dev database — one browser driver at a time, and a seed reset while another agent is mid-flow invalidates its run. If you must work on another branch concurrently, use a throwaway `git worktree add /tmp/wt-<name> <branch>` (or launch the agent with `isolation: "worktree"`) and delete it afterwards; a second worktree needs its own database and ports ([dev-environment.md](docs/guidelines/dev-environment.md#a-second-worktree)). Read-only agents are safe to overlap; writers are not.
 - **Anything under `lib/` is eager-loaded in production.** `config.autoload_lib(ignore: %w[...])` in `config/application.rb` makes Zeitwerk eager-load all of `lib/` except the listed subdirs. A file there that references a constant from a `:development, :test`-only gem (e.g. a custom RuboCop cop subclassing `RuboCop::Cop::Base`) passes the test suite — where the gem IS loaded — but raises `NameError` at production boot and crashes the server (incident: PRs #106/#108). When adding non-app Ruby under `lib/`, either add its subdir to the `autoload_lib` ignore list or keep it out of `lib/`. CI guards this via the `production_boot` job (eager-loads with `BUNDLE_WITHOUT=development:test`); reproduce locally with `BUNDLE_WITHOUT=development:test RAILS_ENV=production SECRET_KEY_BASE=x bin/rails zeitwerk:check`.
 - **Any read model keyed by `capability_stable_id` under a unique index must merge on collision in its `FrameworkVersionMigrated` handler.** An `evolved` survivor can already be rated/linked by the same person at the same natural key, so a plain `update_all` re-key trips the index and rolls back the publish. Follow `rekey_ratings` / `rekey_links` (keep the colliding row under the retiring id, flagged) and see ADR-17 in [adrs.md](docs/architecture/adrs.md).
-- **`gh` unauthenticated in the devcontainer? Re-run the feature hook, don't `gh auth login`.** The `gh-auth-from-host` feature bridges the host's forwarded git credential into `gh` only on `postAttachCommand`; it warns and exits 0 when the host offers nothing at that instant, and a long-lived VS Code connection never re-attaches, so one silent miss at container creation leaves `gh` logged out for the container's lifetime. Fix in place with `sh /usr/local/share/gh-auth-from-host/refresh.sh`. A container-local `gh auth login` shadows the bridge and rots when the host token rotates.
 - **A deploy that rebuilds a projection blanks its read models for a minute or two.** The pre-deploy rebuild truncates the projection's live tables and replays them while the previous release still serves traffic, so `person_development/current_assessment` reads as "every assessment is empty" until the replay finishes. `REBUILD_ON_DEPLOY` lives in the `growthos-shared` env group; it was once left set for four deploys and each one rebuilt. The hook now only rebuilds a projection whose stamp is behind `CODE_VERSION`, so a forgotten variable is inert, but still remove it after the deploy it was set for — see [projection-rebuild.md](docs/runbooks/projection-rebuild.md).
-- **Never quote dev-mode timings from the first requests after a boot.** They run 2–3× slower than steady state (cold caches, first-time constant loading, GC). [#487](https://github.com/mr-yum/growth-os/issues/487) was filed saying a framework-tree preload cost 88 ms of a 134 ms build; warm, the whole build was 46 ms, and the fix saved 13 ms rather than ~70. Warm up first, then interleave old and new paths in one process (shuffle the order each iteration) and compare medians. Measure against seeded data in a cloned database (`createdb -T growth_os_development <name>`, then `DATABASE_URL=…/<name>`), never by mutating the shared dev database.
 - **The claude.ai GitHub MCP connector 404s on this private repo.** Use `gh` for issues, PRs, checks and review threads.
 - **In Claude Code, `@path` loads a file immediately; a Markdown link doesn't.** The "Planning work" table once named every guide as `@docs/guidelines/…`, so every session in this repo loaded 20 files (~706k characters) at startup, and `framework-explorer.md` and `assessments.md`, each over the 150k per-file limit, were truncated, losing the end of each. Both are now a small core with a *Where everything lives* map, plus companions by concern under `docs/guidelines/<guide>/`; split any guide the same way once it nears the directory budget in `agent_guidance_test.rb`. Load a guide on a predicate instead: an `@` import in the `AGENTS.md` of the directory it governs (loaded only when a file there is read), or a "when X, read Y" link here. A path a guide merely mentions belongs in a link or backticks, never after a bare `@`.
-- **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
