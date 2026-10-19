@@ -34,7 +34,7 @@ This project uses a layered guidance system. Standards are loaded contextually �
 | `lib/` | [lib/AGENTS.md](lib/AGENTS.md) (production eager-loading; held in the file itself) |
 | `.github/` | [.github/AGENTS.md](.github/AGENTS.md) (CI workflows; held in the file itself) |
 
-Each directory above has an `AGENTS.md` that imports the relevant guideline (with a peer `CLAUDE.md` stub that imports the `AGENTS.md`, so Claude Code and other agents read the same instructions). Root `AGENTS.md` covers the cross-cutting material — architecture, commands, style, workflow, and PR practices.
+Each directory above has an `AGENTS.md` (with a peer `CLAUDE.md` stub that imports it, so Claude Code and other agents read the same instructions). Most import the relevant guideline; `lib/` and `.github/` hold their few rules in the file itself. Root `AGENTS.md` covers the cross-cutting material — architecture, commands, style, workflow, and PR practices.
 
 ## Text writing rules (when responding, writing user facing copy, comments or docs)
 
@@ -94,6 +94,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) |
 | Add or change an Operation, MCP tool, OAuth or DCR flow | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | Review a Dependabot PR, or change the `Gemfile` or a workflow | [dependencies.md](docs/guidelines/dependencies.md), [.github/AGENTS.md](.github/AGENTS.md) |
+| Add Ruby under `lib/` (a cop, a rake helper, a projection tool) | [lib/AGENTS.md](lib/AGENTS.md) |
 | Open or update a PR, or deliver a GitHub issue end to end | [issue-delivery.md](docs/guidelines/issue-delivery.md) |
 
 Most features touch controllers + models + views + tests + authorization — read all five.
