@@ -31,7 +31,46 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
            cycle_id: @cycle.cycle_id, person_id: person.id,
            framework_id: @cycle.framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: 3,
-           manager_rated_frequency: frequency)
+           manager_rated_frequency: frequency, last_manager_rated_at: Time.current)
+  end
+
+  # A started session over two raters with one report each, both enrolled at
+  # L3 on a two-capability ladder; only Ivy's first capability is rated, so
+  # readiness opens at 1 of 4 cells.
+  def live_session_with_ladder
+    ActsAsTenant.with_tenant(@tenant) do
+      family = create(:framework_role_family, tenant: @tenant, framework_id: @cycle.framework_id)
+      engineer = create(:framework_role, tenant: @tenant, role_family_id: family.role_family_id)
+      (1..5).each { |o| create(:framework_level, tenant: @tenant, role_id: engineer.role_id, ordinal: o) }
+      category = create(:framework_capability_category, tenant: @tenant,
+                        framework_id: @cycle.framework_id, name: "Thinking")
+      @cap_a = create(:framework_capability, tenant: @tenant, category_id: category.category_id, name: "Strategic Thinking")
+      @cap_b = create(:framework_capability, tenant: @tenant, category_id: category.category_id, name: "Delivery")
+      [ @cap_a, @cap_b ].each do |cap|
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: cap.capability_id, role_id: engineer.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: cap.capability_id, level_ordinal: 3)
+      end
+      PersonFrameworkAssignment.where(person_id: [ @report_1.id, @report_2.id ]).update_all(role_id: engineer.role_id)
+      [ @report_1, @report_2 ].each do |person|
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: person.id, level_ordinal: 3, role_id: engineer.role_id)
+      end
+      rate(@report_1, @cap_a, "consistent")
+
+      ctx = AuthorizationContext.new(
+        user: @facilitator_user, tenant_user: TenantUser.find_by(user: @facilitator_user), person: @facilitator
+      )
+      result = Operations::CalibrationSessions::Define.call(
+        context: ctx,
+        params: { cycle_id: @cycle.cycle_id, name: "Live readiness",
+                  participant_ids: [ @em_1.id, @em_2.id ],
+                  calibrant_person_ids: [ @report_1.id, @report_2.id ] }
+      )
+      Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
+      @live_session_id = result[:session_id]
+    end
   end
 
   # Evidence linked to a person's at-level cell — what the wall reads.
@@ -84,7 +123,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Mia Manager's reports (1)"
     assert_text "Ivy IC"
     assert_text "Omar IC"
-    assert_text "0 of 2 manager-rated"
+    # Readiness is cell coverage; nobody is enrolled yet, so there are no
+    # cells to rate and nobody is fully rated.
+    assert_text "0 of 2 people fully rated"
+    assert_text "Draft · ratings as of"
     assert_text "not enrolled in the cycle"
 
     # Remove a calibrant — they surface as an explicit re-add suggestion
@@ -101,8 +143,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # Start — population freezes, curation affordances disappear
     auto_confirm { click_button "Start session" }
     assert_text "Session started"
-    assert_text "Live"
-    assert_text "participants and population are frozen"
+    assert_text "Live · ratings as of"
+    # The header carries the live state; the stale "frozen … coming next"
+    # sentence read as "the numbers are frozen".
+    assert_no_text "coming next"
     assert_no_selector "button[aria-label='Remove Ivy IC from the population']"
     assert_no_text "Add person from your org"
   end
@@ -217,10 +261,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── Strip content, on the default tab ──
     assert_selector "a[role='tab'][aria-selected='true']", text: "Rater tendency"
     assert_no_text "CAPABILITY DIVERGENCE"
-    # Carried-forward values are marked, not hidden and not excluded.
-    assert_text "Carried"
-    # Mia has 3 at-level cells; 1 of them is carried.
-    assert_text "1 of 3"
+    # Carried-forward values are marked, not hidden and not excluded: Mia's
+    # n is 3 rated cells, 1 of them carried.
+    assert_text "33% carried"
+    # Readiness lives on its own card; the strip keeps only bias columns.
+    within("table", text: "Distribution") { assert_no_text "Evidence" }
     # The silent rater: a sentence, never zeroed columns.
     assert_text "No ratings yet — not counted in the org mean or any column."
     # No curation affordances on a live session
@@ -242,7 +287,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Quinn Alderberry hasn't rated yet — not on the board."
     assert_no_text "RATER TENDENCY"
 
-    # ── Score by cohort ──
+    # ── Score by level ──
     # JS-dispatched so Selenium's scroll-into-view can't touch scrollY, and
     # in a SHORT viewport so the fixture page actually scrolls: the frame
     # swap must leave the room's scroll position alone — the entire reason
@@ -251,10 +296,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     page.execute_script("window.scrollTo(0, 300)")
     assert_operator page.evaluate_script("window.scrollY"), :>=, 300,
                     "the instrument needs a page that scrolls"
-    click_with_retry(expect_text: "SCORE BY COHORT") do
+    click_with_retry(expect_text: "SCORE BY LEVEL") do
       page.execute_script(<<~JS)
         [...document.querySelectorAll("a[role='tab']")]
-          .find((a) => a.textContent.includes("Score by cohort")).click()
+          .find((a) => a.textContent.includes("Score by level")).click()
       JS
     end
     assert page.evaluate_script("window.__staying === true"),
@@ -296,7 +341,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
     assert_selector "[data-drawer-card='#{nia_id}']", count: 1
     assert_selector "a[href*='capabilities'][href*='pins%5B%5D=#{nia_id}']"
-    click_link_with_js_fallback("Score by cohort", expect_text: "SCORE BY COHORT")
+    click_link_with_js_fallback("Score by level", expect_text: "SCORE BY LEVEL")
 
     # The drawer composes with the drill-in rather than growing a grid —
     # and the pins ride along into it.
@@ -311,10 +356,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── The cohort axis on a phone: scrolls inside its own container ──
     page.driver.browser.manage.window.resize_to(375, 812)
     visit calibration_session_path(@live_session_id, view: "cohort")
-    assert_text "SCORE BY COHORT"
+    assert_text "SCORE BY LEVEL"
     overflowing = page.evaluate_script(<<~JS)
       (() => {
-        const wrap = document.querySelector(".overflow-x-auto");
+        const wrap = [...document.querySelectorAll(".overflow-x-auto")]
+          .find((el) => el.querySelector("a[aria-label*='% of expected']"));
         return wrap.scrollWidth > wrap.clientWidth &&
                document.documentElement.scrollWidth <= window.innerWidth + 1;
       })()
@@ -322,7 +368,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert overflowing, "the axis scrolls inside its wrapper, never the page body"
     # A dot is still reachable after scrolling the wrapper.
     page.execute_script(<<~JS)
-      const wrap = document.querySelector(".overflow-x-auto");
+      const wrap = [...document.querySelectorAll(".overflow-x-auto")]
+        .find((el) => el.querySelector("a[aria-label*='% of expected']"));
       wrap.scrollLeft = wrap.scrollWidth;
       [...wrap.querySelectorAll("a[aria-label*='% of expected']")].at(-1).click();
     JS
@@ -333,7 +380,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # the cohort tab renders it directly (the ?view= param is shareable),
     # then over to the strip for the vocabulary check.
     visit calibration_session_path(@live_session_id, view: "cohort")
-    assert_text "SCORE BY COHORT"
+    assert_text "SCORE BY LEVEL"
     click_link_with_js_fallback("Rater tendency", expect_text: "RATER TENDENCY")
 
     # ── The vocabulary defines itself, by KEYBOARD ──
@@ -594,6 +641,76 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_no_selector "[data-rater-id][data-dimmed='true']"
     assert_not_includes page.current_url, "rater="
     assert_includes page.current_url, "person=#{@report_1.id}"
+  end
+
+  # Readiness moves with every rated cell, and the live page keeps itself
+  # current: Refresh on demand, a poll otherwise — held while the room is
+  # reading a comparison card, applied the moment it closes.
+  test "readiness counts cells and the live page refreshes itself" do
+    live_session_with_ladder
+    sign_in_as(@facilitator_user)
+    visit calibration_session_path(@live_session_id)
+
+    assert_text "Live · ratings as of"
+    within("#calibration-readiness") do
+      assert_text "25% rated"
+      assert_text "0 of 2 people fully rated"
+    end
+    # Collapsed once live — the strip is the live question.
+    page.execute_script("document.querySelector('details[data-readiness-raters] summary').click()")
+    within("[data-readiness-rater='#{@em_1.id}']") { assert_text "1 unrated" }
+    within("[data-readiness-rater='#{@em_2.id}']") { assert_text "2 unrated" }
+
+    # A rating lands; Refresh brings it in and says what moved.
+    ActsAsTenant.with_tenant(@tenant) { rate(@report_2, @cap_a, "some") }
+    wait_for_stimulus "calibration-freshness"
+    click_button_with_js_fallback "Refresh", expect_text: "Updated just now"
+    within("#calibration-freshness-status") do
+      assert_text "1 rating changed"
+      assert_text "Raj Rater ×1"
+      assert_text "Readiness 25% → 50%"
+    end
+    within("#calibration-readiness") { assert_text "50% rated" }
+    # A reload keeps the rater table as the reader left it.
+    assert_selector "details[data-readiness-raters][open]"
+    page.execute_script("document.querySelector(\"#calibration-freshness-status button[aria-label='Dismiss update']\").click()")
+    assert_no_text "Updated just now"
+
+    # With a comparison card open, the poll holds the reload…
+    visit calibration_session_path(@live_session_id, view: "cohort", person: @report_1.id)
+    assert_selector "#calibration-comparison-drawer [data-drawer-card]"
+    wait_for_stimulus "calibration-freshness"
+    ActsAsTenant.with_tenant(@tenant) { rate(@report_2, @cap_b, "occasional") }
+    page.execute_script(
+      "document.querySelector('[data-controller~=\"calibration-freshness\"]')" \
+      ".setAttribute('data-calibration-freshness-interval-value', '300')"
+    )
+    assert_text "Newer ratings are waiting"
+    assert_no_text "Updated just now"
+    within("#calibration-readiness") { assert_text "50% rated" }
+
+    # …and applies it the moment the drawer collapses.
+    page.execute_script("document.querySelector('[data-comparison-drawer-target=\"collapse\"]').click()")
+    assert_text "Updated just now"
+    within("#calibration-readiness") { assert_text "75% rated" }
+    assert_no_text "Newer ratings are waiting"
+  end
+
+  test "readiness and Refresh fit a phone" do
+    live_session_with_ladder
+    page.driver.browser.manage.window.resize_to(375, 812)
+    sign_in_as(@facilitator_user)
+    visit calibration_session_path(@live_session_id)
+
+    assert_text "Live · ratings as of"
+    assert_selector "button", text: "Refresh"
+    within("#calibration-readiness") { assert_text "25% rated" }
+    page.execute_script("document.querySelector('details[data-readiness-raters] summary').click()")
+    assert_selector "[data-readiness-rater='#{@em_1.id}']"
+    assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+           "the rater table scrolls inside its card, never the page"
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do

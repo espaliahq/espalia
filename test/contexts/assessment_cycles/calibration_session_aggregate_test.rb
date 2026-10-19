@@ -450,4 +450,116 @@ class AssessmentCycles::CalibrationSessionAggregateTest < ActiveSupport::TestCas
       assert_match(/hasn't started/, err.message)
     end
   end
+
+  context "#archive" do
+    setup do
+      define_session
+      @aggregate.start(started_by_id: @facilitator_id)
+    end
+
+    should "archive a closed session" do
+      @aggregate.close(closed_by_id: @facilitator_id)
+      @aggregate.archive(archived_by_id: @facilitator_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationSessionArchived, event
+      assert_equal @session_id, event.data[:session_id]
+      assert_equal @facilitator_id, event.data[:archived_by_id]
+    end
+
+    should "refuse a session that isn't closed" do
+      err = assert_raises(RuntimeError) { @aggregate.archive(archived_by_id: @facilitator_id) }
+      assert_match(/Only a closed session can be archived/, err.message)
+    end
+
+    should "no-op when already archived" do
+      @aggregate.close
+      @aggregate.archive
+      assert_no_difference -> { @aggregate.unpublished_events.to_a.size } do
+        @aggregate.archive
+      end
+    end
+
+    should "raise when not defined" do
+      err = assert_raises(RuntimeError) { AssessmentCycles::CalibrationSessionAggregate.new.archive }
+      assert_match(/not defined/, err.message)
+    end
+  end
+
+  context "#unarchive" do
+    setup do
+      define_session
+      @aggregate.close
+    end
+
+    should "restore an archived session, which stays closed" do
+      @aggregate.archive
+      @aggregate.unarchive(unarchived_by_id: @facilitator_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationSessionUnarchived, event
+      assert_equal @facilitator_id, event.data[:unarchived_by_id]
+      # Still closed: archiving again is allowed, curation is not.
+      @aggregate.archive
+      assert_raises(RuntimeError) { @aggregate.add_calibrant(SecureRandom.uuid_v7) }
+    end
+
+    should "no-op when not archived" do
+      assert_no_difference -> { @aggregate.unpublished_events.to_a.size } do
+        @aggregate.unarchive
+      end
+    end
+  end
+
+  context "#rename" do
+    setup { define_session }
+
+    should "emit CalibrationSessionRenamed with the stripped name and the old one" do
+      @aggregate.rename("  Engineering · H2  ", renamed_by_id: @facilitator_id)
+
+      event = @aggregate.unpublished_events.to_a.last
+      assert_kind_of AssessmentCycles::Events::CalibrationSessionRenamed, event
+      assert_equal "Engineering · H2", event.data[:name]
+      assert_equal "Engineering calibration", event.data[:previous_name]
+      assert_equal @facilitator_id, event.data[:renamed_by_id]
+    end
+
+    should "refuse a blank name" do
+      err = assert_raises(RuntimeError) { @aggregate.rename("   ") }
+      assert_match(/Name can't be blank/, err.message)
+    end
+
+    should "no-op on an unchanged name, whitespace aside" do
+      assert_no_difference -> { @aggregate.unpublished_events.to_a.size } do
+        @aggregate.rename(" Engineering calibration ")
+      end
+    end
+
+    should "strip a padded defined name rather than treat it as unchanged" do
+      padded = AssessmentCycles::CalibrationSessionAggregate.new
+      padded.define(SecureRandom.uuid_v7, @cycle_id, @framework_id, "Eng H1 ", 1, facilitator_id: @facilitator_id)
+      padded.rename("Eng H1")
+
+      assert_kind_of AssessmentCycles::Events::CalibrationSessionRenamed, padded.unpublished_events.to_a.last
+    end
+
+    should "chain previous names across renames" do
+      @aggregate.rename("First")
+      @aggregate.rename("Second")
+      assert_equal "First", @aggregate.unpublished_events.to_a.last.data[:previous_name]
+    end
+
+    should "be allowed while live, closed and archived" do
+      @aggregate.start
+      @aggregate.rename("Live name")
+      @aggregate.close
+      @aggregate.rename("Closed name")
+      @aggregate.archive
+      @aggregate.rename("Archived name")
+
+      renamed = @aggregate.unpublished_events.to_a
+        .grep(AssessmentCycles::Events::CalibrationSessionRenamed)
+      assert_equal [ "Live name", "Closed name", "Archived name" ], renamed.map { |e| e.data[:name] }
+    end
+  end
 end

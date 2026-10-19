@@ -145,6 +145,48 @@ class AssessmentCycles::Projections::CalibrationSessionsTest < ActiveSupport::Te
     end
   end
 
+  context "archive, restore and rename" do
+    setup do
+      emit_defined
+      emit(AssessmentCycles::Events::CalibrationSessionClosed,
+        session_id: @session_id, reason: "facilitator", closed_by_id: @facilitator_id)
+    end
+
+    should "stamp archived_at and archived_by_id, and clear both on restore" do
+      emit(AssessmentCycles::Events::CalibrationSessionArchived,
+        session_id: @session_id, archived_by_id: @facilitator_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        session = CalibrationSession.find(@session_id)
+        assert session.archived?
+        assert_not_nil session.archived_at
+        assert_equal @facilitator_id, session.archived_by_id
+        assert_equal [ session ], CalibrationSession.archived.to_a
+        assert_empty CalibrationSession.unarchived
+      end
+
+      emit(AssessmentCycles::Events::CalibrationSessionUnarchived,
+        session_id: @session_id, unarchived_by_id: @facilitator_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        session = CalibrationSession.find(@session_id)
+        assert_not session.archived?
+        assert_nil session.archived_by_id
+        assert_equal "closed", session.status
+      end
+    end
+
+    should "update the name" do
+      emit(AssessmentCycles::Events::CalibrationSessionRenamed,
+        session_id: @session_id, name: "Engineering · H2 2026",
+        previous_name: "Engineering calibration", renamed_by_id: @facilitator_id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "Engineering · H2 2026", CalibrationSession.find(@session_id).name
+      end
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produces identical read-model state including the stable PK" do
       new_person = SecureRandom.uuid_v7
@@ -164,10 +206,21 @@ class AssessmentCycles::Projections::CalibrationSessionsTest < ActiveSupport::Te
         calibrant_person_ids: [ @report_1, new_person ], started_by_id: @facilitator_id)
       append_and_project(AssessmentCycles::Events::CalibrationSessionClosed,
         session_id: @session_id, reason: "facilitator", closed_by_id: @facilitator_id)
+      append_and_project(AssessmentCycles::Events::CalibrationSessionRenamed,
+        session_id: @session_id, name: "Engineering · H1", previous_name: "Engineering calibration",
+        renamed_by_id: @facilitator_id)
+      append_and_project(AssessmentCycles::Events::CalibrationSessionArchived,
+        session_id: @session_id, archived_by_id: @facilitator_id)
+      append_and_project(AssessmentCycles::Events::CalibrationSessionUnarchived,
+        session_id: @session_id, unarchived_by_id: @facilitator_id)
+      append_and_project(AssessmentCycles::Events::CalibrationSessionArchived,
+        session_id: @session_id, archived_by_id: @em_1)
 
       before_snapshot = snapshot_read_models(AssessmentCycles::Projections::CalibrationSessions, @tenant)
       assert_equal 1, before_snapshot[:sessions].size
       assert_equal 3, before_snapshot[:members].size
+      assert_equal "Engineering · H1", before_snapshot[:sessions].first["name"]
+      assert_equal @em_1, before_snapshot[:sessions].first["archived_by_id"]
 
       AssessmentCycles::Projections::CalibrationSessions.reset!(tenant: @tenant)
       ActsAsTenant.with_tenant(@tenant) do

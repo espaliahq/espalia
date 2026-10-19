@@ -1,10 +1,15 @@
 # frozen_string_literal: true
 
-# The rater tendency strip — one row per participant: report/rated
-# counts, mean at-level rating vs the org mean, the rating distribution
-# (frequency palette segments), the self-gap, and evidence backing.
-# The "acknowledge our biases first" surface; aggregates only, never
-# individual self-ratings (docs/architecture/calibration-sessions.md).
+# The rater tendency strip — one row per participant: how many cells the
+# row is built from, mean at-level rating vs the org mean, the rating
+# distribution (frequency palette segments) and the self-gap. The
+# "acknowledge our biases first" surface; aggregates only, never individual
+# self-ratings (docs/architecture/calibration-sessions.md).
+#
+# Bias only. Readiness — reports, coverage, carried, evidence — has its own
+# card ({Views::CalibrationSessions::ReadinessCard}); the strip keeps n
+# because small-n honesty needs it, and notes the carried share on it
+# because marking never softens.
 #
 # Small-n honesty: raters below the small-n floor show their numbers
 # but never the amber deviation badges — two data points always look
@@ -36,6 +41,7 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
           # and its number breaks the phrase, and the whole stat is what the
           # reader is pointing at anyway.
           defined_term(:org_mean, label: sprintf("Org mean %.2f.", @org_mean)) if @org_mean
+          plain "Readiness has its own card above — this one is only about how each rater rates."
         end
 
         if @raters.all? { |r| r[:cell_count].zero? }
@@ -57,12 +63,10 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
         thead do
           tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
             th(class: "py-1.5 pr-2 font-medium") { "Rater" }
-            th(class: "py-1.5 pr-2 font-medium") { defined_term(:reports) }
+            th(class: "py-1.5 pr-2 font-medium") { defined_term(:rated_cells) }
             th(class: "py-1.5 pr-2 font-medium") { defined_term(:org_delta) }
             th(class: "py-1.5 pr-2 font-medium") { defined_term(:distribution) }
-            th(class: "py-1.5 pr-2 font-medium") { defined_term(:self_gap) }
-            th(class: "py-1.5 pr-2 font-medium") { defined_term(:evidence) }
-            th(class: "py-1.5 font-medium") { defined_term(:carried, align: :right) }
+            th(class: "py-1.5 font-medium") { defined_term(:self_gap, align: :right) }
           end
         end
         tbody do
@@ -77,9 +81,7 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
       td(class: "py-2 pr-2 font-medium text-gray-900 dark:text-white whitespace-nowrap") do
         plain @people[rater[:participant_id]]&.name || "Unknown"
       end
-      td(class: "py-2 pr-2 text-gray-600 dark:text-gray-300 whitespace-nowrap") do
-        plain "#{rater[:report_count]} · #{rater[:cell_count]} cells"
-      end
+      td(class: "py-2 pr-2 text-gray-600 dark:text-gray-300 whitespace-nowrap") { n_cell(rater) }
       if rater[:cell_count].zero?
         unrated_cells
       else
@@ -91,11 +93,7 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
   def rated_cells_for(rater)
     td(class: "py-2 pr-2 whitespace-nowrap") { org_delta_cell(rater) }
     td(class: "py-2 pr-2") { distribution_bar(rater) }
-    td(class: "py-2 pr-2 whitespace-nowrap") { self_gap_cell(rater) }
-    td(class: "py-2 pr-2 whitespace-nowrap text-gray-600 dark:text-gray-300") do
-      plain rater[:evidence_pct] ? "#{(rater[:evidence_pct] * 100).round}%" : "—"
-    end
-    td(class: "py-2 whitespace-nowrap") { carried_cell(rater) }
+    td(class: "py-2 whitespace-nowrap") { self_gap_cell(rater) }
   end
 
   # A rater with nothing rated keeps their row — readiness is this strip's
@@ -105,26 +103,29 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
   # every other aggregate is guaranteed upstream: OverviewStats#rated_cells
   # filters unrated cells before anything is computed.)
   def unrated_cells
-    td(class: "py-2 text-sm italic text-gray-600 dark:text-gray-300", colspan: 5) do
+    td(class: "py-2 text-sm italic text-gray-600 dark:text-gray-300", colspan: 3) do
       "No ratings yet — not counted in the org mean or any column."
     end
   end
 
-  # How much of this rater's row is carried forward. This MARKS the row;
-  # it never softens it. A carried rating is still the rater's rating —
-  # leaving it unrevisited is a decision they own — so the tendency and
-  # self-gap flags below fire on carried numbers exactly as on fresh ones.
-  # The column tells the room where to push ("own these, or do the work to
-  # verify or amend them"), which matters most when the numbers diverge.
-  def carried_cell(rater)
+  # n, the rated cells the row is built from, with the carried share of
+  # them as an amber note. The note MARKS the row; it never softens it. A
+  # carried rating is still the rater's rating — leaving it unrevisited is a
+  # decision they own — so the tendency and self-gap flags beside it fire on
+  # carried numbers exactly as on fresh ones. It tells the room where to
+  # push ("own these, or do the work to verify or amend them"), which matters
+  # most when the numbers diverge.
+  def n_cell(rater)
+    plain rater[:cell_count].to_s
     carried = rater[:carried_count].to_i
-    return span(class: "text-gray-600 dark:text-gray-300") { "—" } if carried.zero?
+    return if carried.zero?
 
+    note = all_carried?(rater) ? "all carried" : "#{(carried * 100.0 / rater[:cell_count]).round}% carried"
     span(
-      class: "text-amber-700 dark:text-amber-300#{' font-medium' if all_carried?(rater)}",
+      class: "text-xs text-amber-700 dark:text-amber-300#{' font-medium' if all_carried?(rater)}",
       title: "#{carried} of #{rater[:cell_count]} ratings carried forward from the previous " \
              "cycle and not confirmed this one"
-    ) { all_carried?(rater) ? "all #{carried}" : "#{carried} of #{rater[:cell_count]}" }
+    ) { " · #{note}" }
   end
 
   # Every rated cell carried — nothing in this row was decided this cycle.
@@ -138,7 +139,7 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
 
     # Carried rows are NOT exempt: these are still this rater's ratings, and
     # a lenient tendency built out of values they declined to revisit is a
-    # tendency they own. The Carried column says how it got there.
+    # tendency they own. The carried note on n says how it got there.
     notable = delta.abs >= DEVIATION_THRESHOLD && !rater[:small_n]
     span(class: notable ? "text-amber-700 dark:text-amber-300 font-medium" : "text-gray-900 dark:text-white") do
       plain signed(delta)

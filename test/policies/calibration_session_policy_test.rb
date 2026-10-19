@@ -60,6 +60,7 @@ class CalibrationSessionPolicyTest < ActiveSupport::TestCase
                tenant: @tenant, session: @session, person_id: @em.id)
         policy = CalibrationSessionPolicy.new(context_for(person: @em), @session)
         assert_not policy.show?
+        assert_not policy.freshness?, "the page's poll is as private as the page"
         assert_not policy.curate?
         assert_not policy.start?
       end
@@ -83,6 +84,7 @@ class CalibrationSessionPolicyTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         policy = CalibrationSessionPolicy.new(@ctx, @session)
         assert policy.show?
+        assert policy.freshness?
         assert policy.curate?
         assert policy.start?
         assert policy.close?
@@ -125,6 +127,67 @@ class CalibrationSessionPolicyTest < ActiveSupport::TestCase
         assert_not policy.define?
         assert policy.show?, "session drive stays available to admins without a person"
       end
+    end
+  end
+
+  context "archive, restore and rename" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @closed = create(:calibration_session, :closed, tenant: @tenant, facilitator_id: @dept_head.id)
+        @archived = create(:calibration_session, :archived, tenant: @tenant, facilitator_id: @dept_head.id)
+        @live = create(:calibration_session, :started, tenant: @tenant, facilitator_id: @dept_head.id)
+      end
+    end
+
+    should "permit the facilitator to archive and restore closed sessions only" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ctx = context_for(person: @dept_head)
+
+        assert CalibrationSessionPolicy.new(ctx, @closed).archive?
+        assert CalibrationSessionPolicy.new(ctx, @archived).unarchive?
+        assert_not CalibrationSessionPolicy.new(ctx, @live).archive?
+        assert_not CalibrationSessionPolicy.new(ctx, @session).archive?, "a draft is discarded, not archived"
+      end
+    end
+
+    should "permit the facilitator to rename in any status" do
+      ActsAsTenant.with_tenant(@tenant) do
+        ctx = context_for(person: @dept_head)
+        [ @session, @live, @closed, @archived ].each do |record|
+          assert CalibrationSessionPolicy.new(ctx, record).rename?, record.status
+        end
+      end
+    end
+
+    should "permit a tenant admin who doesn't facilitate" do
+      ActsAsTenant.with_tenant(@tenant) do
+        admin_person = create(:person, tenant: @tenant, name: "HR Admin")
+        ctx = context_for(person: admin_person, role: :admin)
+
+        assert CalibrationSessionPolicy.new(ctx, @closed).archive?
+        assert CalibrationSessionPolicy.new(ctx, @archived).unarchive?
+        assert CalibrationSessionPolicy.new(ctx, @live).rename?
+      end
+    end
+
+    should "deny a participant and a manager of managers who doesn't facilitate" do
+      ActsAsTenant.with_tenant(@tenant) do
+        other_head = create(:person, tenant: @tenant, name: "Other Head")
+        create(:person, tenant: @tenant, name: "Other EM", manager: other_head).tap do |em|
+          create(:person, tenant: @tenant, manager: em)
+        end
+        [ context_for(person: @em), context_for(person: other_head) ].each do |ctx|
+          assert_not CalibrationSessionPolicy.new(ctx, @closed).archive?
+          assert_not CalibrationSessionPolicy.new(ctx, @archived).unarchive?
+          assert_not CalibrationSessionPolicy.new(ctx, @closed).rename?
+        end
+      end
+    end
+
+    should "deny a non-member" do
+      ctx = AuthorizationContext.new(user: create(:user), tenant_user: nil, person: nil)
+      assert_not CalibrationSessionPolicy.new(ctx, @closed).archive?
+      assert_not CalibrationSessionPolicy.new(ctx, @closed).rename?
     end
   end
 end

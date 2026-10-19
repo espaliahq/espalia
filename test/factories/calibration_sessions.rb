@@ -21,6 +21,11 @@ FactoryBot.define do
       close_reason { "facilitator" }
       closed_at { Time.current }
     end
+
+    trait :archived do
+      closed
+      archived_at { Time.current }
+    end
   end
 
   factory :calibration_session_member do

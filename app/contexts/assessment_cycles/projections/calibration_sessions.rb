@@ -30,7 +30,10 @@ class AssessmentCycles::Projections::CalibrationSessions
       AssessmentCycles::Events::CalibrationCalibrantAdded,
       AssessmentCycles::Events::CalibrationCalibrantRemoved,
       AssessmentCycles::Events::CalibrationSessionStarted,
-      AssessmentCycles::Events::CalibrationSessionClosed
+      AssessmentCycles::Events::CalibrationSessionClosed,
+      AssessmentCycles::Events::CalibrationSessionArchived,
+      AssessmentCycles::Events::CalibrationSessionUnarchived,
+      AssessmentCycles::Events::CalibrationSessionRenamed
     ]
   end
 
@@ -62,6 +65,9 @@ class AssessmentCycles::Projections::CalibrationSessions
     when AssessmentCycles::Events::CalibrationCalibrantRemoved then handle_member_removed(event, event.data[:person_id])
     when AssessmentCycles::Events::CalibrationSessionStarted then handle_started(event)
     when AssessmentCycles::Events::CalibrationSessionClosed then handle_closed(event)
+    when AssessmentCycles::Events::CalibrationSessionArchived then handle_archived(event)
+    when AssessmentCycles::Events::CalibrationSessionUnarchived then handle_unarchived(event)
+    when AssessmentCycles::Events::CalibrationSessionRenamed then handle_renamed(event)
     end
   end
 
@@ -133,6 +139,21 @@ class AssessmentCycles::Projections::CalibrationSessions
       close_reason: event.data[:reason],
       closed_at: event.metadata[:timestamp] || Time.current
     )
+  end
+
+  def handle_archived(event)
+    find_session(event)&.update!(
+      archived_at: event.metadata[:timestamp] || Time.current,
+      archived_by_id: event.data[:archived_by_id]
+    )
+  end
+
+  def handle_unarchived(event)
+    find_session(event)&.update!(archived_at: nil, archived_by_id: nil)
+  end
+
+  def handle_renamed(event)
+    find_session(event)&.update!(name: event.data[:name])
   end
 
   def create_member(session, person_id, member_type, added_by)

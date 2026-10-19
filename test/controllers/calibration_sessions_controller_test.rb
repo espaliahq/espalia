@@ -86,6 +86,10 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes response.body, "To confirm"
       assert_not_includes response.body, "In progress"
+      # The readiness card counts the carried cell as rated, and names the
+      # work left — the old people-count bar read this as 0 of 1.
+      assert_includes response.body, "100% rated"
+      assert_includes response.body, "All 1 to confirm"
     end
 
     should "ignore ratings outside the assessed role in the readiness badges" do
@@ -203,10 +207,9 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       get calibration_session_path(@session_record)
 
       assert_response :success
-      # The row stays (readiness is its job) but reads as a state, not as
-      # zeroed measurements.
+      # The row stays but reads as a state, not as zeroed measurements.
       assert_includes response.body, "No ratings yet"
-      assert_select "td[colspan='5']", text: /No ratings yet/
+      assert_select "td[colspan='3']", text: /No ratings yet/
       # The other tabs' content is NOT on this page — one pane at a time.
       assert_not_includes response.body, "Capability divergence</h2>"
     end
@@ -222,7 +225,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  context "the Score by cohort tab" do
+  context "the Score by level tab" do
     setup do
       sign_in @facilitator_user
       ActsAsTenant.with_tenant(@tenant) do
@@ -285,7 +288,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # Tabs + content live inside the pane frame, so a tab or dot click
       # swaps in place instead of scrolling the room back to the top.
       assert_select "turbo-frame#calibration-overview-pane a[role='tab']", count: 3
-      assert_select "a[role='tab'][aria-selected='true']", text: "Score by cohort"
+      assert_select "a[role='tab'][aria-selected='true']", text: "Score by level"
       # Ivy: 100%, entirely carried → dashed disclosure on the dot.
       assert_select "a[aria-label*='Ivy IC — 100% of expected']"
       assert_includes response.body, "1 of 1 ratings carried forward"
@@ -434,6 +437,153 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       session_record.reload
       assert_equal "closed", session_record.status
       assert_equal "facilitator", session_record.close_reason
+    end
+  end
+
+  context "the list's archive toggle and card actions" do
+    setup do
+      @live = define_session
+      @closed = define_session
+      @archived = define_session
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(
+          user: @facilitator_user, tenant_user: TenantUser.find_by(user: @facilitator_user), person: @facilitator
+        )
+        Operations::CalibrationSessions::Start.call(context: context, params: { session_id: @live.id })
+        [ @closed, @archived ].each do |record|
+          Operations::CalibrationSessions::Close.call(context: context, params: { session_id: record.id })
+        end
+        Operations::CalibrationSessions::Archive.call(context: context, params: { session_id: @archived.id })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @live.id, name: "Live one" })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @closed.id, name: "Closed one" })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @archived.id, name: "Archived one" })
+      end
+      sign_in @facilitator_user
+    end
+
+    should "hide archived sessions by default and offer the toggle with a count" do
+      get calibration_sessions_path
+
+      assert_response :success
+      assert_includes response.body, "Live one"
+      assert_includes response.body, "Closed one"
+      assert_not_includes response.body, "Archived one"
+      assert_select "a[href=?]", calibration_sessions_path(archived: 1), text: "Show archived (1)"
+      assert_select "h2", text: /H1 2026/
+    end
+
+    should "show archived sessions in their own group when asked, with Restore" do
+      get calibration_sessions_path(archived: 1)
+
+      assert_select "section[aria-labelledby='archived-sessions'] #calibration-session-card-#{@archived.id}"
+      assert_select "a[href=?]", calibration_sessions_path, text: "Hide archived"
+      assert_select "#calibration-session-card-#{@archived.id} form[action=?]",
+                    unarchive_calibration_session_path(@archived)
+    end
+
+    should "offer Archive on closed cards only, and Rename on every card" do
+      get calibration_sessions_path
+
+      assert_select "#calibration-session-card-#{@closed.id} form[action=?]", archive_calibration_session_path(@closed)
+      assert_select "#calibration-session-card-#{@live.id} form[action=?]",
+                    archive_calibration_session_path(@live), count: 0
+      [ @live, @closed ].each do |record|
+        assert_select "#calibration-session-card-#{record.id} [data-rename-session-action=?]",
+                      name_calibration_session_path(record)
+      end
+      assert_select "##{Views::CalibrationSessions::RenameSessionModal::ID}"
+    end
+  end
+
+  # The live page's poll: the latest write behind its numbers, and what
+  # moved since the stamp the page rendered with.
+  context "the freshness poll" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        role = create(:framework_role, tenant: @tenant)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: @report.id, level_ordinal: 3, role_id: role.role_id)
+        category = create(:framework_capability_category, tenant: @tenant, framework_id: @cycle.framework_id)
+        @cap = create(:framework_capability, tenant: @tenant, category_id: category.category_id)
+        create(:framework_capability_role_binding, tenant: @tenant,
+               capability_id: @cap.capability_id, role_id: role.role_id)
+        create(:framework_behavioural_expectation, tenant: @tenant,
+               capability_id: @cap.capability_id, level_ordinal: 3)
+      end
+      @session_record = define_session
+    end
+
+    should "report no change against the stamp the page rendered with" do
+      sign_in @facilitator_user
+      get calibration_session_path(@session_record)
+      stamp = css_select("[data-calibration-freshness-stamp-value]").first["data-calibration-freshness-stamp-value"]
+
+      get freshness_calibration_session_path(@session_record, since: stamp)
+
+      assert_response :success
+      assert_equal false, response.parsed_body["changed"]
+    end
+
+    should "name the rater whose people's ratings moved since the stamp" do
+      sign_in @facilitator_user
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: @report.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "some")
+      end
+      get freshness_calibration_session_path(@session_record)
+      since = response.parsed_body["stamp"]
+      travel 1.second do
+        ActsAsTenant.with_tenant(@tenant) do
+          AssessmentLevelRating.find_by(person_id: @report.id)
+            .update!(manager_rated_frequency: "consistent", last_manager_rated_at: Time.current)
+        end
+        get freshness_calibration_session_path(@session_record, since: since)
+      end
+
+      body = response.parsed_body
+      assert body["changed"]
+      assert_equal 1, body["ratings_changed"]
+      assert_equal [ { "name" => "Mia Manager", "count" => 1 } ], body["by_rater"]
+    end
+
+    should "be denied to a participant EM, like the page" do
+      sign_in @em_user
+      get freshness_calibration_session_path(@session_record)
+
+      assert_redirected_to root_path
+    end
+  end
+
+  context "the live page" do
+    should "show its freshness line and no stale \"coming next\" note" do
+      session_record = define_session
+      ActsAsTenant.with_tenant(@tenant) { session_record.update!(status: "started") }
+      sign_in @facilitator_user
+
+      get calibration_session_path(session_record)
+
+      assert_response :success
+      assert_includes response.body, "Live · ratings as of"
+      assert_select "button[data-action='calibration-freshness#refresh']", text: /Refresh/
+      assert_select "[data-calibration-freshness-poll-value='true']"
+      assert_not_includes response.body, "coming next"
+      assert_not_includes response.body, "participants and population are frozen"
+      # Readiness and the overview share one frame, so one reload updates both.
+      assert_select "turbo-frame#calibration-overview-pane #calibration-readiness"
+      assert_select "turbo-frame#calibration-overview-pane [role='tablist']"
+    end
+
+    should "offer Refresh on a closed session but never poll" do
+      session_record = define_session
+      ActsAsTenant.with_tenant(@tenant) { session_record.update!(status: "closed", close_reason: "facilitator") }
+      sign_in @facilitator_user
+
+      get calibration_session_path(session_record)
+
+      assert_includes response.body, "Closed · ratings as of"
+      assert_select "[data-calibration-freshness-poll-value='false']"
     end
   end
 
