@@ -526,8 +526,11 @@ or a **whole-matrix re-fetch** (reorder capability / category — ~950 KB and
 seconds of client time to move two rows). Feedback ranged from a green flash on
 a page you had just lost your place in, to nothing at all.
 
-**Every edit-mode write now answers a Turbo Stream touching exactly the rows it
-changed, plus one toast.** The rules:
+**Every edit-mode write to the grid now answers a Turbo Stream touching exactly
+the rows it changed, plus one toast.** Writes made inside a modal editor that
+stays open (binding editor, levels editor) and the role-tree writes re-render
+their own Turbo Frame instead, and a reorder answers only the toast while
+`reorder-move` moves the node client-side (below). The rules:
 
 1. **Never redirect.** `Frameworks::{Expectations,Capabilities,Categories,
    Levels}Controller#create`, `Capability/Category/IllustrationArchivesController`
