@@ -39,7 +39,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
 
   STATIONS = [
     { anchor: "setup", icon: :grid, title: "Set up", blurb: "Your role, your level, your cycle.", status: "enrolled" },
-    { anchor: "rate", icon: :star, title: "Rate & gather", blurb: "Two private views, plus feedback.", status: "started" },
+    { anchor: "rate", icon: :star, title: "Rate & gather", blurb: "Two views, plus feedback.", status: "started" },
     { anchor: "align", icon: :merge, title: "Align", blurb: "Talk it through. Agree each cell.", status: "aligning → aligned" },
     { anchor: "close", icon: :flag, title: "Close", blurb: "Your record, ready for next time.", status: "concluded" }
   ].freeze
@@ -53,8 +53,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
   ].freeze
 
   RULES = [
-    { icon: :eye, title: "Private until you meet",
-      body: "You never see your manager's ratings before alignment starts." },
+    { icon: :eye, title: "Your manager's view waits",
+      body: "Your manager sees your ratings as you go. You see theirs once alignment starts." },
     { icon: :message, title: "Feedback informs, never scores",
       body: "It shapes the conversation. The score comes from ratings alone." },
     { icon: :shield, title: "One person drives alignment",
@@ -251,9 +251,9 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def rate_phase
     phase(
       anchor: "rate", number: 2, flip: true,
-      title: "Two views, kept apart, backed by feedback",
-      lead: "You and your manager rate the same cells on your own. " \
-            "Neither sees the other's ratings yet, so each view stays honest.",
+      title: "Two views, backed by feedback",
+      lead: "You and your manager rate the same cells. Your manager sees your ratings as you go; " \
+            "theirs stay hidden from you until alignment starts.",
       steps: [
         [ :you, "You rate yourself", "How often do you show this behaviour? Pick one of four words." ],
         [ :manager, "Your manager rates you",

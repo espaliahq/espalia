@@ -35,6 +35,14 @@ class AssessmentGuidesControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "On track at E3"
     end
 
+    should "say the manager sees the report's ratings before alignment, not the other way round" do
+      sign_in @user
+      get assessment_guide_path
+
+      assert_includes response.body, "Your manager sees your ratings as you go"
+      assert_not_includes response.body, "Neither sees"
+    end
+
     should "not be mistaken for an assessment id" do
       assert_equal "assessment_guides", Rails.application.routes.recognize_path("/assessments/how-it-works")[:controller]
     end
