@@ -171,7 +171,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   # Population members whose rater isn't in the room: their numbers count in
   # the totals above, but nobody here can act on them.
   def reference_row(row)
-    tr(class: "border-t border-gray-100 dark:border-gray-800 opacity-70", data: { readiness_reference: "true" }) do
+    tr(class: "border-t border-gray-100 dark:border-gray-800", data: { readiness_reference: "true" }) do
       td(class: "py-2 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300") do
         span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle bg-gray-400 dark:bg-gray-500",
              aria: { hidden: "true" })

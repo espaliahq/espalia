@@ -205,7 +205,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
   def refresh_button
     button(
       type: "button",
-      class: "#{secondary_button_classes} gap-1.5",
+      class: "#{secondary_button_classes} min-h-11 gap-1.5",
       data: { action: "calibration-freshness#refresh", calibration_freshness_target: "refresh" }
     ) do
       span(aria: { hidden: "true" }) { "↻" }

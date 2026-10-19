@@ -50,11 +50,11 @@ class Views::CalibrationSessions::FreshnessStatus < Views::Base
       span(class: "flex-1", data: { message: "" })
       button(
         type: "button",
-        class: "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-600 " \
+        class: "-my-3 -mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-gray-600 " \
                "dark:text-gray-300 hover:text-gray-900 dark:hover:text-white cursor-pointer",
         aria_label: "Dismiss update",
         data: { action: "flash#dismiss" }
-      ) { "×" }
+      ) { span(aria: { hidden: "true" }) { "×" } }
     end
   end
 end
