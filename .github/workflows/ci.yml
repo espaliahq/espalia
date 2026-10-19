@@ -222,7 +222,7 @@ jobs:
   # Merges Dependabot's PRs once every job above has passed on the same head.
   # Every guard reads the PR, never github.actor: the actor can be made
   # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
-  # read-only token whatever this job asks for. See AGENTS.md before editing.
+  # read-only token whatever this job asks for. See .github/AGENTS.md before editing.
   dependabot-auto-merge:
     needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test]
     if: >-
