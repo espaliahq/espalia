@@ -233,7 +233,7 @@ first link — and an item recorded with no cell is **unplaced**: the recipient
 or their manager places it later with `assessments_add_evidence_link`.
 `assessments_evidence_list` with no capability lists the unplaced items
 (`unplaced: true`). A peer still cannot read the assessment; the directory is
-the whole of what they see ([assessments.md → Proactive feedback](assessments.md)).
+the whole of what they see ([assessments/evidence.md → Proactive feedback](assessments/evidence.md)).
 
 ### 4. Shape parity via shared serializers
 

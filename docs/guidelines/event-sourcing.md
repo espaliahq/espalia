@@ -107,7 +107,7 @@ When adding a read model, decide its external-identity strategy deliberately. Th
 
 ## Rating reads are role-scoped
 
-A rating belongs to a cell, not a role (ADR-22), so `assessment_level_ratings` has no role column. Any query over it outside the `CurrentAssessment` projection must pass through `AssessmentLevelRating.within(Assessments::RoleScope…)` or announce `.across_all_roles`; the `GrowthOs/RatingsMustBeRoleScoped` cop enforces it. The rule and its exemptions live in [assessments.md → Role-scoped reads](assessments.md). A new read model that stores rating-derived state inherits the rule: decide which role it reads for before writing the projection.
+A rating belongs to a cell, not a role (ADR-22), so `assessment_level_ratings` has no role column. Any query over it outside the `CurrentAssessment` projection must pass through `AssessmentLevelRating.within(Assessments::RoleScope…)` or announce `.across_all_roles`; the `GrowthOs/RatingsMustBeRoleScoped` cop enforces it. The rule and its exemptions live in [assessments/role-lens.md → Role-scoped reads](assessments/role-lens.md). A new read model that stores rating-derived state inherits the rule: decide which role it reads for before writing the projection.
 
 ## Replay-mode side-effect suppression
 
