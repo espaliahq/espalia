@@ -43,6 +43,7 @@ class CalibrationSessions::ArchiveSystemTest < ApplicationSystemTestCase
       visit calibration_sessions_path
       assert_selector "h2", text: "H1 2026 Review"
       assert_no_text "Show archived"
+      assert_no_sideways_scroll
 
       open_dropdown(scope: card(@closed_id))
       within(card(@closed_id)) do
@@ -59,8 +60,7 @@ class CalibrationSessions::ArchiveSystemTest < ApplicationSystemTestCase
         assert_selector card(@closed_id), text: "Archived"
         assert_text "by Dana Dept"
       end
-      assert_equal page.evaluate_script("document.documentElement.clientWidth"),
-                   page.evaluate_script("document.documentElement.scrollWidth"), "no sideways overflow"
+      assert_no_sideways_scroll
 
       click_selector_with_js_fallback "#{card(@closed_id)} > form[action$='/unarchive'] button",
                                       expect_text: "restored"
@@ -98,6 +98,11 @@ class CalibrationSessions::ArchiveSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def assert_no_sideways_scroll
+    assert_equal page.evaluate_script("document.documentElement.clientWidth"),
+                 page.evaluate_script("document.documentElement.scrollWidth"), "no sideways overflow"
+  end
 
   def card(session_id)
     "#calibration-session-card-#{session_id}"

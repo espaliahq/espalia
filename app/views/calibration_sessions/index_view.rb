@@ -59,16 +59,19 @@ class Views::CalibrationSessions::IndexView < Views::Base
 
   private
 
+  # Not Kit::SectionHeading: its row doesn't wrap, and two actions beside the
+  # title pushed the page sideways on a phone.
   def page_header
-    render Components::Kit::SectionHeading.new(
-      "Calibration",
-      subtitle: "Run sessions with your managers to calibrate how they rate their reports"
-    ) do |heading|
-      heading.action do
-        div(class: "flex flex-col-reverse sm:flex-row items-end sm:items-center gap-2") do
-          archived_toggle
-          define_link if @can_define
+    div(class: "flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-4") do
+      div(class: "min-w-0") do
+        h2(class: "text-xl font-bold text-gray-900 dark:text-white") { "Calibration" }
+        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+          "Run sessions with your managers to calibrate how they rate their reports"
         end
+      end
+      div(class: "flex flex-wrap items-center gap-2") do
+        archived_toggle
+        define_link if @can_define
       end
     end
   end
