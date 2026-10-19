@@ -31,7 +31,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
            cycle_id: @cycle.cycle_id, person_id: person.id,
            framework_id: @cycle.framework_id,
            capability_stable_id: capability.stable_id, level_ordinal: 3,
-           manager_rated_frequency: frequency)
+           manager_rated_frequency: frequency, last_manager_rated_at: Time.current)
   end
 
   # A started session over two raters with one report each, both enrolled at

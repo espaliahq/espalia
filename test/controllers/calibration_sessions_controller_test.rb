@@ -481,7 +481,8 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       since = response.parsed_body["stamp"]
       travel 1.second do
         ActsAsTenant.with_tenant(@tenant) do
-          AssessmentLevelRating.find_by(person_id: @report.id).update!(manager_rated_frequency: "consistent")
+          AssessmentLevelRating.find_by(person_id: @report.id)
+            .update!(manager_rated_frequency: "consistent", last_manager_rated_at: Time.current)
         end
         get freshness_calibration_session_path(@session_record, since: since)
       end

@@ -42,6 +42,25 @@ class CalibrationSessions::FreshnessTest < ActiveSupport::TestCase
     assert_equal 0, result[:ratings_changed]
   end
 
+  should "count a self-rating apart, credited to no rater" do
+    role = create(:framework_role, tenant: @tenant)
+    create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+           person_id: @report.id, level_ordinal: 3, role_id: role.role_id)
+    category = create(:framework_capability_category, tenant: @tenant, framework_id: @framework_id)
+    cap = create(:framework_capability, tenant: @tenant, category_id: category.category_id)
+    create(:framework_capability_role_binding, tenant: @tenant, capability_id: cap.capability_id, role_id: role.role_id)
+    create(:framework_behavioural_expectation, tenant: @tenant, capability_id: cap.capability_id, level_ordinal: 3)
+    since = 1.minute.ago.utc.iso8601(6)
+    create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @report.id,
+           framework_id: @framework_id, capability_stable_id: cap.stable_id, level_ordinal: 3,
+           self_rated_frequency: "some", last_self_rated_at: Time.current)
+
+    result = freshness.call(since: since)
+    assert_equal 1, result[:self_ratings_changed]
+    assert_equal 0, result[:ratings_changed], "the manager wrote nothing"
+    assert_empty result[:by_rater]
+  end
+
   should "ignore writes about people outside the population" do
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
            person_id: @outsider.id, framework_id: @framework_id, manager_rated_frequency: "some")

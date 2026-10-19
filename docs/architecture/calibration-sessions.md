@@ -441,10 +441,13 @@ re-fetched on a tab click.
   /calibration_sessions/:id/freshness?since=<stamp>` every 60s while the tab
   is visible, on draft and live sessions only. The endpoint
   (`CalibrationSessions::Freshness`) answers with the latest `updated_at`
-  over the population's ratings this cycle and their evidence links and
-  items — three `MAX` queries — and, only when that moved past `since`, the
-  summary of what moved: at-level ratings changed per rater, evidence links
-  changed.
+  over the population's ratings this cycle, their evidence links and items,
+  and their enrollments — four `MAX` queries — and, only when that moved
+  past `since`, the summary of what moved: at-level manager ratings per
+  rater (`last_manager_rated_at`), self-ratings uncredited (the manager
+  didn't write them), and feedback / evidence items added, relinked or
+  withdrawn. Blind spot: a bulk `update_all` that skips `updated_at` moves
+  numbers without moving the stamp; Refresh always reloads.
 - A moved stamp reloads the `calibration-overview-pane` frame — readiness
   and the overview share it, so one reload updates both — and fills a
   persistent `role="status"` region under the header: "Updated just now · 3
