@@ -36,6 +36,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # be legible — 22px discs, a lane each time two land within ~one disc.
   MEAN_LANE_NUDGE = 3.5
   MEAN_LANE_HEIGHT = 26
+  # A mark's coloured disc fades when its `group/dot` host is dimmed by the
+  # rater filter (`data-dimmed`).
+  DIMMABLE = "group-data-[dimmed=true]/dot:opacity-30"
   # Room above the track for the tick labels — the `h-[18px]` rows match.
   TICK_LABEL_HEIGHT = 18
 
@@ -509,14 +512,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       placed.each do |(rater_id, stats_hash), lane|
         index = rater_index(rater_id)
         div(
-          class: "absolute flex h-[22px] w-[22px] -translate-x-1/2 items-center justify-center rounded-full " \
-                 "border-2 border-white dark:border-gray-800 text-[9px] font-semibold " \
-                 "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL} " \
-                 "#{dim_class(rater_id)}",
+          class: "group/dot absolute -translate-x-1/2 rounded-full bg-white dark:bg-gray-800",
           style: "left: #{position.call(stats_hash)}%; top: #{2 + (lane * MEAN_LANE_HEIGHT)}px",
           title: "#{rater_name(rater_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})",
-          data: { rater_id: rater_id }
-        ) { initials(rater_name(rater_id)) }
+          data: { rater_id: rater_id, dimmed: dimmed(rater_id) }
+        ) do
+          span(class: "flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 " \
+                      "border-white dark:border-gray-800 text-[9px] font-semibold #{DIMMABLE} " \
+                      "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}") do
+            initials(rater_name(rater_id))
+          end
+        end
       end
     end
   end
@@ -693,18 +699,23 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       # the pins and filters were on page load; `pane_keep_state` tells the
       # pane controller to merge the live values in at click time.
       href: drill_in_path(view: nil, person: dot[:person_id], pins: [], filters: {}),
-      class: "relative inline-flex h-11 w-11 shrink-0 items-center justify-center #{dim_class(dot[:rater_id])}",
+      class: "group/dot relative inline-flex h-11 w-11 shrink-0 items-center justify-center",
       title: "#{dot[:name]} — #{base}",
       aria: { label: "#{dot[:name]} — #{label}. Open to discuss." },
-      data: { pane_keep_state: "true", person_id: dot[:person_id], rater_id: dot[:rater_id].to_s }
+      data: { pane_keep_state: "true", person_id: dot[:person_id], rater_id: dot[:rater_id].to_s,
+              dimmed: dimmed(dot[:rater_id]) }
     ) do
-      # ONE affordance for "in the drawer" — anyone held there (inspected
-      # OR pinned) reads by SIZE (1.5×), same vocabulary as Score by cohort.
-      span(
-        class: "inline-flex items-center justify-center rounded-full " \
-               "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-               "font-semibold #{dot_classes(dot)}"
-      ) { initials(dot[:name]) }
+      # An opaque disc under the dot, so a dimmed dot fades into the card
+      # rather than showing the track and ticks through it.
+      span(class: "inline-flex rounded-full bg-white dark:bg-gray-800") do
+        # ONE affordance for "in the drawer" — anyone held there (inspected
+        # OR pinned) reads by SIZE (1.5×), same vocabulary as Score by cohort.
+        span(
+          class: "inline-flex items-center justify-center rounded-full " \
+                 "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+                 "font-semibold #{DIMMABLE} #{dot_classes(dot)}"
+        ) { initials(dot[:name]) }
+      end
     end
   end
 
@@ -755,8 +766,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   # Under a rater filter everyone else dims — still there, still clickable.
-  def dim_class(rater_id)
-    "opacity-30" if @rater_filter && rater_id != @rater_filter
+  # drill-in-filter flips the same attribute on a click.
+  def dimmed(rater_id)
+    (@rater_filter && rater_id != @rater_filter).to_s
   end
 
   def rater_order(dot)

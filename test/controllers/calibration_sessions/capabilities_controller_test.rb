@@ -112,14 +112,14 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
       assert_response :success
       assert_select "[data-controller~='drill-in-filter'][data-drill-in-filter-rater-value='#{@raj_id}']"
-      assert_select "a[data-person-id='#{@report.id}'].opacity-30"
+      assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']"
       assert_select "a[data-person-id='#{@report.id}'][href*='rater=#{@raj_id}']"
       assert_select "a[href*='view=wall'][href*='rater=#{@raj_id}']"
 
       # Mia is the only rater with a dot, so hers is the only chip.
       get calibration_session_capability_path(@session, @cap.stable_id, rater: @em.id)
       assert_select "button[aria-pressed='true']", text: "Mia Manager"
-      assert_select "a[data-person-id='#{@report.id}'].opacity-30", count: 0
+      assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']", count: 0
     end
 
     should "ignore a rater filter that names no participant" do
@@ -128,7 +128,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
         assert_response :success
         assert_select "[data-drill-in-filter-rater-value='']"
-        assert_select "a[data-person-id].opacity-30", count: 0
+        assert_select "a[data-person-id][data-dimmed='true']", count: 0
       end
     end
 

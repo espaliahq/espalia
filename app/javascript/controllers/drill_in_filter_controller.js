@@ -8,12 +8,10 @@
 //   <button type="button" aria-pressed="false"
 //           data-action="drill-in-filter#toggle"
 //           data-drill-in-filter-rater-param="<person id>">Raj Rater</button>
-//   <a data-rater-id="<person id>">…</a>   <!-- "" for a rater not in the session -->
+//   <a data-rater-id="<person id>" data-dimmed="false">…</a>   <!-- "" for a rater not in the session -->
 // </div>
 
 import BaseController from "controllers/base_controller"
-
-const DIM = "opacity-30"
 
 export default class extends BaseController {
   static values = { rater: String }
@@ -47,7 +45,7 @@ export default class extends BaseController {
   raterValueChanged() {
     const rater = this.raterValue
     this.element.querySelectorAll("[data-rater-id]").forEach((mark) => {
-      mark.classList.toggle(DIM, rater !== "" && mark.dataset.raterId !== rater)
+      mark.dataset.dimmed = String(rater !== "" && mark.dataset.raterId !== rater)
     })
     this.element.querySelectorAll("[data-drill-in-filter-rater-param]").forEach((chip) => {
       chip.setAttribute("aria-pressed", String(chip.dataset.drillInFilterRaterParam === rater))

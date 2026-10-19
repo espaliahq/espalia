@@ -553,8 +553,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # A deep link to the filter renders it dimmed before any script runs.
     visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id, rater: @em_2.id)
     assert_selector "button[aria-pressed='true']", text: "Raj Rater"
-    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
-    assert_no_selector "a[data-person-id='#{@report_2.id}'].opacity-30"
+    assert_selector "a[data-person-id='#{@report_1.id}'][data-dimmed='true']"
+    assert_no_selector "a[data-person-id='#{@report_2.id}'][data-dimmed='true']"
   ensure
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
   end
@@ -565,15 +565,18 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id)
     assert_text "AT-LEVEL RATINGS BY LEVEL"
     wait_for_stimulus "drill-in-filter"
-    assert_no_selector "[data-rater-id].opacity-30"
+    assert_no_selector "[data-rater-id][data-dimmed='true']"
 
     raj_chip = "button[data-drill-in-filter-rater-param='#{@em_2.id}']"
     click_selector_with_js_fallback(raj_chip, expect_selector: "#{raj_chip}[aria-pressed='true']")
     # Mia's people (and her mean) dim; Raj's stay; dimmed dots stay links.
-    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
-    assert_selector "a[data-person-id='#{@uma_id}'].opacity-30"
-    assert_selector "[data-orientation-row] [data-rater-id='#{@em_1.id}'].opacity-30"
-    assert_no_selector "a[data-person-id='#{@report_2.id}'].opacity-30"
+    assert_selector "a[data-person-id='#{@report_1.id}'][data-dimmed='true']"
+    assert_selector "a[data-person-id='#{@uma_id}'][data-dimmed='true']"
+    assert_selector "[data-orientation-row] [data-rater-id='#{@em_1.id}'][data-dimmed='true']"
+    # …and the dimming actually renders: the disc fades, its backdrop doesn't.
+    disc = "a[data-person-id='#{@report_1.id}'] > span > span"
+    assert_equal "0.3", page.evaluate_script(%(getComputedStyle(document.querySelector("#{disc}")).opacity))
+    assert_no_selector "a[data-person-id='#{@report_2.id}'][data-dimmed='true']"
     assert_includes page.current_url, "rater=#{@em_2.id}"
 
     # Opening a person swaps the pane; the filter rides the new URL and the
@@ -582,11 +585,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
                                     expect_selector: "#calibration-person-card")
     assert_includes page.current_url, "person=#{@report_1.id}"
     assert_includes page.current_url, "rater=#{@em_2.id}"
-    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
+    assert_selector "a[data-person-id='#{@report_1.id}'][data-dimmed='true']"
 
     # The same chip again clears it, and the URL with it.
     click_selector_with_js_fallback(raj_chip, expect_selector: "#{raj_chip}[aria-pressed='false']")
-    assert_no_selector "[data-rater-id].opacity-30"
+    assert_no_selector "[data-rater-id][data-dimmed='true']"
     assert_not_includes page.current_url, "rater="
     assert_includes page.current_url, "person=#{@report_1.id}"
   end
