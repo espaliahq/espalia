@@ -411,11 +411,15 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_includes response.body, "to revisit this rating at L4"
       assert_select "form[action*='rating_revisits'] input[name='level_ordinal'][value='4']"
+      # The grid's rater filter changes without a request, so the form reads
+      # the carried state from the live URL at submit time.
+      assert_select "form[action*='rating_revisits'][data-action*='calibration-pane#stampState']"
 
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               person: @report.id, person_level: 4,
                                               person_action: "request")
       assert_select "form[action*='evidence_requests'] input[name='level_ordinal'][value='4']"
+      assert_select "form[action*='evidence_requests'][data-action*='calibration-pane#stampState']"
     end
 
     should "not leak the focused level onto links that open a different person" do

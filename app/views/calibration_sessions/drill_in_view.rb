@@ -1328,7 +1328,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         class: "mt-2 max-w-lg space-y-2",
         # Breaks out of the pane frame so the flash — success or refusal —
         # renders in the layout (the revisit form's rule).
-        data: { turbo_frame: "_top" }
+        # stampState: the grid's rater filter can change after this frame
+        # rendered, without a request, so the carried state is read at submit.
+        data: { turbo_frame: "_top", action: "submit->calibration-pane#stampState" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
@@ -1398,7 +1400,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         # alert when the ask is rejected — renders in the layout OUTSIDE the
         # frame, so a frame-scoped submit would swallow it and the failure
         # would look like nothing happened.
-        data: { turbo_frame: "_top" }
+        # stampState: the grid's rater filter can change after this frame
+        # rendered, without a request, so the carried state is read at submit.
+        data: { turbo_frame: "_top", action: "submit->calibration-pane#stampState" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
