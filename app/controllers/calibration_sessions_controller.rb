@@ -158,6 +158,8 @@ class CalibrationSessionsController < ApplicationController
       can_close: !@session.closed? && policy(@session).close?,
       session_log: session_log,
       can_note: @session.started? && policy(@session).flag_expectation?,
+      can_rename: policy(@session).rename?,
+      can_restore: @session.archived? && policy(@session).unarchive?,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
