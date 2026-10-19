@@ -9,12 +9,9 @@ require "test_helper"
 class AgentGuidanceTest < ActiveSupport::TestCase
   PER_FILE_LIMIT = 150_000
   STARTUP_BUDGET = 150_000
-
-  # Over the limit today and due to be split; drop each entry once it is.
-  OVERSIZED = %w[
-    docs/guidelines/framework-explorer.md
-    docs/guidelines/assessments.md
-  ].freeze
+  # What opening a file in one directory may add on top of startup. A guide that
+  # outgrows it splits by concern, as framework-explorer.md and assessments.md did.
+  DIRECTORY_BUDGET = 100_000
 
   STARTUP_FILES = %w[CLAUDE.md .claude/CLAUDE.md].freeze
   SKIPPED_DIRS = %r{\A(node_modules|vendor|tmp|log|storage|coverage)/}
@@ -54,14 +51,18 @@ class AgentGuidanceTest < ActiveSupport::TestCase
     should "fit under Claude Code's per-file limit" do
       oversized = relatives(instruction_files.flat_map { loaded_with(it).to_a }.uniq.select { it.read.size > PER_FILE_LIMIT })
 
-      assert_empty oversized - OVERSIZED, "Claude Code truncates these; split them rather than grow them"
+      assert_empty oversized, "Claude Code truncates these; split them rather than grow them"
     end
   end
 
-  should "list in OVERSIZED only guides that are still over the limit" do
-    shrunk = OVERSIZED.reject { root(it).exist? && root(it).read.size > PER_FILE_LIMIT }
+  should "keep what any one directory loads inside the directory budget" do
+    startup = loaded_with(root("CLAUDE.md"))
+    over = instruction_files.select { it.basename.to_s == "CLAUDE.md" && it.dirname != Rails.root }.filter_map do |file|
+      size = (directory_chain(file).flat_map { loaded_with(it).to_a }.uniq - startup.to_a).sum { it.read.size }
+      "#{relative(file.dirname)}: #{size}" if size > DIRECTORY_BUDGET
+    end
 
-    assert_empty shrunk, "now under the limit — remove from OVERSIZED"
+    assert_empty over, "opening a file here loads more than #{DIRECTORY_BUDGET} characters of guides; split the largest"
   end
 
   private
@@ -82,6 +83,11 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   def imports(path)
     text = path.read.gsub(/^```.*?^```/m, "").gsub(/`[^`\n]*`/, "")
     text.scan(IMPORT).flatten.map { path.dirname.join(it).cleanpath }.select { it.exist? || it.extname == ".md" }
+  end
+
+  # Claude Code loads the CLAUDE.md of every directory between the root and the file it opens.
+  def directory_chain(file)
+    file.dirname.relative_path_from(Rails.root).descend.map { root(it).join("CLAUDE.md") }.select(&:exist?)
   end
 
   def markdown_imports(path) = imports(path).select { it.extname == ".md" }
