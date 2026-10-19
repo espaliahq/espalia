@@ -12,7 +12,7 @@
 class CalibrationSessionsController < ApplicationController
   include CalibrationSessions::SessionLogData
 
-  before_action :set_session, only: [ :show ]
+  before_action :set_session, only: [ :show, :freshness ]
 
   # GET /calibration_sessions
   def index
@@ -103,6 +103,9 @@ class CalibrationSessionsController < ApplicationController
     members = @session.members.to_a
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)
     calibrant_ids = members.select { |m| m.member_type == "calibrant" }.map(&:person_id)
+    # Read before the numbers it stamps: a write landing in between makes
+    # the next poll reload, rather than hiding behind a newer stamp.
+    freshness_stamp = CalibrationSessions::Freshness.new(session: @session).stamp_token
     seeds = population_seeds(participant_ids) if participant_ids.any?
     seed_groups = seeds ? seeds.call : {}
     session_log = session_log_data(@session)
@@ -162,10 +165,22 @@ class CalibrationSessionsController < ApplicationController
       can_close: !@session.closed? && policy(@session).close?,
       session_log: session_log,
       can_note: @session.started? && policy(@session).flag_expectation?,
+      freshness_stamp: freshness_stamp,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
     )
+  end
+
+  # GET /calibration_sessions/:id/freshness?since=<stamp>
+  #
+  # The live page's poll: the latest write behind its numbers and, when that
+  # moved past `since`, what moved. Web-only — it describes a rendered page's
+  # staleness, which an MCP client reading the overview on demand never has.
+  def freshness
+    authorize @session, :freshness?
+
+    render json: CalibrationSessions::Freshness.new(session: @session).call(since: params[:since])
   end
 
   private

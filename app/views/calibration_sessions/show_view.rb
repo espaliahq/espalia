@@ -41,6 +41,9 @@ class Views::CalibrationSessions::ShowView < Views::Base
   #   partially_rated_ids:, carried_only_ids: } (the card's totals come from stats)
   # @param add_calibrant_candidates [Array<Person>]
   # @param stats [Hash, nil] OverviewStats result (nil when the session has no members)
+  # @param freshness_stamp [String, nil] CalibrationSessions::Freshness#stamp_token,
+  #   read before the stats so a write in between reloads rather than hides
+  # @param rendered_at [Time] when these numbers were computed
   def initialize(session:, cycle:, people:, participant_ids:, calibrant_ids:,
                  groups:, suggestions:, readiness:, stats:,
                  add_calibrant_candidates:,
@@ -48,8 +51,11 @@ class Views::CalibrationSessions::ShowView < Views::Base
                  overview_view: "tendency", cohorts: nil,
                  drawer_cards: [], drawer_person_id: nil, pin_ids: [],
                  session_log: nil, can_note: false,
+                 freshness_stamp: nil, rendered_at: Time.current,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
+    @freshness_stamp = freshness_stamp
+    @rendered_at = rendered_at
     @session_log = session_log
     @can_note = can_note
     @stats = stats
@@ -90,7 +96,13 @@ class Views::CalibrationSessions::ShowView < Views::Base
           # calibration-pane swaps the overview frame on same-page links
           # (tabs, cohort dots) with no scroll jump — the drill-in's rule.
           controller: [ ("activity-pane" if @session_log),
-                        ("calibration-pane" unless @session.draft?) ].compact.join(" ").presence,
+                        ("calibration-pane" unless @session.draft?),
+                        "calibration-freshness" ].compact.join(" "),
+          calibration_freshness_url_value: freshness_calibration_session_path(@session),
+          calibration_freshness_stamp_value: @freshness_stamp.to_s,
+          # A closed session's numbers can still move (late ratings), but
+          # nobody is in the room: Refresh only, no poll.
+          calibration_freshness_poll_value: (!@session.closed?).to_s,
           action: ("click->calibration-pane#navigate" unless @session.draft?),
           activity_pane_cookie_value: Views::CalibrationSessions::LogPane::SESSION_COOKIE,
           # Open by default here: on the session page the log IS the
@@ -101,14 +113,13 @@ class Views::CalibrationSessions::ShowView < Views::Base
       ) do
         div(class: "min-w-0 flex-1") do
           header_row
-          readiness_card
-          overview_section unless @session.draft?
-          agenda_card if @session.draft?
+          render Views::CalibrationSessions::FreshnessStatus.new
+          overview_frame
           div(class: "mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6") do
             div(class: "lg:col-span-1") { participants_card }
             div(class: "lg:col-span-2") { population_card }
           end
-          live_note unless @session.draft?
+          closed_note if @session.closed?
         end
         log_pane if @session_log
       end
@@ -152,7 +163,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def action_cluster
-    div(class: "flex items-center gap-2") do
+    div(class: "flex flex-wrap items-center gap-2") do
+      freshness_line
       log_pane_toggle if @session_log
       if @can_start
         form(action: start_calibration_session_path(@session), method: "post",
@@ -169,6 +181,54 @@ class Views::CalibrationSessions::ShowView < Views::Base
             @session.draft? ? "Discard session" : "Close session"
           end
         end
+      end
+    end
+  end
+
+  # "Live · ratings as of 14:32" and ↻ Refresh. The time is the render
+  # time, re-stamped by calibration_freshness_controller after every poll
+  # that finds nothing new — so it says when the numbers were last known
+  # current, which is what "frozen?" is really asking.
+  def freshness_line
+    span(class: "inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
+      if @session.started?
+        span(class: "h-2 w-2 rounded-full bg-green-500 motion-safe:animate-pulse", aria: { hidden: "true" })
+      end
+      plain "#{STATUS_LABELS.fetch(@session.status, @session.status)} · ratings as of "
+      time(datetime: @rendered_at.utc.iso8601, data: { calibration_freshness_target: "asOf" }) do
+        @rendered_at.strftime("%H:%M")
+      end
+      # Shown while a poll's reload is held for an open drawer or modal, so
+      # the room knows newer numbers exist and why they haven't landed.
+      span(class: "hidden font-medium text-amber-700 dark:text-amber-300",
+           data: { calibration_freshness_target: "waiting" }) do
+        "· update waiting — applies when the drawer closes"
+      end
+    end
+    button(
+      type: "button",
+      class: secondary_button_classes,
+      data: { action: "calibration-freshness#refresh", calibration_freshness_target: "refresh" }
+    ) do
+      span(aria: { hidden: "true" }) { "↻ " }
+      plain "Refresh"
+    end
+  end
+
+  # Readiness and the overview share one Turbo Frame, so one reload — a
+  # poll, Refresh, or a tab click — updates both. The marker carries the
+  # freshness stamp these numbers were computed against.
+  def overview_frame
+    turbo_frame_tag "calibration-overview-pane",
+                    data: { calibration_pane_target: ("frame" unless @session.draft?),
+                            calibration_freshness_target: "frame",
+                            action: "turbo:before-frame-render->calibration-freshness#keepDisclosure" }.compact do
+      div(hidden: true, data: { calibration_freshness_target: "marker", stamp: @freshness_stamp.to_s })
+      readiness_card
+      if @session.draft?
+        agenda_card
+      else
+        overview_section
       end
     end
   end
@@ -355,8 +415,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   # The overview (started/closed only — in draft the same data powers the
-  # compact suggested agenda instead): three tabs inside a Turbo Frame, so
-  # switching — or opening a cohort dot's why-panel — swaps the pane in
+  # compact suggested agenda instead): three tabs inside the overview frame,
+  # so switching — or opening a cohort dot's why-panel — swaps the pane in
   # place instead of reloading and scrolling the room to the top. The tab
   # bar lives INSIDE the frame so its active chip always matches what the
   # frame shows.
@@ -364,29 +424,26 @@ class Views::CalibrationSessions::ShowView < Views::Base
     return unless @stats
 
     div(class: "mt-6") do
-      turbo_frame_tag "calibration-overview-pane",
-                      data: { calibration_pane_target: "frame" } do
-        tab_bar
-        case @overview_view
-        when "divergence"
-          render Views::CalibrationSessions::DivergenceBoard.new(
-            session: @session,
-            capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
-            insufficient_count: @stats[:insufficient_capability_count],
-            pin_ids: @pin_ids, inspector_person_id: @drawer_person_id
-          )
-        when "cohort"
-          render Views::CalibrationSessions::CohortView.new(
-            session: @session, cohorts: @cohorts || [], raters: @stats[:raters],
-            people: @people, selected_person_id: @drawer_person_id, pin_ids: @pin_ids
-          )
-        else
-          render Views::CalibrationSessions::TendencyStrip.new(
-            raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
-          )
-        end
-        comparison_drawer
+      tab_bar
+      case @overview_view
+      when "divergence"
+        render Views::CalibrationSessions::DivergenceBoard.new(
+          session: @session,
+          capabilities: @stats[:capabilities], raters: @stats[:raters], people: @people,
+          insufficient_count: @stats[:insufficient_capability_count],
+          pin_ids: @pin_ids, inspector_person_id: @drawer_person_id
+        )
+      when "cohort"
+        render Views::CalibrationSessions::CohortView.new(
+          session: @session, cohorts: @cohorts || [], raters: @stats[:raters],
+          people: @people, selected_person_id: @drawer_person_id, pin_ids: @pin_ids
+        )
+      else
+        render Views::CalibrationSessions::TendencyStrip.new(
+          raters: @stats[:raters], org_mean: @stats[:org_mean], people: @people
+        )
       end
+      comparison_drawer
     end
   end
 
@@ -467,19 +524,14 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  def live_note
+  # The live state needs no note: the header's freshness line carries it.
+  def closed_note
     div(class: "mt-6 rounded-md border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
-      if @session.started?
-        plain "Session is live — participants and population are frozen. " \
-              "The capability drill-in surface is coming next."
-      else
-        plain "Session closed"
-        plain " (#{@session.close_reason == 'cycle_closed' ? 'cycle closed' : 'by facilitator'})"
-        plain ". This page is the session's follow-through record."
-      end
+      plain "Session closed"
+      plain " (#{@session.close_reason == 'cycle_closed' ? 'cycle closed' : 'by facilitator'})"
+      plain ". This page is the session's follow-through record."
     end
   end
-
 
   def primary_button_classes
     "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold " \
