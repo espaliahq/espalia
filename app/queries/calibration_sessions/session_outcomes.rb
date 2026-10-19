@@ -27,14 +27,27 @@ class CalibrationSessions::SessionOutcomes
     AssessmentCycles::Events::CalibrationSessionUnarchived => "session_restored"
   }.freeze
 
-  # Outcome counts for the session list, one counting read per session —
-  # the list is a handful of sessions per cycle, and a draft has none, so
-  # pass only the sessions that can have any.
+  # Outcome counts for the session list in ONE query, however many sessions
+  # the tenant has accumulated. RES has no multi-stream count, so this reads
+  # its tables directly: `event_type` is the event class name (the JSON
+  # client's default mapping), and the stream names come from
+  # EventStreamNaming, exactly as the stream reads below use them.
   #
   # @param sessions [Array<CalibrationSession>]
-  # @return [Hash{String => Integer}] session id → outcome count
-  def self.counts_for(sessions, event_store: Rails.configuration.event_store)
-    sessions.to_h { |session| [ session.id, new(session: session, event_store: event_store).count ] }
+  # @return [Hash{String => Integer}] session id → outcome count (0 when none)
+  def self.counts_for(sessions)
+    return {} if sessions.empty?
+
+    by_stream = sessions.to_h { |session| [ EventStreamNaming.calibration_session_stream(session.id), session.id ] }
+    sql = ActiveRecord::Base.sanitize_sql_array([ <<~SQL, by_stream.keys, OUTCOME_EVENTS.map(&:name) ])
+      SELECT s.stream, COUNT(*)
+      FROM event_store_events_in_streams s
+      JOIN event_store_events e ON e.event_id = s.event_id
+      WHERE s.stream IN (?) AND e.event_type IN (?)
+      GROUP BY s.stream
+    SQL
+    counted = ActiveRecord::Base.connection.select_rows(sql).to_h { |stream, n| [ by_stream[stream], n.to_i ] }
+    sessions.to_h { |session| [ session.id, counted.fetch(session.id, 0) ] }
   end
 
   # @param session [CalibrationSession]
@@ -42,13 +55,6 @@ class CalibrationSessions::SessionOutcomes
   def initialize(session:, event_store: Rails.configuration.event_store)
     @session = session
     @event_store = event_store
-  end
-
-  # How many outcomes the session recorded, without loading them.
-  #
-  # @return [Integer]
-  def count
-    @event_store.read.stream(stream_name).of_type(OUTCOME_EVENTS).count
   end
 
   # Expectation flags raised by this session, chronological.

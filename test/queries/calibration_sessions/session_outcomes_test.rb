@@ -55,7 +55,8 @@ class CalibrationSessions::SessionOutcomesTest < ActiveSupport::TestCase
 
   should "count outcomes only" do
     session = CalibrationSession.find(@session_id)
-    assert_equal 1, outcomes.count
-    assert_equal({ @session_id => 1 }, CalibrationSessions::SessionOutcomes.counts_for([ session ]))
+    other = create(:calibration_session, :closed, tenant: @tenant)
+    assert_equal({ @session_id => 1, other.id => 0 },
+                 CalibrationSessions::SessionOutcomes.counts_for([ session, other ]))
   end
 end
