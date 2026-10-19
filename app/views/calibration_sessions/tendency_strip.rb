@@ -120,7 +120,10 @@ class Views::CalibrationSessions::TendencyStrip < Views::Base
     carried = rater[:carried_count].to_i
     return if carried.zero?
 
-    note = all_carried?(rater) ? "all carried" : "#{(carried * 100.0 / rater[:cell_count]).round}% carried"
+    # Clamped off the edges: 1 of 300 is not "0% carried", and 199 of 200 is
+    # not "all carried" — the same rule OverviewStats#share applies.
+    pct = (carried * 100.0 / rater[:cell_count]).round.clamp(1, 99)
+    note = all_carried?(rater) ? "all carried" : "#{pct}% carried"
     span(
       class: "text-xs text-amber-700 dark:text-amber-300#{' font-medium' if all_carried?(rater)}",
       title: "#{carried} of #{rater[:cell_count]} ratings carried forward from the previous " \

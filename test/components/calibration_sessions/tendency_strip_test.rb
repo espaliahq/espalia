@@ -70,6 +70,11 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
       assert_includes render_strip(rater(carried_count: 4)), "· 40% carried"
     end
 
+    should "never round a partial share onto 0% or 100%" do
+      assert_includes render_strip(rater(cell_count: 300, carried_count: 1)), "· 1% carried"
+      assert_includes render_strip(rater(cell_count: 200, carried_count: 199)), "· 99% carried"
+    end
+
     should "say \"all carried\" when every cell was carried" do
       html = render_strip(rater(carried_count: 10))
 
