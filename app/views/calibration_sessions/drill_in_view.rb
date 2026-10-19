@@ -523,7 +523,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           data: { rater_id: rater_id, dimmed: dimmed(rater_id) }
         ) do
           span(class: "flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 " \
-                      "border-white dark:border-gray-800 text-[9px] font-semibold #{DIMMABLE} " \
+                      "border-white dark:border-gray-800 text-[10px] font-semibold #{DIMMABLE} " \
                       "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}") do
             initials(rater_name(rater_id))
           end
