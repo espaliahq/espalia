@@ -418,7 +418,9 @@ class AssessmentCycles::CalibrationSessionAggregate
     @facilitator_id = event.data[:facilitator_id]
     @participant_ids = Set.new(event.data[:participant_ids])
     @calibrant_ids = Set.new(event.data[:calibrant_person_ids])
-    @name = event.data[:name].to_s.strip
+    # Raw, as the read model holds it: a padded defined name must still
+    # rename to its stripped form rather than read as unchanged.
+    @name = event.data[:name]
     @status = :draft
   end
 

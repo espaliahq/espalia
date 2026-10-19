@@ -535,6 +535,14 @@ class AssessmentCycles::CalibrationSessionAggregateTest < ActiveSupport::TestCas
       end
     end
 
+    should "strip a padded defined name rather than treat it as unchanged" do
+      padded = AssessmentCycles::CalibrationSessionAggregate.new
+      padded.define(SecureRandom.uuid_v7, @cycle_id, @framework_id, "Eng H1 ", 1, facilitator_id: @facilitator_id)
+      padded.rename("Eng H1")
+
+      assert_kind_of AssessmentCycles::Events::CalibrationSessionRenamed, padded.unpublished_events.to_a.last
+    end
+
     should "chain previous names across renames" do
       @aggregate.rename("First")
       @aggregate.rename("Second")
