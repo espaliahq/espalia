@@ -310,7 +310,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
   end
 
   def unlock_ring
-    unlock_at = (EXAMPLE_LEVEL_SIZE * Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD).ceil
+    unlock_at = Views::Assessments::HeroSummary.unlock_target_for(EXAMPLE_LEVEL_SIZE)
     circumference = 2 * Math::PI * 40
     filled = circumference * unlock_at / EXAMPLE_LEVEL_SIZE
 

@@ -276,7 +276,7 @@ for keeping it honest:
   take their classes from `FrequencyPalette` and `LevelChip`, so a palette
   change reaches the guide too.
 - **Read tenant settings, never restate them.** The state word comes from
-  `StateLabels`, the unlock count from `HeroSummary::COVERAGE_UNLOCK_THRESHOLD`.
+  `StateLabels`, the unlock count from `HeroSummary.unlock_target_for`.
 - **It is not an MCP surface.** It carries no data an agent could act on;
   the tool descriptions already explain the same process.
 
