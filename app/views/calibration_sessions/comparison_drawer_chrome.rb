@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The comparison drawer's shared shell — the sticky bottom shelf both
-# calibration comparison surfaces (the session page's cohort face, the
+# calibration comparison surfaces (the session page's level face, the
 # drill-in's capability face) render their person cards into, so the two
 # screens hold people side by side the exact same way.
 #

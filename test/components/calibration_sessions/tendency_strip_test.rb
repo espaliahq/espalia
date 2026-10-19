@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# The Carried column and the emphasis rules it drives. Rendered directly
+# The carried note on n and the emphasis rules beside it. Rendered directly
 # rather than through the session page, because the interesting cases (an
 # entirely-carried rater; a carried manager row against fresh self-ratings)
 # are awkward to seed end-to-end and the logic is all in the view.
@@ -58,37 +58,48 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
     end
   end
 
-  context "the Carried column" do
-    should "show a dash when nothing was carried" do
+  context "the carried note on n" do
+    should "show n alone when nothing was carried" do
       html = render_strip(rater(carried_count: 0))
 
-      assert_includes html, "Carried"
-      assert_not_includes html, " of 10"
+      assert_includes html, ">10<"
+      assert_not_includes html, "carried"
     end
 
-    should "show the count out of the rater's cells" do
-      assert_includes render_strip(rater(carried_count: 4)), "4 of 10"
+    should "give the carried share of the rated cells" do
+      assert_includes render_strip(rater(carried_count: 4)), "· 40% carried"
     end
 
-    should "say \"all\" when every cell was carried" do
+    should "say \"all carried\" when every cell was carried" do
       html = render_strip(rater(carried_count: 10))
 
-      assert_includes html, ">all 10<", "the visible label reads \"all 10\""
+      assert_includes html, "· all carried"
       assert_includes html, "10 of 10 ratings carried forward",
         "the full count still rides the title, for anyone who wants the number"
     end
   end
 
+  # Readiness has its own card; the strip is only about how each rater rates.
+  context "the columns" do
+    should "carry no readiness columns" do
+      html = render_strip(rater)
+
+      %w[Reports Evidence].each { |column| assert_not_includes html, ">#{column}<" }
+      assert_not_includes html, "10 cells"
+      assert_includes html, "Readiness has its own card above"
+    end
+  end
+
   # Carried ratings are still the rater's ratings — leaving them unrevisited
   # is a decision they own — so the flags fire exactly as on fresh values.
-  # The Carried column marks how the row got there; it never softens it.
+  # The carried note marks how the row got there; it never softens it.
   context "a carried row is not exempt from the flags" do
     should "keep the org-delta emphasis when the whole row is carried" do
       fresh = render_strip(rater(carried_count: 0, org_delta: 0.9))
       carried = render_strip(rater(carried_count: 10, org_delta: 0.9))
 
       assert_includes fresh, "text-amber-700"
-      # Both the org-delta cell AND the Carried cell are amber.
+      # Both the org-delta cell AND the carried note are amber.
       assert_equal 2, carried.scan("text-amber-700").size,
         "a tendency built from values the rater declined to revisit is still theirs"
       assert_includes carried, "+0.9"
@@ -105,7 +116,7 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
     should "still mark the row as carried while flagging it" do
       html = render_strip(rater(carried_count: 10, org_delta: 0.9, self_gap: -1.2))
 
-      assert_includes html, ">all 10<"
+      assert_includes html, "· all carried"
       assert_includes html, "⚠"
     end
   end

@@ -31,8 +31,10 @@ This project uses a layered guidance system. Standards are loaded contextually �
 | `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `app/services/mcp/`, `app/controllers/mcp/`, `app/controllers/oauth/`, `app/models/mcp/`, `app/jobs/mcp/`, `app/views/mcp/`, `app/views/oauth/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
+| `lib/` | [lib/AGENTS.md](lib/AGENTS.md) (production eager-loading; held in the file itself) |
+| `.github/` | [.github/AGENTS.md](.github/AGENTS.md) (CI workflows; held in the file itself) |
 
-Each directory above has an `AGENTS.md` that imports the relevant guideline (with a peer `CLAUDE.md` stub that imports the `AGENTS.md`, so Claude Code and other agents read the same instructions). Root `AGENTS.md` covers the cross-cutting material — architecture, commands, style, workflow, and PR practices.
+Each directory above has an `AGENTS.md` (with a peer `CLAUDE.md` stub that imports it, so Claude Code and other agents read the same instructions). Most import the relevant guideline; `lib/` and `.github/` hold their few rules in the file itself. Root `AGENTS.md` covers the cross-cutting material — architecture, commands, style, workflow, and PR practices.
 
 ## Text writing rules (when responding, writing user facing copy, comments or docs)
 
@@ -79,6 +81,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Reach for a service object | [service-objects.md](docs/guidelines/service-objects.md) |
 | Add or change a permission, policy or `authorize` call | [authorization.md](docs/guidelines/authorization.md) |
 | Write or fix a test | [testing.md](docs/guidelines/testing.md) |
+| Set up or debug the environment: a cloud session, a second worktree, the macOS host, `gh` auth, or timing something in development | [dev-environment.md](docs/guidelines/dev-environment.md) |
 | Verify a front-end change in the browser (mandatory for every one) | [chrome-mcp.md](docs/guidelines/chrome-mcp.md) |
 | Change the favicon, app icon or web manifest | [app-icons.md](docs/guidelines/app-icons.md) |
 | Change the framework explorer (`/frameworks/:id`, `/edit`) | [framework-explorer.md](docs/guidelines/framework-explorer.md), then the companion its *Where everything lives* map names for your change |
@@ -90,7 +93,9 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Bump a projection's `CODE_VERSION`, or rebuild one | [projection-rebuild.md](docs/runbooks/projection-rebuild.md) |
 | Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) |
 | Add or change an Operation, MCP tool, OAuth or DCR flow | [mcp-server.md](docs/guidelines/mcp-server.md) |
-| Deliver a GitHub issue end to end | [issue-delivery.md](docs/guidelines/issue-delivery.md) |
+| Review a Dependabot PR, or change the `Gemfile` or a workflow | [dependencies.md](docs/guidelines/dependencies.md), [.github/AGENTS.md](.github/AGENTS.md) |
+| Add Ruby under `lib/` (a cop, a rake helper, a projection tool) | [lib/AGENTS.md](lib/AGENTS.md) |
+| Open or update a PR, or deliver a GitHub issue end to end | [issue-delivery.md](docs/guidelines/issue-delivery.md) |
 
 Most features touch controllers + models + views + tests + authorization — read all five.
 
@@ -154,41 +159,26 @@ end
 
 ```text
 app/
-├── models/                          # State-based ActiveRecord
-│   ├── tenant.rb                    # acts_as_tenant root
-│   ├── person.rb                    # acts_as_tenant :tenant
-│   ├── user.rb                      # Devise — global identity, NOT tenant-scoped
-│   └── application_record.rb
-│
-├── contexts/                        # Domain bounded contexts (RES)
-│   ├── frameworks/
-│   │   ├── events/                  # RES event classes
-│   │   ├── commands/                # Command objects
-│   │   ├── aggregate.rb             # include AggregateRoot
-│   │   ├── command_handler.rb
-│   │   └── projections/             # Synchronous read model builders
-│   │
-│   ├── person_development/
-│   │   ├── events/
-│   │   ├── commands/
-│   │   ├── aggregate.rb
-│   │   ├── command_handler.rb
-│   │   └── projections/
-│   │
-│   └── reporting/                   # Cross-stream read models
-│
-├── read_models/                     # ActiveRecord models for projections
-│   ├── framework_state/             # Published framework tables
-│   ├── assessment_state.rb
-│   ├── growth_plan_state.rb
-│   └── reporting/
-│
-├── integrations/                    # HRIS, notifications, SSO adapters
-│
-└── controllers/
-    └── api/v1/                      # JSON API
-```
+├── contexts/        # Event-sourced bounded contexts (RES): frameworks, person_development,
+│                    #   assessment_cycles — events, commands, aggregate, command handler, projections
+├── read_models/     # ActiveRecord models the projections write (framework_state/, assessments, evidence…)
+├── models/          # State-based ActiveRecord (Tenant, Person, User, TenantUser) + concerns
+├── operations/      # Operations::* — the one write/read surface shared by web and MCP
+├── queries/         # Read-side query objects (assessments, frameworks, reporting…)
+├── controllers/     # Skinny controllers; every action calls `authorize`
+├── policies/        # Pundit policies
+├── views/           # Phlex page views
+├── components/kit/  # Phlex Kit components (Button, Card, Modal, Prose…)
+├── dashboard/       # Home-page cards (Phlex)
+├── javascript/      # Stimulus controllers (import maps)
+├── integrations/    # HRIS (HiBob) and Slack adapters
+├── jobs/            # Solid Queue jobs
+├── notifiers/       # Noticed notification types
+└── services/        # Rare cross-model orchestration, plus services/mcp/ protocol plumbing
 
+test/                # Minitest: models, controllers, policies, components, system (Capybara), …
+docs/guidelines/     # The layer guides the Planning work table points at
+```
 ## Design Documents
 
 Architecture docs are split into focused files — read on demand, not all at once:
@@ -273,50 +263,7 @@ bin/rubocop -a               # Auto-fix RuboCop issues
 > even when the task itself exited 1. Piping hides the failure as well: rake prints it above
 > the summary the tail shows. Redirect to a file and read that, or set `-o pipefail`.
 
-### Cloud sessions: `bin/cloud-setup`, not the devcontainer
-
-**A Claude Code cloud session runs the app natively, through `bin/cloud-setup`.** The
-devcontainer would rebuild its Rails image and start eight containers every session. The
-script takes about nine minutes from a cold container and six seconds once everything is in
-place. The environment's setup script runs it as root from the checkout; run it again by hand
-to restart anything that has stopped. It provides:
-
-- **Ruby from `.ruby-version`**, compiled by ruby-build into `/opt/rubies/<version>`. Bundler
-  insists on the exact patch, and the image carries Ruby 3.3, so nothing else will do.
-- **Postgres from CI's `postgres:<major>` image tag**, using the image's own Ubuntu cluster on
-  `localhost:5432`, with the `postgres`/`postgres` login `database.yml` expects.
-- **System tests on the local-Chrome branch** of `ApplicationSystemTestCase`, the one CI runs:
-  `CAPYBARA_SERVER_PORT` stays unset, so one worker drives the preinstalled Playwright
-  Chromium. The script fetches the chromedriver that matches it (the image's is newer, and
-  Selenium Manager cannot reach its version index) and writes a `/usr/bin/google-chrome`
-  wrapper that adds `--no-sandbox`, which Chrome needs to run as root.
-- **A headless Chromium on `localhost:9222`**, where `.mcp.json` already points the
-  `chrome-devtools` MCP.
-- **The egress proxy's CAs in Chrome's NSS store**, so the browser can load anything off-host.
-- **The gems, the Tailwind build, the test database**, and the development database, seeded.
-
-**The tools reach the session through `/root/.local/bin`.** A session's shell takes its `PATH`
-from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already on it ahead of
-the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
-the chromedriver there.
-
-**The environment provides three things.** Network access to the hosts the script downloads
-from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
-(gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
-Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
-`db:prepare` seeds development. Tests never need it. The seed signs in the admin from
-credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
-does (names are whimsified).
-
-**A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
-gesture**: a JS-dispatched click leaves the promise pending, even with focus and permission
-granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. A real click copies.
-So a system test that copies clicks for real (`click_with_retry`), and the clipboard controller
-shows "Copied!" only once a copy succeeds, falling back to `execCommand` when `writeText` hangs.
-
-**In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
-browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
-Overmind, which the image lacks.
+**In a Claude Code cloud session the app is at `http://localhost:6600`** (start it with `bin/rails server -p 6600`; `bin/dev` needs Overmind, which the image lacks). How `bin/cloud-setup` provides Ruby, Postgres and Chrome, the second-worktree setup, and running on the macOS host are in [dev-environment.md](docs/guidelines/dev-environment.md).
 
 ## Visual Verification (NON-NEGOTIABLE)
 
@@ -342,33 +289,7 @@ browser (dev URL, login, viewports, screenshot paths, gotchas). The
 `SCREENSHOTS=1` + `/screenshot-test` path remains available for a repeatable,
 suite-level artefact.
 
-### UX quality skill (`/ux-quality`)
-
-The vendored [`ux-quality` skill](.claude/skills/ux-quality/SKILL.md) carries the
-UX/WCAG 2.2 AA criteria for three lifecycle points: `build` (defaults while
-writing UI), `spec-review` (UX gaps in a spec/plan before code exists), and
-`assess` (adversarial browser-driven review — deeper than, and additional to,
-the mandatory Chrome MCP pass above; use it for UX/accessibility sign-off of a
-whole surface, not per-change verification). The skill is host-agnostic and
-resolves this repo via its discovery contract — answers live here, not in the
-skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
-
-- **Design system**: Phlex Kit components (`app/components/kit/`) +
-  [phlex-views.md](docs/guidelines/phlex-views.md) and
-  [tailwindcss.md](docs/guidelines/tailwindcss.md).
-- **App URL / login / seeded-data control**:
-  [chrome-mcp.md](docs/guidelines/chrome-mcp.md) (`http://rails-app:6600`,
-  Rails-credentials admin, seeded-tenant reset caveats).
-- **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
-  — use it, not the skill's bundled dormant `ux-driver`.
-- **Screenshot home**: `tmp/visual/<task>/` (gitignored).
-
-Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
-improvements (last synced: `4aa21f8` — connect#137, which upstreamed all of this
-repo's fixes, so the two trees are identical as of that merge). Generic fixes
-made here must be contributed upstream in the same round-trip; never edit the
-vendored files with GrowthOS-specific facts — put those here or in
-`docs/guidelines/`.
+**The `/ux-quality` skill** (UX and WCAG 2.2 AA criteria for building, spec review and adversarial assessment) resolves this repo's design system, app URL, browser driver and screenshot folder from [chrome-mcp.md → UX quality skill](docs/guidelines/chrome-mcp.md#ux-quality-skill-ux-quality).
 
 ## Core Principles
 
@@ -401,28 +322,6 @@ module Api
     class UsersController < ApplicationController; end
   end
 end
-```
-
-## Key Directories
-
-```text
-app/
-  components/kit/          # Phlex Kit components (Button, Card, Alert, etc.)
-  controllers/             # Rails controllers (skinny)
-  jobs/                    # Background jobs (SolidQueue)
-  models/                  # Fat models with concerns
-  models/concerns/         # Shared model modules
-  policies/                # Pundit authorization policies
-  views/                   # Phlex page views (new) + ERB (legacy)
-
-config/
-  routes/                  # Modular route definitions
-
-test/
-  models/                  # Model tests
-  controllers/             # Controller integration tests
-  system/                  # System tests (Capybara)
-  components/              # Component unit tests
 ```
 
 ## Technology Stack
@@ -473,43 +372,14 @@ test/
 - *CRITICAL* Commit per discrete change, creating a stacked commit, in *one* PR. Stack commits, do not stack PRs. This is about ONE piece of work: never split a single issue's change across several PRs. It does not forbid one issue's PR from being *based on* another issue's still-unmerged branch when the second genuinely builds on the first — that is one PR per issue, opened with `--base <that branch>` and retargeted as the stack lands (see [docs/guidelines/issue-delivery.md](docs/guidelines/issue-delivery.md)).
 - *CRITICAL* **Commit each discrete change as soon as it is complete and verified — *before* starting the next separable piece of work**, even within a single task or session. Do not let two separable changes accumulate uncommitted in the working tree: splitting them apart after the fact is error-prone and sometimes infeasible once they touch the same files/lines. The moment you finish a working, tested unit and the next thing is separable, commit first, then continue (if you're on the default branch, create a feature branch before the first commit). If a request implies several separable changes, plan the commit boundaries up front and land each one before moving on, rather than batching everything into a single end-of-task commit.
 - **Run the `/code-review` skill before creating a PR (NON-NEGOTIABLE).** Review the branch diff vs main once the work is complete and committed, and land each fix as its own stacked commit on the branch before opening the PR. This is a pre-PR gate, separate from (not a replacement for) the CodeRabbit review that runs in PR CI — both apply.
-- When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit. 
-- **Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [docs/guidelines/chrome-mcp.md](docs/guidelines/chrome-mcp.md)). GitHub has no image-upload API, so publish them to this repo's orphan **`screenshots` branch** with `bin/pr-screenshots <pr-number> tmp/visual/<task>/<file>.png …` and paste the markdown it prints into the PR body. It needs the PR's number, so open the PR first, then publish and edit the links in. Each image lands under `pr-<n>/` on that branch, which shares no history with `main`. The commit is built with git plumbing and a throwaway index, so the working tree and the current branch are never touched. The links are pinned to the upload's commit, so a later upload can't change an old PR. Because the repo is private, the images render only for people signed in to GitHub with read access. Never commit screenshots to `main` or a feature branch; `tmp/visual/` stays gitignored. **`bin/pr-screenshots` is pre-authorized** via `.claude/settings.json`, so use it by default without asking. The branch is visible to everyone with repo access and is never cleaned up, so publish seeded or demo data only; dev names are whimsified pseudonyms, so dev-tenant screenshots qualify. Never upload a screenshot showing real customer data, credentials or tokens, by this script or by dragging it into the PR editor, which uploads it to GitHub just the same. Redact it or recapture it on seeded data, and leave it out if you can't. Name files for what they show (`desktop-1400-feed-end.png`, not `05b.png`), since the file name, without its extension, becomes the alt text. Skip screenshots entirely for purely backend/internal changes with no visible surface.
-- **`gh pr checks` does NOT reveal CodeRabbit findings.** Its CodeRabbit row reports the *check* status (e.g. "Review skipped" / "pass") which is independent of the review CodeRabbit posts as PR *review comments*. A green/"skipped" row can still hide actionable findings. Never conclude "no findings" from `gh pr checks` alone. Extraction rules (each learned the hard way):
-  - **Read every CodeRabbit review *body*, not just the threads.** Findings on lines outside the PR's diff cannot be posted inline; CodeRabbit puts them in the review body under "Outside diff range comments" (`gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login=="coderabbitai") | .body'`). They are real findings with no thread to resolve — address them and say so in a PR comment. One was missed on PR #410 by reading threads alone.
-  - **The source of truth for OPEN findings is GraphQL review threads, not the REST comment list.** `isResolved` only exists there: `gh api graphql -f query='query { repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 10) { nodes { author { login } body databaseId } } } } } } }'` and filter `isResolved == false`. CodeRabbit auto-resolves threads it verifies as fixed, so unresolved == still owed a fix or a reply.
-  - **Never time-window filter (`created_at > <timestamp>`) to find "new" comments** — a review that lands seconds before your guessed cutoff vanishes silently (this exact miss happened on PR #301). Ask for unresolved threads instead.
-  - **Always `--paginate`** on `gh api repos/{owner}/{repo}/pulls/<n>/comments` — the default page is 30 and a multi-round PR exceeds it quietly.
-  - `gh pr view <n> --json reviews --jq '…coderabbitai…'` still covers review-level bodies (walkthrough, "actionable comments posted: N").
-  - Replying does NOT resolve a thread; a fix push usually gets auto-resolved by CodeRabbit once verified. Check the unresolved count again after replies/pushes rather than assuming.
-- When referring to a PR, always link to it to reduce having to scroll back to find link
+- **Before opening or updating a PR, read [issue-delivery.md](docs/guidelines/issue-delivery.md).** Track CI, then read every CodeRabbit finding and fix each as its own commit, re-checking after each push. CodeRabbit can skip a review or hide findings behind a green check, and PR screenshots have rules about what may be published; that guide covers both.
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
-- When referencing a PR, always link to it so to avoid having to scroll up to find the link
 - **Never publish online Artifacts (claude.ai-hosted pages) for project deliverables — reports, audits, plans, or any work product.** Generate the HTML (or Markdown) locally instead — write it under `tmp/` (gitignored) or another agreed location and present the file path so it can be opened from the IDE. Project content stays in the repo/workspace, not on an external host.
 
 ## Learnings
 
-> **CRITICAL**: Any important learnings, add them here.
+> **Add a learning here only when it matters in most sessions and no guide would be open at the moment it does.** Otherwise record it where its code lives: the guide the Planning work table names for that task, or the `AGENTS.md` of the directory it governs (`lib/`, `.github/`, `app/…`). Everything in this file loads into every session, and `test/integration/agent_guidance_test.rb` holds it to 40k characters.
 
-- **Do not add a `CHECKSUMS` section to `Gemfile.lock` until [dependabot-core#15193](https://github.com/dependabot/dependabot-core/issues/15193) is fixed.** Dependabot's lockfile regeneration corrupts lockfiles containing the Bundler `CHECKSUMS` section — it drops the section header but keeps the checksum lines, which Bundler then parses as `DEPENDENCIES` entries, so `bundle install` (frozen) fails on every CI job of every Dependabot PR. The section was deliberately removed (June 2026). Once the upstream issue is resolved, restore it with `bundle lock --add-checksums`.
-- **A Dependabot "single gem bump" regenerates the whole lockfile — read the diff, not the title.** [PR #395](https://github.com/mr-yum/growth-os/pull/395) was titled "Bump omniauth-google-oauth2 from 1.2.2 to 1.2.3" and also carried `rubocop` 1.85.1 → 1.90.0 and `json` 2.21.2 → **3.0.2**, which broke every job. json 3.0 made `JSON.parse`'s options keyword-only; `ActiveSupport::JSON.decode` still calls `::JSON.parse(json, options)` positionally, so **every jsonb column read** raises `ArgumentError: wrong number of arguments (given 2, expected 1)` — the whole suite fails in `setup`, and the backtrace points at a factory call rather than at json. Rails 8.1.4 fixed `decode` (it now splats the options), so the `json < 3` Gemfile pin can be dropped — do it as a dedicated json 3 bump (pin + `.github/dependabot.yml` ignore entry together, full suite run) rather than letting it ride along in a lockfile regeneration. The general trap: a transitive gem can be held back only by *another* dependency's constraint (here rubocop's `json (~> 2.3)`), so relaxing that constraint silently unlocks a major bump nothing in our Gemfile asked for. When a dependency-only PR fails everywhere at once, diff the lockfile for versions the title never mentions.
-- **A delegated agent shares your working tree, your database and your dev server.** Subagents (the `Agent` tool, the `chrome-driver` agent, a `/code-review` angle) run in the SAME checkout as the session that launched them — there is no copy-on-write. So while one is working, do NOT `git checkout`, `git pull`, `git stash` or rebase in the orchestrating session: the agent's next `Read` or test run sees a tree it never asked for, and a half-applied rebase can be attributed to its edits. Same for `bin/dev` on port 6600 and the dev database — one browser driver at a time, and a seed reset while another agent is mid-flow invalidates its run. If you must work on another branch concurrently, use a throwaway `git worktree add /tmp/wt-<name> <branch>` (or launch the agent with `isolation: "worktree"`) and delete it afterwards. Read-only agents are safe to overlap; writers are not.
-- **A second worktree needs its own database and ports, and the host is `postgres`, not `localhost`.** Prefix every command with `DATABASE_URL=postgresql://postgres:postgres@postgres/<name>` (plus `CAPYBARA_SERVER_PORT` for system tests; parallel workers derive `<name>-N` and `port+N`) and run the dev server on another port with `-b 0.0.0.0`, so the browser container reaches `http://rails-app:<port>`. Clone the seeded dev database with `createdb -h postgres -U postgres -T growth_os_development <name>` — `pg_dump` in the devcontainer is v15 against a v16 server and refuses; the template copy needs no open connections to the source. **`bin/rails development:precommit` refuses to run under a `DATABASE_URL` that names the test database**: the task runs in development, so its `db:test:prepare` step hits Rails' protected-environment check (`EnvironmentMismatchError`) on a database labelled `test`, and a `db:test:prepare` or `db:prepare RAILS_ENV=test` relabels it `test` again. Either relabel it once with `DATABASE_URL=…/<name>_test bin/rails db:environment:set RAILS_ENV=development` and run precommit as usual, or run its steps individually (erblint, rubocop, brakeman, the two audits, `zeitwerk:check`, `bin/rails test`, `bin/rails test:system`) under the test `DATABASE_URL`. Four parallel worktrees hit this on 2026-10-19 (PRs #523, #524, #526, #527).
-- **CodeRabbit's rate limit also refuses the manual `@coderabbitai review` trigger, and its "wait N minutes" is not reliable.** A limited PR shows a "Review limit reached" comment and `gh pr checks` reports the CodeRabbit row as `pass` with "Review rate limited" — a green row, no review. Posting `@coderabbitai review` inside the limit answers "Action not completed — Review rate limited" (PR #404 was refused 22 minutes after a "wait 7 minutes" notice; a later retry got "Review triggered"). So: never read a rate-limited PR as clean, retry the trigger until the reply says "Review triggered", then poll for the summary comment ("No actionable comments…" / "Actionable comments posted: N") plus the GraphQL unresolved-thread count. The "Run on-demand review" checkbox draws on paid capacity after the free window; leave that to a human.
-- **CodeRabbit does not auto-review a PR whose base is not the default branch.** It posts "Review skipped — Auto reviews are disabled on base/target branches other than the default branch" and nothing else, which reads exactly like a clean review. This bites every stacked PR (base = the branch below it), which is the shape this repo asks for when work is split across issues. Two remedies: comment `@coderabbitai review` to trigger a single review while the PR is still stacked, and re-check after `gh pr edit <n> --base <next>` retargets it as the stack lands. Never treat the absence of CodeRabbit comments on a stacked PR as "no findings" — check for the skip notice first (`gh pr view <n> --json comments -q '.comments[]|select(.author.login=="coderabbitai")|.body'`). Repo-wide auto-review on other bases would need `reviews.auto_review.base_branches` in `.coderabbit.yaml`; it is deliberately not set today.
-- **CodeRabbit does not auto-review a PR opened by a bot, so every Dependabot PR is unreviewed.** It posts "Review skipped — Bot user detected" and nothing else. Same trap as the base-branch and rate-limit skips above, and the same tell: a green CodeRabbit row plus no comments. That matters most exactly where it bites, because a Dependabot PR's diff is a lockfile — the one diff nobody reads closely and the one that can change gems the title never mentions (see the json/rubocop entry above). Treat a dependency PR as having had **no** automated review unless you comment `@coderabbitai review` to trigger one; on a lockfile-only change, reading the diff yourself is usually the better spend.
-- **Anything under `lib/` is eager-loaded in production.** `config.autoload_lib(ignore: %w[...])` in `config/application.rb` makes Zeitwerk eager-load all of `lib/` except the listed subdirs. A file there that references a constant from a `:development, :test`-only gem (e.g. a custom RuboCop cop subclassing `RuboCop::Cop::Base`) passes the test suite — where the gem IS loaded — but raises `NameError` at production boot and crashes the server (incident: PRs #106/#108). When adding non-app Ruby under `lib/`, either add its subdir to the `autoload_lib` ignore list or keep it out of `lib/`. CI guards this via the `production_boot` job (eager-loads with `BUNDLE_WITHOUT=development:test`); reproduce locally with `BUNDLE_WITHOUT=development:test RAILS_ENV=production SECRET_KEY_BASE=x bin/rails zeitwerk:check`.
-- **Any read model keyed by `capability_stable_id` under a unique index must merge on collision in its `FrameworkVersionMigrated` handler.** An `evolved` survivor can already be rated/linked by the same person at the same natural key, so a plain `update_all` re-key trips the index and rolls back the publish. Follow `rekey_ratings` / `rekey_links` (keep the colliding row under the retiring id, flagged) and see ADR-17 in [adrs.md](docs/architecture/adrs.md).
-- **`gh` unauthenticated in the devcontainer? Re-run the feature hook, don't `gh auth login`.** The `gh-auth-from-host` feature bridges the host's forwarded git credential into `gh` only on `postAttachCommand`; it warns and exits 0 when the host offers nothing at that instant, and a long-lived VS Code connection never re-attaches, so one silent miss at container creation leaves `gh` logged out for the container's lifetime. Fix in place with `sh /usr/local/share/gh-auth-from-host/refresh.sh`. A container-local `gh auth login` shadows the bridge and rots when the host token rotates.
-- **A deploy that rebuilds a projection blanks its read models for a minute or two.** The pre-deploy rebuild truncates the projection's live tables and replays them while the previous release still serves traffic, so `person_development/current_assessment` reads as "every assessment is empty" until the replay finishes. `REBUILD_ON_DEPLOY` lives in the `growthos-shared` env group; it was once left set for four deploys and each one rebuilt. The hook now only rebuilds a projection whose stamp is behind `CODE_VERSION`, so a forgotten variable is inert, but still remove it after the deploy it was set for — see [projection-rebuild.md](docs/runbooks/projection-rebuild.md).
-- **Dependabot PRs merge themselves from the last job in `ci.yml`, and every guard there is load-bearing.** `dependabot-auto-merge` approves and squash-merges once every other CI job has passed on the same commit. It replaced a `workflow_run` workflow that interpolated `head_branch` into a shell (injection) while holding a write token. The rules, pinned by `test/integration/ci_workflow_test.rb`:
-  - **Trust the PR, never `github.actor`.** The actor can be made `dependabot[bot]` on someone else's PR ("Dependabot confusion"). The job checks the PR author, that the head branch lives in this repository, and that every commit is authored by Dependabot and signature-verified. GitHub lists at most 250 of a PR's commits, so a longer PR is left for review too. A human commit pushed onto a Dependabot branch therefore leaves the PR for review, while a maintainer re-running CI or reopening the PR still gets it merged.
-  - **Approve and merge only the head CI tested.** The approval is pinned with `commit_id` and the merge with `--match-head-commit`, so a push that lands after CI passed is never approved or merged unseen. `gh pr review --approve` approves whatever the head is at that moment, which is why the job calls the reviews API instead. CI ran against the head merged with main *as it was then*; main does not require branches to be up to date, so the squash can land on a newer main. Same trade-off a human merge makes.
-  - **`needs:` lists every CI job.** A job missing from it is a check Dependabot PRs merge without.
-  - **No `${{ }}` inside `run:`**, in any workflow. Pass values through `env:` and quote `"$VAR"`.
-  - **No `workflow_run`, `pull_request_target` or `issue_comment` triggers.** They run with write access on untrusted input. On `pull_request`, a fork gets a read-only token whatever the workflow requests.
-  - **The repo must let workflows approve PRs** (Settings → Actions → "Allow GitHub Actions to create and approve pull requests"). Main's one required review is satisfied by that approval. Turning on "Require review from Code Owners" with a CODEOWNERS file would block it: a workflow's approval is not a code owner's. Keep "Dismiss stale pull request approvals when new commits are pushed" on, so the pinned approval can't satisfy the review on a later head. Set the default workflow token to read-only; `ci.yml` grants write only to this job.
-- **Never quote dev-mode timings from the first requests after a boot.** They run 2–3× slower than steady state (cold caches, first-time constant loading, GC). [#487](https://github.com/mr-yum/growth-os/issues/487) was filed saying a framework-tree preload cost 88 ms of a 134 ms build; warm, the whole build was 46 ms, and the fix saved 13 ms rather than ~70. Warm up first, then interleave old and new paths in one process (shuffle the order each iteration) and compare medians. Measure against seeded data in a cloned database (`createdb -T growth_os_development <name>`, then `DATABASE_URL=…/<name>`), never by mutating the shared dev database.
+- **A delegated agent shares your working tree, your database and your dev server.** Subagents (the `Agent` tool, the `chrome-driver` agent, a `/code-review` angle) run in the SAME checkout as the session that launched them — there is no copy-on-write. So while one is working, do NOT `git checkout`, `git pull`, `git stash` or rebase in the orchestrating session: the agent's next `Read` or test run sees a tree it never asked for, and a half-applied rebase can be attributed to its edits. Same for `bin/dev` on port 6600 and the dev database — one browser driver at a time, and a seed reset while another agent is mid-flow invalidates its run. If you must work on another branch concurrently, use a throwaway `git worktree add /tmp/wt-<name> <branch>` (or launch the agent with `isolation: "worktree"`) and delete it afterwards; a second worktree needs its own database and ports ([dev-environment.md](docs/guidelines/dev-environment.md#a-second-worktree)). Read-only agents are safe to overlap; writers are not.
 - **The claude.ai GitHub MCP connector 404s on this private repo.** Use `gh` for issues, PRs, checks and review threads.
 - **In Claude Code, `@path` loads a file immediately; a Markdown link doesn't.** The "Planning work" table once named every guide as `@docs/guidelines/…`, so every session in this repo loaded 20 files (~706k characters) at startup, and `framework-explorer.md` and `assessments.md`, each over the 150k per-file limit, were truncated, losing the end of each. Both are now a small core with a *Where everything lives* map, plus companions by concern under `docs/guidelines/<guide>/`; split any guide the same way once it nears the directory budget in `agent_guidance_test.rb`. Load a guide on a predicate instead: an `@` import in the `AGENTS.md` of the directory it governs (loaded only when a file there is read), or a "when X, read Y" link here. A path a guide merely mentions belongs in a link or backticks, never after a bare `@`.
-- **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.

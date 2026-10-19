@@ -10,9 +10,14 @@
 > `CalibrationSessionPolicy`; `PopulationSeeds`.
 > *Setup* — list / define / draft curation / readiness / start / close, with
 > the shared `Views::Shared::PersonPicker` typeahead for participants.
+> *Readiness and freshness* — a readiness card measuring cell coverage
+> (confirmed / carried / unrated, plus evidence coverage, one denominator),
+> a "ratings as of" line with Refresh, and a poll that reloads the
+> readiness + overview frame with a status toast; see *Readiness* and
+> *Freshness and live refresh* under §2.
 > *Overview* — three tabs swapped inside a Turbo Frame (`?view=`, no
 > scroll jump — the drill-in's pane pattern): rater-tendency strip,
-> capability-divergence board, and **Score by cohort** (`OverviewStats` +
+> capability-divergence board, and **Score by level** (`OverviewStats` +
 > `CohortScores`, both in `calibration_sessions_overview`); draft-phase
 > agenda.
 > *Drill-in* — expectation text with role illustrations, the rater × level
@@ -47,7 +52,7 @@
 > on every read surface; see *Carried-vs-vetted provenance*.
 >
 > **Comparison drawer: SHIPPED** — the sticky bottom drawer (inspector +
-> pins, side by side) shared by Score by cohort and the capability
+> pins, side by side) shared by Score by level and the capability
 > drill-in, replacing the inline why-panel, the bottom person card, and
 > the separate compare tray; "What good looks like" folded into the
 > column-header ⓘ menus + person cards; **⚑ Flag example as unclear**
@@ -359,7 +364,7 @@ Participants (raters)        Population (23)                    [+ Add person]
                                ▾ Added individually (1)
   Excluded automatically:         Priya N. (L4 · reports to Kim — not in session)
   Mia, Raj, Sam, Ana
-  (participants)               Readiness: ▓▓▓▓▓▓▓░░ 19/23 manager-rated  [View gaps]
+  (participants)               Readiness: 78% rated · 31% carried · 22% unrated
 
 Suggested agenda (auto-generated, drag to reorder):
   1. ⚠ Strategic Thinking      — high EM disagreement, concentrated at L4
@@ -369,11 +374,12 @@ Suggested agenda (auto-generated, drag to reorder):
                                               [Save draft]  [Start session]
 ```
 
-- **Readiness gate** reuses `assessment_cycle_progress.manager_completed_at`:
-  under-rated assessments are listed per EM with a nudge affordance. The
-  facilitator can proceed anyway (real sessions run on imperfect data) but
-  under-rated people carry a low-confidence badge in every view. Population
-  members not enrolled in the cycle at all are flagged the same way.
+- **Readiness** is cell coverage, not people coverage — see *Readiness*
+  under §2. The facilitator can proceed anyway (real sessions run on
+  imperfect data). The population list keeps its per-person badges
+  (In progress / To confirm / Unrated / Not enrolled); "fully rated"
+  (`assessment_cycle_progress.manager_completed_at`, complete AND vetted)
+  survives only as the card's secondary count.
 - **Auto-agenda** ranks capabilities by residual between-manager divergence
   (tendency-corrected), each with a one-sentence plain-language reason.
   Facilitator reorders or removes freely.
@@ -385,8 +391,83 @@ Suggested agenda (auto-generated, drag to reorder):
 
 ### 2. Overview — "where are we inconsistent"
 
+**Readiness** — a card above the tabs, inside the same frame. It answers
+"how much of the rating work is done, and whose is left", which the strip
+used to half-answer on three scales (people, cells, %).
+
+```
+Readiness  78% rated · 31% carried · 22% unrated   Evidence on 44%   12 of 23 people fully rated
+▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░                                  [Show raters]
+
+  Rater   Reports       Rating coverage (% carried)      Evidence coverage   Ready?
+  Mia     6 · 72 cells  100% · 0% carried   ▓▓▓▓▓▓▓▓      21%  ▓▓             Ready
+  Raj     5 · 60 cells   90% · 58% carried  ▓▓▒▒▒▒▒░      90%  ▓▓▓▓▓▓▓▓▓      35 to confirm
+  Sam     7 · 84 cells   61% · 12% carried  ▓▓▓▓▒░░░      55%  ▓▓▓▓▓          33 unrated
+  Not in session (Kim · 1 person) …                                          reference only
+```
+
+- **One denominator for every percentage**: a person's at-level cells —
+  `Assessments::RoleScope.for_people(...)` at their enrollment-snapshot
+  ordinal, the cells the strip already reads. Rating coverage = rated
+  cells (confirmed this cycle + carried); carried share = carried cells;
+  evidence coverage = cells with ≥1 active evidence link — all over ALL
+  cells, so the bar segments add up and one rated cell moves the card.
+  (Decided 2026-10-19: evidence over all cells, not rated cells, so it
+  reads on the rating-coverage scale.)
+- **Why not the old bar**: it counted people whose manager side was complete
+  and vetted. Rating nine of twelve cells moved it by zero, and a rater whose
+  values were all carried read as unrated; the seeded dev session read
+  "1 of 47 manager-rated" while fourteen raters held 12–82 rated cells.
+- **Ready?** names the work left, by precedence: `N unrated` (a cell still
+  without a value), then `N to confirm` / `All N to confirm` (values exist,
+  some carried), else `Ready`. `OverviewStats.ready_state` is the one rule;
+  the MCP rows carry it as `ready_state`.
+- **Reference people** (rater not in the session) count in the population
+  totals and render as muted "reference only" rows grouped by their own
+  manager (recorded reporting manager, else the live org chart) — nobody in
+  the room can act on them, but the room still reads their numbers.
+- The per-rater table is a `<details>`, open in draft (readiness is the
+  question) and collapsed once live (the strip is). A reload keeps whatever
+  state the reader left it in.
+
+**Freshness and live refresh** — facilitators read the page as frozen when
+it wasn't: nothing said when it was computed, and the frame only
+re-fetched on a tab click.
+
+- The header carries "Live · ratings as of 14:32" under the subtitle (Draft
+  / Closed on those pages) and **↻ Refresh** beside the session actions. The time is re-stamped after every poll that
+  finds nothing new, so it says when the numbers were last known current.
+- `calibration_freshness_controller` polls `GET
+  /calibration_sessions/:id/freshness?since=<stamp>` every 60s while the tab
+  is visible, on draft and live sessions only. The endpoint
+  (`CalibrationSessions::Freshness`) answers with the latest `updated_at`
+  over the population's ratings this cycle, their evidence links and items,
+  and their enrollments — four `MAX` queries — and, only when that moved
+  past `since`, the summary of what moved: at-level manager ratings per
+  rater (`last_manager_rated_at`), self-ratings uncredited (the manager
+  didn't write them), and feedback / evidence items added, relinked or
+  withdrawn. Blind spot: a bulk `update_all` that skips `updated_at` moves
+  numbers without moving the stamp; Refresh always reloads.
+- A moved stamp reloads the `calibration-overview-pane` frame — readiness
+  and the overview share it, so one reload updates both — and fills a
+  persistent `role="status"` region under the header: "Updated just now · 3
+  ratings changed since 14:32 — Raj ×2, Sam ×1. Readiness 76% → 78%."
+  (the explorer's WriteStatus pattern; dismissible, auto-dismissed by the
+  shared `flash` controller).
+- **Held while the room is reading**: an open comparison drawer or modal
+  holds the automatic reload; the status region says "Newer ratings are
+  waiting — they load when the comparison drawer or dialog closes", and the
+  reload lands the moment it does. Refresh is an explicit ask and always
+  applies. (The notice lives in the region, not the header: a longer header
+  line squeezed the session title to one word per line.)
+- Web-only: the endpoint describes a rendered page's staleness, which an MCP
+  client reading `calibration_sessions_overview` on demand never has.
+- Polling is the first cut. If the poll shows in traces, the follow-up is a
+  session-level broadcast (the assessment page's sync-signal pattern).
+
 **Rater tendency strip** — one row per participant; the "acknowledge our
-biases first" moment. Aggregates only, never individual self-ratings:
+biases first" moment. Aggregates only, never individual self-ratings, and
+bias only — readiness lives on its own card:
 
 Every column is computed over the EM's **rated at-level cells** — the
 population's cells at each person's own assessed level, with a manager
@@ -395,11 +476,11 @@ session, all raters pooled (not the mean of the rater means, which would
 weight a rater with two reports like one with nine).
 
 ```
-            reports   vs. org mean      distribution     self-gap   evidence
-  Mia          6        +0.4 ▲       ▁▂▅█  (skews high)    −0.1       21%
-  Raj          5        −0.6 ▼       █▅▂▁  (skews low)     −0.8 ⚠     90%
-  Sam          7        +0.1         ▂▅▅▂                  +0.1       55%
-  Ana          5        −0.1         ▂▆▄▁                  −0.2       48%
+              n             vs. org mean   distribution          self-gap
+  Mia        72                +0.4 ▲      ▁▂▅█  (skews high)     −0.1
+  Raj        54 · 58% carried  −0.6 ▼      █▅▂▁  (skews low)      −0.8 ⚠
+  Sam        51                +0.1        ▂▅▅▂                   +0.1
+  Ana        60 · all carried  −0.1        ▂▆▄▁                   −0.2
 ```
 
 - **self-gap** = mean(manager rating − self rating) over the EM's
@@ -408,12 +489,13 @@ weight a rater with two reports like one with nine).
   agreement. An independent bias signal (an EM far below their whole team's
   self-perception is either the room's only honest rater or has a calibration
   problem; either way, that's the conversation).
-- **evidence** = % of the EM's current-level ratings backed by ≥1 active
-  evidence link (see the evidence section). Leniency and substantiation are
-  different axes: "Raj rates low but backs 90%; Mia rates high on 21%
-  backing" reframes the discussion.
+- **n** = the rated at-level cells the row is built from, with the carried
+  share of them as an amber note ("· 58% carried", "· all carried").
 - **Small-n honesty:** show `n` everywhere; suppress ⚠ badges below a floor
   (n < 3) rather than pretending the signal is real.
+- Evidence moved to the readiness card as *evidence coverage* (over all
+  cells). The MCP rows keep `evidence_pct`, the backed share of RATED
+  cells, for existing clients.
 
 **Capability divergence board** — one row per capability, per-EM mean as
 positioned dots on a shared axis, sorted by spread; click → drill-in:
@@ -424,11 +506,17 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   Delivery                        ●●● ●                       spread 0.4
 ```
 
-**Score by cohort** — the third tab: every calibrated person as an
+**Score by level** — the third tab: every calibrated person as an
 initialed dot on a 0–200% axis (100 = meeting the level, 200 = the next level
 in full — ADR-21), grouped by assessed level (the enrollment
 snapshot) and coloured by WHO rated them, so "Raj's people cluster low"
 is pre-attentive. Design rules, all deliberate:
+
+- **"Level" on the surface, "cohort" in the code.** "Cohort" already means
+  everyone enrolled in a cycle on the cycle report, so people read "level" here.
+  Identifiers stay: `?view=cohort`, `CohortView`, `CohortScores`,
+  `CohortDrawerCard`, `cohort_person` and the `cohorts` key of
+  `calibration_sessions_overview` (a client contract).
 
 - **The metric is the assessment's own number** — `% of expected`
   (`Scoring#performance_ratio`) at `perspective: :manager_only`, computed
@@ -445,7 +533,7 @@ is pre-attentive. Design rules, all deliberate:
   wears the dashed ring.
 - **Axis grammar is the divergence board's** — same track, same rater
   palette (`RaterColours`, shared), a labelled 100% reference line, a
-  median tick per cohort (median over unlocked scores only). Near-tied
+  median tick per level (median over unlocked scores only). Near-tied
   dots drop to a second lane rather than overlapping.
 - **Drill into why**: clicking a dot opens a server-rendered why-panel
   (`?cohort_person=`, swapped in the same frame) — the capabilities
@@ -583,10 +671,12 @@ palette; backing is shape/fill, so the two signals never compete. This
 follows the level-chip precedent — content indicators are a separate visual
 language from the rating language.)
 
-### b. Evidence coverage per rater (tendency-strip altitude)
+### b. Evidence coverage per rater (readiness-card altitude)
 
-The strip's `evidence` column (above) aggregates the same signal per EM.
-Substantiation is an axis of rater quality independent of leniency.
+The readiness card's evidence coverage (§2) aggregates the same signal per
+EM, over all their at-level cells. Substantiation is an axis of rater
+quality independent of leniency: "Raj rates low but backs 90%; Mia rates
+high on 21% backing" reframes the discussion.
 
 ### c. Person card (dot click)
 
@@ -915,7 +1005,7 @@ Mechanics — everything not listed here is inherited untouched:
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
-| Extracting the drawer card SHELL (container/header/✕/Pin) shared by the cohort and capability faces — today duplicated between `CohortDrawerCard` and the drill-in's `drawer_card` | The next change that touches the 38vh cap, pinned ring, or dismiss controls in both places |
+| Extracting the drawer card SHELL (container/header/✕/Pin) shared by the level and capability faces — today duplicated between `CohortDrawerCard` and the drill-in's `drawer_card` | The next change that touches the 38vh cap, pinned ring, or dismiss controls in both places |
 | Batching the drill-in drawer's per-card queries (`PersonCard` ladder/ratings/evidence run per person; a full drawer is ~4×, bounded by the 3-pin cap) | The cap rises, or drawer renders show up in traces |
 
 ### In-surface definitions for the calibration vocabulary — BUILT
@@ -934,7 +1024,13 @@ Every term below now carries its definition on the surface that renders it:
 | **vs org mean** | tendency strip column | that rater's mean minus the org mean — their overall leniency/harshness |
 | **Distribution** | tendency strip column | how that rater's at-level ratings split across the four frequencies |
 | **Self-gap** | tendency strip column | mean of (manager − self) across the rater's cells: negative = they rate their people below those people's own view |
-| **Evidence** | tendency strip column | share of that rater's at-level cells carrying ≥1 active evidence link |
+| **n** | tendency strip column | the rated at-level cells the row is built from; below 3 the row is never flagged |
+| **Reports** | readiness card column | the rater's reports in the session and their at-level cells — the card's denominator |
+| **Rating coverage** | readiness card | share of at-level cells with a manager rating, confirmed or carried |
+| **% carried** | readiness card | share of at-level cells carried from the last cycle and not confirmed |
+| **Evidence coverage** | readiness card | share of at-level cells with ≥1 active evidence link, over ALL cells |
+| **Ready?** | readiness card column | the work left: ready / N to confirm / N unrated |
+| **fully rated** | readiness card summary | people whose manager side is complete and confirmed this cycle |
 | **spread** | divergence board row | max − min of rater means on that capability |
 | **⚠ raters disagree** | divergence board badge | `divergence_score` (= min of spread and residual spread) reached `DIVERGENCE_FLAG_THRESHOLD` **and** the capability has enough rated cells (`FLAG_MIN_CELLS`) — i.e. disagreement that survives subtracting each rater's overall tendency, on a big enough sample (see *The unit of calibration*) |
 | **solid vs outlined dot** | drill-in grid | evidence-backed vs unbacked, deliberately shape not colour |
@@ -987,8 +1083,8 @@ provenance. What that buys the surfaces:
 - **Raters who vet and raters who coast**, assigned by RANK over each
   cycle's raters rather than an independent draw per rater — ranking
   guarantees all three states appear, where independent draws can leave a
-  small tenant entirely coasting, which is precisely the demo the Carried
-  column cannot make.
+  small tenant entirely coasting, which is precisely the demo the carried
+  shares cannot make.
 - **Reporting-line moves** between cycles, always to a sibling under the
   same department head (the re-org that actually happens, and one that keeps
   everyone inside the facilitator's scope). Applied to the org chart AND
@@ -1000,7 +1096,7 @@ provenance. What that buys the surfaces:
 - **Above-level surplus for the org's high performers** (top ~30% by base
   competence, consistent-ish at L+1 on ~60% of behaviours). Without it no
   seeded person can read "above expectations" — every rating sits at the
-  enrolled level, performance never exceeds 100%, and the cohort
+  enrolled level, performance never exceeds 100%, and the Score by level
   why-panel's positive-only "Pulling it up" column is empty by
   construction. Skipped under a coasting rater (a fresh human rating would
   break their "all carried" story).
@@ -1029,18 +1125,18 @@ the session log visible throughout. Design decisions:
   their positions and the just-opened person APPENDS; each card has ONE
   dismiss (✕ — unpins a pinned card, closes an unpinned inspector) plus
   Pin to hold. Anyone held in the
-  drawer — inspected or pinned — reads by SIZE on the grid / cohort dots
+  drawer — inspected or pinned — reads by SIZE on the grid / level dots
   (1.5×, no ring or corner disc), so "already held below" is
   pre-attentive in the main pane. The host
   page is padded by the drawer's measured height, so page-end content
   always scrolls clear. Mobile is the SAME drawer one card wide.
 - **Inspector + pins, max 3 people across** (the compare tray's cap;
   horizontally scrollable if cramped). A pin is a PERSON, not a
-  snapshot: the card renders the context's face — cohort face (% of
+  snapshot: the card renders the context's face — level face (% of
   expected, gate, why columns, rater-tendency note) on the session page;
   capability face (the read-only ladder + level panel) on the drill-in.
   Pins ride every calibration-internal link, so they survive tab
-  switches, capability changes, and the cohort → drill-in jump. This
+  switches, capability changes, and the level → drill-in jump. This
   retires the inline why-panel, the bottom person card placement, and
   the separate `?view=compare` tray — one component, three fewer
   surfaces.
@@ -1098,7 +1194,7 @@ read-only adaptation of the assessment capability view:
   scoped to the FOCUSED level — the ask is about the cell on screen, which
   may sit above the assessed level. Gates unchanged (live session, viewer
   entitlement, one revisit ask per cell per session).
-- The cohort why-panel's "Open drill-in →" anchors at
+- The Score by level why-panel's "Open drill-in →" anchors at
   `#calibration-person-card`, landing the reader on the card it names.
 
 ### Carried-vs-vetted provenance on the read surfaces
@@ -1118,7 +1214,8 @@ inherited*, so the room can discount rather than debate:
 | Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; hue still means frequency and fill still means evidence backing, so the three signals never collide. A backed carried dot also drops to the lighter `chip_carried` tint (lighter = inherited). Legend gains "Carried from last cycle" |
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
-| Tendency strip | a **Carried** column ("12 of 53", or "all N") |
+| Readiness card | a striped amber **carried** segment on every coverage bar, "% carried" beside each rater's coverage, and "N to confirm" as the work left |
+| Tendency strip | an amber note on n ("· 23% carried", or "· all carried") |
 | Divergence board | "· 1 of 2 carried" beside the spread, counted over **only the raters sitting at the two means that define that spread** — the comparison on screen (every rater at an extreme, so a tie counts them all). Counting the capability's whole cell set would both cry wolf (a carried cell belonging to a rater in the middle, who isn't in the comparison) and reassure wrongly ("2 of 20" when both extremes are wholly inherited). The row keeps its rank; the divergence is real in the data |
 
 **Marking never softens (NON-NEGOTIABLE).** A carried rating is still the
