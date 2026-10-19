@@ -158,41 +158,26 @@ end
 
 ```text
 app/
-├── models/                          # State-based ActiveRecord
-│   ├── tenant.rb                    # acts_as_tenant root
-│   ├── person.rb                    # acts_as_tenant :tenant
-│   ├── user.rb                      # Devise — global identity, NOT tenant-scoped
-│   └── application_record.rb
-│
-├── contexts/                        # Domain bounded contexts (RES)
-│   ├── frameworks/
-│   │   ├── events/                  # RES event classes
-│   │   ├── commands/                # Command objects
-│   │   ├── aggregate.rb             # include AggregateRoot
-│   │   ├── command_handler.rb
-│   │   └── projections/             # Synchronous read model builders
-│   │
-│   ├── person_development/
-│   │   ├── events/
-│   │   ├── commands/
-│   │   ├── aggregate.rb
-│   │   ├── command_handler.rb
-│   │   └── projections/
-│   │
-│   └── reporting/                   # Cross-stream read models
-│
-├── read_models/                     # ActiveRecord models for projections
-│   ├── framework_state/             # Published framework tables
-│   ├── assessment_state.rb
-│   ├── growth_plan_state.rb
-│   └── reporting/
-│
-├── integrations/                    # HRIS, notifications, SSO adapters
-│
-└── controllers/
-    └── api/v1/                      # JSON API
-```
+├── contexts/        # Event-sourced bounded contexts (RES): frameworks, person_development,
+│                    #   assessment_cycles — events, commands, aggregate, command handler, projections
+├── read_models/     # ActiveRecord models the projections write (framework_state/, assessments, evidence…)
+├── models/          # State-based ActiveRecord (Tenant, Person, User, TenantUser) + concerns
+├── operations/      # Operations::* — the one write/read surface shared by web and MCP
+├── queries/         # Read-side query objects (assessments, frameworks, reporting…)
+├── controllers/     # Skinny controllers; every action calls `authorize`
+├── policies/        # Pundit policies
+├── views/           # Phlex page views
+├── components/kit/  # Phlex Kit components (Button, Card, Modal, Prose…)
+├── dashboard/       # Home-page cards (Phlex)
+├── javascript/      # Stimulus controllers (import maps)
+├── integrations/    # HRIS (HiBob) and Slack adapters
+├── jobs/            # Solid Queue jobs
+├── notifiers/       # Noticed notification types
+└── services/        # Rare cross-model orchestration, plus services/mcp/ protocol plumbing
 
+test/                # Minitest: models, controllers, policies, components, system (Capybara), …
+docs/guidelines/     # The layer guides the Planning work table points at
+```
 ## Design Documents
 
 Architecture docs are split into focused files — read on demand, not all at once:
@@ -338,28 +323,6 @@ module Api
 end
 ```
 
-## Key Directories
-
-```text
-app/
-  components/kit/          # Phlex Kit components (Button, Card, Alert, etc.)
-  controllers/             # Rails controllers (skinny)
-  jobs/                    # Background jobs (SolidQueue)
-  models/                  # Fat models with concerns
-  models/concerns/         # Shared model modules
-  policies/                # Pundit authorization policies
-  views/                   # Phlex page views (new) + ERB (legacy)
-
-config/
-  routes/                  # Modular route definitions
-
-test/
-  models/                  # Model tests
-  controllers/             # Controller integration tests
-  system/                  # System tests (Capybara)
-  components/              # Component unit tests
-```
-
 ## Technology Stack
 
 - **Rails 8** with Hotwire (Turbo + Stimulus)
@@ -410,9 +373,7 @@ test/
 - **Run the `/code-review` skill before creating a PR (NON-NEGOTIABLE).** Review the branch diff vs main once the work is complete and committed, and land each fix as its own stacked commit on the branch before opening the PR. This is a pre-PR gate, separate from (not a replacement for) the CodeRabbit review that runs in PR CI — both apply.
 - When creating PR, always track CI, always investigate code review and CodeRabbit suggestions and commit each fix as a separate commit in the PR. Always check for fresh code review comments after each commit.
 - **Before opening or updating a PR, read [issue-delivery.md](docs/guidelines/issue-delivery.md).** CodeRabbit can skip a review or hide findings behind a green check in five ways, and screenshots in a PR body have rules about what may be published.
-- When referring to a PR, always link to it to reduce having to scroll back to find link
 - **MCP coverage is non-optional.** Every new user-facing surface — a controller action, a command-handler entry point, a read query that drives UI — must explicitly consider MCP exposure. The default path is to build the operation under `app/operations/operations/<domain>/<noun>.rb` so the web controller AND the MCP server consume the same class (the tool surface is auto-derived via `Operations::Registry`). If you choose NOT to expose it to MCP, say why in the PR description (purely internal, security model not yet modelable in MCP, deferred to follow-up, etc). See [docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md).
-- When referencing a PR, always link to it so to avoid having to scroll up to find the link
 - **Never publish online Artifacts (claude.ai-hosted pages) for project deliverables — reports, audits, plans, or any work product.** Generate the HTML (or Markdown) locally instead — write it under `tmp/` (gitignored) or another agreed location and present the file path so it can be opened from the IDE. Project content stays in the repo/workspace, not on an external host.
 
 ## Learnings
