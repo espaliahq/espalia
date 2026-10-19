@@ -30,7 +30,9 @@ class Views::CalibrationSessions::RenameSessionModal < Views::Base
               class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Name" }
         input(
           id: "rename-session-name", type: "text", name: "calibration_session[name]",
-          required: true, autocomplete: "off",
+          # Whitespace-only is refused here too, so the server's refusal —
+          # a redirect that closes the dialog — is left for a real race.
+          required: true, pattern: ".*\\S.*", title: "The name can’t be blank", autocomplete: "off",
           class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                  "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
                  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
