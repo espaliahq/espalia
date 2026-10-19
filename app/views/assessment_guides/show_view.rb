@@ -492,7 +492,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
         "Your status at every step"
       end
       p(class: "mt-2 #{MUTED}") do
-        "The pill on your assessment, your team's list and the cohort report all read this one status."
+        "Each person in a cycle moves through these statuses, and the cohort report counts them. " \
+          "The pill on your assessment puts them in plainer words, from In Progress through to Aligned."
       end
       ol(class: "mt-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2") do
         STATUSES.each_with_index do |(name, meaning), index|
