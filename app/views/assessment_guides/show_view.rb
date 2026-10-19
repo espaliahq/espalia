@@ -279,29 +279,25 @@ class Views::AssessmentGuides::ShowView < Views::Base
     end
   end
 
+  # Your own ratings only: before alignment the manager's are hidden, so a
+  # chip here never splits. The split belongs to step 3.
   def level_strip
     most = Palette::CONFIG.fetch("occasional")
     some = Palette::CONFIG.fetch("some")
 
     div(class: CARD) do
-      h3(class: CARD_TITLE) { "Critical Thinking, level by level" }
+      h3(class: CARD_TITLE) { "Your Critical Thinking ratings, level by level" }
       div(class: "flex flex-wrap gap-2", role: "img",
-        aria: { label: "E1 and E2 assumed met, E3 rated most of the time, " \
-                       "E4 rated differently by you and your manager, E5 not rated" }) do
+        aria: { label: "E1 and E2 assumed met, E3 rated most of the time, E4 rated some of the time, E5 not rated" }) do
         chip("E1", fill: Views::Assessments::LevelChip::ASSUMED_CONSISTENT_BG)
         chip("E2", fill: Views::Assessments::LevelChip::ASSUMED_CONSISTENT_BG)
         chip("E3", fill: most[:chip_bg], tag: "YOU", focused: true)
-        chip("E4", fill: some[:chip_bg], top: most[:chip_bg])
+        chip("E4", fill: some[:chip_bg])
         chip("E5", fill: "bg-gray-100 dark:bg-gray-700")
       end
       div(class: "mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs #{MUTED}") do
         legend_swatch(Views::Assessments::LevelChip::ASSUMED_CONSISTENT_BG, "Below your level: assumed met")
-        span(class: "inline-flex items-center gap-1.5") do
-          span(class: "relative h-2.5 w-2.5 overflow-hidden rounded-sm #{some[:chip_bg]}", aria: { hidden: "true" }) do
-            span(class: "absolute inset-0 #{most[:chip_bg]}", style: "clip-path: polygon(0 0, 100% 0, 0 100%);")
-          end
-          plain "Split: you and your manager differ"
-        end
+        legend_swatch("bg-gray-100 dark:bg-gray-700", "Grey: not rated yet")
       end
     end
   end
