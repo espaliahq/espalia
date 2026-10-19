@@ -1,0 +1,13 @@
+# CI workflows
+
+Read this before editing anything under `.github/`. Dependency PRs themselves are in
+[dependencies.md](../docs/guidelines/dependencies.md).
+
+**Dependabot PRs merge themselves from the last job in `ci.yml`, and every guard there is load-bearing.** `dependabot-auto-merge` approves and squash-merges once every other CI job has passed on the same commit. It replaced a `workflow_run` workflow that interpolated `head_branch` into a shell (injection) while holding a write token. The rules, pinned by `test/integration/ci_workflow_test.rb`:
+
+- **Trust the PR, never `github.actor`.** The actor can be made `dependabot[bot]` on someone else's PR ("Dependabot confusion"). The job checks the PR author, that the head branch lives in this repository, and that every commit is authored by Dependabot and signature-verified. GitHub lists at most 250 of a PR's commits, so a longer PR is left for review too. A human commit pushed onto a Dependabot branch therefore leaves the PR for review, while a maintainer re-running CI or reopening the PR still gets it merged.
+- **Approve and merge only the head CI tested.** The approval is pinned with `commit_id` and the merge with `--match-head-commit`, so a push that lands after CI passed is never approved or merged unseen. `gh pr review --approve` approves whatever the head is at that moment, which is why the job calls the reviews API instead. CI ran against the head merged with main *as it was then*; main does not require branches to be up to date, so the squash can land on a newer main. Same trade-off a human merge makes.
+- **`needs:` lists every CI job.** A job missing from it is a check Dependabot PRs merge without.
+- **No `${{ }}` inside `run:`**, in any workflow. Pass values through `env:` and quote `"$VAR"`.
+- **No `workflow_run`, `pull_request_target` or `issue_comment` triggers.** They run with write access on untrusted input. On `pull_request`, a fork gets a read-only token whatever the workflow requests.
+- **The repo must let workflows approve PRs** (Settings → Actions → "Allow GitHub Actions to create and approve pull requests"). Main's one required review is satisfied by that approval. Turning on "Require review from Code Owners" with a CODEOWNERS file would block it: a workflow's approval is not a code owner's. Keep "Dismiss stale pull request approvals when new commits are pushed" on, so the pinned approval can't satisfy the review on a later head. Set the default workflow token to read-only; `ci.yml` grants write only to this job.
