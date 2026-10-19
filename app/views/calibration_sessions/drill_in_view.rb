@@ -458,8 +458,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # The divergence-board row the room clicked to get here: each rater's
-  # mean on this capability across every level, on the same 0–3 ticks as
+  # This capability's divergence-board row — usually the one the room
+  # clicked to get here: each rater's mean on it across every level, on the same 0–3 ticks as
   # the level rows below, with the ⚠ badge when the board flags it.
   def orientation_row
     div(
@@ -472,7 +472,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           plain "All levels · each rater's"
           defined_term(:rater_mean)
         end
-        p(class: "-mt-2") { "The row you clicked on the divergence board." }
+        p(class: "-mt-2") { "This capability's row on the divergence board." } if @orientation
         if @orientation&.dig(:flagged)
           div(class: "mt-1") do
             defined_term(:raters_disagree, suffix: @stats[:capability][:stable_id],
@@ -540,10 +540,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     div(
       class: "grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
              "border-t border-gray-100 dark:border-gray-700 py-4",
-      role: "group", aria: { label: "L#{ordinal} — #{dots.size} #{'person'.pluralize(dots.size)}" },
+      role: "group", aria: { label: "L#{ordinal} — #{level_count(dots.size, dots.size - shown.size)}" },
       data: { level_row: ordinal }
     ) do
-      level_header(ordinal, dots.size)
+      level_header(ordinal, dots.size, dots.size - shown.size)
       # The unrated slot is reserved on every row, so the ticks share one x
       # down the whole card and same-frequency dots line up vertically.
       div(class: "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-1") do
@@ -553,12 +553,19 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  def level_header(ordinal, count)
+  # "5 people · 2 named below" — the people of a rater who hasn't rated
+  # this capability are in the sentence under the grid, not on the row.
+  def level_count(count, elsewhere)
+    text = "#{count} #{'person'.pluralize(count)}"
+    elsewhere.positive? ? "#{text} · #{elsewhere} named below" : text
+  end
+
+  def level_header(ordinal, count, elsewhere)
     div(class: "min-w-0", data: { level_menu: ordinal }) do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
         span(class: "rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 " \
                     "px-2 py-0.5 text-xs font-bold text-gray-900 dark:text-white") { "L#{ordinal}" }
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{count} #{'person'.pluralize(count)}" }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { level_count(count, elsewhere) }
         clarifications = @stats[:clarifications][ordinal].to_i
         if clarifications.positive?
           # Scannable without opening the menu — "which levels are already

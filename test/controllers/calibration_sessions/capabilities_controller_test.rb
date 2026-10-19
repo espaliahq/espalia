@@ -325,6 +325,8 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # person card (evidence, the revisit ask) stays one click away — the
       # unrated cell is the "what did you see?" moment.
       assert_select "p[data-silent-raters] a[data-person-id]", text: "Pax Thistledown", count: 1
+      # The level still counts Pax, and says where he is.
+      assert_select "[data-level-row='3'][aria-label='L3 — 2 people · 1 named below']"
       assert_select "a[data-person-id] span.h-7", { count: 1 },
                     "exactly one dot remains — the rated rater's"
       assert_select "a[data-person-id='#{@report.id}']"
