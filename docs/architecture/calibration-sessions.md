@@ -523,7 +523,10 @@ is pre-attentive. Design rules, all deliberate:
   the ⚠ badge when the board flags it. Fewer than two raters → no board row,
   and the row says so.
 - **The legend filters.** A rater chip dims every other rater's dots and
-  mean to 30 % (still clickable); clicking it again clears. The choice is
+  mean to 30 % (still clickable, over an opaque disc so the track never
+  shows through); clicking it again clears. Only a rater with a chip can be
+  the filter — a `?rater=` naming anyone else is ignored rather than
+  dimming the whole grid with nothing to click. The choice is
   `?rater=` — rendered server-side, followed client-side by
   `drill-in-filter` with no refetch.
 - **A silent rater collapses, everywhere in presentation — never in math.**
@@ -539,7 +542,8 @@ is pre-attentive. Design rules, all deliberate:
   names them in a footnote instead of a legend swatch that promises a dot
   existing on no axis. A PARTIALLY rated rater keeps their dots — their
   unrated people sit in the off-axis slot, because per-person gaps beside
-  rated ones are data.
+  rated ones are data. A level's count still includes the silent raters'
+  people and says where they are ("5 people · 2 named below").
 - **Rater dot palette order is load-bearing.** `RATER_DOT_CLASSES` cycles
   teal → purple → orange → pink → indigo → cyan. Orange sits third so pink
   never neighbours purple: the dark pair (pink-400/purple-400) is ΔE 13.3 —
