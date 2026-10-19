@@ -41,9 +41,8 @@ does (names are whimsified).
 gesture**, so a system test that copies must click for real — see
 [testing.md → Copying to the clipboard](testing.md#copying-to-the-clipboard-click-for-real).
 
-**In a cloud session the app is at `http://localhost:6600`**, not `rails-app:6600`: the MCP
-browser runs in the same container. Start it with `bin/rails server -p 6600`; `bin/dev` needs
-Overmind, which the image lacks.
+Where the app runs in a cloud session, and how to start it, is in the root
+[AGENTS.md](../../AGENTS.md) (it loads in every session, so it is the one copy).
 
 ## A second worktree
 

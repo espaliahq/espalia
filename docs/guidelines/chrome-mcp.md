@@ -116,7 +116,8 @@ with `bin/dev` if nothing answers on `:6600`.
 
 **In a Claude Code cloud session the browser and the app share one container**, so
 there it is `http://localhost:6600/`. `bin/cloud-setup` starts the browser; start the
-app with `bin/rails server -p 6600` (see "Cloud sessions" in AGENTS.md).
+app with `bin/rails server -p 6600`. What `bin/cloud-setup` installs, and why, is in
+[dev-environment.md](dev-environment.md#cloud-sessions-bincloud-setup-not-the-devcontainer).
 
 ## Signing in
 
@@ -294,9 +295,9 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
 - **Design system**: Phlex Kit components (`app/components/kit/`) +
   [phlex-views.md](phlex-views.md) and
   [tailwindcss.md](tailwindcss.md).
-- **App URL / login / seeded-data control**:
-  [chrome-mcp.md](chrome-mcp.md) (`http://rails-app:6600`,
-  Rails-credentials admin, seeded-tenant reset caveats).
+- **App URL / login / seeded-data control**: *Reaching the app*
+  (`http://rails-app:6600`), *Signing in* (the Rails-credentials admin) and the
+  seeded-tenant caveat under *Gotchas learned*, above.
 - **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
   — use it, not the skill's bundled dormant `ux-driver`.
 - **Screenshot home**: `tmp/visual/<task>/` (gitignored).
