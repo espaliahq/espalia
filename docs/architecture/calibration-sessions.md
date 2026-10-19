@@ -1279,7 +1279,7 @@ inherited*, so the room can discount rather than debate:
 
 | Surface | Marker |
 |---|---|
-| Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; hue still means frequency and fill still means evidence backing, so the three signals never collide. A backed carried dot also drops to the lighter `chip_carried` tint (lighter = inherited). Legend gains "Carried from last cycle" |
+| Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; position means frequency, hue means rater, and fill means evidence backing, so the signals never collide. Legend reads "Dashed = carried from last cycle" |
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
 | Readiness card | a striped amber **carried** segment on every coverage bar, "% carried" beside each rater's coverage, and "N to confirm" as the work left |
