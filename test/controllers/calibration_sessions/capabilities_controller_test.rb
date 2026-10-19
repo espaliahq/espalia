@@ -104,7 +104,17 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
     should "dim every other rater under ?rater= and carry it on every pane link" do
       ActsAsTenant.with_tenant(@tenant) do
         raj = create(:person, tenant: @tenant, name: "Raj Rater", manager: @facilitator)
+        omar = create(:person, tenant: @tenant, name: "Omar IC", manager: raj)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: omar.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: omar.id, level_ordinal: 3, role_id: @role_id)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: omar.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "none")
         create(:calibration_session_member, :participant, tenant: @tenant, session: @session, person_id: raj.id)
+        create(:calibration_session_member, tenant: @tenant, session: @session, person_id: omar.id)
         @raj_id = raj.id
       end
 
@@ -112,18 +122,26 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
 
       assert_response :success
       assert_select "[data-controller~='drill-in-filter'][data-drill-in-filter-rater-value='#{@raj_id}']"
+      assert_select "button[aria-pressed='true']", text: "Raj Rater"
       assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']"
       assert_select "a[data-person-id='#{@report.id}'][href*='rater=#{@raj_id}']"
       assert_select "a[href*='view=wall'][href*='rater=#{@raj_id}']"
 
-      # Mia is the only rater with a dot, so hers is the only chip.
       get calibration_session_capability_path(@session, @cap.stable_id, rater: @em.id)
       assert_select "button[aria-pressed='true']", text: "Mia Manager"
       assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']", count: 0
     end
 
-    should "ignore a rater filter that names no participant" do
-      [ { rater: SecureRandom.uuid_v7 }, { rater: [ "x" ] }, { rater: { a: "b" } } ].each do |query|
+    should "ignore a rater filter that names no rater with a dot here" do
+      silent = ActsAsTenant.with_tenant(@tenant) do
+        quinn = create(:person, tenant: @tenant, name: "Quinn Alderberry", manager: @facilitator)
+        create(:calibration_session_member, :participant, tenant: @tenant, session: @session, person_id: quinn.id)
+        quinn
+      end
+
+      # A silent rater has no chip, so filtering to them would dim the whole
+      # grid with nothing to click to undo it.
+      [ { rater: silent.id }, { rater: SecureRandom.uuid_v7 }, { rater: [ "x" ] }, { rater: { a: "b" } } ].each do |query|
         get calibration_session_capability_path(@session, @cap.stable_id, query)
 
         assert_response :success

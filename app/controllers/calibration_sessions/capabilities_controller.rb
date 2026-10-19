@@ -60,7 +60,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       # The grid sits outside the pane frame, so a frame request never shows
       # it — the same reason the log is skipped.
       orientation: (orientation_row(stats) unless pane_frame_request?),
-      rater_filter: rater_filter,
+      rater_filter: rater_filter(stats),
       can_note: @session.started? && policy(@session).flag_expectation?,
       person_card: person_card,
       person_focus_ordinal: focus_ordinal,
@@ -110,13 +110,16 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       &.slice(:rater_means, :flagged)
   end
 
-  # The grid's legend filter (`?rater=`): one participant's marks at full
-  # strength, everyone else's dimmed. Anything else is ignored.
+  # The grid's legend filter (`?rater=`): one rater's marks at full
+  # strength, everyone else's dimmed. Only a rater with a legend chip — a
+  # participant who has rated someone here — counts: filtering to anyone
+  # else would dim the whole grid with no chip to clear it.
   #
   # @return [String, nil]
-  def rater_filter
+  def rater_filter(stats)
+    rated = stats[:levels].values.flatten.select { |dot| dot[:frequency] }.map { |dot| dot[:rater_id] }
     (params[:rater] if params[:rater].is_a?(String))
-      .presence_in(@session.participants.pluck(:person_id))
+      .presence_in(stats[:rater_ids] & rated)
   end
 
   # @return [String, nil] "wall" / nil
