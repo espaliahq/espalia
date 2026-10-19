@@ -287,6 +287,47 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
     end
   end
 
+  context "Rename" do
+    setup { @session_id = define![:session_id] }
+
+    should "rename with the stripped name and record the previous one" do
+      result = Operations::CalibrationSessions::Rename.call(
+        context: @facilitator_context, params: { session_id: @session_id, name: "  Engineering · H2  " }
+      )
+      assert_equal({ session_id: @session_id, name: "Engineering · H2" }, result)
+
+      event = Rails.configuration.event_store.read
+        .stream(EventStreamNaming.calibration_session_stream(@session_id))
+        .of_type(AssessmentCycles::Events::CalibrationSessionRenamed).last
+      assert_equal "Engineering calibration", event.data[:previous_name]
+      assert_equal @dept_head.id, event.data[:renamed_by_id]
+    end
+
+    should "rename a closed session" do
+      Operations::CalibrationSessions::Close.call(context: @facilitator_context, params: { session_id: @session_id })
+      Operations::CalibrationSessions::Rename.call(
+        context: @facilitator_context, params: { session_id: @session_id, name: "Done" }
+      )
+      assert_equal "Done", CalibrationSession.find(@session_id).name
+    end
+
+    should "reject a blank name at the parameter boundary" do
+      assert_raises(Operations::Base::ParameterError) do
+        Operations::CalibrationSessions::Rename.call(
+          context: @facilitator_context, params: { session_id: @session_id, name: "" }
+        )
+      end
+    end
+
+    should "deny a participant" do
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Rename.call(
+          context: context_for(@em_1), params: { session_id: @session_id, name: "Mine now" }
+        )
+      end
+    end
+  end
+
   context "List and Get" do
     setup { @session_id = define![:session_id] }
 

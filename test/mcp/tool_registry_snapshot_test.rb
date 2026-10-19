@@ -1062,6 +1062,24 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "calibration_sessions_rename",
+        "description" => "Rename a calibration session (any status; the session log records the previous name).",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "session_id" => { "type" => "string" },
+            "name"       => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[session_id name],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "calibration_sessions_request_evidence",
         "description" => "Ask a colleague for feedback / evidence on a capability × level from a live calibration session.",
         "inputSchema" => {
