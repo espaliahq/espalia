@@ -278,6 +278,20 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
       assert result.key?(:capabilities)
     end
 
+    should "carry readiness as cell coverage, per rater and for the population" do
+      result = Operations::CalibrationSessions::Overview.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+
+      rater = result[:raters].first
+      %i[cell_total coverage_pct carried_pct evidence_coverage_pct ready_state evidence_pct].each do |key|
+        assert rater.key?(key), "rater rows carry #{key}"
+      end
+      %i[cell_total coverage_pct carried_pct evidence_coverage_pct ready_state reference].each do |key|
+        assert result[:readiness].key?(key), "readiness carries #{key}"
+      end
+    end
+
     should "carry the level cohorts with names and the coverage gate intact" do
       # This fixture has no scorable ladder, so everyone in a cohort is
       # GATED — exactly the payload shape an agent must read correctly:
