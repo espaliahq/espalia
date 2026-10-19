@@ -744,7 +744,7 @@ methods.
 
 ## Role Leak Tests — `create_out_of_scope_rating`
 
-**Every query that reads `AssessmentLevelRating` gets an "ignores ratings outside the assessed role" test** (ADR-22, [assessments.md → Role-scoped reads](assessments.md)). The helper, in `test/support/out_of_scope_ratings.rb` and available in every test, builds the case the ordinal filters miss:
+**Every query that reads `AssessmentLevelRating` gets an "ignores ratings outside the assessed role" test** (ADR-22, [assessments/role-lens.md → Role-scoped reads](assessments/role-lens.md)). The helper, in `test/support/out_of_scope_ratings.rb` and available in every test, builds the case the ordinal filters miss:
 
 ```ruby
 rating = create_out_of_scope_rating(person_id: person.id, cycle: cycle, level_ordinal: 3)

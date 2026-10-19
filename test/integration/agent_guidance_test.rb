@@ -9,12 +9,9 @@ require "test_helper"
 class AgentGuidanceTest < ActiveSupport::TestCase
   PER_FILE_LIMIT = 150_000
   STARTUP_BUDGET = 150_000
-
-  # Over the limit today and due to be split; drop each entry once it is.
-  OVERSIZED = %w[
-    docs/guidelines/framework-explorer.md
-    docs/guidelines/assessments.md
-  ].freeze
+  # What opening a file in one directory may add on top of startup. A guide that
+  # outgrows it splits by concern, as framework-explorer.md and assessments.md did.
+  DIRECTORY_BUDGET = 100_000
 
   STARTUP_FILES = %w[CLAUDE.md .claude/CLAUDE.md].freeze
   SKIPPED_DIRS = %r{\A(node_modules|vendor|tmp|log|storage|coverage)/}
@@ -35,8 +32,7 @@ class AgentGuidanceTest < ActiveSupport::TestCase
     end
 
     should "stay inside the startup budget" do
-      loaded = STARTUP_FILES.map { root(it) }.select(&:exist?).flat_map { loaded_with(it).to_a }.uniq
-      size = loaded.sum { it.read.size }
+      size = startup.sum { it.read.size }
 
       assert_operator size, :<=, STARTUP_BUDGET, "a session starts with #{size} characters of instructions"
     end
@@ -54,14 +50,17 @@ class AgentGuidanceTest < ActiveSupport::TestCase
     should "fit under Claude Code's per-file limit" do
       oversized = relatives(instruction_files.flat_map { loaded_with(it).to_a }.uniq.select { it.read.size > PER_FILE_LIMIT })
 
-      assert_empty oversized - OVERSIZED, "Claude Code truncates these; split them rather than grow them"
+      assert_empty oversized, "Claude Code truncates these; split them rather than grow them"
     end
   end
 
-  should "list in OVERSIZED only guides that are still over the limit" do
-    shrunk = OVERSIZED.reject { root(it).exist? && root(it).read.size > PER_FILE_LIMIT }
+  should "keep what any one directory loads inside the directory budget" do
+    over = guided_directories.filter_map do |dir|
+      size = (directory_chain(dir).flat_map { loaded_with(it).to_a }.uniq - startup).sum { it.read.size }
+      "#{relative(dir)}: #{size}" if size > DIRECTORY_BUDGET
+    end
 
-    assert_empty shrunk, "now under the limit — remove from OVERSIZED"
+    assert_empty over, "opening a file here loads more than #{DIRECTORY_BUDGET} characters of guides; split the largest"
   end
 
   private
@@ -82,6 +81,18 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   def imports(path)
     text = path.read.gsub(/^```.*?^```/m, "").gsub(/`[^`\n]*`/, "")
     text.scan(IMPORT).flatten.map { path.dirname.join(it).cleanpath }.select { it.exist? || it.extname == ".md" }
+  end
+
+  def startup = STARTUP_FILES.map { root(it) }.select(&:exist?).flat_map { loaded_with(it).to_a }.uniq
+
+  def guided_directories = instruction_files.map(&:dirname).uniq - STARTUP_FILES.map { root(it).dirname }
+
+  # An agent loads the guidance of every directory between the root and the file
+  # it opens: CLAUDE.md for Claude Code, AGENTS.md for agents that read only that.
+  def directory_chain(dir)
+    dir.relative_path_from(Rails.root).descend.filter_map do |path|
+      [ root(path).join("CLAUDE.md"), root(path).join("AGENTS.md") ].find(&:exist?)
+    end
   end
 
   def markdown_imports(path) = imports(path).select { it.extname == ".md" }
