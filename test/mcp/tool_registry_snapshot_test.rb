@@ -1142,7 +1142,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "calibration_sessions_unarchive",
-        "description" => "Restore an archived calibration session to the default list (it stays closed).",
+        "description" => "Restore an archived calibration session to the default list (it stays closed). " \
+                         "Only closed sessions can be archived or restored.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

@@ -241,6 +241,8 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
       session = CalibrationSession.find(@session_id)
       assert session.archived?
       assert_equal @dept_head.id, session.archived_by_id
+      got = Operations::CalibrationSessions::Get.call(context: @facilitator_context, params: { session_id: @session_id })
+      assert_not_nil got[:archived_at], "Get says the session is archived"
 
       listed = Operations::CalibrationSessions::List.call(context: @facilitator_context, params: {})
       assert_empty listed[:sessions]
