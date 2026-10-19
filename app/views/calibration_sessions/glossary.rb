@@ -27,9 +27,40 @@ module Views::CalibrationSessions::Glossary
     reports: {
       label: "Reports",
       definition: "How many of this rater's reports are in the session, and how " \
-                  "many rated cells they account for. Two numbers because one " \
-                  "rater with nine reports carries more of the org mean than one " \
-                  "with two."
+                  "many at-level cells they hold between them. Those cells are " \
+                  "the denominator for every percentage on this card."
+    },
+    rated_cells: {
+      label: "n",
+      definition: "How many at-level cells this rater has rated — the sample every " \
+                  "number on the row is computed from. Below 3 the row shows its " \
+                  "numbers but never flags them: a small sample always looks extreme."
+    },
+    rating_coverage: {
+      label: "Rating coverage",
+      definition: "The share of at-level cells that carry a manager rating, whether " \
+                  "confirmed this cycle or carried from the last one. Every cell " \
+                  "rated moves it."
+    },
+    evidence_coverage: {
+      label: "Evidence coverage",
+      definition: "The share of at-level cells with at least one piece of linked " \
+                  "feedback, counted over every cell — rated or not — so it reads " \
+                  "on the same scale as rating coverage. Substantiation is a " \
+                  "separate axis from leniency."
+    },
+    ready: {
+      label: "Ready?",
+      definition: "The work left before this rater's ratings are ready to calibrate: " \
+                  "ready means every cell is rated and confirmed this cycle; “N to " \
+                  "confirm” means every cell has a value but N were carried from the " \
+                  "last cycle; “N unrated” counts cells still without a rating."
+    },
+    fully_rated: {
+      label: "fully rated",
+      definition: "People whose manager has rated every at-level cell and confirmed " \
+                  "it this cycle. A stricter count than coverage: one carried or " \
+                  "missing cell keeps a person out of it."
     },
     org_delta: {
       label: "vs org mean",
@@ -50,19 +81,12 @@ module Views::CalibrationSessions::Glossary
                   "below those people's own view of themselves. It is a signal to " \
                   "discuss, not a verdict — they may be the room's most honest rater."
     },
-    evidence: {
-      label: "Evidence",
-      definition: "The share of this rater's rated cells that carry at least one " \
-                  "piece of linked feedback. Substantiation is a separate axis " \
-                  "from leniency: rating low and backing it is not the same as " \
-                  "rating low."
-    },
     carried: {
-      label: "Carried",
-      definition: "Ratings carried forward from this person's previous cycle and " \
-                  "not confirmed this one. They are still the rater's ratings and " \
-                  "still count — the column says how much of the row the rater has " \
-                  "yet to vet."
+      label: "% carried",
+      definition: "The share of at-level cells whose rating was carried forward from " \
+                  "the previous cycle and not confirmed this one. Carried ratings are " \
+                  "still the rater's ratings and still count everywhere — this says " \
+                  "how much the rater has yet to vet."
     },
     spread: {
       label: "spread",
