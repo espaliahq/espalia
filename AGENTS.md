@@ -68,28 +68,32 @@ When responding in the chat, writing comments, docs or user facing copy, please 
 
 ### Planning work
 
-Before designing or planning any feature, **read the relevant guideline files** for the layers involved — do not rely on defaults:
+Before designing or planning any feature, **read the relevant guideline files** for the layers involved — do not rely on defaults. The per-directory `AGENTS.md` files load a guide only once you open a file in that directory, which is usually after the plan is made, so open these yourself with `Read`:
 
-| Planning area | Read before starting |
+| When you are about to… | Read first |
 |---|---|
-| Controllers / routing | @docs/guidelines/rails-controllers.md |
-| Models / migrations / JSONB | @docs/guidelines/rails-models.md |
-| Views / components / UI | @docs/guidelines/phlex-views.md, @docs/guidelines/tailwindcss.md |
-| JavaScript / Stimulus | @docs/guidelines/javascript-stimulus.md |
-| Service objects | @docs/guidelines/service-objects.md |
-| Authorization / permissions | @docs/guidelines/authorization.md |
-| Tests | @docs/guidelines/testing.md |
-| Visual verification (Chrome MCP) — mandatory for front-end changes | @docs/guidelines/chrome-mcp.md |
-| Favicon / app icon / web manifest | @docs/guidelines/app-icons.md |
-| Framework Explorer UX | @docs/guidelines/framework-explorer.md |
-| Assessment UX | @docs/guidelines/assessments.md |
-| HRIS sync / role-level mapping | @docs/guidelines/hris-integration.md + @docs/architecture/integrations.md |
-| Slack (notifications, the feedback modal, inbound endpoints) | @docs/guidelines/slack-integration.md |
-| Events / aggregates / projections / read models | @docs/guidelines/event-sourcing.md + @docs/runbooks/projection-rebuild.md |
-| Production incidents / 500s on Render | @docs/runbooks/production-diagnostics.md |
-| MCP server / Operations / OAuth / DCR | @docs/guidelines/mcp-server.md |
+| Plan or change a controller or route | [rails-controllers.md](docs/guidelines/rails-controllers.md) |
+| Plan or change a model, migration or JSONB column | [rails-models.md](docs/guidelines/rails-models.md) |
+| Plan or change a view, component or any UI | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
+| Write or change a Stimulus controller | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
+| Reach for a service object | [service-objects.md](docs/guidelines/service-objects.md) |
+| Add or change a permission, policy or `authorize` call | [authorization.md](docs/guidelines/authorization.md) |
+| Write or fix a test | [testing.md](docs/guidelines/testing.md) |
+| Verify a front-end change in the browser (mandatory for every one) | [chrome-mcp.md](docs/guidelines/chrome-mcp.md) |
+| Change the favicon, app icon or web manifest | [app-icons.md](docs/guidelines/app-icons.md) |
+| Change the framework explorer (`/frameworks/:id`, `/edit`) | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
+| Change an assessment screen | [assessments.md](docs/guidelines/assessments.md) |
+| Change HRIS sync or the role/level mapping | [hris-integration.md](docs/guidelines/hris-integration.md), [integrations.md](docs/architecture/integrations.md) |
+| Change Slack notifications, the feedback modal or an inbound Slack endpoint | [slack-integration.md](docs/guidelines/slack-integration.md) |
+| Add or change an event, aggregate, projection or read model | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
+| Bump a projection's `CODE_VERSION`, or rebuild one | [projection-rebuild.md](docs/runbooks/projection-rebuild.md) |
+| Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) |
+| Add or change an Operation, MCP tool, OAuth or DCR flow | [mcp-server.md](docs/guidelines/mcp-server.md) |
+| Deliver a GitHub issue end to end | [issue-delivery.md](docs/guidelines/issue-delivery.md) |
 
 Most features touch controllers + models + views + tests + authorization — read all five.
+
+**Link to a guide here, never `@`-import it.** Claude Code loads an `@path` the moment the file that names it loads, so an import in this file loads its target into every session. `test/integration/agent_guidance_test.rb` fails on one.
 
 Any new user-facing read or write surface must consider MCP coverage during planning. Default to building through `Operations::*` so the web and the MCP server share one implementation (see [mcp-server.md](docs/guidelines/mcp-server.md)); explicitly justify in the PR if MCP exposure is being skipped or deferred.
 
@@ -506,4 +510,5 @@ test/
   - **The repo must let workflows approve PRs** (Settings → Actions → "Allow GitHub Actions to create and approve pull requests"). Main's one required review is satisfied by that approval. Turning on "Require review from Code Owners" with a CODEOWNERS file would block it: a workflow's approval is not a code owner's. Keep "Dismiss stale pull request approvals when new commits are pushed" on, so the pinned approval can't satisfy the review on a later head. Set the default workflow token to read-only; `ci.yml` grants write only to this job.
 - **Never quote dev-mode timings from the first requests after a boot.** They run 2–3× slower than steady state (cold caches, first-time constant loading, GC). [#487](https://github.com/mr-yum/growth-os/issues/487) was filed saying a framework-tree preload cost 88 ms of a 134 ms build; warm, the whole build was 46 ms, and the fix saved 13 ms rather than ~70. Warm up first, then interleave old and new paths in one process (shuffle the order each iteration) and compare medians. Measure against seeded data in a cloned database (`createdb -T growth_os_development <name>`, then `DATABASE_URL=…/<name>`), never by mutating the shared dev database.
 - **The claude.ai GitHub MCP connector 404s on this private repo.** Use `gh` for issues, PRs, checks and review threads.
+- **In Claude Code, `@path` loads a file immediately; a Markdown link doesn't.** The "Planning work" table once named every guide as `@docs/guidelines/…`, so every session in this repo loaded 20 files (~706k characters) at startup, and `framework-explorer.md` and `assessments.md`, each over the 150k per-file limit, were truncated, losing the end of each. Load a guide on a predicate instead: an `@` import in the `AGENTS.md` of the directory it governs (loaded only when a file there is read), or a "when X, read Y" link here. A path a guide merely mentions belongs in a link or backticks, never after a bare `@`.
 - **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
