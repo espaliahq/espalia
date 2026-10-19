@@ -61,11 +61,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   #   as unclear (facilitator/admin AND the session is live)
   # @param orientation [Hash, nil] this capability's divergence-board row,
   #   `{ rater_means:, flagged: }`; nil when it has no comparable row
+  # @param rater_filter [String, nil] the participant whose marks stay at
+  #   full strength (`?rater=`); everyone else's dim
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  person_focus_ordinal: nil, person_action: nil,
                  request_candidates: nil,
                  view: nil, wall: nil, wall_filters: {}, pin_ids: [], pinned_cards: {},
-                 session_log: nil, can_note: false, orientation: nil,
+                 session_log: nil, can_note: false, orientation: nil, rater_filter: nil,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
     @stats = stats
@@ -77,6 +79,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @request_candidates = request_candidates
     @session_log = session_log
     @orientation = orientation
+    @rater_filter = rater_filter
     @can_note = can_note
     @view = view
     @wall = wall
@@ -366,7 +369,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         card.body do
           # The container query, not the viewport: the session log panel
           # takes width from this column on a wide screen.
-          div(class: "@container px-3 pb-3 sm:px-6 sm:pb-6") do
+          div(class: "@container px-3 pb-3 sm:px-6 sm:pb-6",
+              data: { controller: "drill-in-filter", drill_in_filter_rater_value: @rater_filter.to_s }) do
             grid_heading
             rater_legend
             orientation_row
@@ -391,7 +395,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         "At-level ratings by level"
       end
       p(class: "text-xs text-gray-600 dark:text-gray-300") do
-        "Click a dot to discuss · pin up to #{MAX_PINS} to compare"
+        "Click a rater to dim the others · click a dot to discuss · pin up to #{MAX_PINS} to compare"
       end
     end
     p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
@@ -430,9 +434,20 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @stats[:rater_ids].select { |rater_id| rated_rater_ids.include?(rater_id) }
   end
 
+  # A toggle: dims every other rater's marks, still clickable; pressed
+  # again, it clears. The state is `?rater=` (drill-in-filter).
   def legend_chip(rater_id)
-    span(class: "inline-flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border " \
-                "border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white") do
+    button(
+      type: "button",
+      class: "inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full " \
+             "border border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white " \
+             "hover:bg-gray-50 dark:hover:bg-gray-700 aria-pressed:border-gray-900 aria-pressed:font-semibold " \
+             "dark:aria-pressed:border-white focus-visible:outline-hidden focus-visible:ring-2 " \
+             "focus-visible:ring-primary",
+      aria: { pressed: (rater_id == @rater_filter).to_s },
+      title: "Show only #{rater_name(rater_id)}'s ratings — click again to show everyone",
+      data: { action: "drill-in-filter#toggle", drill_in_filter_rater_param: rater_id }
+    ) do
       span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
            aria: { hidden: "true" })
       plain rater_name(rater_id)
@@ -496,7 +511,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         div(
           class: "absolute flex h-[22px] w-[22px] -translate-x-1/2 items-center justify-center rounded-full " \
                  "border-2 border-white dark:border-gray-800 text-[9px] font-semibold " \
-                 "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}",
+                 "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL} " \
+                 "#{dim_class(rater_id)}",
           style: "left: #{position.call(stats_hash)}%; top: #{2 + (lane * MEAN_LANE_HEIGHT)}px",
           title: "#{rater_name(rater_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})",
           data: { rater_id: rater_id }
@@ -677,10 +693,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       # the pins and filters were on page load; `pane_keep_state` tells the
       # pane controller to merge the live values in at click time.
       href: drill_in_path(view: nil, person: dot[:person_id], pins: [], filters: {}),
-      class: "relative inline-flex h-11 w-11 shrink-0 items-center justify-center",
+      class: "relative inline-flex h-11 w-11 shrink-0 items-center justify-center #{dim_class(dot[:rater_id])}",
       title: "#{dot[:name]} — #{base}",
       aria: { label: "#{dot[:name]} — #{label}. Open to discuss." },
-      data: { pane_keep_state: "true", person_id: dot[:person_id], rater_id: dot[:rater_id] }
+      data: { pane_keep_state: "true", person_id: dot[:person_id], rater_id: dot[:rater_id].to_s }
     ) do
       # ONE affordance for "in the drawer" — anyone held there (inspected
       # OR pinned) reads by SIZE (1.5×), same vocabulary as Score by cohort.
@@ -736,6 +752,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def rater_index(rater_id)
     @rater_index ||= @stats[:rater_ids].each_with_index.to_h
     @rater_index[rater_id]
+  end
+
+  # Under a rater filter everyone else dims — still there, still clickable.
+  def dim_class(rater_id)
+    "opacity-30" if @rater_filter && rater_id != @rater_filter
   end
 
   def rater_order(dot)
@@ -810,6 +831,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     query[:wall_level] = filters[:level] if filters[:level]
     query[:wall_valence] = filters[:valence] if filters[:valence]
     query[:wall_rater] = filters[:rater_id] if filters[:rater_id]
+    query[:rater] = @rater_filter if @rater_filter
     calibration_session_capability_path(@session, @stats[:capability][:stable_id], query)
   end
 
@@ -842,7 +864,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @pin_ids.each { |id| input(type: "hidden", name: "pins[]", value: id, data: tag) }
     input(type: "hidden", name: "view", value: @view, data: tag) if @view
     { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
-      wall_rater: @wall_filters[:rater_id] }.each do |name, value|
+      wall_rater: @wall_filters[:rater_id], rater: @rater_filter }.each do |name, value|
       input(type: "hidden", name: name.to_s, value: value, data: tag) if value.present?
     end
   end

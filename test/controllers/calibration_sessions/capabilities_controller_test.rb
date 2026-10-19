@@ -101,6 +101,37 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_select "[data-orientation-row]", text: /nothing to compare yet/
     end
 
+    should "dim every other rater under ?rater= and carry it on every pane link" do
+      ActsAsTenant.with_tenant(@tenant) do
+        raj = create(:person, tenant: @tenant, name: "Raj Rater", manager: @facilitator)
+        create(:calibration_session_member, :participant, tenant: @tenant, session: @session, person_id: raj.id)
+        @raj_id = raj.id
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, rater: @raj_id)
+
+      assert_response :success
+      assert_select "[data-controller~='drill-in-filter'][data-drill-in-filter-rater-value='#{@raj_id}']"
+      assert_select "a[data-person-id='#{@report.id}'].opacity-30"
+      assert_select "a[data-person-id='#{@report.id}'][href*='rater=#{@raj_id}']"
+      assert_select "a[href*='view=wall'][href*='rater=#{@raj_id}']"
+
+      # Mia is the only rater with a dot, so hers is the only chip.
+      get calibration_session_capability_path(@session, @cap.stable_id, rater: @em.id)
+      assert_select "button[aria-pressed='true']", text: "Mia Manager"
+      assert_select "a[data-person-id='#{@report.id}'].opacity-30", count: 0
+    end
+
+    should "ignore a rater filter that names no participant" do
+      [ { rater: SecureRandom.uuid_v7 }, { rater: [ "x" ] }, { rater: { a: "b" } } ].each do |query|
+        get calibration_session_capability_path(@session, @cap.stable_id, query)
+
+        assert_response :success
+        assert_select "[data-drill-in-filter-rater-value='']"
+        assert_select "a[data-person-id].opacity-30", count: 0
+      end
+    end
+
     should "render the person card with ratings and evidence when a dot is opened" do
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
 
@@ -312,13 +343,13 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_select "[data-drawer-card='#{@report.id}']"
     end
 
-    should "carry the pane, the opened person, the pins and the filters through an outcome POST" do
+    should "carry the pane, the opened person, the pins and both filters through an outcome POST" do
       start_session_stream
 
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Compare the pricing work with Omar's.",
-        pins: [ @report.id ], view: "wall", wall_valence: "demonstrated"
+        pins: [ @report.id ], view: "wall", wall_valence: "demonstrated", rater: @em.id
       }
 
       assert_equal "Revisit requested — it will appear in the rater's assessment activity.",
@@ -327,6 +358,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.redirect_url, "person=#{@report.id}"
       assert_includes response.redirect_url, "view=wall"
       assert_includes response.redirect_url, "wall_valence=demonstrated"
+      assert_includes response.redirect_url, "rater=#{@em.id}", "the grid's filter survives too"
       assert_includes response.redirect_url, "activity=open",
         "the ask must land somewhere visible even with the log panel closed"
     end

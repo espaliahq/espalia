@@ -550,8 +550,45 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       })()
     JS
     assert_operator axis_top, :>=, header_bottom - 1, "mobile: the axis drops below its expectation"
+    # A deep link to the filter renders it dimmed before any script runs.
+    visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id, rater: @em_2.id)
+    assert_selector "button[aria-pressed='true']", text: "Raj Rater"
+    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
+    assert_no_selector "a[data-person-id='#{@report_2.id}'].opacity-30"
   ensure
     page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+  end
+
+  test "the drill-in legend filters to one rater and keeps it across pane swaps" do
+    seed_live_session(with_unrated: true)
+    sign_in_as(@facilitator_user)
+    visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id)
+    assert_text "AT-LEVEL RATINGS BY LEVEL"
+    wait_for_stimulus "drill-in-filter"
+    assert_no_selector "[data-rater-id].opacity-30"
+
+    raj_chip = "button[data-drill-in-filter-rater-param='#{@em_2.id}']"
+    click_selector_with_js_fallback(raj_chip, expect_selector: "#{raj_chip}[aria-pressed='true']")
+    # Mia's people (and her mean) dim; Raj's stay; dimmed dots stay links.
+    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
+    assert_selector "a[data-person-id='#{@uma_id}'].opacity-30"
+    assert_selector "[data-orientation-row] [data-rater-id='#{@em_1.id}'].opacity-30"
+    assert_no_selector "a[data-person-id='#{@report_2.id}'].opacity-30"
+    assert_includes page.current_url, "rater=#{@em_2.id}"
+
+    # Opening a person swaps the pane; the filter rides the new URL and the
+    # grid keeps its dimming.
+    click_selector_with_js_fallback("a[data-person-id='#{@report_1.id}']",
+                                    expect_selector: "#calibration-person-card")
+    assert_includes page.current_url, "person=#{@report_1.id}"
+    assert_includes page.current_url, "rater=#{@em_2.id}"
+    assert_selector "a[data-person-id='#{@report_1.id}'].opacity-30"
+
+    # The same chip again clears it, and the URL with it.
+    click_selector_with_js_fallback(raj_chip, expect_selector: "#{raj_chip}[aria-pressed='false']")
+    assert_no_selector "[data-rater-id].opacity-30"
+    assert_not_includes page.current_url, "rater="
+    assert_includes page.current_url, "person=#{@report_1.id}"
   end
 
   test "facilitator flags an unclear expectation from the drill-in" do
