@@ -35,6 +35,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # The orientation row's rater-mean dots: not links, so they only need to
   # be legible — 22px discs, a lane each time two land within ~one disc.
   MEAN_LANE_NUDGE = 3.5
+  MEAN_LANE_NUDGE_NARROW = 12
   MEAN_LANE_HEIGHT = 26
   # A mark's coloured disc fades when its `group/dot` host is dimmed by the
   # rater filter (`data-dimmed`).
@@ -482,7 +483,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       div(class: "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-1") do
         div
         if @orientation
-          rater_means_axis(@orientation[:rater_means])
+          # Packed twice: discs ~one width apart share a lane, and that
+          # distance in % is four times larger on a phone's axis.
+          rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE_NARROW, visibility: "@3xl:hidden")
+          rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE, visibility: "hidden @3xl:block")
         else
           p(class: "self-center text-xs italic text-gray-600 dark:text-gray-300") do
             "Fewer than two raters have rated this capability — nothing to compare yet."
@@ -492,9 +496,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  def rater_means_axis(rater_means)
+  def rater_means_axis(rater_means, nudge:, visibility:)
     position = ->(stats_hash) { (12.5 + (stats_hash[:mean] * 25)).clamp(0, 100).round(1) }
-    placed = pack_lanes(rater_means.sort_by { |_, stats_hash| stats_hash[:mean] }, nudge: MEAN_LANE_NUDGE) do |(_, stats_hash)|
+    placed = pack_lanes(rater_means.sort_by { |_, stats_hash| stats_hash[:mean] }, nudge: nudge) do |(_, stats_hash)|
       position.call(stats_hash)
     end
     lanes = (placed.map(&:last).max || 0) + 1
@@ -502,7 +506,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       "#{rater_name(rater_id)} #{sprintf('%.1f', stats_hash[:mean])} (n #{stats_hash[:n]})"
     end.join(", ")
 
-    div(class: "relative min-w-0", style: "height: #{(lanes * MEAN_LANE_HEIGHT) + 4}px",
+    div(class: "relative min-w-0 #{visibility}",
+        style: "height: #{(lanes * MEAN_LANE_HEIGHT) + 4}px",
         role: "img", aria: { label: "#{@stats[:capability][:name]} rater means: #{summary}" }) do
       span(class: "absolute inset-x-0 top-[13px] h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700")
       FREQUENCY_POSITIONS.each_value do |left|
