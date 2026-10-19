@@ -8,7 +8,9 @@ require "test_helper"
 # and a bloated guide silently loses its end. Neither fails anything else.
 class AgentGuidanceTest < ActiveSupport::TestCase
   PER_FILE_LIMIT = 150_000
-  STARTUP_BUDGET = 150_000
+  # The root AGENTS.md loads into every session; most guidance belongs in a guide
+  # loaded on a predicate. See the note at the head of its Learnings.
+  STARTUP_BUDGET = 40_000
   # What opening a file in one directory may add on top of startup. A guide that
   # outgrows it splits by concern, as framework-explorer.md and assessments.md did.
   DIRECTORY_BUDGET = 100_000
@@ -72,7 +74,7 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   def relatives(paths) = paths.map { relative(it) }
 
   def instruction_files
-    (Rails.root.glob("**/{AGENTS,CLAUDE}.md") + STARTUP_FILES.map { root(it) })
+    (Rails.root.glob("{**/,.github/**/}{AGENTS,CLAUDE}.md") + STARTUP_FILES.map { root(it) })
       .select(&:exist?).reject { relative(it).match?(SKIPPED_DIRS) }.uniq
   end
 

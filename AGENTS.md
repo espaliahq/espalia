@@ -378,7 +378,7 @@ end
 
 ## Learnings
 
-> **CRITICAL**: Any important learnings, add them here.
+> **Add a learning here only when it matters in most sessions and no guide would be open at the moment it does.** Otherwise record it where its code lives: the guide the Planning work table names for that task, or the `AGENTS.md` of the directory it governs (`lib/`, `.github/`, `app/…`). Everything in this file loads into every session, and `test/integration/agent_guidance_test.rb` holds it to 40k characters.
 
 - **A delegated agent shares your working tree, your database and your dev server.** Subagents (the `Agent` tool, the `chrome-driver` agent, a `/code-review` angle) run in the SAME checkout as the session that launched them — there is no copy-on-write. So while one is working, do NOT `git checkout`, `git pull`, `git stash` or rebase in the orchestrating session: the agent's next `Read` or test run sees a tree it never asked for, and a half-applied rebase can be attributed to its edits. Same for `bin/dev` on port 6600 and the dev database — one browser driver at a time, and a seed reset while another agent is mid-flow invalidates its run. If you must work on another branch concurrently, use a throwaway `git worktree add /tmp/wt-<name> <branch>` (or launch the agent with `isolation: "worktree"`) and delete it afterwards; a second worktree needs its own database and ports ([dev-environment.md](docs/guidelines/dev-environment.md#a-second-worktree)). Read-only agents are safe to overlap; writers are not.
 - **The claude.ai GitHub MCP connector 404s on this private repo.** Use `gh` for issues, PRs, checks and review threads.
