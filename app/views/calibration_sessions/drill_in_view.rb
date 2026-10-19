@@ -1,16 +1,17 @@
 # frozen_string_literal: true
 
-# The capability drill-in — expectation text per level above a
-# rater × level dot grid, with a person card when a dot is opened.
+# The capability drill-in — one row per assessed level, its expectation
+# beside a frequency axis of the people assessed there, with a person card
+# when a dot is opened.
 #
 # The room sees who it is discussing: a dot carries the ratee's INITIALS
 # and their full name (tooltip + accessible name), and wall items show the
 # author and the text. There is no anonymisation layer — see
 # docs/architecture/calibration-sessions.md, "Naming".
-# Three signals on a dot, three primitives that never collide: colour =
-# frequency (the shared palette), fill = evidence backing (solid backed /
-# outlined unbacked), dashed edge = carried forward from the previous cycle
-# and unconfirmed.
+# Signals on a dot never collide: position = the rating, colour = who
+# rated it, fill = evidence backing (solid backed / outlined unbacked),
+# dashed edge = carried forward from the previous cycle and unconfirmed,
+# size = held in the comparison drawer.
 class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::Assessments::FrequencyPalette
   include Views::Evidence::Valence
@@ -18,8 +19,29 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::CalibrationSessions::RaterColours
   include Views::CalibrationSessions::ComparisonDrawerChrome
   include Views::CalibrationSessions::PeopleNames
+  include Views::CalibrationSessions::LanePacking
 
   UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
+
+  # Not yet / Some / Most / Consistently at 12.5 / 37.5 / 62.5 / 87.5 % —
+  # the board's 0–3 scale with half a band of margin at each end, so the
+  # rater means in the orientation row read off the same ticks.
+  FREQUENCY_POSITIONS = AssessmentLevelRating::FREQUENCIES.each_with_index
+    .to_h { |frequency, index| [ frequency, 12.5 + (index * 25) ] }.freeze
+  # One 44px tap target per lane, so lanes never overlap — and never
+  # narrower than one target per column, so neighbouring columns can't.
+  LANE_HEIGHT = 44
+  AXIS_COLUMNS = "grid-cols-[repeat(4,minmax(2.75rem,1fr))]"
+  # The orientation row's rater-mean dots: not links, so they only need to
+  # be legible — 22px discs, a lane each time two land within ~one disc.
+  MEAN_LANE_NUDGE = 3.5
+  MEAN_LANE_NUDGE_NARROW = 12
+  MEAN_LANE_HEIGHT = 26
+  # A mark's coloured disc fades when its `group/dot` host is dimmed by the
+  # rater filter (`data-dimmed`).
+  DIMMABLE = "group-data-[dimmed=true]/dot:opacity-30"
+  # Room above the track for the tick labels — the `h-[18px]` rows match.
+  TICK_LABEL_HEIGHT = 18
 
   # The ⓘ panel previews this many examples (across the level's calibrated
   # roles) — a reference glance, not a reading surface. The full list lives
@@ -41,11 +63,15 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # @param pinned_cards [Hash{String => Hash}] person_id => PersonCard data
   # @param can_flag [Boolean] whether the viewer can ⚑ flag an expectation
   #   as unclear (facilitator/admin AND the session is live)
+  # @param orientation [Hash, nil] this capability's divergence-board row,
+  #   `{ rater_means:, flagged: }`; nil when it has no comparable row
+  # @param rater_filter [String, nil] the participant whose marks stay at
+  #   full strength (`?rater=`); everyone else's dim
   def initialize(session:, stats:, people:, person_card:, can_flag: false,
                  person_focus_ordinal: nil, person_action: nil,
                  request_candidates: nil,
                  view: nil, wall: nil, wall_filters: {}, pin_ids: [], pinned_cards: {},
-                 session_log: nil, can_note: false,
+                 session_log: nil, can_note: false, orientation: nil, rater_filter: nil,
                  user: nil, current_tenant: nil, tenants: [])
     @session = session
     @stats = stats
@@ -56,6 +82,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @can_flag = can_flag
     @request_candidates = request_candidates
     @session_log = session_log
+    @orientation = orientation
+    @rater_filter = rater_filter
     @can_note = can_note
     @view = view
     @wall = wall
@@ -146,31 +174,35 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     end
   end
 
-  # One level's reference material — the column header's ⓘ menu: the
-  # canonical expectation, the role illustrations (each flaggable), and
-  # the cell's ⚑ flag affordance. What the "What good looks like" card
-  # used to show, now anchored to the column it describes.
-  def level_header_menu(ordinal)
+  # One level's reference material, under the expectation it illustrates:
+  # the role examples (each flaggable) and the cell's ⚑ flag affordance.
+  def level_menu(ordinal)
+    example_count = Array(@stats[:illustrations]&.dig(ordinal)).sum { |group| group[:items].size }
     render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
-      dropdown.trigger(label: "L#{ordinal} — expectation, examples, and flags") do
-        # 44px tap target (the visual glyph stays small) — this is the only
-        # route to the level's reference material. A DRAWN info glyph, not
-        # the ⓘ character: headless/minimal font stacks render that as tofu.
-        span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
-                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") do
-          span(class: "inline-flex h-4 w-4 items-center justify-center rounded-full border " \
+      dropdown.trigger do
+        # 44px tap target — the only route to the level's examples and
+        # flags. A DRAWN info glyph, not the ⓘ character: headless/minimal
+        # font stacks render that as tofu.
+        span(class: "inline-flex min-h-11 items-center gap-1.5 text-left text-xs font-medium " \
+                    "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white") do
+          span(class: "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border " \
                       "border-current text-[10px] font-serif italic leading-none",
                aria: { hidden: "true" }) { "i" }
+          plain "What good looks like"
+          plain " · Examples (#{example_count})" if example_count.positive?
+          span(class: "sr-only") { " at L#{ordinal}" }
         end
       end
-      dropdown.menu(width: "w-96", role: "dialog",
+      dropdown.menu(width: "w-[min(24rem,calc(100vw-2rem))]", role: "dialog",
                     label: "L#{ordinal} — what good looks like") do
         div(class: "px-3 py-2 text-left") do
           p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
             "L#{ordinal} — what good looks like"
           end
-          p(class: "mt-1 text-sm text-gray-900 dark:text-white whitespace-normal") do
-            @stats[:expectations][ordinal] || "No expectation defined at this level."
+          if example_count.zero?
+            p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+              "No examples for the roles calibrated at this level."
+            end
           end
           example_groups(ordinal, limit: EXAMPLE_PREVIEW_LIMIT)
           flag_affordance(ordinal)
@@ -328,112 +360,328 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       end
   end
 
+  # One row per assessed level: the level's expectation on the left, and
+  # its people on a frequency axis coloured by who rated them — the same
+  # grammar as Score by cohort and the divergence board (position = value,
+  # colour = rater). Same-level people are compared against the one
+  # expectation sentence beside them; levels never share an axis.
   def grid_card
-    # min-w-fit: on narrow screens the pane scrolls horizontally and the
-    # card must grow with its table instead of letting rows bleed past
-    # the card edge.
-    div(class: "mt-4 min-w-fit") do
-      render Components::Kit::Card.new do |card|
+    div(class: "mt-4") do
+      # Flush, with its own tighter padding on a phone: every pixel of a
+      # 375px axis goes to the four columns of 44px tap targets.
+      render Components::Kit::Card.new(variant: :flush) do |card|
         card.body do
-          div(class: "flex flex-wrap items-baseline justify-between gap-2") do
-            h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
-              "At-level ratings by rater"
-            end
-            div(class: "flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
-              defined_term(:backing, align: :right)
-              plain "· click a dot to discuss · pin up to #{MAX_PINS} to compare"
-            end
-          end
-
-          # No inner scroll: the surrounding pane is the ONE scroller, and
-          # the level headers stick to it (nesting a second vertical
-          # scroller here made the stickiness read as random).
-          div(class: "mt-3") do
-            table(class: "w-full text-sm") do
-              thead do
-                tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
-                  th(class: "sticky left-0 top-0 z-[3] bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium") do
-                    "Rater"
-                  end
-                  @stats[:ordinals].each do |ordinal|
-                    # has-[…]:z-30 — sibling sticky headers share a stacking
-                    # context, so a later column would paint THROUGH this
-                    # column's open ⓘ menu unless the host th out-ranks its
-                    # siblings while the menu is open.
-                    th(class: "sticky top-0 z-[2] has-[[aria-expanded=true]]:z-40 " \
-                              "bg-white dark:bg-gray-800 py-1.5 pr-3 font-medium",
-                       data: { level_menu: ordinal }) do
-                      div(class: "flex items-center gap-1") do
-                        span { "L#{ordinal}" }
-                        if @stats[:clarifications][ordinal].to_i.positive?
-                          # Scannable without opening the menu — "which
-                          # cells are already contested" was a one-glance
-                          # read on the old expectations card.
-                          span(class: "text-amber-700 dark:text-amber-300 font-semibold",
-                               title: "#{@stats[:clarifications][ordinal]} open clarification(s) on this level's expectation") do
-                            "⚑#{@stats[:clarifications][ordinal]}"
-                          end
-                        end
-                        level_header_menu(ordinal)
-                      end
-                    end
-                  end
-                end
-              end
-              tbody do
-                rated_rows.each { |row| grid_row(row) }
-                unrated_raters_row
+          # The container query, not the viewport: the session log panel
+          # takes width from this column on a wide screen.
+          div(class: "@container px-3 pb-3 sm:px-6 sm:pb-6",
+              data: { controller: "drill-in-filter", drill_in_filter_rater_value: @rater_filter.to_s }) do
+            grid_heading
+            rater_legend
+            orientation_row
+            if @stats[:ordinals].empty?
+              p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+                "Nobody in the population is enrolled at a level yet."
               end
             end
+            @stats[:ordinals].each do |ordinal|
+              level_row(ordinal, @stats[:levels].fetch(ordinal, []))
+            end
+            silent_raters_note
           end
-
-          frequency_legend
         end
       end
     end
   end
 
-  # Rows with at least one rated dot on THIS capability. A rater who hasn't
-  # touched it yet renders as one muted sentence instead of a full row of
-  # grey dots — a row of nothing reads as data on a projector, and the room
-  # only needs to know who is missing. Their people are named in it AS
-  # LINKS to their person cards: the unrated cell is precisely the "what
-  # did you see?" moment, and the card is where the evidence and the
-  # revisit ask live, so collapsing the row must never sever that path.
-  # The "other raters" reference row is exempt — context, not a
-  # participant being calibrated.
-  def rated_rows
-    @rated_rows ||= @stats[:rows].select do |row|
-      row[:rater_id].nil? || row_has_rating?(row)
+  def grid_heading
+    div(class: "flex flex-wrap items-baseline justify-between gap-2") do
+      h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        "At-level ratings by level"
+      end
+      p(class: "text-xs text-gray-600 dark:text-gray-300") do
+        "Click a rater to dim the others · click a dot to discuss · pin up to #{MAX_PINS} to compare"
+      end
+    end
+    p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+      "Each dot is a person, placed by the rating their manager gave at their own level " \
+        "and coloured by who rated them."
     end
   end
 
-  def row_has_rating?(row)
-    row[:people].values.flatten.any? { |dot| dot[:frequency] }
+  def rater_legend
+    # One scrolling line on a phone — twenty raters would otherwise push the
+    # first level a screen down — and wrapped where there is room.
+    div(class: "mt-2 -mx-1 flex items-center gap-x-2 overflow-x-auto px-1 @lg:flex-wrap " \
+              "text-xs text-gray-600 dark:text-gray-300") do
+      legend_rater_ids.each { |rater_id| legend_chip(rater_id) }
+      if all_dots.any? { |dot| dot[:rater_id].nil? }
+        span(class: "inline-flex shrink-0 items-center gap-1.5 px-1") do
+          span(class: "inline-block h-3 w-3 rounded-full #{NOT_IN_SESSION_FILL}", aria: { hidden: "true" })
+          plain "Rater not in session"
+        end
+      end
+    end
+    div(class: "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+      defined_term(:backing, align: :right)
+      span(class: "inline-flex items-center gap-1.5") do
+        span(class: "inline-block h-3 w-3 rounded-full border-2 border-dashed " \
+                    "border-gray-600 dark:border-gray-300", aria: { hidden: "true" })
+        plain "Dashed = carried from last cycle"
+      end
+    end
   end
 
-  def unrated_raters_row
-    missing = @stats[:rows].reject { |row| rated_rows.include?(row) }
+  # Raters with at least one rating on this capability, in session order.
+  # A silent rater is named in the sentence under the grid instead — a
+  # swatch would promise a dot that exists on no axis.
+  def legend_rater_ids
+    @stats[:rater_ids].select { |rater_id| rated_rater_ids.include?(rater_id) }
+  end
+
+  # A toggle: dims every other rater's marks, still clickable; pressed
+  # again, it clears. The state is `?rater=` (drill-in-filter).
+  def legend_chip(rater_id)
+    # A 44px hit area around a compact pill; focus uses the global
+    # :focus-visible ring (a teal ring fails 3:1 on white).
+    button(
+      type: "button",
+      class: "group inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-full",
+      aria: { pressed: (rater_id == @rater_filter).to_s },
+      title: "Show only #{rater_name(rater_id)}'s ratings — click again to show everyone",
+      data: { action: "drill-in-filter#toggle", drill_in_filter_rater_param: rater_id }
+    ) do
+      span(class: "inline-flex min-h-7 items-center gap-1.5 whitespace-nowrap rounded-full border " \
+                  "border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white " \
+                  "group-hover:bg-gray-50 dark:group-hover:bg-gray-700 group-aria-pressed:border-gray-900 " \
+                  "group-aria-pressed:font-semibold dark:group-aria-pressed:border-white") do
+        span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
+             aria: { hidden: "true" })
+        plain rater_name(rater_id)
+      end
+    end
+  end
+
+  # This capability's divergence-board row — usually the one the room
+  # clicked to get here: each rater's mean on it across every level, on the
+  # same 0–3 ticks as the level rows below, with the ⚠ badge when the board
+  # flags it.
+  def orientation_row
+    div(
+      class: "mt-4 grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
+             "border-t border-gray-100 dark:border-gray-700 py-4",
+      data: { orientation_row: "true" }
+    ) do
+      div(class: "min-w-0 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "flex flex-wrap items-center gap-x-1") do
+          plain "All levels · each rater's"
+          defined_term(:rater_mean)
+        end
+        p(class: "-mt-2") { "This capability's row on the divergence board." } if @orientation
+        if @orientation&.dig(:flagged)
+          div(class: "mt-1") do
+            defined_term(:raters_disagree, suffix: @stats[:capability][:stable_id],
+                         trigger_class: BADGE_TRIGGER)
+          end
+        end
+      end
+      div(class: "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-1") do
+        div
+        if @orientation
+          # Packed twice: discs ~one width apart share a lane, and that
+          # distance in % is four times larger on a phone's axis.
+          rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE_NARROW, visibility: "@3xl:hidden")
+          rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE, visibility: "hidden @3xl:block")
+        else
+          p(class: "self-center text-xs italic text-gray-600 dark:text-gray-300") do
+            "Fewer than two raters have rated this capability — nothing to compare yet."
+          end
+        end
+      end
+    end
+  end
+
+  def rater_means_axis(rater_means, nudge:, visibility:)
+    position = ->(stats_hash) { (12.5 + (stats_hash[:mean] * 25)).clamp(0, 100).round(1) }
+    placed = pack_lanes(rater_means.sort_by { |_, stats_hash| stats_hash[:mean] }, nudge: nudge) do |(_, stats_hash)|
+      position.call(stats_hash)
+    end
+    lanes = (placed.map(&:last).max || 0) + 1
+    summary = rater_means.map do |rater_id, stats_hash|
+      "#{rater_name(rater_id)} #{sprintf('%.1f', stats_hash[:mean])} (n #{stats_hash[:n]})"
+    end.join(", ")
+
+    div(class: "relative min-w-0 #{visibility}",
+        style: "height: #{(lanes * MEAN_LANE_HEIGHT) + 4}px",
+        role: "img", aria: { label: "#{@stats[:capability][:name]} rater means: #{summary}" }) do
+      span(class: "absolute inset-x-0 top-[13px] h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700")
+      FREQUENCY_POSITIONS.each_value do |left|
+        span(class: "absolute top-[13px] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full " \
+                    "bg-gray-300 dark:bg-gray-600", style: "left: #{left}%")
+      end
+      placed.each do |(rater_id, stats_hash), lane|
+        index = rater_index(rater_id)
+        div(
+          class: "group/dot absolute -translate-x-1/2 rounded-full bg-white dark:bg-gray-800",
+          style: "left: #{position.call(stats_hash)}%; top: #{2 + (lane * MEAN_LANE_HEIGHT)}px",
+          title: "#{rater_name(rater_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})",
+          data: { rater_id: rater_id, dimmed: dimmed(rater_id) }
+        ) do
+          span(class: "flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 " \
+                      "border-white dark:border-gray-800 text-[10px] font-semibold #{DIMMABLE} " \
+                      "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}") do
+            initials(rater_name(rater_id))
+          end
+        end
+      end
+    end
+  end
+
+  def level_row(ordinal, dots)
+    shown = dots.reject { |dot| silent_rater_ids.include?(dot[:rater_id]) }
+      .sort_by { |dot| [ rater_order(dot), dot[:name] ] }
+    unrated, rated = shown.partition { |dot| dot[:frequency].nil? }
+
+    div(
+      class: "grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
+             "border-t border-gray-100 dark:border-gray-700 py-4",
+      role: "group", aria: { label: "L#{ordinal} — #{level_count(dots.size, dots.size - shown.size)}" },
+      data: { level_row: ordinal }
+    ) do
+      level_header(ordinal, dots.size, dots.size - shown.size)
+      # The unrated slot is reserved on every row, so the ticks share one x
+      # down the whole card and same-frequency dots line up vertically.
+      div(class: "grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-1") do
+        unrated_slot(ordinal, unrated)
+        frequency_axis(ordinal, rated.group_by { |dot| dot[:frequency] })
+      end
+    end
+  end
+
+  # "5 people · 2 named below" — the people of a rater who hasn't rated
+  # this capability are in the sentence under the grid, not on the row.
+  def level_count(count, elsewhere)
+    text = "#{count} #{'person'.pluralize(count)}"
+    elsewhere.positive? ? "#{text} · #{elsewhere} named below" : text
+  end
+
+  def level_header(ordinal, count, elsewhere)
+    div(class: "min-w-0", data: { level_menu: ordinal }) do
+      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
+        span(class: "rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 " \
+                    "px-2 py-0.5 text-xs font-bold text-gray-900 dark:text-white") { "L#{ordinal}" }
+        span(class: "text-xs text-gray-600 dark:text-gray-300") { level_count(count, elsewhere) }
+        clarifications = @stats[:clarifications][ordinal].to_i
+        if clarifications.positive?
+          # Scannable without opening the menu — "which levels are already
+          # contested" is a one-glance read.
+          span(class: "text-xs font-semibold text-amber-700 dark:text-amber-300",
+               title: "#{clarifications} open #{'clarification'.pluralize(clarifications)} " \
+                      "on this level's expectation") { "⚑#{clarifications}" }
+        end
+      end
+      p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") do
+        @stats[:expectations][ordinal] || "No expectation defined at this level."
+      end
+      level_menu(ordinal)
+    end
+  end
+
+  # People nobody has rated yet sit OFF the axis: an absence is not a value.
+  def unrated_slot(ordinal, dots)
+    div(class: "min-w-0") do
+      next if dots.empty?
+
+      p(class: "h-[18px] text-center text-[10px] leading-none " \
+               "text-gray-600 dark:text-gray-300") { "Unrated" }
+      div(class: "flex flex-col items-center") do
+        dots.each { |dot| render_dot(dot, ordinal) }
+      end
+    end
+  end
+
+  # Four equal columns, one per frequency, so each column's centre IS its
+  # tick (12.5 / 37.5 / 62.5 / 87.5 %). Same-frequency dots wrap inside
+  # their column: as many abreast as its width holds 44px tap targets,
+  # then a further lane below — tap targets never overlap, and a phone
+  # stacks one per lane where a projector fits four.
+  def frequency_axis(ordinal, dots_by_frequency)
+    track_y = TICK_LABEL_HEIGHT + (LANE_HEIGHT / 2)
+    div(class: "relative min-w-0") do
+      # The ticks and their labels are the legend; each dot's accessible
+      # name carries its rating, so this layer is hidden from assistive tech.
+      div(aria: { hidden: "true" }) do
+        div(class: "grid #{AXIS_COLUMNS} h-[18px] text-center text-[10px] leading-none " \
+                   "text-gray-600 dark:text-gray-300") do
+          FREQUENCY_POSITIONS.each_key do |frequency|
+            config = CONFIG.fetch(frequency)
+            span(class: "whitespace-nowrap") do
+              span(class: "hidden @lg:inline") { config[:phrase] }
+              span(class: "@lg:hidden") { config[:label] }
+            end
+          end
+        end
+        span(class: "absolute inset-x-0 h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700",
+             style: "top: #{track_y}px")
+        FREQUENCY_POSITIONS.each do |frequency, left|
+          span(class: "absolute bottom-0 w-px -translate-x-1/2 bg-gray-100 dark:bg-gray-700",
+               style: "left: #{left}%; top: #{track_y}px")
+          span(class: "absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full " \
+                      "#{CONFIG.fetch(frequency)[:dot]}",
+               style: "left: #{left}%; top: #{track_y}px")
+        end
+      end
+      div(class: "relative grid #{AXIS_COLUMNS}") do
+        FREQUENCY_POSITIONS.each_key do |frequency|
+          div(class: "flex min-h-11 min-w-0 flex-wrap content-start justify-center",
+              data: { frequency: frequency }) do
+            Array(dots_by_frequency[frequency]).each { |dot| render_dot(dot, ordinal) }
+          end
+        end
+      end
+    end
+  end
+
+  def all_dots
+    @all_dots ||= @stats[:levels].values.flatten
+  end
+
+  def rated_rater_ids
+    @rated_rater_ids ||= all_dots.select { |dot| dot[:frequency] }.filter_map { |dot| dot[:rater_id] }.to_set
+  end
+
+  # A rater with nothing rated on THIS capability renders as one muted
+  # sentence instead of a scatter of unrated dots — on a projector a slot
+  # full of nothing reads as data, and the room only needs to know who is
+  # missing. The "rater not in session" group is exempt: context, not a
+  # participant being calibrated.
+  def silent_rater_ids
+    @silent_rater_ids ||= (@stats[:rater_ids] - rated_rater_ids.to_a).to_set
+  end
+
+  # Their people are named AS LINKS to their person cards: the unrated cell
+  # is precisely the "what did you see?" moment, and the card is where the
+  # evidence and the revisit ask live, so collapsing them must never sever
+  # that path.
+  def silent_raters_note
+    missing = @stats[:rater_ids].select { |rater_id| silent_rater_ids.include?(rater_id) }
     return if missing.empty?
 
-    tr(class: "border-t border-gray-100 dark:border-gray-800") do
-      td(class: "py-2.5 text-sm italic text-gray-600 dark:text-gray-300",
-         colspan: @stats[:ordinals].size + 1) do
-        missing.each_with_index do |row, index|
-          plain ", " if index.positive?
-          plain "#{rater_label(row)} hasn't rated this capability yet"
-          people = row[:people].values.flatten
-          next if people.empty?
+    p(class: "border-t border-gray-100 dark:border-gray-700 pt-3 text-sm italic text-gray-600 dark:text-gray-300",
+      data: { silent_raters: "true" }) do
+      missing.each_with_index do |rater_id, index|
+        plain ", " if index.positive?
+        plain "#{rater_name(rater_id)} hasn't rated this capability yet"
+        people = all_dots.select { |dot| dot[:rater_id] == rater_id }
+        next if people.empty?
 
-          plain " ("
-          people.each_with_index do |dot, person_index|
-            plain ", " if person_index.positive?
-            unrated_person_link(dot)
-          end
-          plain ")"
+        plain " ("
+        people.each_with_index do |dot, person_index|
+          plain ", " if person_index.positive?
+          unrated_person_link(dot)
         end
-        plain "."
+        plain ")"
       end
+      plain "."
     end
   end
 
@@ -449,121 +697,98 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     ) { dot[:name] }
   end
 
-  def grid_row(row)
-    tr(class: "border-t border-gray-100 dark:border-gray-800 #{'opacity-60' unless row[:in_session]}") do
-      # Sticky-left like the explorer's matrix: the grid scrolls sideways on
-      # a narrow viewport, and a scrolled-away rater name makes the dots
-      # unattributable.
-      td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-800 py-2 pr-3 whitespace-nowrap") do
-        span(class: "font-medium text-gray-900 dark:text-white") { rater_label(row) }
-        unless row[:in_session]
-          span(class: "ml-2 text-xs text-gray-600 dark:text-gray-300") { "(not in session)" }
-        end
-      end
-      @stats[:ordinals].each do |ordinal|
-        td(class: "py-2 pr-3") do
-          div(class: "flex flex-wrap items-center") do
-            (row[:people][ordinal] || []).each { |dot| render_dot(dot, ordinal) }
-          end
-        end
-      end
-    end
-  end
-
-  # The dot carries the member's INITIALS — a grid of unlabelled dots can't
-  # be discussed ("which one is that?"), and the divergence board already
-  # initials its rater dots. The full name rides the tooltip and the
-  # accessible name.
+  # The dot carries the member's INITIALS — a field of unlabelled dots
+  # can't be discussed ("which one is that?"). The full name, the rating
+  # and the rater ride the tooltip and the accessible name, so neither
+  # position nor colour is ever the only carrier.
   def render_dot(dot, ordinal)
     base = dot_description(dot, ordinal)
     selected = dot[:person_id] == opened_person_id
     pinned = @pin_ids.include?(dot[:person_id])
-    base += " Currently open in the comparison." if selected
-    base += " Pinned to the comparison." if pinned
+    label = base
+    label += ". Currently open in the comparison" if selected
+    label += ". Pinned to the comparison" if pinned
     a(
       # Opening a dot returns to the person-card view but keeps the pins —
       # the room browses dots mid-comparison without losing the tray. The
       # grid sits OUTSIDE the pane frame, so this href freezes at whatever
       # the pins and filters were on page load; `pane_keep_state` tells the
       # pane controller to merge the live values in at click time.
-      href: drill_in_path(view: nil, person: dot[:person_id], pins: [],
-                          filters: {}),
-      class: "inline-flex h-11 w-11 items-center justify-center",
-      title: dot[:name],
-      # Initials are the compact label; the accessible name carries the
-      # person, since "BA" tells a screen-reader user nothing.
-      aria: { label: "#{dot[:name]} — #{base}. Open to discuss." },
-      data: { pane_keep_state: "true", person_id: dot[:person_id] }
+      href: drill_in_path(view: nil, person: dot[:person_id], pins: [], filters: {}),
+      class: "group/dot relative inline-flex h-11 w-11 shrink-0 items-center justify-center",
+      title: "#{dot[:name]} — #{base}",
+      aria: { label: "#{dot[:name]} — #{label}. Open to discuss." },
+      data: { pane_keep_state: "true", person_id: dot[:person_id], rater_id: dot[:rater_id].to_s,
+              dimmed: dimmed(dot[:rater_id]) }
     ) do
-      # ONE affordance for "in the drawer" — anyone held there (inspected
-      # OR pinned) reads by SIZE (1.5×), same vocabulary as the cohort axis.
-      span(
-        class: "inline-flex items-center justify-center rounded-full " \
-               "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-               "font-semibold #{dot_classes(dot)}"
-      ) { initials(dot[:name]) }
+      # An opaque disc under the dot, so a dimmed dot fades into the card
+      # rather than showing the track and ticks through it.
+      span(class: "inline-flex rounded-full bg-white dark:bg-gray-800") do
+        # ONE affordance for "in the drawer" — anyone held there (inspected
+        # OR pinned) reads by SIZE (1.5×), same vocabulary as Score by cohort.
+        span(
+          class: "inline-flex items-center justify-center rounded-full " \
+                 "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
+                 "font-semibold #{DIMMABLE} #{dot_classes(dot)}"
+        ) { initials(dot[:name]) }
+      end
     end
   end
 
-  # Two letters, uppercased — the divergence board's convention.
-  # Backed = solid fill, unbacked = outline (the backing signal is shape,
-  # never colour). The initials sit on both, so each branch also picks a
-  # text colour that clears AA against its own background.
-  #
-  # Solid dots use near-black rather than the palette's per-hue `chip_txt`:
-  # at 10px these are small text needing 4.5:1, and hue-950 on hue-500 only
-  # reaches ~4.0:1 on blue and ~4.3:1 on red. Near-black clears all four
-  # fills in both modes.
   # Three independent signals, three primitives that never collide:
-  # hue = frequency, fill = evidence backing (solid / outlined), and a
-  # DASHED edge = carried forward from the previous cycle, unconfirmed —
-  # the same "dashed means carried" vocabulary the assessment chips and
-  # pills use (see FrequencyPalette). A carried backed dot also drops to the
-  # lighter `chip_carried` tint, mirroring lighter = inherited.
+  # hue = WHO rated (the shared rater palette, grey for a rater outside the
+  # session), fill = evidence backing (solid / outlined in the rater's
+  # hue), and a DASHED edge = carried forward from the previous cycle,
+  # unconfirmed — the "dashed means carried" vocabulary the assessment
+  # chips and pills use. An unrated person is a hollow grey dot.
   def dot_classes(dot)
-    return "#{UNRATED_DOT} text-gray-600 dark:text-gray-300" unless dot[:frequency]
+    return "#{UNRATED_DOT} bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300" unless dot[:frequency]
 
-    config = CONFIG.fetch(dot[:frequency])
-    if dot[:backed] && dot[:carried]
-      "#{config[:chip_carried]} border-2 #{config[:chip_carried_border]} text-gray-950"
-    elsif dot[:backed]
-      "#{config[:chip_bg]} text-gray-950"
+    index = rater_index(dot[:rater_id])
+    if dot[:backed]
+      fill = index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : "#{NOT_IN_SESSION_FILL} text-white dark:text-gray-900"
+      edge = dot[:carried] ? "border-dashed border-gray-900 dark:border-white" : "border-white dark:border-gray-800"
+      "#{fill} border-2 #{edge}"
     else
-      # Outline from the shared palette so an unbacked dot's hue can never
-      # drift from the chips/pills for the same frequency.
-      "border-2 #{config[:border]} #{'border-dashed' if dot[:carried]} " \
+      edge = index ? rater_border_class(index) : NOT_IN_SESSION_BORDER
+      "bg-white dark:bg-gray-800 border-2 #{edge} #{'border-dashed' if dot[:carried]} " \
         "text-gray-900 dark:text-white"
     end
   end
 
   # Carried state must be conveyed non-visually too — the dashed edge is
-  # decoration-only (FrequencyPalette's rule).
+  # decoration-only (FrequencyPalette's rule); so must the rater, now that
+  # colour carries it.
   def dot_description(dot, ordinal)
     rating = dot[:frequency] ? CONFIG.fetch(dot[:frequency])[:phrase] : "unrated"
     backing = dot[:backed] ? "evidence attached" : "no evidence"
     parts = [ "L#{ordinal}", rating, backing ]
     parts << "carried forward from the previous cycle" if dot[:carried]
+    parts << if dot[:rater_id].nil?
+      "rater not in this session"
+    elsif dot[:frequency]
+      "rated by #{rater_name(dot[:rater_id])}"
+    else
+      "awaiting #{rater_name(dot[:rater_id])}"
+    end
     parts.join(" · ")
   end
 
-  def frequency_legend
-    div(class: "mt-4 flex flex-wrap gap-x-4 gap-y-1") do
-      CONFIG.each do |_freq, config|
-        div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-          span(class: "inline-block h-3 w-3 rounded-full #{config[:chip_bg]}", aria: { hidden: "true" })
-          plain config[:phrase]
-        end
-      end
-      div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-        span(class: "inline-block h-3 w-3 rounded-full #{UNRATED_DOT}", aria: { hidden: "true" })
-        plain "Unrated"
-      end
-      div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-        span(class: "inline-block h-3 w-3 rounded-full border-2 border-dashed " \
-                    "border-gray-500 dark:border-gray-400", aria: { hidden: "true" })
-        plain "Carried from last cycle"
-      end
-    end
+  # nil for a rater outside the session — their dot must NOT wear rater #1's
+  # colour (a misattributed hue is worse than none).
+  def rater_index(rater_id)
+    @rater_index ||= @stats[:rater_ids].each_with_index.to_h
+    @rater_index[rater_id]
+  end
+
+  # Under a rater filter everyone else dims — still there, still clickable.
+  # drill-in-filter flips the same attribute on a click.
+  def dimmed(rater_id)
+    (@rater_filter && rater_id != @rater_filter).to_s
+  end
+
+  def rater_order(dot)
+    rater_index(dot[:rater_id]) || @stats[:rater_ids].size
   end
 
   # ── Bottom pane: the evidence wall toggle + the comparison drawer ──
@@ -634,6 +859,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     query[:wall_level] = filters[:level] if filters[:level]
     query[:wall_valence] = filters[:valence] if filters[:valence]
     query[:wall_rater] = filters[:rater_id] if filters[:rater_id]
+    query[:rater] = @rater_filter if @rater_filter
     calibration_session_capability_path(@session, @stats[:capability][:stable_id], query)
   end
 
@@ -666,7 +892,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     @pin_ids.each { |id| input(type: "hidden", name: "pins[]", value: id, data: tag) }
     input(type: "hidden", name: "view", value: @view, data: tag) if @view
     { wall_level: @wall_filters[:level], wall_valence: @wall_filters[:valence],
-      wall_rater: @wall_filters[:rater_id] }.each do |name, value|
+      wall_rater: @wall_filters[:rater_id], rater: @rater_filter }.each do |name, value|
       input(type: "hidden", name: name.to_s, value: value, data: tag) if value.present?
     end
   end
@@ -1113,7 +1339,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         class: "mt-2 max-w-lg space-y-2",
         # Breaks out of the pane frame so the flash — success or refusal —
         # renders in the layout (the revisit form's rule).
-        data: { turbo_frame: "_top" }
+        # stampState: the grid's rater filter can change after this frame
+        # rendered, without a request, so the carried state is read at submit.
+        data: { turbo_frame: "_top", action: "submit->calibration-pane#stampState" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
@@ -1183,7 +1411,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         # alert when the ask is rejected — renders in the layout OUTSIDE the
         # frame, so a frame-scoped submit would swallow it and the failure
         # would look like nothing happened.
-        data: { turbo_frame: "_top" }
+        # stampState: the grid's rater filter can change after this frame
+        # rendered, without a request, so the carried state is read at submit.
+        data: { turbo_frame: "_top", action: "submit->calibration-pane#stampState" }
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "person_id", value: @person_card[:dot][:person_id])
@@ -1270,10 +1500,6 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       end
       p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") { Prose.to_plain(item[:content]).truncate(280) }
     end
-  end
-
-  def rater_label(row)
-    row[:rater_id] ? rater_name(row[:rater_id]) : "Other raters"
   end
 
   def rater_name(rater_id)

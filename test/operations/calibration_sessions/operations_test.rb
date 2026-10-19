@@ -225,6 +225,111 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
     end
   end
 
+  context "Archive and Unarchive" do
+    setup do
+      @session_id = define![:session_id]
+      Operations::CalibrationSessions::Close.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+    end
+
+    should "archive a closed session, hide it from List, and restore it" do
+      result = Operations::CalibrationSessions::Archive.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+      assert_equal({ session_id: @session_id, archived: true }, result)
+      session = CalibrationSession.find(@session_id)
+      assert session.archived?
+      assert_equal @dept_head.id, session.archived_by_id
+      got = Operations::CalibrationSessions::Get.call(context: @facilitator_context, params: { session_id: @session_id })
+      assert_not_nil got[:archived_at], "Get says the session is archived"
+
+      listed = Operations::CalibrationSessions::List.call(context: @facilitator_context, params: {})
+      assert_empty listed[:sessions]
+      listed = Operations::CalibrationSessions::List.call(
+        context: @facilitator_context, params: { include_archived: true }
+      )
+      assert_equal [ @session_id ], listed[:sessions].map { |s| s[:session_id] }
+      assert_not_nil listed[:sessions].first[:archived_at]
+
+      Operations::CalibrationSessions::Unarchive.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+      assert_not session.reload.archived?
+      assert_equal "closed", session.status
+    end
+
+    should "treat a repeated archive as a no-op" do
+      2.times do
+        Operations::CalibrationSessions::Archive.call(
+          context: @facilitator_context, params: { session_id: @session_id }
+        )
+      end
+      stream = EventStreamNaming.calibration_session_stream(@session_id)
+      archived = Rails.configuration.event_store.read.stream(stream)
+        .of_type(AssessmentCycles::Events::CalibrationSessionArchived).count
+      assert_equal 1, archived
+    end
+
+    should "deny archiving a session that isn't closed" do
+      live_id = define!(name: "Still live")[:session_id]
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Archive.call(
+          context: @facilitator_context, params: { session_id: live_id }
+        )
+      end
+    end
+
+    should "deny a participant" do
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Archive.call(
+          context: context_for(@em_1), params: { session_id: @session_id }
+        )
+      end
+    end
+  end
+
+  context "Rename" do
+    setup { @session_id = define![:session_id] }
+
+    should "rename with the stripped name and record the previous one" do
+      result = Operations::CalibrationSessions::Rename.call(
+        context: @facilitator_context, params: { session_id: @session_id, name: "  Engineering · H2  " }
+      )
+      assert_equal({ session_id: @session_id, name: "Engineering · H2" }, result)
+
+      event = Rails.configuration.event_store.read
+        .stream(EventStreamNaming.calibration_session_stream(@session_id))
+        .of_type(AssessmentCycles::Events::CalibrationSessionRenamed).last
+      assert_equal "Engineering calibration", event.data[:previous_name]
+      assert_equal @dept_head.id, event.data[:renamed_by_id]
+    end
+
+    should "rename a closed session" do
+      Operations::CalibrationSessions::Close.call(context: @facilitator_context, params: { session_id: @session_id })
+      Operations::CalibrationSessions::Rename.call(
+        context: @facilitator_context, params: { session_id: @session_id, name: "Done" }
+      )
+      assert_equal "Done", CalibrationSession.find(@session_id).name
+    end
+
+    should "reject a blank name at the parameter boundary" do
+      assert_raises(Operations::Base::ParameterError) do
+        Operations::CalibrationSessions::Rename.call(
+          context: @facilitator_context, params: { session_id: @session_id, name: "" }
+        )
+      end
+    end
+
+    should "deny a participant" do
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Rename.call(
+          context: context_for(@em_1), params: { session_id: @session_id, name: "Mine now" }
+        )
+      end
+    end
+  end
+
   context "List and Get" do
     setup { @session_id = define![:session_id] }
 
@@ -276,6 +381,20 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
       assert_equal @session_id, result[:session_id]
       assert_equal [ "Mia Manager", "Raj Rater" ], result[:raters].map { |r| r[:name] }.sort
       assert result.key?(:capabilities)
+    end
+
+    should "carry readiness as cell coverage, per rater and for the population" do
+      result = Operations::CalibrationSessions::Overview.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+
+      rater = result[:raters].first
+      %i[cell_total coverage_pct carried_pct evidence_coverage_pct ready_state evidence_pct].each do |key|
+        assert rater.key?(key), "rater rows carry #{key}"
+      end
+      %i[cell_total coverage_pct carried_pct evidence_coverage_pct ready_state reference].each do |key|
+        assert result[:readiness].key?(key), "readiness carries #{key}"
+      end
     end
 
     should "carry the level cohorts with names and the coverage gate intact" do

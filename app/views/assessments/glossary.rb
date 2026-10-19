@@ -8,7 +8,7 @@
 # says 80% where the framework says 75% is worse than no copy at all.
 #
 # The wording rules, and why each exists, are in
-# docs/guidelines/assessments.md; glossary_test.rb enforces them.
+# docs/guidelines/assessments/scoring.md; glossary_test.rb enforces them.
 class Views::Assessments::Glossary
   # Shared with the calibration cohort view, whose axis spans people at
   # different levels, so no single code is true for the column. Everywhere a

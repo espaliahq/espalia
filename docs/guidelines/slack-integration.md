@@ -9,8 +9,8 @@
 
 **Outbound** is notifications: `SlackDeliveryMethod` DMs a Noticed
 notification to its recipient over the tenant's workspace, after the in-app
-copy has had its minute to be read ([assessments.md → Comment
-notifications](assessments.md)). **Inbound** is the feedback modal: the
+copy has had its minute to be read ([assessments/evidence.md → Comment
+notifications](assessments/evidence.md)). **Inbound** is the feedback modal: the
 `/growthos feedback` slash command and the "Feedback on this message"
 shortcut open it, and its submission records evidence as the Slack user.
 
@@ -114,7 +114,7 @@ content, type, and an optional capability with its valence. **A capability
 alone means the recipient's current level** — a phone-sized modal has no room
 for a level ladder, and leaving it blank records the item unplaced for the
 recipient or their manager to place, exactly as on the web
-([assessments.md → Proactive feedback](assessments.md)). The capability list
+([assessments/evidence.md → Proactive feedback](assessments/evidence.md)). The capability list
 is the first framework's, capped at Slack's 100 options; a cell the
 recipient's role has no expectation at comes back as a form error, not a
 failed write. The message shortcut prefills the text and keeps the message's

@@ -12,9 +12,10 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
     # Each key is rendered by a view today; dropping one silently would
     # raise KeyError at render, so pin the set here where it's cheap.
     expected = %i[
-      org_mean reports org_delta distribution self_gap evidence carried
+      org_mean rater_mean reports org_delta distribution self_gap carried
       spread raters_disagree backing to_confirm
       pct_of_expected cohort_median score_gate
+      rated_cells rating_coverage evidence_coverage ready fully_rated
     ]
 
     assert_equal expected.sort, TERMS.keys.sort
@@ -35,6 +36,8 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
                  "a cell the report never self-rated has no gap to average")
     assert_match(/assessed level/, TERMS[:org_mean][:definition],
                  "the org mean pools at-level cells, not rater means")
+    assert_match(/every cell/, TERMS[:evidence_coverage][:definition],
+                 "evidence coverage is over all at-level cells, the rating-coverage scale")
   end
 
   should "give a repeated term a distinct id per instance" do

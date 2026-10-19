@@ -73,6 +73,10 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     ).call
   end
 
+  def dot(result, person)
+    result[:levels].values.flatten.find { |d| d[:person_id] == person.id }
+  end
+
   should "return nil for a capability outside the framework" do
     assert_nil stats(stable_id: SecureRandom.uuid_v7)
   end
@@ -86,7 +90,7 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     assert_match(/team direction/, result[:expectations][4])
   end
 
-  should "place each member at (their rater, their assessed level) with rating + backing" do
+  should "place each member at their assessed level with their rater, rating + backing" do
     create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
            person_id: @r1.id, framework_id: @framework_id,
            capability_stable_id: @cap.stable_id, level_ordinal: 3,
@@ -96,40 +100,53 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
            capability_stable_id: @cap.stable_id, level_ordinal: 3)
 
     result = stats
-    mia_row = result[:rows].find { |row| row[:rater_id] == @em_1.id }
-    dot = mia_row[:people][3].first
+    ivy = result[:levels][3].find { |d| d[:person_id] == @r1.id }
 
-    assert_equal @r1.id, dot[:person_id]
-    assert_equal "Ivy", dot[:name]
-    assert_equal "consistent", dot[:frequency]
-    assert_equal "occasional", dot[:self_frequency]
-    assert dot[:backed]
+    assert_equal "Ivy", ivy[:name]
+    assert_equal @em_1.id, ivy[:rater_id]
+    assert_equal "consistent", ivy[:frequency]
+    assert_equal "occasional", ivy[:self_frequency]
+    assert ivy[:backed]
+    assert_equal [ @em_1.id, @em_2.id ], result[:rater_ids], "participants, in session order"
+  end
+
+  should "group each level's members by name, levels in order" do
+    result = stats
+
+    assert_equal [ 3, 4 ], result[:levels].keys
+    assert_equal [ "Ivy", "Ref Point" ], result[:levels][3].map { |d| d[:name] }
+    assert_equal [ "Omar" ], result[:levels][4].map { |d| d[:name] }
   end
 
   should "ignore ratings outside the assessed role" do
     rating = create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3)
 
-    mia_row = stats(stable_id: rating.capability_stable_id)[:rows].find { |row| row[:rater_id] == @em_1.id }
-    assert_nil mia_row[:people][3].sole[:frequency]
+    assert_nil dot(stats(stable_id: rating.capability_stable_id), @r1)[:frequency]
   end
 
   should "render unrated members as frequency-nil dots" do
-    result = stats
-    raj_row = result[:rows].find { |row| row[:rater_id] == @em_2.id }
-    dot = raj_row[:people][4].first
+    omar = dot(stats, @r2)
 
-    assert_equal "Omar", dot[:name]
-    assert_nil dot[:frequency]
-    assert_not dot[:backed]
+    assert_equal "Omar", omar[:name]
+    assert_equal @em_2.id, omar[:rater_id]
+    assert_nil omar[:frequency]
+    assert_not omar[:backed]
   end
 
-  should "group members with out-of-session raters into a trailing nil row" do
-    result = stats
-    other_row = result[:rows].last
+  should "leave the rater nil for a member whose rater is not in the session" do
+    assert_nil dot(stats, @ref)[:rater_id]
+  end
 
-    assert_nil other_row[:rater_id]
-    assert_not other_row[:in_session]
-    assert_equal [ "Ref Point" ], other_row[:people][3].map { |d| d[:name] }
+  should "attribute through the request's PopulationSeeds when one is passed" do
+    seeds = CalibrationSessions::PopulationSeeds.new(
+      framework_id: @framework_id, participant_ids: [ @em_1.id, @em_2.id ],
+      facilitator_id: @dept_head.id
+    )
+    result = CalibrationSessions::DrillInStats.new(
+      session: @session, capability_stable_id: @cap.stable_id, population_seeds: seeds
+    ).call
+
+    assert_equal @em_1.id, dot(result, @r1)[:rater_id]
   end
 
   should "ignore ratings at a different level than the assessed one" do
@@ -138,8 +155,7 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
            capability_stable_id: @cap.stable_id, level_ordinal: 5,
            manager_rated_frequency: "consistent")
 
-    dot = stats[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
-    assert_nil dot[:frequency]
+    assert_nil dot(stats, @r1)[:frequency]
   end
 
   context "illustrations" do
@@ -205,7 +221,7 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
     CalibrationSessions::DrillInStats.new(
       session: @session, capability_stable_id: @cap.stable_id,
       visible_person_ids: visible
-    ).call[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
+    ).call[:levels][3].find { |d| d[:person_id] == @r1.id }
   end
 
   context "assessee entitlement" do
@@ -239,9 +255,9 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
              capability_stable_id: @cap.stable_id, level_ordinal: 3,
              manager_rated_frequency: "consistent", manager_rating_source: "seeded")
 
-      dot = stats[:rows].find { |row| row[:rater_id] == @em_1.id }[:people][3].first
-      assert dot[:carried], "a seeded manager rating is carried"
-      assert_equal "consistent", dot[:frequency], "the value is still shown"
+      ivy = dot(stats, @r1)
+      assert ivy[:carried], "a seeded manager rating is carried"
+      assert_equal "consistent", ivy[:frequency], "the value is still shown"
     end
 
     should "not mark a human or legacy rating as carried" do
@@ -254,7 +270,7 @@ class CalibrationSessions::DrillInStatsTest < ActiveSupport::TestCase
              capability_stable_id: @cap.stable_id, level_ordinal: 4,
              manager_rated_frequency: "some", manager_rating_source: nil)
 
-      carried = stats[:rows].flat_map { |r| r[:people].values.flatten }.map { |d| d[:carried] }
+      carried = stats[:levels].values.flatten.map { |d| d[:carried] }
       assert_equal [ false ], carried.uniq
     end
   end

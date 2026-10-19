@@ -46,6 +46,12 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     "note_recorded"       => "notes"
   }.freeze
 
+  # Housekeeping on the session itself — renames, archive, restore. Rendered
+  # muted with a hollow dot (the assessment thread's lifecycle-row treatment)
+  # and only under "All": they say what happened to the record, not what the
+  # room decided.
+  LIFECYCLE_KINDS = %w[session_renamed session_archived session_restored].freeze
+
   CHIPS = [
     { value: "all",      label: "All" },
     { value: "flags",    label: "Flags" },
@@ -91,9 +97,9 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   def view_template
     div(class: "p-4", id: "session-log", data: { controller: "framework-activity" }) do
       header
-      if entries.empty?
-        empty_state
-      else
+      # A session with only renames / archive lines still has no outcomes.
+      empty_state unless any_outcomes?
+      if entries.any?
         ul(class: "mt-3 space-y-1") do
           entries.each { |entry| entry_row(entry) }
         end
@@ -107,6 +113,12 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def entries
     @entries ||= (@log[:entries] || []).first(RENDER_LIMIT)
+  end
+
+  # Over the whole feed, not the rendered slice: a page of renames must not
+  # hide an older outcome behind "No outcomes recorded yet".
+  def any_outcomes?
+    (@log[:entries] || []).any? { |entry| !LIFECYCLE_KINDS.include?(entry[:kind]) }
   end
 
   def truncated?
@@ -128,7 +140,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         aria: { label: "Close the session log" }
       ) { span(aria: { hidden: "true" }) { "✕" } }
     end
-    div(class: "mt-2") { filter_chips } if entries.any?
+    div(class: "mt-2") { filter_chips } if any_outcomes?
   end
 
   def filter_chips
@@ -159,7 +171,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   # indistinguishable from one with nothing older in it.
   def older_note
     p(class: "mt-3 text-[11px] text-gray-600 dark:text-gray-300") do
-      "Showing the #{RENDER_LIMIT} most recent outcomes."
+      "Showing the #{RENDER_LIMIT} most recent entries."
     end
   end
 
@@ -171,6 +183,8 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   # One feed entry, in the product's activity shape.
   def entry_row(entry)
+    return lifecycle_row(entry) if LIFECYCLE_KINDS.include?(entry[:kind])
+
     li(
       class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
              "data-[hidden=true]:hidden",
@@ -195,6 +209,31 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         resolution_line(entry)
         footer(entry)
       end
+    end
+  end
+
+  def lifecycle_row(entry)
+    li(
+      class: "flex gap-2 text-xs text-gray-600 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+             "data-[hidden=true]:hidden",
+      data: { framework_activity_target: "entry", kind_group: "lifecycle" }
+    ) do
+      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 border border-gray-400 dark:border-gray-500",
+           aria: { hidden: "true" }) { }
+      div(class: "min-w-0 flex-1") do
+        p(class: "italic break-words") { lifecycle_text(entry) }
+        footer(entry)
+      end
+    end
+  end
+
+  def lifecycle_text(entry)
+    case entry[:kind]
+    when "session_renamed"
+      was = entry[:previous_name].presence
+      "Renamed to “#{entry[:name]}”#{" (was “#{was}”)" if was}"
+    when "session_archived" then "Archived the session"
+    else                         "Restored the session from the archive"
     end
   end
 

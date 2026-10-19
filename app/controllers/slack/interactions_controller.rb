@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # Slack interactive payloads (POST /slack/interactions): the recipient
-# typeahead of the feedback modal, the modal's submission, and the "Give
-# feedback on this message" message shortcut. One endpoint, as Slack
-# requires; the payload's `type` picks the handler.
+# typeahead of the feedback modal, the modal's submission, and the "Feedback
+# on this message" message shortcut. One endpoint, as Slack requires; the
+# payload's `type` picks the handler.
 #
 # Signature-authenticated; see Slack::CommandsController for the trust model.
 class Slack::InteractionsController < ActionController::Base

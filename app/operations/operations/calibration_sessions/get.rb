@@ -33,6 +33,7 @@ class Operations::CalibrationSessions::Get < Operations::Base
       started_at: session.started_at,
       closed_at: session.closed_at,
       close_reason: session.close_reason,
+      archived_at: session.archived_at,
       participants: roster(members, "participant", names),
       calibrants: roster(members, "calibrant", names)
     }

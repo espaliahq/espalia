@@ -393,6 +393,15 @@ These do one Capybara click, and if the destination text/selector doesn't appear
 
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
+## Copying to the Clipboard: Click for Real
+
+**`navigator.clipboard.writeText` never settles without a real user gesture** in the Chromium
+the suite runs in: a JS-dispatched click leaves the promise pending, even with focus and
+permission granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. So a
+system test that copies clicks for real (`click_with_retry`), never through a JS-dispatch
+helper, and the `clipboard` controller shows "Copied!" only once a copy succeeds, falling back
+to `execCommand` when `writeText` hangs.
+
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.
@@ -550,6 +559,26 @@ end
 **When to use:** Any time the test interacts with content inside a `turbo_frame_tag(name, src: ..., data: ...) do ... end` block on a page where the frame's eager-loaded `src` will replace the inline fallback.
 
 **When NOT needed:** Frames without `src:` (eager-rendered only) or frames whose inner content is already verified by an earlier `assert_text` on something only the loaded version would render.
+
+## Measuring a Scroll: Wait for It to Stop
+
+**Read a scroll position only once the page has stopped scrolling, and never
+after a fixed `sleep`.** A smooth scroll takes as long as the browser needs,
+and the assessment chip's scroll ends with a settle pass 600ms later. A chip
+clicked before the matrix frame's own load lands also waits for that load
+before scrolling at all. A slow worker can stretch either past any fixed sleep,
+and the reading then describes a scroll that hasn't happened yet: the card
+sits exactly where the test put it. That is how the chip-scroll tests failed
+under a full parallel precommit and passed alone
+([#501](https://github.com/mr-yum/growth-os/issues/501)).
+
+- Wait for the eager frame (`turbo-frame#…[complete]`) and its controller
+  (`wait_for_stimulus`) before arranging the page and clicking.
+- Poll until the condition holds on two readings at the same `scrollY`. The
+  assessment tests' `assert_card_settles` is the example.
+- Reproduce a timing flake by slowing the server rather than the browser. 8x
+  CPU throttling never failed these tests; a 1.5s delay prepended to the frame
+  action failed both every time.
 
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
@@ -724,7 +753,7 @@ methods.
 
 ## Role Leak Tests — `create_out_of_scope_rating`
 
-**Every query that reads `AssessmentLevelRating` gets an "ignores ratings outside the assessed role" test** (ADR-22, [assessments.md → Role-scoped reads](assessments.md)). The helper, in `test/support/out_of_scope_ratings.rb` and available in every test, builds the case the ordinal filters miss:
+**Every query that reads `AssessmentLevelRating` gets an "ignores ratings outside the assessed role" test** (ADR-22, [assessments/role-lens.md → Role-scoped reads](assessments/role-lens.md)). The helper, in `test/support/out_of_scope_ratings.rb` and available in every test, builds the case the ordinal filters miss:
 
 ```ruby
 rating = create_out_of_scope_rating(person_id: person.id, cycle: cycle, level_ordinal: 3)

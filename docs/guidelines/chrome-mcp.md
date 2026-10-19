@@ -116,7 +116,8 @@ with `bin/dev` if nothing answers on `:6600`.
 
 **In a Claude Code cloud session the browser and the app share one container**, so
 there it is `http://localhost:6600/`. `bin/cloud-setup` starts the browser; start the
-app with `bin/rails server -p 6600` (see "Cloud sessions" in AGENTS.md).
+app with `bin/rails server -p 6600`. What `bin/cloud-setup` installs, and why, is in
+[dev-environment.md](dev-environment.md#cloud-sessions-bincloud-setup-not-the-devcontainer).
 
 ## Signing in
 
@@ -279,3 +280,31 @@ lives: it runs only in your turn, never in CI. So:
   MCP" never discharges the obligation to write/maintain the system test, and a
   green system test never discharges the obligation to lay eyes on the change
   before marking it done. A front-end change needs both.
+
+## UX quality skill (`/ux-quality`)
+
+The vendored [`ux-quality` skill](../../.claude/skills/ux-quality/SKILL.md) carries the
+UX/WCAG 2.2 AA criteria for three lifecycle points: `build` (defaults while
+writing UI), `spec-review` (UX gaps in a spec/plan before code exists), and
+`assess` (adversarial browser-driven review — deeper than, and additional to,
+the mandatory Chrome MCP pass this guide describes; use it for UX/accessibility sign-off of a
+whole surface, not per-change verification). The skill is host-agnostic and
+resolves this repo via its discovery contract — answers live here, not in the
+skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
+
+- **Design system**: Phlex Kit components (`app/components/kit/`) +
+  [phlex-views.md](phlex-views.md) and
+  [tailwindcss.md](tailwindcss.md).
+- **App URL / login / seeded-data control**: *Reaching the app*
+  (`http://rails-app:6600` in the devcontainer, `http://localhost:6600` in a\n  Claude Code cloud session), *Signing in* (the Rails-credentials admin) and the
+  seeded-tenant caveat under *Gotchas learned*, above.
+- **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
+  — use it, not the skill's bundled dormant `ux-driver`.
+- **Screenshot home**: `tmp/visual/<task>/` (gitignored).
+
+Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
+improvements (last synced: `4aa21f8` — connect#137, which upstreamed all of this
+repo's fixes, so the two trees are identical as of that merge). Generic fixes
+made here must be contributed upstream in the same round-trip; never edit the
+vendored files with GrowthOS-specific facts — put those in this guide or
+another under `docs/guidelines/`.

@@ -30,6 +30,11 @@ class CalibrationSessionPolicy < ApplicationPolicy
     facilitator? || tenant_admin?
   end
 
+  # The session page's freshness poll — whoever may read the page.
+  def freshness?
+    show?
+  end
+
   # Draft curation: add/remove participants and calibrants.
   def curate?
     facilitator? || tenant_admin?
@@ -40,6 +45,22 @@ class CalibrationSessionPolicy < ApplicationPolicy
   end
 
   def close?
+    facilitator? || tenant_admin?
+  end
+
+  # Archive / restore a closed session — reversible, nothing deleted. Both
+  # need the session closed; which one applies (archived or not) is the
+  # caller's call, so a retried archive reaches the aggregate's no-op.
+  def archive?
+    (facilitator? || tenant_admin?) && closed_record?
+  end
+
+  def unarchive?
+    archive?
+  end
+
+  # A name is a label, so it can change in any status.
+  def rename?
     facilitator? || tenant_admin?
   end
 
@@ -62,6 +83,10 @@ class CalibrationSessionPolicy < ApplicationPolicy
     return false unless person
 
     person.manages_managers?
+  end
+
+  def closed_record?
+    record.respond_to?(:closed?) && record.closed?
   end
 
   def facilitator?

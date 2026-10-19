@@ -67,6 +67,89 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Mia Manager"
     end
 
+    should "place each person on their level's frequency axis, coloured by their rater" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Mia has rated Ivy, so her unrated report sits in the off-axis slot
+        # rather than collapsing into the silent-rater sentence.
+        @omar = create(:person, tenant: @tenant, name: "Omar IC", manager: @em)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: @omar.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: @omar.id, level_ordinal: 3, role_id: @role_id)
+        create(:calibration_session_member, tenant: @tenant, session: @session, person_id: @omar.id)
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id)
+
+      assert_response :success
+      assert_select "[data-level-row='3']" do
+        assert_select "[data-level-menu='3']", text: /Identifies root causes\./
+        assert_select "[data-level-menu='3']", text: /2 people/
+        # Consistently is the last column; Mia is the session's first rater,
+        # so the backed dot wears the first rater hue.
+        assert_select "[data-frequency='consistent'] a[data-person-id='#{@report.id}'] span.bg-teal-600"
+        # Unrated: off the axis, hollow grey, still a link to the card.
+        assert_select "a[data-person-id='#{@omar.id}'] span.border-gray-300"
+        assert_select "[data-frequency] a[data-person-id='#{@omar.id}']", count: 0
+      end
+      ivy = css_select("a[data-person-id='#{@report.id}']").first
+      assert_includes ivy["aria-label"], "Consistently · evidence attached · rated by Mia Manager"
+      assert_includes ivy["title"], "L3 · Consistently"
+      assert_includes css_select("a[data-person-id='#{@omar.id}']").first["aria-label"], "unrated"
+      assert_select "p[data-silent-raters]", count: 0
+      # One rater: the board has no row to orient by, and says so.
+      assert_select "[data-orientation-row]", text: /nothing to compare yet/
+    end
+
+    should "dim every other rater under ?rater= and carry it on every pane link" do
+      ActsAsTenant.with_tenant(@tenant) do
+        raj = create(:person, tenant: @tenant, name: "Raj Rater", manager: @facilitator)
+        omar = create(:person, tenant: @tenant, name: "Omar IC", manager: raj)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: omar.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: omar.id, level_ordinal: 3, role_id: @role_id)
+        create(:assessment_level_rating, tenant: @tenant, cycle_id: @cycle.cycle_id,
+               person_id: omar.id, framework_id: @cycle.framework_id,
+               capability_stable_id: @cap.stable_id, level_ordinal: 3,
+               manager_rated_frequency: "none")
+        create(:calibration_session_member, :participant, tenant: @tenant, session: @session, person_id: raj.id)
+        create(:calibration_session_member, tenant: @tenant, session: @session, person_id: omar.id)
+        @raj_id = raj.id
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id, rater: @raj_id)
+
+      assert_response :success
+      assert_select "[data-controller~='drill-in-filter'][data-drill-in-filter-rater-value='#{@raj_id}']"
+      assert_select "button[aria-pressed='true']", text: "Raj Rater"
+      assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']"
+      assert_select "a[data-person-id='#{@report.id}'][href*='rater=#{@raj_id}']"
+      assert_select "a[href*='view=wall'][href*='rater=#{@raj_id}']"
+
+      get calibration_session_capability_path(@session, @cap.stable_id, rater: @em.id)
+      assert_select "button[aria-pressed='true']", text: "Mia Manager"
+      assert_select "a[data-person-id='#{@report.id}'][data-dimmed='true']", count: 0
+    end
+
+    should "ignore a rater filter that names no rater with a dot here" do
+      silent = ActsAsTenant.with_tenant(@tenant) do
+        quinn = create(:person, tenant: @tenant, name: "Quinn Alderberry", manager: @facilitator)
+        create(:calibration_session_member, :participant, tenant: @tenant, session: @session, person_id: quinn.id)
+        quinn
+      end
+
+      # A silent rater has no chip, so filtering to them would dim the whole
+      # grid with nothing to click to undo it.
+      [ { rater: silent.id }, { rater: SecureRandom.uuid_v7 }, { rater: [ "x" ] }, { rater: { a: "b" } } ].each do |query|
+        get calibration_session_capability_path(@session, @cap.stable_id, query)
+
+        assert_response :success
+        assert_select "[data-drill-in-filter-rater-value='']"
+        assert_select "a[data-person-id][data-dimmed='true']", count: 0
+      end
+    end
+
     should "render the person card with ratings and evidence when a dot is opened" do
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
 
@@ -241,9 +324,11 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # Pax appears as a LINK in the sentence, never as a grey dot: the
       # person card (evidence, the revisit ask) stays one click away — the
       # unrated cell is the "what did you see?" moment.
-      assert_select "td[colspan] a[data-person-id]", text: "Pax Thistledown", count: 1
+      assert_select "p[data-silent-raters] a[data-person-id]", text: "Pax Thistledown", count: 1
+      # The level still counts Pax, and says where he is.
+      assert_select "[data-level-row='3'][aria-label='L3 — 2 people · 1 named below']"
       assert_select "a[data-person-id] span.h-7", { count: 1 },
-                    "exactly one dot row remains — the rated rater's"
+                    "exactly one dot remains — the rated rater's"
       assert_select "a[data-person-id='#{@report.id}']"
     end
 
@@ -278,13 +363,13 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_select "[data-drawer-card='#{@report.id}']"
     end
 
-    should "carry the pane, the opened person, the pins and the filters through an outcome POST" do
+    should "carry the pane, the opened person, the pins and both filters through an outcome POST" do
       start_session_stream
 
       post calibration_session_rating_revisits_path(@session), params: {
         person_id: @report.id, capability_stable_id: @cap.stable_id,
         level_ordinal: 3, note: "Compare the pricing work with Omar's.",
-        pins: [ @report.id ], view: "wall", wall_valence: "demonstrated"
+        pins: [ @report.id ], view: "wall", wall_valence: "demonstrated", rater: @em.id
       }
 
       assert_equal "Revisit requested — it will appear in the rater's assessment activity.",
@@ -293,6 +378,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.redirect_url, "person=#{@report.id}"
       assert_includes response.redirect_url, "view=wall"
       assert_includes response.redirect_url, "wall_valence=demonstrated"
+      assert_includes response.redirect_url, "rater=#{@em.id}", "the grid's filter survives too"
       assert_includes response.redirect_url, "activity=open",
         "the ask must land somewhere visible even with the log panel closed"
     end
@@ -345,11 +431,15 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_response :success
       assert_includes response.body, "to revisit this rating at L4"
       assert_select "form[action*='rating_revisits'] input[name='level_ordinal'][value='4']"
+      # The grid's rater filter changes without a request, so the form reads
+      # the carried state from the live URL at submit time.
+      assert_select "form[action*='rating_revisits'][data-action*='calibration-pane#stampState']"
 
       get calibration_session_capability_path(@session, @cap.stable_id,
                                               person: @report.id, person_level: 4,
                                               person_action: "request")
       assert_select "form[action*='evidence_requests'] input[name='level_ordinal'][value='4']"
+      assert_select "form[action*='evidence_requests'][data-action*='calibration-pane#stampState']"
     end
 
     should "not leak the focused level onto links that open a different person" do

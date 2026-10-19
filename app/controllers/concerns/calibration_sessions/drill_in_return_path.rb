@@ -3,7 +3,7 @@
 # Rebuilds the drill-in URL an outcome POST (⚑ flag / revisit request) came
 # from, so recording an outcome returns the room to the screen it was
 # reading — which pane, the opened person, the drawer pins, the wall's
-# filters — rather than resetting it mid-conversation.
+# filters, the grid's rater filter — rather than resetting it mid-conversation.
 #
 # The forms supply this state as hidden fields
 # (`DrillInView#state_passthrough_fields`); everything here is untrusted
@@ -26,6 +26,7 @@ module CalibrationSessions::DrillInReturnPath
       wall_level: params[:wall_level].to_s.presence,
       wall_valence: params[:wall_valence].presence_in(EvidenceLink::VALENCES),
       wall_rater: params[:wall_rater].to_s.presence,
+      rater: (params[:rater] if params[:rater].is_a?(String)).presence,
       # The focused strip level survives an outcome POST; the open form
       # (person_action) deliberately does NOT — the submit finished it.
       person_level: params[:person_level].to_s.presence
