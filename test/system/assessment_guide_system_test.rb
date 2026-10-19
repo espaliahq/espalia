@@ -23,6 +23,26 @@ class AssessmentGuideSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  context "the way in" do
+    should "open the guide from My Assessments" do
+      visit assessments_path
+      assert_text "My Assessments"
+
+      click_link_with_js_fallback "How assessments work →", expect_text: "One cycle. Four steps."
+
+      assert_current_path assessment_guide_path
+    end
+
+    should "keep the link on screen on a phone" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      assert_text "My Assessments"
+
+      assert_selector "a[href='#{assessment_guide_path}']", text: "How assessments work →", visible: true
+      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, MOBILE_SIZE.first
+    end
+  end
+
   context "the guide" do
     should "lay the four steps out in one row on desktop" do
       visit assessment_guide_path
