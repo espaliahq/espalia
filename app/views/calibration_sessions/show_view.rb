@@ -221,7 +221,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
                     data: { calibration_pane_target: ("frame" unless @session.draft?),
                             calibration_freshness_target: "frame",
                             action: "turbo:before-frame-render->calibration-freshness#keepDisclosure" }.compact do
-      div(hidden: true, data: { calibration_freshness_target: "marker", stamp: @freshness_stamp.to_s })
+      div(hidden: true, data: { calibration_freshness_target: "marker", stamp: @freshness_stamp.to_s,
+                                rendered_at: @rendered_at.utc.iso8601 })
       readiness_card
       if @session.draft?
         agenda_card

@@ -249,7 +249,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
     when "unrated"
       render Components::Kit::Badge.new("#{row[:unrated_count]} unrated", variant: :default)
     else
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "No reports" }
+      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Nothing to rate" }
     end
   end
 

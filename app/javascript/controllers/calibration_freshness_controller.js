@@ -21,15 +21,18 @@
 //   <div role="status" data-calibration-freshness-target="region"></div>
 //   <template data-calibration-freshness-target="template">…[data-message]…</template>
 //   <turbo-frame data-calibration-freshness-target="frame">
-//     <div data-calibration-freshness-target="marker" data-stamp="…"></div>
+//     <div data-calibration-freshness-target="marker" data-stamp="…" data-rendered-at="…"></div>
 //     <section data-readiness-coverage="78">…</section>
 //   </turbo-frame>
 // </div>
 
 import BaseController from "controllers/base_controller"
 import { get } from "@rails/request.js"
+import { useVisibility } from "stimulus-use"
 
 const TIME_FORMAT = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+// A reload that never answers must not wedge the poll for the page's life.
+const RELOAD_TIMEOUT = 20000
 
 export default class extends BaseController {
   static targets = ["frame", "asOf", "region", "template", "waitingTemplate", "marker", "refresh"]
@@ -42,17 +45,25 @@ export default class extends BaseController {
 
   connect() {
     super.connect()
+    useVisibility(this)
     this.#localiseAsOf()
-    this.onVisibility = () => this.#visibilityChanged()
-    document.addEventListener("visibilitychange", this.onVisibility)
     this.#schedule()
   }
 
   disconnect() {
     this.#stopTimer()
     this.#stopWatching()
-    document.removeEventListener("visibilitychange", this.onVisibility)
     super.disconnect()
+  }
+
+  // useVisibility: no polling from a background tab; catch up on return.
+  visible() {
+    this.#schedule()
+    if (this.pollValue) this.#check({ manual: false })
+  }
+
+  invisible() {
+    this.#stopTimer()
   }
 
   intervalValueChanged() {
@@ -60,10 +71,13 @@ export default class extends BaseController {
   }
 
   // Any load of the frame — ours, a tab click, a cohort dot — rendered
-  // fresh numbers, so the stamp and the as-of line follow it.
+  // fresh numbers, so the stamp and the as-of line follow it. The time is
+  // the server's render time, so a page restored from Turbo's cache says
+  // how old it really is until the next poll catches it up.
   markerTargetConnected(marker) {
     if (marker.dataset.stamp !== undefined) this.stampValue = marker.dataset.stamp
-    this.#setAsOf(new Date())
+    const renderedAt = new Date(marker.dataset.renderedAt)
+    if (!Number.isNaN(renderedAt.getTime())) this.#setAsOf(renderedAt)
     // Whatever reloaded the frame brought the held numbers with it.
     this.pending = null
     this.#stopWatching()
@@ -98,13 +112,6 @@ export default class extends BaseController {
   #stopTimer() {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
-  }
-
-  #visibilityChanged() {
-    if (document.hidden) return this.#stopTimer()
-
-    this.#schedule()
-    if (this.pollValue) this.#check({ manual: false })
   }
 
   async #check({ manual }) {
@@ -142,13 +149,25 @@ export default class extends BaseController {
   #loadFrame() {
     const frame = this.frameTarget
     return new Promise(resolve => {
+      // A response without the frame (an expired session's sign-in page, an
+      // error page) becomes a full visit to that response rather than
+      // Turbo's "Content missing" painted over the readiness card.
+      const missing = event => {
+        event.preventDefault()
+        event.detail.visit(event.detail.response)
+        done()
+      }
       const done = () => {
+        clearTimeout(timer)
         frame.removeEventListener("turbo:frame-load", done)
         frame.removeEventListener("turbo:fetch-request-error", done)
+        frame.removeEventListener("turbo:frame-missing", missing)
         resolve()
       }
+      const timer = setTimeout(done, RELOAD_TIMEOUT)
       frame.addEventListener("turbo:frame-load", done)
       frame.addEventListener("turbo:fetch-request-error", done)
+      frame.addEventListener("turbo:frame-missing", missing)
       const src = `${window.location.pathname}${window.location.search}`
       if (frame.getAttribute("src") === src) {
         frame.reload()
@@ -168,10 +187,18 @@ export default class extends BaseController {
     if (this.hasRegionTarget && this.hasWaitingTemplateTarget) {
       this.regionTarget.replaceChildren(this.waitingTemplateTarget.content.firstElementChild.cloneNode(true))
     }
+    // The drawer and every modal on this page live inside this element. A
+    // drawer drag mutates its style on every pointermove, so the check runs
+    // at most once a frame.
     this.observer = new MutationObserver(() => {
-      if (this.pending && !this.#held()) this.#reload(this.pending)
+      if (this.checkQueued) return
+      this.checkQueued = true
+      requestAnimationFrame(() => {
+        this.checkQueued = false
+        if (this.pending && !this.#held()) this.#reload(this.pending)
+      })
     })
-    this.observer.observe(document.body, {
+    this.observer.observe(this.element, {
       subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style"]
     })
   }
@@ -183,9 +210,9 @@ export default class extends BaseController {
   }
 
   #held() {
-    const drawer = document.querySelector("#calibration-comparison-drawer [data-comparison-drawer-target='body']")
+    const drawer = this.element.querySelector("#calibration-comparison-drawer [data-comparison-drawer-target='body']")
     const drawerOpen = drawer && drawer.style.display !== "none"
-    const modalOpen = document.querySelector("[data-modal-target='overlay']:not(.hidden)")
+    const modalOpen = this.element.querySelector("[data-modal-target='overlay']:not(.hidden)")
     return Boolean(drawerOpen || modalOpen)
   }
 
@@ -201,8 +228,11 @@ export default class extends BaseController {
       const raters = changes.by_rater.map(({ name, count }) => `${name} ×${count}`).join(", ")
       parts.push(`${this.#plural(changes.ratings_changed, "rating")} changed${sinceText}${raters ? ` — ${raters}` : ""}.`)
     }
+    if (changes.self_ratings_changed > 0) {
+      parts.push(`${this.#plural(changes.self_ratings_changed, "self-rating")} changed${parts.length ? "" : sinceText}.`)
+    }
     if (changes.evidence_changed > 0) {
-      parts.push(`${this.#plural(changes.evidence_changed, "feedback / evidence link")} changed${parts.length ? "" : sinceText}.`)
+      parts.push(`${this.#plural(changes.evidence_changed, "feedback / evidence item")} changed${parts.length ? "" : sinceText}.`)
     }
     if (before !== null && after !== null && before !== after) parts.push(`Readiness ${before}% → ${after}%.`)
     if (parts.length === 0) parts.push(changes.changed ? "The numbers below are current." : `Nothing changed${sinceText}.`)

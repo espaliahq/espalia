@@ -312,10 +312,13 @@ class CalibrationSessions::OverviewStats
     end
   end
 
+  # Two decimals, but never rounded onto an edge the counts haven't reached:
+  # 249 of 250 cells reads 0.99, not a 1.0 beside "1 unrated", and one
+  # carried cell reads 0.01, not 0.0.
   def share(part, total)
     return nil if total.zero?
 
-    (part.to_f / total).round(2)
+    (part.to_f / total).round(2).clamp(part.positive? ? 0.01 : 0.0, part < total ? 0.99 : 1.0)
   end
 
   # Fraction of this rater's rated at-level cells carrying ≥1 active

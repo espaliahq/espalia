@@ -368,6 +368,14 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
       assert_equal 2, mia_row[:cell_total], "the other role's cell is not in the denominator either"
     end
 
+    should "never round a share onto an edge the counts haven't reached" do
+      overview = CalibrationSessions::OverviewStats.new(session: @session)
+
+      assert_equal 0.99, overview.send(:share, 249, 250), "one unrated cell is not 100% rated"
+      assert_equal 0.01, overview.send(:share, 1, 250), "one carried cell is not 0% carried"
+      assert_equal 1.0, overview.send(:share, 250, 250)
+    end
+
     should "give a person who is not enrolled no cells" do
       AssessmentCycleEnrollment.where(person_id: @r1.id).delete_all
 
