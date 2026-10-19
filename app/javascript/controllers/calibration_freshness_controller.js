@@ -158,8 +158,15 @@ export default class extends BaseController {
     const before = this.#coverage()
     const since = this.hasAsOfTarget ? this.asOfTarget.textContent.trim() : null
 
-    await this.#loadFrame()
-    this.#toast(this.#message(changes, since, before, this.#coverage()))
+    // Only a frame that actually loaded earns "Updated just now". A failed
+    // load leaves the stamp where it was, so the next poll tries again; a
+    // missing frame is already on its way to a full visit.
+    const outcome = await this.#loadFrame()
+    if (outcome === "loaded") {
+      this.#toast(this.#message(changes, since, before, this.#coverage()))
+    } else if (outcome === "failed") {
+      this.#toast("Couldn't load the new numbers — Refresh to try again.")
+    }
   }
 
   #loadFrame() {
@@ -168,21 +175,23 @@ export default class extends BaseController {
       // A response without the frame (an expired session's sign-in page, an
       // error page) becomes a full visit to that response rather than
       // Turbo's "Content missing" painted over the readiness card.
+      const loaded = () => done("loaded")
+      const failed = () => done("failed")
       const missing = event => {
         event.preventDefault()
         event.detail.visit(event.detail.response)
-        done()
+        done("visiting")
       }
-      const done = () => {
+      const done = outcome => {
         clearTimeout(timer)
-        frame.removeEventListener("turbo:frame-load", done)
-        frame.removeEventListener("turbo:fetch-request-error", done)
+        frame.removeEventListener("turbo:frame-load", loaded)
+        frame.removeEventListener("turbo:fetch-request-error", failed)
         frame.removeEventListener("turbo:frame-missing", missing)
-        resolve()
+        resolve(outcome)
       }
-      const timer = setTimeout(done, RELOAD_TIMEOUT)
-      frame.addEventListener("turbo:frame-load", done)
-      frame.addEventListener("turbo:fetch-request-error", done)
+      const timer = setTimeout(failed, RELOAD_TIMEOUT)
+      frame.addEventListener("turbo:frame-load", loaded)
+      frame.addEventListener("turbo:fetch-request-error", failed)
       frame.addEventListener("turbo:frame-missing", missing)
       const src = `${window.location.pathname}${window.location.search}`
       if (frame.getAttribute("src") === src) {
