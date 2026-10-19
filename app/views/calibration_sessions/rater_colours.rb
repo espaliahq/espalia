@@ -21,10 +21,44 @@ module Views::CalibrationSessions::RaterColours
     bg-cyan-600 dark:bg-cyan-400
   ].each_slice(2).map { |light, dark| "#{light} #{dark}" }.freeze
 
+  # Same hues, same order, for a rater's OUTLINED marks (a drill-in dot
+  # with no evidence behind it).
+  RATER_BORDER_CLASSES = %w[
+    border-teal-600 dark:border-teal-400
+    border-purple-600 dark:border-purple-400
+    border-orange-600 dark:border-orange-400
+    border-pink-600 dark:border-pink-400
+    border-indigo-600 dark:border-indigo-400
+    border-cyan-600 dark:border-cyan-400
+  ].each_slice(2).map { |light, dark| "#{light} #{dark}" }.freeze
+
+  # Initials on a SOLID rater fill. White misses 4.5:1 on the light teal,
+  # orange and cyan (3.6–3.7:1), so those take near-black; every dark-theme
+  # fill is light enough for gray-900.
+  RATER_TEXT_CLASSES = %w[
+    text-gray-950 text-white text-gray-950 text-white text-white text-gray-950
+  ].map { |light| "#{light} dark:text-gray-900" }.freeze
+
+  # A mark whose rater is not in the session (Score by cohort, the drill-in).
+  NOT_IN_SESSION_FILL = "bg-gray-500 dark:bg-gray-400"
+  NOT_IN_SESSION_BORDER = "border-gray-500 dark:border-gray-400"
+
   # @param index [Integer] the rater's position in the session's rater list
   # @return [String] background classes for both themes
   def rater_dot_class(index)
     RATER_DOT_CLASSES[index % RATER_DOT_CLASSES.size]
+  end
+
+  # @param index [Integer]
+  # @return [String] border classes for both themes
+  def rater_border_class(index)
+    RATER_BORDER_CLASSES[index % RATER_BORDER_CLASSES.size]
+  end
+
+  # @param index [Integer]
+  # @return [String] text classes that clear AA on {#rater_dot_class}
+  def rater_text_class(index)
+    RATER_TEXT_CLASSES[index % RATER_TEXT_CLASSES.size]
   end
   # Two letters, uppercased — the shared identity mark on every rater/
   # person disc (tendency strip, divergence board, cohort dots).

@@ -12,7 +12,7 @@ class Views::CalibrationSessions::GlossaryTest < ActiveSupport::TestCase
     # Each key is rendered by a view today; dropping one silently would
     # raise KeyError at render, so pin the set here where it's cheap.
     expected = %i[
-      org_mean reports org_delta distribution self_gap carried
+      org_mean rater_mean reports org_delta distribution self_gap carried
       spread raters_disagree backing to_confirm
       pct_of_expected cohort_median score_gate
       rated_cells rating_coverage evidence_coverage ready fully_rated

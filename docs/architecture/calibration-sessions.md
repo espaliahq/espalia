@@ -23,8 +23,9 @@
 > capability-divergence board, and **Score by level** (`OverviewStats` +
 > `CohortScores`, both in `calibration_sessions_overview`); draft-phase
 > agenda.
-> *Drill-in* — expectation text with role illustrations, the rater × level
-> dot grid, and a three-pane bottom half (person card / evidence wall §d /
+> *Drill-in* — one row per assessed level: the level's expectation (role
+> illustrations behind its ⓘ) beside a frequency axis of its people, dots
+> coloured by rater, under the board's rater-means row, and a three-pane bottom half (person card / evidence wall §d /
 > compare tray §e). The person card is a **read-only assessment column**:
 > the capability's whole ladder as chips, a focused per-level panel
 > (expectation + ratings + feedback/evidence), and the request-evidence /
@@ -591,32 +592,58 @@ is pre-attentive. Design rules, all deliberate:
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│ Strategic Thinking                          [⚑ Flag expectation]   │
-│ L3: "Identifies root causes and weighs trade-offs…"                │
-│ L4: "Shapes team direction by connecting work to strategy…" ⚠      │
-│ L5: "Sets multi-team technical direction…"                         │
+│ Strategic Thinking                                                 │
+│ (Mia) (Raj) (Sam) (Ana) ● not in session   ● backed ○ unbacked ◌ carried │
 ├────────────────────────────────────────────────────────────────────┤
-│         L2        L3          L4            L5                     │
-│  Mia    ·◍        ●●          ●◌ ●                                 │
-│  Raj              ●●          ◌ ●●                                 │
-│  Sam    ●         ● ●◌        ●●            ●                      │
-│  Ana              ●●          ●◌ ●                                 │
-│  Kim ⚪ (not in session)       ●                                    │
+│ All levels · rater means ⚠       ──R──────S─A────────M──           │
 ├────────────────────────────────────────────────────────────────────┤
-│ [Person: Priya N.]  [Evidence wall]  [Compare (2)]                 │
-│  …selected-tab content — see "Evidence & feedback in the session"… │
+│ L3 · 6 people              Unrated  Not yet  Some   Most   Consist.│
+│ "Identifies root causes…"    ○GH    ──┼──────PN TO──LB JK───RS──   │
+│ ⓘ What good looks like · Examples (4)                              │
+│ L4 · 7 people ⚑1             ○KW    ──DW─────EV MK──BA────AC NR─   │
+│ "Shapes team direction…"                                           │
+├────────────────────────────────────────────────────────────────────┤
+│ Ana hasn't rated this capability yet (Oli B.).                     │
+├────────────────────────────────────────────────────────────────────┤
+│ [Feedback / Evidence wall] · comparison drawer (person cards)      │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Rows = raters, columns = levels** (not frequency buckets) — the question
-  in the room is "is Raj's L4 *Some* the same behaviour as Mia's L4
-  *Consistently*?", answered against the L4 expectation sentence directly
-  above. Divergence is thereby localized to the level whose expectation text
-  may be at fault.
-- **Dot color = manager-rated frequency** from the existing
-  `FrequencyPalette` — the vocabulary everyone already knows from the
-  assessment screen. **Dot fill = evidence backing** (● backed / ◌ unbacked —
-  see below).
+- **Rows = levels, x = frequency, colour = rater** — the grammar Score by
+  cohort and the divergence board already speak (position = value, colour
+  = who). The question in the room is "is Raj's L4 *Some* the same
+  behaviour as Mia's L4 *Consistently*?", answered against the L4
+  expectation sentence beside those dots. Levels never share an axis: an L3
+  *Most* and an L5 *Most* are different bars. Divergence stays localized to
+  the level whose expectation text may be at fault.
+- **The axis.** Four columns, Not yet → Consistently, each column's centre
+  its tick (12.5 / 37.5 / 62.5 / 87.5 %, the frequency palette's hues on the
+  ticks; the labels are the legend). Same-frequency dots wrap inside their
+  column — four abreast on a projector, one per lane on a phone — and a
+  column is never narrower than one 44px tap target, so targets never
+  overlap. Every row reserves the unrated slot, so the ticks share one x
+  down the card.
+- **Dot colour = rater** (`RaterColours`, the participants' session order,
+  the same index every calibration surface uses; grey for a rater outside
+  the session). **Fill = evidence backing** (solid in the rater's hue /
+  outlined in it), **dashed edge = carried**, **1.5× = in the comparison
+  drawer**. The rating, the rater and the carried state are all in the
+  dot's tooltip and accessible name, so neither position nor colour carries
+  anything alone.
+- **Unrated people sit off the axis**, in an "Unrated" slot left of Not yet:
+  an absence is not a value.
+- **The orientation row** at the top is the divergence-board row the room
+  clicked: each rater's mean on this capability (`OverviewStats`' board row,
+  built from the request's one `PopulationSeeds`) on the same ticks, with
+  the ⚠ badge when the board flags it. Fewer than two raters → no board row,
+  and the row says so.
+- **The legend filters.** A rater chip dims every other rater's dots and
+  mean to 30 % (still clickable, over an opaque disc so the track never
+  shows through); clicking it again clears. Only a rater with a chip can be
+  the filter — a `?rater=` naming anyone else is ignored rather than
+  dimming the whole grid with nothing to click. The choice is
+  `?rater=` — rendered server-side, followed client-side by
+  `drill-in-filter` with no refetch.
 - **A silent rater collapses, everywhere in presentation — never in math.**
   Unrated cells never enter any aggregate (`OverviewStats#rated_cells`
   filters before anything is computed); the fix here is what RENDERS. A
@@ -628,15 +655,22 @@ is pre-attentive. Design rules, all deliberate:
   card path would sever the outcome); the tendency strip keeps their row but
   says "No ratings yet" in place of zeroed columns; the divergence board
   names them in a footnote instead of a legend swatch that promises a dot
-  existing on no axis. A PARTIALLY rated rater keeps a normal row — grey
-  dots beside rated ones are the per-person gaps, which are data.
+  existing on no axis. A PARTIALLY rated rater keeps their dots — their
+  unrated people sit in the off-axis slot, because per-person gaps beside
+  rated ones are data. A level's count still includes the silent raters'
+  people and says where they are ("5 people · 2 named below").
 - **Rater dot palette order is load-bearing.** `RATER_DOT_CLASSES` cycles
   teal → purple → orange → pink → indigo → cyan. Orange sits third so pink
   never neighbours purple: the dark pair (pink-400/purple-400) is ΔE 13.3 —
   indistinguishable even to full colour vision — and the reorder lifts the
   worst adjacent pair to 27.8 (validated light AND dark). Initials on every
   dot remain the identity signal of record; don't reorder without
-  re-validating both modes.
+  re-validating both modes. `RATER_BORDER_CLASSES` (outlined dots) and
+  `RATER_TEXT_CLASSES` (initials on a solid fill) follow the same order;
+  white initials miss 4.5:1 on the light teal, orange and cyan, so those
+  take near-black. The palette has six hues, so in a session with more
+  raters two of them share one — the initials and the legend filter tell
+  them apart.
 - **Prior calibration context — NOT BUILT** (overlapping sessions): a small
   marker on dots already discussed in an earlier session this cycle, with the
   outcome on hover — "discussed in Engineering calibration July 10 — revisit
@@ -663,11 +697,18 @@ Things that bite when changing this surface:
 - **The room sees names** — dots carry initials as a compact label plus the
   full name in tooltip and accessible name; there is no anonymisation layer
   (see *Naming*).
-- The **rater column is sticky-left**, so a sideways scroll on a narrow
-  viewport can't orphan a row of dots from the rater they belong to.
-- **Role illustrations** sit under each level's expectation behind the
-  evidence dialog's shared "Examples (N)" disclosure, scoped to the roles
-  actually being calibrated *at that level* — a framework carries
+- **The rater filter is grid state, not pane state.** The grid changes it
+  without a request, so no link can know it: `calibration-pane` copies
+  `rater` from the live URL onto EVERY pane navigation and the wall's
+  filter submit (not only `data-pane-keep-state` links), `stampState`
+  carries it into outcome forms, and `DrillInReturnPath` puts it back on
+  the redirect. A new way in or out of the drill-in needs the same.
+- **The orientation row is skipped for pane-frame requests**, like the log:
+  the grid is outside the frame, so its board statistics would be built and
+  thrown away on every dot click.
+- **Role illustrations** sit under each level's expectation behind its
+  "ⓘ What good looks like · Examples (N)" menu, with the ⚑ flags, scoped to
+  the roles actually being calibrated *at that level* — a framework carries
   illustrations for every role and the rest is noise.
 - **The session log rides this page** as the same right-hand side panel the
   session page uses, defaulting closed here (the grid wants the width). It
@@ -693,10 +734,10 @@ when unbacked**. This is deliberately pre-attentive: before any discussion,
 the grid shows whose ratings rest on recorded observation and whose on
 impression. The pattern-level read — an EM whose *high* ratings are
 systematically hollow — is one of the most actionable calibration findings
-and costs nothing to compute. (Fill ≠ color: color stays the frequency
-palette; backing is shape/fill, so the two signals never compete. This
-follows the level-chip precedent — content indicators are a separate visual
-language from the rating language.)
+and costs nothing to compute. (Fill ≠ colour: colour is the rater and
+position the rating; backing is shape/fill, so the signals never compete.
+This follows the level-chip precedent — content indicators are a separate
+visual language from the rating language.)
 
 ### b. Evidence coverage per rater (readiness-card altitude)
 
@@ -1238,7 +1279,7 @@ inherited*, so the room can discount rather than debate:
 
 | Surface | Marker |
 |---|---|
-| Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; hue still means frequency and fill still means evidence backing, so the three signals never collide. A backed carried dot also drops to the lighter `chip_carried` tint (lighter = inherited). Legend gains "Carried from last cycle" |
+| Drill-in dot grid | a **dashed edge** — the shared "dashed means carried" primitive from `FrequencyPalette`; position means frequency, hue means rater, and fill means evidence backing, so the signals never collide. Legend reads "Dashed = carried from last cycle" |
 | Person / compare cards | the Manager pill uses the palette's dashed-outline `pill_carried` variant plus "· carried" |
 | Evidence wall | the same treatment on the `Mgr:` stamp — the room shouldn't norm against a grade nobody awarded this time |
 | Readiness card | a striped amber **carried** segment on every coverage bar, "% carried" beside each rater's coverage, and "N to confirm" as the work left |

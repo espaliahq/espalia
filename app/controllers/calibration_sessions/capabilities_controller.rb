@@ -23,7 +23,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
 
     stats = CalibrationSessions::DrillInStats.new(
       session: @session, capability_stable_id: params.expect(:id),
-      visible_person_ids: visible_person_ids
+      visible_person_ids: visible_person_ids, population_seeds: population_seeds
     ).call
     if stats.nil?
       redirect_to calibration_session_path(@session), alert: "Capability not found in this framework."
@@ -48,7 +48,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     # outcomes to mark an already-asked revisit — which is why the instance
     # above is shared rather than each building its own.
     session_log = session_log_data(@session, outcomes: outcomes) unless pane_frame_request?
-    people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
+    people_ids = (stats[:rater_ids] + log_person_ids(session_log)).compact.uniq
 
     person_card = @cards.for(params[:person].presence)
     focus_ordinal = person_focus_ordinal(person_card)
@@ -57,6 +57,10 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
       stats: stats,
       people: Person.where(id: people_ids).index_by(&:id),
       session_log: session_log,
+      # The grid sits outside the pane frame, so a frame request never shows
+      # it — the same reason the log is skipped.
+      orientation: (orientation_row(stats) unless pane_frame_request?),
+      rater_filter: rater_filter(stats),
       can_note: @session.started? && policy(@session).flag_expectation?,
       person_card: person_card,
       person_focus_ordinal: focus_ordinal,
@@ -81,6 +85,41 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # Turbo asks for one frame by name; the side panel isn't in it.
   def pane_frame_request?
     request.headers["Turbo-Frame"] == "calibration-bottom-pane"
+  end
+
+  # The request's one attribution (recorded managers, delegations,
+  # assignments), shared by the drill-in and the board's statistics.
+  def population_seeds
+    @population_seeds ||= CalibrationSessions::PopulationSeeds.new(
+      framework_id: @session.framework_id,
+      participant_ids: @session.participants.pluck(:person_id),
+      facilitator_id: @session.facilitator_id
+    )
+  end
+
+  # This capability's divergence-board row — each rater's mean and the
+  # "raters disagree" flag — so the drill-in opens on the row the room just
+  # clicked. nil when fewer than two raters have rated it (the board lists
+  # no row then either).
+  #
+  # @return [Hash, nil] `{ rater_means:, flagged: }`
+  def orientation_row(stats)
+    CalibrationSessions::OverviewStats.new(session: @session, population_seeds: population_seeds)
+      .call[:capabilities]
+      .find { |row| row[:stable_id] == stats[:capability][:stable_id] }
+      &.slice(:rater_means, :flagged)
+  end
+
+  # The grid's legend filter (`?rater=`): one rater's marks at full
+  # strength, everyone else's dimmed. Only a rater with a legend chip — a
+  # participant who has rated someone here — counts: filtering to anyone
+  # else would dim the whole grid with no chip to clear it.
+  #
+  # @return [String, nil]
+  def rater_filter(stats)
+    rated = stats[:levels].values.flatten.select { |dot| dot[:frequency] }.map { |dot| dot[:rater_id] }
+    (params[:rater] if params[:rater].is_a?(String))
+      .presence_in(stats[:rater_ids] & rated)
   end
 
   # @return [String, nil] "wall" / nil
@@ -108,8 +147,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # The people the grid actually plots — the wall and the tray read the
   # same population, so every wall item has a dot to open.
   def grid_person_ids(stats)
-    @grid_person_ids ||= stats[:rows].flat_map { |row| row[:people].values.flatten }
-      .map { |dot| dot[:person_id] }.uniq
+    @grid_person_ids ||= stats[:levels].values.flatten.map { |dot| dot[:person_id] }
   end
 
   # Who the open person card can offer as evidence requestees — the

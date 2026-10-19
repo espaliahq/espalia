@@ -24,6 +24,13 @@ module Views::CalibrationSessions::Glossary
                   "on the 0–3 frequency scale. Only cells at each person's own " \
                   "assessed level count."
     },
+    rater_mean: {
+      label: "mean",
+      definition: "A rater's mean manager rating on this capability across " \
+                  "everyone they rate in the session, on the 0–3 frequency scale " \
+                  "(Not yet is 0, Consistently is 3). Only each person's own " \
+                  "assessed level counts, so levels are never mixed."
+    },
     reports: {
       label: "Reports",
       definition: "How many of this rater's reports are in the session, and how " \
@@ -104,9 +111,10 @@ module Views::CalibrationSessions::Glossary
     backing: {
       label: "Solid dot = feedback / evidence attached · outlined = unbacked",
       definition: "Fill shows whether the rating rests on recorded observation. " \
-                  "Colour is the rating itself, so the two signals never compete. " \
-                  "A rater whose high ratings are systematically outlined is one " \
-                  "of the most useful things this grid shows."
+                  "Position is the rating and colour is who gave it, so the " \
+                  "signals never compete. A rater whose high ratings are " \
+                  "systematically outlined is one of the most useful things " \
+                  "this view shows."
     },
     # The one term this glossary shares with the assessment side, where the
     # same number is read by the person it describes. The scale's own

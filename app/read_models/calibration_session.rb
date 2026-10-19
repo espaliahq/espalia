@@ -44,11 +44,13 @@ class CalibrationSession < ApplicationRecord
   scope :archived, -> { where.not(archived_at: nil) }
   scope :unarchived, -> { where(archived_at: nil) }
 
-  # Participant (rater) membership rows.
+  # Participant (rater) membership rows, in the order they joined — the
+  # rater colour order every calibration surface shares, so it must be the
+  # same on every query (Postgres promises no order without one).
   #
   # @return [ActiveRecord::Relation<CalibrationSessionMember>]
   def participants
-    members.where(member_type: "participant")
+    members.where(member_type: "participant").order(:created_at, :id)
   end
 
   # Calibrant (population) membership rows.

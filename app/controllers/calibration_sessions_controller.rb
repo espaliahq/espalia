@@ -108,7 +108,7 @@ class CalibrationSessionsController < ApplicationController
     authorize @session
     @page_title = "#{@session.name} · Calibration"
 
-    members = @session.members.to_a
+    members = @session.members.order(:created_at, :id).to_a
     participant_ids = members.select { |m| m.member_type == "participant" }.map(&:person_id)
     calibrant_ids = members.select { |m| m.member_type == "calibrant" }.map(&:person_id)
     # Read before the numbers it stamps: a write landing in between makes
