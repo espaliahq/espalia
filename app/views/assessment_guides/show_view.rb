@@ -368,10 +368,11 @@ class Views::AssessmentGuides::ShowView < Views::Base
       anchor: "align", number: 3,
       title: "Sit down together and agree what's true",
       lead: "Your manager starts alignment. Their ratings appear, both sets lock, and every cell " \
-            "you already agree on settles itself. The conversation covers only what's left.",
+            "you both rated the same this cycle settles itself. The conversation covers what's left.",
       steps: [
         [ :manager, "Your manager starts alignment", "Only your reporting manager can." ],
-        [ :growthos, "Matching cells agree themselves", "Same rating on both sides? It's settled before you meet." ],
+        [ :growthos, "Matching cells agree themselves",
+          "Same rating from both of you this cycle? It's settled before you meet. Carried ratings still need agreeing." ],
         [ :you, "You both settle the rest",
           "Either of you can record the agreed value. Split chips turn solid as you go." ],
         [ :manager, "Your manager marks it complete",
