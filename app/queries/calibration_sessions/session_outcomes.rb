@@ -18,11 +18,28 @@ class CalibrationSessions::SessionOutcomes
     AssessmentCycles::Events::CalibrationNoteRecorded
   ].freeze
 
+  # Outcome counts for the session list, one counting read per session —
+  # the list is a handful of sessions per cycle, and a draft has none, so
+  # pass only the sessions that can have any.
+  #
+  # @param sessions [Array<CalibrationSession>]
+  # @return [Hash{String => Integer}] session id → outcome count
+  def self.counts_for(sessions, event_store: Rails.configuration.event_store)
+    sessions.to_h { |session| [ session.id, new(session: session, event_store: event_store).count ] }
+  end
+
   # @param session [CalibrationSession]
   # @param event_store [RailsEventStore::Client]
   def initialize(session:, event_store: Rails.configuration.event_store)
     @session = session
     @event_store = event_store
+  end
+
+  # How many outcomes the session recorded, without loading them.
+  #
+  # @return [Integer]
+  def count
+    @event_store.read.stream(stream_name).of_type(OUTCOME_EVENTS).count
   end
 
   # Expectation flags raised by this session, chronological.
@@ -147,8 +164,12 @@ class CalibrationSessions::SessionOutcomes
   # render (see CapabilitiesController) so the read happens once.
   def stream_events
     @stream_events ||= @event_store.read
-      .stream(EventStreamNaming.calibration_session_stream(@session.id))
+      .stream(stream_name)
       .of_type(OUTCOME_EVENTS)
       .to_a
+  end
+
+  def stream_name
+    EventStreamNaming.calibration_session_stream(@session.id)
   end
 end

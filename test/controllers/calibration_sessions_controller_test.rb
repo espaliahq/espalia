@@ -437,6 +437,61 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "the list's archive toggle and card actions" do
+    setup do
+      @live = define_session
+      @closed = define_session
+      @archived = define_session
+      ActsAsTenant.with_tenant(@tenant) do
+        context = AuthorizationContext.new(
+          user: @facilitator_user, tenant_user: TenantUser.find_by(user: @facilitator_user), person: @facilitator
+        )
+        Operations::CalibrationSessions::Start.call(context: context, params: { session_id: @live.id })
+        [ @closed, @archived ].each do |record|
+          Operations::CalibrationSessions::Close.call(context: context, params: { session_id: record.id })
+        end
+        Operations::CalibrationSessions::Archive.call(context: context, params: { session_id: @archived.id })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @live.id, name: "Live one" })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @closed.id, name: "Closed one" })
+        Operations::CalibrationSessions::Rename.call(context: context, params: { session_id: @archived.id, name: "Archived one" })
+      end
+      sign_in @facilitator_user
+    end
+
+    should "hide archived sessions by default and offer the toggle with a count" do
+      get calibration_sessions_path
+
+      assert_response :success
+      assert_includes response.body, "Live one"
+      assert_includes response.body, "Closed one"
+      assert_not_includes response.body, "Archived one"
+      assert_select "a[href=?]", calibration_sessions_path(archived: 1), text: "Show archived (1)"
+      assert_select "h2", text: /H1 2026/
+    end
+
+    should "show archived sessions in their own group when asked, with Restore" do
+      get calibration_sessions_path(archived: 1)
+
+      assert_select "section[aria-labelledby='archived-sessions'] #calibration-session-card-#{@archived.id}"
+      assert_select "a[href=?]", calibration_sessions_path, text: "Hide archived"
+      assert_select "#calibration-session-card-#{@archived.id} form[action=?]",
+                    unarchive_calibration_session_path(@archived)
+    end
+
+    should "offer Archive on closed cards only, and Rename on every card" do
+      get calibration_sessions_path
+
+      assert_select "#calibration-session-card-#{@closed.id} form[action=?]", archive_calibration_session_path(@closed)
+      assert_select "#calibration-session-card-#{@live.id} form[action=?]",
+                    archive_calibration_session_path(@live), count: 0
+      [ @live, @closed ].each do |record|
+        assert_select "#calibration-session-card-#{record.id} [data-rename-session-action=?]",
+                      name_calibration_session_path(record)
+      end
+      assert_select "##{Views::CalibrationSessions::RenameSessionModal::ID}"
+    end
+  end
+
   context "as a participant EM (v1 facilitator-only)" do
     should "deny the session page" do
       session_record = define_session
