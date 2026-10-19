@@ -80,9 +80,10 @@ module Views::CalibrationSessions::Glossary
     backing: {
       label: "Solid dot = feedback / evidence attached · outlined = unbacked",
       definition: "Fill shows whether the rating rests on recorded observation. " \
-                  "Colour is the rating itself, so the two signals never compete. " \
-                  "A rater whose high ratings are systematically outlined is one " \
-                  "of the most useful things this grid shows."
+                  "Position is the rating and colour is who gave it, so the " \
+                  "signals never compete. A rater whose high ratings are " \
+                  "systematically outlined is one of the most useful things " \
+                  "this view shows."
     },
     # The one term this glossary shares with the assessment side, where the
     # same number is read by the person it describes. The scale's own

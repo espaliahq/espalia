@@ -67,6 +67,38 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_includes response.body, "Mia Manager"
     end
 
+    should "place each person on their level's frequency axis, coloured by their rater" do
+      ActsAsTenant.with_tenant(@tenant) do
+        # Mia has rated Ivy, so her unrated report sits in the off-axis slot
+        # rather than collapsing into the silent-rater sentence.
+        @omar = create(:person, tenant: @tenant, name: "Omar IC", manager: @em)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: @omar.id, framework_id: @cycle.framework_id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+               person_id: @omar.id, level_ordinal: 3, role_id: @role_id)
+        create(:calibration_session_member, tenant: @tenant, session: @session, person_id: @omar.id)
+      end
+
+      get calibration_session_capability_path(@session, @cap.stable_id)
+
+      assert_response :success
+      assert_select "[data-level-row='3']" do
+        assert_select "[data-level-menu='3']", text: /Identifies root causes\./
+        assert_select "[data-level-menu='3']", text: /2 people/
+        # Consistently is the last column; Mia is the session's first rater,
+        # so the backed dot wears the first rater hue.
+        assert_select "[data-frequency='consistent'] a[data-person-id='#{@report.id}'] span.bg-teal-600"
+        # Unrated: off the axis, hollow grey, still a link to the card.
+        assert_select "a[data-person-id='#{@omar.id}'] span.border-gray-300"
+        assert_select "[data-frequency] a[data-person-id='#{@omar.id}']", count: 0
+      end
+      ivy = css_select("a[data-person-id='#{@report.id}']").first
+      assert_includes ivy["aria-label"], "Consistently · evidence attached · rated by Mia Manager"
+      assert_includes ivy["title"], "L3 · Consistently"
+      assert_includes css_select("a[data-person-id='#{@omar.id}']").first["aria-label"], "unrated"
+      assert_select "p[data-silent-raters]", count: 0
+    end
+
     should "render the person card with ratings and evidence when a dot is opened" do
       get calibration_session_capability_path(@session, @cap.stable_id, person: @report.id)
 
@@ -241,9 +273,9 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # Pax appears as a LINK in the sentence, never as a grey dot: the
       # person card (evidence, the revisit ask) stays one click away — the
       # unrated cell is the "what did you see?" moment.
-      assert_select "td[colspan] a[data-person-id]", text: "Pax Thistledown", count: 1
+      assert_select "p[data-silent-raters] a[data-person-id]", text: "Pax Thistledown", count: 1
       assert_select "a[data-person-id] span.h-7", { count: 1 },
-                    "exactly one dot row remains — the rated rater's"
+                    "exactly one dot remains — the rated rater's"
       assert_select "a[data-person-id='#{@report.id}']"
     end
 

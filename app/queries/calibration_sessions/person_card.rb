@@ -123,11 +123,9 @@ class CalibrationSessions::PersonCard
 
   # @return [Array(Hash, Integer, String), nil] [dot, ordinal, rater_id]
   def locate(person_id)
-    @stats[:rows].each do |row|
-      row[:people].each do |ordinal, dots|
-        dot = dots.find { |d| d[:person_id] == person_id }
-        return [ dot, ordinal, row[:rater_id] ] if dot
-      end
+    @stats[:levels].each do |ordinal, dots|
+      dot = dots.find { |d| d[:person_id] == person_id }
+      return [ dot, ordinal, dot[:rater_id] ] if dot
     end
     nil
   end

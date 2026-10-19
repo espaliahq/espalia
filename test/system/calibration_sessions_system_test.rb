@@ -107,7 +107,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_no_text "Add person from your org"
   end
 
-  test "facilitator sees tendency strip and divergence board on a live session" do
+  # A live session: Mia rates Strategic Thinking high, Raj low, both agree on
+  # Delivery; Quinn has rated nothing. `with_unrated:` adds a report of
+  # Mia's she hasn't rated yet, so the drill-in has someone off the axis.
+  def seed_live_session(with_unrated: false)
     ActsAsTenant.with_tenant(@tenant) do
       # A scorable ladder so the cohort tab has real numbers: role, levels,
       # and both capabilities bound. Adds nothing to the strip/board math.
@@ -126,6 +129,13 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       @report_3_id = report_3.id
       report_4 = create(:person, tenant: @tenant, name: "Pax IC", manager: @em_2)
       population = [ @report_1, @report_2, report_3, report_4 ]
+      if with_unrated
+        uma = create(:person, tenant: @tenant, name: "Uma IC", manager: @em_1)
+        create(:person_framework_assignment, tenant: @tenant,
+               person_id: uma.id, framework_id: @cycle.framework_id, role_id: engineer.role_id)
+        @uma_id = uma.id
+        population << uma
+      end
       # report_1/2 already hold assignments from setup (DeterministicId PK).
       [ report_3, report_4 ].each do |person|
         create(:person_framework_assignment, tenant: @tenant,
@@ -191,6 +201,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       Operations::CalibrationSessions::Start.call(context: ctx, params: { session_id: result[:session_id] })
       @live_session_id = result[:session_id]
     end
+  end
+
+  test "facilitator sees tendency strip and divergence board on a live session" do
+    seed_live_session
 
     sign_in_as(@facilitator_user)
     visit calibration_session_path(@live_session_id)
@@ -289,7 +303,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_selector "a[href*='capabilities'][href*='person=']", minimum: 1
     click_selector_with_js_fallback(
       "a[href*='capabilities'][href*='person=']",
-      expect_text: "AT-LEVEL RATINGS BY RATER"
+      expect_text: "AT-LEVEL RATINGS BY LEVEL"
     )
     assert_includes page.current_url, "pins%5B%5D=#{nia_id}"
     assert_selector "[data-drawer-card='#{nia_id}']"
@@ -350,10 +364,10 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # so the assertion passed with the flip removed. A test that cannot fail
     # is worse than none; the flip is verified visually instead.
 
-    # ── Drill-in: divergence row → rater × level grid ──
+    # ── Drill-in: divergence row → per-level frequency axes ──
     click_link_with_js_fallback("Capability divergence", expect_text: "CAPABILITY DIVERGENCE")
-    click_link_with_js_fallback("Strategic Thinking", expect_text: "AT-LEVEL RATINGS BY RATER")
-    assert_text "AT-LEVEL RATINGS BY RATER"
+    click_link_with_js_fallback("Strategic Thinking", expect_text: "AT-LEVEL RATINGS BY LEVEL")
+    assert_text "AT-LEVEL RATINGS BY LEVEL"
     assert_selector "a[data-person-id]", minimum: 4
     # …and on the grid, the silent rater collapses to one sentence — with
     # their people as links, so the person card (and its revisit ask) stays
@@ -370,7 +384,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # The dot is initialled for compactness and named for everyone else.
     dot = find("a[data-person-id='#{@report_1.id}']")
     assert_equal "II", dot.text.strip, "dots carry the ratee's initials"
-    assert_equal "Ivy IC", dot["title"]
+    assert dot["title"].start_with?("Ivy IC — L3 · "), "the tooltip names the person and the rating"
     assert dot["aria-label"].start_with?("Ivy IC —"),
       "the accessible name carries the person, not just their initials"
 
@@ -469,6 +483,71 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_no_selector "[data-drawer-card='#{@report_2.id}'] a[aria-label^='Unpin']"
   end
 
+  DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE = [ 375, 812 ].freeze
+
+  # Every level reads as its own frequency axis: the expectation beside its
+  # dots, each dot in its frequency's column, the unrated off the axis.
+  def assert_drill_in_axis
+    within("[data-level-row='3']") do
+      # Pax counts too: the level's population, whether rated or not.
+      assert_text "6 people"
+      assert_selector "[data-frequency='consistent'] a[data-person-id='#{@report_1.id}']"
+      assert_selector "[data-frequency='none'] a[data-person-id='#{@report_2.id}']"
+      # Unrated sits off the axis, in its own slot, still a link to the card.
+      assert_selector "a[data-person-id='#{@uma_id}']"
+      assert_no_selector "[data-frequency] a[data-person-id='#{@uma_id}']"
+    end
+    # The silent rater still collapses to one sentence, outside every row.
+    assert_selector "p[data-silent-raters]", text: "Quinn Alderberry hasn't rated this capability yet"
+    assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth + 1"),
+           "the drill-in must not scroll the page sideways"
+    overflowing = page.evaluate_script(<<~JS)
+      [...document.querySelectorAll("[data-level-row] [data-frequency]")].flatMap((column) => {
+        const box = column.getBoundingClientRect()
+        return [...column.querySelectorAll("a")]
+          .filter((dot) => {
+            const r = dot.getBoundingClientRect()
+            return r.left < box.left - 1 || r.right > box.right + 1
+          })
+          .map((dot) => dot.dataset.personId)
+      })
+    JS
+    assert_empty overflowing, "same-frequency dots stay inside their own column"
+  end
+
+  test "drill-in plots each level on a frequency axis at both viewports" do
+    seed_live_session(with_unrated: true)
+    sign_in_as(@facilitator_user)
+
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id)
+    assert_text "AT-LEVEL RATINGS BY LEVEL"
+    assert_drill_in_axis
+    # Level header beside the axis on desktop, stacked above it on a phone.
+    header, axis = page.evaluate_script(<<~JS)
+      (() => {
+        const row = document.querySelector("[data-level-row='3']")
+        return [row.children[0].getBoundingClientRect().top, row.children[1].getBoundingClientRect().top]
+      })()
+    JS
+    assert_in_delta header, axis, 30, "desktop: the expectation sits beside its dots"
+
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    visit calibration_session_capability_path(@live_session_id, @cap_a.stable_id)
+    assert_text "AT-LEVEL RATINGS BY LEVEL"
+    assert_drill_in_axis
+    header_bottom, axis_top = page.evaluate_script(<<~JS)
+      (() => {
+        const row = document.querySelector("[data-level-row='3']")
+        return [row.children[0].getBoundingClientRect().bottom, row.children[1].getBoundingClientRect().top]
+      })()
+    JS
+    assert_operator axis_top, :>=, header_bottom - 1, "mobile: the axis drops below its expectation"
+  ensure
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+  end
+
   test "facilitator flags an unclear expectation from the drill-in" do
     ActsAsTenant.with_tenant(@tenant) do
       # The flag raises a framework clarification, so this framework needs a
@@ -534,11 +613,12 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
 
     sign_in_as(@facilitator_user)
     visit calibration_session_capability_path(@flag_session_id, @flag_cap_stable)
-    assert_text "AT-LEVEL RATINGS BY RATER"
+    assert_text "AT-LEVEL RATINGS BY LEVEL"
 
-    # "What good looks like" lives in the level column's ⓘ menu now —
-    # expectation, examples, and the ⚑ flags, anchored to the column.
-    open_dropdown(scope: "th[data-level-menu='3']")
+    # The expectation sits beside its level's dots; the examples and the ⚑
+    # flags live in the ⓘ menu under it.
+    within("[data-level-menu='3']") { assert_text "Shapes team direction" }
+    open_dropdown(scope: "[data-level-menu='3']")
     assert_text "Shapes team direction"
     assert_text "Runs the team retro end to end"
 
@@ -554,7 +634,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     click_button_with_js_fallback "Raise clarification", expect_text: "clarification discussion is now open"
 
     # One flag per cell per session: the marker replaces the affordance.
-    open_dropdown(scope: "th[data-level-menu='3']")
+    open_dropdown(scope: "[data-level-menu='3']")
     assert_text "⚑ Flagged — 1 open clarification on the framework"
     assert_no_selector "summary", text: "⚑ Flag expectation as unclear"
 
@@ -566,7 +646,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     JS
     js_fill_in "textarea[aria-label^='Why this example is unclear']", with: "Reads as an L5 behaviour"
     click_button_with_js_fallback "Flag example", expect_text: "Example flagged"
-    open_dropdown(scope: "th[data-level-menu='3']")
+    open_dropdown(scope: "[data-level-menu='3']")
     assert_text "⚑ Example flagged — clarification open on the framework"
     ActsAsTenant.with_tenant(@tenant) do
       example_flag = FrameworkState::SuggestedEdit.clarifications.pending

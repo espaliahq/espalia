@@ -48,7 +48,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
     # outcomes to mark an already-asked revisit — which is why the instance
     # above is shared rather than each building its own.
     session_log = session_log_data(@session, outcomes: outcomes) unless pane_frame_request?
-    people_ids = (stats[:rows].map { |r| r[:rater_id] } + log_person_ids(session_log)).compact.uniq
+    people_ids = (stats[:rater_ids] + log_person_ids(session_log)).compact.uniq
 
     person_card = @cards.for(params[:person].presence)
     focus_ordinal = person_focus_ordinal(person_card)
@@ -108,8 +108,7 @@ class CalibrationSessions::CapabilitiesController < ApplicationController
   # The people the grid actually plots — the wall and the tray read the
   # same population, so every wall item has a dot to open.
   def grid_person_ids(stats)
-    @grid_person_ids ||= stats[:rows].flat_map { |row| row[:people].values.flatten }
-      .map { |dot| dot[:person_id] }.uniq
+    @grid_person_ids ||= stats[:levels].values.flatten.map { |dot| dot[:person_id] }
   end
 
   # Who the open person card can offer as evidence requestees — the

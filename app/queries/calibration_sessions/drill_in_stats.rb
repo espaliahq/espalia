@@ -1,18 +1,14 @@
 # frozen_string_literal: true
 
-# Assembles the capability drill-in for one calibration session: the
-# expectation text per level beside a rater × level grid of the
-# population's at-level manager ratings
-# (docs/architecture/calibration-sessions.md, "Capability drill-in").
+# Assembles the capability drill-in for one calibration session: one row
+# per assessed level, each holding the population members assessed there
+# with their at-level manager rating, who rated it, and whether it is
+# backed by evidence (docs/architecture/calibration-sessions.md,
+# "Capability drill-in").
 #
-# Rows are raters; columns are assessed-level ordinals; each population
-# member appears as one dot at (their rater, their level) carrying their
-# manager-rated frequency (nil = unrated; a rater with NOTHING rated on
-# this capability is collapsed by the view into a single "hasn't rated
-# yet" sentence rather than a full row of grey dots) and
-# whether the cell has active evidence backing. Population members whose
-# rater is not a participant group into one muted "other raters" row
-# (`rater_id: nil`) — reference points, visible but exempt from outcomes.
+# A member's rater is the participant attributed to them; members whose
+# rater is not in the session carry `rater_id: nil` — reference points,
+# visible but exempt from outcomes. `frequency: nil` is unrated.
 class CalibrationSessions::DrillInStats
   # @param session [CalibrationSession]
   # @param capability_stable_id [String]
@@ -21,15 +17,23 @@ class CalibrationSessions::DrillInStats
   #   ({CalibrationSessions::AssesseeVisibility}). Outside it, the dot keeps
   #   its manager rating — the rater is in the room to defend it — but the
   #   assessee's own SELF rating is withheld. nil skips the gate entirely.
-  def initialize(session:, capability_stable_id:, visible_person_ids: nil)
+  # @param population_seeds [CalibrationSessions::PopulationSeeds, nil] the
+  #   request's instance, so the attribution is read once per render
+  def initialize(session:, capability_stable_id:, visible_person_ids: nil, population_seeds: nil)
     @session = session
     @capability_stable_id = capability_stable_id
     @visible_person_ids = visible_person_ids&.to_set
+    @population_seeds = population_seeds
   end
 
   # @return [Hash, nil] nil when the capability isn't in the session's
-  #   framework; otherwise
-  #   `{ capability:, ordinals:, expectations:, clarifications:, rows: }`
+  #   framework; otherwise `{ capability:, ordinals:, expectations:,
+  #   illustrations:, clarifications:, flagged_illustration_ids:,
+  #   rater_ids:, levels: }`. `rater_ids` are the participants in session
+  #   order (the rater colour order every calibration surface shares);
+  #   `levels` maps ordinal => dots sorted by name, each
+  #   `{ person_id:, name:, rater_id:, frequency:, self_frequency:,
+  #   self_withheld:, carried:, backed: }`.
   def call
     return nil unless capability
 
@@ -44,7 +48,8 @@ class CalibrationSessions::DrillInStats
       illustrations: illustrations,
       clarifications: clarification_counts,
       flagged_illustration_ids: flagged_illustration_ids,
-      rows: rows
+      rater_ids: participant_ids,
+      levels: levels
     }
   end
 
@@ -67,15 +72,15 @@ class CalibrationSessions::DrillInStats
 
   # population person_id => participant person_id (nil when their rater
   # isn't in the session). Reads the canonical PopulationSeeds#attribution
-  # so the grid rows, the tendency strip, and the revisit-request rater
+  # so the drill-in, the tendency strip, and the revisit-request rater
   # resolution always name the same rater for a person.
   def rater_for
     @rater_for ||= begin
-      attributed = CalibrationSessions::PopulationSeeds.new(
+      attributed = (@population_seeds || CalibrationSessions::PopulationSeeds.new(
         framework_id: @session.framework_id,
         participant_ids: participant_ids,
         facilitator_id: @session.facilitator_id
-      ).attribution
+      )).attribution
       calibrant_ids.index_with { |person_id| attributed[person_id] }
     end
   end
@@ -288,35 +293,28 @@ class CalibrationSessions::DrillInStats
     end
   end
 
-  # One row per participant (in session order), plus a trailing
-  # `rater_id: nil` row when unattributed members exist.
-  def rows
+  # ordinal => the members assessed at that level, sorted by name.
+  def levels
     people = Person.where(id: assessed_ordinals.keys).index_by(&:id)
-    grouped = assessed_ordinals.keys.group_by { |person_id| rater_for[person_id] }
+    assessed_ordinals.keys
+      .map { |person_id| dot_for(person_id, people[person_id]) }
+      .group_by { |dot| assessed_ordinals[dot[:person_id]] }
+      .transform_values { |dots| dots.sort_by { |dot| dot[:name] } }
+      .sort.to_h
+  end
 
-    ordered_raters = participant_ids + (grouped.key?(nil) ? [ nil ] : [])
-    ordered_raters.map do |rater_id|
-      members = grouped.fetch(rater_id, [])
-      {
-        rater_id: rater_id,
-        in_session: !rater_id.nil?,
-        people: members.group_by { |person_id| assessed_ordinals[person_id] }
-          .transform_values do |ids|
-            ids.map do |person_id|
-              rating = ratings[person_id] || {}
-              withheld = self_withheld?(person_id)
-              {
-                person_id: person_id,
-                name: people[person_id]&.name || "Unknown",
-                frequency: rating[:frequency],
-                self_frequency: withheld ? nil : rating[:self_frequency],
-                self_withheld: withheld,
-                carried: rating[:carried] || false,
-                backed: backed_person_ids.include?(person_id)
-              }
-            end.sort_by { |dot| dot[:name] }
-          end
-      }
-    end
+  def dot_for(person_id, person)
+    rating = ratings[person_id] || {}
+    withheld = self_withheld?(person_id)
+    {
+      person_id: person_id,
+      name: person&.name || "Unknown",
+      rater_id: rater_for[person_id],
+      frequency: rating[:frequency],
+      self_frequency: withheld ? nil : rating[:self_frequency],
+      self_withheld: withheld,
+      carried: rating[:carried] || false,
+      backed: backed_person_ids.include?(person_id)
+    }
   end
 end
