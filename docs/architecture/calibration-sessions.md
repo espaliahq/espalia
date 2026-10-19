@@ -12,7 +12,7 @@
 > the shared `Views::Shared::PersonPicker` typeahead for participants.
 > *Overview* — three tabs swapped inside a Turbo Frame (`?view=`, no
 > scroll jump — the drill-in's pane pattern): rater-tendency strip,
-> capability-divergence board, and **Score by cohort** (`OverviewStats` +
+> capability-divergence board, and **Score by level** (`OverviewStats` +
 > `CohortScores`, both in `calibration_sessions_overview`); draft-phase
 > agenda.
 > *Drill-in* — expectation text with role illustrations, the rater × level
@@ -47,7 +47,7 @@
 > on every read surface; see *Carried-vs-vetted provenance*.
 >
 > **Comparison drawer: SHIPPED** — the sticky bottom drawer (inspector +
-> pins, side by side) shared by Score by cohort and the capability
+> pins, side by side) shared by Score by level and the capability
 > drill-in, replacing the inline why-panel, the bottom person card, and
 > the separate compare tray; "What good looks like" folded into the
 > column-header ⓘ menus + person cards; **⚑ Flag example as unclear**
@@ -424,11 +424,17 @@ positioned dots on a shared axis, sorted by spread; click → drill-in:
   Delivery                        ●●● ●                       spread 0.4
 ```
 
-**Score by cohort** — the third tab: every calibrated person as an
+**Score by level** — the third tab: every calibrated person as an
 initialed dot on a 0–200% axis (100 = meeting the level, 200 = the next level
 in full — ADR-21), grouped by assessed level (the enrollment
 snapshot) and coloured by WHO rated them, so "Raj's people cluster low"
 is pre-attentive. Design rules, all deliberate:
+
+- **"Level" on the surface, "cohort" in the code.** "Cohort" already means
+  everyone enrolled in a cycle on the cycle report, so people read "level" here.
+  Identifiers stay: `?view=cohort`, `CohortView`, `CohortScores`,
+  `CohortDrawerCard`, `cohort_person` and the `cohorts` key of
+  `calibration_sessions_overview` (a client contract).
 
 - **The metric is the assessment's own number** — `% of expected`
   (`Scoring#performance_ratio`) at `perspective: :manager_only`, computed
@@ -445,7 +451,7 @@ is pre-attentive. Design rules, all deliberate:
   wears the dashed ring.
 - **Axis grammar is the divergence board's** — same track, same rater
   palette (`RaterColours`, shared), a labelled 100% reference line, a
-  median tick per cohort (median over unlocked scores only). Near-tied
+  median tick per level (median over unlocked scores only). Near-tied
   dots drop to a second lane rather than overlapping.
 - **Drill into why**: clicking a dot opens a server-rendered why-panel
   (`?cohort_person=`, swapped in the same frame) — the capabilities
@@ -915,7 +921,7 @@ Mechanics — everything not listed here is inherited untouched:
 | Enforced session sequencing | No known need |
 | Auto-resolving a clarification whose anchor entity is archived (it stays pending; the suggestion index / feed remain the manual resolve surfaces, and archived capabilities drop off the calibration surfaces anyway) | Stale open clarifications accumulate in practice |
 | Assessee-facing disclosure of calibration visibility | With the v2 visibility grant (org-norm decision) |
-| Extracting the drawer card SHELL (container/header/✕/Pin) shared by the cohort and capability faces — today duplicated between `CohortDrawerCard` and the drill-in's `drawer_card` | The next change that touches the 38vh cap, pinned ring, or dismiss controls in both places |
+| Extracting the drawer card SHELL (container/header/✕/Pin) shared by the level and capability faces — today duplicated between `CohortDrawerCard` and the drill-in's `drawer_card` | The next change that touches the 38vh cap, pinned ring, or dismiss controls in both places |
 | Batching the drill-in drawer's per-card queries (`PersonCard` ladder/ratings/evidence run per person; a full drawer is ~4×, bounded by the 3-pin cap) | The cap rises, or drawer renders show up in traces |
 
 ### In-surface definitions for the calibration vocabulary — BUILT
@@ -1000,7 +1006,7 @@ provenance. What that buys the surfaces:
 - **Above-level surplus for the org's high performers** (top ~30% by base
   competence, consistent-ish at L+1 on ~60% of behaviours). Without it no
   seeded person can read "above expectations" — every rating sits at the
-  enrolled level, performance never exceeds 100%, and the cohort
+  enrolled level, performance never exceeds 100%, and the Score by level
   why-panel's positive-only "Pulling it up" column is empty by
   construction. Skipped under a coasting rater (a fresh human rating would
   break their "all carried" story).
@@ -1029,18 +1035,18 @@ the session log visible throughout. Design decisions:
   their positions and the just-opened person APPENDS; each card has ONE
   dismiss (✕ — unpins a pinned card, closes an unpinned inspector) plus
   Pin to hold. Anyone held in the
-  drawer — inspected or pinned — reads by SIZE on the grid / cohort dots
+  drawer — inspected or pinned — reads by SIZE on the grid / level dots
   (1.5×, no ring or corner disc), so "already held below" is
   pre-attentive in the main pane. The host
   page is padded by the drawer's measured height, so page-end content
   always scrolls clear. Mobile is the SAME drawer one card wide.
 - **Inspector + pins, max 3 people across** (the compare tray's cap;
   horizontally scrollable if cramped). A pin is a PERSON, not a
-  snapshot: the card renders the context's face — cohort face (% of
+  snapshot: the card renders the context's face — level face (% of
   expected, gate, why columns, rater-tendency note) on the session page;
   capability face (the read-only ladder + level panel) on the drill-in.
   Pins ride every calibration-internal link, so they survive tab
-  switches, capability changes, and the cohort → drill-in jump. This
+  switches, capability changes, and the level → drill-in jump. This
   retires the inline why-panel, the bottom person card placement, and
   the separate `?view=compare` tray — one component, three fewer
   surfaces.
@@ -1098,7 +1104,7 @@ read-only adaptation of the assessment capability view:
   scoped to the FOCUSED level — the ask is about the cell on screen, which
   may sit above the assessed level. Gates unchanged (live session, viewer
   entitlement, one revisit ask per cell per session).
-- The cohort why-panel's "Open drill-in →" anchors at
+- The Score by level why-panel's "Open drill-in →" anchors at
   `#calibration-person-card`, landing the reader on the card it names.
 
 ### Carried-vs-vetted provenance on the read surfaces

@@ -88,17 +88,17 @@ module Views::CalibrationSessions::Glossary
     # same number is read by the person it describes. The scale's own
     # sentence comes from {Views::Assessments::Glossary} so the two surfaces
     # cannot drift; what is added here is the part that is true only of a
-    # cohort — manager ratings only.
+    # level — manager ratings only.
     pct_of_expected: {
       label: "% of expected",
       definition: "The same number this person's own assessment shows: how much of what their " \
                   "level expects they already show, across every capability. " \
                   "#{Views::Assessments::Glossary::SCALE_SENTENCE} " \
-                  "Manager ratings only, so cohorts compare exactly the judgments being calibrated."
+                  "Manager ratings only, so people at a level compare exactly the judgments being calibrated."
     },
     cohort_median: {
       label: "median",
-      definition: "The midpoint of the unlocked scores in this cohort — half sit " \
+      definition: "The midpoint of the unlocked scores at this level — half sit " \
                   "above it, half below. People whose score is still locked behind " \
                   "the coverage gate aren't counted."
     },
