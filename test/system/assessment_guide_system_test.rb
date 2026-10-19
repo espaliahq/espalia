@@ -1,0 +1,58 @@
+# frozen_string_literal: true
+
+require "application_system_test_case"
+
+class AssessmentGuideSystemTest < ApplicationSystemTestCase
+  DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE = [ 375, 812 ].freeze
+
+  setup do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+    @tenant = FactoryBot.create(:tenant)
+    @user = FactoryBot.create(:user, password: "password123")
+    ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:tenant_user, tenant: @tenant, user: @user) }
+
+    sign_in_as(@user)
+  end
+
+  # The top edge of each of the four step links, in order.
+  def station_tops
+    page.evaluate_script(<<~JS)
+      Array.from(document.querySelectorAll("nav[aria-label='The four steps'] li"))
+        .map((li) => Math.round(li.getBoundingClientRect().top))
+    JS
+  end
+
+  context "the guide" do
+    should "lay the four steps out in one row on desktop" do
+      visit assessment_guide_path
+      assert_text "One cycle. Four steps."
+
+      tops = station_tops
+      assert_equal 4, tops.size
+      assert_equal 1, tops.uniq.size, "expected the four steps side by side, got tops #{tops}"
+    end
+
+    should "stack the four steps on a phone without scrolling sideways" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_guide_path
+      assert_text "One cycle. Four steps."
+
+      tops = station_tops
+      assert_equal tops.sort, tops
+      assert_equal 4, tops.uniq.size, "expected the four steps stacked, got tops #{tops}"
+      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, MOBILE_SIZE.first
+    end
+
+    should "jump to a step from the step list" do
+      visit assessment_guide_path
+      assert_text "One cycle. Four steps."
+
+      click_selector_with_js_fallback "nav[aria-label='The four steps'] a[href='#align']",
+        expect_selector: "section#align:target"
+
+      assert_selector "section#align:target h2", text: "Sit down together and agree what's true"
+      assert_operator page.evaluate_script("document.getElementById('align').getBoundingClientRect().top"), :<, 200
+    end
+  end
+end
