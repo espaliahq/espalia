@@ -227,7 +227,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # Rater colour, or the neutral fill for a dot rated outside the room.
   def dot_fill(dot)
     index = rater_index(dot[:rater_id])
-    index ? rater_dot_class(index) : "bg-gray-500 dark:bg-gray-400"
+    index ? rater_dot_class(index) : NOT_IN_SESSION_FILL
   end
 
   def dot_description(dot, name)
