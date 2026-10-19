@@ -364,7 +364,7 @@ via the × button, Cancel, Esc, or a successful submit.
 
 **Operations-first (web + MCP parity).** Add/archive/publish/mapping all dispatch
 `Operations::Frameworks::*` (`AddCapability`, `AddCategory`, `ArchiveCapability`,
-`ArchiveCategory`, `DefineMigrationMapping`, `PublishVersion`) so the web
+`ArchiveCategory`, `DefineMigrationMapping` (as-you-go, from the archive modal), `DefineMigrationMappings` (the publish-review form's batch), `PublishVersion`) so the web
 controllers and the MCP tools share one implementation (the house rule).
 `AddCategory` is shape-preserving (applies live).
 `AddCapability`/`ArchiveCapability`/`ArchiveCategory` are shape-changing → they
