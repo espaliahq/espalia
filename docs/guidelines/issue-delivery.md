@@ -1,9 +1,9 @@
 # Delivering One Issue, End to End
 
-> Read this when: handing a single GitHub issue to an agent (or picking one up
-> yourself) to be taken from "open" to "PR green and reviewed" without
-> supervision. It is the delivery contract — the process rules that sit around
-> whatever the issue actually asks for.
+> Read this when: opening or updating any PR, and before handing a single
+> GitHub issue to an agent (or picking one up yourself) to be taken from "open"
+> to "PR green and reviewed" without supervision. It is the delivery contract —
+> the process rules that sit around whatever the issue actually asks for.
 
 The rules below are the ones that, when skipped, produce work that has to be
 redone: an issue nobody knew was being worked, a branch off the wrong base, a
@@ -63,16 +63,38 @@ touches **before** writing code; do not rely on defaults.
     `Closes #<n>`, and the Claude Code footer. Screenshots need the PR's
     number, so open the PR first, then run `bin/pr-screenshots <n> <files…>`
     and edit the printed links into the Screenshots section. Seeded dev data
-    only.
+    only — see [Screenshots in the PR body](#screenshots-in-the-pr-body).
 12. **Track CI, then track the review.** `gh pr checks <n> --watch` in the
     foreground. Then read CodeRabbit's *unresolved review threads* over
     GraphQL — `gh pr checks` does not reveal findings, and on a **stacked** PR
-    CodeRabbit skips auto-review entirely (see AGENTS.md → Learnings). Fix each
+    CodeRabbit skips auto-review entirely (see
+    [Reading a PR's review](#reading-a-prs-review-what-coderabbit-can-hide)). Fix each
     real finding as its own commit, push, re-watch, and repeat until CI is
     green and nothing unresolved is left unanswered.
 13. **Never merge, force-push, rewrite pushed history, delete branches, or
     touch production.** Writes to the dev tenant during verification are fine;
     keep them recognisable.
+
+## Reading a PR's review: what CodeRabbit can hide
+
+**`gh pr checks` does NOT reveal CodeRabbit findings.** Its CodeRabbit row reports the *check* status (e.g. "Review skipped" / "pass") which is independent of the review CodeRabbit posts as PR *review comments*. A green/"skipped" row can still hide actionable findings. Never conclude "no findings" from `gh pr checks` alone. Extraction rules (each learned the hard way):
+
+- **Read every CodeRabbit review *body*, not just the threads.** Findings on lines outside the PR's diff cannot be posted inline; CodeRabbit puts them in the review body under "Outside diff range comments" (`gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login=="coderabbitai") | .body'`). They are real findings with no thread to resolve — address them and say so in a PR comment. One was missed on [PR #410](https://github.com/mr-yum/growth-os/pull/410) by reading threads alone.
+- **The source of truth for OPEN findings is GraphQL review threads, not the REST comment list.** `isResolved` only exists there: `gh api graphql -f query='query { repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { isResolved isOutdated path line comments(first: 10) { nodes { author { login } body databaseId } } } } } } }'` and filter `isResolved == false`. CodeRabbit auto-resolves threads it verifies as fixed, so unresolved == still owed a fix or a reply.
+- **Never time-window filter (`created_at > <timestamp>`) to find "new" comments** — a review that lands seconds before your guessed cutoff vanishes silently (this exact miss happened on [PR #301](https://github.com/mr-yum/growth-os/pull/301)). Ask for unresolved threads instead.
+- **Always `--paginate`** on `gh api repos/{owner}/{repo}/pulls/<n>/comments` — the default page is 30 and a multi-round PR exceeds it quietly.
+- `gh pr view <n> --json reviews --jq '…coderabbitai…'` still covers review-level bodies (walkthrough, "actionable comments posted: N").
+- Replying does NOT resolve a thread; a fix push usually gets auto-resolved by CodeRabbit once verified. Check the unresolved count again after replies/pushes rather than assuming.
+
+CodeRabbit can also post no review at all and still show a green row. Check for each skip before reading silence as clean:
+
+- **CodeRabbit's rate limit also refuses the manual `@coderabbitai review` trigger, and its "wait N minutes" is not reliable.** A limited PR shows a "Review limit reached" comment and `gh pr checks` reports the CodeRabbit row as `pass` with "Review rate limited" — a green row, no review. Posting `@coderabbitai review` inside the limit answers "Action not completed — Review rate limited" ([PR #404](https://github.com/mr-yum/growth-os/pull/404) was refused 22 minutes after a "wait 7 minutes" notice; a later retry got "Review triggered"). So: never read a rate-limited PR as clean, retry the trigger until the reply says "Review triggered", then poll for the summary comment ("No actionable comments…" / "Actionable comments posted: N") plus the GraphQL unresolved-thread count. The "Run on-demand review" checkbox draws on paid capacity after the free window; leave that to a human.
+- **CodeRabbit does not auto-review a PR whose base is not the default branch.** It posts "Review skipped — Auto reviews are disabled on base/target branches other than the default branch" and nothing else, which reads exactly like a clean review. This bites every stacked PR (base = the branch below it), which is the shape this repo asks for when work is split across issues. Two remedies: comment `@coderabbitai review` to trigger a single review while the PR is still stacked, and re-check after `gh pr edit <n> --base <next>` retargets it as the stack lands. Never treat the absence of CodeRabbit comments on a stacked PR as "no findings" — check for the skip notice first (`gh pr view <n> --json comments -q '.comments[]|select(.author.login=="coderabbitai")|.body'`). Repo-wide auto-review on other bases would need `reviews.auto_review.base_branches` in `.coderabbit.yaml`; it is deliberately not set today.
+- **A PR opened by a bot gets no review.** Every Dependabot PR is unreviewed; see [dependencies.md](dependencies.md).
+
+## Screenshots in the PR body
+
+**Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [chrome-mcp.md](chrome-mcp.md)). GitHub has no image-upload API, so publish them to this repo's orphan **`screenshots` branch** with `bin/pr-screenshots <pr-number> tmp/visual/<task>/<file>.png …` and paste the markdown it prints into the PR body. It needs the PR's number, so open the PR first, then publish and edit the links in. Each image lands under `pr-<n>/` on that branch, which shares no history with `main`. The commit is built with git plumbing and a throwaway index, so the working tree and the current branch are never touched. The links are pinned to the upload's commit, so a later upload can't change an old PR. Because the repo is private, the images render only for people signed in to GitHub with read access. Never commit screenshots to `main` or a feature branch; `tmp/visual/` stays gitignored. **`bin/pr-screenshots` is pre-authorized** via `.claude/settings.json`, so use it by default without asking. The branch is visible to everyone with repo access and is never cleaned up, so publish seeded or demo data only; dev names are whimsified pseudonyms, so dev-tenant screenshots qualify. Never upload a screenshot showing real customer data, credentials or tokens, by this script or by dragging it into the PR editor, which uploads it to GitHub just the same. Redact it or recapture it on seeded data, and leave it out if you can't. Name files for what they show (`desktop-1400-feed-end.png`, not `05b.png`), since the file name, without its extension, becomes the alt text. Skip screenshots entirely for purely backend/internal changes with no visible surface.
 
 ## Long-running work: block, don't poll
 
