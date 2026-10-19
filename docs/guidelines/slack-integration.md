@@ -58,9 +58,14 @@ The steps, for whoever holds the GrowthOS Slack app:
    granted, reconnect that workspace from GrowthOS: **Integrations → Slack →
    Disconnect**, then **Connect Slack**. The OAuth flow asks for
    `Slack::BOT_SCOPES` afresh and stores the new token; a reconnect also
-   clears cached Slack ids, which re-resolve by email on next contact. A
-   workspace that is missing a scope fails loudly: `missing_scope` from
-   Slack's API, and the command answers "dispatch_failed" in Slack.
+   clears cached Slack ids, which re-resolve by email on next contact.
+   What a missing scope looks like depends on which one. Without `commands`,
+   Slack never sends `/growthos` to GrowthOS, so the command does not exist in
+   that workspace. Without a scope GrowthOS calls with (`users:read` to
+   resolve the person, `chat:write` to DM them), Slack answers `missing_scope`:
+   the command logs `[slack] command failed` and replies "GrowthOS couldn't
+   open the form just now", and a DM is dropped with `[slack] dm skipped` in
+   the log. `views.open` itself needs no scope.
 5. Prove it in the workspace: `/growthos feedback` opens the modal, the
    message shortcut appears in a message's **More actions** menu, and a
    submission DMs a confirmation. The signing secret in Rails credentials
