@@ -568,6 +568,8 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_no_selector "[data-rater-id][data-dimmed='true']"
 
     raj_chip = "button[data-drill-in-filter-rater-param='#{@em_2.id}']"
+    assert_operator page.evaluate_script(%(document.querySelector("#{raj_chip}").getBoundingClientRect().height)),
+                    :>=, 44, "the chip is the filter's only control, so it takes a full tap target"
     click_selector_with_js_fallback(raj_chip, expect_selector: "#{raj_chip}[aria-pressed='true']")
     # Mia's people (and her mean) dim; Raj's stay; dimmed dots stay links.
     assert_selector "a[data-person-id='#{@report_1.id}'][data-dimmed='true']"

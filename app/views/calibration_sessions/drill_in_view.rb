@@ -411,7 +411,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def rater_legend
     # One scrolling line on a phone — twenty raters would otherwise push the
     # first level a screen down — and wrapped where there is room.
-    div(class: "mt-3 -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 @lg:flex-wrap " \
+    div(class: "mt-2 -mx-1 flex items-center gap-x-2 overflow-x-auto px-1 @lg:flex-wrap " \
               "text-xs text-gray-600 dark:text-gray-300") do
       legend_rater_ids.each { |rater_id| legend_chip(rater_id) }
       if all_dots.any? { |dot| dot[:rater_id].nil? }
@@ -441,26 +441,30 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # A toggle: dims every other rater's marks, still clickable; pressed
   # again, it clears. The state is `?rater=` (drill-in-filter).
   def legend_chip(rater_id)
+    # A 44px hit area around a compact pill; focus uses the global
+    # :focus-visible ring (a teal ring fails 3:1 on white).
     button(
       type: "button",
-      class: "inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full " \
-             "border border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white " \
-             "hover:bg-gray-50 dark:hover:bg-gray-700 aria-pressed:border-gray-900 aria-pressed:font-semibold " \
-             "dark:aria-pressed:border-white focus-visible:outline-hidden focus-visible:ring-2 " \
-             "focus-visible:ring-primary",
+      class: "group inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-full",
       aria: { pressed: (rater_id == @rater_filter).to_s },
       title: "Show only #{rater_name(rater_id)}'s ratings — click again to show everyone",
       data: { action: "drill-in-filter#toggle", drill_in_filter_rater_param: rater_id }
     ) do
-      span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
-           aria: { hidden: "true" })
-      plain rater_name(rater_id)
+      span(class: "inline-flex min-h-7 items-center gap-1.5 whitespace-nowrap rounded-full border " \
+                  "border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white " \
+                  "group-hover:bg-gray-50 dark:group-hover:bg-gray-700 group-aria-pressed:border-gray-900 " \
+                  "group-aria-pressed:font-semibold dark:group-aria-pressed:border-white") do
+        span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
+             aria: { hidden: "true" })
+        plain rater_name(rater_id)
+      end
     end
   end
 
   # This capability's divergence-board row — usually the one the room
-  # clicked to get here: each rater's mean on it across every level, on the same 0–3 ticks as
-  # the level rows below, with the ⚠ badge when the board flags it.
+  # clicked to get here: each rater's mean on it across every level, on the
+  # same 0–3 ticks as the level rows below, with the ⚠ badge when the board
+  # flags it.
   def orientation_row
     div(
       class: "mt-4 grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
