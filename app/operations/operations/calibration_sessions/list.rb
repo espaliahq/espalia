@@ -2,15 +2,18 @@
 
 # Lists calibration sessions visible to the caller — sessions they
 # facilitate, or every session in the tenant for admins. Optionally
-# narrowed to one assessment cycle.
+# narrowed to one assessment cycle. Archived sessions are left out unless
+# asked for, matching the web list.
 class Operations::CalibrationSessions::List < Operations::Base
   include Operations::CalibrationSessions::ScopeChecks
 
-  description "List calibration sessions you facilitate (admins see all), optionally filtered to one assessment cycle."
+  description "List calibration sessions you facilitate (admins see all), optionally filtered to one " \
+              "assessment cycle. Archived sessions are omitted unless include_archived is true."
   category :read
   approval :none
 
   parameter :cycle_id, String
+  parameter :include_archived, :boolean
 
   def policy_check
     authorize CalibrationSession, :index?
@@ -19,6 +22,7 @@ class Operations::CalibrationSessions::List < Operations::Base
   # @return [Hash] `{ sessions: [{ session_id, cycle_id, name, status, ... }] }`
   def perform
     scope = visible_sessions
+    scope = scope.unarchived unless params[:include_archived]
     if params[:cycle_id]
       ensure_uuid!(:cycle_id, params[:cycle_id])
       scope = scope.for_cycle(params[:cycle_id])
@@ -37,7 +41,8 @@ class Operations::CalibrationSessions::List < Operations::Base
           participant_count: counts.fetch([ session.id, "participant" ], 0),
           calibrant_count: counts.fetch([ session.id, "calibrant" ], 0),
           started_at: session.started_at,
-          closed_at: session.closed_at
+          closed_at: session.closed_at,
+          archived_at: session.archived_at
         }
       end
     }

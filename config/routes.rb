@@ -293,6 +293,9 @@ Rails.application.routes.draw do
     member do
       post :start, to: "calibration_sessions/starts#create"
       post :close, to: "calibration_sessions/closes#create"
+      # Reversible: a closed session leaves the default list and comes back.
+      post :archive, to: "calibration_sessions/archives#create"
+      post :unarchive, to: "calibration_sessions/unarchives#create"
     end
     # :id on both nested resources is the person_id being added/removed.
     resources :participants, only: [ :create, :destroy ],

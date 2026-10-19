@@ -225,6 +225,68 @@ class Operations::CalibrationSessions::OperationsTest < ActiveSupport::TestCase
     end
   end
 
+  context "Archive and Unarchive" do
+    setup do
+      @session_id = define![:session_id]
+      Operations::CalibrationSessions::Close.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+    end
+
+    should "archive a closed session, hide it from List, and restore it" do
+      result = Operations::CalibrationSessions::Archive.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+      assert_equal({ session_id: @session_id, archived: true }, result)
+      session = CalibrationSession.find(@session_id)
+      assert session.archived?
+      assert_equal @dept_head.id, session.archived_by_id
+
+      listed = Operations::CalibrationSessions::List.call(context: @facilitator_context, params: {})
+      assert_empty listed[:sessions]
+      listed = Operations::CalibrationSessions::List.call(
+        context: @facilitator_context, params: { include_archived: true }
+      )
+      assert_equal [ @session_id ], listed[:sessions].map { |s| s[:session_id] }
+      assert_not_nil listed[:sessions].first[:archived_at]
+
+      Operations::CalibrationSessions::Unarchive.call(
+        context: @facilitator_context, params: { session_id: @session_id }
+      )
+      assert_not session.reload.archived?
+      assert_equal "closed", session.status
+    end
+
+    should "treat a repeated archive as a no-op" do
+      2.times do
+        Operations::CalibrationSessions::Archive.call(
+          context: @facilitator_context, params: { session_id: @session_id }
+        )
+      end
+      stream = EventStreamNaming.calibration_session_stream(@session_id)
+      archived = Rails.configuration.event_store.read.stream(stream)
+        .of_type(AssessmentCycles::Events::CalibrationSessionArchived).count
+      assert_equal 1, archived
+    end
+
+    should "deny archiving a session that isn't closed" do
+      live_id = define!(name: "Still live")[:session_id]
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Archive.call(
+          context: @facilitator_context, params: { session_id: live_id }
+        )
+      end
+    end
+
+    should "deny a participant" do
+      assert_raises(Pundit::NotAuthorizedError) do
+        Operations::CalibrationSessions::Archive.call(
+          context: context_for(@em_1), params: { session_id: @session_id }
+        )
+      end
+    end
+  end
+
   context "List and Get" do
     setup { @session_id = define![:session_id] }
 
