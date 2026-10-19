@@ -16,7 +16,8 @@ require "set"
 # docs/architecture/calibration-sessions.md.
 #
 # Lifecycle: draft (participants + population editable) → started
-# (both frozen) → closed. Cross-stream effects (closing open sessions
+# (both frozen) → closed, and a closed session can be archived (hidden
+# from the default list) and restored any number of times. Cross-stream effects (closing open sessions
 # when the cycle closes) happen via a sync handler, never from inside
 # this aggregate.
 #
@@ -39,6 +40,8 @@ class AssessmentCycles::CalibrationSessionAggregate
     @revisited_cells = Set.new
     @raised_request_ids = Set.new
     @status = :new
+    @name = nil
+    @archived = false
   end
 
   # Defines a new calibration session in draft state.
@@ -339,6 +342,58 @@ class AssessmentCycles::CalibrationSessionAggregate
     }))
   end
 
+  # Puts a closed session away. Nothing is deleted — outcomes reference the
+  # session — and {#unarchive} reverses it. No-op when already archived.
+  #
+  # @param archived_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] if never defined, or not closed
+  def archive(archived_by_id: nil)
+    raise "Session not defined" if @status == :new
+    raise "Only a closed session can be archived" unless @status == :closed
+    return if @archived
+
+    apply(AssessmentCycles::Events::CalibrationSessionArchived.new(data: {
+      session_id: @session_id,
+      archived_by_id: archived_by_id
+    }))
+  end
+
+  # Restores an archived session to the default list. No-op when it isn't
+  # archived, so a retried restore is harmless.
+  #
+  # @param unarchived_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] if never defined
+  def unarchive(unarchived_by_id: nil)
+    raise "Session not defined" if @status == :new
+    return unless @archived
+
+    apply(AssessmentCycles::Events::CalibrationSessionUnarchived.new(data: {
+      session_id: @session_id,
+      unarchived_by_id: unarchived_by_id
+    }))
+  end
+
+  # Renames the session in any status. Whitespace is stripped; an unchanged
+  # name is a no-op.
+  #
+  # @param name [String] the new name
+  # @param renamed_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] if never defined, or the name is blank
+  def rename(name, renamed_by_id: nil)
+    raise "Session not defined" if @status == :new
+
+    stripped = name.to_s.strip
+    raise "Name can't be blank" if stripped.empty?
+    return if stripped == @name
+
+    apply(AssessmentCycles::Events::CalibrationSessionRenamed.new(data: {
+      session_id: @session_id,
+      name: stripped,
+      previous_name: @name,
+      renamed_by_id: renamed_by_id
+    }))
+  end
+
   private
 
   def ensure_draft!
@@ -363,6 +418,7 @@ class AssessmentCycles::CalibrationSessionAggregate
     @facilitator_id = event.data[:facilitator_id]
     @participant_ids = Set.new(event.data[:participant_ids])
     @calibrant_ids = Set.new(event.data[:calibrant_person_ids])
+    @name = event.data[:name].to_s.strip
     @status = :draft
   end
 
@@ -407,5 +463,17 @@ class AssessmentCycles::CalibrationSessionAggregate
 
   on AssessmentCycles::Events::CalibrationSessionClosed do |_event|
     @status = :closed
+  end
+
+  on AssessmentCycles::Events::CalibrationSessionArchived do |_event|
+    @archived = true
+  end
+
+  on AssessmentCycles::Events::CalibrationSessionUnarchived do |_event|
+    @archived = false
+  end
+
+  on AssessmentCycles::Events::CalibrationSessionRenamed do |event|
+    @name = event.data[:name]
   end
 end

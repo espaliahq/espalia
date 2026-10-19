@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_15_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -187,6 +187,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_15_000003) do
     t.string "status", default: "draft", null: false
     t.uuid "tenant_id", null: false
     t.datetime "updated_at", null: false
+    t.datetime "archived_at"
+    t.uuid "archived_by_id"
     t.index ["facilitator_id"], name: "index_calibration_sessions_on_facilitator_id"
     t.index ["status"], name: "index_calibration_sessions_on_status"
     t.index ["tenant_id", "cycle_id"], name: "index_calibration_sessions_on_tenant_id_and_cycle_id"
