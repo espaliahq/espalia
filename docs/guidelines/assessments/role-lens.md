@@ -18,7 +18,7 @@ A person can be read against a role or level they are not in — "how would I re
 
 Avoid "aspirational assessment", "what-if", "shadow ratings" and "exploration ratings": each implies a second copy of the truth, and there is only one rating per cell.
 
-- **Disclosure is per role.** A manager rating on a cell reaches the assessee only once alignment has started against a role whose scope contains that cell — the home rule (see *Self-assessment privacy*) applied per role. There is no side channel: disclosure is the one deliberate act of starting alignment.
+- **Disclosure is per role.** A manager rating on a cell reaches the assessee only once alignment has started against a role whose scope contains that cell — the home rule (see [*Self-assessment privacy*](../assessments.md)) applied per role. There is no side channel: disclosure is the one deliberate act of starting alignment.
 - **Freeze is per cell; completion is per role.** A cell freezes once any started role's scope contains it, and each role's completion gate counts only that role's current-level cells.
 
 ### Reading through a lens
@@ -61,7 +61,7 @@ Looking through a lens tells nobody — it writes nothing. **Declaring an explor
 - **The list.** `/assessments` gains an **Explorations** section on the person's own list — "Product Manager · PM3", then "4 of 10 rated · started by you · since 3 Oct" (`LevelCoverage`'s vetted self count at the target level in the open cycle; omitted between cycles) — and a team card an **Exploring PM3** chip (`ExplorationChips`, the lens chip's sky tone; not on skip-level cards, matching `assessments_mine`). Both link into the lens. `Assessments::OpenExplorations` reads them.
 - **Moving into the target closes it.** A role or level change onto the explored role and level closes the exploration as `moved` (the aggregate, same unit of work), so it never lingers naming the record.
 - **Read model.** `assessment_explorations`, written by `CurrentAssessment`, PK = the event-carried `exploration_id` (externally addressed by MCP, so a rebuild reproduces it); a partial unique index mirrors one-open-per-role. The projection broadcasts the sync signal, so the banner and the feed update live.
-- **Notified.** The other party, on start and on close (`ExplorationNotifier` → `ExplorationStartedNotifier` / `ExplorationClosedNotifier`; see *Comment notifications* for the delivery model): the assessee's act reaches the manager side (reporting manager + active delegates), the manager side's reaches the assessee (and the reporting manager, when a delegate acted), a close by a move into the role reaches both, and never the actor.
+- **Notified.** The other party, on start and on close (`ExplorationNotifier` → `ExplorationStartedNotifier` / `ExplorationClosedNotifier`; see [*Comment notifications*](evidence.md) for the delivery model): the assessee's act reaches the manager side (reporting manager + active delegates), the manager side's reaches the assessee (and the reporting manager, when a delegate acted), a close by a move into the role reaches both, and never the actor.
 - **MCP.** `assessments_start_exploration` / `assessments_close_exploration` (`:mcp_client`), `assessments_explorations_list` (`:none`); `assessments_mine` carries `explorations: { own:, team: }` (open ones) and `assessments_get` under a lens carries the lens role's open one as `current_exploration`.
 
 ### Role-scoped reads (NON-NEGOTIABLE)

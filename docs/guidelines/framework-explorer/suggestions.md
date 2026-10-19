@@ -8,7 +8,7 @@
 
 **Edit mode only.** The context pane does not render in view mode — viewers see no **Activity** toggle and no right-hand pane. View mode is "published state, clean"; collaborative chatter lives behind `/edit`.
 
-The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the suggestions index's panel response (`GET /frameworks/:id/suggestions?layout=panel`) — the pane's own frame carries `layout=panel` too, so the **path** is what tells the two apart, not the param. See *Activity feed coverage* and §9.
+The right-hand context pane keeps the Turbo Frame id `#suggestion-panel` (the focus protocol and every `data-turbo-frame` target predate the feed and still name it), but what it renders is the **activity feed** — `Views::Frameworks::Activity::PanelFrame`, swapped for `Activity::SuggestionCardFrame` at suggestion focus. `Suggestions::PanelFrame` and `FocusedSuggestionsQuery` now serve only the suggestions index's panel response (`GET /frameworks/:id/suggestions?layout=panel`) — the pane's own frame carries `layout=panel` too, so the **path** is what tells the two apart, not the param. See [*Activity feed coverage*](../framework-explorer.md) and §9.
 
 It narrows its contents to the currently focused scope. There are four focus levels, each narrower than the previous:
 
@@ -69,7 +69,7 @@ left implicit:
 
 Each suggestion row must answer three questions at a glance: **what kind of entity**, **what action**, and **where in the framework**. Internal categorisations (review tiers, entity type codes) are never shown — they serve the system, not the user.
 
-> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **suggestions index's panel response** (`GET /frameworks/:id/suggestions?layout=panel`, i.e. `SuggestionsController#render_panel`), the only caller left since the context pane became the activity feed. Grep by that path, not by `layout=panel`: the activity frame sends the same param. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under *Activity feed coverage*.
+> **Which surface this describes.** The *principles* below govern every place a suggestion is listed, the pane's activity feed included. The *mechanics* — `Suggestions::PanelFrame#header`, `FocusedSuggestionsQuery` — belong to the **suggestions index's panel response** (`GET /frameworks/:id/suggestions?layout=panel`, i.e. `SuggestionsController#render_panel`), the only caller left since the context pane became the activity feed. Grep by that path, not by `layout=panel`: the activity frame sends the same param. The pane's own header is §8's; its entries are `Views::Frameworks::Activity::Entry`, whose kinds, groups and anchors are covered under [*Activity feed coverage*](../framework-explorer.md).
 
 **Panel header** (rendered by `Suggestions::PanelFrame#header`):
 - **Focus title** — derived from `FocusedSuggestionsQuery#descriptor`:

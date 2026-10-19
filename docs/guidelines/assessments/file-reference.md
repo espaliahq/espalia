@@ -16,13 +16,13 @@
 | `app/views/assessments/carried_ratings/index_view.rb` | The review page — every carried cell ticked, with its expectation and this cycle's feedback |
 | `app/operations/operations/assessments/confirm_carried_ratings.rb` | Shared web + MCP bulk confirm — checks each cell is still carried, then confirms through `RateSelf` / `RateAsManager` |
 | `app/views/assessments/header_chrome.rb` | Shared header chrome for both show views — the lens control, the status pill or lens banner, the lens modal, and `lens_params` for frame srcs |
-| `app/views/assessments/lens_control.rb` | The shortcode chip as the lens control — the role's ladder, "Back to E3", "Another role…" (see *Role lens*) |
+| `app/views/assessments/lens_control.rb` | The shortcode chip as the lens control — the role's ladder, "Back to E3", "Another role…" (see [*Role lens*](role-lens.md)) |
 | `app/views/assessments/lens_role_modal.rb` | "Read against another role" — GET form, role by family, level kept at the reader's ordinal |
 | `app/views/assessments/lens_banner.rb` | The lines that replace the status pill under a lens — what it reads against, and where alignment against the lens role stands (with the manager's start) |
 | `app/views/assessments/start_lens_alignment_modal.rb` | "Start alignment against PM3?" — the confirmation, a `Kit::Modal` form |
 | `app/views/assessments/lens_alignment_chips.rb` | "Aligning · PM3" chips linking into each started lens role |
 | `app/queries/assessments/lens_alignments.rb` | The started lens-role alignments per participation — list cards and the home page |
-| `app/models/assessments/disclosure.rb` | Disclosed and frozen cells — the union of started roles' scopes (see *Lifecycle*) |
+| `app/models/assessments/disclosure.rb` | Disclosed and frozen cells — the union of started roles' scopes (see [*Lifecycle*](lifecycle.md)) |
 | `app/read_models/assessment_cycle_role_alignment.rb` | One row per role alignment has started against (home included), written by `CurrentAssessment` |
 | `app/operations/operations/assessments/{start,complete,reopen}_alignment.rb` | The alignment milestones, web and MCP, per role (`AlignmentLens` resolves the role) |
 | `app/contexts/person_development/async_handlers/lens_alignment_notifier.rb` | Tells the assessee when alignment against another role starts |
@@ -80,7 +80,7 @@
 | `app/controllers/assessments/alignment_reopenings_controller.rb` | Manager-only POST — dispatches `Operations::Assessments::ReopenAlignment`, returns the cycle to `aligning` (agreed values preserved) |
 | `app/operations/operations/assessments/reopen_alignment.rb` | Shared web + MCP operation — re-open a completed alignment (manager-only, cycle still open) |
 | **Notifications** | |
-| `app/contexts/person_development/async_handlers/comment_notifier.rb` | Async handler: `CommentPosted` → reply / assessee / manager-side notifications (see *Comment notifications*) |
+| `app/contexts/person_development/async_handlers/comment_notifier.rb` | Async handler: `CommentPosted` → reply / assessee / manager-side notifications (see [*Comment notifications*](evidence.md)) |
 | `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
 | `app/queries/assessments/role_scope.rb` | The ONE definition of the cells a role reads (ADR-22) — active bound capabilities × their expectations, plus the bindings scoring uses; every rating reader filters through it via `AssessmentLevelRating.within` |
@@ -112,12 +112,12 @@
 | `app/javascript/controllers/frame_error_controller.js` | Shared lazy-frame failure state — error + Retry in place of a stuck "Loading…" (see the controllers table) |
 | `app/components/kit/frame_load_error.rb` | The hidden `role="alert"` block `frame-error` reveals — Retry, plus an optional Close for modals (whose own ×/Cancel went down with the hidden frame). Callers pass `subject:` ("the form", "the discussion") and the sentence — including whether its tail says "close this" — is built from `subject:` + `closeable:`, so the copy can't promise an exit the site doesn't render. Owns `BUTTON_CLASSES`, the canonical secondary-button treatment the evidence forms' `SECONDARY_BTN` point at |
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
-| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock, lifted when the item may stay unplaced) + the capability/level picker (see *The unified "Applies to" block*) |
-| `app/views/evidence/recipient_picker_form.rb` / `recipient_row.rb` / `recipient_candidates_frame.rb` | The "Give feedback" step: who is it for? Suggestions + typeahead over the recipient directory; each row navigates the `evidence-modal` frame to the `:new` form (see *Proactive feedback*) |
+| `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock, lifted when the item may stay unplaced) + the capability/level picker (see [*The unified "Applies to" block*](evidence.md)) |
+| `app/views/evidence/recipient_picker_form.rb` / `recipient_row.rb` / `recipient_candidates_frame.rb` | The "Give feedback" step: who is it for? Suggestions + typeahead over the recipient directory; each row navigates the `evidence-modal` frame to the `:new` form (see [*Proactive feedback*](evidence.md)) |
 | `app/views/assessments/unplaced_feedback_notice.rb` | "N pieces of feedback about you are waiting to be placed" on the assessment, linking to the hub's "Feedback to place" |
 | `app/javascript/controllers/evidence_hub_controller.js` | Clicks the hub's "Give feedback" trigger on arrival when the URL carries `?give=1` |
-| `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see *Evidence-link valence*) |
-| `app/views/assessments/evidence/link_thread_frame.rb` | One linkage's discussion thread (lazy frame in the evidence card's disclosure) — lifecycle rows + comment cards + composer + removed/withdrawn notices (see *Evidence-linkage discussion threads*) |
+| `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see [*Evidence-link valence*](evidence.md)) |
+| `app/views/assessments/evidence/link_thread_frame.rb` | One linkage's discussion thread (lazy frame in the evidence card's disclosure) — lifecycle rows + comment cards + composer + removed/withdrawn notices (see [*Evidence-linkage discussion threads*](evidence.md)) |
 | `app/queries/assessments/evidence_link_thread_query.rb` | Assembles a linkage thread — comments + stream-read lifecycle entries (linked / revalenced / removed / withdrawn) |
 | `app/controllers/assessments/evidence_link_threads_controller.rb` | `GET /assessments/:id/evidence/:evidence_id/link_thread` — serves the thread frame (comment-policy gated) |
 | `app/operations/operations/assessments/set_evidence_link_valence.rb` | Shared web + MCP operation — reclassify one link's valence (`EvidenceLinkRevalenced`; no-op when unchanged) |

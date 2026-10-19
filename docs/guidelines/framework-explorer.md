@@ -630,6 +630,6 @@ Update the file that holds the section — see *Where everything lives* above �
 - **New or modified components** — update the file reference
 - **New Stimulus controllers or changed responsibilities** — update the Stimulus controllers file
 
-Never renumber a section or a lesson: code comments and other guides cite them. Keep this entry point small enough to load on every visit; a concern that grows large moves to its own file. `test/integration/agent_guidance_test.rb` fails if any guide passes Claude Code's per-file limit.
+Never renumber a section or a lesson: code comments and other guides cite them. Keep this entry point small enough to load on every visit; a concern that grows large moves to its own file. `test/integration/agent_guidance_test.rb` fails when what one directory loads passes 100k characters (this core, plus the guides of every directory above it), and when any guide passes Claude Code's 150k per-file limit.
 
 If a lesson or decision is superseded, update or remove the old entry rather than appending a contradiction.
