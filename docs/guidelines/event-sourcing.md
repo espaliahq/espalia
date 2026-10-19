@@ -109,6 +109,10 @@ When adding a read model, decide its external-identity strategy deliberately. Th
 
 A rating belongs to a cell, not a role (ADR-22), so `assessment_level_ratings` has no role column. Any query over it outside the `CurrentAssessment` projection must pass through `AssessmentLevelRating.within(Assessments::RoleScope…)` or announce `.across_all_roles`; the `GrowthOs/RatingsMustBeRoleScoped` cop enforces it. The rule and its exemptions live in [assessments/role-lens.md → Role-scoped reads](assessments/role-lens.md). A new read model that stores rating-derived state inherits the rule: decide which role it reads for before writing the projection.
 
+## Re-keying on `FrameworkVersionMigrated` merges on collision
+
+Any read model keyed by `capability_stable_id` under a unique index must merge on collision in its `FrameworkVersionMigrated` handler. An `evolved` survivor can already be rated/linked by the same person at the same natural key, so a plain `update_all` re-key trips the index and rolls back the publish. Follow `rekey_ratings` / `rekey_links` (keep the colliding row under the retiring id, flagged) and see ADR-17 in [adrs.md](../architecture/adrs.md).
+
 ## Replay-mode side-effect suppression
 
 Replay must not produce side effects beyond writing read models — no Turbo broadcasts, no job enqueuing, no ActionCable, no outbound HTTP.
