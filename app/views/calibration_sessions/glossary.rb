@@ -81,13 +81,6 @@ module Views::CalibrationSessions::Glossary
                   "below those people's own view of themselves. It is a signal to " \
                   "discuss, not a verdict — they may be the room's most honest rater."
     },
-    evidence: {
-      label: "Evidence",
-      definition: "The share of this rater's rated cells that carry at least one " \
-                  "piece of linked feedback. Substantiation is a separate axis " \
-                  "from leniency: rating low and backing it is not the same as " \
-                  "rating low."
-    },
     carried: {
       label: "% carried",
       definition: "The share of at-level cells whose rating was carried forward from " \

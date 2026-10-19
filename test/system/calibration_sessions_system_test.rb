@@ -205,10 +205,11 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     # ── Strip content, on the default tab ──
     assert_selector "a[role='tab'][aria-selected='true']", text: "Rater tendency"
     assert_no_text "CAPABILITY DIVERGENCE"
-    # Carried-forward values are marked, not hidden and not excluded.
-    assert_text "Carried"
-    # Mia has 3 at-level cells; 1 of them is carried.
-    assert_text "1 of 3"
+    # Carried-forward values are marked, not hidden and not excluded: Mia's
+    # n is 3 rated cells, 1 of them carried.
+    assert_text "33% carried"
+    # Readiness lives on its own card; the strip keeps only bias columns.
+    within("table", text: "Distribution") { assert_no_text "Evidence" }
     # The silent rater: a sentence, never zeroed columns.
     assert_text "No ratings yet — not counted in the org mean or any column."
     # No curation affordances on a live session

@@ -207,10 +207,9 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       get calibration_session_path(@session_record)
 
       assert_response :success
-      # The row stays (readiness is its job) but reads as a state, not as
-      # zeroed measurements.
+      # The row stays but reads as a state, not as zeroed measurements.
       assert_includes response.body, "No ratings yet"
-      assert_select "td[colspan='5']", text: /No ratings yet/
+      assert_select "td[colspan='3']", text: /No ratings yet/
       # The other tabs' content is NOT on this page — one pane at a time.
       assert_not_includes response.body, "Capability divergence</h2>"
     end
