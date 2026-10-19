@@ -271,6 +271,10 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
     # height: on a phone the scrollport is the leftover viewport, #384, which is
     # shorter than a tall 11-role row.)
     page.execute_script("arguments[0].scrollIntoView({ block: 'start' });", row)
+    # The scroll leaves the pointer over a row further down, and once Chrome
+    # recomputes `:hover` this row's kebab is `opacity: 0` again, so hover once
+    # more where the row now rests. Under load the recompute could beat the find.
+    row.find("td", match: :first).hover
     # rubocop:disable SystemTests/FlakeProneClick
     row.find("button[aria-label='Capability actions']").click
     # rubocop:enable SystemTests/FlakeProneClick
