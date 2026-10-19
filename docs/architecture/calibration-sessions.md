@@ -10,6 +10,9 @@
 > `CalibrationSessionPolicy`; `PopulationSeeds`.
 > *Setup* — list / define / draft curation / readiness / start / close, with
 > the shared `Views::Shared::PersonPicker` typeahead for participants.
+> *Housekeeping* — the list groups sessions by cycle; a closed session can be
+> **archived** and restored (#521), and any session **renamed** in place.
+> See *Lifecycle*.
 > *Overview* — three tabs swapped inside a Turbo Frame (`?view=`, no
 > scroll jump — the drill-in's pane pattern): rater-tendency strip,
 > capability-divergence board, and **Score by cohort** (`OverviewStats` +
@@ -151,7 +154,7 @@ cycle's stream. Reasons this is load-bearing:
 ### Lifecycle
 
 ```
-draft ──▶ started ──▶ closed
+draft ──▶ started ──▶ closed ⇄ archived   (archive / restore; rename in any status)
   │  participants + population editable
   │
   started: both sets FROZEN (snapshot carried on the event — the ADR-19
@@ -163,6 +166,25 @@ draft ──▶ started ──▶ closed
   the cycle's close event — same section of the RES initializer as the other
   cross-stream sync handlers, and like them it MUST NOT be registered as a
   replayable projection.
+- **Archive is reversible state on a closed session, not a fourth status.**
+  `archive` / `unarchive` (facilitator or tenant admin, closed sessions only)
+  hide the session from the default list and bring it back; nothing is
+  deleted, because outcomes (revisit requests, clarifications) reference the
+  session. Archiving an archived session, or restoring one that isn't, is a
+  no-op. The list shows archived sessions only behind "Show archived (N)"
+  (`?archived=1`), in their own group; `calibration_sessions_list` takes
+  `include_archived`.
+- **Rename is allowed in every status** — a name is a label, not a fact the
+  room argued over. Whitespace is stripped, a blank name refused, an
+  unchanged one a no-op. Two surfaces: the pencil beside the session page's
+  `<h1>` (the framework-rename pattern — `SessionNameFrame` +
+  `CalibrationSessions::NamesController`, 422 with the frame and the typed
+  text on a refusal) and "Rename…" in the list card's kebab, because a closed
+  or archived session has no other reason to be opened.
+- Renames, archives and restores appear in the session log as muted lines
+  read off the stream (`SessionOutcomes#lifecycle`), so the record says what
+  the session used to be called. They are not outcomes and don't count as
+  one.
 - A stale-session guard (auto-close after a horizon, or a sweep job) prevents
   a forgotten session lingering open indefinitely. Matters more in v2 when a
   live session implies visibility grants.
@@ -181,6 +203,8 @@ draft ──▶ started ──▶ closed
 | `CalibrationEvidenceRequestRaised` | live | provenance for a cell-scoped evidence request fired from the session (the request itself rides the existing machinery; fulfilment is read back from `EvidenceRequest`) |
 | `NoteRecorded` | live | free-text minute, anchored to capability or person |
 | `SessionClosed` | live→closed | facilitator action or cycle-close sync |
+| `CalibrationSessionArchived` / `CalibrationSessionUnarchived` | closed | hide from / return to the default list; `archived_by_id` / `unarchived_by_id` |
+| `CalibrationSessionRenamed` | any | `name` (stripped) + `previous_name`, so the log can say what it was called |
 
 All writes dispatch through `Operations::*` classes (web + MCP parity, audit
 metadata, the house rule).
@@ -188,7 +212,10 @@ metadata, the house rule).
 ### Read models
 
 A session projection owning its own tables (session header, population
-membership, agenda state). Per the read-model ownership invariant it never
+membership, agenda state). The header carries `archived_at` /
+`archived_by_id` (scopes `archived` / `unarchived`, `#archived?`) and the
+current `name`; the three housekeeping events arrived with no history, so
+adding them needed a migration but no `CODE_VERSION` bump. Per the read-model ownership invariant it never
 writes to any other projection's tables; everything it displays about
 ratings/evidence is a **read-time join** against `AssessmentLevelRating`,
 `PersonFrameworkAssignment`, `RecordedReportingManager`,
