@@ -83,7 +83,8 @@ class Views::CalibrationSessions::IndexView < Views::Base
       href: @show_archived ? calibration_sessions_path : calibration_sessions_path(archived: 1),
       class: "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap " \
              "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 " \
-             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors"
+             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 " \
+             "dark:focus-visible:outline-blue-300 transition-colors"
     ) { @show_archived ? "Hide archived" : "Show archived (#{@archived_count})" }
   end
 
@@ -153,7 +154,8 @@ class Views::CalibrationSessions::IndexView < Views::Base
           h3(class: "min-w-0 break-words text-base font-semibold text-gray-900 dark:text-white") do
             a(href: calibration_session_path(session),
               class: "after:absolute after:inset-0 after:rounded-lg hover:text-primary-ink " \
-                     "focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-primary") do
+                     "focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-blue-700 " \
+                     "dark:focus-visible:after:ring-blue-300") do
               session.name
             end
           end
@@ -210,7 +212,8 @@ class Views::CalibrationSessions::IndexView < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(type: "submit",
              class: "text-sm font-medium text-primary-ink hover:underline focus-visible:outline " \
-                    "focus-visible:outline-2 focus-visible:outline-primary rounded-sm") { "Restore" }
+                    "focus-visible:outline-2 focus-visible:outline-blue-700 " \
+                    "dark:focus-visible:outline-blue-300 rounded-sm") { "Restore" }
     end
   end
 

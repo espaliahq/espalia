@@ -35,15 +35,18 @@ class Views::CalibrationSessions::RenameSessionModal < Views::Base
           required: true, pattern: ".*\\S.*", title: "The name can’t be blank", autocomplete: "off",
           class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
                  "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-700 " \
+                 "dark:focus-visible:ring-blue-300",
           data: { rename_session_form_target: "name" }
         )
       end
       div(class: "flex items-center gap-3") do
         button(
           type: "submit",
-          class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-                 "text-white hover:bg-primary/90 transition-colors"
+          # The neutral pairing, not white on bg-primary (phlex-views.md, #447).
+          class: "inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold " \
+                 "text-white hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 " \
+                 "transition-colors"
         ) { "Save" }
         button(
           type: "button", data: { action: "click->modal#close" },
