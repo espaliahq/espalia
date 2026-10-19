@@ -330,7 +330,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
       div do
         p(class: "font-semibold text-gray-900 dark:text-white") { "Score unlocks at #{unlock_at}" }
         p(class: "text-sm #{MUTED}") do
-          "Until enough of your level is rated, nobody sees a verdict. There isn't enough to judge yet."
+          "While you're rating, the score waits until enough of your level is rated. There isn't enough to judge yet."
         end
       end
     end
