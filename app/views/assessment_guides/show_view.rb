@@ -322,7 +322,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
         s.text(x: "50", y: "53", text_anchor: "middle",
           class: "fill-gray-900 dark:fill-white text-[20px] font-extrabold") { "#{unlock_at}/#{EXAMPLE_LEVEL_SIZE}" }
         s.text(x: "50", y: "67", text_anchor: "middle",
-          class: "fill-gray-600 dark:fill-gray-300 text-[9px] font-semibold") { "RATED" }
+          class: "fill-gray-600 dark:fill-gray-300 text-[10px] font-semibold") { "RATED" }
       end
       div do
         p(class: "font-semibold text-gray-900 dark:text-white") { "Score unlocks at #{unlock_at}" }
@@ -579,7 +579,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
       span(class: "relative rounded bg-white/80 dark:bg-gray-900/80 dark:text-white px-1.5") { code }
       if tag
         span(class: "absolute bottom-0 left-1/2 -translate-x-1/2 rounded-t bg-gray-900 dark:bg-white px-1 " \
-                    "text-[9px] font-bold tracking-wider text-white dark:text-gray-900") { tag }
+                    "text-[10px] font-bold tracking-wider text-white dark:text-gray-900") { tag }
       end
     end
   end
