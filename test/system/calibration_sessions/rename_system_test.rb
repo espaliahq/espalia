@@ -28,10 +28,12 @@ class CalibrationSessions::RenameSystemTest < ApplicationSystemTestCase
         params: { cycle_id: cycle.cycle_id, name: "Engineering · H1",
                   participant_ids: [ em.id ], calibrant_person_ids: [ report.id ] }
       )[:session_id]
+      # Live, so the page carries the session log the rename line lands in.
+      Operations::CalibrationSessions::Start.call(context: context, params: { session_id: @session_id })
     end
   end
 
-  should "rename from the pencil on desktop" do
+  should "rename from the pencil on desktop, and the log says what it was called" do
     sign_in_as(@facilitator_user)
     visit calibration_session_path(@session_id)
     assert_selector "h1", text: "Engineering · H1"
@@ -42,6 +44,7 @@ class CalibrationSessions::RenameSystemTest < ApplicationSystemTestCase
 
     visit calibration_session_path(@session_id)
     assert_selector "h1", text: "Engineering · H1 2026"
+    within("#session-log") { assert_text "Renamed to “Engineering · H1 2026” (was “Engineering · H1”)" }
   end
 
   should "rename from the pencil on mobile" do

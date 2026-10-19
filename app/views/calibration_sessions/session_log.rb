@@ -46,6 +46,12 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     "note_recorded"       => "notes"
   }.freeze
 
+  # Housekeeping on the session itself — renames, archive, restore. Rendered
+  # muted with a hollow dot (the assessment thread's lifecycle-row treatment)
+  # and only under "All": they say what happened to the record, not what the
+  # room decided.
+  LIFECYCLE_KINDS = %w[session_renamed session_archived session_restored].freeze
+
   CHIPS = [
     { value: "all",      label: "All" },
     { value: "flags",    label: "Flags" },
@@ -171,6 +177,8 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   # One feed entry, in the product's activity shape.
   def entry_row(entry)
+    return lifecycle_row(entry) if LIFECYCLE_KINDS.include?(entry[:kind])
+
     li(
       class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
              "data-[hidden=true]:hidden",
@@ -195,6 +203,31 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         resolution_line(entry)
         footer(entry)
       end
+    end
+  end
+
+  def lifecycle_row(entry)
+    li(
+      class: "flex gap-2 text-xs text-gray-600 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+             "data-[hidden=true]:hidden",
+      data: { framework_activity_target: "entry", kind_group: "lifecycle" }
+    ) do
+      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 border border-gray-400 dark:border-gray-500",
+           aria: { hidden: "true" }) { }
+      div(class: "min-w-0 flex-1") do
+        p(class: "italic break-words") { lifecycle_text(entry) }
+        footer(entry)
+      end
+    end
+  end
+
+  def lifecycle_text(entry)
+    case entry[:kind]
+    when "session_renamed"
+      was = entry[:previous_name].presence
+      "Renamed to “#{entry[:name]}”#{" (was “#{was}”)" if was}"
+    when "session_archived" then "Archived the session"
+    else                         "Restored the session from the archive"
     end
   end
 

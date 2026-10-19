@@ -49,4 +49,24 @@ class Views::CalibrationSessions::SessionLogTest < ActiveSupport::TestCase
     assert_includes html, "Showing the #{limit} most recent outcomes.",
       "a truncated log says so rather than just stopping"
   end
+
+  should "render renames, archives and restores as muted lifecycle lines" do
+    at = Time.zone.parse("2026-08-01 09:00")
+    html = view_context.render(Views::CalibrationSessions::SessionLog.new(
+      session: CalibrationSession.new,
+      log: { entries: [
+        { kind: "session_restored", at: at + 2.minutes, actor_id: ACTOR_ID },
+        { kind: "session_archived", at: at + 1.minute, actor_id: ACTOR_ID },
+        { kind: "session_renamed", at: at, actor_id: ACTOR_ID, name: "H1 · Eng", previous_name: "Eng" }
+      ], suggestions: {}, capability_names: {}, acted: Set.new },
+      people: { ACTOR_ID => Person.new(name: "Dana Dept") },
+      can_note: false
+    ))
+
+    assert_includes html, "Renamed to “H1 · Eng” (was “Eng”)"
+    assert_includes html, "Archived the session"
+    assert_includes html, "Restored the session from the archive"
+    assert_equal 3, html.scan(%(data-kind-group="lifecycle")).size,
+      "lifecycle lines only show under All — no chip claims them"
+  end
 end
