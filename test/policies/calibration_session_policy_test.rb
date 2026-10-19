@@ -60,6 +60,7 @@ class CalibrationSessionPolicyTest < ActiveSupport::TestCase
                tenant: @tenant, session: @session, person_id: @em.id)
         policy = CalibrationSessionPolicy.new(context_for(person: @em), @session)
         assert_not policy.show?
+        assert_not policy.freshness?, "the page's poll is as private as the page"
         assert_not policy.curate?
         assert_not policy.start?
       end
@@ -83,6 +84,7 @@ class CalibrationSessionPolicyTest < ActiveSupport::TestCase
       ActsAsTenant.with_tenant(@tenant) do
         policy = CalibrationSessionPolicy.new(@ctx, @session)
         assert policy.show?
+        assert policy.freshness?
         assert policy.curate?
         assert policy.start?
         assert policy.close?

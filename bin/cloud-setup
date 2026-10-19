@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prepares a Claude Code cloud session to run the app and the test suite, system tests
-# included, without the devcontainer. See "Cloud sessions" in AGENTS.md for why each piece
+# included, without the devcontainer. See "Cloud sessions" in docs/guidelines/dev-environment.md for why each piece
 # is here.
 set -euo pipefail
 

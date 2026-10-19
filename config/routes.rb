@@ -291,6 +291,8 @@ Rails.application.routes.draw do
       get :participant_candidates
     end
     member do
+      # The live page's poll: has anything behind its numbers moved?
+      get :freshness
       post :start, to: "calibration_sessions/starts#create"
       post :close, to: "calibration_sessions/closes#create"
       # Reversible: a closed session leaves the default list and comes back.

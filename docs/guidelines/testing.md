@@ -393,6 +393,15 @@ These do one Capybara click, and if the destination text/selector doesn't appear
 
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
 
+## Copying to the Clipboard: Click for Real
+
+**`navigator.clipboard.writeText` never settles without a real user gesture** in the Chromium
+the suite runs in: a JS-dispatched click leaves the promise pending, even with focus and
+permission granted, in Playwright's Chromium, Chrome for Testing and under Xvfb alike. So a
+system test that copies clicks for real (`click_with_retry`), never through a JS-dispatch
+helper, and the `clipboard` controller shows "Copied!" only once a copy succeeds, falling back
+to `execCommand` when `writeText` hangs.
+
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.

@@ -294,6 +294,97 @@ class CalibrationSessions::OverviewStatsTest < ActiveSupport::TestCase
     end
   end
 
+  # Readiness is cell coverage: every percentage shares one denominator, a
+  # person's at-level cells, so one rating moves it and the parts add up.
+  def mia_row
+    stats[:raters].find { |r| r[:participant_id] == @em_1.id }
+  end
+
+  context "readiness" do
+    should "move when a single cell is rated" do
+      assert_equal 0.0, mia_row[:coverage_pct]
+
+      rate(@r1, @cap_a, manager: "some")
+
+      assert_equal 0.5, mia_row[:coverage_pct], "one of Ivy's two at-level cells"
+      assert_equal 2, mia_row[:cell_total]
+      assert_equal 1, mia_row[:unrated_count]
+      assert_equal "unrated", mia_row[:ready_state]
+      assert_equal 0.25, stats[:readiness][:coverage_pct], "one of the population's four cells"
+    end
+
+    should "read a fully carried rater as covered, carried, and still to confirm" do
+      rate(@r1, @cap_a, manager: "consistent", source: "seeded")
+      rate(@r1, @cap_b, manager: "some", source: "seeded")
+
+      row = mia_row
+      assert_equal 1.0, row[:coverage_pct]
+      assert_equal 1.0, row[:carried_pct]
+      assert_equal "to_confirm", row[:ready_state]
+      assert_equal 2, row[:carried_count]
+    end
+
+    should "call a rater ready only when every cell is rated and confirmed" do
+      rate(@r1, @cap_a, manager: "consistent", source: "human")
+      rate(@r1, @cap_b, manager: "some")
+
+      assert_equal "ready", mia_row[:ready_state]
+      assert_equal 0.0, mia_row[:carried_pct]
+    end
+
+    should "count evidence over every at-level cell, not only the rated ones" do
+      rate(@r1, @cap_a, manager: "consistent")
+      create(:evidence_item, tenant: @tenant, person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap_a.stable_id, level_ordinal: 3)
+      # Backing on a cell nobody has rated still counts toward coverage.
+      create(:evidence_item, tenant: @tenant, person_id: @r1.id, framework_id: @framework_id,
+             capability_stable_id: @cap_b.stable_id, level_ordinal: 3)
+
+      row = mia_row
+      assert_equal 1.0, row[:evidence_coverage_pct]
+      assert_equal 1.0, row[:evidence_pct], "evidence_pct keeps its meaning: of rated cells"
+    end
+
+    should "include reference people in the population totals, grouped by their own rater" do
+      other_manager = create(:person, tenant: @tenant, name: "Kim Elsewhere")
+      outsider = create(:person, tenant: @tenant, name: "Ref Point", manager: other_manager)
+      create(:person_framework_assignment, tenant: @tenant, person_id: outsider.id, framework_id: @framework_id)
+      create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle,
+             person_id: outsider.id, level_ordinal: 3, role_id: @role.role_id)
+      create(:calibration_session_member, tenant: @tenant, session: @session, person_id: outsider.id)
+      rate(outsider, @cap_a, manager: "none")
+
+      readiness = stats[:readiness]
+      assert_equal 6, readiness[:cell_total]
+      assert_equal 1, readiness[:cell_count]
+      assert_equal [ { rater_id: other_manager.id, person_count: 1, cell_total: 2, cell_count: 1 } ],
+                   readiness[:reference].map { |row| row.slice(:rater_id, :person_count, :cell_total, :cell_count) }
+    end
+
+    should "ignore ratings outside the assessed role" do
+      create_out_of_scope_rating(person_id: @r1.id, cycle: @cycle, level_ordinal: 3, manager_rated_frequency: "none")
+
+      assert_equal 0.0, mia_row[:coverage_pct]
+      assert_equal 2, mia_row[:cell_total], "the other role's cell is not in the denominator either"
+    end
+
+    should "never round a share onto an edge the counts haven't reached" do
+      overview = CalibrationSessions::OverviewStats.new(session: @session)
+
+      assert_equal 0.99, overview.send(:share, 249, 250), "one unrated cell is not 100% rated"
+      assert_equal 0.01, overview.send(:share, 1, 250), "one carried cell is not 0% carried"
+      assert_equal 1.0, overview.send(:share, 250, 250)
+    end
+
+    should "give a person who is not enrolled no cells" do
+      AssessmentCycleEnrollment.where(person_id: @r1.id).delete_all
+
+      assert_equal 0, mia_row[:cell_total]
+      assert_nil mia_row[:coverage_pct]
+      assert_equal "no_cells", mia_row[:ready_state]
+    end
+  end
+
   # A further rater on the grid: a participant EM plus one enrolled report.
   # Membership is what puts them there — without it `rater_for` slices them
   # out and any assertion about a third rater is trivially true.
