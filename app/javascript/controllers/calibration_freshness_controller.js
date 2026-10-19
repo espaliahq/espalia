@@ -32,7 +32,7 @@ import { get } from "@rails/request.js"
 const TIME_FORMAT = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
 
 export default class extends BaseController {
-  static targets = ["frame", "asOf", "region", "template", "marker", "refresh", "waiting"]
+  static targets = ["frame", "asOf", "region", "template", "waitingTemplate", "marker", "refresh"]
   static values = {
     url: String,
     stamp: String,
@@ -165,7 +165,9 @@ export default class extends BaseController {
     this.pending = changes
     if (this.observer) return
 
-    if (this.hasWaitingTarget) this.waitingTarget.classList.remove("hidden")
+    if (this.hasRegionTarget && this.hasWaitingTemplateTarget) {
+      this.regionTarget.replaceChildren(this.waitingTemplateTarget.content.firstElementChild.cloneNode(true))
+    }
     this.observer = new MutationObserver(() => {
       if (this.pending && !this.#held()) this.#reload(this.pending)
     })
@@ -177,7 +179,7 @@ export default class extends BaseController {
   #stopWatching() {
     this.observer?.disconnect()
     this.observer = null
-    if (this.hasWaitingTarget) this.waitingTarget.classList.add("hidden")
+    if (this.hasRegionTarget) this.regionTarget.querySelector("[data-freshness-waiting]")?.remove()
   }
 
   #held() {

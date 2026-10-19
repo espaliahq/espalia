@@ -74,7 +74,10 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
         span(class: "text-gray-900 dark:text-white") do
           defined_term(:rating_coverage, label: "#{rated}% rated", suffix: "summary")
           span(class: "text-gray-600 dark:text-gray-300") do
-            plain " · #{percent(@readiness[:carried_pct])}% carried · #{100 - rated}% unrated"
+            plain " · "
+            span(class: "whitespace-nowrap") { "#{percent(@readiness[:carried_pct])}% carried" }
+            plain " · "
+            span(class: "whitespace-nowrap") { "#{100 - rated}% unrated" }
           end
         end
         span(class: "text-gray-600 dark:text-gray-300") do
@@ -199,7 +202,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
 
     td(class: "py-2 pr-3") do
       div(class: "flex items-center gap-2") do
-        span(class: "w-28 shrink-0 whitespace-nowrap") do
+        span(class: "w-36 shrink-0 whitespace-nowrap") do
           span(class: "font-medium text-gray-900 dark:text-white") { "#{percent(row[:coverage_pct])}%" }
           span(class: "text-gray-600 dark:text-gray-300") { " · #{percent(row[:carried_pct])}% carried" }
         end

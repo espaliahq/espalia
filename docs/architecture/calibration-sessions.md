@@ -434,8 +434,8 @@ Readiness  78% rated · 31% carried · 22% unrated   Evidence on 44%   12 of 23 
 it wasn't: nothing said when it was computed, and the frame only
 re-fetched on a tab click.
 
-- The header carries "Live · ratings as of 14:32" (Draft / Closed on those
-  pages) and **↻ Refresh**. The time is re-stamped after every poll that
+- The header carries "Live · ratings as of 14:32" under the subtitle (Draft
+  / Closed on those pages) and **↻ Refresh** beside the session actions. The time is re-stamped after every poll that
   finds nothing new, so it says when the numbers were last known current.
 - `calibration_freshness_controller` polls `GET
   /calibration_sessions/:id/freshness?since=<stamp>` every 60s while the tab
@@ -452,9 +452,11 @@ re-fetched on a tab click.
   (the explorer's WriteStatus pattern; dismissible, auto-dismissed by the
   shared `flash` controller).
 - **Held while the room is reading**: an open comparison drawer or modal
-  holds the automatic reload; the header says "update waiting — applies when
-  the drawer closes", and the reload lands the moment it does. Refresh is an
-  explicit ask and always applies.
+  holds the automatic reload; the status region says "Newer ratings are
+  waiting — they load when the comparison drawer or dialog closes", and the
+  reload lands the moment it does. Refresh is an explicit ask and always
+  applies. (The notice lives in the region, not the header: a longer header
+  line squeezed the session title to one word per line.)
 - Web-only: the endpoint describes a rendered page's staleness, which an MCP
   client reading `calibration_sessions_overview` on demand never has.
 - Polling is the first cut. If the poll shows in traces, the follow-up is a

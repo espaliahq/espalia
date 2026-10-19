@@ -558,7 +558,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
       "document.querySelector('[data-controller~=\"calibration-freshness\"]')" \
       ".setAttribute('data-calibration-freshness-interval-value', '300')"
     )
-    assert_text "update waiting"
+    assert_text "Newer ratings are waiting"
     assert_no_text "Updated just now"
     within("#calibration-readiness") { assert_text "50% rated" }
 
@@ -566,7 +566,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     page.execute_script("document.querySelector('[data-comparison-drawer-target=\"collapse\"]').click()")
     assert_text "Updated just now"
     within("#calibration-readiness") { assert_text "75% rated" }
-    assert_no_text "update waiting"
+    assert_no_text "Newer ratings are waiting"
   end
 
   test "readiness and Refresh fit a phone" do

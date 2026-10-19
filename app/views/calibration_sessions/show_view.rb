@@ -157,6 +157,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
           plain @cycle&.name || "Cycle unavailable"
           plain " · facilitated by #{person_name(@session.facilitator_id)}"
         end
+        freshness_line
       end
       action_cluster
     end
@@ -164,7 +165,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   def action_cluster
     div(class: "flex flex-wrap items-center gap-2") do
-      freshness_line
+      refresh_button
       log_pane_toggle if @session_log
       if @can_start
         form(action: start_calibration_session_path(@session), method: "post",
@@ -185,12 +186,12 @@ class Views::CalibrationSessions::ShowView < Views::Base
     end
   end
 
-  # "Live · ratings as of 14:32" and ↻ Refresh. The time is the render
-  # time, re-stamped by calibration_freshness_controller after every poll
-  # that finds nothing new — so it says when the numbers were last known
-  # current, which is what "frozen?" is really asking.
+  # "Live · ratings as of 14:32". The time is the render time, re-stamped by
+  # calibration_freshness_controller after every poll that finds nothing new
+  # — so it says when the numbers were last known current, which is what
+  # "frozen?" is really asking.
   def freshness_line
-    span(class: "inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
       if @session.started?
         span(class: "h-2 w-2 rounded-full bg-green-500 motion-safe:animate-pulse", aria: { hidden: "true" })
       end
@@ -198,19 +199,16 @@ class Views::CalibrationSessions::ShowView < Views::Base
       time(datetime: @rendered_at.utc.iso8601, data: { calibration_freshness_target: "asOf" }) do
         @rendered_at.strftime("%H:%M")
       end
-      # Shown while a poll's reload is held for an open drawer or modal, so
-      # the room knows newer numbers exist and why they haven't landed.
-      span(class: "hidden font-medium text-amber-700 dark:text-amber-300",
-           data: { calibration_freshness_target: "waiting" }) do
-        "· update waiting — applies when the drawer closes"
-      end
     end
+  end
+
+  def refresh_button
     button(
       type: "button",
-      class: secondary_button_classes,
+      class: "#{secondary_button_classes} gap-1.5",
       data: { action: "calibration-freshness#refresh", calibration_freshness_target: "refresh" }
     ) do
-      span(aria: { hidden: "true" }) { "↻ " }
+      span(aria: { hidden: "true" }) { "↻" }
       plain "Refresh"
     end
   end
