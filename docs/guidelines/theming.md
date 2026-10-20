@@ -15,6 +15,7 @@ The short version: **colour with a role, never a palette step.** Write `text-mut
 | **Domain palette** | Colours that carry assessment meaning: rating, score, activity, the hero's verdict, the role lens, evidence valence. | `theme/domain.css` |
 | **Categorical palette** | Eight hues for tags. | `theme/categorical.css` |
 | **Contrast helper** | Black or white text for a fill a tenant picks. | the `@supports` blocks in `roles.css` |
+| **Elevation** | A shadow per job: raised, overlay, modal. | The `--gos-shadow-*` block at the foot of `roles.css` |
 | **Scheme rule** | When dark applies. | `@custom-variant dark` in `application.css` |
 
 Role names follow Bento's vocabulary: content, surface, border, neutral, brand, accent, danger, success, warning, info, each with subtle, muted and strong steps and a `content-inverse` for text on the strong fill. GrowthOS adds a few roles Bento lacks: `surface-page`, `surface-overlay`, the two hover surfaces, `surface-field`, `scrim`, `content-link` and the nav pair.
@@ -80,6 +81,9 @@ Most work needs only this table.
 | A pending framework change or a search hit | `decoration-suggestion-edit`, `-add`, `-delete`; `bg-search-hit text-search-hit` |
 | The hero's verdict panel, a role lens, an evidence valence | `Views::Assessments::VerdictPanel`; `bg-lens-subtle text-lens ring-lens`; `bg-valence-growth-area text-valence-growth-area` |
 | The navbar | `bg-nav text-nav` (Shell only) |
+| A card's lift off the page | `shadow-raised` (or `Kit::Card`) |
+| A menu, popover, tooltip, toast or drawer | `shadow-overlay` (or `Kit::Dropdown`) |
+| A modal | `shadow-modal` (`Kit::Modal`) |
 
 The Lookbook page **Design Tokens → Colour roles** lists every role with its utilities, its value under the current theme and scheme, and its measured contrast.
 
@@ -172,10 +176,10 @@ Then:
 | Test | Fails when |
 |---|---|
 | `test/lib/kit_colour_roles_test.rb` | Kit, Shell, Shared, the controllers that write their classes, or a `.kit-*`, `.explorer-*`, `.mx-*` or `.tree-*` rule in `application.css` uses a palette colour |
-| `test/lib/theme_roles_test.rb` | a role utility points at an undefined variable, shares a name with a Tailwind colour or text size (`text-secondary`, `text-lg`), or a preset leaves a role unset in either scheme |
+| `test/lib/theme_roles_test.rb` | a role utility (colour or shadow) points at an undefined variable, shares a name with a Tailwind colour, text size or shadow step (`text-secondary`, `text-lg`, `shadow-md`), or a preset leaves a role unset in either scheme |
 | `test/lib/domain_palette_tokens_test.rb` | a view colours a rating, score or activity with a palette step |
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |
-| `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius or shadow step, or Shared or Shell adds a shadow |
+| `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius step or elevation role, or Shared or Shell adds a shadow |
 | `test/lib/kit_previews_test.rb` | a Kit or Shared component has no preview |
 | `test/lib/view_colour_roles_test.rb` | a migrated view area uses a palette colour, other than the data-vis hues it lists as waiting for domain tokens |
 
@@ -199,14 +203,20 @@ Colour rules are the same in all three. Only Shell paints the nav roles, and onl
 
 ## Radius and shadow
 
-Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each component owns one step, so changing the look means changing one file, so elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
+Each component owns one radius step and one elevation role, so changing the look means changing one file, and elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
+
+- **Shadows are roles** ([#597](https://github.com/mr-yum/growth-os/issues/597)): `--gos-shadow-raised`, `-overlay` and `-modal`, with the utilities `shadow-raised`, `shadow-overlay` and `shadow-modal`. Default keeps Tailwind's `xl`, `lg` and `2xl`. Bento follows bento-ui's recipes: an outlined card with no shadow, and `lg` for overlays and modals. A shadow reads the same in both schemes, as Bento's do, so a role needs no dark value.
+- **Radius is Tailwind's scale**, not themed.
+- **Small lifts stay steps:** a hover or selected chip's `shadow-xs` or `shadow-sm`, and the navbar's `shadow-xs`, are not elevation.
+
+Lookbook's **Design Tokens → Elevation and radius** shows each level on the page and on a card under the current theme and scheme, with the files that use it.
 
 | Component | Radius | Shadow |
 |---|---|---|
-| `Kit::Card` | `rounded-2xl` | `shadow-xl` |
+| `Kit::Card` | `rounded-2xl` | `shadow-raised` |
 | `Kit::Card` `variant: :inset` | `rounded-md` | none |
-| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-lg` |
-| `Kit::Modal` | `rounded-lg` | `shadow-2xl` |
+| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu, tooltip and drawer | `rounded-md` | `shadow-overlay` |
+| `Kit::Modal` | `rounded-lg` | `shadow-modal` |
 | `Kit::Button`, `Kit::Field`, `Kit::Alert` | `rounded-md` | none |
 | `Kit::Badge` | `rounded-sm` | none |
 | `Kit::Tag`, `Kit::Chip`, `Kit::SegmentedControl` | `rounded-full` | none |
@@ -253,7 +263,7 @@ Reach for a new role only when no existing one does the job. Two near-identical 
 
 ### Add a preset
 
-1. **A file** `app/assets/tailwind/theme/<name>.css` with one `html[data-theme="<name>"]` block that sets the font and every role, with an `@variant dark` block for the dark values. Copy `bento.css` for the shape. Import it in `application.css`.
+1. **A file** `app/assets/tailwind/theme/<name>.css` with one `html[data-theme="<name>"]` block that sets the font and every role, with an `@variant dark` block for the dark values, and its three `--gos-shadow-*` values. Copy `bento.css` for the shape. Import it in `application.css`.
 2. **Set its text colours.** Presets set `--gos-*-content-inverse` to designed values; the contrast helper is only for fills a tenant picks.
 3. **Register it:** `Themeable::THEMES` and `Themeable::PRESETS` (`app/models/concerns/themeable.rb`), its font in `PRESET_FONT_URLS`, its navbar in `NAV_SURFACES` for the browser chrome (the `--gos-nav-surface` values from its file, light and dark), and the `theme:` list in `config.lookbook.preview_display_options` (`config/environments/development.rb`). `?theme=<name>` (`DevThemeOverride`) reads `PRESETS`, so it needs nothing.
 
@@ -281,7 +291,7 @@ A Custom theme can set a role only if `roles.css` reads a tenant hook for it, wi
 
 Lookbook runs at `/lookbook` in development only; the gem and its engine never reach production. Previews live in `test/components/previews/<layer>/<name>_preview.rb`, one `Lookbook::Preview` subclass per component, each public method a scenario. They render in `app/views/layouts/component_preview.html.erb`, on the app's page surface with its stylesheets, import map and icon sprite, but with no tenant, so no tenant theme and no `PageLayout`. Lookbook brings in the `view_component` gem; don't write ViewComponents.
 
-The sidebar holds **Design Tokens** (colour roles, brand tokens, the contrast helper, palette, type scale), then **Kit** (with an **Icons** gallery), **Shared** and **Shell**. It sorts folders alphabetically and its path is the URL; `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
+The sidebar holds **Design Tokens** (colour roles, brand tokens, the contrast helper, elevation and radius, palette, type scale), then **Kit** (with an **Icons** gallery), **Shared** and **Shell**. It sorts folders alphabetically and its path is the URL; `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
 
 
 - **A `playground` with `# @param` tags** for every argument, so anyone can try a combination. `Kit::ButtonPreview#playground` is the model.

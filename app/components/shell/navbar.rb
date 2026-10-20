@@ -69,7 +69,7 @@ class Components::Shell::Navbar < Components::Base
         role: "tooltip",
         style: "font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', 'Comic Neue', cursive",
         class: "fixed top-0 left-0 z-50 whitespace-nowrap rounded-md border border-default bg-overlay " \
-               "px-3 py-2 text-[13px] font-normal text-default shadow-lg pointer-events-none " \
+               "px-3 py-2 text-[13px] font-normal text-default shadow-overlay pointer-events-none " \
                "opacity-0 scale-95 transition-[opacity,scale] duration-200 " \
                "data-open:opacity-100 data-open:scale-100",
         data: { brand_confetti_target: "tagline" }

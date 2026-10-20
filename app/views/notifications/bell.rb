@@ -42,7 +42,7 @@ class Views::Notifications::Bell < Views::Base
     # narrow screen a 20rem panel would spill off-screen left, so below `sm`
     # it goes fixed and spans the viewport (minus gutters) instead.
     div(
-      class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-lg " \
+      class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-overlay " \
              "max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:mt-0 max-sm:w-auto max-sm:max-w-none " \
              "border border-default bg-overlay z-50 hidden overflow-hidden " \
              "[--gos-focus-ring:var(--gos-content-default)]",

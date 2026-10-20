@@ -425,3 +425,10 @@ html[data-theme="bento"] {
     --gos-illustration-marker: #51555c;
   }
 }
+
+/* Elevation, from bento-ui's recipes: a card is outlined with no shadow; menus, popovers and dialogs take lg */
+html[data-theme="bento"] {
+  --gos-shadow-raised: 0 0 #0000;
+  --gos-shadow-overlay: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --gos-shadow-modal: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}

@@ -8,9 +8,9 @@ require "test_helper"
 class ThemeRolesTest < ActiveSupport::TestCase
   THEME_DIR = Rails.root.join("app/assets/tailwind/theme")
   APPLICATION_CSS = Rails.root.join("app/assets/tailwind/application.css")
-  # Unstepped colours and the font-size scale: text-white, text-lg and the like already exist.
-  TAILWIND_NAMES = (%w[black white transparent current inherit xs sm base lg xl] + (2..9).map { |n| "#{n}xl" }).to_set
-  UTILITY = /^\s*--(?:text|background|border|ring|outline)-color-([\w-]+):\s*var\((--gos-[\w-]+)\)/
+  # Unstepped colours, the font-size scale and the shadow steps: text-white, text-lg and shadow-md already exist.
+  TAILWIND_NAMES = (%w[black white transparent current inherit 2xs xs sm md base lg xl inner none] + (2..9).map { |n| "#{n}xl" }).to_set
+  UTILITY = /^\s*--(?:(?:text|background|border|ring|outline)-color|shadow)-([\w-]+):\s*var\((--gos-[\w-]+)\)/
 
   def theme_css
     Dir[THEME_DIR.join("*.css")].map { |path| File.read(path) }.join("\n")

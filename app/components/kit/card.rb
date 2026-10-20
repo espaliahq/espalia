@@ -34,7 +34,7 @@
 #   end
 #
 class Components::Kit::Card < Components::Base
-  RAISED = "bg-default rounded-2xl shadow-xl border border-default"
+  RAISED = "bg-default rounded-2xl shadow-raised border border-default"
 
   # The inset's edge is `border-default`: `border-subtle` and `bg-subtle` both match the card in dark
   VARIANTS = {

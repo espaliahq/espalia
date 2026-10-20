@@ -139,7 +139,7 @@ class Components::Kit::Dropdown < Components::Base
       # scroll, so without this their lower content was unreachable).
       # The focus ring resets to neutral: in the navbar it follows the nav's text.
       class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} max-h-[70vh] overflow-y-auto " \
-             "rounded-md shadow-lg border border-default bg-overlay z-50 hidden " \
+             "rounded-md shadow-overlay border border-default bg-overlay z-50 hidden " \
              "[--gos-focus-ring:var(--gos-content-default)]",
       data: { dropdown_target: "menu" },
       role: role,

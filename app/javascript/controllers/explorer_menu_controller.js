@@ -33,7 +33,7 @@
 import BaseController from "controllers/base_controller"
 
 const MENU_CLASSES =
-  "explorer-menu fixed z-50 max-h-[70vh] w-56 overflow-y-auto rounded-md shadow-lg " +
+  "explorer-menu fixed z-50 max-h-[70vh] w-56 overflow-y-auto rounded-md shadow-overlay " +
   "border border-default bg-overlay py-1"
 
 const VIEWPORT_MARGIN = 8

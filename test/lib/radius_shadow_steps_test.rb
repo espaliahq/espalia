@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Each component owns one radius and shadow step from Tailwind's scale (#565).
+# Each component owns one radius step from Tailwind's scale and one elevation role (#565, #597).
 # Views are covered later, as each migrates onto Kit.
 class RadiusShadowStepsTest < ActiveSupport::TestCase
   STEP = /(?<![\w-])(?:rounded|shadow)(?:-[a-z0-9]+)+/
@@ -11,24 +11,24 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
     "alert.rb" => %w[rounded-md],
     "badge.rb" => %w[rounded-sm],
     "button.rb" => %w[rounded-md],
-    "card.rb" => %w[rounded-2xl rounded-md shadow-xl],
+    "card.rb" => %w[rounded-2xl rounded-md shadow-raised],
     "chip.rb" => %w[rounded-full],
-    "definition_tip.rb" => %w[rounded-md shadow-lg],
+    "definition_tip.rb" => %w[rounded-md shadow-overlay],
     "description_list.rb" => %w[rounded-lg],
-    "dropdown.rb" => %w[rounded-md shadow-lg],
+    "dropdown.rb" => %w[rounded-md shadow-overlay],
     "empty_state.rb" => %w[rounded-lg],
     "field.rb" => %w[rounded-md rounded-sm rounded-full],
-    "modal.rb" => %w[rounded-lg rounded-md shadow-2xl],
+    "modal.rb" => %w[rounded-lg rounded-md shadow-modal],
     "segmented_control.rb" => %w[rounded-full],
     "tag.rb" => %w[rounded-full],
-    "toast.rb" => %w[shadow-lg]
+    "toast.rb" => %w[shadow-overlay]
   }.freeze
 
   # Shell pieces that draw a surface of their own
   SHELL_SHADOWS = {
     "shell/impersonation_banner.rb" => %w[shadow-sm],
-    "shell/navbar.rb" => %w[shadow-xs shadow-lg],
-    "shell/page_layout.rb" => %w[shadow-lg]
+    "shell/navbar.rb" => %w[shadow-xs shadow-overlay],
+    "shell/page_layout.rb" => %w[shadow-overlay]
   }.freeze
 
   should "keep every Kit component on the step it owns" do
