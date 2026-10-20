@@ -52,6 +52,12 @@ class Operations::Assessments::EvidenceSuggestionOperationsTest < ActiveSupport:
       assert_equal "strongly_demonstrated", link_event.data[:valence]
     end
 
+    should "record the suggested valence passed back as accepted, not edited" do
+      result = run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @alex,
+        suggestion_id: @suggestion.id, valence: "demonstrated")
+      assert_equal "accepted", result[:status]
+    end
+
     should "reclassify instead when someone linked the cell in the meantime" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, @item.id,

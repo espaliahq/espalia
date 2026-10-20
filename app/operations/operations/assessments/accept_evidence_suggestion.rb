@@ -42,7 +42,7 @@ class Operations::Assessments::AcceptEvidenceSuggestion < Operations::Base
         capability_stable_id: suggestion.capability_stable_id, level_ordinal: suggestion.level_ordinal,
         linked_by_id: context.person.id, valence: valence, via_suggestion_id: suggestion.id)
     end
-    suggestion.decide!(status: params[:valence] ? "edited" : "accepted", by: context.person)
+    suggestion.decide!(status: valence == suggestion.valence ? "accepted" : "edited", by: context.person)
 
     suggestion_payload(suggestion, capability_names([ suggestion ])).merge(valence: valence, links: active_links)
   rescue PersonDevelopment::Aggregate::CommandError => e
