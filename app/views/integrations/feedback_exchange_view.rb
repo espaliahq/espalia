@@ -17,7 +17,8 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   }.freeze
 
   INPUT_CLASSES = "block w-full min-h-11 rounded-md border-gray-300 dark:border-gray-600 " \
-                  "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary"
+                  "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary " \
+                  "placeholder:text-gray-600 dark:placeholder:text-gray-300"
   LABEL_CLASSES = "block text-sm font-medium text-gray-900 dark:text-white"
   HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300"
   BUTTON_CLASSES = "inline-flex items-center justify-center min-h-11 px-4 rounded-md text-sm font-medium cursor-pointer " \
@@ -216,7 +217,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   end
 
   def inbound_address
-    div(class: "rounded-md bg-gray-50 dark:bg-gray-800/50 px-4 py-3") do
+    div(class: "rounded-md bg-gray-50 dark:bg-gray-900 px-4 py-3") do
       p(class: "text-sm font-medium text-gray-900 dark:text-white") { "Our address for the peer" }
       p(class: "mt-1 text-sm font-mono break-all text-gray-900 dark:text-white") { @inbound_url }
       p(class: HINT_CLASSES) do
