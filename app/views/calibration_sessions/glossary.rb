@@ -173,6 +173,5 @@ module Views::CalibrationSessions::Glossary
   end
 
   # The warning-badge look, so a term that WAS a badge stays one.
-  BADGE_TRIGGER = "inline-flex min-h-11 items-center rounded-full px-2.5 text-xs font-medium " \
-                  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+  BADGE_TRIGGER = "#{Components::Kit::Badge.classes(:warning)} min-h-11"
 end

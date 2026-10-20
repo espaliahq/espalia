@@ -46,9 +46,9 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   def view_template
     pinned = @pin_ids.include?(@dot[:person_id])
     div(
-      class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-white dark:bg-gray-800 " \
+      class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-default " \
              "p-3 h-full overflow-y-auto " \
-             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200 dark:border-gray-700'}",
+             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-default'}",
       data: { drawer_card: @dot[:person_id] }
     ) do
       header_row(pinned)
@@ -66,8 +66,8 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   def header_row(pinned)
     div(class: "flex flex-wrap items-start justify-between gap-2") do
       div do
-        h2(class: "text-base font-semibold text-gray-900 dark:text-white") { person_name(@dot[:person_id]) }
-        p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") do
+        h2(class: "text-base font-semibold text-default") { person_name(@dot[:person_id]) }
+        p(class: "mt-0.5 text-xs text-muted") do
           plain "L#{@dot[:ordinal]}"
           plain " · rated by #{rated_by}" if @dot[:rater_id] || @dot[:unlocked]
         end
@@ -80,7 +80,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
           a(
             href: session_path(person: nil),
             class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
-                   "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md",
+                   "text-muted hover:bg-default-hover rounded-md",
             aria: { label: "Close person card" }
           ) { "×" }
         end
@@ -99,7 +99,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     elsif @pin_ids.size < @max_pins
       a(
         href: session_path(pins: @pin_ids + [ @dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary-ink hover:underline",
+        class: "inline-flex min-h-11 items-center px-2 text-sm text-link hover:text-link-hover hover:underline",
         aria: { label: "Pin #{person_name(@dot[:person_id])}" }
       ) { "Pin" }
     end
@@ -109,18 +109,18 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   # it isn't — a card never shows a misleadingly-low score.
   def score_or_gate
     if @dot[:unlocked]
-      p(class: "mt-1 text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white tabular-nums") do
+      p(class: "mt-1 text-2xl font-extrabold tracking-tight text-default tabular-nums") do
         plain "#{@dot[:pct]}%"
-        span(class: "ml-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300") { "of expected" }
+        span(class: "ml-1.5 text-xs font-semibold text-muted") { "of expected" }
       end
     elsif @dot[:role_missing]
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         "No role snapshot for this cycle — their assessment still opens from the population list."
       end
     elsif @dot[:total].zero?
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { "No behaviours at this level." }
+      p(class: "mt-1 text-sm text-muted") { "No behaviours at this level." }
     else
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         plain "#{@dot[:rated]} of #{@dot[:total]} rated — "
         defined_term(:score_gate, suffix: "drawer-#{@dot[:person_id]}",
                      label: "score unlocks at #{@dot[:unlock_target]}")
@@ -131,7 +131,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   def meta_line
     return unless @dot[:unlocked]
 
-    p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") do
+    p(class: "mt-0.5 text-xs text-muted") do
       plain "#{@dot[:rated]} of #{@dot[:total]} rated"
       plain " · #{@dot[:carried_count]} carried forward" if @dot[:carried_count].positive?
     end
@@ -148,11 +148,11 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
 
   def why_column(heading, entries, empty:)
     div do
-      h3(class: "text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+      h3(class: "text-[11px] font-semibold uppercase tracking-wide text-muted") do
         heading
       end
       if entries.empty?
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { empty }
+        p(class: "mt-1 text-xs text-muted") { empty }
       else
         entries.each { |entry| why_row(entry) }
       end
@@ -160,8 +160,8 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   end
 
   def why_row(entry)
-    div(class: "flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 py-1 text-sm") do
-      span(class: "min-w-0 flex-1 text-gray-900 dark:text-white") { entry[:name] }
+    div(class: "flex items-center gap-2 border-t border-default py-1 text-sm") do
+      span(class: "min-w-0 flex-1 text-default") { entry[:name] }
       weight_marker(entry[:weight])
       # The same number, scale and tone as this person's own assessment
       # page — this drawer used to speak in the engine's weight units, which
@@ -174,7 +174,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
           # Land ON the person card — the reader followed a person's row.
           anchor: "calibration-person-card"
         ),
-        class: "text-xs text-gray-700 dark:text-gray-200 underline underline-offset-2 " \
+        class: "text-xs text-muted underline underline-offset-2 " \
                "whitespace-nowrap min-h-11 inline-flex items-center",
         # Off-page link inside the overview frame — without _top, Turbo
         # navigates the FRAME and renders "Content missing".
@@ -189,7 +189,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
   def weight_marker(weight)
     return unless PersonDevelopment::Scoring.weighted?(weight)
 
-    span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 shrink-0",
+    span(class: "text-[10px] font-medium text-muted shrink-0",
          title: "Counts #{weight_label(weight)} toward the score") do
       weight_label(weight)
     end
@@ -201,8 +201,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     rater = @raters.find { |row| row[:participant_id] == @dot[:rater_id] }
     return unless rater && rater[:org_delta]
 
-    p(class: "mt-2 rounded-md bg-amber-100 dark:bg-amber-900/25 px-3 py-2 text-xs " \
-             "text-amber-800 dark:text-amber-200") do
+    render Components::Kit::Alert.new(tone: :warning, size: :sm, role: :note, class: "mt-2") do
       plain "Rater context: #{person_name(@dot[:rater_id])} rates "
       strong { sprintf("%+.2f vs org mean", rater[:org_delta]) }
       plain " across their whole team — part of this score may be tendency, not #{person_name(@dot[:person_id])}."

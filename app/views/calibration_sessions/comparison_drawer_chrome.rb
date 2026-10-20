@@ -30,7 +30,7 @@ module Views::CalibrationSessions::ComparisonDrawerChrome
   def comparison_drawer_chrome(pin_count:, max_pins:)
     div(
       class: "fixed inset-x-0 bottom-0 z-30 border-t-2 border-violet-500 " \
-             "bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 pb-2",
+             "bg-page px-4 sm:px-6 pb-2",
       id: "calibration-comparison-drawer",
       data: { controller: "comparison-drawer" }
     ) do
@@ -53,8 +53,8 @@ module Views::CalibrationSessions::ComparisonDrawerChrome
       button(
         type: "button",
         class: "absolute right-4 -top-4 z-10 inline-flex h-8 w-8 items-center justify-center " \
-               "rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
-               "text-base text-gray-600 dark:text-gray-300 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-700",
+               "rounded-full border border-emphasized bg-default " \
+               "text-base text-muted shadow-sm hover:bg-default-hover",
         data: { action: "comparison-drawer#toggle", comparison_drawer_target: "collapse" },
         aria: { expanded: "true", controls: "comparison-drawer-body",
                 label: "Collapse the comparison drawer" }
@@ -64,7 +64,7 @@ module Views::CalibrationSessions::ComparisonDrawerChrome
       button(
         type: "button",
         class: "hidden w-full min-h-8 items-center justify-center gap-2 text-xs font-semibold " \
-               "uppercase tracking-wide text-gray-600 dark:text-gray-300 hover:text-violet-700 " \
+               "uppercase tracking-wide text-muted hover:text-violet-700 " \
                "dark:hover:text-violet-300",
         data: { action: "comparison-drawer#toggle", comparison_drawer_target: "expandBar" },
         aria: { expanded: "false", controls: "comparison-drawer-body" }

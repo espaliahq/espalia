@@ -37,7 +37,7 @@ class Views::AssessmentCycles::CycleNameFrame < Views::Base
   end
 
   def display_heading
-    h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { @cycle.name }
+    h1(class: "text-2xl font-bold text-default") { @cycle.name }
   end
 
   def editable
@@ -56,7 +56,7 @@ class Views::AssessmentCycles::CycleNameFrame < Views::Base
     button(
       type: "button",
       class: "opacity-0 group-hover/ine:opacity-100 group-focus-within/ine:opacity-100 " \
-             "focus-visible:opacity-100 transition-opacity text-gray-400 hover:text-primary-ink " \
+             "focus-visible:opacity-100 transition-opacity text-muted hover:text-brand " \
              "shrink-0 mt-1",
       data: { action: "inline-editor#startEdit" },
       aria_label: "Edit cycle name"
@@ -78,26 +78,20 @@ class Views::AssessmentCycles::CycleNameFrame < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "patch")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      input(
-        type: "text",
-        name: "assessment_cycle[name]",
-        value: @cycle.name,
-        required: true,
-        class: "w-72 text-lg font-semibold border border-primary rounded-sm px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-1 focus:ring-primary",
-        data: { inline_editor_target: "input" }
-      )
+      div(class: "w-72") do
+        input(
+          type: "text",
+          name: "assessment_cycle[name]",
+          value: @cycle.name,
+          required: true,
+          class: "#{Components::Kit::Field::INLINE} text-lg! font-semibold",
+          data: { inline_editor_target: "input" }
+        )
+      end
       div(class: "flex gap-1 mt-1") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded-sm bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded-sm border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Save" }
+        render Components::Kit::Button.new(
+          variant: :outline, size: :xs, data: { action: "inline-editor#cancel" }
         ) { "Cancel" }
       end
     end

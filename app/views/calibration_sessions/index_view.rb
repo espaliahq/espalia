@@ -64,8 +64,8 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def page_header
     div(class: "flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-4") do
       div(class: "min-w-0") do
-        h2(class: "text-xl font-bold text-gray-900 dark:text-white") { "Calibration" }
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+        h2(class: "text-xl font-bold text-default") { "Calibration" }
+        p(class: "mt-1 text-sm text-muted") do
           "Run sessions with your managers to calibrate how they rate their reports"
         end
       end
@@ -79,23 +79,13 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def archived_toggle
     return unless @show_archived || @archived_count.positive?
 
-    a(
-      href: @show_archived ? calibration_sessions_path : calibration_sessions_path(archived: 1),
-      class: "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap " \
-             "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 " \
-             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 " \
-             "dark:focus-visible:outline-blue-300 transition-colors"
+    render Components::Kit::Button.new(
+      variant: :ghost, href: @show_archived ? calibration_sessions_path : calibration_sessions_path(archived: 1)
     ) { @show_archived ? "Hide archived" : "Show archived (#{@archived_count})" }
   end
 
   def define_link
-    a(
-      href: new_calibration_session_path,
-      class: "inline-flex items-center rounded-md bg-primary px-3 py-2 whitespace-nowrap " \
-             "text-sm font-semibold text-white shadow-xs hover:bg-primary/90 " \
-             "focus-visible:outline focus-visible:outline-2 " \
-             "focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
-    ) { "Define calibration session" }
+    render Components::Kit::Button.new(tone: :brand, href: new_calibration_session_path) { "Define calibration session" }
   end
 
   # [[cycle_id, sessions]] for the unarchived sessions, newest cycle first; a
@@ -114,10 +104,10 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def cycle_group(cycle_id, sessions)
     cycle = @cycles[cycle_id]
     section(class: "mt-6", aria: { labelledby: "cycle-#{cycle_id}" }) do
-      h2(id: "cycle-#{cycle_id}", class: "text-sm font-semibold text-gray-900 dark:text-white") do
+      h2(id: "cycle-#{cycle_id}", class: "text-sm font-semibold text-default") do
         plain cycle&.name || "Cycle unavailable"
         if cycle
-          span(class: "font-normal text-gray-600 dark:text-gray-300") { " · #{cycle.status}" }
+          span(class: "font-normal text-muted") { " · #{cycle.status}" }
         end
       end
       card_grid(sessions)
@@ -126,7 +116,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
 
   def archived_group
     section(class: "mt-10", aria: { labelledby: "archived-sessions" }) do
-      h2(id: "archived-sessions", class: "text-sm font-semibold text-gray-600 dark:text-gray-300") do
+      h2(id: "archived-sessions", class: "text-sm font-semibold text-muted") do
         plain "Archived"
         span(class: "font-normal") { " · #{archived_sessions.size}" }
       end
@@ -145,17 +135,16 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def session_card(session)
     div(
       id: "calibration-session-card-#{session.id}",
-      class: "relative rounded-lg border border-gray-200 dark:border-gray-700 " \
-             "shadow-xs p-5 transition-colors hover:border-primary/60 " \
-             "#{session.archived? ? 'bg-gray-50 dark:bg-gray-900' : 'bg-white dark:bg-gray-800'}"
+      class: "relative rounded-lg border border-default " \
+             "shadow-xs p-5 transition-colors hover:border-emphasized " \
+             "#{session.archived? ? 'bg-muted' : 'bg-default'}"
     ) do
       div(class: "flex items-start justify-between gap-3") do
         div(class: "min-w-0 flex flex-wrap items-center gap-2") do
-          h3(class: "min-w-0 break-words text-base font-semibold text-gray-900 dark:text-white") do
+          h3(class: "min-w-0 break-words text-base font-semibold text-default") do
             a(href: calibration_session_path(session),
-              class: "after:absolute after:inset-0 after:rounded-lg hover:text-primary-ink " \
-                     "focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-blue-700 " \
-                     "dark:focus-visible:after:ring-blue-300") do
+              class: "after:absolute after:inset-0 after:rounded-lg hover:text-brand " \
+                     "focus-visible:outline-hidden focus-visible:after:ring-2 focus-visible:after:ring-focus") do
               session.name
             end
           end
@@ -163,7 +152,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
         end
         card_kebab(session)
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { meta_line(session) }
+      p(class: "mt-1 text-sm text-muted") { meta_line(session) }
       outcome_line(session)
       restore_button(session) if session.archived? && permission(session, :restore)
     end
@@ -201,7 +190,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
     count = @outcome_counts[session.id]
     return if count.nil?
 
-    p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-2 text-sm text-muted") do
       count == 1 ? "1 outcome" : "#{count} outcomes"
     end
   end
@@ -210,10 +199,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def restore_button(session)
     form(action: unarchive_calibration_session_path(session), method: "post", class: "relative mt-3") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(type: "submit",
-             class: "text-sm font-medium text-primary-ink hover:underline focus-visible:outline " \
-                    "focus-visible:outline-2 focus-visible:outline-blue-700 " \
-                    "dark:focus-visible:outline-blue-300 rounded-sm") { "Restore" }
+      render Components::Kit::Button.new(variant: :link, tone: :brand, type: :submit) { "Restore" }
     end
   end
 
@@ -273,19 +259,14 @@ class Views::CalibrationSessions::IndexView < Views::Base
   end
 
   def empty_state
-    div(class: "text-center py-12") do
-      p(class: "text-gray-600 dark:text-gray-300") do
-        if @archived_count.positive?
-          plain "Every session is archived. Show archived sessions to see them."
-        else
-          plain "No calibration sessions yet."
-        end
+    if @archived_count.positive?
+      render Components::Kit::EmptyState.new(title: "Every session is archived") { "Show archived sessions to see them." }
+    elsif @can_define
+      render Components::Kit::EmptyState.new(title: "No calibration sessions yet") do
+        "Define one to compare how your managers rate their reports."
       end
-      if @can_define
-        p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
-          plain "Define one to compare how your managers rate their reports."
-        end
-      end
+    else
+      render Components::Kit::EmptyState.new(title: "No calibration sessions yet")
     end
   end
 end

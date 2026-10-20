@@ -36,10 +36,10 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
   def view_template
     render Components::Kit::Card.new do |card|
       card.body do
-        h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
           "Capability divergence"
         end
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "mt-1 text-xs text-muted") do
           plain "Each dot is one rater's mean for that capability. " \
                 "Sorted by disagreement remaining after each rater's overall tendency is subtracted — " \
                 "⚠ marks likely unclear expectations."
@@ -58,7 +58,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         end
 
         if @insufficient_count.positive?
-          p(class: "mt-4 text-xs text-gray-600 dark:text-gray-300") do
+          p(class: "mt-4 text-xs text-muted") do
             plain "#{@insufficient_count} #{'capability'.pluralize(@insufficient_count)} rated by only one rater — not comparable yet."
           end
         end
@@ -77,7 +77,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
       @raters.each_with_index do |rater, index|
         next if rater[:cell_count].zero?
 
-        div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "flex items-center gap-1.5 text-xs text-muted") do
           span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
           plain rater_name(rater[:participant_id])
         end
@@ -91,7 +91,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
       .map { |rater| rater_name(rater[:participant_id]) }
     return if names.empty?
 
-    p(class: "mt-1.5 text-xs italic text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1.5 text-xs italic text-muted") do
       "#{names.to_sentence} #{names.size == 1 ? 'hasn\'t' : 'haven\'t'} rated yet — not on the board."
     end
   end
@@ -101,7 +101,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
       div(class: "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1") do
         div(class: "min-w-0") do
           if capability[:category_name]
-            span(class: "text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300 mr-2") do
+            span(class: "text-[10px] font-medium uppercase tracking-wide text-muted mr-2") do
               capability[:category_name]
             end
           end
@@ -115,21 +115,20 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
               { person: @inspector_person_id, pins: @pin_ids.presence }.compact
             ),
             class: "group/cap inline-flex items-baseline gap-1 text-sm font-medium " \
-                   "text-gray-900 dark:text-white underline decoration-gray-400 " \
-                   "dark:decoration-gray-500 underline-offset-4 hover:decoration-gray-900 " \
-                   "dark:hover:decoration-white",
+                   "text-default underline decoration-(--gos-content-subtle) " \
+                   "underline-offset-4 hover:decoration-(--gos-content-default)",
             # The board renders inside the overview tab frame now — this
             # off-page link must break out or Turbo swaps the frame to
             # "Content missing" (phlex-views.md's in-frame trap).
             data: { turbo_frame: "_top" }
           ) do
             plain capability[:name]
-            span(class: "text-gray-600 dark:text-gray-300 transition-transform " \
+            span(class: "text-muted transition-transform " \
                         "group-hover/cap:translate-x-0.5", aria: { hidden: "true" }) { "›" }
           end
         end
         div(class: "flex items-center gap-2 text-xs") do
-          span(class: "text-gray-600 dark:text-gray-300") do
+          span(class: "text-muted") do
             defined_term(:spread, align: :right, suffix: capability[:stable_id],
                          label: sprintf("spread %.1f", capability[:spread]))
           end
@@ -153,7 +152,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
       "#{rater_name(participant_id)} #{sprintf('%.1f', stats_hash[:mean])} (n #{stats_hash[:n]})"
     end.join(", ")
 
-    div(class: "relative mt-2 h-7 rounded-full bg-gray-100 dark:bg-gray-800",
+    div(class: "relative mt-2 h-7 rounded-full bg-neutral-subtle",
         role: "img", aria: { label: "#{capability[:name]} rater means: #{summary}" }) do
       capability[:rater_means].each do |participant_id, stats_hash|
         index = rater_index(participant_id)
@@ -169,7 +168,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
   end
 
   def empty_state
-    p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-4 text-sm text-muted") do
       "Nothing to compare yet — capabilities appear once two raters have rated them."
     end
   end
@@ -185,7 +184,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
     total = capability[:cell_count].to_i
     all = total.positive? && carried == total
     span(
-      class: "text-amber-700 dark:text-amber-300",
+      class: "text-warning",
       title: "#{carried} of #{total} ratings behind this comparison were carried forward " \
              "from the previous cycle and not confirmed this one"
     ) { all ? "· all carried" : "· #{carried} of #{total} carried" }

@@ -89,7 +89,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         # so the backed dot wears the first rater hue.
         assert_select "[data-frequency='consistent'] a[data-person-id='#{@report.id}'] span.bg-teal-600"
         # Unrated: off the axis, hollow grey, still a link to the card.
-        assert_select "a[data-person-id='#{@omar.id}'] span.border-gray-300"
+        assert_select "a[data-person-id='#{@omar.id}'] span.border-emphasized"
         assert_select "[data-frequency] a[data-person-id='#{@omar.id}']", count: 0
       end
       ivy = css_select("a[data-person-id='#{@report.id}']").first
@@ -523,7 +523,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       # verbatim or the label silently falls back to a gray humanize.
       request.update!(status: "responded")
       get calibration_session_capability_path(@session, @cap.stable_id)
-      assert_select "span.text-green-700", text: "Answered"
+      assert_select "span.text-success", text: "Answered"
       assert_not_includes response.body, "Awaiting response"
     end
 

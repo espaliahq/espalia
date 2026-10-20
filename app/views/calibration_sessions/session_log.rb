@@ -24,9 +24,9 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   RENDER_LIMIT = 100
 
   CLARIFICATION_STATUS = {
-    "pending"   => [ "Discussion open", "text-amber-700 dark:text-amber-300" ],
-    "resolved"  => [ "Resolved", "text-green-700 dark:text-green-300" ],
-    "withdrawn" => [ "Withdrawn", "text-gray-600 dark:text-gray-300" ]
+    "pending"   => [ "Discussion open", "text-warning" ],
+    "resolved"  => [ "Resolved", "text-success" ],
+    "withdrawn" => [ "Withdrawn", "text-muted" ]
   }.freeze
 
   # Kind → dot colour, borrowing the framework feed's vocabulary: amber
@@ -65,10 +65,10 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   # Keys are EvidenceRequest::STATUSES verbatim — the read model says
   # "responded"; the room reads "Answered".
   REQUEST_STATUS = {
-    "pending"   => [ "Awaiting response", "text-amber-700 dark:text-amber-300" ],
-    "responded" => [ "Answered", "text-green-700 dark:text-green-300" ],
-    "declined"  => [ "Declined", "text-gray-600 dark:text-gray-300" ],
-    "cancelled" => [ "Cancelled", "text-gray-600 dark:text-gray-300" ]
+    "pending"   => [ "Awaiting response", "text-warning" ],
+    "responded" => [ "Answered", "text-success" ],
+    "declined"  => [ "Declined", "text-muted" ],
+    "cancelled" => [ "Cancelled", "text-muted" ]
   }.freeze
 
   # @param session [CalibrationSession]
@@ -129,54 +129,45 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   # below — the assessment feed's arrangement.
   def header
     div(class: "flex items-center justify-between gap-2") do
-      h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+      h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
         "Session log"
       end
-      button(
-        type: "button",
-        class: "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md " \
-               "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
-        data: { action: "click->activity-pane#close" },
-        aria: { label: "Close the session log" }
+      render Components::Kit::Button.new(
+        variant: :ghost, icon: true, touch: true, aria_label: "Close the session log",
+        data: { action: "click->activity-pane#close" }
       ) { span(aria: { hidden: "true" }) { "✕" } }
     end
     div(class: "mt-2") { filter_chips } if any_outcomes?
   end
 
   def filter_chips
-    div(class: "flex flex-wrap gap-1 text-[11px] font-medium",
-        role: "group", aria_label: "Filter the session log by kind") do
+    div(class: "flex flex-wrap gap-1", role: "group", aria_label: "Filter the session log by kind") do
       CHIPS.each { |chip| render_chip(chip) }
     end
   end
 
   def render_chip(chip)
-    button(
-      type: "button",
-      class: "px-2 py-1 rounded-md transition-colors " \
-             "aria-pressed:bg-primary aria-pressed:text-white " \
-             "aria-[pressed=false]:bg-gray-100 dark:aria-[pressed=false]:bg-gray-800 " \
-             "aria-[pressed=false]:text-gray-600 dark:aria-[pressed=false]:text-gray-300 " \
-             "aria-[pressed=false]:hover:bg-gray-200 dark:aria-[pressed=false]:hover:bg-gray-700",
+    render Components::Kit::Chip.new(
+      chip[:label],
+      pressed: chip[:value] == "all",
       data: {
         framework_activity_target: "filterChip",
         framework_activity_filter_param: chip[:value],
         action: "click->framework-activity#setFilter"
-      },
-      aria: { pressed: chip[:value] == "all" ? "true" : "false" }
-    ) { chip[:label] }
+      }
+    )
   end
 
   # Says so rather than silently truncating — a log that quietly stops is
   # indistinguishable from one with nothing older in it.
   def older_note
-    p(class: "mt-3 text-[11px] text-gray-600 dark:text-gray-300") do
+    p(class: "mt-3 text-[11px] text-muted") do
       "Showing the #{RENDER_LIMIT} most recent entries."
     end
   end
 
   def empty_state
-    p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-2 text-sm text-muted") do
       "No outcomes recorded yet — flags, revisits, feedback requests, and notes land here."
     end
   end
@@ -186,7 +177,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     return lifecycle_row(entry) if LIFECYCLE_KINDS.include?(entry[:kind])
 
     li(
-      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+      class: "flex gap-2 text-xs text-muted rounded -mx-2 px-2 py-1.5 " \
              "data-[hidden=true]:hidden",
       data: {
         framework_activity_target: "entry",
@@ -197,14 +188,14 @@ class Views::CalibrationSessions::SessionLog < Views::Base
            aria: { hidden: "true" }) { }
       div(class: "min-w-0 flex-1") do
         div(class: "flex flex-wrap items-center gap-2") do
-          p(class: "font-medium text-gray-900 dark:text-gray-100") { summary_text(entry) }
+          p(class: "font-medium text-default") { summary_text(entry) }
           status_badge(entry)
         end
         context = context_text(entry)
-        p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") { context } if context
+        p(class: "mt-0.5 text-[11px] text-muted") { context } if context
         secondary = secondary_text(entry)
         if secondary
-          render Components::Kit::Prose.new(secondary, class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300")
+          render Components::Kit::Prose.new(secondary, class: "mt-0.5 text-[11px] text-muted")
         end
         resolution_line(entry)
         footer(entry)
@@ -214,11 +205,11 @@ class Views::CalibrationSessions::SessionLog < Views::Base
 
   def lifecycle_row(entry)
     li(
-      class: "flex gap-2 text-xs text-gray-600 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+      class: "flex gap-2 text-xs text-muted rounded -mx-2 px-2 py-1.5 " \
              "data-[hidden=true]:hidden",
       data: { framework_activity_target: "entry", kind_group: "lifecycle" }
     ) do
-      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 border border-gray-400 dark:border-gray-500",
+      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 border border-emphasized",
            aria: { hidden: "true" }) { }
       div(class: "min-w-0 flex-1") do
         p(class: "italic break-words") { lifecycle_text(entry) }
@@ -288,7 +279,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     return unless status
 
     label, classes = REQUEST_STATUS.fetch(
-      status, [ status.humanize, "text-gray-600 dark:text-gray-300" ]
+      status, [ status.humanize, "text-muted" ]
     )
     span(class: "text-[11px] font-medium #{classes}") { label }
   end
@@ -298,16 +289,16 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     return unless suggestion
 
     label, classes = CLARIFICATION_STATUS.fetch(
-      suggestion.status, [ suggestion.status.humanize, "text-gray-600 dark:text-gray-300" ]
+      suggestion.status, [ suggestion.status.humanize, "text-muted" ]
     )
     span(class: "text-[11px] font-medium #{classes}") { label }
   end
 
   def revisit_badge(entry)
     if acted?(entry)
-      span(class: "text-[11px] font-medium text-green-700 dark:text-green-300") { "Rating revisited" }
+      span(class: "text-[11px] font-medium text-success") { "Rating revisited" }
     else
-      span(class: "text-[11px] font-medium text-amber-700 dark:text-amber-300") { "Open" }
+      span(class: "text-[11px] font-medium text-warning") { "Open" }
     end
   end
 
@@ -317,7 +308,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
     suggestion = @log[:suggestions][entry[:suggestion_id]]
     return unless suggestion&.status == "resolved" && suggestion.reviewer_comment.present?
 
-    p(class: "mt-0.5 text-[11px] italic text-gray-600 dark:text-gray-300") do
+    p(class: "mt-0.5 text-[11px] italic text-muted") do
       "Resolution: #{suggestion.reviewer_comment}"
     end
   end
@@ -329,7 +320,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   end
 
   def footer(entry)
-    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 text-[10px] text-muted") do
       bits = [ person_name(entry[:actor_id]),
                (entry[:at] ? "#{time_ago_in_words(entry[:at])} ago" : nil) ].compact
       span { bits.join(" · ") }
@@ -348,20 +339,14 @@ class Views::CalibrationSessions::SessionLog < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       @note_fields.each { |name, value| input(type: "hidden", name: name, value: value) }
       label(for: "session-note", class: "block text-xs font-semibold uppercase " \
-                                        "text-gray-600 dark:text-gray-300") { "Add a note" }
+                                        "text-muted") { "Add a note" }
       textarea(
         id: "session-note", aria: { describedby: "session-note-hint" }, name: "body", rows: "2", required: true,
-        class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+        class: Components::Kit::Field::TEXTAREA,
         placeholder: "A minute for the room — e.g. “add Priya to the org-wide session”"
       )
-      p(id: "session-note-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm " \
-               "font-semibold text-white hover:bg-primary/80 transition-colors"
-      ) { "Record note" }
+      p(id: "session-note-hint", class: "mt-1 text-xs text-muted") { Prose::COMPOSER_HINT }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Record note" }
     end
   end
 
