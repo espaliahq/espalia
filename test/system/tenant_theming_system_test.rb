@@ -4,8 +4,10 @@ require "application_system_test_case"
 
 class TenantThemingSystemTest < ApplicationSystemTestCase
   setup do
-    @tenant_a = FactoryBot.create(:tenant, name: "Teal Corp", primary_color: "#32c8c8", secondary_color: "#079191")
-    @tenant_b = FactoryBot.create(:tenant, name: "Indigo Inc", primary_color: "#6366f1", secondary_color: "#4f46e5")
+    @tenant_a = FactoryBot.create(:tenant, name: "Teal Corp", theme: "custom",
+                                             custom_theme: { "brand" => { "light" => "#32c8c8" } })
+    @tenant_b = FactoryBot.create(:tenant, name: "Indigo Inc", theme: "custom",
+                                             custom_theme: { "brand" => { "light" => "#6366f1" } })
     @user = FactoryBot.create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant_a) { FactoryBot.create(:tenant_user, tenant: @tenant_a, user: @user) }
     ActsAsTenant.with_tenant(@tenant_b) { FactoryBot.create(:tenant_user, tenant: @tenant_b, user: @user) }
@@ -20,8 +22,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
 
       theme_style = evaluate_script("document.getElementById('tenant-theme')?.textContent || ''")
       # First auto-selected tenant's colours should be present
-      assert_match(/--color-primary/, theme_style)
-      assert_match(/--color-secondary/, theme_style)
+      assert_match(/--tenant-brand:/, theme_style)
     end
 
     should "change CSS variables after switching tenant" do
@@ -63,7 +64,7 @@ class TenantThemingSystemTest < ApplicationSystemTestCase
       # the element is missing entirely — which satisfied an absence check on a
       # render that had switched nothing, and the old value then came back.
       switched_xpath =
-        "//style[@id='tenant-theme'][contains(text(), #{@tenant_b.primary_color.inspect})]"
+        "//style[@id='tenant-theme'][contains(text(), #{@tenant_b.custom_role("brand", :light).inspect})]"
       submit_switch_to_b.call unless page.has_xpath?(switched_xpath, visible: :all, wait: 8)
 
       assert page.has_xpath?(

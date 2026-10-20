@@ -12,7 +12,7 @@ const pngToIcoMod = require("png-to-ico"); const pngToIco = pngToIcoMod.default 
 const fs = require("fs");
 const path = require("path");
 const out = path.join(__dirname, "..", "public") + "/";
-const COLOR = "#32c8c8"; // --color-primary / --color-nav-bg (light)
+const COLOR = "#32c8c8"; // Default --gos-brand / --gos-nav-surface in theme/roles.css (light)
 const STEPS = "M223,847 H777 A28,28 0 0 0 805,819 V408 A28,28 0 0 0 777,380 H633 A28,28 0 0 0 605,408 V506 A14,14 0 0 1 591,520 H428 A28,28 0 0 0 400,548 V636 A14,14 0 0 1 386,650 H223 A28,28 0 0 0 195,678 V819 A28,28 0 0 0 223,847 Z";
 const LEAF = "M688,400 V330 C688,235 765,180 868,180 C870,300 812,380 726,380 V400 Z";
 const CX = 531.5, CY = 513.5;

@@ -6,11 +6,15 @@
  *
  * These are the Default theme's values: each points at the palette step the
  * app used for that role before roles existed, so moving a class onto a role
- * renders the same. A preset ([data-theme]) or a tenant's Custom theme
- * overrides the variables; dark values follow the dark variant's rule.
+ * renders the same. A preset ([data-theme]) overrides the variables; dark
+ * values follow the dark variant's rule.
+ *
+ * A tenant's Custom theme sets --tenant-<role> and --tenant-<role>-dark, read
+ * below with Default's value as the fallback. A role with that hook is one a
+ * Custom theme can set (Themeable::CUSTOM_ROLES reads the list from here).
  */
 :root {
-  --gos-brand: var(--color-primary);
+  --gos-brand: var(--tenant-brand, #32c8c8);
 
   /* Content (text and icons) */
   --gos-content-default: var(--color-gray-900);
@@ -84,11 +88,13 @@
   --gos-info-content-inverse: #ffffff;
   --gos-border-info: var(--color-blue-200);
 
-  /* The navbar: the tenant's own nav colours until tenant themes move onto roles (#550) */
-  --gos-nav-surface: var(--color-nav-bg);
-  --gos-nav-content: var(--color-nav-fg);
+  /* The navbar. Its text comes from the contrast helper, below. */
+  --gos-nav-surface: var(--tenant-nav-surface, #32c8c8);
 
   @variant dark {
+    --gos-brand: var(--tenant-brand-dark, #5ee0e0);
+    --gos-nav-surface: var(--tenant-nav-surface-dark, #1a1a2e);
+
     --gos-content-default: #ffffff;
     --gos-content-muted: var(--color-gray-300);
     --gos-content-subtle: var(--color-gray-500);
@@ -194,6 +200,10 @@
    */
   @supports (color: color(from red srgb-linear r g b)) {
     --gos-brand-content-inverse: color(from var(--gos-brand-strong) srgb-linear
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));
+    --gos-nav-content: color(from var(--gos-nav-surface) srgb-linear
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));

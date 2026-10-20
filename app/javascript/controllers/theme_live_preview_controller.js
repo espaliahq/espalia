@@ -11,17 +11,16 @@
 // inline overrides would persist across the rest of the user's
 // session, defeating Cancel.
 //
-// Each field previews only in its own scheme: a light value is skipped
-// while the page renders dark (the OS, or <html data-scheme>), and the
-// reverse. The admin flips the scheme to preview the other half.
+// Light and dark fields write their own variables (`--tenant-brand`,
+// `--tenant-brand-dark`), and theme/roles.css shows whichever the page's
+// scheme calls for. The admin flips the scheme to preview the other half.
 //
 // Usage:
 // <form data-controller="theme-live-preview">
-//   <input type="color" name="tenant[primary_color]"
+//   <input type="color" name="tenant[custom_theme][brand][light]"
 //          value="#32c8c8"
 //          data-theme-live-preview-target="field"
-//          data-theme-live-preview-var-param="--color-primary"
-//          data-theme-live-preview-mode-param="light"
+//          data-theme-live-preview-var-param="--tenant-brand"
 //          data-theme-live-preview-default-param="#32c8c8"
 //          data-action="input->theme-live-preview#apply">
 //   <button type="button" data-action="theme-live-preview#revert">Cancel</button>
@@ -50,15 +49,7 @@ export default class extends BaseController {
   apply(event) {
     const el = event.currentTarget
     const varName = el.dataset.themeLivePreviewVarParam
-    const mode = el.dataset.themeLivePreviewModeParam
     if (!varName) return
-
-    // Only preview the value for the colour scheme actually being
-    // rendered. Without this, light + dark fields share a CSS variable
-    // and clobber each other (especially during revert, where the
-    // last-written value wins regardless of scheme).
-    if (mode === "light" && this.prefersDark) return
-    if (mode === "dark" && !this.prefersDark) return
 
     const rawValue = el.value
     const finalValue = varName === "--font-sans" && rawValue.length > 0
@@ -75,11 +66,5 @@ export default class extends BaseController {
       field.value = defaultValue
       field.dispatchEvent(new Event("input", { bubbles: true }))
     })
-  }
-
-  get prefersDark() {
-    const scheme = document.documentElement.dataset.scheme
-    if (scheme) return scheme === "dark"
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
   }
 }

@@ -10,33 +10,14 @@ class Views::Tenant::Theme::EditView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::FormWith
 
-  # One row per color concept; each carries a light + dark sub-control
-  # so admins see the pair together and the layout reads top-to-bottom
-  # without crossed labels.
+  # One row per role a Custom theme sets; each carries a light + dark
+  # sub-control so admins see the pair together. Until the Theme page is
+  # rebuilt (#551), saving here makes the theme Custom.
   COLOR_GROUPS = [
+    { label: "Primary", role: "brand", light: "#32c8c8", dark: "#5ee0e0" },
     {
-      label: "Primary",
-      var: "--color-primary",
-      light: { attr: :primary_color,        default: "#32c8c8" },
-      dark:  { attr: :primary_color_dark,   default: "#5ee0e0" }
-    },
-    {
-      label: "Secondary",
-      var: "--color-secondary",
-      light: { attr: :secondary_color,      default: "#079191" },
-      dark:  { attr: :secondary_color_dark, default: "#0ababa" }
-    },
-    {
-      label: "Nav background",
-      var: "--color-nav-bg",
-      light: { attr: :nav_bg_color,         default: Tenant::DEFAULT_NAV_BG_COLOR },
-      dark:  { attr: :nav_bg_color_dark,    default: Tenant::DEFAULT_NAV_BG_COLOR_DARK }
-    },
-    {
-      label: "Nav text",
-      var: "--color-nav-fg",
-      light: { attr: :nav_fg_color,         default: "#ffffff" },
-      dark:  { attr: :nav_fg_color_dark,    default: "#e2e8f0" }
+      label: "Nav background", role: "nav-surface",
+      light: Tenant::DEFAULT_NAV_BG_COLOR, dark: Tenant::DEFAULT_NAV_BG_COLOR_DARK
     }
   ].freeze
 
@@ -66,7 +47,8 @@ class Views::Tenant::Theme::EditView < Views::Base
         data: { controller: "theme-live-preview" },
         class: "space-y-6"
       ) do |form|
-        colors_card(form)
+        form.hidden_field :theme, value: "custom"
+        colors_card
         typography_card(form)
         dark_mode_note
         actions(form)
@@ -76,7 +58,7 @@ class Views::Tenant::Theme::EditView < Views::Base
 
   private
 
-  def colors_card(form)
+  def colors_card
     render Components::Kit::Card.new(title: "Brand colors") do |card|
       card.body do
         # Column headers — only on sm+ to anchor the light/dark grouping.
@@ -90,40 +72,43 @@ class Views::Tenant::Theme::EditView < Views::Base
         end
 
         div(class: "divide-y divide-gray-200 dark:divide-gray-700") do
-          COLOR_GROUPS.each { |group| color_group_row(form, group) }
+          COLOR_GROUPS.each { |group| color_group_row(group) }
         end
       end
     end
   end
 
-  def color_group_row(form, group)
+  def color_group_row(group)
     div(class: "grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-x-6 gap-y-3 py-4 items-center") do
       div(class: "min-w-0") do
         span(class: "block text-sm font-medium text-gray-900 dark:text-white") { group[:label] }
       end
-      color_picker(form, group[:var], group[:light], mode: :light)
-      color_picker(form, group[:var], group[:dark],  mode: :dark)
+      color_picker(group, :light)
+      color_picker(group, :dark)
     end
   end
 
-  def color_picker(form, var, slot, mode:)
-    current = @tenant.public_send(slot[:attr]).presence || slot[:default]
+  def color_picker(group, scheme)
+    current = @tenant.custom_role(group[:role], scheme) || group[scheme]
+    preview_var = scheme == :dark ? "--tenant-#{group[:role]}-dark" : "--tenant-#{group[:role]}"
 
     div(class: "flex items-center gap-2 sm:justify-self-center") do
       span(class: "sm:hidden text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300 w-12") do
-        mode.to_s.capitalize
+        scheme.to_s.capitalize
       end
-      form.color_field slot[:attr],
+      input(
+        type: "color",
+        name: "tenant[custom_theme][#{group[:role]}][#{scheme}]",
         value: current,
-        aria: { label: "#{form.object_name} #{slot[:attr]}" },
+        aria: { label: "#{group[:label]}, #{scheme}" },
         class: "h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer",
         data: {
           theme_live_preview_target: "field",
-          theme_live_preview_var_param: var,
-          theme_live_preview_mode_param: mode.to_s,
+          theme_live_preview_var_param: preview_var,
           theme_live_preview_default_param: current,
           action: "input->theme-live-preview#apply"
         }
+      )
       span(class: "text-xs font-mono text-gray-600 dark:text-gray-300 w-16 truncate") { current }
     end
   end
@@ -146,7 +131,6 @@ class Views::Tenant::Theme::EditView < Views::Base
           data: {
             theme_live_preview_target: "field",
             theme_live_preview_var_param: "--font-sans",
-            theme_live_preview_mode_param: "both",
             theme_live_preview_default_param: current_font,
             action: "input->theme-live-preview#apply"
           }

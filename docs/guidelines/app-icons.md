@@ -50,10 +50,10 @@ cannot reach: a browser's own unsolicited `GET /favicon.ico`, and the icon
 URLs inside the manifest (installed home-screen tiles refresh on the
 platform's own schedule regardless).
 
-**Three places must agree on the brand teal**: the `--color-primary` /
-`--color-nav-bg` tokens in `application.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
-and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins the
-last two to each other and to the manifest.
+**Three places must agree on the brand teal**: Default's `--gos-brand` /
+`--gos-nav-surface` in `theme/roles.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
+and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins all
+three to each other and to the manifest.
 
 ## Regenerating
 

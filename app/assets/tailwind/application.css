@@ -25,10 +25,11 @@
   /* https://rsms.me/inter/lab */
   --font-sans--font-feature-settings: 'liga', 'cv02', 'cv03', 'cv04', 'cv11';
 
-  --color-primary: #32c8c8;
+  /* The legacy brand and nav tokens follow the theme's roles until no view uses them (#539) */
+  --color-primary: var(--gos-brand);
   --color-secondary: #079191;
-  --color-nav-bg: #32c8c8;
-  --color-nav-fg: #ffffff;
+  --color-nav-bg: var(--gos-nav-surface);
+  --color-nav-fg: var(--gos-nav-content);
 
   /* The brand colour as readable text. A tenant can set any primary, so
      clamp its lightness rather than pick a hex: >= 4.5:1 for every hue
@@ -39,10 +40,7 @@
 
 :root {
   @variant dark {
-    --color-primary: #5ee0e0;
     --color-secondary: #0ababa;
-    --color-nav-bg: #1a1a2e;
-    --color-nav-fg: #e2e8f0;
     --color-primary-ink: color-mix(in oklab, var(--color-primary) 45%, white);
   }
 }

@@ -47,23 +47,20 @@
 ```ruby
 # Schema: tenants
 #   id (uuid), name, slug (unique),
-#   settings (jsonb) — theme customisation
+#   theme — default | bento | custom
+#   custom_theme (jsonb) — a Custom theme's role values: { "brand" => { "light" => "#…", "dark" => "#…" } }
+#   settings (jsonb) — font_family
 
 class Tenant < ApplicationRecord
+  include Themeable
+
   has_many :tenant_users, dependent: :destroy
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
-
-  store_accessor :settings,
-    :primary_color, :primary_color_dark,
-    :secondary_color, :secondary_color_dark,
-    :nav_bg_color, :nav_bg_color_dark,
-    :nav_fg_color, :nav_fg_color_dark,
-    :font_family
 end
 ```
 
-Settings jsonb currently stores theme customisation (colours, font). Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
+A tenant's theme is Default, the Bento preset, or Custom (ADR-23). Custom stores values only for the roles it overrides; a blank role, light or dark, falls back to Default's. The roles it can set are the ones `theme/roles.css` reads a `--tenant-*` hook for (`Themeable::CUSTOM_ROLES`). The font applies to Custom only; presets carry their own. Additional JSONB columns for `sso_config`, `hris_config`, and `notification_config` are planned for V1 integrations but not yet implemented.
 
 ---
 

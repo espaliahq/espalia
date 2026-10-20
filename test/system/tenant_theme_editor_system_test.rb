@@ -7,6 +7,8 @@ require "application_system_test_case"
 # lives in tenant_theme_preview_screenshot_test.rb.
 #
 class TenantThemeEditorSystemTest < ApplicationSystemTestCase
+  BRAND_LIGHT = "tenant[custom_theme][brand][light]"
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user, password: "password123")
@@ -19,15 +21,15 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     sign_in_as(@admin_user)
   end
 
-  should "update the --color-primary CSS variable live on input change" do
+  should "update the --tenant-brand CSS variable live on input change" do
     visit tenant_theme_path
     wait_for_stimulus "theme-live-preview"
 
     new_color = "#ff8800"
-    set_color_field("tenant[primary_color]", new_color)
+    set_color_field(BRAND_LIGHT, new_color)
 
     applied = page.evaluate_script(
-      "document.documentElement.style.getPropertyValue('--color-primary').trim()"
+      "document.documentElement.style.getPropertyValue('--tenant-brand').trim()"
     )
     assert_equal new_color, applied
   end
@@ -37,15 +39,15 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     wait_for_stimulus "theme-live-preview"
 
     original_color = page.evaluate_script(
-      "document.querySelector('input[name=\"tenant[primary_color]\"]')" \
+      "document.querySelector('input[name=\"#{BRAND_LIGHT}\"]')" \
       ".dataset.themeLivePreviewDefaultParam"
     )
 
-    set_color_field("tenant[primary_color]", "#ff8800")
+    set_color_field(BRAND_LIGHT, "#ff8800")
     click_cancel
 
     applied = page.evaluate_script(
-      "document.documentElement.style.getPropertyValue('--color-primary').trim()"
+      "document.documentElement.style.getPropertyValue('--tenant-brand').trim()"
     )
     assert_equal original_color, applied
   end
@@ -54,7 +56,7 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     visit tenant_theme_path
     wait_for_stimulus "theme-live-preview"
 
-    set_color_field("tenant[primary_color]", "#abcdef")
+    set_color_field(BRAND_LIGHT, "#abcdef")
     # Land back on the editor; the persisted value rendered next to
     # the input is a stable signal that the round-trip completed,
     # without racing the 5s flash auto-dismiss.
@@ -62,12 +64,13 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     assert_current_path tenant_theme_path
 
     @tenant.reload
-    assert_equal "#abcdef", @tenant.primary_color
+    assert_equal "custom", @tenant.theme
+    assert_equal "#abcdef", @tenant.custom_role("brand", :light)
 
     style = page.evaluate_script(
       "document.querySelector('#tenant-theme')?.textContent || ''"
     )
-    assert_includes style, "--color-primary:#abcdef"
+    assert_includes style, "--tenant-brand:#abcdef"
   end
 
   private

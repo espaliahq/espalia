@@ -12,7 +12,8 @@ class AppIconsTest < ActionDispatch::IntegrationTest
 
   context "the layout head for a themed tenant" do
     setup do
-      @tenant = create(:tenant, nav_bg_color: "#123456", nav_bg_color_dark: "#654321")
+      @tenant = create(:tenant, theme: "custom",
+                               custom_theme: { "nav-surface" => { "light" => "#123456", "dark" => "#654321" } })
       user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: user, role: :member) }
       sign_in user
@@ -108,13 +109,13 @@ class AppIconsTest < ActionDispatch::IntegrationTest
 
     should "be painted in the same teal the navbar and manifest use" do
       # COLOR in bin/build-icons is a literal (it's a node script) — this is what
-      # keeps it in step with Tenant::DEFAULT_NAV_BG_COLOR, and the CSS tokens
-      # are literals too, so pin those to the same constant here.
+      # keeps it in step with Tenant::DEFAULT_NAV_BG_COLOR, and Default's nav
+      # surface in roles.css is a literal too, so pin those to the same constant here.
       assert_includes @svg, %(fill="#{Tenant::DEFAULT_NAV_BG_COLOR}")
 
-      css = Rails.root.join("app/assets/tailwind/application.css").read
-      assert_includes css, "--color-nav-bg: #{Tenant::DEFAULT_NAV_BG_COLOR};"
-      assert_includes css, "--color-nav-bg: #{Tenant::DEFAULT_NAV_BG_COLOR_DARK};"
+      css = Tenant::ROLES_STYLESHEET.read
+      assert_includes css, "--gos-nav-surface: var(--tenant-nav-surface, #{Tenant::DEFAULT_NAV_BG_COLOR});"
+      assert_includes css, "--gos-nav-surface: var(--tenant-nav-surface-dark, #{Tenant::DEFAULT_NAV_BG_COLOR_DARK});"
     end
   end
 

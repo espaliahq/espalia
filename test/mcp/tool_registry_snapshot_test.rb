@@ -2385,19 +2385,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "tenants_update_theme",
-        "description" => "Update the active tenant's theme (brand colors and font).",
+        "description" => "Update the active tenant's theme: default, bento, or custom with its own " \
+                         "colour-role values (light and dark hex) and Google font. custom_theme merges " \
+                         "per role; a blank value restores the default for that role.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "primary_color"        => { "type" => "string" },
-            "primary_color_dark"   => { "type" => "string" },
-            "secondary_color"      => { "type" => "string" },
-            "secondary_color_dark" => { "type" => "string" },
-            "nav_bg_color"         => { "type" => "string" },
-            "nav_bg_color_dark"    => { "type" => "string" },
-            "nav_fg_color"         => { "type" => "string" },
-            "nav_fg_color_dark"    => { "type" => "string" },
-            "font_family"          => { "type" => "string" }
+            "theme"        => { "type" => "string", "enum" => %w[default bento custom] },
+            "custom_theme" => custom_theme_schema,
+            "font_family"  => { "type" => "string" }
           },
           "required" => [],
           "additionalProperties" => false
@@ -2409,6 +2405,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       }
     ]
+  end
+
+  # A Custom theme's role values: one object per role with a --tenant-* hook
+  # in roles.css, each taking a light and a dark hex (or blank, to clear it).
+  def custom_theme_schema
+    hex = { "type" => "string", "pattern" => "^#[0-9a-fA-F]{6}$|^$" }
+    role = { "type" => "object", "properties" => { "light" => hex, "dark" => hex }, "additionalProperties" => false }
+    { "type" => "object", "properties" => { "brand" => role, "nav-surface" => role }, "additionalProperties" => false }
   end
 
   # The published JSON Schema for an evidence item's external_reference,

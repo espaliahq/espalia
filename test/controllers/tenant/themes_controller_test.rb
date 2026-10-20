@@ -24,14 +24,17 @@ class Tenant::ThemesControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "Brand colors"
         assert_includes response.body, "Typography"
         assert_includes response.body, "theme-live-preview"
+        assert_select "input[name='tenant[custom_theme][brand][light]']"
+        assert_select "input[name='tenant[custom_theme][nav-surface][dark]']"
       end
     end
 
     context "PATCH /tenant/theme" do
-      should "persist supplied theme attributes" do
+      should "save the form as a Custom theme" do
         patch tenant_theme_path, params: {
           tenant: {
-            primary_color: "#abcdef",
+            theme: "custom",
+            custom_theme: { brand: { light: "#abcdef", dark: "#123456" } },
             font_family: "Roboto"
           }
         }
@@ -40,19 +43,20 @@ class Tenant::ThemesControllerTest < ActionDispatch::IntegrationTest
         assert_equal "Theme saved.", flash[:notice]
 
         @tenant.reload
-        assert_equal "#abcdef", @tenant.primary_color
+        assert_equal "custom", @tenant.theme
+        assert_equal "#abcdef", @tenant.custom_role("brand", :light)
+        assert_equal "#123456", @tenant.custom_role("brand", :dark)
         assert_equal "Roboto", @tenant.font_family
       end
 
       should "redirect with an alert on a malformed hex color" do
         patch tenant_theme_path, params: {
-          tenant: { primary_color: "not-a-hex" }
+          tenant: { theme: "custom", custom_theme: { brand: { light: "not-a-hex" } } }
         }
         assert_response :see_other
         follow_redirect!
         assert_includes flash[:alert], "Theme could not be saved"
-        @tenant.reload
-        assert_nil @tenant.primary_color
+        assert_equal({}, @tenant.reload.custom_theme)
       end
     end
   end
@@ -68,10 +72,13 @@ class Tenant::ThemesControllerTest < ActionDispatch::IntegrationTest
     end
 
     should "deny PATCH update" do
-      patch tenant_theme_path, params: { tenant: { primary_color: "#abcdef" } }
+      patch tenant_theme_path, params: {
+        tenant: { theme: "custom", custom_theme: { brand: { light: "#abcdef" } } }
+      }
       assert_response :redirect
       @tenant.reload
-      assert_nil @tenant.primary_color
+      assert_equal "default", @tenant.theme
+      assert_equal({}, @tenant.custom_theme)
     end
   end
 
