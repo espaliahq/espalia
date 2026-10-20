@@ -126,6 +126,16 @@
 | `app/javascript/controllers/submit_guard_controller.js` | One user action, one request — in-flight lock on the evidence-modal **and request-evidence** submit buttons (see the controllers table) |
 | `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side; edit mode loads ALL active links (origin included, entry-point cell first) |
 | `app/models/evidence/cell_context_resolver.rb` | Shared per-cell context (name, role, level title, expectation, illustrations) — hub + modal |
+| **Placement suggestions** (see [*Suggested placement and valence*](evidence.md)) | |
+| `app/models/evidence_placement_suggestion.rb` | One suggested cell + valence for an item, pending until a person decides; plain state, not a read model |
+| `app/models/evidence/placement_prompt.rb` | The candidate cells (role cells at the home level ±1, minus linked and dismissed), the cached framework text, the item text and the enum-constrained schema; `VERSION` is recorded on every row |
+| `app/models/evidence/suggestion_model.rb` | The one Claude call (`claude-opus-5-5`, effort low, structured output); SDK errors become `RateLimited` / `Unavailable` / `Rejected`, a refusal is no suggestions |
+| `app/jobs/evidence/suggest_placements_job.rb` | Generates a set: supersedes the pending one, re-validates every cell, stores the rest; `after_generate` is the notification hook |
+| `app/contexts/person_development/async_handlers/placement_suggester.rb` | Async handler on `EvidenceRecorded` / `EvidenceUpdated` that enqueues the job for human, non-self feedback when the tenant switch is on |
+| `app/views/evidence/placement_suggestions.rb` / `placement_suggestion_status.rb` | The hub block under an item (rows, Accept, Dismiss…, Adjust, Suggest again) and the status line its responses write into |
+| `app/controllers/evidence_placement_suggestions_controller.rb` | Accept / dismiss / suggest again → Turbo Stream replacing the block |
+| `app/models/evidence/placement_suggestion_rows.rb` | Loads the pending rows and their cell context for a set of hub items |
+| `lib/tasks/evidence_suggestions.rake` / `evidence_suggestions_eval.rb` | `evidence:suggestions:eval` — cell and valence match rates against `test/fixtures/files/evidence_suggestions/` |
 | `app/models/evidence/framework_cell_options.rb` | Valid (active + bound + has-expectation) link cells + the per-cell expectation map (incl. role-scoped illustrations) for the "Applies to" rows |
 | `app/controllers/concerns/evidence_diff_submit.rb` | Diff-based save — emits the minimal commands (record / update-if-content-changed / add+remove links / respond); links-only never bumps `edited_at` |
 | `app/controllers/assessments/evidence_controller.rb#save` | Assessment-surface submit → matrix cell Turbo Streams (hub uses `evidence_requests#respond` / `evidence_items#update`) |

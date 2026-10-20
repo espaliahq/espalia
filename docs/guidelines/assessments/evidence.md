@@ -1,6 +1,6 @@
 # Assessments — Feedback / Evidence
 
-> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, requesting evidence, or comment notifications.
+> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, placement suggestions, requesting evidence, or comment notifications.
 
 ## Evidence-link valence — "what does this say about the behaviour?"
 
@@ -230,6 +230,83 @@ current level or unplaced; a giver who has never signed in gets a draft link
 that opens the hub's modal prefilled after sign-in. See
 [slack-integration.md](../slack-integration.md).
 
+## Suggested placement and valence
+
+Feedback written by someone who never saw the framework arrives unplaced, or
+placed on one cell when it speaks to three. When a tenant switches it on,
+Claude reads each new piece of feedback and suggests where it belongs; a
+person decides ([#536](https://github.com/mr-yum/growth-os/issues/536), plan
+§7 in [feedback-integration-plan.md](../../notes/feedback-integration-plan.md)).
+Rules, all deliberate:
+
+- **Off until the data decision is made.** `Tenant.settings` →
+  `evidence_suggestions_enabled` (`Tenant#evidence_suggestions_enabled?`)
+  gates the handler, the job and "Suggest again"; seeds never set it. Without
+  `Rails.application.credentials.dig(:anthropic, :api_key)` the job is a
+  no-op too. Sending feedback text to Anthropic is plan decision D2.
+- **Only human feedback about someone else.** The async handler
+  `PlacementSuggester` enqueues `Evidence::SuggestPlacementsJob` on
+  `EvidenceRecorded` and on `EvidenceUpdated`, skipping `source: "self"` and
+  events whose `acting_via` is `hris` or `system`. An edit supersedes the
+  pending set. It is never a projection: replaying it would re-ask the model
+  about every item ever recorded.
+- **The model can only answer with cells that exist.**
+  `Evidence::PlacementPrompt` takes the recipient's role cells from
+  `FrameworkCellOptions#expectation_map` at their level and one either side,
+  and the structured-output schema makes `capability_stable_id` and
+  `level_ordinal` enums of those values. The job still re-checks each pair,
+  and drops cells already linked or ever dismissed for the item, so a
+  dismissed suggestion never comes back. Up to three survive.
+- **The framework text is the cached prefix.** Instructions plus the role's
+  cells are identical for everyone at a role and level and carry the
+  `cache_control` breakpoint; the feedback, who gave it and the cells to
+  leave out are the volatile tail.
+- **One class talks to Claude.** `Evidence::SuggestionModel#suggest` calls
+  `claude-opus-5-5` (`evidence_suggestions_model` overrides it per tenant)
+  at `effort: "low"` with adaptive thinking left on. Its errors are its own:
+  `RateLimited` and `Unavailable` retry with backoff, `Rejected` (any other
+  4xx) is logged and dropped, and a `refusal`, a truncated answer or
+  unparseable JSON is simply no suggestions. No refusal fallback is sent: it
+  would route personal feedback to a second model, which is D2's question.
+  Every test stubs `#suggest`, never the gem. The Ruby SDK spells two
+  request keys with a trailing underscore, `system_:` and
+  `output_config: { format_: … }`, because `system` and `format` are Ruby
+  methods; it sends them as `system` and `format`.
+- **Suggestions are state, decisions are events.** `EvidencePlacementSuggestion`
+  is a plain tenant table, one row per item × cell, recording model, prompt
+  version and confidence. Accepting goes through
+  `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
+  `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
+  cell meanwhile — carrying `via_suggestion_id`. The feed's secondary line
+  then says "from a suggestion". Dismissals keep an optional reason and are
+  not feed entries.
+- **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager
+  chain, a rating delegate and the author. Plan decision D5 may narrow it to
+  the manager side.
+- **On the hub, in place.** Each item the viewer may place shows its pending
+  suggestions — capability · level, the valence badge, "82% confident" as
+  text, the expectation and the quoted rationale — on "Feedback to place",
+  "Feedback you've provided", the responses you asked for, and a "Suggested
+  placements" group for placed items about you or your reports with more
+  cells to go. Accept and Dismiss answer with a Turbo Stream that replaces
+  `evidence-suggestions-<id>` and writes the outcome into the persistent
+  `role="status"` line beside it; nothing reloads. "Adjust in the editor"
+  opens the evidence modal with every pending suggestion staged as an
+  "Applies to" row (`suggestions=pending`, valence preselected, "Suggested —
+  rationale" note); on save a kept row is accepted as **edited** and a
+  removed one dismissed ("Removed while adjusting").
+- **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
+  after each stored set and is empty; the placement notifier
+  ([#534](https://github.com/mr-yum/growth-os/issues/534)) hooks in there.
+- **Eval before widening.** `bin/rails evidence:suggestions:eval` scores the
+  current `PlacementPrompt::VERSION` against thirty invented, hand-placed
+  items in `test/fixtures/files/evidence_suggestions/` (cell match for the
+  top and any suggestion, valence match on hit cells, precision, and
+  feedback the framework doesn't cover left alone).
+  `SUGGESTION_MODEL=baseline` scores a word-overlap baseline with no API
+  call. Bump `VERSION` whenever the instructions, framework text or schema
+  change, and rerun.
+
 ## Requesting evidence (cell-scoped)
 
 A manager (or the assessee, or an active rating delegate, or a tenant admin —
@@ -369,7 +446,7 @@ payload's `available_months` render.
 
 **Hub layout** ([hub_view.rb](../../../app/views/evidence/hub_view.rb)): the
 "Give feedback" entry in the header → "Feedback to place" (see *Proactive
-feedback*) → "Open
+feedback*) → "Suggested placements" (see *Suggested placement and valence*) → "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
 (subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
