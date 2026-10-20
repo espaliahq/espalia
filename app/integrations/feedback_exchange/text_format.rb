@@ -26,7 +26,8 @@ module FeedbackExchange::TextFormat
   UNKNOWN_MENTION = "@someone"
 
   # Placeholder delimiters for spans that must pass through untouched. Neither
-  # is whitespace or a formatting character, so the inline rules never see them.
+  # is whitespace or a formatting character, so the inline rules never see them;
+  # the character is stripped from the input so a peer's text cannot forge one.
   HOLD = "\u0001"
   HELD = /\u0001(\d+)\u0001/
 
@@ -52,8 +53,8 @@ module FeedbackExchange::TextFormat
     text = text.to_s
     case format.to_s
     when "markdown" then text
-    when "slack" then new_run.slack(text)
-    else new_run.plain(text)
+    when "slack" then new_run.slack(text.delete(HOLD))
+    else new_run.plain(text.delete(HOLD))
     end
   end
 

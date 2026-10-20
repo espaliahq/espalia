@@ -41,6 +41,11 @@ class FeedbackExchange::TextFormatTest < ActiveSupport::TestCase
     assert_equal "Great work on the RFC (https://x.io/rfc)", Prose.to_plain(markdown)
   end
 
+  should "not let the text forge a held span" do
+    assert_equal "a7 **b**", FeedbackExchange::TextFormat.to_markdown("a\u00017\u0001 *b*", format: "slack")
+    assert_equal "x 9 y", FeedbackExchange::TextFormat.to_markdown("x \u00019\u0001 y", format: "plain")
+  end
+
   should "treat an unknown format as plain" do
     assert_equal "a \\*b\\*", FeedbackExchange::TextFormat.to_markdown("a *b*", format: "html")
   end
