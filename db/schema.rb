@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -324,6 +324,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000001) do
     t.datetime "updated_at", null: false
     t.index ["tenant_id"], name: "index_feedback_drafts_on_tenant_id"
     t.index ["token"], name: "index_feedback_drafts_on_token", unique: true
+  end
+
+  create_table "feedback_exchange_imports", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "origin", null: false
+    t.string "external_id", null: false
+    t.uuid "evidence_id"
+    t.uuid "recipient_id"
+    t.string "status", null: false
+    t.string "skip_reason"
+    t.jsonb "record"
+    t.datetime "peer_updated_at"
+    t.datetime "synced_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "origin", "external_id"], name: "index_feedback_exchange_imports_on_origin_key", unique: true
+    t.index ["tenant_id", "recipient_id"], name: "index_feedback_exchange_imports_on_skipped_recipient", where: "((status)::text = 'skipped'::text)"
+    t.index ["tenant_id", "status", "skip_reason"], name: "index_feedback_exchange_imports_on_status"
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -842,6 +860,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000001) do
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "feedback_drafts", "tenants"
+  add_foreign_key "feedback_exchange_imports", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"

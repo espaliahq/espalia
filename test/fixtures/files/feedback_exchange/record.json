@@ -1,0 +1,18 @@
+{
+  "id": "chip-fb-0001",
+  "origin": "chip",
+  "status": "active",
+  "given_at": "2026-10-18T03:12:44Z",
+  "updated_at": "2026-10-18T03:12:45Z",
+  "kind": "feedback",
+  "text": "*Great* work on the incident call, _calm and clear_.",
+  "text_format": "slack",
+  "author": { "email": "priya@example.com", "display_name": "Priya N.", "active": true, "external_ids": {} },
+  "recipient": { "email": "alex@example.com", "display_name": "Alex R.", "active": true, "external_ids": {} },
+  "request": null,
+  "period": { "id": "q4-2026", "name": "Q4 2026" },
+  "audience": ["recipient", "management_line", "hr"],
+  "notified": ["recipient", "manager"],
+  "source_url": "https://chip.example.com/feedback/chip-fb-0001",
+  "external_reference": null
+}
