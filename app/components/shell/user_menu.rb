@@ -5,6 +5,7 @@
 # Shows the user's initial as a trigger and renders a dropdown with:
 # - User email (header)
 # - Tenant switcher (only when user belongs to multiple tenants)
+# - Appearance: Auto / Light / Dark
 # - Sign out link
 #
 # @example
@@ -14,6 +15,13 @@
 #     tenants: current_user.tenants
 #   )
 class Components::Shell::UserMenu < Components::Base
+  COLOR_SCHEME_LABELS = { "auto" => "Auto", "light" => "Light", "dark" => "Dark" }.freeze
+
+  COLOR_SCHEME_OPTION = "flex-1 min-h-8 rounded-full px-2 text-[13px] font-medium text-muted cursor-pointer " \
+                        "transition-colors hover:text-default focus-visible:outline-2 " \
+                        "focus-visible:outline-offset-1 focus-visible:outline-focus " \
+                        "aria-checked:bg-default aria-checked:font-semibold aria-checked:text-default"
+
   # @param user [User] the currently signed-in user
   # @param current_tenant [Tenant, nil] the active tenant
   # @param tenants [Array<Tenant>] all tenants the user belongs to
@@ -58,6 +66,7 @@ class Components::Shell::UserMenu < Components::Base
   def menu_content
     email_header
     tenant_section if @tenants.size > 1
+    color_scheme_section
     divider
     notifications_link
     ai_assistants_link
@@ -82,6 +91,43 @@ class Components::Shell::UserMenu < Components::Base
         p(class: "text-xs text-muted truncate") { @current_tenant.name }
       end
     end
+  end
+
+  # menuitemradio rather than Kit::Chip: inside role="menu" every control must be a menu item
+  def color_scheme_section
+    divider
+    div(
+      role: "group",
+      aria: { labelledby: "color-scheme-label" },
+      class: "px-4 pt-1.5 pb-2",
+      data: {
+        controller: "color-scheme",
+        color_scheme_url_value: settings_color_scheme_path,
+        color_scheme_light_color_value: Tenant.browser_theme_color(@current_tenant, :light),
+        color_scheme_dark_color_value: Tenant.browser_theme_color(@current_tenant, :dark)
+      }
+    ) do
+      p(id: "color-scheme-label", class: "text-xs font-semibold text-muted uppercase tracking-wider") do
+        plain "Appearance"
+      end
+      div(role: "none", class: "mt-1.5 flex gap-1 rounded-full bg-neutral-muted p-0.5") do
+        COLOR_SCHEME_LABELS.each { |value, label| color_scheme_option(value, label) }
+      end
+    end
+  end
+
+  def color_scheme_option(value, label)
+    button(
+      type: "button",
+      role: "menuitemradio",
+      aria: { checked: (@user.color_scheme == value).to_s },
+      class: COLOR_SCHEME_OPTION,
+      data: {
+        color_scheme_target: "option",
+        color_scheme_scheme_param: value,
+        action: "color-scheme#choose"
+      }
+    ) { label }
   end
 
   def tenant_section

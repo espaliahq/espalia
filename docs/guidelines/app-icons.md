@@ -32,6 +32,7 @@ The `<head>` in [`app/views/layouts/application.html.erb`](../../app/views/layou
 links the ICO, the SVG, the Apple touch icon and the manifest, and declares a
 `theme-color` per colour scheme — the tenant's navbar colour when one is set,
 else `Tenant::DEFAULT_NAV_BG_COLOR` / `_DARK` (`Tenant.browser_theme_color`).
+A person who chose Light or Dark gets one tag, for that scheme, with no `media`.
 A view can replace both with `content_for(:theme_color, …)`; the sign-in page
 does, with Bento's sloe (`#6b58da`) in both schemes, since it has no navbar.
 The manifest is a static [`public/manifest.json`](../../public/manifest.json)

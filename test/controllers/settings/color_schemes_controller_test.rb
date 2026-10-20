@@ -67,5 +67,21 @@ class Settings::ColorSchemesControllerTest < ActionDispatch::IntegrationTest
         assert_equal "dark", @user.reload.color_scheme
       end
     end
+
+    should "save an impersonating admin's own choice, leaving the person they view as untouched" do
+      admin = create(:user, password: "password123")
+      member_tu = ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: admin, role: :admin)
+        TenantUser.find_by!(user: @user)
+      end
+      sign_in admin
+      post impersonation_path, params: { tenant_user_id: member_tu.id }
+
+      patch settings_color_scheme_path, params: { color_scheme: "dark" }, as: :json
+
+      assert_response :no_content
+      assert_equal "dark", admin.reload.color_scheme
+      assert @user.reload.color_scheme_auto?
+    end
   end
 end

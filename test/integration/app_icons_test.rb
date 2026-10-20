@@ -27,6 +27,30 @@ class AppIconsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "the layout for a person who chose a scheme" do
+    setup do
+      @tenant = create(:tenant, theme: "custom",
+                               custom_theme: { "nav-surface" => { "light" => "#123456", "dark" => "#654321" } })
+      @user = create(:user, password: "password123", color_scheme: :dark)
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: @user, role: :member) }
+      sign_in @user
+    end
+
+    should "set data-scheme and one theme colour for that scheme" do
+      get root_path
+      assert_select "html[data-scheme='dark']"
+      assert_select "meta[name='theme-color']", count: 1
+      assert_select "meta[name='theme-color'][content='#654321']:not([media])"
+    end
+
+    should "leave data-scheme off and keep the media pair for Auto" do
+      @user.update!(color_scheme: :auto)
+      get root_path
+      assert_select "html[data-scheme]", count: 0
+      assert_select "meta[name='theme-color'][media]", count: 2
+    end
+  end
+
   context "the layout head" do
     setup { get new_user_session_path }
 
