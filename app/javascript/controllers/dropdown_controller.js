@@ -59,21 +59,21 @@ export default class extends BaseController {
         window.removeEventListener("scroll", this._onAnyScroll, true)
       }
     }
-    this.#updateAria()
+    this.#setExpanded(opening)
     requestAnimationFrame(() => { this._toggling = false })
   }
 
   close() {
     this.leave()
     window.removeEventListener("scroll", this._onAnyScroll, true)
-    this.#updateAria()
+    this.#setExpanded(false)
   }
 
   clickOutside() {
     if (this._toggling) return
     this.leave()
     window.removeEventListener("scroll", this._onAnyScroll, true)
-    this.#updateAria()
+    this.#setExpanded(false)
   }
 
   // private
@@ -139,10 +139,10 @@ export default class extends BaseController {
     }
   }
 
-  #updateAria() {
-    if (this.hasTriggerTarget) {
-      const expanded = !this.menuTarget.classList.contains("hidden")
-      this.triggerTarget.setAttribute("aria-expanded", expanded)
-    }
+  // Set from intent, not from the menu's `hidden` class: useTransition only
+  // adds `hidden` once the leave transition ends, so reading it here left
+  // aria-expanded "true" after every close.
+  #setExpanded(expanded) {
+    if (this.hasTriggerTarget) this.triggerTarget.setAttribute("aria-expanded", expanded)
   }
 }

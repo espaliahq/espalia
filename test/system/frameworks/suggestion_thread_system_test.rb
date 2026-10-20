@@ -154,7 +154,14 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_selector "#{trigger}[aria-expanded='true']"
     assert_selector "li[id^='comment-'] [role='menuitem']", text: "Reply", visible: true
 
-    press_escape
+    # Read in the same tick as the key: a late re-render of the comment resets the attribute.
+    expanded = page.evaluate_script(<<~JS, find(trigger))
+      (trigger => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }))
+        return trigger.getAttribute("aria-expanded")
+      })(arguments[0])
+    JS
+    assert_equal "false", expanded
     assert_no_selector "li[id^='comment-'] [role='menuitem']", text: "Reply", visible: true
   end
 
