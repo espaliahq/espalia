@@ -1,0 +1,14 @@
+<% item = "block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer" %>
+<div class="flex items-center justify-between max-w-md overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4">
+  <span class="text-sm font-semibold">Engineering calibration, March</span>
+  <%= render Components::Kit::Dropdown.new(align: :right, strategy: strategy) do |dropdown| %>
+    <% dropdown.trigger(label: "Actions for Engineering calibration, March") do %>
+      <span class="inline-flex h-11 w-11 items-center justify-center rounded-md text-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" aria-hidden="true">⋮</span>
+    <% end %>
+    <% dropdown.menu(width: "w-44") do %>
+      <a href="#" role="menuitem" class="<%= item %>">Open</a>
+      <button type="button" role="menuitem" class="<%= item %>" data-action="dropdown#close">Rename…</button>
+      <button type="button" role="menuitem" class="<%= item %>" data-action="dropdown#close">Archive</button>
+    <% end %>
+  <% end %>
+</div>
