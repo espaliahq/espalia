@@ -1,12 +1,7 @@
 <%= render "design_tokens/contrast_script" %>
-<%# Redeclares the helper as roles.css's fallback, so a browser with contrast-color() can show both paths. %>
+<%# Redeclares the helper with roles.css's own fallback, so a browser with contrast-color() can show both paths. %>
 <style>
-  .helper-fallback [data-theme-scope] {
-    --gos-brand-content-inverse: color(from var(--gos-brand-strong) srgb-linear
-      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
-      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
-      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));
-  }
+  .helper-fallback [data-theme-scope] { <%= fallback.html_safe %> }
 </style>
 <% columns = {
      "clamped" => ["Brand, as the theme derives its strong fill", ->(colour) { "--gos-brand: #{colour}" }],

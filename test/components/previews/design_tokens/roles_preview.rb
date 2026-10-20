@@ -23,13 +23,19 @@ class DesignTokens::RolesPreview < Lookbook::Preview
 
   # The text colour helper on brand fills a tenant could pick, by both paths.
   def contrast_helper
-    render_with_template(locals: { fills: HELPER_FILLS })
+    render_with_template(locals: { fills: HELPER_FILLS, fallback: helper_fallback })
   end
 
   private
 
   def stylesheet
     STYLESHEET.read
+  end
+
+  # The fallback declaration as roles.css writes it, so the proof can't drift from the formula it proves.
+  def helper_fallback
+    stylesheet[/@supports \(color: color\(from red srgb-linear r g b\)\) \{\s*(--gos-brand-content-inverse:.*?;)/m, 1] ||
+      raise("roles.css no longer has the contrast helper's relative-colour fallback")
   end
 
   def grouped_roles
