@@ -24,7 +24,7 @@ class HrisTitleMappingSystemTest < ApplicationSystemTestCase
 
       should "map a renamed title and say who the next sync moves" do
         assert_text "Vera Renamed is still on E L3 from an earlier title"
-        assert_no_page_overflow
+        assert_no_sideways_overflow
         assert_on_screen find(MAP_RENAMED)
         screenshot("unmapped_titles_#{viewport}")
 
@@ -78,12 +78,6 @@ class HrisTitleMappingSystemTest < ApplicationSystemTestCase
   end
 
   private
-
-  # A table scrolls inside its own card; the page itself never scrolls sideways.
-  def assert_no_page_overflow
-    widths = page.evaluate_script("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
-    assert_operator widths[0], :<=, widths[1], "the page scrolls sideways (scrollWidth #{widths[0]} > #{widths[1]})"
-  end
 
   def assert_on_screen(element)
     right = page.evaluate_script("arguments[0].getBoundingClientRect().right", element)
