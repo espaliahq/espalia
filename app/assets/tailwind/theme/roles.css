@@ -56,9 +56,9 @@
 
   --gos-content-success: var(--color-green-700);
   --gos-success-subtle: var(--color-green-50);
-  --gos-success-muted: var(--color-green-100);
-  --gos-success-strong: var(--color-green-600);
-  --gos-success-strong-hover: var(--color-green-700);
+  --gos-success-muted: color-mix(in oklab, var(--color-green-100) 70%, var(--gos-surface-default));
+  --gos-success-strong: var(--color-green-700);
+  --gos-success-strong-hover: var(--color-green-800);
   --gos-success-content-inverse: #ffffff;
   --gos-border-success: var(--color-green-200);
 
@@ -310,6 +310,7 @@
   --background-color-accent-subtle: var(--gos-accent-subtle);
   --background-color-accent-muted: var(--gos-accent-muted);
   --background-color-accent-strong: var(--gos-accent-strong);
+  --background-color-accent-strong-hover: var(--gos-accent-strong-hover);
   --background-color-danger-subtle: var(--gos-danger-subtle);
   --background-color-danger-muted: var(--gos-danger-muted);
   --background-color-danger-strong: var(--gos-danger-strong);
