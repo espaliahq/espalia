@@ -8,6 +8,8 @@
 # reads suggestions and acts on them, it has no reason to spend another
 # model call.
 class EvidencePlacementSuggestionsController < ApplicationController
+  REQUEST_INTERVAL = 1.minute
+
   before_action :require_person
 
   # POST /evidence_placement_suggestions/:id/accept
@@ -37,11 +39,18 @@ class EvidencePlacementSuggestionsController < ApplicationController
     @evidence_item = EvidenceItem.find(params.expect(:evidence_item_id))
     authorize evidence_item, :add_link?, policy_class: EvidencePolicy
 
-    unless Evidence::SuggestionModel.configured? && ActsAsTenant.current_tenant.evidence_suggestions_enabled?
+    unless Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
       return render_block(message: "Suggestions are switched off for this workspace.", error: true)
     end
+    if evidence_item.withdrawn? || evidence_item.source == "self"
+      return render_block(message: "Suggestions are made only for feedback someone else gave.", error: true)
+    end
 
-    Evidence::SuggestPlacementsJob.perform_later(evidence_item.id)
+    # Each run is a paid model call: one per item a minute, however often
+    # the button is pressed.
+    if Rails.cache.write("evidence-suggestions:requested:#{evidence_item.id}", true, expires_in: REQUEST_INTERVAL, unless_exist: true)
+      Evidence::SuggestPlacementsJob.perform_later(evidence_item.id)
+    end
     render_block(message: "Asking for new suggestions. They replace these when you next open the hub.")
   end
 

@@ -153,6 +153,27 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_response :success
     end
 
+    should "ask once a minute however often the button is pressed" do
+      sign_in @alex_user
+      Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+        Evidence::SuggestionModel.stub(:configured?, true) do
+          assert_enqueued_jobs(1, only: Evidence::SuggestPlacementsJob) do
+            3.times { stream_post evidence_item_placement_suggestions_path(@item) }
+          end
+        end
+      end
+      assert_response :success
+    end
+
+    should "refuse self feedback" do
+      ActsAsTenant.with_tenant(@tenant) { @item.update_columns(source: "self") }
+      sign_in @alex_user
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { stream_post evidence_item_placement_suggestions_path(@item) }
+      end
+      assert_response :unprocessable_content
+    end
+
     should "say so when suggestions are off, and enqueue nothing" do
       ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: false) }
       sign_in @alex_user
