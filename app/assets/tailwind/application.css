@@ -87,9 +87,9 @@ input[type="week"] {
  */
 @layer base {
   /* blue-700 / blue-300: >= 3:1 on white and brand surfaces, and on dark ones.
-     A variable, not @variant dark on the list: nesting a variant in a selector
-     list compiles to :is(), which lifts every selector to the most specific
-     one and beats the forms plugin's transparent outline on fields. */
+     A variable, not @variant dark on the list: a variant nested in a selector
+     list compiles to :is(), which would lift every selector to the most
+     specific one and override the forms plugin's own focus style on fields. */
   :root {
     --focus-outline: #1d4ed8;
 
