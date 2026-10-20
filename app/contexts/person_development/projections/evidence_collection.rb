@@ -199,7 +199,8 @@ class PersonDevelopment::Projections::EvidenceCollection
     # cycle_id and feedback_direction were introduced with the event payloads
     # that can populate them. Historical events lack the keys and therefore
     # replay to the columns' existing nil values, so these additive
-    # attributions need no version bump.
+    # attributions need no version bump (`recorded_via` too: nil on history,
+    # and a rebuild fills it).
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
     # An unplaced item re-processed after its first placement keeps the origin
     # that placement gave it; only a cell on the event, or a fresh row, sets it.
@@ -224,6 +225,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       external_reference: external_reference_attrs(event.data[:external_reference]),
       author_id: event.data[:author_id],
       link_status: "active",
+      recorded_via: event.metadata[:acting_via],
       recorded_at: event.metadata[:timestamp] || Time.current
     )
     item.save!
