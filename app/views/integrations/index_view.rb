@@ -125,12 +125,15 @@ class Views::Integrations::IndexView < Views::Base
     end
   end
 
-  # @return [String, nil] "Imported 12 · Updated 2 · Skipped 3", once anything has crossed
+  # @return [String, nil] "Imported 12 · Updated 2 · Skipped 3", plus withdrawals when
+  #   there are any, once anything has crossed
   def feedback_exchange_counts
     summary = @feedback_exchange_summary
     return if summary.nil? || summary.values_at(:imported, :updated, :skipped, :withdrawn).sum.zero?
 
-    "Imported #{summary[:imported]} · Updated #{summary[:updated]} · Skipped #{summary[:skipped]}"
+    parts = [ "Imported #{summary[:imported]}", "Updated #{summary[:updated]}", "Skipped #{summary[:skipped]}" ]
+    parts << "Withdrawn #{summary[:withdrawn]}" if summary[:withdrawn].positive?
+    parts.join(" · ")
   end
 
   def feedback_exchange_subtitle

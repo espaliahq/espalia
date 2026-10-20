@@ -84,6 +84,12 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
 
         get tenant_integrations_path
         assert_select "#feedback-exchange-card-counts", text: "Imported 1 · Updated 0 · Skipped 1"
+
+        ActsAsTenant.with_tenant(@tenant) do
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "3", status: "withdrawn", synced_at: Time.current)
+        end
+        get tenant_integrations_path
+        assert_select "#feedback-exchange-card-counts", text: "Imported 1 · Updated 0 · Skipped 1 · Withdrawn 1"
       end
 
       should "never echo a stored secret" do
