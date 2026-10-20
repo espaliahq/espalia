@@ -87,8 +87,9 @@ Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchang
 - **New record → unplaced evidence**, dispatched straight to `PersonDevelopment::CommandHandler#record_evidence` (the author may have no account) inside `AuditMetadata.with(acting_via: :feedback_exchange, actor_id: <author>, correlation_id: "<origin>:<id>")` and the tenant metadata. The evidence id is `UUIDv5(Importer::NAMESPACE, "<tenant_id>:<origin>:<id>")`, so a lost ledger row or a replay finds the same item. `source` comes from `EvidenceItem.source_for`; `evidence_type` is the record's `kind` when GrowthOS has that type, else `manager_feedback` or `peer_feedback`; the text goes through `FeedbackExchange::TextFormat` (below) with a request's question quoted above the answer; `external_reference` is `{ system: origin, external_id: id, url: source_url, metadata: { kind, request_context, requested_by_email, period_name, given_at, notified } }`.
 - **Dated when given.** `recorded_at` on the event is the record's `given_at`, so reports count a backfill in the month it was given.
 - **Counted in a cycle only when given in it.** `cycle_id` is the open cycle only when `given_at` falls inside the recipient's enrollment window there; otherwise nil, and reporting infers it as it does for history. A backfill of last year's feedback never counts as this cycle's.
-- **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op. An item withdrawn in GrowthOS stays withdrawn.
-- **Then** it asks the manager side to place it (`#notify_placement_needed`, see [evidence.md](assessments/evidence.md)).
+- **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"), and so does a newer version whose `audience` no longer covers everyone who can read it here (consent is data); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op, and so is a blank edit. An item withdrawn in GrowthOS stays withdrawn and is not acknowledged.
+- **A refused write never stops the page.** The domain can refuse an update or a withdrawal (the recipient was unassigned since, say); the importer logs it, leaves the ledger as it was and moves on, so one record cannot fail every run.
+- **Then** it asks the manager side to place it (`#notify_placement_needed`, see [evidence.md](assessments/evidence.md)), but only for feedback given in the last 30 days (`Importer::NOTIFY_WITHIN`). A first pull of a peer's history waits quietly on the hub; it does not page every manager once per item. `FeedbackNotifier` applies the same window to the recipient.
 
 ### Skip reasons
 
@@ -100,10 +101,10 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 | `audience_too_narrow` | the author did not agree to all of `recipient`, `management_line`, `hr`, who can read feedback here | no |
 | `kind_not_imported` | `import_kinds` is set and leaves this kind out | no |
 | `author_unmatched` / `recipient_unmatched` | no Person with that HRIS id or email | yes |
-| `recipient_inactive` | our Person or the peer says the recipient is inactive | yes |
+| `author_inactive` / `recipient_inactive` | our Person or the peer says that person is inactive (protocol §4.2) | yes |
 | `self_feedback` | author and recipient are the same person | no |
 | `no_assignment` | the recipient has no framework assignment | yes, and at once on `PersonAssignedToFramework` |
-| `invalid_record` | no usable `origin` or `id`, or the domain refused it | no |
+| `invalid_record` | no `id`, an `origin` that is not the configured peer, or the domain refused it | no |
 
 A retriable skip keeps the record in the ledger's `record` column so a retry needs no pull; nothing else does. `FeedbackExchange::AssignmentRetry` (a sync handler subscribed in the RES initializer, never a projection) enqueues a sync when a newly assigned person has a `no_assignment` record waiting. A record skipped for a reason that is not retried is evaluated again if the peer sends a newer version.
 

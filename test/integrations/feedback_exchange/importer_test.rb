@@ -85,9 +85,18 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
     end
 
     should "ask the manager to place it, once" do
-      perform_enqueued_jobs { @importer.import(exchange_record) }
+      travel_to Time.utc(2026, 10, 19) do
+        perform_enqueued_jobs { @importer.import(exchange_record) }
+      end
 
       assert_equal [ "Priya gave Alex feedback in Chip" ], @manager_user.notifications.reload.map(&:inbox_title)
+    end
+
+    should "not page anyone about feedback given long ago" do
+      perform_enqueued_jobs { @importer.import(exchange_record(given_at: 3.months.ago.iso8601)) }
+
+      assert EvidenceItem.exists?(evidence_id)
+      assert_empty @manager_user.notifications.reload
     end
 
     should "add nothing on a second run" do
@@ -179,7 +188,39 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal @priya.id, item.withdrawn_by_id
       assert_equal "Withdrawn in Chip", item.withdrawal_reason
       assert_equal "withdrawn", ledger.status
-      assert_equal :unchanged, @importer.import(exchange_record(status: "withdrawn")).outcome
+      assert_equal :withdrawn, @importer.import(exchange_record(status: "withdrawn")).outcome
+      assert_equal 1, Rails.configuration.event_store.read.of_type(PersonDevelopment::Events::EvidenceWithdrawn).count
+    end
+
+    should "withdraw it as the author when the author narrowed who may read it" do
+      result = @importer.import(exchange_record(audience: %w[recipient manager], updated_at: "2026-10-19T00:00:00Z"))
+
+      assert_equal :withdrawn, result.outcome
+      item = EvidenceItem.find(evidence_id)
+      assert_equal @priya.id, item.withdrawn_by_id
+      assert_match(/No longer shared in Chip/, item.withdrawal_reason)
+    end
+
+    should "keep a copy withdrawn here, and never acknowledge it" do
+      @handler.withdraw_evidence(@alex.id, @framework_id, evidence_id, withdrawn_by_id: @priya.id)
+      result = @importer.import(exchange_record(text: "Edited", updated_at: "2026-10-19T00:00:00Z"))
+
+      assert_equal :withdrawn, result.outcome
+      assert_not result.lives_here?
+      assert EvidenceItem.find(evidence_id).withdrawn?
+    end
+
+    should "keep the text it has when the peer's edit is blank" do
+      assert_equal :updated, @importer.import(exchange_record(text: "  ", updated_at: "2026-10-19T00:00:00Z")).outcome
+      assert_equal "**Great** work on the incident call, *calm and clear*.", EvidenceItem.find(evidence_id).content
+    end
+
+    should "log and move on when the domain refuses a withdrawal" do
+      @handler.unassign_from_framework(@alex.id, @framework_id, unassigned_by: @manager.id)
+
+      assert_equal :skipped, @importer.withdraw_deleted("chip-fb-0001").outcome
+      assert_equal :skipped, @importer.import(exchange_record(status: "withdrawn", updated_at: "2026-10-19T00:00:00Z")).outcome
+      assert_not EvidenceItem.find(evidence_id).withdrawn?
     end
 
     should "withdraw it as the system when the peer deleted it" do
@@ -241,6 +282,12 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "recipient_inactive", exchange_record(id: "chip-fb-0002"), keeps_record: true
     end
 
+    should "skip an inactive author, ours or the peer's" do
+      assert_skipped "author_inactive", exchange_record(author: { email: "priya@example.com", active: false }), keeps_record: true
+      @priya.update!(status: "inactive")
+      assert_skipped "author_inactive", exchange_record(id: "chip-fb-0002"), keeps_record: true
+    end
+
     should "skip feedback someone gave themselves" do
       assert_skipped "self_feedback", exchange_record(author: { email: "alex@example.com" })
     end
@@ -255,6 +302,10 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       result = @importer.import(exchange_record(id: nil))
       assert_equal [ :skipped, "invalid_record" ], [ result.outcome, result.skip_reason ]
       assert_equal 0, FeedbackExchangeImport.count
+    end
+
+    should "skip a record that names an origin other than the peer" do
+      assert_skipped "invalid_record", exchange_record(origin: "lattice")
     end
   end
 

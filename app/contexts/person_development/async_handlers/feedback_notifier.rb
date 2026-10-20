@@ -66,8 +66,10 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
   end
 
   def notify_imported(item)
+    metadata = item.external_reference&.metadata || {}
     return if item.person_id == item.author_id
-    return if Array(item.external_reference&.metadata&.dig("notified")).include?("recipient")
+    return if Array(metadata["notified"]).include?("recipient")
+    return unless FeedbackExchange::Importer.notify?(metadata["given_at"])
 
     deliver(FeedbackReceivedNotifier, item, item.person_id, presentation(item))
   end

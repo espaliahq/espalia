@@ -13,6 +13,7 @@ class FeedbackExchangeImport < ApplicationRecord
 
   SKIP_REASONS = %w[
     author_unmatched
+    author_inactive
     recipient_unmatched
     recipient_inactive
     self_feedback
@@ -24,7 +25,7 @@ class FeedbackExchangeImport < ApplicationRecord
   ].freeze
 
   # Reasons that depend on our people and assignments rather than on the record.
-  RETRIABLE_REASONS = %w[author_unmatched recipient_unmatched recipient_inactive no_assignment].freeze
+  RETRIABLE_REASONS = %w[author_unmatched author_inactive recipient_unmatched recipient_inactive no_assignment].freeze
 
   acts_as_tenant :tenant
   belongs_to :tenant

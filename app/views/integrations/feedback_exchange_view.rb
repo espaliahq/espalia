@@ -235,6 +235,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   # What a skip reason means to the admin who has to act on it.
   SKIP_REASON_LABELS = {
     "author_unmatched" => "Giver not found in GrowthOS",
+    "author_inactive" => "Giver inactive",
     "recipient_unmatched" => "Recipient not found in GrowthOS",
     "recipient_inactive" => "Recipient inactive",
     "self_feedback" => "Feedback on themselves",

@@ -31,6 +31,26 @@ class FeedbackExchange::Importer
   # Our own system name: a record from it, or copied from it, is an echo (§2.5).
   SELF = FeedbackExchange::Client::CONSUMER
 
+  # Feedback given longer ago than this arrives without a notification: a
+  # first pull of a peer's history must not page every manager for each item.
+  # It still waits on the hub under "Feedback to place".
+  NOTIFY_WITHIN = 30.days
+
+  # Whether feedback given at +given_at+ is recent enough to tell anyone about.
+  #
+  # @param given_at [Time, String, nil] nil counts as now
+  # @return [Boolean]
+  def self.notify?(given_at)
+    given_at = Time.iso8601(given_at) if given_at.is_a?(String)
+    given_at.nil? || given_at >= NOTIFY_WITHIN.ago
+  rescue ArgumentError
+    true
+  end
+
+  # What the domain raises when it refuses a command: CommandError, or the
+  # bare RuntimeError of an invariant such as "not yet assigned".
+  REFUSALS = [ PersonDevelopment::Aggregate::CommandError, RuntimeError ].freeze
+
   Result = Data.define(:outcome, :skip_reason, :evidence_id, :assignment_id) do
     # @return [Boolean] whether the record now lives here as an active item
     def lives_here? = %i[imported updated unchanged].include?(outcome) && evidence_id.present?
@@ -59,20 +79,11 @@ class FeedbackExchange::Importer
   # @return [Result]
   def import(record)
     record = record.to_h.deep_stringify_keys
-    origin = record["origin"].to_s
-    external_id = record["id"].to_s
-    return invalid(record) unless ExternalReference::SYSTEM_FORMAT.match?(origin) && external_id.present?
+    return invalid(record) unless keyed?(record)
 
-    ledger = FeedbackExchangeImport.find_or_initialize_by(origin: origin, external_id: external_id)
-    item = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, origin, external_id))
+    ledger = FeedbackExchangeImport.find_or_initialize_by(origin: record["origin"], external_id: record["id"].to_s)
+    item = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, record["origin"], record["id"]))
     item ? revisit(ledger, item, record) : first_sight(ledger, record)
-  rescue PersonDevelopment::Aggregate::CommandError => e
-    # Another run imported it first; the item is the answer, not a refusal.
-    raced = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, origin, external_id))
-    return result(:unchanged, evidence_id: raced.id) if raced
-
-    Rails.logger.warn("[FeedbackExchange] #{origin}:#{external_id} refused: #{e.message}")
-    skip(ledger, record, "invalid_record")
   end
 
   # Withdraws the copy of a record the peer hard-deleted (protocol §5.2).
@@ -84,10 +95,13 @@ class FeedbackExchange::Importer
     ledger = FeedbackExchangeImport.find_or_initialize_by(origin: origin, external_id: external_id.to_s)
     item = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, origin, external_id))
     if item && !item.withdrawn?
-      dispatch(origin, external_id, actor_id: nil) do
-        @command_handler.withdraw_evidence(item.person_id, item.framework_id, item.id,
-          withdrawn_by_id: nil, reason: "Deleted in #{peer_label(origin)}")
+      refused = refused(origin, external_id) do
+        dispatch(origin, external_id, actor_id: nil) do
+          @command_handler.withdraw_evidence(item.person_id, item.framework_id, item.id,
+            withdrawn_by_id: nil, reason: "Deleted in #{peer_label(origin)}")
+        end
       end
+      return refused if refused
     end
     return result(:unchanged) if ledger.new_record? && item.nil?
 
@@ -119,16 +133,33 @@ class FeedbackExchange::Importer
 
   # ── A record we have already turned into an item ──
 
+  # A withdrawn copy stays withdrawn and is never acknowledged as living here.
   def revisit(ledger, item, record)
     if item.withdrawn?
       write(ledger, status: "withdrawn", evidence_id: item.id, record: nil) unless ledger.status == "withdrawn"
-      return result(:unchanged, evidence_id: item.id)
+      return result(:withdrawn, evidence_id: item.id)
     end
-    return withdraw_by_author(ledger, item, record) if record["status"] == "withdrawn"
-    return result(:unchanged, evidence_id: item.id, assignment_id: assignment_id_for(item)) unless newer?(record, ledger)
+    return withdraw_by_author(ledger, item, record, "Withdrawn in #{peer_label(record['origin'])}") if record["status"] == "withdrawn"
+    unless newer?(record, ledger)
+      return result(:unchanged, evidence_id: item.id, assignment_id: assignment_id_for(item))
+    end
+    # Consent is data (§2.1): an author who narrows it takes the copy back.
+    if narrower_than_visibility?(record)
+      return withdraw_by_author(ledger, item, record,
+        "No longer shared in #{peer_label(record['origin'])} with everyone who can read it here")
+    end
 
+    update_content(item, record) { |refusal| return refusal }
+    write(ledger, status: "updated", evidence_id: item.id, record: nil, peer_updated_at: peer_updated_at(record))
+    result(:updated, evidence_id: item.id, assignment_id: assignment_id_for(item))
+  end
+
+  # A blank edit keeps the text we have rather than failing the update.
+  def update_content(item, record)
     content = content_for(record)
-    if content != item.content
+    return if content.strip.empty? || content == item.content
+
+    refusal = refused(record["origin"], record["id"]) do
       dispatch(record["origin"], record["id"], actor_id: item.author_id) do
         @command_handler.update_evidence(item.person_id, item.framework_id, item.id,
           title: item.title, content: content, evidence_type: item.evidence_type,
@@ -136,17 +167,33 @@ class FeedbackExchange::Importer
           edited_by_id: item.author_id)
       end
     end
-    write(ledger, status: "updated", evidence_id: item.id, record: nil, peer_updated_at: peer_updated_at(record))
-    result(:updated, evidence_id: item.id, assignment_id: assignment_id_for(item))
+    yield refusal if refusal
   end
 
-  def withdraw_by_author(ledger, item, record)
-    dispatch(record["origin"], record["id"], actor_id: item.author_id) do
-      @command_handler.withdraw_evidence(item.person_id, item.framework_id, item.id,
-        withdrawn_by_id: item.author_id, reason: "Withdrawn in #{peer_label(record['origin'])}")
+  def withdraw_by_author(ledger, item, record, reason)
+    refusal = refused(record["origin"], record["id"]) do
+      dispatch(record["origin"], record["id"], actor_id: item.author_id) do
+        @command_handler.withdraw_evidence(item.person_id, item.framework_id, item.id,
+          withdrawn_by_id: item.author_id, reason: reason)
+      end
     end
+    return refusal if refusal
+
     write(ledger, status: "withdrawn", evidence_id: item.id, record: nil, peer_updated_at: peer_updated_at(record))
     result(:withdrawn, evidence_id: item.id)
+  end
+
+  # Runs a write the domain may refuse (the recipient was unassigned since,
+  # say). A refusal is logged and leaves the ledger as it was; it must not
+  # stop the rest of the page, or the run would fail on it forever.
+  #
+  # @return [Result, nil] a skipped result when refused
+  def refused(origin, external_id)
+    yield
+    nil
+  rescue *REFUSALS => e
+    Rails.logger.warn("[FeedbackExchange] #{origin}:#{external_id} refused: #{e.message}")
+    result(:skipped, skip_reason: "invalid_record")
   end
 
   def newer?(record, ledger)
@@ -168,8 +215,15 @@ class FeedbackExchange::Importer
     item = record!(record, author, recipient, assignment)
     write(ledger, status: "imported", evidence_id: item.id, recipient_id: recipient.id, record: nil,
                   peer_updated_at: peer_updated_at(record))
-    notify_placement_needed(item)
+    notify_placement_needed(item) if self.class.notify?(record["given_at"])
     result(:imported, evidence_id: item.id, assignment_id: assignment.id)
+  rescue *REFUSALS => e
+    # Another run imported it first; that item is the answer, not a refusal.
+    raced = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, record["origin"], record["id"]))
+    return result(:unchanged, evidence_id: raced.id, assignment_id: assignment_id_for(raced)) if raced
+
+    Rails.logger.warn("[FeedbackExchange] #{record['origin']}:#{record['id']} refused: #{e.message}")
+    skip(ledger, record, "invalid_record")
   end
 
   # The first reason not to import, in the order a reader would check: the
@@ -178,11 +232,12 @@ class FeedbackExchange::Importer
   # @return [Array] [skip_reason or nil, author, recipient, assignment]
   def assess(record)
     return [ "echo" ] if echo?(record)
-    return [ "audience_too_narrow" ] unless (VISIBILITY - Array(record["audience"]).map(&:to_s)).empty?
+    return [ "audience_too_narrow" ] if narrower_than_visibility?(record)
     return [ "kind_not_imported" ] unless kind_imported?(record["kind"])
 
     author = @matcher.match(record["author"])
     return [ "author_unmatched" ] if author.nil?
+    return [ "author_inactive" ] if author.status != "active" || record.dig("author", "active") == false
 
     recipient = @matcher.match(record["recipient"])
     return [ "recipient_unmatched" ] if recipient.nil?
@@ -193,6 +248,16 @@ class FeedbackExchange::Importer
     return [ "no_assignment", author, recipient ] if assignment.nil?
 
     [ nil, author, recipient, assignment ]
+  end
+
+  # Records come only from the configured peer, keyed on (origin, id); one that
+  # names another origin could never be found again by the deletions feed.
+  def keyed?(record)
+    [ @config.peer_name, SELF ].include?(record["origin"].presence) && record["id"].to_s.present?
+  end
+
+  def narrower_than_visibility?(record)
+    !(VISIBILITY - Array(record["audience"]).map(&:to_s)).empty?
   end
 
   def echo?(record)
@@ -298,7 +363,7 @@ class FeedbackExchange::Importer
   def invalid(record)
     origin = record["origin"].to_s.presence
     external_id = record["id"].to_s.presence
-    Rails.logger.warn("[FeedbackExchange] Skipped a record with no usable origin or id: #{origin.inspect} #{external_id.inspect}")
+    Rails.logger.warn("[FeedbackExchange] Skipped a record not keyed by the peer: #{origin.inspect} #{external_id.inspect}")
     return result(:skipped, skip_reason: "invalid_record") unless origin && external_id
 
     skip(FeedbackExchangeImport.find_or_initialize_by(origin: origin, external_id: external_id), record, "invalid_record")
