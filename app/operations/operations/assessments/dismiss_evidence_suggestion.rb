@@ -25,8 +25,11 @@ class Operations::Assessments::DismissEvidenceSuggestion < Operations::Base
 
   # @return [Hash] the dismissed suggestion
   def perform
-    ensure_pending!
-    suggestion.decide!(status: "dismissed", by: context.person, reason: params[:reason])
+    EvidencePlacementSuggestion.transaction do
+      suggestion.lock!
+      ensure_pending!
+      suggestion.decide!(status: "dismissed", by: context.person, reason: params[:reason])
+    end
     suggestion_payload(suggestion, capability_names([ suggestion ]))
   end
 end

@@ -71,6 +71,17 @@ class Operations::Assessments::EvidenceSuggestionOperationsTest < ActiveSupport:
       assert_equal [ "demonstrated", @suggestion.id ], [ event.data[:valence], event.data[:via_suggestion_id] ]
     end
 
+    should "leave no link behind when the decision cannot be recorded" do
+      broken = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find(@suggestion.id) }
+      broken.define_singleton_method(:decide!) { |**| raise ActiveRecord::RecordInvalid }
+      EvidencePlacementSuggestion.stub(:find, ->(_) { broken }) do
+        assert_raises(ActiveRecord::RecordInvalid) do
+          run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @morgan, suggestion_id: @suggestion.id)
+        end
+      end
+      ActsAsTenant.with_tenant(@tenant) { assert_empty EvidenceLink.active.where(evidence_id: @item.id) }
+    end
+
     should "refuse someone who may not place this feedback" do
       assert_raises(Pundit::NotAuthorizedError) do
         run_op(Operations::Assessments::AcceptEvidenceSuggestion, as: @stranger, suggestion_id: @suggestion.id)

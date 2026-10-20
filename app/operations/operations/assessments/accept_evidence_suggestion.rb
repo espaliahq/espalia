@@ -29,10 +29,25 @@ class Operations::Assessments::AcceptEvidenceSuggestion < Operations::Base
   # @return [Hash] the decided suggestion plus `links`, every active link the
   #   item now carries
   def perform
-    ensure_pending!
-    ensure_cell_still_exists!
+    # One transaction with the suggestion row locked: the link event and the
+    # decision land together, and a concurrent accept or dismiss waits, then
+    # finds the suggestion already decided.
+    valence = EvidencePlacementSuggestion.transaction do
+      suggestion.lock!
+      ensure_pending!
+      ensure_cell_still_exists!
+      place(params[:valence] || suggestion.valence)
+    end
 
-    valence = params[:valence] || suggestion.valence
+    suggestion_payload(suggestion, capability_names([ suggestion ])).merge(valence: valence, links: active_links)
+  rescue PersonDevelopment::Aggregate::CommandError => e
+    raise Operations::Base::ParameterError, e.message
+  end
+
+  private
+
+  # @return [String] the valence the item was placed with
+  def place(valence)
     if linked?
       handler.set_evidence_link_valence(evidence_item.person_id, evidence_item.framework_id, evidence_item.id,
         capability_stable_id: suggestion.capability_stable_id, level_ordinal: suggestion.level_ordinal,
@@ -43,13 +58,8 @@ class Operations::Assessments::AcceptEvidenceSuggestion < Operations::Base
         linked_by_id: context.person.id, valence: valence, via_suggestion_id: suggestion.id)
     end
     suggestion.decide!(status: valence == suggestion.valence ? "accepted" : "edited", by: context.person)
-
-    suggestion_payload(suggestion, capability_names([ suggestion ])).merge(valence: valence, links: active_links)
-  rescue PersonDevelopment::Aggregate::CommandError => e
-    raise Operations::Base::ParameterError, e.message
+    valence
   end
-
-  private
 
   def handler
     @handler ||= PersonDevelopment::CommandHandler.new
