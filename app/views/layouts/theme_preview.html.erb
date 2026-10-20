@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<%# One theme in one scheme, for the Theme page's preset choice. No scripts: the frame is a picture, and the page writes a Custom theme's live values onto it. %>
+<% theme = @preview_theme %>
+<%# The tenant's stored Custom values, whichever theme it is on now %>
+<% custom = ActsAsTenant.current_tenant.dup.tap { |t| t.theme = "custom" } %>
+<html <%= tag.attributes(lang: I18n.locale, data: { theme: (theme if Tenant::PRESETS.include?(theme)), scheme: @preview_scheme }) %>>
+  <head>
+    <title>Theme preview</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <% font_url = Tenant::PRESET_FONT_URLS.fetch(theme) { custom.google_font_url if theme == "custom" } %>
+    <% if font_url %>
+      <link href="<%= font_url %>" rel="stylesheet">
+    <% end %>
+    <%= stylesheet_link_tag "tailwind" %>
+    <%= stylesheet_link_tag "application" %>
+    <% custom_theme = theme == "custom" ? custom.theme_css_variables : {} %>
+    <% if custom_theme.any? %>
+      <style id="tenant-theme">:root { <%= custom_theme.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %> }</style>
+    <% end %>
+  </head>
+  <body class="min-h-screen overflow-hidden bg-page text-default" inert>
+    <%= yield %>
+  </body>
+</html>

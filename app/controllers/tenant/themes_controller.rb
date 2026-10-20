@@ -2,7 +2,8 @@
 
 # Tenant theme editor — the theme, its colour roles and typography.
 #
-# `show` renders the live-preview form; `update` persists via
+# `show` renders the live-preview form; `preview` renders one theme in one
+# scheme for that form's preset choice; `update` persists via
 # Operations::Tenants::UpdateTheme. The controller authorizes against
 # TenantPolicy in addition to the Operation's own policy check
 # (defense in depth per docs/guidelines/authorization.md).
@@ -17,6 +18,16 @@ class Tenant::ThemesController < ApplicationController
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user
     )
+  end
+
+  # GET /tenant/theme/preview?theme_name=bento&colour_scheme=dark
+  #
+  # Not `theme` and `scheme`: those are the development-only overrides, which stick in a cookie.
+  def preview
+    authorize ActsAsTenant.current_tenant, :update_theme?, policy_class: TenantPolicy
+    @preview_theme = params[:theme_name].presence_in(Tenant::THEMES) || "default"
+    @preview_scheme = params[:colour_scheme].presence_in(Tenant::SCHEMES) || "light"
+    render Views::Tenant::Theme::PreviewView.new(tenant: ActsAsTenant.current_tenant), layout: "theme_preview"
   end
 
   # PATCH /tenant/theme

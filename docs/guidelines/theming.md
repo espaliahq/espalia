@@ -269,7 +269,7 @@ A Custom theme can set a role only if `roles.css` reads a tenant hook for it, wi
 
 `Themeable::CUSTOM_ROLES` reads that list from `roles.css`, so adding a hook is all it takes to make a role settable. Today that is `brand` and `nav-surface`, plus the font family. A tenant's values are stored as `{ role => { "light" => hex, "dark" => hex } }` and injected on `:root` as `--tenant-<role>` and `--tenant-<role>-dark` by the layout's `#tenant-theme` block ([#550](https://github.com/mr-yum/growth-os/issues/550)). Text on those fills comes from the contrast helper, so a tenant never picks a text colour.
 
-The Theme page that lets a tenant choose Default, Bento or Custom, and how Custom handles dark, is coming in [#551](https://github.com/mr-yum/growth-os/issues/551).
+**Tenant admin → Theme** (`app/views/tenant/theme/edit_view.rb`) is where an admin chooses Default, Bento or Custom ([#551](https://github.com/mr-yum/growth-os/issues/551)). Each choice shows a small page (the navbar, a card, a badge and the main button) in light and dark. Each one is an iframe of `/tenant/theme/preview`, because role values switch scheme only on `:root` (see [Light and dark](#light-and-dark)). Custom sets brand and navbar, each with its own light and dark colour, plus the font. Beside each colour, the page shows the text the contrast helper picked, read from Custom's preview. `theme_live_preview_controller.js` previews the choice on the whole page as the admin picks: `data-theme` for a preset, the `--tenant-*` variables for Custom.
 
 ## Lookbook
 

@@ -76,7 +76,10 @@ Rails.application.routes.draw do
   namespace :tenant do
     root to: "dashboard#show", as: :root
 
-    resource :theme, only: [ :show, :update ], controller: "themes"
+    resource :theme, only: [ :show, :update ], controller: "themes" do
+      # One theme in one scheme, framed by the Theme page's preset choice
+      get :preview
+    end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
     # Feedback export for monthly reporting (#458): `new` is the picker,

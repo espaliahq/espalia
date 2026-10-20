@@ -1,25 +1,33 @@
 # frozen_string_literal: true
 
-# Tenant theme editor — color pickers for brand palette + a font input.
-# Live preview is wired up via the `theme-live-preview` Stimulus
-# controller: every `input` event sets a CSS variable on
-# `document.documentElement` so the running page repaints as the
-# admin drags color pickers.
-#
+# Tenant theme editor: choose Default, Bento or Custom, and Custom's colours and font.
+# Each choice shows a framed preview in light and dark (`PreviewView`); the
+# `theme-live-preview` Stimulus controller repaints the page and Custom's frames as the
+# admin picks, and Cancel puts everything back.
 class Views::Tenant::Theme::EditView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::FormWith
 
-  # One row per role a Custom theme sets; each carries a light + dark
-  # sub-control so admins see the pair together. Until the Theme page is
-  # rebuilt (#551), saving here makes the theme Custom.
-  COLOR_GROUPS = [
-    { label: "Primary", role: "brand", light: "#32c8c8", dark: "#5ee0e0" },
-    {
-      label: "Nav background", role: "nav-surface",
-      light: Tenant::DEFAULT_NAV_BG_COLOR, dark: Tenant::DEFAULT_NAV_BG_COLOR_DARK
-    }
+  THEMES = [
+    { value: "default", label: "Default", description: "GrowthOS's own teal." },
+    { value: "bento", label: "Bento", description: "The Bento design system: lime, with Plus Jakarta Sans." },
+    { value: "custom", label: "Custom", description: "Default, with your own brand, navbar and font." }
   ].freeze
+
+  # How the page names each role in Tenant::CUSTOM_ROLES. The element is where Custom's
+  # preview shows the contrast helper's text for the role, and `text` names it. `shade`
+  # names the element's fill when CSS darkens the colour for it.
+  ROLE_COPY = {
+    "brand" => {
+      label: "Brand", element: "[data-theme-preview-button]", text: "button text",
+      shade: "Buttons use a darker shade",
+      hint: "The main button and highlights."
+    },
+    "nav-surface" => {
+      label: "Navbar", element: "nav", text: "text",
+      hint: "The bar across the top of every page."
+    }
+  }.freeze
 
   # @param tenant [Tenant]
   # @param user [User]
@@ -39,7 +47,7 @@ class Views::Tenant::Theme::EditView < Views::Base
     ) do
       render Components::Kit::SectionHeading.new(
         "Theme",
-        subtitle: "Brand colors and typography. Changes preview live; click Save to persist."
+        subtitle: "How GrowthOS looks for everyone here. Changes preview live; Save to keep them."
       )
 
       form_with(
@@ -47,116 +55,166 @@ class Views::Tenant::Theme::EditView < Views::Base
         data: { controller: "theme-live-preview" },
         class: "space-y-6"
       ) do |form|
-        form.hidden_field :theme, value: "custom"
-        colors_card
-        typography_card(form)
-        dark_mode_note
-        actions(form)
+        theme_choice
+        custom_controls(form)
+        scheme_note
+        actions
       end
     end
   end
 
   private
 
-  def colors_card
-    render Components::Kit::Card.new(title: "Brand colors") do |card|
+  def theme_choice
+    render Components::Kit::Card.new(title: "Theme", heading_level: :h2) do |card|
       card.body do
-        # Column headers — only on sm+ to anchor the light/dark grouping.
-        div(class: "hidden sm:grid sm:grid-cols-[1fr_auto_auto] gap-x-6 gap-y-2 " \
-                   "text-xs font-medium uppercase tracking-wide " \
-                   "text-gray-600 dark:text-gray-300 pb-2 " \
-                   "border-b border-gray-200 dark:border-gray-700") do
-          span { "" }
-          span(class: "text-center min-w-[5rem]") { "Light" }
-          span(class: "text-center min-w-[5rem]") { "Dark" }
-        end
-
-        div(class: "divide-y divide-gray-200 dark:divide-gray-700") do
-          COLOR_GROUPS.each { |group| color_group_row(group) }
+        fieldset do
+          legend(class: "sr-only") { "Theme" }
+          div(class: "grid gap-4 xl:grid-cols-3") do
+            THEMES.each { |theme| theme_option(theme) }
+          end
         end
       end
     end
   end
 
-  def color_group_row(group)
-    div(class: "grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-x-6 gap-y-3 py-4 items-center") do
+  def theme_option(theme)
+    label(
+      class: "flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg border border-default p-3 " \
+             "hover:bg-default-hover has-checked:border-strong has-checked:ring-1 has-checked:ring-inset " \
+             "has-checked:ring-focus"
+    ) do
+      div(class: "flex items-start gap-3") do
+        input(
+          type: "radio", name: "tenant[theme]", value: theme[:value],
+          checked: @tenant.theme == theme[:value],
+          class: "#{Components::Kit::Field::RADIO} mt-0.5",
+          aria: { describedby: "theme-#{theme[:value]}-description" },
+          data: { theme_live_preview_target: "theme", action: "theme-live-preview#chooseTheme" }
+        )
+        div(class: "min-w-0") do
+          span(class: "block text-sm font-semibold text-default") { theme[:label] }
+          span(id: "theme-#{theme[:value]}-description", class: "block text-sm text-muted") { theme[:description] }
+        end
+      end
+      div(class: "grid grid-cols-2 gap-2") do
+        Tenant::SCHEMES.each { |scheme| preview_frame(theme, scheme) }
+      end
+    end
+  end
+
+  # Drawn at a phone's width and scaled to fit by the controller, so every frame shows the same layout.
+  def preview_frame(theme, scheme)
+    figure(class: "min-w-0") do
+      div(class: "relative aspect-[3/2] overflow-hidden rounded-md border border-default") do
+        iframe(
+          src: preview_tenant_theme_path(theme_name: theme[:value], colour_scheme: scheme),
+          title: "#{theme[:label]} theme, #{scheme}",
+          tabindex: "-1",
+          aria: { hidden: "true" },
+          class: "pointer-events-none absolute top-0 left-0 h-[240px] w-[360px] origin-top-left border-0",
+          data: {
+            theme_live_preview_target: "frame", theme: theme[:value], scheme: scheme,
+            action: "load->theme-live-preview#frameLoaded"
+          }
+        )
+      end
+      figcaption(class: "mt-1 text-xs text-muted") { scheme.capitalize }
+    end
+  end
+
+  def custom_controls(form)
+    custom = @tenant.custom_theme?
+
+    fieldset(hidden: !custom, disabled: !custom, data: { theme_live_preview_target: "custom" }) do
+      render Components::Kit::Card.new(title: "Custom theme", heading_level: :h2) do |card|
+        card.body do
+          p(class: "text-sm text-muted") do
+            "Pick each colour for light and for dark. Text on it is black or white, whichever reads better."
+          end
+          div(class: "mt-4 divide-y divide-default border-t border-default") do
+            Tenant::CUSTOM_ROLES.each { |role| role_row(custom_role(role)) }
+          end
+          font_field(form)
+        end
+      end
+    end
+  end
+
+  # A role roles.css gained before this page named it still gets its pickers.
+  def custom_role(role)
+    { role:, label: role.tr("-", " ").capitalize, **ROLE_COPY.fetch(role, {}) }
+  end
+
+  def role_row(role)
+    div(class: "grid grid-cols-1 items-start gap-x-6 gap-y-3 py-4 sm:grid-cols-[1fr_auto_auto]") do
       div(class: "min-w-0") do
-        span(class: "block text-sm font-medium text-gray-900 dark:text-white") { group[:label] }
+        span(class: "block text-sm font-medium text-default") { role[:label] }
+        span(class: "block text-sm text-muted") { role[:hint] }
       end
-      color_picker(group, :light)
-      color_picker(group, :dark)
+      Tenant::SCHEMES.each { |scheme| color_picker(role, scheme) }
     end
   end
 
-  def color_picker(group, scheme)
-    current = @tenant.custom_role(group[:role], scheme) || group[scheme]
-    preview_var = scheme == :dark ? "--tenant-#{group[:role]}-dark" : "--tenant-#{group[:role]}"
+  def color_picker(role, scheme)
+    current = @tenant.custom_theme.dig(role[:role], scheme) || Tenant::CUSTOM_ROLE_DEFAULTS.dig(role[:role], scheme)
+    readout_id = "theme-#{role[:role]}-#{scheme}-readout"
 
-    div(class: "flex items-center gap-2 sm:justify-self-center") do
-      span(class: "sm:hidden text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300 w-12") do
-        scheme.to_s.capitalize
-      end
+    div(class: "flex items-center gap-3") do
       input(
         type: "color",
-        name: "tenant[custom_theme][#{group[:role]}][#{scheme}]",
+        name: "tenant[custom_theme][#{role[:role]}][#{scheme}]",
         value: current,
-        aria: { label: "#{group[:label]}, #{scheme}" },
-        class: "h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer",
+        aria: { label: "#{role[:label]}, #{scheme}", describedby: readout_id },
+        class: "h-9 w-12 shrink-0 cursor-pointer rounded-md border border-field bg-field p-0.5",
         data: {
           theme_live_preview_target: "field",
-          theme_live_preview_var_param: preview_var,
-          theme_live_preview_default_param: current,
+          variable: scheme == "dark" ? "--tenant-#{role[:role]}-dark" : "--tenant-#{role[:role]}",
           action: "input->theme-live-preview#apply"
         }
       )
-      span(class: "text-xs font-mono text-gray-600 dark:text-gray-300 w-16 truncate") { current }
-    end
-  end
-
-  def typography_card(form)
-    current_font = @tenant.font_family.presence || ""
-
-    render Components::Kit::Card.new(title: "Typography") do |card|
-      card.body do
-        form.label :font_family, "Font family",
-                   class: "block text-sm font-medium text-gray-700 dark:text-gray-300"
-        p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5 mb-2") do
-          plain "Google Fonts family name (e.g. \"Inter\", \"Roboto\"). Leave blank for the default."
-        end
-        form.text_field :font_family,
-          value: current_font,
-          placeholder: "InterVariable",
-          class: "block w-full max-w-sm rounded-md border-gray-300 dark:border-gray-600 " \
-                 "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary",
+      div(class: "min-w-0 text-xs") do
+        span(class: "block font-medium text-muted") { scheme.capitalize }
+        span(
+          id: readout_id, class: "block max-w-48 text-muted",
           data: {
-            theme_live_preview_target: "field",
-            theme_live_preview_var_param: "--font-sans",
-            theme_live_preview_default_param: current_font,
-            action: "input->theme-live-preview#apply"
+            theme_live_preview_target: "readout",
+            role: role[:role], scheme: scheme, element: role[:element], text: role[:text], shade: role[:shade]
           }
+        ) { span(class: "font-mono") { current } }
       end
     end
   end
 
-  def dark_mode_note
-    p(class: "text-xs text-gray-600 dark:text-gray-300 px-1") do
-      plain "Dark-mode previews are visible only when your OS is in dark mode."
+  def font_field(form)
+    div(class: "border-t border-default pt-4") do
+      form.label :font_family, "Font", class: "block text-sm font-medium text-default"
+      p(id: "theme-font-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
+        "A Google Fonts family, such as Inter or Roboto. Leave it blank for the default."
+      end
+      form.text_field :font_family,
+        value: @tenant.font_family.presence || "",
+        placeholder: "InterVariable",
+        class: "#{Components::Kit::Field::INPUT} max-w-sm",
+        aria: { describedby: "theme-font-hint" },
+        data: {
+          theme_live_preview_target: "field",
+          variable: "--font-sans",
+          action: "input->theme-live-preview#apply"
+        }
     end
   end
 
-  def actions(form)
+  def scheme_note
+    render Components::Kit::Alert.new(tone: :info) do
+      "Each person sees the theme in light or dark, following their own setting: Auto, Light or Dark."
+    end
+  end
+
+  def actions
     div(class: "flex justify-end gap-3") do
-      button(
-        type: "button",
-        class: "px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 " \
-               "text-sm text-gray-700 dark:text-gray-300 " \
-               "hover:bg-gray-100 dark:hover:bg-gray-800",
-        data: { action: "theme-live-preview#revert" }
-      ) { "Cancel" }
-      form.submit "Save",
-        class: "px-4 py-2 rounded-md bg-primary text-white text-sm font-medium " \
-               "hover:bg-secondary focus:outline-hidden focus:ring-2 focus:ring-primary " \
-               "focus:ring-offset-2 cursor-pointer"
+      render Components::Kit::Button.new(variant: :outline, data: { action: "theme-live-preview#revert" }) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Save" }
     end
   end
 end

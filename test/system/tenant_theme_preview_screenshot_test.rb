@@ -30,6 +30,11 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
     wait_for_stimulus "theme-live-preview"
     screenshot("01_initial_state")
 
+    choose "tenant[theme]", option: "bento"
+    screenshot("01b_bento_previewed")
+
+    choose "tenant[theme]", option: "custom"
+
     # High-contrast magenta — easy to eyeball against the default teal
     set_color_field("tenant[custom_theme][brand][light]", "#ff0080")
     screenshot("02_primary_changed_to_magenta")
@@ -42,7 +47,7 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
     screenshot("04_after_cancel_restored")
 
     set_color_field("tenant[custom_theme][brand][light]", "#7c3aed")
-    click_button_with_js_fallback "Save", expect_text: "#7c3aed"
+    click_button_with_js_fallback "Save", expect_text: "Theme saved."
     assert_current_path tenant_theme_path
     screenshot("05_after_save")
 
