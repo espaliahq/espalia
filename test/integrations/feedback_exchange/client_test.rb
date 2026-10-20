@@ -128,6 +128,11 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
       assert_raises(FeedbackExchange::Errors::ApiError) { @client.health }
     end
 
+    should "raise ApiError on JSON that is not an object" do
+      @stubs.get("/api/feedback-exchange/health") { [ 200, {}, "[1]" ] }
+      assert_raises(FeedbackExchange::Errors::ApiError) { @client.health }
+    end
+
     should "not retry" do
       calls = 0
       @stubs.get("/api/feedback-exchange/feedback") { calls += 1; [ 503, {}, "" ] }
@@ -136,11 +141,23 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     end
   end
 
+  context "with the real connection" do
+    should "refuse a peer address that resolves to a private address" do
+      client = FeedbackExchange::Client.new(base_url: "https://sneaky.example.com/x", outbound_secret: SECRET)
+
+      Resolv.stub(:getaddresses, [ "10.0.0.5" ]) do
+        error = assert_raises(FeedbackExchange::Errors::ApiError) { client.health }
+        assert_nil error.status
+        assert_match(/private network/, error.message)
+      end
+    end
+  end
+
   context ".for" do
     should "build from the tenant's config and secrets" do
       tenant = create(:tenant)
       tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(base_url: "https://chip.example.com/x/", peer_name: "chip"))
-      tenant.update_feedback_exchange_secrets!(outbound_secret: SECRET, inbound_secret: "in")
+      tenant.update_feedback_exchange!(outbound_secret: SECRET, inbound_secret: "in")
 
       assert_instance_of FeedbackExchange::Client, FeedbackExchange::Client.for(tenant)
     end

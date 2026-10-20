@@ -63,13 +63,21 @@ class FeedbackExchangeConfig
 
   private
 
-  # https only, except in development where a local peer is plain http.
+  # https only, except in development where a local peer is plain http. The
+  # address is a prefix the client appends paths to, so it carries no credentials,
+  # query or fragment, and (outside development) no private network host.
   def base_url_is_secure
     return if base_url.blank?
 
     uri = URI.parse(base_url.to_s.strip)
     allowed = uri.scheme == "https" || (uri.scheme == "http" && Rails.env.development?)
-    errors.add(:base_url, "must start with https://") unless allowed && uri.host.present?
+    if !allowed || uri.host.blank?
+      errors.add(:base_url, "must start with https://")
+    elsif uri.userinfo.present? || uri.query.present? || uri.fragment.present?
+      errors.add(:base_url, "must be a plain address, with no login, query or fragment")
+    elsif !Rails.env.development? && FeedbackExchange::HostGuard.private_host?(uri.host)
+      errors.add(:base_url, "must not be a private network address")
+    end
   rescue URI::InvalidURIError
     errors.add(:base_url, "is not a valid URL")
   end

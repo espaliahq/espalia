@@ -120,13 +120,23 @@ class FeedbackExchange::Client
   end
 
   def parse_json(body)
-    body.to_s.strip.empty? ? {} : JSON.parse(body.to_s)
+    return {} if body.to_s.strip.empty?
+
+    parsed = JSON.parse(body.to_s)
+    return parsed if parsed.is_a?(Hash)
+
+    raise FeedbackExchange::Errors::ApiError.new(status: 200, body: body, message: "The peer answered with JSON that is not an object")
   rescue JSON::ParserError
     raise FeedbackExchange::Errors::ApiError.new(status: 200, body: body, message: "The peer answered with something that is not JSON")
   end
 
   def connection
-    @connection ||= Faraday.new(url: "#{base_url}/") do |f|
+    @connection ||= build_connection
+  end
+
+  def build_connection
+    FeedbackExchange::HostGuard.check!(base_url)
+    Faraday.new(url: "#{base_url}/") do |f|
       f.options.open_timeout = OPEN_TIMEOUT
       f.options.timeout = READ_TIMEOUT
       f.adapter Faraday.default_adapter

@@ -39,6 +39,27 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       assert_not FeedbackExchangeConfig.new(base_url: "not a url").valid?
     end
 
+    should "refuse a login, query or fragment in the address" do
+      %w[https://u:p@chip.example.com/x https://chip.example.com/x?env=prod https://chip.example.com/x#frag].each do |url|
+        assert_not FeedbackExchangeConfig.new(base_url: url).valid?, "expected #{url} to be refused"
+      end
+    end
+
+    should "refuse a private network address" do
+      %w[https://localhost/x https://127.0.0.1/x https://10.0.0.5/x https://192.168.1.2/x https://169.254.169.254/x
+         https://[::1]/x https://printer.local/x https://db.internal/x].each do |url|
+        config = FeedbackExchangeConfig.new(base_url: url)
+        assert_not config.valid?, "expected #{url} to be refused"
+        assert_includes config.errors[:base_url], "must not be a private network address"
+      end
+    end
+
+    should "allow a private address in development" do
+      Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new("development")) do
+        assert FeedbackExchangeConfig.new(base_url: "https://127.0.0.1:4000/api").valid?
+      end
+    end
+
     should "be optional while the exchange is off" do
       assert FeedbackExchangeConfig.new(base_url: "").valid?
     end
@@ -77,12 +98,12 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
 
     should "need both secrets" do
       assert_not @config.configured?(@tenant)
-      @tenant.update_feedback_exchange_secrets!(outbound_secret: "a" * 32, inbound_secret: "b" * 32)
+      @tenant.update_feedback_exchange!(outbound_secret: "a" * 32, inbound_secret: "b" * 32)
       assert @config.configured?(@tenant)
     end
 
     should "be false while disabled" do
-      @tenant.update_feedback_exchange_secrets!(outbound_secret: "a" * 32, inbound_secret: "b" * 32)
+      @tenant.update_feedback_exchange!(outbound_secret: "a" * 32, inbound_secret: "b" * 32)
       @config.enabled = false
       assert_not @config.configured?(@tenant)
     end
