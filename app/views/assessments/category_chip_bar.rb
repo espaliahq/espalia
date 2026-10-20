@@ -10,6 +10,11 @@ class Views::Assessments::CategoryChipBar < Views::Base
   include Views::Assessments::Concerns::RatedCount
   include Views::Assessments::Concerns::ScoreScale
 
+  # aria-current carries the active chip, so category_nav_controller moves it with the attribute alone.
+  CHIP_CLASSES = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
+                 "bg-neutral-subtle text-muted not-aria-[current=page]:hover:bg-neutral-muted transition-colors " \
+                 "aria-[current=page]:bg-neutral-strong aria-[current=page]:text-inverse"
+
   # @param categories [Array<Hash>] from MatrixDataBuilder
   # @param scoring [Hash] primary scoring for the context
   # @param active_category_id [String, nil] highlighted chip
@@ -35,8 +40,8 @@ class Views::Assessments::CategoryChipBar < Views::Base
     total = @categories.sum { |c| c[:capabilities].size }
     a(
       href: "#",
-      class: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
-             "#{@active_category_id.nil? ? active_chip_classes : inactive_chip_classes}",
+      class: CHIP_CLASSES,
+      aria: { current: ("page" if @active_category_id.nil?) }.compact,
       data: { all_chip: "true", action: "click->category-nav#scrollToTop" }
     ) do
       plain "All"
@@ -51,8 +56,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
 
     attrs = {
       href: "#category-#{category.category_id}",
-      class: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
-             "#{active ? active_chip_classes : inactive_chip_classes}",
+      class: CHIP_CLASSES,
       data: { category_id: category.category_id,
               action: "click->category-nav#scrollTo" }
     }
@@ -110,14 +114,5 @@ class Views::Assessments::CategoryChipBar < Views::Base
     return true if counts[:total].zero?
 
     counts[:rated] >= (counts[:total] * Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD).ceil
-  end
-
-  def active_chip_classes
-    "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-  end
-
-  def inactive_chip_classes
-    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 " \
-    "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
   end
 end

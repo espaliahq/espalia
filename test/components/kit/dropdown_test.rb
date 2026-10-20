@@ -13,18 +13,16 @@ class Components::Kit::DropdownTest < ActiveSupport::TestCase
   # The trigger removes the browser outline, so it must draw its own
   # indicator or keyboard focus disappears (#322, WCAG 2.4.7).
   context "Components::Kit::Dropdown#trigger" do
-    # Brand ink, not the brand: a teal ring on white is 2:1 (#447).
-    should "draw a brand-ink focus ring by default" do
+    should "draw the focus role's ring by default" do
       html = trigger_html
       assert_includes html, "focus-visible:ring-2"
-      assert_includes html, "focus-visible:ring-primary-ink"
+      assert_includes html, "focus-visible:ring-focus"
     end
 
-    should "take a caller's ring where the brand colour can't show" do
-      html = trigger_html(focus_ring: "rounded-full focus-visible:ring-nav-fg")
+    should "take a caller's ring shape" do
+      html = trigger_html(focus_ring: "rounded-full focus-visible:ring-focus")
       assert_includes html, "focus-visible:ring-2"
-      assert_includes html, "focus-visible:ring-nav-fg"
-      assert_not_includes html, "focus-visible:ring-primary-ink"
+      assert_includes html, "rounded-full focus-visible:ring-focus"
     end
   end
 end

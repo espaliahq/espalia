@@ -62,7 +62,7 @@ class Components::Kit::DefinitionTipTest < ActiveSupport::TestCase
     html = render_tip(trigger_class: "rounded-full bg-amber-100")
 
     assert_includes html, "bg-amber-100"
-    assert_includes html, "focus-visible:ring-primary"
+    assert_includes html, "focus-visible:ring-focus"
     assert_not_includes html, "decoration-dotted", "the caller's styling replaces the default"
   end
 

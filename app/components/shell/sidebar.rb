@@ -18,7 +18,7 @@ class Components::Shell::Sidebar < Components::Base
 
   def view_template
     aside(
-      class: "hidden fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-gray-100 md:hidden",
+      class: "hidden fixed inset-y-0 left-0 z-40 w-64 border-r border-default bg-overlay text-default md:hidden",
       data: { sidebar_target: "drawer" }
     ) do
       nav(class: "flex flex-col gap-1 p-4 pt-20 flex-1", aria: { label: "Mobile navigation" }) do
@@ -33,7 +33,7 @@ class Components::Shell::Sidebar < Components::Base
     a(
       href: link[:href],
       class: "flex items-center gap-3 px-3 py-2 min-h-11 rounded-md text-sm font-medium " \
-             "text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+             "text-muted hover:bg-default-hover hover:text-default transition-colors"
     ) do
       plain link[:label]
     end

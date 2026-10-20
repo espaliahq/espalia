@@ -28,10 +28,7 @@ class Components::Shell::UserMenu < Components::Base
     # also hosts the notification bell dropdown.
     div(id: "user-menu", class: "inline-block") do
       render Components::Kit::Dropdown.new(align: :right) do |dropdown|
-        # Two tones, because the nav colour is the tenant's: whichever of the
-        # ring and the dark band behind it contrasts with their navbar carries.
-        dropdown.trigger(focus_ring: "rounded-full focus-visible:ring-nav-fg " \
-                                     "focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900") { avatar_circle }
+        dropdown.trigger(focus_ring: "rounded-full focus-visible:ring-focus") { avatar_circle }
         dropdown.menu { menu_content }
       end
     end
@@ -49,8 +46,8 @@ class Components::Shell::UserMenu < Components::Base
   def avatar_circle
     div(class: "flex items-center justify-center h-11 w-11 cursor-pointer") do
       div(
-        class: "h-8 w-8 rounded-full bg-nav-fg/20 flex items-center justify-center " \
-               "text-sm font-medium text-nav-fg hover:bg-nav-fg/30 transition-colors"
+        class: "h-8 w-8 rounded-full bg-current/20 flex items-center justify-center " \
+               "text-sm font-medium text-nav hover:bg-current/30 transition-colors"
       ) do
         plain user_initial
       end
@@ -69,8 +66,7 @@ class Components::Shell::UserMenu < Components::Base
   def notifications_link
     a(
       href: settings_notifications_path,
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
       role: "menuitem"
     ) do
       svg(xmlns: "http://www.w3.org/2000/svg", class: "h-4 w-4", fill: "none",
@@ -84,9 +80,9 @@ class Components::Shell::UserMenu < Components::Base
 
   def email_header
     div(class: "px-4 py-2") do
-      p(class: "text-sm font-medium text-gray-900 dark:text-white truncate") { @user.email }
+      p(class: "text-sm font-medium text-default truncate") { @user.email }
       if @current_tenant
-        p(class: "text-xs text-gray-600 dark:text-gray-300 truncate") { @current_tenant.name }
+        p(class: "text-xs text-muted truncate") { @current_tenant.name }
       end
     end
   end
@@ -94,7 +90,7 @@ class Components::Shell::UserMenu < Components::Base
   def tenant_section
     divider
     div(class: "px-4 py-1.5") do
-      p(class: "text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider") do
+      p(class: "text-xs font-semibold text-muted uppercase tracking-wider") do
         plain "Switch workspace"
       end
     end
@@ -106,7 +102,7 @@ class Components::Shell::UserMenu < Components::Base
 
     if current
       div(
-        class: "flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50",
+        class: "flex items-center gap-2 px-4 py-2 text-sm text-default bg-neutral-muted",
         role: "menuitem"
       ) do
         checkmark_icon
@@ -122,8 +118,8 @@ class Components::Shell::UserMenu < Components::Base
         input(type: "hidden", name: "tenant_id", value: tenant.id)
         button(
           type: "submit",
-          class: "flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 " \
-                 "hover:bg-gray-100 dark:hover:bg-gray-700 text-left",
+          class: "flex items-center gap-2 w-full px-4 py-2 text-sm text-muted " \
+                 "hover:bg-default-hover text-left",
           role: "menuitem"
         ) do
           # Empty space to align with checkmark
@@ -137,8 +133,7 @@ class Components::Shell::UserMenu < Components::Base
   def ai_assistants_link
     a(
       href: settings_connected_clients_path,
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
       role: "menuitem"
     ) do
       ai_assistants_icon
@@ -150,8 +145,7 @@ class Components::Shell::UserMenu < Components::Base
     a(
       href: destroy_user_session_path,
       data: { turbo_method: :delete },
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
       role: "menuitem"
     ) do
       sign_out_icon
@@ -160,13 +154,13 @@ class Components::Shell::UserMenu < Components::Base
   end
 
   def divider
-    div(class: "border-t border-gray-200 dark:border-gray-700 my-1")
+    div(class: "border-t border-default my-1")
   end
 
   def checkmark_icon
     svg(
       xmlns: "http://www.w3.org/2000/svg",
-      class: "w-4 h-4 shrink-0 text-primary-ink",
+      class: "w-4 h-4 shrink-0 text-brand",
       fill: "none",
       viewBox: "0 0 24 24",
       stroke: "currentColor",
@@ -179,7 +173,7 @@ class Components::Shell::UserMenu < Components::Base
   def ai_assistants_icon
     svg(
       xmlns: "http://www.w3.org/2000/svg",
-      class: "w-4 h-4 shrink-0 text-gray-400",
+      class: "w-4 h-4 shrink-0 text-subtle",
       fill: "none",
       viewBox: "0 0 24 24",
       stroke: "currentColor",
@@ -197,7 +191,7 @@ class Components::Shell::UserMenu < Components::Base
   def sign_out_icon
     svg(
       xmlns: "http://www.w3.org/2000/svg",
-      class: "w-4 h-4 shrink-0 text-gray-400",
+      class: "w-4 h-4 shrink-0 text-subtle",
       fill: "none",
       viewBox: "0 0 24 24",
       stroke: "currentColor",

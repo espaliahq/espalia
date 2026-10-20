@@ -25,12 +25,6 @@
 
 import BaseController from "controllers/base_controller"
 
-const ACTIVE_CHIP_CLASSES = ["bg-gray-900", "dark:bg-white", "text-white", "dark:text-gray-900"]
-const INACTIVE_CHIP_CLASSES = [
-  "bg-gray-100", "dark:bg-gray-800", "text-gray-700", "dark:text-gray-300",
-  "hover:bg-gray-200", "dark:hover:bg-gray-700", "transition-colors"
-]
-
 export default class extends BaseController {
   connect() {
     super.connect()
@@ -230,12 +224,8 @@ export default class extends BaseController {
   #toggleChipActive(chip, isActive) {
     if (isActive) {
       chip.setAttribute("aria-current", "page")
-      chip.classList.remove(...INACTIVE_CHIP_CLASSES)
-      chip.classList.add(...ACTIVE_CHIP_CLASSES)
     } else {
       chip.removeAttribute("aria-current")
-      chip.classList.remove(...ACTIVE_CHIP_CLASSES)
-      chip.classList.add(...INACTIVE_CHIP_CLASSES)
     }
   }
 }

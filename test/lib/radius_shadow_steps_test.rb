@@ -26,7 +26,7 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
   # Shell pieces that draw a surface of their own
   SHELL_SHADOWS = {
     "shell/impersonation_banner.rb" => %w[shadow-sm],
-    "shell/navbar.rb" => %w[shadow-xs shadow-sm],
+    "shell/navbar.rb" => %w[shadow-xs shadow-lg],
     "shell/page_layout.rb" => %w[shadow-lg]
   }.freeze
 

@@ -72,9 +72,9 @@ class Components::Shell::TenantAdminLayout < Components::Base
     active = section[:key] == @active_section
     base = "px-3 py-2 rounded-md text-sm whitespace-nowrap transition-colors"
     state = if active
-      "bg-primary/10 text-primary-ink font-semibold"
+      "bg-neutral-muted text-default font-semibold"
     else
-      "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+      "text-muted hover:bg-default-hover"
     end
 
     a(

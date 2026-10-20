@@ -5,7 +5,7 @@
 # caller's font size and colour, so it drops into any text slot.
 #
 # @example
-#   render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-gray-700")
+#   render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-muted")
 #
 class Components::Kit::Prose < Components::Base
   # @param text [String, nil] the text as the author typed it

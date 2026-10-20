@@ -61,11 +61,10 @@ class Components::Kit::Dropdown < Components::Base
   #
   # @param label [String, nil] accessible name for an icon-only trigger
   #   (sets aria-label so the button isn't nameless to screen readers)
-  # @param focus_ring [String] the keyboard focus ring's shape and colour —
-  #   a literal, so Tailwind sees it. Override where the brand colour can't
-  #   show against what the trigger sits on (the navbar).
+  # @param focus_ring [String] the keyboard focus ring's shape (and colour,
+  #   if it must differ from the focus role) — a literal, so Tailwind sees it
   # @yield The content to display inside the trigger button
-  def trigger(label: nil, focus_ring: "rounded-md focus-visible:ring-primary-ink", &block)
+  def trigger(label: nil, focus_ring: "rounded-md focus-visible:ring-focus", &block)
     button(
       type: "button",
       aria: { haspopup: "true", expanded: "false", label: label }.compact,
@@ -91,10 +90,10 @@ class Components::Kit::Dropdown < Components::Base
       # max-h + overflow: a tall panel scrolls its own content instead of
       # overflowing the viewport (fixed-strategy menus close on outside
       # scroll, so without this their lower content was unreachable).
+      # The focus ring resets to neutral: in the navbar it follows the nav's text.
       class: "absolute #{ALIGNMENT_CLASSES[@align]} mt-2 #{width} max-h-[70vh] overflow-y-auto " \
-             "rounded-md shadow-lg " \
-             "bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 " \
-             "z-50 hidden",
+             "rounded-md shadow-lg border border-default bg-overlay z-50 hidden " \
+             "[--gos-focus-ring:var(--gos-content-default)]",
       data: { dropdown_target: "menu" },
       role: role,
       aria: { orientation: (role == "menu" ? "vertical" : nil), label: label }.compact

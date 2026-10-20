@@ -87,18 +87,10 @@ input[type="week"] {
  * the utilities layer and still win where a bespoke ring is defined.
  */
 @layer base {
-  /* blue-700 / blue-300: >= 3:1 on white and brand surfaces, and on dark ones.
+  /* The focus role: neutral, and reset by a coloured surface (the navbar) for what sits on it.
      A variable, not @variant dark on the list: a variant nested in a selector
      list compiles to :is(), which would lift every selector to the most
      specific one and override the forms plugin's own focus style on fields. */
-  :root {
-    --focus-outline: #1d4ed8;
-
-    @variant dark {
-      --focus-outline: #93c5fd;
-    }
-  }
-
   a:focus-visible,
   button:focus-visible,
   input:focus-visible,
@@ -108,7 +100,7 @@ input[type="week"] {
   [role="button"]:focus-visible,
   [role="menuitem"]:focus-visible,
   [tabindex]:not([tabindex="-1"]):focus-visible {
-    outline: 2px solid var(--focus-outline);
+    outline: 2px solid var(--gos-focus-ring);
     outline-offset: 2px;
     border-radius: 2px;
   }
@@ -290,7 +282,7 @@ input[type="week"] {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 0.25rem;
-  color: var(--color-gray-400);
+  color: var(--gos-content-muted);
   cursor: pointer;
 }
 
@@ -302,14 +294,14 @@ input[type="week"] {
 .explorer-cluster-btn:hover,
 .explorer-discuss:hover,
 .explorer-kebab:hover {
-  color: var(--color-primary-ink);
+  color: var(--gos-content-brand);
 }
 
 .explorer-cluster-btn:focus-visible,
 .explorer-discuss:focus-visible,
 .explorer-kebab:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
+  box-shadow: 0 0 0 2px var(--gos-focus-ring);
 }
 
 /* Items of a menu built by `explorer_menu_controller.js`. */
@@ -320,13 +312,13 @@ input[type="week"] {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: var(--color-gray-700);
+  color: var(--gos-content-muted);
   cursor: pointer;
   transition: background-color 150ms ease;
 }
 
 .explorer-menu-item:hover {
-  background-color: var(--color-gray-100);
+  background-color: var(--gos-surface-default-hover);
 }
 
 .explorer-menu-item:disabled {
@@ -335,25 +327,7 @@ input[type="week"] {
 }
 
 .explorer-menu-item--approve {
-  color: var(--color-green-700);
-}
-
-.explorer-menu-item {
-  @variant dark {
-    color: var(--color-gray-200);
-  }
-}
-
-.explorer-menu-item:hover {
-  @variant dark {
-    background-color: var(--color-gray-700);
-  }
-}
-
-.explorer-menu-item--approve {
-  @variant dark {
-    color: var(--color-green-400);
-  }
+  color: var(--gos-content-success);
 }
 
 [data-hover-cluster="row"]:hover [data-cluster~="row"],
@@ -511,31 +485,24 @@ input[type="week"] {
   gap: 0.25rem;
   width: 100%;
   padding: 0.25rem 0.5rem;
-  border: 1px dashed var(--color-gray-300);
+  border: 1px dashed var(--gos-border-emphasized);
   border-radius: 0.25rem;
   font-size: 0.75rem;
   line-height: 1rem;
-  color: var(--color-gray-600);
+  color: var(--gos-content-muted);
   cursor: pointer;
   transition: border-color 150ms ease, color 150ms ease;
 }
 
 .explorer-add:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary-ink);
+  border-color: var(--gos-border-brand);
+  color: var(--gos-content-brand);
 }
 
 .explorer-add:focus-visible {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
-}
-
-.explorer-add {
-  @variant dark {
-    border-color: var(--color-gray-700);
-    color: var(--color-gray-300);
-  }
+  border-color: var(--gos-focus-ring);
+  box-shadow: 0 0 0 1px var(--gos-focus-ring);
 }
 
 /* Framework explorer — filter re-fetch busy indicator (#383).
@@ -848,22 +815,22 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   min-height: 2.75rem;
   padding-inline: 0.75rem;
   border-radius: 0.375rem;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--gos-border-emphasized);
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--gos-content-default);
   cursor: pointer;
 }
 
 .kit-alert-panel {
   padding: 0.5rem;
   border-radius: 0.375rem;
-  border: 1px solid var(--color-red-200);
-  background-color: var(--color-red-50);
+  border: 1px solid var(--gos-border-danger);
+  background-color: var(--gos-danger-subtle);
   font-size: 0.75rem;
   line-height: 1rem;
-  color: var(--color-red-700);
+  color: var(--gos-content-danger);
 }
 
 .mx-cell,
@@ -939,20 +906,6 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   }
 }
 
-.kit-btn-secondary {
-  @variant dark {
-    border-color: var(--color-gray-600);
-    color: var(--color-gray-200);
-  }
-}
-
-.kit-alert-panel {
-  @variant dark {
-    border-color: var(--color-red-800);
-    background-color: color-mix(in oklab, var(--color-red-900) 20%, transparent);
-    color: var(--color-red-300);
-  }
-}
 
 /* Text people write — feedback, comments, notes — rendered from Markdown by
  * Components::Kit::Prose (#482). Inherits size and colour from the slot it

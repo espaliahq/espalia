@@ -32,7 +32,7 @@ class Components::Shell::PageLayout < Components::Base
 
   def view_template(&block)
     div(
-      class: "min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950",
+      class: "min-h-screen flex flex-col bg-page",
       data: { controller: "sidebar" }
     ) do
       # One `<symbol>` set per page — repeated glyphs are `<use href="#icon-…">`
@@ -44,9 +44,9 @@ class Components::Shell::PageLayout < Components::Base
       a(
         href: "#main-content",
         class: "sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 " \
-               "focus:rounded-md focus:bg-white focus:dark:bg-gray-900 focus:px-4 focus:py-2 " \
-               "focus:text-sm focus:font-medium focus:text-gray-900 focus:dark:text-white " \
-               "focus:shadow-lg focus:ring-2 focus:ring-blue-600"
+               "focus:rounded-md focus:bg-overlay focus:px-4 focus:py-2 " \
+               "focus:text-sm focus:font-medium focus:text-default " \
+               "focus:shadow-lg focus:ring-2 focus:ring-focus"
       ) { "Skip to main content" }
 
       render Components::Shell::Navbar.new(

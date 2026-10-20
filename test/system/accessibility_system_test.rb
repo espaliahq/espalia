@@ -157,7 +157,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       JS
 
       assert outlines["button"]["focusVisible"], "a script focus with no prior pointer input should read as keyboard focus"
-      assert_equal "rgb(147, 197, 253)", outlines["button"]["colour"], "buttons take the dark focus colour"
+      assert_equal "rgb(255, 255, 255)", outlines["button"]["colour"], "buttons take the dark focus role"
       assert_equal "rgba(0, 0, 0, 0)", outlines["field"]["colour"], "fields keep the forms plugin's transparent outline"
     end
   end

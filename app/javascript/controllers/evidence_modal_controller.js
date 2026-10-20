@@ -130,17 +130,17 @@ export default class extends BaseController {
   #row(token, level, info) {
     const row = document.createElement("div")
     row.dataset.linkRow = ""
-    row.className = "rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm space-y-1"
+    row.className = "rounded-md border border-default p-2 text-sm space-y-1"
 
     const head = document.createElement("div")
     head.className = "flex items-start justify-between gap-2"
     const title = document.createElement("span")
-    title.className = "font-medium text-gray-900 dark:text-white"
+    title.className = "font-medium text-default"
     title.textContent = `${info.capability_name} · ${this.#levelLabels()[level] || `L${level}`}`
     const remove = document.createElement("button")
     remove.type = "button"
     remove.dataset.action = "evidence-modal#removeLink"
-    remove.className = "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer " +
+    remove.className = "text-muted hover:text-default cursor-pointer " +
       "disabled:opacity-40 disabled:cursor-not-allowed"
     remove.setAttribute("aria-label", "Remove link")
     remove.textContent = "×"
@@ -149,7 +149,7 @@ export default class extends BaseController {
 
     if (info.expectation) {
       const exp = document.createElement("p")
-      exp.className = "text-xs text-gray-600 dark:text-gray-300"
+      exp.className = "text-xs text-muted"
       exp.textContent = `↳ ${info.expectation}`
       row.appendChild(exp)
     }
@@ -171,7 +171,7 @@ export default class extends BaseController {
     details.className = "group"
     const summary = document.createElement("summary")
     summary.className = "cursor-pointer select-none text-xs font-semibold uppercase tracking-wide " +
-      "text-gray-600 dark:text-gray-300 marker:content-none flex items-center gap-1"
+      "text-muted marker:content-none flex items-center gap-1"
     const chevron = document.createElement("span")
     chevron.className = "transition-transform group-open:rotate-90"
     chevron.setAttribute("aria-hidden", "true")
@@ -185,9 +185,9 @@ export default class extends BaseController {
     ul.className = "mt-1 space-y-1"
     list.forEach((text) => {
       const li = document.createElement("li")
-      li.className = "flex gap-2 text-xs text-gray-700 dark:text-gray-200"
+      li.className = "flex gap-2 text-xs text-muted"
       const bullet = document.createElement("span")
-      bullet.className = "text-gray-400"
+      bullet.className = "text-subtle"
       bullet.setAttribute("aria-hidden", "true")
       bullet.textContent = "•"
       const body = document.createElement("span")
@@ -227,8 +227,8 @@ export default class extends BaseController {
     select.name = `evidence[link_valences][${token}]`
     select.required = true
     select.setAttribute("aria-label", "Evidence valence")
-    select.className = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " +
-      "text-gray-900 dark:text-gray-100 text-xs focus-visible:ring-primary focus-visible:border-primary"
+    select.className = "w-full rounded-md border-field bg-field text-default text-xs " +
+      "focus:border-strong focus:ring-1 focus:ring-inset focus:ring-focus focus:outline-hidden"
     select.add(new Option("Valence…", ""))
     this.#valenceOptions().forEach(([label, value]) => select.add(new Option(label, value)))
     return select
