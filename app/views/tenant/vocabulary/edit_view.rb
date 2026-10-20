@@ -79,11 +79,8 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
   # What the word will actually look like, in the shape the hero renders it
   # — a label alone tells an admin nothing about where it lands.
   def preview
-    div(class: "mt-4 rounded-lg border border-purple-300 dark:border-purple-700 " \
-               "bg-gray-50/50 dark:bg-gray-800/30 p-3") do
-      span(class: "text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300") do
-        "#{Views::Assessments::StateLabels.for(:mastering, tenant: @tenant)} E3 · 62% of the way to E4"
-      end
+    render Views::Assessments::VerdictPanel.new(state: :mastering, class: "mt-4") do |panel|
+      panel.heading("#{Views::Assessments::StateLabels.for(:mastering, tenant: @tenant)} E3 · 62% of the way to E4")
     end
   end
 

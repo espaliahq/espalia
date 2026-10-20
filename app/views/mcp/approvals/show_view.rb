@@ -6,6 +6,8 @@
 class Views::Mcp::Approvals::ShowView < Views::Base
   include Phlex::Rails::Helpers::Routes
 
+  STATUS_TONES = { "pending" => :warning, "approved" => :success, "rejected" => :danger, "expired" => :neutral }.freeze
+
   # @param approval [Mcp::PendingApproval]
   def initialize(approval:)
     @approval = approval
@@ -57,15 +59,7 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   end
 
   def status_pill
-    classes = case @approval.status
-    when "pending"  then "bg-warning-muted text-warning"
-    when "approved" then "bg-success-muted text-success"
-    when "rejected" then "bg-danger-muted text-danger"
-    when "expired"  then "bg-neutral-subtle text-muted"
-    end
-    span(class: "inline-block rounded-full px-2 py-0.5 text-xs font-medium #{classes}") do
-      plain @approval.status
-    end
+    render Components::Kit::Badge.new(@approval.status, tone: STATUS_TONES.fetch(@approval.status, :neutral))
   end
 
   def arguments_card

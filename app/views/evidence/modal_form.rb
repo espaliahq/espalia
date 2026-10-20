@@ -141,7 +141,13 @@ class Views::Evidence::ModalForm < Views::Base
   # all context lives on the uniform "Applies to" rows.
   def context_card
     cx = @context_block
-    div(class: "rounded-md bg-subtle border border-subtle p-3 space-y-2 mb-4") do
+    render Components::Kit::Card.new(variant: :inset, density: :compact, class: "mb-4") do |card|
+      card.body { context_card_body(cx) }
+    end
+  end
+
+  def context_card_body(cx)
+    div(class: "space-y-2") do
       div do
         p(class: "text-sm font-medium text-default") { prompt_label(cx) }
         p(class: "text-xs text-muted") { scope_label(cx) } if cx[:show_role_level]

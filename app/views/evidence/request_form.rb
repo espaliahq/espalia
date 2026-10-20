@@ -72,12 +72,14 @@ class Views::Evidence::RequestForm < Views::Base
 
   def context_card
     cx = @context_block
-    div(class: "rounded-md bg-subtle border border-subtle p-3 mb-4") do
-      p(class: "text-sm font-medium text-default") { "#{cx[:name]} · #{cx[:level_title]}" }
-      p(class: "text-xs text-muted") { "on #{cx[:assessee_name]}'s assessment" } if cx[:assessee_name]
-      if cx[:expectation].present?
-        span(class: "mt-2 block text-xs font-semibold uppercase tracking-wide text-muted") { "What good looks like" }
-        p(class: "mt-0.5 text-sm text-muted") { cx[:expectation] }
+    render Components::Kit::Card.new(variant: :inset, density: :compact, class: "mb-4") do |card|
+      card.body do
+        p(class: "text-sm font-medium text-default") { "#{cx[:name]} · #{cx[:level_title]}" }
+        p(class: "text-xs text-muted") { "on #{cx[:assessee_name]}'s assessment" } if cx[:assessee_name]
+        if cx[:expectation].present?
+          span(class: "mt-2 block text-xs font-semibold uppercase tracking-wide text-muted") { "What good looks like" }
+          p(class: "mt-0.5 text-sm text-muted") { cx[:expectation] }
+        end
       end
     end
   end

@@ -26,16 +26,7 @@ class ViewColourRolesTest < ActiveSupport::TestCase
   # Waiting on a domain token: the evidence valence hues and the vocabulary
   # preview, which copies the hero's per-state panel (#544). Remove an entry
   # when its site moves; a stale entry fails too.
-  PENDING = {
-    "app/views/evidence/valence.rb" =>
-      %w[bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200
-         bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300
-         bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
-         bg-rose-50 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300],
-    "app/views/tenant/vocabulary/edit_view.rb" =>
-      %w[border-purple-300 dark:border-purple-700 bg-gray-50/50 dark:bg-gray-800/30
-         text-purple-700 dark:text-purple-300]
-  }.freeze
+  PENDING = {}.freeze
 
   should "colour the views with role utilities" do
     offenders = palette_utilities.flat_map do |path, utilities|

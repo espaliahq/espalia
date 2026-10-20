@@ -267,14 +267,20 @@ class Views::Evidence::HubView < Views::Base
     return if response.nil?
 
     item = response[:item]
-    div(class: "rounded-md border border-default bg-subtle p-3 space-y-2") do
+    render Components::Kit::Card.new(variant: :inset, density: :compact) do |card|
+      card.body { response_card_body(item, response[:links]) }
+    end
+  end
+
+  def response_card_body(item, links)
+    div(class: "space-y-2") do
       div(class: "flex items-center justify-between gap-2") do
         span(class: "text-xs font-semibold uppercase tracking-wide text-muted") { "Response from #{item.author&.name || "a colleague"}" }
         span(class: "text-xs text-muted") { response_type_label(item) }
       end
       render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
       external_link(item)
-      applies_to_line(response[:links])
+      applies_to_line(links)
       div(class: "flex items-center gap-4") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
                class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") { "Edit links" }

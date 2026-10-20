@@ -26,11 +26,13 @@ class StrongFillTest < ActiveSupport::TestCase
     "app/views/assessments/activity/focus_mode_toggle.rb" => %w[aria-pressed:bg-neutral-strong],
     "app/views/assessments/activity/filter_chips.rb" => %w[aria-pressed:bg-neutral-strong],
     "app/views/assessments/level_chip.rb" => %w[bg-neutral-strong],
+    "app/views/notifications/bell.rb" => %w[bg-tone-strong],
     # The sign-in page's 44px Log in keeps its own size and radius, which Kit::Button lacks
     "app/views/users/sessions/new_view.rb" => %w[bg-tone-strong hover:bg-tone-strong-hover],
     # Marks with no text
     "app/views/assessments/hero_summary.rb" => %w[bg-neutral-strong bg-warning-strong],
-    "app/views/assessments/category_indicators.rb" => %w[bg-warning-strong]
+    "app/views/assessments/category_indicators.rb" => %w[bg-warning-strong],
+    "app/views/notifications/row.rb" => %w[bg-info-strong]
   }.freeze
 
   should "keep strong fills inside Kit components" do

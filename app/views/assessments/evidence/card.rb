@@ -270,12 +270,14 @@ class Views::Assessments::Evidence::Card < Views::Base
              "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
       render Components::Kit::Dropdown.new do |dropdown|
-        kebab_trigger
+        dropdown.trigger(label: "Feedback / evidence actions", button: { variant: :ghost, size: :xs, icon: true }) do
+          icon("kebab", class: "size-4")
+        end
         dropdown.menu(width: "w-44") do
-          edit_menu_item if @can_update
+          edit_menu_item(dropdown) if @can_update
           # The author's Edit already manages links (the unified modal). Offer a
           # link-only entry only to non-author link-holders (content disabled there).
-          link_menu_item if @can_manage_links && !@can_update
+          link_menu_item(dropdown) if @can_manage_links && !@can_update
           remove_link_menu_item if @can_manage_links
           withdraw_menu_item if @can_withdraw
         end
@@ -283,30 +285,20 @@ class Views::Assessments::Evidence::Card < Views::Base
     end
   end
 
-  def kebab_trigger
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :xs, icon: true, aria_label: "Feedback / evidence actions",
-      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { haspopup: "menu", expanded: "false" }
-    ) { icon("kebab", class: "size-4") }
-  end
-
-  def edit_menu_item
-    modal_menu_button("Edit")
+  def edit_menu_item(dropdown)
+    modal_menu_button(dropdown, "Edit")
   end
 
   # Opens the unified modal in edit mode for a non-author who may manage links
   # but not edit content — the server disables the content fields, leaving the
   # "Applies to" block active.
-  def link_menu_item
-    modal_menu_button("Link to another capability")
+  def link_menu_item(dropdown)
+    modal_menu_button(dropdown, "Link to another capability")
   end
 
-  def modal_menu_button(label)
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
+  def modal_menu_button(dropdown, label)
+    dropdown.item(
+      size: :xs,
       data: {
         action: "click->dropdown#close evidence-modal#load click->modal#open",
         modal_target_id: "evidence-modal-overlay",
@@ -333,7 +325,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         params: { evidence: { capability_stable_id: @current_capability_stable_id,
                               level_ordinal: @current_level_ordinal } },
         method: :post,
-        class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
+        class: Components::Kit::Dropdown.item_classes(size: :xs),
         role: "menuitem",
         form: { data: { turbo_confirm: unlink_confirm_message } }
       ) { "Unlink from this capability" }
@@ -362,7 +354,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     button_to(
       assessment_evidence_path(@assessment_id, @item.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
+      class: Components::Kit::Dropdown.item_classes(tone: :danger, size: :xs),
       role: "menuitem",
       form: { data: { turbo_confirm: "Withdraw this feedback?" } }
     ) { "Withdraw" }

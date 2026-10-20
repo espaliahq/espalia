@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Modal shell that hosts the "request evidence" form. A bare overlay/panel
-# (driven by the shared `modal` controller) wrapping the lazy
+# Modal shell that hosts the "request evidence" form. A headerless embedded
+# `Kit::Modal` (driven by the shared `modal` controller) wrapping the lazy
 # `#evidence-request-modal` turbo-frame (driven by `request-evidence#load`).
 #
 # Rendered once per assessment surface, INSIDE the element that owns the
@@ -21,21 +21,18 @@
 # the frame so it survives the frame swap a failed submit can trigger.
 class Views::Evidence::RequestModalShell < Views::Base
   def view_template
-    div(id: "evidence-request-modal-overlay",
-        data: { modal_target: "overlay",
-                modal_dirty_guard: "Discard your unsaved request?" },
-        class: "fixed inset-0 z-40 hidden items-center justify-center bg-scrim px-4",
-        role: "dialog", aria: { modal: "true" }) do
-      div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-default bg-overlay shadow-2xl",
-          tabindex: "-1",
-          data: { modal_target: "panel",
-                  controller: "submit-fallback frame-error",
-                  submit_fallback_text_value: "Couldn't send your request — check your connection " \
-                                              "and try again. Your recipients are still here.",
-                  action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
-                          "turbo:submit-start->submit-fallback#submitStart " \
-                          "turbo:submit-end->submit-fallback#submitEnd " \
-                          "modal:open@window->submit-fallback#submitStart" }) do
+    render Components::Kit::Modal.new(
+      id: "evidence-request-modal-overlay", title: "Request feedback / evidence", size: :xl, header: false,
+      standalone: false, dirty_guard: "Discard your unsaved request?",
+      panel_data: { controller: "submit-fallback frame-error",
+                    submit_fallback_text_value: "Couldn't send your request — check your connection " \
+                                                "and try again. Your recipients are still here.",
+                    action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
+                            "turbo:submit-start->submit-fallback#submitStart " \
+                            "turbo:submit-end->submit-fallback#submitEnd " \
+                            "modal:open@window->submit-fallback#submitStart" }
+    ) do |modal|
+      modal.body do
         render Components::Shared::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-request-modal", loading: "lazy",
                         data: { request_evidence_target: "frame", frame_error_target: "frame" }) do

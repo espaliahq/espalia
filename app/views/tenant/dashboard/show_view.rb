@@ -63,14 +63,8 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
   end
 
   def tile_card(tile)
-    a(
-      href: public_send(tile[:path]),
-      class: "block bg-default rounded-lg shadow-xs border " \
-             "border-default p-5 " \
-             "hover:border-brand hover:shadow-sm transition"
-    ) do
-      h3(class: "text-base font-semibold text-default") { tile[:label] }
-      p(class: "mt-1 text-sm text-muted") { tile[:description] }
+    render Components::Kit::Card.new(title: tile[:label], href: public_send(tile[:path])) do |card|
+      card.body { p(class: "text-sm text-muted") { tile[:description] } }
     end
   end
 end
