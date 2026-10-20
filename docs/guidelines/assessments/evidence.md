@@ -286,9 +286,10 @@ Rules, all deliberate:
 - **On the hub, in place.** Each item the viewer may place shows its pending
   suggestions — capability · level, the valence badge, "82% confident" as
   text, the expectation and the quoted rationale — on "Feedback to place",
-  "Feedback you've provided", the responses you asked for, and a "Suggested
-  placements" group for placed items about you or your reports with more
-  cells to go. Accept and Dismiss answer with a Turbo Stream that replaces
+  "Feedback you've provided", the responses you asked for, and a "May fit
+  elsewhere too" group for placed items about you or your reports with more
+  cells to go (a different name from the block's own "Suggested placements"
+  heading, so the page doesn't say it twice). Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an
@@ -454,7 +455,7 @@ payload's `available_months` render.
 
 **Hub layout** ([hub_view.rb](../../../app/views/evidence/hub_view.rb)): the
 "Give feedback" entry in the header → "Feedback to place" (see *Proactive
-feedback*) → "Suggested placements" (see *Suggested placement and valence*) → "Open
+feedback*) → "May fit elsewhere too" (see *Suggested placement and valence*) → "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
 (subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've

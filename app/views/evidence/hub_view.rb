@@ -162,7 +162,7 @@ class Views::Evidence::HubView < Views::Base
     return if @with_suggestions.empty?
 
     section(id: "suggested-placements", class: "scroll-mt-20") do
-      group_heading("Suggested placements")
+      group_heading("May fit elsewhere too")
       p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
         "Feedback already placed, which may also speak to other capabilities."
       end

@@ -33,7 +33,7 @@ class EvidenceHubController < ApplicationController
     shown = authored + to_place_about_me + to_place_for_team
     responded_items = responses.values.map { |r| r[:item] }
     # A suggestion block's id is the item's, so an item listed elsewhere on
-    # the page must not be listed again under "Suggested placements".
+    # the page must not be listed again under "May fit elsewhere too".
     # Suggestion work only when something could show: a pending row somewhere,
     # or a tenant that can ask for one. Off is the default.
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)

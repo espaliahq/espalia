@@ -66,7 +66,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_select "li[data-suggestion-id]", count: 0
     end
 
-    should "list a placed item's extra suggestions under Suggested placements" do
+    should "list a placed item's extra suggestions under May fit elsewhere too" do
       placed = record_peer_feedback(content: "Placed already.", placed_on: @collaboration)
       ActsAsTenant.with_tenant(@tenant) do
         create(:evidence_placement_suggestion, tenant: @tenant, item: placed, capability_stable_id: @ownership.stable_id)
