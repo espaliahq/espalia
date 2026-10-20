@@ -8,7 +8,6 @@ class Views::Users::Sessions::NewView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::ContentFor
 
-  FONT_URL = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap"
   BROWSER_THEME_COLOR = "#6b58da"
 
   # Copies of STEPS and LEAF in bin/build-icons; test/integration/app_icons_test.rb keeps them equal.
@@ -30,11 +29,11 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def view_template
-    font_links
+    content_for(:html_theme, "bento")
     content_for(:theme_color, view_context.tag.meta(name: "theme-color", content: BROWSER_THEME_COLOR))
 
     main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-dvh flex items-center justify-center p-4 " \
-                "bg-(--auth-surface) text-(--auth-content) antialiased") do
+                "bg-default text-default antialiased") do
       backdrop
       div(class: "w-full max-w-100 flex flex-col gap-6") do
         branding
@@ -44,14 +43,6 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   private
-
-  def font_links
-    content_for(:head, view_context.safe_join([
-      view_context.tag.link(rel: "preconnect", href: "https://fonts.googleapis.com"),
-      view_context.tag.link(rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: ""),
-      view_context.tag.link(rel: "stylesheet", href: FONT_URL)
-    ]))
-  end
 
   def backdrop
     span(class: "auth-blob size-[420px] left-[30%] top-[30%] sm:size-[56vmax] sm:left-[36%] sm:top-[34%]",
@@ -66,7 +57,7 @@ class Views::Users::Sessions::NewView < Views::Base
     div(class: "flex flex-col items-center gap-3 text-center") do
       brand_mark
       h1(class: "text-2xl/7 font-bold") { "GrowthOS" }
-      p(class: "text-base/5 text-(--auth-content-muted)") { "Career growth for your team" }
+      p(class: "text-base/5 text-muted") { "Career growth for your team" }
     end
   end
 
@@ -81,8 +72,8 @@ class Views::Users::Sessions::NewView < Views::Base
 
   def auth_card
     section(
-      class: "flex flex-col gap-5 p-4 sm:p-6 rounded-lg border border-(--auth-border-subtle) " \
-             "bg-(--auth-surface)/78 backdrop-blur-[24px] backdrop-saturate-[1.2]",
+      class: "flex flex-col gap-5 p-4 sm:p-6 rounded-lg border border-subtle " \
+             "bg-default/78 backdrop-blur-[24px] backdrop-saturate-[1.2]",
       aria: { labelledby: "sign-in-title" }
     ) do
       h2(id: "sign-in-title", class: "text-lg/5 font-bold") { "Sign in to your account" }
@@ -103,7 +94,7 @@ class Views::Users::Sessions::NewView < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(
         type: "submit",
-        class: "#{BUTTON_CLASSES} bg-(--auth-neutral-subtle) hover:bg-(--auth-neutral-muted) text-(--auth-content)"
+        class: "#{BUTTON_CLASSES} bg-neutral-subtle hover:bg-neutral-muted text-default"
       ) do
         google_logo
         span { "Continue with Google" }
@@ -124,8 +115,8 @@ class Views::Users::Sessions::NewView < Views::Base
     div(
       id: "sign-in-divider",
       class: "flex items-center gap-3 text-xs/[14px] font-semibold uppercase tracking-[.04em] " \
-             "text-(--auth-content-muted) before:flex-1 before:border-t before:border-(--auth-or-line) " \
-             "after:flex-1 after:border-t after:border-(--auth-or-line)",
+             "text-muted before:flex-1 before:border-t before:border-default dark:before:border-subtle " \
+             "after:flex-1 after:border-t after:border-default dark:after:border-subtle",
       aria: { hidden: "true" }
     ) { "or" }
   end
@@ -134,8 +125,8 @@ class Views::Users::Sessions::NewView < Views::Base
     return unless @flash[:alert]
 
     div(
-      class: "flex items-start gap-2 p-3 rounded-lg border border-(--auth-danger-muted) bg-(--auth-danger-subtle) " \
-             "text-sm/[18px] text-(--auth-danger)",
+      class: "flex items-start gap-2 p-3 rounded-lg border border-danger bg-danger-subtle " \
+             "text-sm/[18px] text-danger",
       role: "alert"
     ) do
       alert_icon
@@ -178,8 +169,8 @@ class Views::Users::Sessions::NewView < Views::Base
         type: type,
         autocomplete: autocomplete,
         required: true,
-        class: "w-full h-11 px-3 rounded-lg border border-(--auth-control-edge) " \
-               "bg-(--auth-surface) text-sm/[18px] text-(--auth-content)"
+        class: "w-full h-11 px-3 rounded-lg border border-field " \
+               "bg-field text-sm/[18px] text-default"
       )
     end
   end
@@ -200,8 +191,8 @@ class Views::Users::Sessions::NewView < Views::Base
   def submit_button
     button(
       type: "submit",
-      class: "#{BUTTON_CLASSES} bg-(--auth-neutral-strong) hover:bg-(--auth-neutral-strong-hover) " \
-             "text-(--auth-neutral-inverse)"
+      class: "#{BUTTON_CLASSES} tone-neutral bg-tone-strong hover:bg-tone-strong-hover " \
+             "text-tone-content-inverse"
     ) { "Log in" }
   end
 
@@ -210,11 +201,11 @@ class Views::Users::Sessions::NewView < Views::Base
       a(
         href: new_user_registration_path,
         class: "inline-flex items-center min-h-11 text-sm/5 font-semibold underline underline-offset-3 " \
-               "decoration-(--auth-border-default) hover:decoration-current transition-colors duration-200"
+               "decoration-(--gos-border-default) hover:decoration-current transition-colors duration-200"
       ) { "Create an account" }
       a(
         href: new_user_password_path,
-        class: "inline-flex items-center min-h-11 text-(--auth-content-muted) hover:underline underline-offset-3"
+        class: "inline-flex items-center min-h-11 text-muted hover:underline underline-offset-3"
       ) { "Forgot your password?" }
     end
   end

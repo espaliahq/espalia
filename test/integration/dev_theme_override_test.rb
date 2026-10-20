@@ -30,20 +30,20 @@ class DevThemeOverrideTest < ActionDispatch::IntegrationTest
 
     should "apply ?theme=bento to <html> and remember it until ?theme=default" do
       Rails.stub(:env, @env) do
-        get new_user_session_path(theme: "bento")
+        get new_user_password_path(theme: "bento")
         assert_select "html[data-theme='bento']"
 
-        get new_user_session_path
+        get new_user_password_path
         assert_select "html[data-theme='bento']"
 
-        get new_user_session_path(theme: "default")
+        get new_user_password_path(theme: "default")
         assert_select "html[data-theme]", count: 0
       end
     end
 
     should "ignore a theme with no preset" do
       Rails.stub(:env, @env) do
-        get new_user_session_path(theme: "no-such-preset")
+        get new_user_password_path(theme: "no-such-preset")
         assert_select "html[data-theme]", count: 0
       end
     end
