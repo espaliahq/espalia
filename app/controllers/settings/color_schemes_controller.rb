@@ -9,6 +9,7 @@ class Settings::ColorSchemesController < ApplicationController
     authorize :color_scheme, :update?
 
     if current_user.update(color_scheme: params.expect(:color_scheme))
+      forget_dev_scheme_override
       respond_to do |format|
         format.html { redirect_back_or_to root_path }
         format.any(:turbo_stream, :json) { head :no_content }
