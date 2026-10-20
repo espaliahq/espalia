@@ -581,10 +581,11 @@ under a full parallel precommit and passed alone
   action failed both every time.
 
 **Sideways overflow is a layout reading too: use `assert_no_sideways_overflow`.**
-A single `scrollWidth` / `clientWidth` read can land mid-reflow. The explorer's
-rename test once read 375 against 360 on CI, a scrollbar its own failure
-screenshot no longer showed. The helper polls until the page fits or the wait
-runs out, so lasting overflow still fails.
+Reading `scrollWidth` forces a layout, but async work can still change the next
+one: an observer, a frame load, a transition. The explorer's rename test once
+read 375 against 360 on CI, a scrollbar its own failure screenshot no longer
+showed. The helper polls until two reads in a row fit, so lasting overflow and
+a layout that keeps flipping both still fail.
 
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
