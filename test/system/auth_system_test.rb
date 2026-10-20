@@ -3,6 +3,30 @@
 require "application_system_test_case"
 
 class AuthSystemTest < ApplicationSystemTestCase
+  include ContrastHelpers
+
+  HOVER_FILL_JS = <<~JS
+    (el => {
+      const hoverClass = [ ...el.classList ].find(c => c.startsWith("hover:bg-"))
+      if (!hoverClass) return { base: null, hover: null }
+      const selector = `.${CSS.escape(hoverClass)}:hover`
+      const rules = []
+      const walk = list => [ ...list ].forEach(r => {
+        if (r.selectorText) rules.push(r)
+        if (r.cssRules) walk(r.cssRules)
+      })
+      for (const sheet of document.styleSheets) { try { walk(sheet.cssRules) } catch (e) {} }
+      const rule = rules.find(r => r.selectorText === selector)
+      if (!rule) return { base: getComputedStyle(el).backgroundColor, hover: null }
+      const probe = document.createElement("span")
+      probe.style.backgroundColor = rule.style.backgroundColor
+      el.appendChild(probe)
+      const hover = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return { base: getComputedStyle(el).backgroundColor, hover }
+    })(arguments[0])
+  JS
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -24,6 +48,68 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_selector "button[type='submit']", text: "Log in"
       assert_text "Create an account"
       assert_text "Forgot your password?"
+    end
+  end
+
+  context "sign in page layout" do
+    should "fit the desktop viewport with the brand mark and 44px controls" do
+      visit new_user_session_path
+
+      assert_selector "svg[data-brand-mark]"
+      assert_selector "meta[name='theme-color']", visible: false, count: 1
+      assert_selector "meta[name='theme-color'][content='#6b58da']", visible: false
+      assert_no_sideways_scroll
+      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
+                               "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
+    end
+
+    should "fit the mobile viewport with 44px controls" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit new_user_session_path
+      screenshot("sign_in_page_mobile")
+
+      assert_selector "svg[data-brand-mark]"
+      assert_no_sideways_scroll
+      assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
+                               "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
+    end
+  end
+
+  context "sign in page contrast" do
+    should "clear AA for its text in light mode" do
+      visit new_user_session_path
+      assert_text "Sign in to your account"
+      log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
+      assert_equal "rgb(12, 16, 20)", log_in_fill, "the light theme didn't apply"
+
+      assert_contrast_clears_aa
+    end
+
+    should "clear AA for its text in dark mode" do
+      emulate_color_scheme("dark")
+      visit new_user_session_path
+      assert_text "Sign in to your account"
+      log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
+      assert_equal "rgb(251, 251, 255)", log_in_fill, "the dark theme didn't apply"
+
+      assert_contrast_clears_aa
+    ensure
+      emulate_color_scheme("light")
+    end
+  end
+
+  context "sign in page hover states" do
+    # The test browser reports `hover: none`, so Tailwind's hover rules never
+    # match a real hover there; read the rule each button would apply instead.
+    should "give both buttons a different fill on hover" do
+      visit new_user_session_path
+
+      [ log_in_css, "button[type='submit']" ].each do |css|
+        button = find(css, match: :first)
+        fills = page.evaluate_script(HOVER_FILL_JS, button)
+        assert fills["hover"], "#{button.text} has no hover fill"
+        assert_not_equal fills["base"], fills["hover"], "#{button.text} keeps its fill on hover"
+      end
     end
   end
 
@@ -56,6 +142,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       # The URL doesn't change (POST and GET share the same path), so
       # assert_current_path would pass immediately without waiting.
       assert_selector "[role='alert']", text: "Invalid email or password."
+      assert_operator rendered_contrast("[role='alert']"), :>=, 4.5
       screenshot("invalid_credentials_error")
       assert_current_path new_user_session_path
     end
@@ -88,5 +175,39 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       assert_current_path root_path
     end
+  end
+
+  private
+
+  def assert_no_sideways_scroll
+    widths = page.evaluate_script("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
+    assert_operator widths[0], :<=, widths[1], "the page scrolls sideways (scrollWidth #{widths[0]} > #{widths[1]})"
+  end
+
+  def log_in_css = "#{SIGN_IN_FORM_SELECTOR} button[type='submit']"
+
+  def assert_contrast_clears_aa
+    assert_selector log_in_css, text: "Log in"
+
+    [ log_in_css, "button[type='submit']", "#sign-in-divider", ".auth-page h1", ".auth-page h2", ".auth-page p",
+      "label[for='user_email']", "label[for='user_remember_me']", "#user_email",
+      "a[href='#{new_user_registration_path}']", "a[href='#{new_user_password_path}']" ].each do |css|
+      assert_operator rendered_contrast(css), :>=, 4.5, "#{css} fails AA"
+    end
+  end
+
+  def assert_control_heights(selectors)
+    selectors.each do |css|
+      all(css).each do |control|
+        height = page.evaluate_script("arguments[0].getBoundingClientRect().height", control)
+        assert yield(height), "#{css} (#{control.text.presence || control[:id]}) is #{height}px tall"
+      end
+    end
+  end
+
+  def emulate_color_scheme(scheme)
+    page.driver.browser.execute_cdp(
+      "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: scheme } ]
+    )
   end
 end

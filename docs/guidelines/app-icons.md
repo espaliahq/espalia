@@ -32,6 +32,8 @@ The `<head>` in [`app/views/layouts/application.html.erb`](../../app/views/layou
 links the ICO, the SVG, the Apple touch icon and the manifest, and declares a
 `theme-color` per colour scheme — the tenant's navbar colour when one is set,
 else `Tenant::DEFAULT_NAV_BG_COLOR` / `_DARK` (`Tenant.browser_theme_color`).
+A view can replace both with `content_for(:theme_color, …)`; the sign-in page
+does, with Bento's sloe (`#6b58da`) in both schemes, since it has no navbar.
 The manifest is a static [`public/manifest.json`](../../public/manifest.json)
 (nothing in it is per-request, so it costs no Rails request); its `theme_color`
 is the app default — an installed app's splash and title bar are therefore
@@ -73,3 +75,9 @@ first.
 Edit the `STEPS` / `LEAF` path data (and `COLOR`) in `bin/build-icons`, then
 regenerate. Keep the mark's bounding box centred at (531.5, 513.5) in the
 1024 box, or update `CX` / `CY` — every crop is computed from that centre.
+
+The sign-in page draws the mark inline, in the text colour rather than teal, so
+it follows light and dark mode
+(`Views::Users::Sessions::NewView::MARK_PATHS`). Those paths are a copy of
+`STEPS` / `LEAF`: change both. `test/integration/app_icons_test.rb` fails when
+they differ.
