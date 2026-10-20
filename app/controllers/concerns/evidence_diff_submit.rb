@@ -34,7 +34,8 @@ module EvidenceDiffSubmit
     params.expect(evidence: [ :assignment_id, :evidence_id, :request_id, :primary_cell,
                               :evidence_type, :custom_type_label, :title, :content,
                               { external_reference: [ :system, :url ] }, { desired_links: [] },
-                              { link_valences: {} } ]).to_h.symbolize_keys
+                              { link_valences: {} }, { suggestion_ids: [] }, { staged_suggestion_ids: [] } ])
+      .to_h.symbolize_keys
   end
 
   def evidence_diff_mode(p)
@@ -122,11 +123,20 @@ module EvidenceDiffSubmit
         assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
       })
     end
+    kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     new_cells.each do |cap, level|
-      Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
-        valence: valences[[ cap, level ]]
-      })
+      if (suggestion = kept_suggestions[[ cap, level ]])
+        # Adjusted in the editor: the person checked it, so it is recorded
+        # as edited whatever valence they left on it.
+        Operations::Assessments::AcceptEvidenceSuggestion.call(context: pundit_user, params: {
+          suggestion_id: suggestion.id, valence: valences[[ cap, level ]]
+        })
+      else
+        Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
+          assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
+          valence: valences[[ cap, level ]]
+        })
+      end
     end
     (current_cells - desired).each do |cap, level|
       Operations::Assessments::RemoveEvidenceLink.call(context: pundit_user, params: {
@@ -145,7 +155,31 @@ module EvidenceDiffSubmit
         valence: valence
       })
     end
+    dismiss_removed_suggestions(item, p[:staged_suggestion_ids], kept_suggestions)
     TouchedCells.new((desired | current_cells).to_a, item.id)
+  end
+
+  # The pending suggestions "Adjust" staged whose rows survived the edit,
+  # keyed by cell.
+  #
+  # @return [Hash{Array(String, Integer) => EvidencePlacementSuggestion}]
+  def staged_suggestions(item, ids)
+    return {} if ids.blank?
+
+    EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
+  end
+
+  # A staged suggestion whose row the person removed before saving was
+  # turned down.
+  def dismiss_removed_suggestions(item, staged_ids, kept)
+    removed = Array(staged_ids) - kept.values.map(&:id)
+    return if removed.empty?
+
+    EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: removed).find_each do |suggestion|
+      Operations::Assessments::DismissEvidenceSuggestion.call(context: pundit_user, params: {
+        suggestion_id: suggestion.id, reason: "Removed while adjusting"
+      })
+    end
   end
 
   # ── Helpers ──
