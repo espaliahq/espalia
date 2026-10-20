@@ -1,0 +1,55 @@
+<%# Measures colours as the browser paints them: computed colour → 1×1 canvas → pixel → WCAG ratio. %>
+<script>
+  window.tokenContrast ||= (() => {
+    const canvas = document.createElement("canvas")
+    canvas.width = canvas.height = 1
+    const context = canvas.getContext("2d", { willReadFrequently: true })
+
+    const pixel = (colour, backdrop) => {
+      context.clearRect(0, 0, 1, 1)
+      if (backdrop) {
+        context.fillStyle = `rgb(${backdrop.join(" ")})`
+        context.fillRect(0, 0, 1, 1)
+      }
+      context.fillStyle = colour
+      context.fillRect(0, 0, 1, 1)
+      return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3))
+    }
+    const channel = (value) => {
+      const s = value / 255
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+    }
+    const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    const ratio = (a, b) => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+      return (high + 0.05) / (low + 0.05)
+    }
+    // Rounded down, so a ratio just under a threshold never reads as meeting it.
+    const formatRatio = (value) => `${(Math.floor(value * 100) / 100).toFixed(2)}:1`
+    const hex = (rgb) => "#" + rgb.map((v) => v.toString(16).padStart(2, "0")).join("")
+    const ink = (rgb) => ({ "#ffffff": "white", "#000000": "black" })[hex(rgb)] || hex(rgb)
+
+    // A role's colour where `within` sits, through a probe so var() resolves in that scope.
+    const resolve = (role, within) => {
+      const probe = document.createElement("span")
+      probe.hidden = true
+      probe.style.backgroundColor = `var(${role})`
+      within.append(probe)
+      const colour = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return colour
+    }
+
+    const dark = () => {
+      const scheme = document.documentElement.dataset.scheme
+      return scheme ? scheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches
+    }
+    const helperPath = () => {
+      if (CSS.supports("color", "contrast-color(red)")) return "contrast-color()"
+      if (CSS.supports("color", "color(from red srgb-linear r g b)")) return "relative-colour fallback"
+      return "none (static white)"
+    }
+
+    return { pixel, luminance, ratio, formatRatio, hex, ink, resolve, dark, helperPath }
+  })()
+</script>

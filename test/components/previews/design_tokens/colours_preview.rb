@@ -57,21 +57,24 @@ class DesignTokens::ColoursPreview < Lookbook::Preview
     declarations(region).map(&:first).uniq.reject { |name| name.start_with?("--font-") }
   end
 
+  # The block's own declarations are light; those inside its `@variant dark` are dark.
   def sign_in_declarations
     light = []
     dark = []
-    in_dark = false
-    in_block = false
+    depth = 0
+    dark_depth = nil
     stylesheet_lines.each do |line|
-      in_dark = true if line.start_with?("@media (prefers-color-scheme: dark)")
-      in_dark = false if line.start_with?("}") && !in_block
-      if line.strip == SIGN_IN_SELECTOR
-        in_block = true
-      elsif in_block && line.strip == "}"
-        in_block = false
-      elsif in_block
-        (in_dark ? dark : light).concat(declarations([ line ]).select { |name, _| name.start_with?("--auth-") })
+      if depth.zero?
+        depth = 1 if line.strip == SIGN_IN_SELECTOR
+        next
       end
+      if line.strip == "@variant dark {"
+        dark_depth = depth
+      else
+        (dark_depth ? dark : light).concat(declarations([ line ]).select { |name, _| name.start_with?("--auth-") })
+      end
+      depth += line.count("{") - line.count("}")
+      dark_depth = nil if dark_depth && depth <= dark_depth
     end
     [ light, dark ]
   end
@@ -87,9 +90,11 @@ class DesignTokens::ColoursPreview < Lookbook::Preview
     declarations.select { |_, value| value.match?(COLOUR_VALUE) }.map(&:first)
   end
 
+  # Dark under the same rule as the dark variant: the OS decides unless <html data-scheme> overrides it.
   def scoped_css(selector, light, dark)
     body = ->(decls) { decls.map { |name, value| "#{name}: #{value};" }.join(" ") }
     "#{selector} { #{body.call(light)} } " \
-      "@media (prefers-color-scheme: dark) { #{selector} { #{body.call(dark)} } }"
+      "@media (prefers-color-scheme: dark) { :root:not([data-scheme=\"light\"]) #{selector} { #{body.call(dark)} } } " \
+      ":root[data-scheme=\"dark\"] #{selector} { #{body.call(dark)} }"
   end
 end

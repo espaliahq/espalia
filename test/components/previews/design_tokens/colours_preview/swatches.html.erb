@@ -2,13 +2,13 @@
   <style><%= scoped_css.html_safe %></style>
 <% end %>
 <section class="<%= scope_class %> max-w-4xl" data-token-swatches>
-  <h2 class="text-lg font-semibold text-gray-900 dark:text-white"><%= title %></h2>
-  <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-    Read from <code>app/assets/tailwind/application.css</code>. Values follow the browser's colour scheme.
+  <h2 class="text-lg font-semibold text-default"><%= title %></h2>
+  <p class="mt-1 text-sm text-muted">
+    Read from <code>app/assets/tailwind/application.css</code>. Values follow the preview's colour scheme.
   </p>
   <table class="mt-4 w-full text-sm">
     <thead>
-      <tr class="text-left text-xs text-gray-600 dark:text-gray-300">
+      <tr class="text-left text-xs text-muted">
         <th class="py-2 pr-4 font-medium">Swatch</th>
         <th class="py-2 pr-4 font-medium">Token</th>
         <th class="py-2 pr-4 font-medium">Resolved</th>
@@ -16,16 +16,16 @@
         <th class="py-2 font-medium">On #030712</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
+    <tbody class="divide-y divide-default">
       <% tokens.each do |token| %>
         <tr data-token="<%= token %>">
           <td class="py-2 pr-4">
-            <span data-swatch class="block size-10 rounded-md ring-1 ring-gray-300 dark:ring-gray-700" style="background-color: var(<%= token %>)"></span>
+            <span data-swatch class="block size-10 rounded-md border border-default" style="background-color: var(<%= token %>)"></span>
           </td>
-          <td class="py-2 pr-4 font-mono text-gray-900 dark:text-white"><%= token %></td>
-          <td class="py-2 pr-4 font-mono text-xs text-gray-600 dark:text-gray-300">
+          <td class="py-2 pr-4 font-mono text-default"><%= token %></td>
+          <td class="py-2 pr-4 font-mono text-xs text-muted">
             <span data-resolved>—</span>
-            <span data-declared class="block text-gray-500 dark:text-gray-400"></span>
+            <span data-declared class="block text-subtle"></span>
           </td>
           <td class="py-2 pr-4 font-mono" data-contrast="#ffffff">—</td>
           <td class="py-2 font-mono" data-contrast="#030712">—</td>
