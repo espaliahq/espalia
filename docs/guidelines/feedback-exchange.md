@@ -6,7 +6,7 @@
 
 Two feedback systems each serve the feedback given in them and pull the other's. GrowthOS plays both roles under one namespace, `FeedbackExchange`. The first peer is Chip. Nothing is pushed: a consumer pulls on its own schedule, so a missed run costs nothing.
 
-Phase 0 (this guide's first content) is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Nothing calls the client yet. The importer, the producer feed and suggestions land on top of it.
+Phase 0 is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Phase 1 is the consumer: GrowthOS pulls the peer's feed and turns each record into unplaced feedback ([The consumer](#the-consumer)). The producer feed and placement suggestions land on top of it.
 
 ## Configuration
 
@@ -70,6 +70,60 @@ It does **not** retry. The sync job owns retries, from the error class:
 | `RateLimitError` (`retry_after`) | 429 | retry after the stated delay |
 | `ApiError` (`status`, nil if unreachable) | 5xx, other 4xx, no answer, a non-JSON body | retry with backoff |
 
+## The consumer
+
+`FeedbackExchange::SyncJob` pulls one tenant's feed; `FeedbackExchange::SyncAllTenantsJob` enqueues it for every tenant whose exchange is set up, every 15 minutes (`config/recurring.yml`). A run, inside the tenant:
+
+1. Retries the ledger rows skipped for a reason our side can fix (below).
+2. Pages through `GET /feedback` from `cursor`: imports every record on the page, acknowledges the ones that now live here (`remote_id` the evidence id, `remote_url` the assessment), then moves `cursor`. A run that dies mid-page redoes that page; the ledger and the deterministic ids make that safe.
+3. Pages through `GET /feedback/deletions` from `deletions_cursor`, withdrawing each copy.
+4. Stamps `last_synced_at`.
+
+Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. At most 50 pages a run; the next run carries on.
+
+### One record (`FeedbackExchange::Importer`)
+
+- **People** match through `FeedbackExchange::PersonMatcher`: the id under the tenant's HRIS provider key in `external_ids`, else the lower-cased email (`Person.identified_by`). No match is a skip; a person is never created.
+- **New record → unplaced evidence**, dispatched straight to `PersonDevelopment::CommandHandler#record_evidence` (the author may have no account) inside `AuditMetadata.with(acting_via: :feedback_exchange, actor_id: <author>, correlation_id: "<origin>:<id>")` and the tenant metadata. The evidence id is `UUIDv5(Importer::NAMESPACE, "<tenant_id>:<origin>:<id>")`, so a lost ledger row or a replay finds the same item. `source` comes from `EvidenceItem.source_for`; `evidence_type` is the record's `kind` when GrowthOS has that type, else `manager_feedback` or `peer_feedback`; the text goes through `FeedbackExchange::TextFormat` (below) with a request's question quoted above the answer; `external_reference` is `{ system: origin, external_id: id, url: source_url, metadata: { kind, request_context, requested_by_email, period_name, given_at, notified } }`.
+- **Dated when given.** `recorded_at` on the event is the record's `given_at`, so reports count a backfill in the month it was given.
+- **Counted in a cycle only when given in it.** `cycle_id` is the open cycle only when `given_at` falls inside the recipient's enrollment window there; otherwise nil, and reporting infers it as it does for history. A backfill of last year's feedback never counts as this cycle's.
+- **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op. An item withdrawn in GrowthOS stays withdrawn.
+- **Then** it asks the manager side to place it (`#notify_placement_needed`, see [evidence.md](assessments/evidence.md)).
+
+### Skip reasons
+
+Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), unique on (tenant, `origin`, `external_id`), with `status` `imported | updated | withdrawn | skipped`.
+
+| `skip_reason` | Means | Retried |
+|---|---|---|
+| `echo` | `origin` is `growthos`, or the record's `external_reference.system` is | no |
+| `audience_too_narrow` | the author did not agree to all of `recipient`, `management_line`, `hr`, who can read feedback here | no |
+| `kind_not_imported` | `import_kinds` is set and leaves this kind out | no |
+| `author_unmatched` / `recipient_unmatched` | no Person with that HRIS id or email | yes |
+| `recipient_inactive` | our Person or the peer says the recipient is inactive | yes |
+| `self_feedback` | author and recipient are the same person | no |
+| `no_assignment` | the recipient has no framework assignment | yes, and at once on `PersonAssignedToFramework` |
+| `invalid_record` | no usable `origin` or `id`, or the domain refused it | no |
+
+A retriable skip keeps the record in the ledger's `record` column so a retry needs no pull; nothing else does. `FeedbackExchange::AssignmentRetry` (a sync handler subscribed in the RES initializer, never a projection) enqueues a sync when a newly assigned person has a `no_assignment` record waiting. A record skipped for a reason that is not retried is evaluated again if the peer sends a newer version.
+
+The Integrations card and page show the counts, the skip reasons and the people the peer named that GrowthOS could not find; `integrations_feedback_exchange_status` returns the same under `imports` and `unmatched_people`.
+
+### Text (`FeedbackExchange::TextFormat`)
+
+`markdown` passes through. `slack` converts `*b*` → `**b**`, `_i_` → `*i*`, `~s~` → `~~s~~`, `•`/`◦` bullets (nested by four spaces) → `-`, `<url|text>` → `[text](url)`, `<@U…>` → the person's name through `TenantUser.slack_user_id`, else the name Slack carried, else `@someone`, and Slack's `&amp;`/`&lt;`/`&gt;`. `plain` escapes Markdown's characters. Both turn `label (url)`, the shape `Prose.to_plain` gives a link, back into `[label](url)`; the label runs back to the line start or the nearest `. ! ? : ; ,`. Code spans, code blocks, `> ` quotes and `1. ` lists are kept. The cases live in `test/fixtures/files/feedback_exchange/` as `<name>.<format>.txt` → `<name>.md` pairs, shared with the producer side.
+
+### Replaying
+
+To pull everything again, for instance after fixing people the peer named that GrowthOS did not know, clear the cursors and run a sync:
+
+```ruby
+tenant.update_feedback_exchange!(settings: { cursor: nil, deletions_cursor: nil })
+FeedbackExchange::SyncJob.perform_later(tenant)
+```
+
+Records already imported come back as no-ops (or updates, if the peer changed them), because the ledger and the evidence ids are keyed on the record. Nothing is duplicated, and nobody is notified twice.
+
 ## Inbound requests
 
 `FeedbackExchangeSignedRequest` is the trust boundary, modelled on `SlackSignedRequest`. A controller inherits `ActionController::Base`, includes it and adds `around_action :authenticate_feedback_exchange_request!`. The signature is the only credential, so there is no Devise, no CSRF and no Pundit `authorize`.
@@ -115,4 +169,5 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
 - Sign what Faraday sends. Hand-building a query string can order or encode it differently from the wire, and the peer's check then fails with a bare 401.
 - **Two identical requests within one second share a signature**, and the replay guard refuses the second. Space retries by more than a second; do not read that 401 as a wrong secret.
 - **Write settings through `Tenant#update_feedback_exchange!`.** It locks and reloads the row first. Anything that writes `feedback_exchange_config` from a job (the cursors, `last_synced_at`) must do the same, or an admin saving the form overwrites it with stale values, and the reverse.
-- The Integrations card's counts section is a placeholder until the importer ships.
+- **A test that imports must give the importer a tenant with the exchange set up** (`test/support/feedback_exchange_records.rb` has `connect_feedback_exchange` and `exchange_record`, built on `test/fixtures/files/feedback_exchange/record.json`).
+- **The importer dispatches command handlers itself, so it wraps them in `AuditMetadata.wrap_event_store`.** `AuditMetadata.with` alone only sets the thread-local; outside an Operation nothing copies it onto the events, and `acting_via` would be missing.

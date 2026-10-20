@@ -223,6 +223,30 @@ shared by web, MCP and Slack:
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
 
+**From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
+feedback given in a peer such as Chip arrives through the feedback exchange
+([feedback-exchange.md](../feedback-exchange.md)) as unplaced feedback written
+as its real author, dated by when it was given.
+
+- **"via Chip" says where it came from.** `Views::Evidence::OriginBadge`
+  renders on the evidence card, the hub card and the activity entry for an
+  item whose `external_reference.imported?` (the importer is the only writer
+  of `metadata.given_at`), named through `Reporting::OriginLabels` and linking
+  to the original. It replaces the plain reference chip on those items. It is
+  neutral grey on purpose: colour beside feedback already means a rating or a
+  valence.
+- **The peer did the telling** (protocol §2.6). `FeedbackNotifier` tells the
+  recipient about an imported item only when the record's `notified` lacks
+  `recipient`, and never tells the manager side about it.
+- **The manager is asked to place it instead.** `FeedbackPlacementNotifier`
+  (`feedback_to_place`, in-app + Slack) goes to the recorded reporting
+  manager and active rating delegates, never the author: "Priya gave Alex
+  feedback in Chip. Confirm which capabilities it speaks to and what it
+  shows", linking to the hub card. The importer sends it through
+  `FeedbackExchange::Importer#notify_placement_needed`, the method the
+  placement-suggestion job calls instead once suggestions exist. One per
+  person per item.
+
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
 `/growthos feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
