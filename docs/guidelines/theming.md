@@ -106,7 +106,7 @@ so a component styles itself once against the tone roles:
 | Fill | Text on it |
 |---|---|
 | `bg-tone-strong` | `text-tone-content-inverse` |
-| `bg-tone-subtle`, `bg-tone-muted` | `text-tone-content-strong` |
+| `bg-tone-subtle`, `bg-tone-muted` | `text-tone-content-strong`, for the title and the body alike |
 | `bg-default` with `border-tone` | `text-tone-content-strong` |
 
 and the caller passes a meaning: `tone: :danger`. The tones are `neutral`, `brand`, `accent`, `danger`, `success`, `warning` and `info`.
@@ -177,7 +177,7 @@ Views join the palette guard as they migrate ([#544](https://github.com/mr-yum/g
 
 ## Reuse before you build
 
-Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
+Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot. A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
 
 The same goes for previews: render the real component, never a copy of its markup.
 

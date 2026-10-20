@@ -78,7 +78,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 |---|---|
 | Plan or change a controller or route | [rails-controllers.md](docs/guidelines/rails-controllers.md) |
 | Plan or change a model, migration or JSONB column | [rails-models.md](docs/guidelines/rails-models.md) |
-| Plan or change a view, component or any UI | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
+| Plan or change a view, component or any UI | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md), [theming.md](docs/guidelines/theming.md) |
 | Colour anything, or change a role, token, preset, the Theme page or a Lookbook preview | [theming.md](docs/guidelines/theming.md) |
 | Write or change a Stimulus controller | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | Reach for a service object | [service-objects.md](docs/guidelines/service-objects.md) |

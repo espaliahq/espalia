@@ -51,17 +51,20 @@ end
 
 ## Component Testing
 
-```ruby
-class Kit::ButtonTest < ComponentTestCase
-  context "Kit::Button" do
-    should "render a button with label" do
-      html = render_component(Kit::Button.new("Save"))
-      assert_selector html, "button", text: "Save"
-    end
+Component tests are `ActiveSupport::TestCase`s that render with `#call` and read the HTML with Nokogiri. `test/components/kit/alert_test.rb` is the model:
 
-    should "render with primary variant by default" do
-      html = render_component(Kit::Button.new("Save"))
-      assert_selector html, "button.btn.btn-primary"
+```ruby
+class Components::Kit::AlertTest < ActiveSupport::TestCase
+  def render_alert(**options, &block)
+    block ||= proc { "Weight must be between 0 and 10." }
+    Nokogiri::HTML5.fragment(Components::Kit::Alert.new(**options).call(&block)).at_css("div")
+  end
+
+  context "Components::Kit::Alert" do
+    should "colour itself only through the tone, for every tone" do
+      Components::Kit::Alert::TONES.each do |tone, tone_class|
+        assert_includes render_alert(tone: tone)["class"].split, tone_class
+      end
     end
   end
 end
