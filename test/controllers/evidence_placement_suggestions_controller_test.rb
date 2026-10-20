@@ -94,6 +94,12 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       sign_in @morgan_user
       get evidence_hub_path
       assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(response_id)}", count: 1
+
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.withdraw_evidence(@alex.id, @framework_id, response_id, withdrawn_by_id: @jordan.id)
+      end
+      get evidence_hub_path
+      assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(response_id)}", count: 0
     end
   end
 

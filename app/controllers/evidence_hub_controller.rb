@@ -114,9 +114,10 @@ class EvidenceHubController < ApplicationController
 
   # Items whose suggestions the viewer may decide. Everything the hub already
   # lists for placing qualifies by construction; a response the viewer asked
-  # for depends on who they are to the assessee, so the policy decides.
+  # for depends on who they are to the assessee, so the policy decides. A
+  # withdrawn response can no longer be linked anywhere.
   def decidable_items(placeable, responded)
-    placeable + responded.select { |item| EvidencePolicy.new(pundit_user, item).add_link? }
+    placeable + responded.select { |item| !item.withdrawn? && EvidencePolicy.new(pundit_user, item).add_link? }
   end
 
   # For responded outgoing requests, load the evidence the requestee provided
