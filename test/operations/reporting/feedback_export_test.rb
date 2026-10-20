@@ -319,8 +319,7 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       withdrawn_at: (Time.current if status == "withdrawn"), **attributes)
   end
 
-  # `chip` and the like are not in ExternalReference::SYSTEMS yet, so the
-  # reference is written past validation, as an importer's projection would.
+  # Written straight to the column, as the importer's projection writes it.
   def peer_feedback(person:, system:, metadata: {}, **attributes)
     feedback(person: person, **attributes).tap do |item|
       item.update_columns(external_reference: { system: system, metadata: metadata })

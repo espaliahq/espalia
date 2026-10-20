@@ -1155,6 +1155,25 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_nil event.data[:cycle_id]
     end
 
+    should "carry when the feedback was given only when the caller says, as UTC ISO 8601" do
+      @aggregate.record_evidence(@evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "Imported", author_id: @author_id,
+        recorded_at: "2026-10-18T13:12:44+10:00")
+      assert_equal "2026-10-18T03:12:44.000000Z", @aggregate.unpublished_events.to_a.last.data[:recorded_at]
+
+      @aggregate.record_evidence(SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Native", author_id: @author_id)
+      assert_not @aggregate.unpublished_events.to_a.last.data.key?(:recorded_at)
+    end
+
+    should "refuse a recorded_at that is not a time" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id, recorded_at: "yesterday")
+      end
+      assert_match(/recorded_at/, err.message)
+    end
+
     should "record an unplaced item when no cell is given, and place it through add_evidence_link" do
       @aggregate.record_evidence(@evidence_id,
         source: "peer", evidence_type: "peer_feedback", content: "Great incident call",

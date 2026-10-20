@@ -629,6 +629,8 @@ class PersonDevelopment::CommandHandler
   #   level_ordinal:, valence: } links applied atomically alongside the first link
   # @param cycle_id [String, nil, Object] explicit cycle attribution, or the
   #   current aggregate cycle when omitted
+  # @param recorded_at [Time, String, nil] when the feedback was given, when
+  #   that is earlier than now (an import)
   def record_evidence(person_id, framework_id, evidence_id, **evidence_attributes)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.record_evidence(evidence_id, **evidence_attributes_for(person_id, **evidence_attributes))
@@ -884,7 +886,8 @@ class PersonDevelopment::CommandHandler
   def evidence_attributes_for(person_id, source:, evidence_type:, content:, author_id:,
                               capability_stable_id: nil, level_ordinal: nil, valence: nil,
                               custom_type_label: nil, title: nil,
-                              external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE)
+                              external_reference: nil, additional_links: [], cycle_id: CURRENT_CYCLE,
+                              recorded_at: nil)
     attributes = {
       capability_stable_id: capability_stable_id, level_ordinal: level_ordinal,
       source: source, evidence_type: evidence_type, content: content,
@@ -894,6 +897,7 @@ class PersonDevelopment::CommandHandler
       additional_links: additional_links
     }
     attributes[:cycle_id] = cycle_id unless cycle_id.equal?(CURRENT_CYCLE)
+    attributes[:recorded_at] = recorded_at if recorded_at
     attributes
   end
 

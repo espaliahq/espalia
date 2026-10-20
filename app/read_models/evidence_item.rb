@@ -118,6 +118,22 @@ class EvidenceItem < ApplicationRecord
     active.where.not(EvidenceLink.active.where("evidence_links.evidence_id = evidence_items.id").arel.exists)
   }
 
+  # Where feedback comes from, read from the author's place relative to the
+  # recipient when it is recorded: their own ("self"), from anyone above them
+  # in the org chart ("manager"), or from anyone else ("peer"). Never trusted
+  # from input. The web form additionally counts an active rating delegate as
+  # "manager"; this is the relationship alone.
+  #
+  # @param author [Person]
+  # @param recipient [Person, nil]
+  # @return [String] one of SOURCES
+  def self.source_for(author:, recipient:)
+    return "self" if recipient&.id == author.id
+    return "manager" if recipient&.managed_by?(author)
+
+    "peer"
+  end
+
   # Classifies feedback from the provider to the recipient at recording time.
   # A manager source includes active rating delegates acting in manager
   # capacity. For peer-sourced feedback, the live relationship distinguishes

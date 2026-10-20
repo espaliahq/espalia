@@ -10,16 +10,24 @@ class ExternalReferenceTest < ActiveSupport::TestCase
     end
 
     should "allow known systems" do
-      ExternalReference::SYSTEMS.each do |sys|
+      ExternalReference::KNOWN_SYSTEMS.each do |sys|
         ref = ExternalReference.new(system: sys)
         assert ref.valid?, "expected #{sys.inspect} to be valid"
       end
     end
 
-    should "reject unknown system" do
-      ref = ExternalReference.new(system: "unknown_system")
-      assert_not ref.valid?
-      assert ref.errors[:system].any?
+    should "allow any slug, so a new peer needs no code change" do
+      %w[chip some-peer some_peer peer2].each do |sys|
+        assert ExternalReference.new(system: sys).valid?, "expected #{sys.inspect} to be valid"
+      end
+    end
+
+    should "reject a system that is not a slug" do
+      [ "Chip", "chip peer", "-chip", "chip_", "chip!" ].each do |sys|
+        ref = ExternalReference.new(system: sys)
+        assert_not ref.valid?, "expected #{sys.inspect} to be invalid"
+        assert ref.errors[:system].any?
+      end
     end
 
     should "reject javascript: URLs to prevent XSS when rendered as href" do
@@ -145,17 +153,20 @@ class ExternalReferenceTest < ActiveSupport::TestCase
     end
 
     should "report an invalid system or unsafe url without raising" do
-      assert_match(/system/i, ExternalReference.validation_error_for({ "system" => "myspace" }))
+      assert_match(/system/i, ExternalReference.validation_error_for({ "system" => "My Space" }))
       assert_match(/url/i, ExternalReference.validation_error_for({ "url" => "javascript:alert(1)" }))
     end
   end
 
   context ".json_schema" do
-    should "publish the accepted keys and the system enum" do
+    should "publish the accepted keys, the slug pattern and the known systems as examples" do
       schema = ExternalReference.json_schema
       assert_equal "object", schema[:type]
       assert_equal %w[system url external_id metadata], schema[:properties].keys.map(&:to_s)
-      assert_equal ExternalReference::SYSTEMS, schema[:properties][:system][:enum]
+      assert_nil schema[:properties][:system][:enum]
+      assert_equal ExternalReference::KNOWN_SYSTEMS, schema[:properties][:system][:examples]
+      assert_match Regexp.new(schema[:properties][:system][:pattern]), "google_doc"
+      assert_no_match Regexp.new(schema[:properties][:system][:pattern]), "Google Doc"
       assert_equal false, schema[:additionalProperties]
     end
   end

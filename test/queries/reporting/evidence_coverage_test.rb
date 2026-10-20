@@ -302,7 +302,6 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       framework_id: framework_id, cycle_id: cycle_id,
       source: source, feedback_direction: feedback_direction,
       link_status: status, recorded_at: recorded_at).tap do |item|
-      # `chip` is not in ExternalReference::SYSTEMS yet, so skip validation.
       item.update_columns(external_reference: external_reference) if external_reference.present?
     end
   end

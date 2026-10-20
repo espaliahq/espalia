@@ -215,8 +215,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
 
   private
 
-  # `chip` is not in ExternalReference::SYSTEMS yet, so the reference is
-  # written past validation, as the importer's projection will.
+  # Written straight to the column, as the importer's projection writes it.
   def record_feedback_from(system, count)
     ActsAsTenant.with_tenant(@tenant) do
       count.times do
