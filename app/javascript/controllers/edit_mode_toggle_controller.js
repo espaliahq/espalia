@@ -23,7 +23,6 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 
 export default class extends BaseController {
   static targets = ["editingButton", "suggestingButton"]
-  static classes = ["active", "inactive"]
 
   connect() {
     super.connect()
@@ -61,20 +60,9 @@ export default class extends BaseController {
     }
   }
 
+  // Kit::SegmentedControl styles the pressed segment from the attribute alone
   setPressed(button, pressed) {
     button.setAttribute("aria-pressed", pressed ? "true" : "false")
-    // Active / inactive CSS classes are provided by the view via
-    // `data-edit-mode-toggle-active-class` / `-inactive-class` so the
-    // controller stays styling-agnostic.
-    if (this.hasActiveClass && this.hasInactiveClass) {
-      if (pressed) {
-        button.classList.remove(...this.inactiveClasses)
-        button.classList.add(...this.activeClasses)
-      } else {
-        button.classList.remove(...this.activeClasses)
-        button.classList.add(...this.inactiveClasses)
-      }
-    }
   }
 
   readCookie() {

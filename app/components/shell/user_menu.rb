@@ -17,11 +17,6 @@
 class Components::Shell::UserMenu < Components::Base
   COLOR_SCHEME_LABELS = { "auto" => "Auto", "light" => "Light", "dark" => "Dark" }.freeze
 
-  COLOR_SCHEME_OPTION = "flex-1 min-h-8 rounded-full px-2 text-[13px] font-medium text-muted cursor-pointer " \
-                        "transition-colors hover:text-default focus-visible:outline-2 " \
-                        "focus-visible:outline-offset-1 focus-visible:outline-focus " \
-                        "aria-checked:bg-default aria-checked:font-semibold aria-checked:text-default"
-
   # @param user [User] the currently signed-in user
   # @param current_tenant [Tenant, nil] the active tenant
   # @param tenants [Array<Tenant>] all tenants the user belongs to
@@ -93,12 +88,10 @@ class Components::Shell::UserMenu < Components::Base
     end
   end
 
-  # menuitemradio rather than Kit::Chip: inside role="menu" every control must be a menu item
+  # Inside role="menu" every control must be a menu item, so the segments are menuitemradio
   def color_scheme_section
     divider
     div(
-      role: "group",
-      aria: { labelledby: "color-scheme-label" },
       class: "px-4 pt-1.5 pb-2",
       data: {
         controller: "color-scheme",
@@ -110,24 +103,18 @@ class Components::Shell::UserMenu < Components::Base
       p(id: "color-scheme-label", class: "text-xs font-semibold text-muted uppercase tracking-wider") do
         plain "Appearance"
       end
-      div(role: "none", class: "mt-1.5 flex gap-1 rounded-full bg-neutral-muted p-0.5") do
-        COLOR_SCHEME_LABELS.each { |value, label| color_scheme_option(value, label) }
+      render Components::Kit::SegmentedControl.new(
+        fill: true, item_role: :menuitemradio, class: "mt-1.5", aria: { labelledby: "color-scheme-label" }
+      ) do |control|
+        COLOR_SCHEME_LABELS.each do |value, label|
+          control.segment(label, selected: @user.color_scheme == value, data: {
+            color_scheme_target: "option",
+            color_scheme_scheme_param: value,
+            action: "color-scheme#choose"
+          })
+        end
       end
     end
-  end
-
-  def color_scheme_option(value, label)
-    button(
-      type: "button",
-      role: "menuitemradio",
-      aria: { checked: (@user.color_scheme == value).to_s },
-      class: COLOR_SCHEME_OPTION,
-      data: {
-        color_scheme_target: "option",
-        color_scheme_scheme_param: value,
-        action: "color-scheme#choose"
-      }
-    ) { label }
   end
 
   def tenant_section
