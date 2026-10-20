@@ -10,24 +10,7 @@
  * overrides the variables; dark values follow the dark variant's rule.
  */
 :root {
-  /* Brand: the tenant's primary, a deeper fill that carries text (#447), and its ink for text on surfaces */
   --gos-brand: var(--color-primary);
-  --gos-brand-strong: color-mix(in oklab, var(--gos-brand) 55%, black);
-  --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 88%, black);
-  --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
-  --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
-  --gos-content-brand: var(--color-primary-ink);
-  --gos-brand-content-inverse: #ffffff;
-  --gos-border-brand: var(--gos-brand);
-
-  /* Accent: no separate accent in Default yet, so it follows brand */
-  --gos-accent-strong: var(--gos-brand-strong);
-  --gos-accent-strong-hover: var(--gos-brand-strong-hover);
-  --gos-accent-subtle: var(--gos-brand-subtle);
-  --gos-accent-muted: var(--gos-brand-muted);
-  --gos-content-accent: var(--gos-content-brand);
-  --gos-accent-content-inverse: var(--gos-brand-content-inverse);
-  --gos-border-accent: var(--gos-border-brand);
 
   /* Content (text and icons) */
   --gos-content-default: var(--color-gray-900);
@@ -36,8 +19,6 @@
   --gos-content-subtle: var(--color-gray-400);
   --gos-content-disabled: var(--color-gray-400);
   --gos-content-inverse: #ffffff;
-  --gos-content-link: var(--gos-content-brand);
-  --gos-content-link-hover: var(--gos-content-brand);
 
   /* Surfaces */
   --gos-surface-page: var(--color-gray-50);
@@ -57,7 +38,6 @@
   --gos-border-emphasized: var(--color-gray-300);
   --gos-border-strong: var(--color-gray-900);
   --gos-border-disabled: var(--color-gray-200);
-  --gos-focus-ring: var(--color-primary-ink);
 
   /* Neutral fills: chips, toggles, tracks, the pressed chip */
   --gos-neutral-subtle: var(--color-gray-100);
@@ -157,30 +137,62 @@
   }
 }
 
-/* The exact #447 clamp where relative colours work; the mixes above are the fallback */
-@supports (color: oklch(from red min(l, 0.5) c h)) {
-  :root {
+/*
+ * Colours derived from the brand. Declared on [data-theme-scope] as well as
+ * :root, because a custom property resolves where it is declared: an element
+ * that sets its own --gos-brand needs the attribute to re-derive these.
+ */
+:root,
+[data-theme-scope] {
+  /* A deeper fill that carries text (#447), and the brand as readable text on surfaces */
+  --gos-brand-strong: color-mix(in oklab, var(--gos-brand) 55%, black);
+  --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 88%, black);
+  --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
+  --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
+  --gos-content-brand: color-mix(in oklab, var(--gos-brand) 55%, black);
+  --gos-brand-content-inverse: #ffffff;
+  --gos-border-brand: var(--gos-brand);
+  --gos-content-link: var(--gos-content-brand);
+  --gos-content-link-hover: var(--gos-content-brand);
+  --gos-focus-ring: var(--gos-content-brand);
+
+  /* No separate accent in Default yet, so it follows brand */
+  --gos-accent-strong: var(--gos-brand-strong);
+  --gos-accent-strong-hover: var(--gos-brand-strong-hover);
+  --gos-accent-subtle: var(--gos-brand-subtle);
+  --gos-accent-muted: var(--gos-brand-muted);
+  --gos-content-accent: var(--gos-content-brand);
+  --gos-accent-content-inverse: var(--gos-brand-content-inverse);
+  --gos-border-accent: var(--gos-border-brand);
+
+  @variant dark {
+    --gos-content-brand: color-mix(in oklab, var(--gos-brand) 45%, white);
+  }
+
+  /* The exact clamps where relative colours work; the mixes above are the fallback */
+  @supports (color: oklch(from red min(l, 0.5) c h)) {
     --gos-brand-strong: oklch(from var(--gos-brand) min(l, 0.5) c h);
     --gos-brand-strong-hover: oklch(from var(--gos-brand-strong) calc(l - 0.06) c h);
-  }
-}
+    --gos-content-brand: oklch(from var(--gos-brand) min(l, 0.5) c h);
 
-/*
- * The contrast helper: black or white text, whichever reads better on a fill
- * a tenant can pick. The fallback does the WCAG maths; 0.17913 is the
- * relative luminance where black and white tie. Presets set their own.
- */
-@supports (color: color(from red srgb-linear r g b)) {
-  :root {
+    @variant dark {
+      --gos-content-brand: oklch(from var(--gos-brand) max(l, 0.75) c h);
+    }
+  }
+
+  /*
+   * The contrast helper: black or white text, whichever reads better on a
+   * fill a tenant can pick. The fallback does the WCAG maths; 0.17913 is the
+   * relative luminance where black and white tie. Presets set their own.
+   */
+  @supports (color: color(from red srgb-linear r g b)) {
     --gos-brand-content-inverse: color(from var(--gos-brand-strong) srgb-linear
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
       clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));
   }
-}
 
-@supports (color: contrast-color(red)) {
-  :root {
+  @supports (color: contrast-color(red)) {
     --gos-brand-content-inverse: contrast-color(var(--gos-brand-strong));
   }
 }
