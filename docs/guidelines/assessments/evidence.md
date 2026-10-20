@@ -237,7 +237,8 @@ as its real author, dated by when it was given.
   valence.
 - **The peer did the telling** (protocol §2.6). `FeedbackNotifier` tells the
   recipient about an imported item only when the record's `notified` lacks
-  `recipient`, and never tells the manager side about it.
+  `recipient` (and the feedback is recent), and never tells the manager side
+  about it.
 - **The manager is asked to place it instead.** `FeedbackPlacementNotifier`
   (`feedback_to_place`, in-app + Slack) goes to the recorded reporting
   manager and active rating delegates, never the author: "Priya gave Alex
@@ -245,7 +246,11 @@ as its real author, dated by when it was given.
   shows", linking to the hub card. The importer sends it through
   `FeedbackExchange::Importer#notify_placement_needed`, the method the
   placement-suggestion job calls instead once suggestions exist. One per
-  person per item.
+  person per item, and only for feedback given in the last 30 days: a first
+  pull of a peer's history waits on the hub without paging anyone.
+- **Its author edits the text, not where it was given.** The edit modal shows
+  the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
+  the imported reference on save.
 
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
 `/growthos feedback` and the "Feedback on this message" shortcut open a
