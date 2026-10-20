@@ -13,7 +13,9 @@
 #
 # When the tenant keeps pseudonymisation on (the default), every person's name
 # is swapped for a placeholder on the way out and swapped back in the rationales
-# that come in. See {Ai::NamePseudonymiser}.
+# that come in. See {Ai::NamePseudonymiser}. The framework text gets full names
+# only: it is about the framework, not a person, and a first name that is an
+# ordinary word (Will, Mark) would only damage it.
 class Evidence::SuggestionModel
   MAX_SUGGESTIONS = 3
 
@@ -54,7 +56,7 @@ class Evidence::SuggestionModel
   def suggest(prompt)
     names = pseudonymiser
     response = adapter.suggest(
-      system: names ? names.pseudonymise(prompt.framework_text) : prompt.framework_text,
+      system: names ? names.pseudonymise(prompt.framework_text, first_names: false) : prompt.framework_text,
       user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
       schema: prompt.schema
     )
@@ -62,13 +64,20 @@ class Evidence::SuggestionModel
     response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }
   rescue Ai::Errors::RateLimitError => e
     raise RateLimited, e.message
-  rescue Ai::Errors::AuthenticationError => e
+  rescue Ai::Errors::AuthenticationError, Ai::Errors::ConfigurationError => e
     raise Rejected, e.message
   rescue Ai::Errors::ApiError => e
-    raise (e.status && (400..499).cover?(e.status) ? Rejected : Unavailable), e.message
+    raise (permanent?(e) ? Rejected : Unavailable), e.message
   end
 
   private
+
+  # A 4xx says the request itself is wrong, except 408, which says only that
+  # the endpoint was too slow. No status, a 5xx or an answer that was not an
+  # answer (status 200) might be gone in a minute.
+  def permanent?(error)
+    error.status.present? && (400..499).cover?(error.status) && error.status != 408
+  end
 
   attr_reader :tenant
 

@@ -40,7 +40,7 @@ class AiModelConfig
   attribute :effort, :string, default: "low"
 
   validates :provider, inclusion: { in: PROVIDERS }
-  validates :effort, inclusion: { in: EFFORTS }
+  validates :effort, inclusion: { in: EFFORTS }, allow_blank: true
   validates :base_url, :model, presence: true, if: :openai_compatible?
   validates :model, format: { with: MODEL_FORMAT, message: "may only contain letters, numbers and . _ : / @ + -" },
                     length: { maximum: 200 }, allow_blank: true

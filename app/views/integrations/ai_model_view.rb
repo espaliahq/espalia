@@ -252,9 +252,11 @@ class Views::Integrations::AiModelView < Views::Base
       select(id: field_id(:effort), name: field_name(:effort), class: "#{INPUT_CLASSES} mt-1", autocomplete: "off",
              aria: { describedby: "#{field_id(:effort)}-hint" }) do
         AiModelConfig::EFFORTS.each { |value| option(value: value, selected: value == @form_config.effort) { value.capitalize } }
+        option(value: "", selected: @form_config.effort.blank?) { "Don't send" }
       end
       p(id: "#{field_id(:effort)}-hint", class: HINT_CLASSES) do
-        plain "How hard an Anthropic model thinks before it answers. Low is right for placement suggestions; higher costs more and takes longer."
+        plain "How hard an Anthropic model thinks before it answers. Low is right for placement suggestions; higher costs more and takes longer. " \
+              "Choose Don't send for a model that rejects the setting, such as Claude Haiku 4.5."
       end
     end
   end

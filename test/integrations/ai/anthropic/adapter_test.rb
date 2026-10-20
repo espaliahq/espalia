@@ -57,6 +57,16 @@ class Ai::Anthropic::AdapterTest < ActiveSupport::TestCase
     assert_not params.key?(:tool_choice), "forced tool use is rejected"
   end
 
+  should "send no effort at all when it is blank, for models that reject it" do
+    adapter, messages = adapter_for(answer("{}"), effort: "")
+    suggest(adapter)
+    assert_equal [ :format_ ], messages.params[:output_config].keys
+
+    adapter, messages = adapter_for(Message.new(:end_turn, [ Block.new(:text, "ready") ], "m", nil), effort: nil)
+    adapter.ping
+    assert_equal({}, messages.params[:output_config])
+  end
+
   should "default to low effort and the Opus 5.5 model, and use a configured model" do
     adapter, messages = adapter_for(answer("{}"))
     suggest(adapter)
@@ -171,7 +181,7 @@ class Ai::Anthropic::AdapterTest < ActiveSupport::TestCase
     should "refuse an endpoint on a private network before connecting" do
       adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant", base_url: "https://10.0.0.5")
 
-      assert_raises(Ai::Errors::ApiError) { suggest(adapter) }
+      assert_raises(Ai::Errors::ConfigurationError) { suggest(adapter) }
     end
 
     should "need a key" do

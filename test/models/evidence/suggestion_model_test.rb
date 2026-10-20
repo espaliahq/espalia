@@ -38,9 +38,9 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
     end
   end
 
-  def run_model(adapter, tenant: @tenant, text: "Alex Chen led the review; Anna wrote it up.")
+  def run_model(adapter, tenant: @tenant, text: "Alex Chen led the review; Anna wrote it up.", framework: "Framework for Alex Chen.")
     model = Evidence::SuggestionModel.new(tenant: tenant, adapter: adapter)
-    [ model.suggest(Prompt.new("Framework for Alex.", text, { type: "object" })), adapter.calls.first ]
+    [ model.suggest(Prompt.new(framework, text, { type: "object" })), adapter.calls.first ]
   end
 
   def raw(**overrides)
@@ -61,6 +61,14 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
       assert_equal "Framework for Person 1.", call[:system]
       assert_equal "Person 1 led the review; Person 2 wrote it up.", call[:user]
       assert_equal({ type: "object" }, call[:schema])
+    end
+
+    should "leave first names alone in the framework text, where they are only words" do
+      ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Will Hart") }
+      _, call = run_model(FakeAdapter.new, text: "Will Hart will present.", framework: "Will Hart will review; will deliver.")
+
+      assert_match(/\APerson \d+ will review; will deliver\.\z/, call[:system])
+      assert_match(/\APerson \d+ Person \d+ present\.\z/, call[:user], "the feedback itself gets first names too")
     end
 
     should "put the names back in the rationales that come back" do
@@ -107,6 +115,8 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
       Ai::Errors::AuthenticationError.new("key rejected") => Evidence::SuggestionModel::Rejected,
       Ai::Errors::ApiError.new(status: 400, body: "bad") => Evidence::SuggestionModel::Rejected,
       Ai::Errors::ApiError.new(status: 404, body: "no model") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ConfigurationError.new("private address") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ApiError.new(status: 408, body: "slow") => Evidence::SuggestionModel::Unavailable,
       Ai::Errors::ApiError.new(status: 503, body: "down") => Evidence::SuggestionModel::Unavailable,
       Ai::Errors::ApiError.new(status: nil, message: "unreachable") => Evidence::SuggestionModel::Unavailable,
       Ai::Errors::ApiError.new(status: 200, message: "not JSON") => Evidence::SuggestionModel::Unavailable

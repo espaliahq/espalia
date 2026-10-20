@@ -27,7 +27,8 @@ class Ai::Anthropic::Adapter
   # @param model [String, nil] defaults to {AiModelConfig::DEFAULT_ANTHROPIC_MODEL}
   # @param base_url [String, nil] an Anthropic-compatible endpoint, without
   #   the /v1 the gem appends; nil for the Anthropic API itself
-  # @param effort [String] one of {AiModelConfig::EFFORTS}
+  # @param effort [String, nil] one of {AiModelConfig::EFFORTS}; blank sends none,
+  #   for models that reject the parameter
   # @param client [#messages, nil] injectable for tests
   def initialize(api_key:, model: nil, base_url: nil, effort: "low", client: nil)
     raise ArgumentError, "api_key is required" if api_key.blank?
@@ -35,7 +36,7 @@ class Ai::Anthropic::Adapter
     @api_key = api_key
     @model = model.presence || AiModelConfig::DEFAULT_ANTHROPIC_MODEL
     @base_url = base_url.presence
-    @effort = effort.presence || "low"
+    @effort = effort.presence
     @client = client
   end
 
@@ -56,7 +57,7 @@ class Ai::Anthropic::Adapter
         max_tokens: MAX_TOKENS,
         system_: [ { type: "text", text: system, cache_control: { type: "ephemeral" } } ],
         messages: [ { role: "user", content: user } ],
-        output_config: { effort: @effort.to_sym, format_: { type: :json_schema, schema: schema } }
+        output_config: output_config(format_: { type: :json_schema, schema: schema })
       )
     end
     response_from(message)
@@ -68,7 +69,7 @@ class Ai::Anthropic::Adapter
   # @raise [Ai::Errors::RefusalError, Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def ping
     message = request do
-      client.messages.create(model: model, max_tokens: PING_MAX_TOKENS, output_config: { effort: :low },
+      client.messages.create(model: model, max_tokens: PING_MAX_TOKENS, output_config: output_config,
                              messages: [ { role: "user", content: PING_PROMPT } ])
     end
     raise Ai::Errors::RefusalError, "The model declined the test request" if message.stop_reason == :refusal
@@ -85,6 +86,10 @@ class Ai::Anthropic::Adapter
       Ai::HostGuard.check!(@base_url) if @base_url
       ::Anthropic::Client.new(api_key: @api_key, base_url: @base_url, timeout: TIMEOUT_SECONDS, max_retries: 0)
     end
+  end
+
+  def output_config(**extra)
+    @effort ? { effort: @effort.to_sym, **extra } : extra
   end
 
   def request

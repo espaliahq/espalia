@@ -152,7 +152,7 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
     should "refuse an endpoint on a private network before connecting" do
       adapter = Ai::OpenAiCompatible::Adapter.new(api_key: "sk-gw", base_url: "https://10.0.0.5/v1", model: MODEL)
 
-      assert_raises(Ai::Errors::ApiError) { adapter.ping }
+      assert_raises(Ai::Errors::ConfigurationError) { adapter.ping }
     end
 
     should "need a key, an address and a model" do
