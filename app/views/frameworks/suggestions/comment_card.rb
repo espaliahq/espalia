@@ -80,7 +80,7 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
   end
 
   def avatar_dot
-    span(class: "mt-1 w-2 h-2 rounded-full shrink-0 bg-sky-500", title: "Comment") { }
+    span(class: "mt-1 w-2 h-2 rounded-full shrink-0 bg-activity-discussion", title: "Comment") { }
   end
 
   def header_line
