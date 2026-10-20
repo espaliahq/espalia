@@ -234,16 +234,24 @@ that opens the hub's modal prefilled after sign-in. See
 
 Feedback written by someone who never saw the framework arrives unplaced, or
 placed on one cell when it speaks to three. When a tenant switches it on,
-Claude reads each new piece of feedback and suggests where it belongs; a
+a model reads each new piece of feedback and suggests where it belongs; a
 person decides ([#536](https://github.com/mr-yum/growth-os/issues/536), plan
 §7 in [feedback-integration-plan.md](../../notes/feedback-integration-plan.md)).
 Rules, all deliberate:
 
-- **Off until the data decision is made.** `Tenant.settings` →
-  `evidence_suggestions_enabled` (`Tenant#evidence_suggestions_enabled?`)
+- **Off until the tenant chooses a model and switches it on.**
+  `Tenant.ai_config` → `suggestions_enabled` (`Tenant#evidence_suggestions_enabled?`)
   gates the handler, the job and "Suggest again"; seeds never set it. Without
-  `Rails.application.credentials.dig(:anthropic, :api_key)` the job is a
-  no-op too. Sending feedback text to Anthropic is plan decision D2.
+  a complete model config and a stored key (`Evidence::SuggestionModel.configured?(tenant)`)
+  the job is a no-op too, so a tenant with no config runs nothing. Sending
+  feedback text to a model provider is plan decision D2, and it is each
+  tenant's own: the AI model card is where they take it. A tenant switched on
+  under the earlier `Tenant.settings` key (`evidence_suggestions_enabled`,
+  `evidence_suggestions_model`) stays on, on the deployment's Anthropic key,
+  until an admin saves the card; saving drops the old keys. That reader
+  (`Tenant#legacy_evidence_suggestions_enabled?` and the key fallback in
+  `Tenant#ai_api_key`) is for one release: delete it once every tenant has
+  been saved through the card.
 - **Only human feedback about someone else.** The async handler
   `PlacementSuggester` enqueues `Evidence::SuggestPlacementsJob` on
   `EvidenceRecorded` and on `EvidenceUpdated`, skipping `source: "self"` and
@@ -261,20 +269,60 @@ Rules, all deliberate:
   cells are identical for everyone at a role and level and carry the
   `cache_control` breakpoint; the feedback, who gave it and the cells to
   leave out are the volatile tail.
-- **One class talks to Claude.** `Evidence::SuggestionModel#suggest` calls
-  `claude-opus-5-5` (`evidence_suggestions_model` overrides it per tenant)
-  at `effort: "low"` with adaptive thinking left on. Its errors are its own:
-  `RateLimited` and `Unavailable` retry with backoff, `Rejected` (any other
-  4xx) is logged and dropped, and a `refusal`, a truncated answer or
-  unparseable JSON is simply no suggestions. No refusal fallback is sent: it
-  would route personal feedback to a second model, which is D2's question.
-  Every test stubs `#suggest`, never the gem. The Ruby SDK spells two
-  request keys with a trailing underscore, `system_:` and
-  `output_config: { format_: … }`, because `system` and `format` are Ruby
-  methods; it sends them as `system` and `format`.
+- **The tenant's model answers, through one class.**
+  `Evidence::SuggestionModel#suggest` is the one method the job calls and the
+  one tests stub. It builds the request from the prompt, asks the adapter
+  `Ai::ModelClient.for(tenant)` picks, and turns the answer into at most
+  three `Proposal`s. Two adapters live under `app/integrations/ai/`:
+  `Ai::Anthropic::Adapter` (the official gem; the Anthropic API, or any
+  Anthropic-compatible endpoint through `base_url:`; `cache_control` on the
+  system text, `output_config.format` for the schema, the tenant's `effort`,
+  default `low`, adaptive thinking left on) and `Ai::OpenAiCompatible::Adapter`
+  (Faraday, `POST {base_url}/chat/completions`, a strict `json_schema`
+  `response_format`, `Authorization: Bearer`). Both return one
+  `Ai::SuggestionResponse` and raise the shared `Ai::Errors`. The stored
+  config (`AiModelConfig`: `provider`, `base_url`, `model`, `effort`) is
+  generic: "Vercel AI Gateway" is only a preset in the form that fills
+  `openai_compatible` and `https://ai-gateway.vercel.sh/v1`, and no adapter
+  special-cases it. The tenant's key is passed to the gem explicitly, so an
+  `ANTHROPIC_API_KEY` in the environment never answers for a tenant.
+  `Evidence::SuggestionModel` maps the errors to its own: `RateLimited`
+  and `Unavailable` (5xx, no answer, a malformed one) retry with backoff;
+  `Rejected` (a refused key or any other 4xx) is logged and dropped. A
+  refusal, a truncated answer or unparseable JSON is simply no suggestions.
+  No refusal fallback is sent on either adapter: it would route personal
+  feedback to a second model nobody chose. Both adapters share the prompt,
+  the candidate list, the schema and the server-side re-check in the job: a
+  model that answers with an id outside the candidates yields no suggestion
+  for that row. The Ruby gem spells two request keys with a trailing
+  underscore, `system_:` and `output_config: { format_: … }`, because
+  `system` and `format` are Ruby methods; it sends them as `system` and
+  `format`. `anthropic` endpoints take the address without `/v1`, which the
+  gem appends; `openai_compatible` ones take it with whatever prefix serves
+  `/chat/completions`.
+- **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
+  in the tenant for `Person N` in both texts before they leave, and swaps them
+  back in the rationales that return. Whole words only, longest first, so
+  "Anna" is not found inside "Annabel"; a first name only one person has
+  stands for that person, and one two people share gets a placeholder of its
+  own. The number is the person's rank by id, so a placeholder is the same on
+  every request and the cached framework text stays cacheable. The mapping
+  lives in the instance for one request and is not stored. It hides names, not
+  roles, projects or the story; a tenant can turn it off (`pseudonymise_names`).
+  Test connection sends no names; the eval runs the same path as production.
+- **Admin: the AI model card.** Integrations → AI model
+  (`Tenant::AiModelsController`, `IntegrationsPolicy#update_ai_model?` /
+  `#test_ai_model?`, tenant admins). A preset or the generic fields, a
+  write-only key (stored encrypted in `Tenant.ai_credentials`, never rendered;
+  blank keeps it), the two switches, and **Test connection**, which sends the
+  saved model one line and shows its reply or the failure, never the
+  endpoint's body. The address is https only outside development, with no
+  login, query or private-network host (`Ai::HostGuard`, also checked against
+  DNS at call time). Writes are web-only; the MCP surface is the read-only
+  `integrations_ai_model_status`.
 - **Suggestions are state, decisions are events.** `EvidencePlacementSuggestion`
-  is a plain tenant table, one row per item × cell, recording model, prompt
-  version and confidence. Accepting goes through
+  is a plain tenant table, one row per item × cell, recording provider, model,
+  prompt version and confidence. Accepting goes through
   `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
   `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
   cell meanwhile — carrying `via_suggestion_id`. The feed's secondary line
@@ -307,14 +355,16 @@ Rules, all deliberate:
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; the placement notifier
   ([#534](https://github.com/mr-yum/growth-os/issues/534)) hooks in there.
-- **Eval before widening.** `bin/rails evidence:suggestions:eval` scores the
-  current `PlacementPrompt::VERSION` against thirty invented, hand-placed
-  items in `test/fixtures/files/evidence_suggestions/` (cell match for the
-  top and any suggestion, valence match on hit cells, precision, and
-  feedback the framework doesn't cover left alone).
-  `SUGGESTION_MODEL=baseline` scores a word-overlap baseline with no API
-  call. Bump `VERSION` whenever the instructions, framework text or schema
-  change, and rerun.
+- **Eval before widening.** `bin/rails "evidence:suggestions:eval[<tenant slug>]"`
+  scores the current `PlacementPrompt::VERSION` against thirty invented,
+  hand-placed items in `test/fixtures/files/evidence_suggestions/` (cell match
+  for the top and any suggestion, valence match on hit cells, precision, and
+  feedback the framework doesn't cover left alone), through the model that
+  tenant has configured: its adapter, effort and name hiding, so a gateway
+  model is scored the way it will answer. `MODEL=…` tries another model id on
+  the same endpoint. The tenant is only read. `SUGGESTION_MODEL=baseline`
+  scores a word-overlap baseline with no tenant and no call. Bump `VERSION`
+  whenever the instructions, framework text or schema change, and rerun.
 
 ## Requesting evidence (cell-scoped)
 
