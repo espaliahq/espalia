@@ -4,11 +4,12 @@
 
 ## Rules
 
-- All new page views MUST use Phlex (inherit from `ApplicationView`)
-- All new UI components MUST use Kit pattern (inherit from `ApplicationComponent`)
+- All new page views MUST use Phlex (inherit from `Views::Base`)
+- All new UI components inherit from `Components::Base` and live in a [layer](#component-layers)
 - Do NOT create new ERB files — use ERB only for minor fixes to existing legacy views
 - Use `view_template` method (not `template`)
-- Use semantic Kit helpers: `Button()`, `Card()`, `Alert()`, `Badge()`, `Avatar()`
+- Render Kit components rather than hand-rolling their markup: `render Components::Kit::Card.new(title: "Theme")`
+- Colour, radius, shadow and focus follow [theming.md](theming.md)
 - Give interactive/form elements accessible names — prefer a native `<label>` or `aria-labelledby`, and reserve `aria-label` for controls with no visible label (see [Accessibility](#accessibility-non-negotiable))
 
 ## Naming Conventions
@@ -28,23 +29,9 @@
 
 Anything used by one screen stays with that screen's views, not here.
 
-### Radius and shadow: one step per component
+### Options before copies
 
-Tailwind's radius and shadow scales are the tokens; each component owns one step ([#565](https://github.com/mr-yum/growth-os/issues/565)). To change the look, change the one file. Views don't set radius or shadow on anything a component provides.
-
-| Component | Radius | Shadow |
-|---|---|---|
-| `Kit::Card` | `rounded-2xl` | `shadow-xl` |
-| `Kit::Card` `variant: :inset`, a panel inside another surface | `rounded-md` | none |
-| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-lg` |
-| `Kit::Modal` | `rounded-lg` | `shadow-2xl`, so it floats above the cards under it |
-| Controls: `Kit::Button`, `Kit::Field` | `rounded-md` | none |
-| `Kit::Tag`, `Kit::Chip` | `rounded-full` | none |
-| `Kit::Badge` | `rounded-sm`, square so it reads apart from a tag | none |
-
-`test/lib/radius_shadow_steps_test.rb` holds Kit to these steps and keeps shadows out of Shared and Shell, except where a Shell piece draws its own surface.
-
-Reach for an option before hand-rolling a near copy:
+Each component owns its radius and shadow ([theming.md → Radius and shadow](theming.md#radius-and-shadow)), so views never set either on a Kit surface. Reach for an option before hand-rolling a near copy:
 
 - **A grey panel inside a card:** `Kit::Card` `variant: :inset`. Add `density: :compact` for a list or grouped fields; compact also suits a small card of its own. `edge:` swaps its border for a state's, as the hero's verdict panel does.
 - **A clickable card:** `Kit::Card` `href:` renders an `a` with one hover and focus treatment, so it can't hold other links. `interactive: true` gives a `div` the same look, and `data-focused="true"` holds it on.
@@ -55,7 +42,7 @@ Reach for an option before hand-rolling a near copy:
 
 ```ruby
 # app/views/dashboard/show_view.rb
-class Views::Dashboard::ShowView < ApplicationView
+class Views::Dashboard::ShowView < Views::Base
   def initialize(user:, stats:)
     @user = user
     @stats = stats
@@ -70,9 +57,11 @@ class Views::Dashboard::ShowView < ApplicationView
         stat_card("Points", @stats[:points].to_s)
       end
 
-      Card(title: "Recent Activity") do |card|
+      render Components::Kit::Card.new(title: "Recent Activity") do |card|
         card.body { render_activity }
-        card.actions { Button("View All", variant: :link, href: activities_path) }
+        card.actions do
+          render Components::Kit::Button.new(variant: :link, tone: :brand, href: activities_path) { "View all" }
+        end
       end
     end
   end
@@ -80,7 +69,7 @@ class Views::Dashboard::ShowView < ApplicationView
   private
 
   def stat_card(label, value)
-    Card do |card|
+    render Components::Kit::Card.new do |card|
       card.body do
         p(class: "text-sm text-muted") { label }
         p(class: "text-3xl font-bold") { value }
@@ -92,51 +81,30 @@ end
 
 ## Kit Component Pattern
 
+`app/components/kit/button.rb` is the model: a constant per axis (tone, form, size), a `.classes` class method for call sites that can't render the component, and `view_template` joining them. How it stays themeable is in [theming.md → Building a themed component](theming.md#building-a-themed-component).
+
 ```ruby
-# app/components/kit/button.rb
-module Kit
-  class Button < ApplicationComponent
-    VARIANTS = {
-      primary: "btn btn-primary",
-      secondary: "btn btn-secondary",
-      danger: "btn btn-danger"
-    }.freeze
+# app/components/kit/button.rb (abridged)
+class Components::Kit::Button < Components::Base
+  TONES = { neutral: "tone-neutral", brand: "tone-brand", danger: "tone-danger", … }.freeze
+  VARIANTS = { solid: "border-transparent bg-tone-strong text-tone-content-inverse …", … }.freeze
 
-    def initialize(label = nil, variant: :primary, size: :md, **attributes)
-      @label = label
-      @variant = variant
-      @size = size
-      @attributes = attributes
-    end
+  def self.classes(variant: :solid, tone: :neutral, size: :md, touch: false, icon: false) = …
 
-    def view_template(&block)
-      button(**button_attributes) do
-        block ? yield : @label
-      end
-    end
+  def initialize(variant: :solid, tone: :neutral, size: :md, href: nil, type: :button, **attrs)
+    @classes = self.class.classes(variant:, tone:, size:)
+    …
+  end
 
-    private
-
-    def button_attributes
-      merge_attributes({ type: "button", class: VARIANTS[@variant] }, @attributes)
-    end
+  def view_template(&)
+    @href ? a(**element_attrs, href: @href, &) : button(**element_attrs, type: @type, &)
   end
 end
 ```
 
 ## Previewing components (Lookbook)
 
-[Lookbook](https://lookbook.build) shows Kit components on their own, outside any page, at **`/lookbook`** in development. Use it to build or restyle a component, state by state, before wiring it into a view.
-
-- **One preview class per component**, in `test/components/previews/<layer>/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
-- **A `playground` scenario with `# @param` tags** gives live controls (text fields, selects) in the Lookbook UI.
-- **Previews render in `layouts/component_preview.html.erb`**: the app's stylesheets, import map and icon sprite on the page surface, so Tailwind, the colour roles and Stimulus behave as they do in the app. There's no tenant, so no tenant theme and no `PageLayout`. The toolbar's gear icon switches **Theme** and **Scheme** for every preview.
-- **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
-
-- **What's there:** **Design Tokens** (the colour roles, read from `theme/roles.css`, and the brand tokens, read from `application.css`, so a new one appears on its own, each with its measured contrast; a proof of the contrast helper; the Tailwind palette and the type scale), then **Kit** (with an **Icons** gallery), **Shared** and **Shell**. Only the Sidebar is previewed from the Shell so far.
-- **Every Kit and Shared component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing. Previewing the Shell is optional.
-- **The sidebar sorts folders alphabetically** and its path is the URL, so moving a preview changes its link. `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
-- **A class that appears only in a preview is still built into the CSS.** Pass a component its real arguments; don't write its class names into the preview, or a class the component builds by interpolation will render in Lookbook and nowhere else.
+[Lookbook](https://lookbook.build) shows Kit components on their own at **`/lookbook`** in development. Build or restyle a component there, state by state, before wiring it into a view. How to write a preview, and what the completeness test demands, is in [theming.md → Lookbook](theming.md#lookbook).
 
 ## Slots Pattern
 
@@ -323,17 +291,7 @@ and dark** and at a **mobile viewport**, then pin regressions with a test.
 
 ### Colour contrast — 1.4.3 (4.5:1 normal text, 3:1 large/≥18.66px-bold)
 
-- **New code colours itself with role utilities** (`text-muted`, `bg-default`, `border-subtle`, `text-danger`, `bg-tone-strong`…), defined in `app/assets/tailwind/theme/roles.css` ([ADR-23](../architecture/adrs.md)). A role carries both schemes, so it needs no `dark:` partner. The palette rules below still hold for code not yet moved onto roles (#539).
-- **Muted/secondary text uses one AA-safe pairing: `text-gray-600 dark:text-gray-300`.** Do not reach for `text-gray-400`/`text-gray-500` for readable text — both fall below 4.5:1 on white/`gray-50` (and on `gray-800` cards in dark). The lighter greys are for genuinely incidental/decorative glyphs only (e.g. faint empty-cell `—` placeholders), never for content.
-- **Coloured accent text on a light/neutral background needs `-700`, not `-600`** (`text-amber-700`, `text-green-700`, `text-red-700`). `blue-600` is the exception — it already clears AA. On the `-100` tinted fills used by `Kit::Badge`-style chips, go one darker again (`-800`).
-- **Brand-coloured text uses `text-primary-ink`, never `text-primary`.** The brand teal is 2:1 on white, and a tenant can set any primary, so `--color-primary-ink` clamps the active primary's OKLCH lightness (≤0.5 light, ≥0.75 dark) to clear 4.5:1 whatever the tenant chose. `text-primary` survives only where it paints a checkbox or radio mark; fills (`bg-primary/10`), borders and focus rings keep the brand colour. A faded hover (`hover:text-primary-ink/80`) drops below AA — hover with `hover:underline` instead.
-- **Don't add new white text on `bg-primary`, or new `ring-primary` focus rings.** The default teal carries neither: white on it is 2.0:1 (1.5:1 in dark mode), and a teal ring on white is 2.0:1 against the 3:1 a focus indicator needs. The existing sites are tracked in [#447](https://github.com/mr-yum/growth-os/issues/447), which adds a darker `--color-primary-strong` fill. Until then, a pressed chip uses the neutral pairing (`bg-gray-900 text-white dark:bg-white dark:text-gray-900`).
-- **Contrast depends on the background, so verify, don't eyeball.** A token that passes on white can fail on a `gray-50`/`gray-800` card. The same applies in reverse for dark mode — lighten the `dark:` variant, never just darken the light one.
-- **An indicator that sits on a variably-coloured surface can't use a single text colour** — put it on a contrasting disc (e.g. the level-chip "rated" `✓` on `bg-white dark:bg-gray-900`) so it clears AA against any fill.
-
-### Don't ship translucent text surfaces
-
-A panel that holds readable content must be **opaque**. `dark:bg-gray-800/50` over the page or another component composites to a muddy, low-contrast surface (this bit the assessment activity sidebar). Reserve `/NN` alpha backgrounds for subtle highlights behind already-high-contrast text, not for content containers.
+Colour with role utilities, and check contrast on the surface an element actually sits on, in both schemes. Which role to use, opaque fills under text, and how to measure are in [theming.md](theming.md). A view still on palette steps keeps its AA pairings (`text-gray-600 dark:text-gray-300` for muted text, `-700` for coloured text) until it moves; don't tune them, move what you touch onto roles.
 
 ### Touch targets — 2.5.5 (≥44×44 CSS px)
 
@@ -355,7 +313,7 @@ Headings descend sequentially; never skip a level for styling. `Kit::Card` takes
 
 ### Keyboard focus — 2.4.7
 
-A global `:focus-visible` ring lives in `app/assets/tailwind/application.css` (2px, offset, blue-700/blue-300). **Never reset an outline (`outline-hidden`/`focus:outline-none`) without providing an equivalent visible focus state** — a per-component `focus:ring-2` is fine, a bare reset is not.
+A global `:focus-visible` ring in `app/assets/tailwind/application.css` covers bare elements. Never remove an outline without a visible focus state in its place; the colours and patterns are in [theming.md → Focus and selection](theming.md#focus-and-selection).
 
 ### Document structure (layout-level, but views rely on it)
 
@@ -402,19 +360,13 @@ For the related rule that a frame's re-render response must carry the same
 `mode:` / permission flags / counts as the initial render, see
 [framework-explorer.md](framework-explorer.md) Hard-Won Lessons 13 & 16.
 
-## ERB Bridge (Legacy Views Only)
+## Kit in a legacy ERB view
 
-When making minor updates to existing ERB views, use Kit helpers:
+A minor fix to an ERB view renders the Phlex component, or uses its `.classes` on a Rails helper:
 
 ```erb
-<%= kit_button "Save", variant: :primary %>
-<%= kit_card(title: "Settings") { render "form" } %>
-<%= kit_alert "Success!", variant: :success %>
-<%= kit_badge "New", variant: :primary %>
-<%= kit_avatar src: url, name: name %>
+<%= render Components::Kit::Alert.new(tone: :success) { "Saved" } %>
+<%= f.submit "Save", class: Components::Kit::Button.classes(tone: :brand) %>
 ```
 
-**Kit variants:**
-- Buttons: `:primary`, `:secondary`, `:tertiary`, `:danger`, `:success`, `:link`
-- Alerts: `:info`, `:success`, `:warning`, `:danger`
-- Badges: `variant:` `:subtle`, `:solid`, `:outline` × `tone:` `:neutral`, `:brand`, `:info`, `:success`, `:warning`, `:danger`
+Variants are named for their form and take a `tone:`; which pair suits which job is in [theming.md → Which form and tone for which job](theming.md#which-form-and-tone-for-which-job).

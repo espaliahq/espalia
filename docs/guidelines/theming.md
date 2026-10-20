@@ -31,7 +31,7 @@ A preset is a whole theme: under Default or Bento, a tenant's brand and font don
 
 ### Light and dark
 
-One rule, in `@custom-variant dark` (`app/assets/tailwind/application.css`): dark applies when the OS is dark, unless `<html data-scheme="light">`; `<html data-scheme="dark">` forces it. Role values, `dark:` utilities and `@variant dark` blocks all follow it. A person's choice (Auto, Light or Dark) is stored on `User#color_scheme` and reaches `<html data-scheme>` through `ColorSchemePreference`. The person picks it under Appearance in the user menu; the `color-scheme` controller sets `data-scheme` and the `theme-color` meta at once, then saves.
+One rule, in `@custom-variant dark` (`app/assets/tailwind/application.css`): dark applies when the OS is dark, unless `<html data-scheme="light">`; `<html data-scheme="dark">` forces it. Role values, `dark:` utilities and `@variant dark` blocks all follow it. Anything outside Tailwind that switches on the scheme (the layout's tenant theme block, `matchMedia` in a Stimulus controller) checks `data-scheme` first. A person's choice (Auto, Light or Dark) is stored on `User#color_scheme` and reaches `<html data-scheme>` through `ColorSchemePreference`. The person picks it under Appearance in the user menu; the `color-scheme` controller sets `data-scheme` and the `theme-color` meta at once, then saves.
 
 **Role values switch to dark only on `:root`.** An element with its own `data-scheme="dark"` (a dark panel on a light page) keeps the light `--gos-*` values, while any `dark:` utility inside it does switch, so the two disagree. Only the brand-derived roles re-derive inside `[data-theme-scope]`. Nothing needs a nested scheme today. One would need the dark role set repeated on the scoped element, as Bento does on its `.dark` class.
 
@@ -78,6 +78,8 @@ Most work needs only this table.
 | The navbar | `bg-nav text-nav` (Shell only) |
 
 The Lookbook page **Design Tokens → Colour roles** lists every role with its utilities, its value under the current theme and scheme, and its measured contrast.
+
+An indicator that sits on fills of several colours can't take one text colour. Put it on a disc of `bg-default` so it reads on any of them.
 
 Strong fills (`bg-brand-strong`, `bg-danger-strong`, `bg-tone-strong`…) belong inside Kit components, which pair them with their text. A view that wants one wants a `Kit::Button` or a solid `Kit::Alert`.
 
@@ -191,13 +193,13 @@ Colour rules are the same in all three. Only Shell paints the nav roles, and onl
 
 ## Radius and shadow
 
-Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each component owns one step, so elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
+Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each component owns one step, so changing the look means changing one file, so elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
 
 | Component | Radius | Shadow |
 |---|---|---|
 | `Kit::Card` | `rounded-2xl` | `shadow-xl` |
 | `Kit::Card` `variant: :inset` | `rounded-md` | none |
-| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast` | `rounded-md` | `shadow-lg` |
+| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-lg` |
 | `Kit::Modal` | `rounded-lg` | `shadow-2xl` |
 | `Kit::Button`, `Kit::Field`, `Kit::Alert` | `rounded-md` | none |
 | `Kit::Badge` | `rounded-sm` | none |
@@ -206,6 +208,7 @@ Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each
 
 ## Focus and selection
 
+- **Never remove an outline** (`outline-hidden`, `focus:outline-none`) without a visible focus state in its place.
 - **Keyboard focus is neutral on every theme:** `--gos-focus-ring` is near-black in light and near-white in dark, never the brand. Use `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`, as `Kit::Button` does; the global `:focus-visible` rule in `application.css` covers bare elements.
 - **On a coloured surface, reset the ring** to the surface's own text colour: the navbar sets `[--gos-focus-ring:var(--gos-nav-content)]`, a solid alert `var(--gos-tone-content-inverse)`.
 - **A field shows focus by darkening its edge**, with no offset ring: `focus:border-strong focus:ring-1 focus:ring-inset focus:ring-focus` in `Kit::Field`.
@@ -268,7 +271,10 @@ The Theme page that lets a tenant choose Default, Bento or Custom, and how Custo
 
 ## Lookbook
 
-Lookbook runs at `/lookbook` in development. Previews live in `test/components/previews/<layer>/<name>_preview.rb` and render in `app/views/layouts/component_preview.html.erb`, on the app's page surface with its stylesheets, import map and icon sprite.
+Lookbook runs at `/lookbook` in development only; the gem and its engine never reach production. Previews live in `test/components/previews/<layer>/<name>_preview.rb`, one `Lookbook::Preview` subclass per component, each public method a scenario. They render in `app/views/layouts/component_preview.html.erb`, on the app's page surface with its stylesheets, import map and icon sprite, but with no tenant, so no tenant theme and no `PageLayout`. Lookbook brings in the `view_component` gem; don't write ViewComponents.
+
+The sidebar holds **Design Tokens** (colour roles, brand tokens, the contrast helper, palette, type scale), then **Kit** (with an **Icons** gallery), **Shared** and **Shell**. It sorts folders alphabetically and its path is the URL; `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
+
 
 - **A `playground` with `# @param` tags** for every argument, so anyone can try a combination. `Kit::ButtonPreview#playground` is the model.
 - **Named groups for real states** (`# @!group Forms × tones` … `# @!endgroup`): every variant, tone and size, disabled, and the component in use (`dialog_footer`, `destructive_confirm`).
