@@ -80,10 +80,10 @@ class Components::Shell::Navbar < Components::Base
   def hamburger_button
     button(
       type: "button",
-      aria: { label: "Toggle navigation", expanded: "false" },
+      aria: { label: "Toggle navigation", expanded: "false", controls: Components::Shell::Sidebar::DRAWER_ID },
       class: "md:hidden inline-flex items-center justify-center h-11 w-11 -ml-1.5 rounded-md " \
              "hover:bg-current/10 focus:outline-hidden focus:ring-2 focus:ring-focus",
-      data: { action: "sidebar#toggle" }
+      data: { sidebar_target: "toggle", action: "sidebar#toggle" }
     ) do
       svg(
         xmlns: "http://www.w3.org/2000/svg",

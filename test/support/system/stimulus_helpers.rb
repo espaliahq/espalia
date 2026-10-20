@@ -160,12 +160,7 @@ module StimulusHelpers
   #
   # @param scope [String, nil] optional CSS selector to scope the toggle
   def toggle_sidebar(scope: nil)
-    # Sidebar doesn't extend BaseController. Wait for target registration
-    # as a readiness signal.
-    drawer_selector = "[data-sidebar-target='drawer']"
-    drawer_selector = "#{scope} #{drawer_selector}" if scope
-    assert_selector drawer_selector, visible: :all
-
+    wait_for_stimulus "sidebar", scope: scope
     stimulus_toggle(
       "[data-action='sidebar#toggle']",
       visible_selector: "[data-sidebar-target='drawer']",

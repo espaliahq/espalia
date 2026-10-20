@@ -11,6 +11,8 @@
 #     { label: "Reports", href: "/reports" }
 #   ])
 class Components::Shell::Sidebar < Components::Base
+  DRAWER_ID = "mobile-navigation"
+
   # @param links [Array<Hash>] Navigation links, each with :label and :href keys
   def initialize(links:)
     @links = links
@@ -18,10 +20,21 @@ class Components::Shell::Sidebar < Components::Base
 
   def view_template
     aside(
+      id: DRAWER_ID,
       class: "hidden fixed inset-y-0 left-0 z-40 w-64 border-r border-default bg-overlay text-default md:hidden",
-      data: { sidebar_target: "drawer" }
+      data: {
+        sidebar_target: "drawer",
+        action: "keydown.esc@window->sidebar#escape focusout->sidebar#focusOut"
+      }
     ) do
-      nav(class: "flex flex-col gap-1 p-4 pt-20 flex-1", aria: { label: "Mobile navigation" }) do
+      # The drawer covers the navbar's hamburger, so it carries its own way out in the same spot.
+      div(class: "flex items-center h-12 px-4") do
+        render Components::Kit::Button.new(variant: :ghost, icon: true, touch: true, aria_label: "Close menu",
+                                           class: "-ml-1.5", data: { action: "sidebar#dismiss" }) do
+          icon(:x, class: "size-5")
+        end
+      end
+      nav(class: "flex flex-col gap-1 p-4 pt-8 flex-1", aria: { label: "Mobile navigation" }) do
         @links.each { |link| nav_link(link) }
       end
     end
