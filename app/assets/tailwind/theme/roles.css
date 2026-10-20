@@ -14,7 +14,6 @@
 
   /* Content (text and icons) */
   --gos-content-default: var(--color-gray-900);
-  --gos-content-secondary: var(--color-gray-700);
   --gos-content-muted: var(--color-gray-600);
   --gos-content-subtle: var(--color-gray-400);
   --gos-content-disabled: var(--color-gray-400);
@@ -85,7 +84,6 @@
 
   @variant dark {
     --gos-content-default: #ffffff;
-    --gos-content-secondary: var(--color-gray-200);
     --gos-content-muted: var(--color-gray-300);
     --gos-content-subtle: var(--color-gray-500);
     --gos-content-disabled: var(--color-gray-600);
@@ -274,7 +272,6 @@
 /* The utilities: text-*, bg-*, border-*, ring-* and outline-* for each role */
 @theme inline {
   --text-color-default: var(--gos-content-default);
-  --text-color-secondary: var(--gos-content-secondary);
   --text-color-muted: var(--gos-content-muted);
   --text-color-subtle: var(--gos-content-subtle);
   --text-color-disabled: var(--gos-content-disabled);
