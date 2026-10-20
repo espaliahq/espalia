@@ -304,6 +304,13 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal 0, FeedbackExchangeImport.count
     end
 
+    should "skip a malformed record instead of raising" do
+      assert_skipped "invalid_record", exchange_record(author: "priya@example.com")
+      assert_skipped "invalid_record", exchange_record(id: "chip-fb-0002", request: "a question")
+      assert_skipped "invalid_record", exchange_record(id: "chip-fb-0003", recipient: { email: "alex@example.com", external_ids: "x" })
+      assert_skipped "invalid_record", exchange_record(id: "chip-fb-0004", request: { requested_by: "morgan" })
+    end
+
     should "skip a record that names an origin other than the peer" do
       assert_skipped "invalid_record", exchange_record(origin: "lattice")
     end

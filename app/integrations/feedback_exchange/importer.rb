@@ -253,7 +253,17 @@ class FeedbackExchange::Importer
   # Records come only from the configured peer, keyed on (origin, id); one that
   # names another origin could never be found again by the deletions feed.
   def keyed?(record)
-    [ @config.peer_name, SELF ].include?(record["origin"].presence) && record["id"].to_s.present?
+    [ @config.peer_name, SELF ].include?(record["origin"].presence) && record["id"].to_s.present? && well_shaped?(record)
+  end
+
+  # Every nested part the importer digs into is an object, or absent where the
+  # protocol allows it, so a malformed record is skipped instead of raising.
+  def well_shaped?(record)
+    people = record.values_at("author", "recipient")
+    people.all?(Hash) &&
+      people.all? { |person| person["external_ids"].nil? || person["external_ids"].is_a?(Hash) } &&
+      record.values_at("request", "period", "external_reference").all? { |part| part.nil? || part.is_a?(Hash) } &&
+      (record.dig("request", "requested_by").nil? || record.dig("request", "requested_by").is_a?(Hash))
   end
 
   def narrower_than_visibility?(record)
