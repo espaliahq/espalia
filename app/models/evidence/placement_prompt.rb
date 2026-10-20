@@ -50,6 +50,11 @@ class Evidence::PlacementPrompt
     assignment.present? && home_level.present? && open_cells.any?
   end
 
+  # @return [Integer, nil] the level the recipient is assessed at
+  def home_ordinal
+    home_level&.ordinal
+  end
+
   # @return [Hash{String => Hash}] "stableId|ordinal" => cell, for every cell
   #   in the level window the role reads
   def cells
