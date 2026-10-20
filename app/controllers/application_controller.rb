@@ -4,6 +4,7 @@ class ApplicationController < ActionController::Base
   include Pundit::Authorization
   include Impersonatable
   include Pagy::Method
+  include DevThemeOverride
 
   set_current_tenant_through_filter
 

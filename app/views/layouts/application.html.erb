@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="<%= I18n.locale %>">
+<% dev_overrides = respond_to?(:dev_theme_override) ? { theme: dev_theme_override, scheme: dev_scheme_override } : {} %>
+<html <%= tag.attributes(lang: I18n.locale, data: dev_overrides) %>>
   <head>
     <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), "GrowthOS"].compact.join(" · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
