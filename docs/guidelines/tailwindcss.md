@@ -35,6 +35,7 @@
 
 - Make all views responsive with breakpoints: `sm:`, `md:`, `lg:`, `xl:`, `2xl:`
 - Colour with role utilities (`text-muted`, `bg-default`…), never palette steps or `dark:` for anything a role covers: [theming.md](theming.md)
+- Shadows are elevation roles (`shadow-raised`, `shadow-overlay`…), never a raw step: [theming.md → Radius and shadow](theming.md#radius-and-shadow)
 - Implement proper ARIA attributes for accessibility
 - Use `dom_id` for HTML element IDs
 

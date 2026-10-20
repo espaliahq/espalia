@@ -28,7 +28,7 @@ class Components::Shell::Navbar < Components::Base
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-12 px-4 bg-nav text-nav shadow-xs shrink-0 " \
+    nav(class: "flex items-center justify-between h-12 px-4 bg-nav text-nav shadow-raised shrink-0 " \
                 "[--gos-focus-ring:var(--gos-nav-content)]") do
       left_section
       right_section

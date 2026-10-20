@@ -15,7 +15,7 @@ The short version: **colour with a role, never a palette step.** Write `text-mut
 | **Domain palette** | Colours that carry assessment meaning: rating, score, activity, the hero's verdict, the role lens, evidence valence. | `theme/domain.css` |
 | **Categorical palette** | Eight hues for tags. | `theme/categorical.css` |
 | **Contrast helper** | Black or white text for a fill a tenant picks. | the `@supports` blocks in `roles.css` |
-| **Elevation** | A shadow per job: raised, overlay, modal. | The `--gos-shadow-*` block at the foot of `roles.css` |
+| **Elevation** | A shadow per job, lowest first: raised, lifted, overlay, drawer, modal. | The `--gos-shadow-*` block at the foot of `roles.css` |
 | **Scheme rule** | When dark applies. | `@custom-variant dark` in `application.css` |
 
 Role names follow Bento's vocabulary: content, surface, border, neutral, brand, accent, danger, success, warning, info, each with subtle, muted and strong steps and a `content-inverse` for text on the strong fill. GrowthOS adds a few roles Bento lacks: `surface-page`, `surface-overlay`, the two hover surfaces, `surface-field`, `scrim`, `content-link` and the nav pair.
@@ -81,9 +81,7 @@ Most work needs only this table.
 | A pending framework change or a search hit | `decoration-suggestion-edit`, `-add`, `-delete`; `bg-search-hit text-search-hit` |
 | The hero's verdict panel, a role lens, an evidence valence | `Views::Assessments::VerdictPanel`; `bg-lens-subtle text-lens ring-lens`; `bg-valence-growth-area text-valence-growth-area` |
 | The navbar | `bg-nav text-nav` (Shell only) |
-| A card's lift off the page | `shadow-raised` (or `Kit::Card`) |
-| A menu, popover, tooltip, toast or drawer | `shadow-overlay` (or `Kit::Dropdown`) |
-| A modal | `shadow-modal` (`Kit::Modal`) |
+| Any shadow | an elevation role: see [Radius and shadow](#radius-and-shadow) |
 
 The Lookbook page **Design Tokens → Colour roles** lists every role with its utilities, its value under the current theme and scheme, and its measured contrast.
 
@@ -205,9 +203,20 @@ Colour rules are the same in all three. Only Shell paints the nav roles, and onl
 
 Each component owns one radius step and one elevation role, so changing the look means changing one file, and elevation reads in order: cards below overlays below modals. Views never set radius or shadow on a Kit surface.
 
-- **Shadows are roles** ([#597](https://github.com/mr-yum/growth-os/issues/597)): `--gos-shadow-raised`, `-overlay` and `-modal`, with the utilities `shadow-raised`, `shadow-overlay` and `shadow-modal`. Default keeps Tailwind's `xl`, `lg` and `2xl`. Bento follows bento-ui's recipes: an outlined card with no shadow, and `lg` for overlays and modals. A shadow reads the same in both schemes, as Bento's do, so a role needs no dark value.
 - **Radius is Tailwind's scale**, not themed.
-- **Small lifts stay steps:** a hover or selected chip's `shadow-xs` or `shadow-sm`, and the navbar's `shadow-xs`, are not elevation.
+- **Shadows are roles** ([#597](https://github.com/mr-yum/growth-os/issues/597)), one per job, so a preset sets its own ladder. Anything that draws a shadow uses one of these; `radius_shadow_steps_test.rb` fails on a raw step (`shadow-sm`) anywhere in components, views or JavaScript.
+
+| Level | Utility | For | Default | Bento |
+|---|---|---|---|---|
+| 1 | `shadow-raised` | A card or bar on the page: `Kit::Card`, the navbar, the impersonation banner, a card-like row | Tailwind `xs` | none |
+| 2 | `shadow-lifted` | A card or chip under the pointer or focus: a focused capability card, a level chip | `sm` | `sm` |
+| 3 | `shadow-overlay` | Menus, popovers, tooltips and toasts: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, the person pickers | `lg` | `lg` |
+| 4 | `shadow-drawer` | A side pane over the page: the mobile activity and log panes | `xl` | `lg` |
+| 5 | `shadow-modal` | `Kit::Modal` | `2xl` | `lg` |
+
+Pick by job, never by the look you want: a card that needs to stand out is still `raised`, and a hover is always one level up from rest. Bento's values come from bento-ui's recipes, where a card is outlined with no shadow. A shadow reads the same in both schemes, as Bento's do, so a role needs no dark value; one that did would go in `@variant dark` beside the colour roles.
+
+To add a level, put the role in the elevation block at the foot of `roles.css` with a comment naming its job, expose it in that block's `@theme inline`, give Bento a value, and add it to `LEVELS` in Lookbook's `design_tokens/elevation_preview.rb`. Add one only for a job none of the five does.
 
 Lookbook's **Design Tokens → Elevation and radius** shows each level on the page and on a card under the current theme and scheme, with the files that use it.
 
@@ -215,7 +224,7 @@ Lookbook's **Design Tokens → Elevation and radius** shows each level on the pa
 |---|---|---|
 | `Kit::Card` | `rounded-2xl` | `shadow-raised` |
 | `Kit::Card` `variant: :inset` | `rounded-md` | none |
-| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu, tooltip and drawer | `rounded-md` | `shadow-overlay` |
+| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-overlay` |
 | `Kit::Modal` | `rounded-lg` | `shadow-modal` |
 | `Kit::Button`, `Kit::Field`, `Kit::Alert` | `rounded-md` | none |
 | `Kit::Badge` | `rounded-sm` | none |
@@ -263,7 +272,7 @@ Reach for a new role only when no existing one does the job. Two near-identical 
 
 ### Add a preset
 
-1. **A file** `app/assets/tailwind/theme/<name>.css` with one `html[data-theme="<name>"]` block that sets the font and every role, with an `@variant dark` block for the dark values, and its three `--gos-shadow-*` values. Copy `bento.css` for the shape. Import it in `application.css`.
+1. **A file** `app/assets/tailwind/theme/<name>.css` with one `html[data-theme="<name>"]` block that sets the font and every role, with an `@variant dark` block for the dark values, and a value for each `--gos-shadow-*` level. Copy `bento.css` for the shape. Import it in `application.css`.
 2. **Set its text colours.** Presets set `--gos-*-content-inverse` to designed values; the contrast helper is only for fills a tenant picks.
 3. **Register it:** `Themeable::THEMES` and `Themeable::PRESETS` (`app/models/concerns/themeable.rb`), its font in `PRESET_FONT_URLS`, its navbar in `NAV_SURFACES` for the browser chrome (the `--gos-nav-surface` values from its file, light and dark), and the `theme:` list in `config.lookbook.preview_display_options` (`config/environments/development.rb`). `?theme=<name>` (`DevThemeOverride`) reads `PRESETS`, so it needs nothing.
 

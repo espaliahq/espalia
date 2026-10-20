@@ -97,8 +97,8 @@ class Views::Assessments::CapabilityCard < Views::Base
     div(
       class: "rounded-xl border border-default " \
              "bg-overlay p-4 transition-shadow " \
-             "hover:shadow-sm " \
-             "data-[focused=true]:shadow-sm " \
+             "hover:shadow-lifted " \
+             "data-[focused=true]:shadow-lifted " \
              "data-[focused=true]:ring-1 data-[focused=true]:ring-(--gos-border-default)",
       # scroll-margin-top accounts for the unified sticky header. The
       # section sticky heading height varies per section (description

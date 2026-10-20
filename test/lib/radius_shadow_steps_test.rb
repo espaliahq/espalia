@@ -26,8 +26,8 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
 
   # Shell pieces that draw a surface of their own
   SHELL_SHADOWS = {
-    "shell/impersonation_banner.rb" => %w[shadow-sm],
-    "shell/navbar.rb" => %w[shadow-xs shadow-overlay],
+    "shell/impersonation_banner.rb" => %w[shadow-raised],
+    "shell/navbar.rb" => %w[shadow-raised shadow-overlay],
     "shell/page_layout.rb" => %w[shadow-overlay]
   }.freeze
 
@@ -38,6 +38,18 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
     end
 
     assert_empty offenders, "Off-step radius or shadow in Kit (add it to KIT_STEPS only if the component owns it):\n#{offenders.join("\n")}"
+  end
+
+  # A raw step can't follow the theme, so Bento would keep Default's shadow there
+  should "draw every shadow in the app with an elevation role" do
+    raw = /(?<![\w-])shadow-(?:2xs|xs|sm|md|lg|xl|2xl|inner)(?![\w-])/
+    offenders = Dir[Rails.root.join("app/{components,views}/**/*.rb"), Rails.root.join("app/javascript/**/*.js")].flat_map do |path|
+      File.readlines(path).each_with_index.filter_map do |line, i|
+        "#{relative(path)}:#{i + 1} #{line[raw]}" if line.match?(raw) && !line.lstrip.start_with?("#", "//")
+      end
+    end
+
+    assert_empty offenders, "Raw shadow steps; use shadow-raised, -lifted, -overlay, -drawer or -modal:\n#{offenders.join("\n")}"
   end
 
   should "leave shadows in Shared and Shell to the pieces that own a surface" do

@@ -18,7 +18,7 @@ class Components::Shell::ImpersonationBanner < Components::Base
   def view_template
     div(
       class: "sticky top-0 z-[70] flex items-center justify-center gap-x-3 gap-y-1 flex-wrap " \
-             "tone-warning bg-tone-strong px-4 py-2 text-sm font-medium text-tone-content-inverse shadow-sm " \
+             "tone-warning bg-tone-strong px-4 py-2 text-sm font-medium text-tone-content-inverse shadow-raised " \
              "[--gos-focus-ring:var(--gos-tone-content-inverse)]",
       role: "status"
     ) do

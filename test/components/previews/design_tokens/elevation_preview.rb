@@ -7,13 +7,15 @@ class DesignTokens::ElevationPreview < Lookbook::Preview
 
   # Literal class names so Tailwind's scanner emits them.
   LEVELS = {
-    "shadow-raised" => "A card on the page",
-    "shadow-overlay" => "Menus, popovers, tooltips, toasts and the mobile drawers",
+    "shadow-raised" => "A card or bar on the page",
+    "shadow-lifted" => "A card or chip under the pointer or focus",
+    "shadow-overlay" => "Menus, popovers, tooltips and toasts",
+    "shadow-drawer" => "A side pane over the page",
     "shadow-modal" => "A modal dialog"
   }.freeze
   RADII = %w[rounded-sm rounded-md rounded-lg rounded-2xl rounded-full].freeze
 
-  # Each elevation role on the page and on a card, with its value under the current theme and scheme.
+  # Each elevation role, lowest first, on the page and on a card, with its value under the current theme and scheme.
   def elevation
     levels = LEVELS.map do |utility, job|
       role = "--gos-#{utility}"

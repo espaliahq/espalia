@@ -54,7 +54,7 @@ module Views::CalibrationSessions::ComparisonDrawerChrome
         type: "button",
         class: "absolute right-4 -top-4 z-10 inline-flex h-8 w-8 items-center justify-center " \
                "rounded-full border border-emphasized bg-default " \
-               "text-base text-muted shadow-sm hover:bg-default-hover",
+               "text-base text-muted shadow-lifted hover:bg-default-hover",
         data: { action: "comparison-drawer#toggle", comparison_drawer_target: "collapse" },
         aria: { expanded: "true", controls: "comparison-drawer-body",
                 label: "Collapse the comparison drawer" }

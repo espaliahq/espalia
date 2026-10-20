@@ -170,7 +170,7 @@ This rule is symmetric: scrolling down, the new card's visible area grows from b
 **Visual styling.** A focused card carries `data-focused="true"`; styling hangs off Tailwind data variants:
 
 ```ruby
-"data-[focused=true]:shadow-sm data-[focused=true]:ring-1 data-[focused=true]:ring-(--gos-border-default)"
+"data-[focused=true]:shadow-lifted data-[focused=true]:ring-1 data-[focused=true]:ring-(--gos-border-default)"
 ```
 
 Server stamps it from `?capability=` on initial render; `matrix_controller#applyCardFocus` toggles it on focus changes. Single source of truth.
