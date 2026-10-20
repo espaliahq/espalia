@@ -38,6 +38,21 @@ class Components::Kit::SegmentedControlTest < ActiveSupport::TestCase
       assert render_control.css("button").none? { _1["class"].split.include?("flex-1") }
     end
 
+    should "make link segments that mark the selected one as the current page" do
+      html = SegmentedControl.new(label: "Scope").call do |control|
+        control.segment("Whole cycle", href: "/cycles/1/cohort", selected: true)
+        control.segment("My org", href: "/cycles/1/cohort?scope=mine")
+      end
+      links = Nokogiri::HTML5.fragment(html).css("a")
+
+      assert_equal [ "page", nil ], links.map { _1["aria-current"] }
+      assert links.none? { _1.key?("aria-pressed") || _1.key?("type") }
+    end
+
+    should "reach 44px for a touch target" do
+      assert render_control(touch: true).css("button").all? { _1["class"].split.include?("min-h-11") }
+    end
+
     should "keep a caller's class on the track" do
       assert_includes render_control(class: "mt-1.5")["class"].split, "mt-1.5"
     end
