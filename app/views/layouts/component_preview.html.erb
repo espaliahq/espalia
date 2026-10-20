@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="<%= I18n.locale %>">
+<% display = params.dig(:lookbook, :display) || {} %>
+<% theme = display[:theme].presence_in(%w[bento]) %>
+<% scheme = display[:scheme].presence_in(%w[light dark]) %>
+<html <%= tag.attributes(lang: I18n.locale, data: { theme: theme, scheme: scheme }) %>>
   <head>
     <title>GrowthOS previews</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,8 +11,8 @@
     <%= stylesheet_link_tag "application" %>
     <%= javascript_importmap_tags %>
   </head>
-  <%# The app's own page surface (Kit::PageLayout), so a dark preview isn't dark ink on white. %>
-  <body class="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 p-6">
+  <%# The app's own page surface, so a dark preview isn't dark ink on white. %>
+  <body class="min-h-screen bg-page text-default p-6">
     <%= render Components::Kit::IconSprite.new %>
     <%= yield %>
   </body>
