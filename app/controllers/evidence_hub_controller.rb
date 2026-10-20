@@ -34,8 +34,12 @@ class EvidenceHubController < ApplicationController
     responded_items = responses.values.map { |r| r[:item] }
     # A suggestion block's id is the item's, so an item listed elsewhere on
     # the page must not be listed again under "Suggested placements".
-    with_suggestions = placed_with_suggestions(exclude: (shown + responded_items).map(&:id))
-    decidable = decidable_items(shown + with_suggestions, responded_items)
+    # Suggestion work only when something could show: a pending row somewhere,
+    # or a tenant that can ask for one. Off is the default.
+    can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
+    suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
+    with_suggestions = suggestions_live ? placed_with_suggestions(exclude: (shown + responded_items).map(&:id)) : []
+    decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
@@ -59,7 +63,7 @@ class EvidenceHubController < ApplicationController
       with_suggestions: with_suggestions,
       suggestions: Evidence::PlacementSuggestionRows.for(decidable),
       decidable_ids: decidable.to_set(&:id),
-      can_regenerate: Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant),
+      can_regenerate: can_regenerate,
       viewer_person_id: current_person.id,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
@@ -94,11 +98,9 @@ class EvidenceHubController < ApplicationController
 
   # Placed items about the viewer or the people they may place feedback for
   # (their subtree, a delegation's person on that framework) with pending
-  # placement suggestions — the extra cells the model sees. Skipped
-  # entirely while no suggestion is pending anywhere.
+  # placement suggestions — the extra cells the model sees.
   def placed_with_suggestions(exclude:)
     pending = EvidencePlacementSuggestion.pending
-    return [] unless pending.exists?
 
     report_ids = current_person.all_reports.pluck(:id)
     delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id, :framework_id)
