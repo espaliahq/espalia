@@ -67,6 +67,8 @@ class DesignTokens::RolesPreview < Lookbook::Preview
     case name
     when "--gos-content-inverse" then [ [ name, "--gos-surface-inverse", 4.5 ] ]
     when /\A--gos-\w+-content-inverse\z/ then []
+    # Decorative glyphs and disabled controls, which WCAG doesn't hold to 4.5:1
+    when "--gos-content-subtle", "--gos-content-disabled" then []
     when /\A--gos-content-/ then SURFACES.map { |surface| [ name, surface, 4.5 ] }
     when /\A--gos-border-/, "--gos-focus-ring" then SURFACES.map { |surface| [ name, surface, 3 ] }
     when "--gos-surface-inverse" then [ [ "--gos-content-inverse", name, 4.5 ] ]
