@@ -2291,7 +2291,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
           "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
-          "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+          "withdrawn feedback, where it was given (by_origin: GrowthOS, or the system it arrived from), " \
+          "request statuses, fulfilment rate, participant coverage, " \
           "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
           "recorded and requests sent in one calendar month of the cycle; the response lists " \
           "the months available.",
