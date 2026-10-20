@@ -120,7 +120,7 @@ class AssessmentCycles::AttainmentSystemTest < ApplicationSystemTestCase
     click_link_with_js_fallback "Manager", expect_text: "0/1 assessed"
 
     click_link_with_js_fallback "By role family",
-                                expect_selector: "a[aria-current='true'][href*='by=family']"
+                                expect_selector: "a[aria-current='page'][href*='by=family']"
   end
 
   should "reach the report from the cycle page" do

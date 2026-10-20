@@ -4,7 +4,8 @@
 # brand (#543), so a Stimulus controller only has to flip the segment's state attribute.
 #
 # Segments are buttons with `aria-pressed` in a labelled group. Inside a `role="menu"`, where every
-# control must be a menu item, `item_role: :menuitemradio` gives them `aria-checked` instead.
+# control must be a menu item, `item_role: :menuitemradio` gives them `aria-checked` instead. A segment
+# given `href:` is a link to that view of the page, marked `aria-current="page"` when selected.
 #
 # @example
 #   render Components::Kit::SegmentedControl.new(label: "Activity feed focus mode", size: :sm) do |control|
@@ -15,25 +16,30 @@ class Components::Kit::SegmentedControl < Components::Base
   TRACK = "items-stretch gap-0.5 rounded-full bg-neutral-muted p-0.5"
 
   SEGMENT = "inline-flex items-center justify-center rounded-full font-medium whitespace-nowrap text-muted " \
-            "cursor-pointer select-none transition-colors enabled:hover:text-default " \
+            "cursor-pointer select-none transition-colors not-disabled:hover:text-default " \
             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus " \
             "aria-pressed:bg-default aria-pressed:font-semibold aria-pressed:text-default " \
             "aria-checked:bg-default aria-checked:font-semibold aria-checked:text-default " \
+            "aria-[current=page]:bg-default aria-[current=page]:font-semibold aria-[current=page]:text-default " \
             "disabled:cursor-not-allowed disabled:text-disabled"
 
   SIZES = {
-    sm: "min-h-6 px-2.5 text-xs",
-    md: "min-h-8 px-3 text-[13px]"
+    sm: "px-2.5 text-xs",
+    md: "px-3 text-[13px]"
   }.freeze
+
+  HEIGHTS = { sm: "min-h-6", md: "min-h-8" }.freeze
+  TOUCH = "min-h-11"
 
   # @param label [String, nil] the group's accessible name; pass `aria: { labelledby: }` for a visible label
   # @param size [Symbol] :sm or :md
   # @param fill [Boolean] stretch the track to its container and share the width between segments
   # @param item_role [Symbol, nil] :menuitemradio inside a menu; segments are plain buttons otherwise
+  # @param touch [Boolean] segments at least 44px tall, for a touch target
   # @param attrs [Hash] passed through to the track; `class:` is appended
-  def initialize(label: nil, size: :md, fill: false, item_role: nil, **attrs)
+  def initialize(label: nil, size: :md, fill: false, item_role: nil, touch: false, **attrs)
     @label = label
-    @size = SIZES.fetch(size)
+    @size = "#{SIZES.fetch(size)} #{touch ? TOUCH : HEIGHTS.fetch(size)}"
     @fill = fill
     @item_role = item_role
     @attrs = attrs
@@ -46,11 +52,16 @@ class Components::Kit::SegmentedControl < Components::Base
 
   # @param label [String]
   # @param selected [Boolean]
-  # @param disabled [Boolean]
-  # @param attrs [Hash] passed through to the segment's button
-  def segment(label, selected: false, disabled: false, **attrs)
-    button(**mix({ type: "button", disabled: disabled, class: "#{SEGMENT} #{@size}#{" flex-1" if @fill}" },
-                 state(selected), attrs)) { plain label }
+  # @param href [String, nil] makes the segment a link to that view
+  # @param disabled [Boolean] buttons only
+  # @param attrs [Hash] passed through to the segment's button or link
+  def segment(label, selected: false, href: nil, disabled: false, **attrs)
+    classes = { class: "#{SEGMENT} #{@size}#{" flex-1" if @fill}" }
+    if href
+      a(**mix(classes, { href: href, aria: { current: ("page" if selected) }.compact }, attrs)) { plain label }
+    else
+      button(**mix(classes, { type: "button", disabled: disabled }, state(selected), attrs)) { plain label }
+    end
   end
 
   private

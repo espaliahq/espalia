@@ -111,17 +111,17 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   end
 
   def perspective_tabs
-    nav(class: "inline-flex gap-1 rounded-md bg-muted p-0.5", aria: { label: "Rating perspective" }) do
+    render Components::Kit::SegmentedControl.new(label: "Rating perspective") do |control|
       PERSPECTIVES.each do |key, label|
-        segment_link(label, attainment_path(perspective: key), active: key == @perspective)
+        control.segment(label, href: attainment_path(perspective: key), selected: key == @perspective)
       end
     end
   end
 
   def by_tabs
-    nav(class: "inline-flex gap-1 rounded-md bg-muted p-0.5", aria: { label: "Column axis" }) do
+    render Components::Kit::SegmentedControl.new(label: "Column axis") do |control|
       BY_TABS.each do |key, label|
-        segment_link(label, attainment_path(by: key), active: key == @by)
+        control.segment(label, href: attainment_path(by: key), selected: key == @by)
       end
     end
   end
@@ -131,21 +131,10 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def scope_toggle
     return unless @can_scope_to_self
 
-    nav(class: "inline-flex gap-1 rounded-md bg-muted p-0.5", aria: { label: "Scope" }) do
-      segment_link("Whole cycle", attainment_path(scope: nil), active: @scope == "all")
-      segment_link("My org", attainment_path(scope: "mine"), active: @scope == "mine")
+    render Components::Kit::SegmentedControl.new(label: "Scope") do |control|
+      control.segment("Whole cycle", href: attainment_path(scope: nil), selected: @scope == "all")
+      control.segment("My org", href: attainment_path(scope: "mine"), selected: @scope == "mine")
     end
-  end
-
-  def segment_link(label, href, active:)
-    a(
-      href: href,
-      aria: { current: active ? "true" : nil },
-      class: [
-        "rounded px-3 py-1 text-sm font-medium",
-        active ? "bg-default text-default shadow-xs" : "text-muted hover:text-default"
-      ].join(" ")
-    ) { label }
   end
 
   # Builds the report path preserving the other axes.
