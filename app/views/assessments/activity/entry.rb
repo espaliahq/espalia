@@ -485,14 +485,14 @@ class Views::Assessments::Activity::Entry < Views::Base
     Views::Evidence::Valence::LABELS[payload_value(:valence)]
   end
 
-  # "Growth area (was Demonstrates)" — or just the new label when the link
-  # was pre-valence (nil) before this reclassification.
   # Said when a person accepted a placement suggestion rather than choosing
   # the cell themselves; the event carries the suggestion's id.
   def from_suggestion_note
     "from a suggestion" if payload_value(:via_suggestion_id).present?
   end
 
+  # "Growth area (was Demonstrates)" — or just the new label when the link
+  # was pre-valence (nil) before this reclassification.
   def revalence_secondary
     new_label = valence_label_or_nil
     return nil unless new_label
