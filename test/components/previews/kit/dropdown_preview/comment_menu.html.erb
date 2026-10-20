@@ -1,17 +1,12 @@
-<% item = "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover" %>
 <div class="flex <%= align == :right ? "justify-end" : "" %> max-w-md">
   <%= render Components::Kit::Dropdown.new(align: align, strategy: strategy) do |dropdown| %>
-    <%= render Components::Kit::Button.new(
-          variant: :ghost, size: :xs, icon: true, aria_label: "Comment actions",
-          data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-          aria: { haspopup: "menu", expanded: "false" }
-        ) do %>
+    <% dropdown.trigger(label: "Comment actions", button: { variant: :ghost, size: :xs, icon: true }) do %>
       <svg class="size-4" aria-hidden="true" focusable="false"><use href="#icon-kebab"></use></svg>
     <% end %>
     <% dropdown.menu(width: "w-32") do %>
-      <button type="button" role="menuitem" class="<%= item %>" data-action="dropdown#close">Reply</button>
-      <button type="button" role="menuitem" class="<%= item %>" data-action="dropdown#close">Edit</button>
-      <button type="button" role="menuitem" class="block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle" data-action="dropdown#close">Delete</button>
+      <% dropdown.item(size: :xs, data: { action: "dropdown#close" }) { "Reply" } %>
+      <% dropdown.item(size: :xs, data: { action: "dropdown#close" }) { "Edit" } %>
+      <% dropdown.item(tone: :danger, size: :xs, data: { action: "dropdown#close" }) { "Delete" } %>
     <% end %>
   <% end %>
 </div>

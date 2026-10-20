@@ -248,7 +248,7 @@ class Frameworks::ExplorerMenuSystemTest < ApplicationSystemTestCase
             discuss: read("button.explorer-discuss svg"),
             pencil: read("button.explorer-cluster-btn svg"),
             add: read("button.explorer-add svg"),
-            tree: read("[data-tree-target='role'] [aria-haspopup='true'] svg")
+            tree: read("[data-tree-target='role'] [aria-haspopup='menu'] svg")
           };
         })()
       JS

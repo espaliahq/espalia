@@ -28,6 +28,7 @@ class Components::Shell::UserMenu < Components::Base
     # also hosts the notification bell dropdown.
     div(id: "user-menu", class: "inline-block") do
       render Components::Kit::Dropdown.new(align: :right) do |dropdown|
+        @dropdown = dropdown
         dropdown.trigger(focus_ring: "rounded-full focus-visible:ring-focus") { avatar_circle }
         dropdown.menu { menu_content }
       end
@@ -64,11 +65,7 @@ class Components::Shell::UserMenu < Components::Base
   end
 
   def notifications_link
-    a(
-      href: settings_notifications_path,
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
-      role: "menuitem"
-    ) do
+    @dropdown.item(href: settings_notifications_path) do
       svg(xmlns: "http://www.w3.org/2000/svg", class: "h-4 w-4", fill: "none",
           viewBox: "0 0 24 24", stroke: "currentColor", aria: { hidden: "true" }) do |s|
         s.path(stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "2",
@@ -116,12 +113,7 @@ class Components::Shell::UserMenu < Components::Base
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
         input(type: "hidden", name: "tenant_id", value: tenant.id)
-        button(
-          type: "submit",
-          class: "flex items-center gap-2 w-full px-4 py-2 text-sm text-muted " \
-                 "hover:bg-default-hover text-left",
-          role: "menuitem"
-        ) do
+        @dropdown.item(type: "submit") do
           # Empty space to align with checkmark
           span(class: "w-4 h-4 shrink-0")
           span(class: "truncate") { tenant.name }
@@ -131,23 +123,14 @@ class Components::Shell::UserMenu < Components::Base
   end
 
   def ai_assistants_link
-    a(
-      href: settings_connected_clients_path,
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
-      role: "menuitem"
-    ) do
+    @dropdown.item(href: settings_connected_clients_path) do
       ai_assistants_icon
       span { "AI assistants" }
     end
   end
 
   def sign_out_link
-    a(
-      href: destroy_user_session_path,
-      data: { turbo_method: :delete },
-      class: "flex items-center gap-2 px-4 py-2 text-sm text-muted hover:bg-default-hover",
-      role: "menuitem"
-    ) do
+    @dropdown.item(href: destroy_user_session_path, data: { turbo_method: :delete }) do
       sign_out_icon
       span { "Sign out" }
     end

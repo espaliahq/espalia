@@ -40,7 +40,9 @@ module Components::Kit::Field
              "focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-focus " \
              "disabled:cursor-not-allowed disabled:opacity-50"
 
+  # The forms plugin's dot is a white SVG, which vanishes on a pale brand; this one takes the contrast helper's ink
   RADIO = "size-4 rounded-full border border-strong bg-field checked:border-strong checked:bg-brand-strong " \
+          "checked:bg-[radial-gradient(circle_closest-side,var(--gos-brand-content-inverse)_37.5%,transparent_40%)] " \
           "focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-focus " \
           "disabled:cursor-not-allowed disabled:opacity-50"
 

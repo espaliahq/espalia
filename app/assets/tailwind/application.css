@@ -805,32 +805,17 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   position: relative;
 }
 
-/* The neutral secondary button and the red inline-error panel. Named here
- * because `Shared::FrameLoadError` ships one of each into EVERY expanded-row
- * placeholder — ~11 KB of repeated utility text in one matrix frame. Their
- * Ruby constants now carry these names, so every other caller follows. */
+/* Kit::Button (outline, neutral, md, touch) and a small danger Kit::Alert, as
+ * one class each. `Shared::FrameLoadError` ships both into EVERY expanded-row
+ * placeholder and `Shared::SubmitFallbackMessage` sits beside every rating
+ * pill, so the components' utility strings would repeat hundreds of times a
+ * frame (#383). test/lib/kit_css_components_test.rb holds each to its component. */
 .kit-btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-  padding-inline: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--gos-border-emphasized);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 500;
-  color: var(--gos-content-default);
-  cursor: pointer;
+  @apply inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border font-medium whitespace-nowrap cursor-pointer select-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed aria-disabled:cursor-not-allowed tone-neutral bg-default border-tone text-tone-content-strong hover:bg-tone-subtle active:bg-tone-muted disabled:bg-default disabled:border-disabled disabled:text-disabled aria-disabled:bg-default aria-disabled:border-disabled aria-disabled:text-disabled h-9 px-3.5 text-sm min-h-11 min-w-11;
 }
 
 .kit-alert-panel {
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--gos-border-danger);
-  background-color: var(--gos-danger-subtle);
-  font-size: 0.75rem;
-  line-height: 1rem;
-  color: var(--gos-content-danger);
+  @apply rounded-md border tone-danger bg-tone-subtle border-tone text-tone-content-strong px-3 py-2 text-xs;
 }
 
 .mx-cell,

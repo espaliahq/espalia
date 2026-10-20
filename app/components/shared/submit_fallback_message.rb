@@ -10,10 +10,9 @@
 #     classes: "absolute left-0 top-full mt-1 z-20 w-max max-w-64"
 #   )
 class Components::Shared::SubmitFallbackMessage < Components::Base
-  # The red inline-error panel. Public so other surfaces that render the same
-  # "something went wrong here" panel outside this component's live region —
-  # the evidence modal's frame-load error — share one definition instead of
-  # retyping the class string.
+  # A small danger Kit::Alert's look as one CSS class (application.css), because
+  # one sits beside every rating pill. Public so the frame-load error and the
+  # field editor share it.
   PANEL_CLASSES = "kit-alert-panel"
 
   # @param classes [String] positioning/sizing utilities for the host surface
