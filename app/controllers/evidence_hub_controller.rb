@@ -31,8 +31,11 @@ class EvidenceHubController < ApplicationController
     to_place_for_team = to_place.exists? ? placeable_for_team(to_place) : []
     responses = responses_for(completed_outgoing)
     shown = authored + to_place_about_me + to_place_for_team
-    with_suggestions = placed_with_suggestions(exclude: shown.map(&:id))
-    decidable = decidable_items(shown + with_suggestions, responses.values.map { |r| r[:item] })
+    responded_items = responses.values.map { |r| r[:item] }
+    # A suggestion block's id is the item's, so an item listed elsewhere on
+    # the page must not be listed again under "Suggested placements".
+    with_suggestions = placed_with_suggestions(exclude: (shown + responded_items).map(&:id))
+    decidable = decidable_items(shown + with_suggestions, responded_items)
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and

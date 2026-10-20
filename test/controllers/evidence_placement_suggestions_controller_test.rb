@@ -66,6 +66,25 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       get evidence_hub_path
       assert_select "#suggested-placements ##{EvidenceItem.dom_id(placed.id)} li[data-suggestion-id]", count: 1
     end
+
+    should "show a requested response's suggestions once, on its response card" do
+      request_id = SecureRandom.uuid_v7
+      response_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = PersonDevelopment::CommandHandler.new
+        handler.request_evidence(@alex.id, @framework_id, request_id, requested_by_id: @morgan.id,
+          requestee_person_id: @jordan.id, capability_stable_id: @collaboration.stable_id, level_ordinal: 3)
+        handler.record_evidence_for_request(@alex.id, @framework_id, request_id, response_id, responded_by_id: @jordan.id,
+          capability_stable_id: @collaboration.stable_id, level_ordinal: 3, valence: "demonstrated",
+          source: "peer", evidence_type: "peer_feedback", content: "Answered.", author_id: @jordan.id)
+        create(:evidence_placement_suggestion, tenant: @tenant, evidence_id: response_id, person_id: @alex.id,
+          framework_id: @framework_id, capability_stable_id: @ownership.stable_id)
+      end
+
+      sign_in @morgan_user
+      get evidence_hub_path
+      assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(response_id)}", count: 1
+    end
   end
 
   context "accepting" do
