@@ -95,10 +95,10 @@ end
 
 - **One preview class per component**, in `test/components/previews/kit/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
 - **A `playground` scenario with `# @param` tags** gives live controls (text fields, selects) in the Lookbook UI.
-- **Previews render in the app's own layout**, so Tailwind, the colour tokens, dark mode and Stimulus all behave as they do in the app. The default theme applies; there is no tenant.
+- **Previews render in `layouts/component_preview.html.erb`**: the app's stylesheets, import map and icon sprite on the page surface, so Tailwind, the colour roles and Stimulus behave as they do in the app. There's no tenant, so no tenant theme and no `PageLayout`. The toolbar's gear icon switches **Theme** and **Scheme** for every preview.
 - **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
 
-- **What's there:** **Design Tokens** (every colour token, read from `application.css` so a new one appears on its own, with its contrast in each scheme; the Tailwind palette and the type scale), then every Kit component and an **Icons** gallery. The app-shell components (Navbar, UserMenu, PageLayout, TenantAdminLayout, ImpersonationBanner) aren't previewed yet.
+- **What's there:** **Design Tokens** (the colour roles, read from `theme/roles.css`, and the brand tokens, read from `application.css`, so a new one appears on its own, each with its measured contrast; a proof of the contrast helper; the Tailwind palette and the type scale), then every Kit component and an **Icons** gallery. The app-shell components (Navbar, UserMenu, PageLayout, TenantAdminLayout, ImpersonationBanner) aren't previewed yet.
 - **Every Kit component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing; skip a component there by name, with the reason.
 - **The sidebar sorts folders alphabetically** and its path is the URL, so moving a preview changes its link. `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
 - **A class that appears only in a preview is still built into the CSS.** Pass a component its real arguments; don't write its class names into the preview, or a class the component builds by interpolation will render in Lookbook and nowhere else.
