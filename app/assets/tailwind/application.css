@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./theme/roles.css";
+@import "./theme/domain.css";
 
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";

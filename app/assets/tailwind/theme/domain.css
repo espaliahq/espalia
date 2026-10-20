@@ -1,0 +1,153 @@
+/*
+ * Domain palettes: colours that carry assessment meaning, one token each, so
+ * a theme can set them and no view names a palette step. Default values are
+ * the steps the views used before these tokens existed.
+ *
+ * The dark pill fill was 30% alpha; it is now an opaque srgb mix, which is
+ * how the alpha composited. It mixes into the overlay surface because the
+ * assessment card it sits on is white / gray-900, the overlay pair.
+ */
+:root {
+  /* Rating frequency: the hue (chip fill, dot, outline), the ink on a chip,
+     the softer pill, and the lighter, dashed carried-forward treatment */
+  --gos-rating-none: var(--color-red-500);
+  --gos-rating-none-chip-content: var(--color-red-950);
+  --gos-rating-none-carried: var(--color-red-300);
+  --gos-rating-none-carried-border: var(--color-red-600);
+  --gos-rating-none-pill: var(--color-red-100);
+  --gos-rating-none-pill-content: var(--color-red-800);
+  --gos-rating-none-pill-carried-border: var(--color-red-400);
+
+  --gos-rating-some: var(--color-yellow-500);
+  --gos-rating-some-chip-content: var(--color-yellow-950);
+  --gos-rating-some-carried: var(--color-yellow-300);
+  --gos-rating-some-carried-border: var(--color-yellow-600);
+  --gos-rating-some-pill: var(--color-yellow-100);
+  --gos-rating-some-pill-content: var(--color-yellow-800);
+  --gos-rating-some-pill-carried-border: var(--color-yellow-500);
+
+  --gos-rating-occasional: var(--color-green-500);
+  --gos-rating-occasional-chip-content: var(--color-green-950);
+  --gos-rating-occasional-carried: var(--color-green-300);
+  --gos-rating-occasional-carried-border: var(--color-green-600);
+  --gos-rating-occasional-pill: var(--color-green-100);
+  --gos-rating-occasional-pill-content: var(--color-green-800);
+  --gos-rating-occasional-pill-carried-border: var(--color-green-500);
+
+  --gos-rating-consistent: var(--color-blue-500);
+  --gos-rating-consistent-chip-content: var(--color-blue-950);
+  --gos-rating-consistent-carried: var(--color-blue-300);
+  --gos-rating-consistent-carried-border: var(--color-blue-600);
+  --gos-rating-consistent-pill: var(--color-blue-100);
+  --gos-rating-consistent-pill-content: var(--color-blue-800);
+  --gos-rating-consistent-pill-carried-border: var(--color-blue-400);
+
+  /* Score tone: the performance state's colour, as text and as a bar */
+  --gos-score-below: var(--color-red-700);
+  --gos-score-below-fill: var(--color-red-500);
+  --gos-score-progressing: var(--color-amber-700);
+  --gos-score-progressing-fill: var(--color-amber-500);
+  --gos-score-performing: var(--color-green-700);
+  --gos-score-performing-fill: var(--color-green-500);
+  --gos-score-ahead: var(--color-purple-600);
+  --gos-score-ahead-fill: var(--color-purple-500);
+
+  /* Activity event type: the dot beside a feed entry. Framework and
+     calibration feeds reuse the hues under their own names. */
+  --gos-activity-self: var(--color-emerald-500);
+  --gos-activity-manager: var(--color-indigo-500);
+  --gos-activity-attention: var(--color-amber-500);
+  --gos-activity-discussion: var(--color-sky-500);
+  --gos-activity-complete: var(--color-green-600);
+  --gos-activity-cleared: var(--color-gray-400);
+  --gos-activity-version: var(--color-purple-500);
+  --gos-activity-added: var(--gos-activity-self);
+  --gos-activity-updated: var(--gos-activity-manager);
+  --gos-activity-peer: var(--gos-activity-attention);
+
+  @variant dark {
+    --gos-rating-none: var(--color-red-400);
+    --gos-rating-none-carried-border: var(--color-red-500);
+    --gos-rating-none-pill: color-mix(in srgb, var(--color-red-900) 30%, var(--gos-surface-overlay));
+    --gos-rating-none-pill-content: var(--color-red-300);
+    --gos-rating-none-pill-carried-border: var(--color-red-500);
+
+    --gos-rating-some: var(--color-yellow-400);
+    --gos-rating-some-carried-border: var(--color-yellow-500);
+    --gos-rating-some-pill: color-mix(in srgb, var(--color-yellow-900) 30%, var(--gos-surface-overlay));
+    --gos-rating-some-pill-content: var(--color-yellow-300);
+
+    --gos-rating-occasional: var(--color-green-400);
+    --gos-rating-occasional-carried-border: var(--color-green-500);
+    --gos-rating-occasional-pill: color-mix(in srgb, var(--color-green-900) 30%, var(--gos-surface-overlay));
+    --gos-rating-occasional-pill-content: var(--color-green-300);
+
+    --gos-rating-consistent: var(--color-blue-400);
+    --gos-rating-consistent-carried-border: var(--color-blue-500);
+    --gos-rating-consistent-pill: color-mix(in srgb, var(--color-blue-900) 30%, var(--gos-surface-overlay));
+    --gos-rating-consistent-pill-content: var(--color-blue-300);
+    --gos-rating-consistent-pill-carried-border: var(--color-blue-500);
+
+    --gos-score-below: var(--color-red-400);
+    --gos-score-progressing: var(--color-amber-400);
+    --gos-score-performing: var(--color-green-400);
+    --gos-score-ahead: var(--color-purple-400);
+  }
+}
+
+@theme inline {
+  --background-color-rating-none: var(--gos-rating-none);
+  --background-color-rating-none-carried: var(--gos-rating-none-carried);
+  --background-color-rating-none-pill: var(--gos-rating-none-pill);
+  --background-color-rating-some: var(--gos-rating-some);
+  --background-color-rating-some-carried: var(--gos-rating-some-carried);
+  --background-color-rating-some-pill: var(--gos-rating-some-pill);
+  --background-color-rating-occasional: var(--gos-rating-occasional);
+  --background-color-rating-occasional-carried: var(--gos-rating-occasional-carried);
+  --background-color-rating-occasional-pill: var(--gos-rating-occasional-pill);
+  --background-color-rating-consistent: var(--gos-rating-consistent);
+  --background-color-rating-consistent-carried: var(--gos-rating-consistent-carried);
+  --background-color-rating-consistent-pill: var(--gos-rating-consistent-pill);
+
+  --text-color-rating-none-chip: var(--gos-rating-none-chip-content);
+  --text-color-rating-none-pill: var(--gos-rating-none-pill-content);
+  --text-color-rating-some-chip: var(--gos-rating-some-chip-content);
+  --text-color-rating-some-pill: var(--gos-rating-some-pill-content);
+  --text-color-rating-occasional-chip: var(--gos-rating-occasional-chip-content);
+  --text-color-rating-occasional-pill: var(--gos-rating-occasional-pill-content);
+  --text-color-rating-consistent-chip: var(--gos-rating-consistent-chip-content);
+  --text-color-rating-consistent-pill: var(--gos-rating-consistent-pill-content);
+
+  --border-color-rating-none: var(--gos-rating-none);
+  --border-color-rating-none-carried: var(--gos-rating-none-carried-border);
+  --border-color-rating-none-pill-carried: var(--gos-rating-none-pill-carried-border);
+  --border-color-rating-some: var(--gos-rating-some);
+  --border-color-rating-some-carried: var(--gos-rating-some-carried-border);
+  --border-color-rating-some-pill-carried: var(--gos-rating-some-pill-carried-border);
+  --border-color-rating-occasional: var(--gos-rating-occasional);
+  --border-color-rating-occasional-carried: var(--gos-rating-occasional-carried-border);
+  --border-color-rating-occasional-pill-carried: var(--gos-rating-occasional-pill-carried-border);
+  --border-color-rating-consistent: var(--gos-rating-consistent);
+  --border-color-rating-consistent-carried: var(--gos-rating-consistent-carried-border);
+  --border-color-rating-consistent-pill-carried: var(--gos-rating-consistent-pill-carried-border);
+
+  --text-color-score-below: var(--gos-score-below);
+  --text-color-score-progressing: var(--gos-score-progressing);
+  --text-color-score-performing: var(--gos-score-performing);
+  --text-color-score-ahead: var(--gos-score-ahead);
+  --background-color-score-below: var(--gos-score-below-fill);
+  --background-color-score-progressing: var(--gos-score-progressing-fill);
+  --background-color-score-performing: var(--gos-score-performing-fill);
+  --background-color-score-ahead: var(--gos-score-ahead-fill);
+
+  --background-color-activity-self: var(--gos-activity-self);
+  --background-color-activity-manager: var(--gos-activity-manager);
+  --background-color-activity-attention: var(--gos-activity-attention);
+  --background-color-activity-discussion: var(--gos-activity-discussion);
+  --background-color-activity-complete: var(--gos-activity-complete);
+  --background-color-activity-cleared: var(--gos-activity-cleared);
+  --background-color-activity-version: var(--gos-activity-version);
+  --background-color-activity-added: var(--gos-activity-added);
+  --background-color-activity-updated: var(--gos-activity-updated);
+  --background-color-activity-peer: var(--gos-activity-peer);
+}

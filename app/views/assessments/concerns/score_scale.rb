@@ -27,12 +27,14 @@ module Views::Assessments::Concerns::ScoreScale
   end
 
   TONE_TEXT = {
-    red: "text-red-700 dark:text-red-400",
-    amber: "text-amber-700 dark:text-amber-400",
-    green: "text-green-700 dark:text-green-400",
-    purple: "text-purple-600 dark:text-purple-400"
+    red: "text-score-below",
+    amber: "text-score-progressing",
+    green: "text-score-performing",
+    purple: "text-score-ahead"
   }.freeze
-  TONE_BAR = { red: "bg-red-500", amber: "bg-amber-500", green: "bg-green-500", purple: "bg-purple-500" }.freeze
+  TONE_BAR = {
+    red: "bg-score-below", amber: "bg-score-progressing", green: "bg-score-performing", purple: "bg-score-ahead"
+  }.freeze
   TONE_DOT = TONE_BAR
 
   # @param state [Symbol, nil] a `performance_state` symbol

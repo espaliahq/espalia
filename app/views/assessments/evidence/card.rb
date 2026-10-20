@@ -17,9 +17,9 @@ class Views::Assessments::Evidence::Card < Views::Base
   include Views::Evidence::Valence
 
   SOURCE_DOT = {
-    "self"    => "bg-emerald-500",
-    "manager" => "bg-indigo-500",
-    "peer"    => "bg-amber-500"
+    "self"    => "bg-activity-self",
+    "manager" => "bg-activity-manager",
+    "peer"    => "bg-activity-peer"
   }.freeze
 
   TYPE_LABEL = {
@@ -185,7 +185,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def source_dot
-    color = SOURCE_DOT[@item.source] || "bg-gray-400"
+    color = SOURCE_DOT[@item.source] || "bg-activity-cleared"
     span(
       class: "mt-1 w-2 h-2 rounded-full shrink-0 #{color}",
       title: @item.source.to_s.capitalize

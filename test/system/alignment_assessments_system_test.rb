@@ -219,8 +219,8 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
 
       # Top-left overlay slice is the manager's "consistent" (blue-500);
       # the base (bottom-right) is the report's "occasional" (green-500).
-      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-blue-500", visible: :all
-      assert_selector "#cell-#{@cap_stable}-2.bg-green-500"
+      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-rating-consistent", visible: :all
+      assert_selector "#cell-#{@cap_stable}-2.bg-rating-occasional"
 
       # Hero secondary percentages lead with the viewer's own — "Mgr:" first.
       percents = find("#hero-secondary-percents", visible: :all).text
@@ -259,8 +259,8 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       visit assessment_path(@report_assignment, capability: @cap_stable)
       wait_for_stimulus "matrix"
 
-      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-green-500", visible: :all
-      assert_selector "#cell-#{@cap_stable}-2.bg-blue-500"
+      assert_selector "#cell-#{@cap_stable}-2 [data-split].bg-rating-occasional", visible: :all
+      assert_selector "#cell-#{@cap_stable}-2.bg-rating-consistent"
 
       # Hero secondary percentages lead with the viewer's own — "Self:" first.
       percents = find("#hero-secondary-percents", visible: :all).text

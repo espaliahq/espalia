@@ -172,7 +172,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "h1", text: "Report Alex"
 
       assert_no_selector "#cell-#{@cap_stable}-2 [data-split]"
-      assert_selector "#cell-#{@cap_stable}-2.bg-green-500"
+      assert_selector "#cell-#{@cap_stable}-2.bg-rating-occasional"
     end
 
     should "split the chip colour-vs-grey when only one perspective has rated" do
@@ -226,7 +226,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "h1", text: "Report Alex"
 
       # Manager's explicit slice (top-left overlay) is solid blue-500.
-      assert_selector "#cell-#{@cap_stable}-1 [data-split].bg-blue-500", visible: :all
+      assert_selector "#cell-#{@cap_stable}-1 [data-split].bg-rating-consistent", visible: :all
       # Report's assumed slice (chip base) is the lighter blue-300.
       assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
     end

@@ -365,7 +365,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       html = render_hero(state: :progressing, statuses: { "cap-a" => :blocked },
                          components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
       assert_includes html, "You&#39;re held back at E3 by 1 blocked capability."
-      assert_includes html, "text-amber-700", "a blocked score is coloured like its verdict, not its number"
+      assert_includes html, "text-score-progressing", "a blocked score is coloured like its verdict, not its number"
     end
 
     # #485: an unrated capability is not a judgement, so it is never counted
@@ -400,8 +400,8 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
     should "colour the number and bar by state" do
       html = render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.62, score: 1.62 })
-      assert_includes html, "text-purple-600"
-      assert_includes html, "bg-purple-500"
+      assert_includes html, "text-score-ahead"
+      assert_includes html, "bg-score-ahead"
     end
 
     should "read as the top of the ladder when there is no level above" do

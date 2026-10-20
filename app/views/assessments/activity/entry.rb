@@ -11,31 +11,31 @@ class Views::Assessments::Activity::Entry < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
 
   KIND_DOT = {
-    "self_rated"               => "bg-emerald-500",
-    "self_rating_revised"      => "bg-emerald-500",
-    "self_rating_cleared"      => "bg-gray-400",
-    "manager_rated"            => "bg-indigo-500",
-    "manager_rating_revised"   => "bg-indigo-500",
-    "manager_rating_cleared"   => "bg-gray-400",
-    "assessment_aligned"       => "bg-amber-500",
-    "alignment_cleared"        => "bg-gray-400",
-    "evidence_recorded"        => "bg-amber-500",
-    "evidence_relinked"        => "bg-sky-500",
-    "evidence_linked"          => "bg-sky-500",
-    "evidence_unlinked"        => "bg-gray-400",
-    "evidence_revalenced"      => "bg-sky-500",
-    "evidence_withdrawn"       => "bg-gray-400",
-    "alignment_started"        => "bg-amber-500",
-    "alignment_completed"      => "bg-green-600",
-    "alignment_reopened"       => "bg-amber-500",
-    "comment_posted"           => "bg-sky-500",
-    "evidence_link_commented"  => "bg-sky-500",
-    "delegation_granted"       => "bg-indigo-500",
-    "delegation_revoked"       => "bg-gray-400",
-    "reporting_manager_recorded" => "bg-sky-500",
-    "rating_revisit_requested" => "bg-amber-500",
-    "exploration_started"      => "bg-sky-500",
-    "exploration_closed"       => "bg-gray-400"
+    "self_rated"               => "bg-activity-self",
+    "self_rating_revised"      => "bg-activity-self",
+    "self_rating_cleared"      => "bg-activity-cleared",
+    "manager_rated"            => "bg-activity-manager",
+    "manager_rating_revised"   => "bg-activity-manager",
+    "manager_rating_cleared"   => "bg-activity-cleared",
+    "assessment_aligned"       => "bg-activity-attention",
+    "alignment_cleared"        => "bg-activity-cleared",
+    "evidence_recorded"        => "bg-activity-attention",
+    "evidence_relinked"        => "bg-activity-discussion",
+    "evidence_linked"          => "bg-activity-discussion",
+    "evidence_unlinked"        => "bg-activity-cleared",
+    "evidence_revalenced"      => "bg-activity-discussion",
+    "evidence_withdrawn"       => "bg-activity-cleared",
+    "alignment_started"        => "bg-activity-attention",
+    "alignment_completed"      => "bg-activity-complete",
+    "alignment_reopened"       => "bg-activity-attention",
+    "comment_posted"           => "bg-activity-discussion",
+    "evidence_link_commented"  => "bg-activity-discussion",
+    "delegation_granted"       => "bg-activity-manager",
+    "delegation_revoked"       => "bg-activity-cleared",
+    "reporting_manager_recorded" => "bg-activity-discussion",
+    "rating_revisit_requested" => "bg-activity-attention",
+    "exploration_started"      => "bg-activity-discussion",
+    "exploration_closed"       => "bg-activity-cleared"
   }.freeze
 
   # Maps each entry kind into one of the four user-facing groups that
@@ -110,7 +110,7 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   def dot_class
-    KIND_DOT[@entry.kind] || "bg-gray-400"
+    KIND_DOT[@entry.kind] || "bg-activity-cleared"
   end
 
   def kind_group
