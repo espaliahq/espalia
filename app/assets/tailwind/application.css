@@ -3,6 +3,19 @@
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
 
+/* Dark follows the OS unless <html data-scheme> overrides it: "light" opts out, "dark" opts in. */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-scheme="light"]), :root:not([data-scheme="light"]) *) {
+      @slot;
+    }
+  }
+
+  &:where([data-scheme="dark"], [data-scheme="dark"] *) {
+    @slot;
+  }
+}
+
 @theme {
   --font-sans: InterVariable, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   /* https://rsms.me/inter/lab */
@@ -20,8 +33,8 @@
   --color-primary-ink: color-mix(in oklab, var(--color-primary) 55%, black);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root {
+  @variant dark {
     --color-primary: #5ee0e0;
     --color-secondary: #0ababa;
     --color-nav-bg: #1a1a2e;
@@ -35,8 +48,8 @@
     --color-primary-ink: oklch(from var(--color-primary) min(l, 0.5) c h);
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
+  :root {
+    @variant dark {
       --color-primary-ink: oklch(from var(--color-primary) max(l, 0.75) c h);
     }
   }
@@ -45,15 +58,18 @@
 /*
  * Let native date/time controls (and their calendar-picker glyph) follow the
  * active colour scheme. Without this the WebKit picker indicator is dark and
- * disappears against our dark-mode field backgrounds. `light dark` lets the
- * browser render the control for whichever scheme prefers-color-scheme reports.
+ * disappears against our dark-mode field backgrounds.
  */
 input[type="date"],
 input[type="datetime-local"],
 input[type="time"],
 input[type="month"],
 input[type="week"] {
-  color-scheme: light dark;
+  color-scheme: light;
+
+  @variant dark {
+    color-scheme: dark;
+  }
 }
 
 /*
@@ -82,16 +98,16 @@ input[type="week"] {
     border-radius: 2px;
   }
 
-  @media (prefers-color-scheme: dark) {
-    a:focus-visible,
-    button:focus-visible,
-    input:focus-visible,
-    select:focus-visible,
-    textarea:focus-visible,
-    summary:focus-visible,
-    [role="button"]:focus-visible,
-    [role="menuitem"]:focus-visible,
-    [tabindex]:not([tabindex="-1"]):focus-visible {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    @variant dark {
       outline-color: #93c5fd; /* blue-300 — ≥3:1 on dark surfaces */
     }
   }
@@ -321,16 +337,20 @@ input[type="week"] {
   color: var(--color-green-700);
 }
 
-@media (prefers-color-scheme: dark) {
-  .explorer-menu-item {
+.explorer-menu-item {
+  @variant dark {
     color: var(--color-gray-200);
   }
+}
 
-  .explorer-menu-item:hover {
+.explorer-menu-item:hover {
+  @variant dark {
     background-color: var(--color-gray-700);
   }
+}
 
-  .explorer-menu-item--approve {
+.explorer-menu-item--approve {
+  @variant dark {
     color: var(--color-green-400);
   }
 }
@@ -449,9 +469,9 @@ input[type="week"] {
   background-color: var(--color-gray-100);
 }
 
-@media (prefers-color-scheme: dark) {
-  [data-hover-cluster="tree"]:hover .tree-actions,
-  [data-hover-cluster="tree"]:focus-within .tree-actions {
+[data-hover-cluster="tree"]:hover .tree-actions,
+[data-hover-cluster="tree"]:focus-within .tree-actions {
+  @variant dark {
     background-color: var(--color-gray-800);
   }
 }
@@ -465,9 +485,11 @@ input[type="week"] {
   }
 }
 
-@media (pointer: coarse) and (prefers-color-scheme: dark) {
+@media (pointer: coarse) {
   .tree-actions {
-    background-color: var(--color-gray-900);
+    @variant dark {
+      background-color: var(--color-gray-900);
+    }
   }
 }
 
@@ -508,8 +530,8 @@ input[type="week"] {
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 60%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  .explorer-add {
+.explorer-add {
+  @variant dark {
     border-color: var(--color-gray-700);
     color: var(--color-gray-300);
   }
@@ -843,64 +865,88 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   color: var(--color-red-700);
 }
 
-@media (prefers-color-scheme: dark) {
-  .mx-cell,
-  .mx-cap-cell,
-  .mx-exp-cell,
-  .mx-exp-gutter {
+.mx-cell,
+.mx-cap-cell,
+.mx-exp-cell,
+.mx-exp-gutter {
+  @variant dark {
     border-bottom-color: var(--color-gray-800);
     border-right-color: var(--color-gray-800);
   }
+}
 
-  .mx-exp-placeholder {
+.mx-exp-placeholder {
+  @variant dark {
     border-bottom-color: var(--color-gray-800);
   }
+}
 
-  .mx-cell-empty {
+.mx-cell-empty {
+  @variant dark {
     background-color: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
   }
+}
 
-  .mx-sticky-edge {
+.mx-sticky-edge {
+  @variant dark {
     box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);
   }
+}
 
-  .mx-row[data-focused="true"] > td.mx-sticky-edge {
+.mx-row[data-focused="true"] > td.mx-sticky-edge {
+  @variant dark {
     box-shadow: inset 0 1px 0 var(--mx-focus-ring), inset 0 -1px 0 var(--mx-focus-ring),
-                6px 0 8px -6px rgba(0, 0, 0, 0.65);
+    6px 0 8px -6px rgba(0, 0, 0, 0.65);
   }
+}
 
-  .mx-row:hover {
+.mx-row:hover {
+  @variant dark {
     background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent);
   }
+}
 
-  .mx-expectation {
+.mx-expectation {
+  @variant dark {
     color: var(--color-gray-300);
   }
+}
 
-  .mx-count,
-  .mx-badge {
+.mx-count,
+.mx-badge {
+  @variant dark {
     color: var(--color-gray-300);
   }
+}
 
-  .mx-badge {
+.mx-badge {
+  @variant dark {
     background-color: var(--color-gray-700);
   }
+}
 
-  .mx-exp-cell,
-  .mx-exp-placeholder {
+.mx-exp-cell,
+.mx-exp-placeholder {
+  @variant dark {
     background-color: color-mix(in oklab, var(--color-blue-900) 10%, transparent);
   }
+}
 
-  .mx-exp-cell--focusable:hover {
+.mx-exp-cell--focusable:hover {
+  @variant dark {
     background-color: color-mix(in oklab, var(--color-blue-900) 20%, transparent);
   }
+}
 
-  .kit-btn-secondary {
+.kit-btn-secondary {
+  @variant dark {
     border-color: var(--color-gray-600);
     color: var(--color-gray-200);
   }
+}
 
-  .kit-alert-panel {
+.kit-alert-panel {
+  @variant dark {
     border-color: var(--color-red-800);
     background-color: color-mix(in oklab, var(--color-red-900) 20%, transparent);
     color: var(--color-red-300);
@@ -961,10 +1007,17 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   border-left: 2px solid var(--color-gray-300);
 }
 
-@media (prefers-color-scheme: dark) {
-  .md-prose code,
-  .md-prose pre { background-color: var(--color-gray-800); }
-  .md-prose blockquote { border-left-color: var(--color-gray-600); }
+.md-prose code,
+.md-prose pre {
+  @variant dark {
+    background-color: var(--color-gray-800);
+  }
+}
+
+.md-prose blockquote {
+  @variant dark {
+    border-left-color: var(--color-gray-600);
+  }
 }
 
 /* The sign-in page (#514): Bento's tokens and type, scoped to the page
@@ -995,8 +1048,8 @@ html:has(.auth-page) {
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  html:has(.auth-page) {
+html:has(.auth-page) {
+  @variant dark {
     --auth-surface: #0a0917;
     --auth-content: #fbfbff;
     --auth-content-muted: #a5a5b3;

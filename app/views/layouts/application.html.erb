@@ -46,9 +46,12 @@
             :root { <%= light.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %> }
           <% end %>
           <% if dark.any? %>
+            <% dark_css = dark.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %>
+            <%# Same rule as the dark variant in application.css: the OS decides unless data-scheme overrides it %>
             @media (prefers-color-scheme: dark) {
-              :root { <%= dark.map { |k, v| "#{k}:#{v}" }.join('; ').html_safe %> }
+              :root:not([data-scheme="light"]) { <%= dark_css %> }
             }
+            :root[data-scheme="dark"] { <%= dark_css %> }
           <% end %>
         </style>
       <% end %>

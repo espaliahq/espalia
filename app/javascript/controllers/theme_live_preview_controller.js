@@ -81,6 +81,8 @@ export default class extends BaseController {
   }
 
   get prefersDark() {
+    const scheme = document.documentElement.dataset.scheme
+    if (scheme) return scheme === "dark"
     return window.matchMedia("(prefers-color-scheme: dark)").matches
   }
 }
