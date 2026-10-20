@@ -19,13 +19,15 @@ module FeedbackExchangeSignedRequest
   end
 
   # A signature is unique to one body, path and timestamp, so claiming it once
-  # for as long as the timestamp allows is the replay guard.
-  REPLAY_WINDOW = FeedbackExchange::Signature::MAX_SKEW
+  # is the replay guard. A timestamp is fresh from MAX_SKEW before now to
+  # MAX_SKEW after it, so a signature stays acceptable for up to twice MAX_SKEW
+  # and the claim has to outlast that.
+  REPLAY_WINDOW = FeedbackExchange::Signature::MAX_SKEW * 2
 
   private
 
   def authenticate_feedback_exchange_request!(&action)
-    return head :unauthorized unless signature_headers_present?
+    return head :unauthorized unless signature_headers_present? && fresh_timestamp?
 
     tenant = signing_tenant
     return head :unauthorized if tenant.nil?
@@ -40,12 +42,23 @@ module FeedbackExchangeSignedRequest
       request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER].present?
   end
 
+  # A stale or malformed timestamp is refused before any tenant is loaded and
+  # decrypted, so an unauthenticated flood costs no more than a header check.
+  def fresh_timestamp?
+    timestamp = Integer(request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER].to_s, 10)
+    (Time.current.to_i - timestamp).abs <= FeedbackExchange::Signature::MAX_SKEW
+  rescue ArgumentError
+    false
+  end
+
   # @return [Tenant, nil] the tenant whose inbound secret signed this request
   def signing_tenant
     body = request.raw_post
-    Tenant.where.not(feedback_exchange_credentials: nil).find do |tenant|
+    Tenant.where.not(feedback_exchange_credentials: nil).find_each do |tenant|
       secrets = tenant.feedback_exchange_secrets
-      secrets.inbound_secret.present? && FeedbackExchange::Signature.verify(
+      next if secrets.inbound_secret.blank?
+
+      verified = FeedbackExchange::Signature.verify(
         signature: request.headers[FeedbackExchange::Signature::SIGNATURE_HEADER],
         timestamp: request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER],
         secret: secrets.inbound_secret,
@@ -55,7 +68,9 @@ module FeedbackExchangeSignedRequest
         path_with_query: request.fullpath,
         body: body
       )
+      return tenant if verified
     end
+    nil
   end
 
   # @return [Boolean] false when this signed request was already accepted

@@ -12,7 +12,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
     @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(
       enabled: true, peer_name: "chip", base_url: "https://chip.example.com/api"
     ))
-    @tenant.update_feedback_exchange_secrets!(outbound_secret: "outbound-secret-outbound-secret-xx", inbound_secret: INBOUND)
+    @tenant.update_feedback_exchange!(outbound_secret: "outbound-secret-outbound-secret-xx", inbound_secret: INBOUND)
   end
 
   def signed_headers(secret: INBOUND, method: "GET", path: PATH, body: "", timestamp: Time.now.to_i.to_s)
@@ -38,7 +38,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
 
   should "run the action in the signing tenant" do
     other = create(:tenant)
-    other.update_feedback_exchange_secrets!(inbound_secret: "someone-elses-secret")
+    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret")
     other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
 
     get_health
@@ -49,7 +49,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
   should "resolve a different tenant from a different secret" do
     other = create(:tenant)
     other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
-    other.update_feedback_exchange_secrets!(inbound_secret: "someone-elses-secret")
+    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret")
 
     get_health(headers: signed_headers(secret: "someone-elses-secret"))
 
@@ -91,6 +91,27 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
   end
 
+  should "refuse a replay for as long as the timestamp is still acceptable" do
+    ahead = (Time.now.to_i + 290).to_s
+    headers = signed_headers(timestamp: ahead)
+
+    get_health(headers: headers)
+    assert_response :success
+
+    travel 301.seconds do
+      get_health(headers: headers)
+      assert_response :unauthorized
+    end
+  end
+
+  should "refuse a stale timestamp before looking at any tenant" do
+    Tenant.stub(:where, ->(*) { flunk "no tenant should be loaded for a stale request" }) do
+      get_health(headers: signed_headers(timestamp: (Time.now.to_i - 3600).to_s))
+    end
+
+    assert_response :unauthorized
+  end
+
   should "answer 404 to a verified request while the exchange is disabled" do
     @tenant.update!(feedback_exchange_config: @tenant.feedback_exchange_config.tap { |c| c.enabled = false })
 
@@ -109,7 +130,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
 
   should "accept the previous secret inside the rotation window" do
     freeze_time do
-      @tenant.update_feedback_exchange_secrets!(inbound_secret: "the-new-inbound-secret")
+      @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret")
 
       get_health(headers: signed_headers(secret: INBOUND))
       assert_response :success
@@ -117,7 +138,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
   end
 
   should "refuse the previous secret once the window has passed" do
-    @tenant.update_feedback_exchange_secrets!(inbound_secret: "the-new-inbound-secret")
+    @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret")
 
     travel 25.hours do
       get_health(headers: signed_headers(secret: INBOUND))
