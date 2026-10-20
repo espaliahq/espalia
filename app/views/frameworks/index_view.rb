@@ -50,12 +50,12 @@ class Views::Frameworks::IndexView < Views::Base
       class: "block group") do
       render Components::Kit::Card.new do |card|
         card.body do
-          h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                    "group-hover:text-primary-ink transition-colors") do
+          h3(class: "text-lg font-semibold text-default " \
+                    "group-hover:text-brand transition-colors") do
             framework.name
           end
 
-          div(class: "mt-4 flex gap-4 text-sm text-gray-600 dark:text-gray-300") do
+          div(class: "mt-4 flex gap-4 text-sm text-muted") do
             stat_pill("Role families", framework.role_families.size)
             stat_pill("Capabilities", framework.capability_categories.sum { |c| c.capabilities.size })
           end
@@ -70,14 +70,12 @@ class Views::Frameworks::IndexView < Views::Base
 
   def stat_pill(label, count)
     span do
-      span(class: "font-semibold text-gray-900 dark:text-white") { count.to_s }
+      span(class: "font-semibold text-default") { count.to_s }
       plain " #{label}"
     end
   end
 
   def empty_state
-    div(class: "text-center py-12") do
-      p(class: "text-gray-600 dark:text-gray-300") { "No frameworks defined yet." }
-    end
+    render Components::Kit::EmptyState.new(title: "No frameworks defined yet")
   end
 end

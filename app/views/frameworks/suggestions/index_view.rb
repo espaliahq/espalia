@@ -9,6 +9,9 @@
 class Views::Frameworks::Suggestions::IndexView < Views::Base
   STATUSES = FrameworkState::SuggestedEdit::STATUSES
 
+  STATUS_CHIP = "inline-flex min-h-8 items-center rounded-full border px-3 text-[13px] transition-colors " \
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+
   STATUS_VARIANTS = {
     "pending" => :warning,
     "approved" => :success,
@@ -70,17 +73,17 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def back_link
     a(
       href: framework_path(@framework.framework_id),
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink"
+      class: "text-sm text-muted hover:text-brand"
     ) { plain "\u2190 Back to framework" }
   end
 
   def header
     div(class: "mt-4 mb-6") do
       div(class: "flex items-center gap-3") do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Suggested edits" }
+        h1(class: "text-2xl font-bold text-default") { "Suggested edits" }
         render Components::Kit::Badge.new(@framework.name, variant: :info)
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         "Review and apply inline suggestions from collaborators."
       end
     end
@@ -88,10 +91,10 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
 
   def filters_bar
     div(
-      class: "mb-6 flex flex-wrap items-center gap-2 border-b border-gray-200 " \
-             "dark:border-gray-700 pb-4"
+      class: "mb-6 flex flex-wrap items-center gap-2 border-b border-default " \
+             "pb-4"
     ) do
-      span(class: "text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase") { "Status" }
+      span(class: "text-xs font-semibold text-muted uppercase") { "Status" }
       status_filter_link("All", nil)
       STATUSES.each { |status| status_filter_link(status.humanize, status) }
     end
@@ -99,18 +102,17 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
 
   def status_filter_link(label, status)
     active = @filters[:status] == status
+    # Kit::Chip's toggle look, as links: selected takes the neutral fill, never brand (#543)
     classes = if active
-      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium " \
-        "bg-primary text-white"
+      "#{STATUS_CHIP} border-transparent bg-neutral-muted font-semibold text-default"
     else
-      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium " \
-        "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 " \
-        "hover:bg-gray-200 dark:hover:bg-gray-700"
+      "#{STATUS_CHIP} border-default bg-default font-medium text-default " \
+        "hover:border-emphasized hover:bg-default-hover"
     end
 
     a(
       href: framework_suggestions_path(@framework.framework_id, status: status),
-      class: classes
+      class: classes, aria: { current: ("page" if active) }
     ) { label }
   end
 
@@ -128,20 +130,12 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   end
 
   def empty_state
-    render Components::Kit::Card.new do |card|
-      card.body do
-        div(class: "py-8 text-center") do
-          p(class: "text-sm text-gray-600 dark:text-gray-300") do
-            "No suggestions match these filters."
-          end
-        end
-      end
-    end
+    render Components::Kit::EmptyState.new(title: "No suggestions match these filters")
   end
 
   def tier_section(tier, suggestions)
     div(class: "mb-8") do
-      h2(class: "text-sm font-semibold uppercase text-gray-600 dark:text-gray-300 mb-3") do
+      h2(class: "text-sm font-semibold uppercase text-muted mb-3") do
         TIER_LABELS[tier]
       end
       div(class: "space-y-3") do
@@ -180,7 +174,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
       render Components::Kit::Badge.new(entity_label(suggestion))
       render Components::Kit::Badge.new(kind_label(suggestion.kind), variant: kind_variant(suggestion.kind))
       if suggestion.kind == "edit" && suggestion.field.present?
-        span(class: "text-xs text-gray-600 dark:text-gray-300") do
+        span(class: "text-xs text-muted") do
           "field: #{suggestion.field}"
         end
       end
@@ -190,8 +184,8 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   def suggestion_diff_preview(suggestion)
     preview = suggestion_preview_text(suggestion)
 
-    div(class: "text-sm text-gray-700 dark:text-gray-300 line-clamp-2 " \
-                "group-hover:text-primary-ink transition-colors") do
+    div(class: "text-sm text-muted line-clamp-2 " \
+                "group-hover:text-brand transition-colors") do
       plain preview
     end
   end
@@ -247,7 +241,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   end
 
   def suggestion_footer(suggestion)
-    div(class: "mt-2 flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "mt-2 flex items-center gap-3 text-xs text-muted") do
       span { "by #{@author_names.resolve(suggestion.author_id)}" }
       span { local_time_ago(suggestion.created_at) }
       if suggestion.rationale.present?

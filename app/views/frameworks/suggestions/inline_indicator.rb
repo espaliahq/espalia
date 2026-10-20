@@ -17,7 +17,7 @@ class Views::Frameworks::Suggestions::InlineIndicator < Views::Base
 
     span(
       class: "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold " \
-             "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+             "bg-amber-100 text-warning dark:bg-amber-900/30",
       title: "#{@count} pending #{'suggestion'.pluralize(@count)}"
     ) do
       plain "#{@count} pending"

@@ -40,7 +40,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
   def view_template
     turbo_frame_tag("pending-suggestion-#{@suggestion.suggestion_id}") do
       li(
-        class: "relative text-xs text-gray-600 dark:text-gray-400",
+        class: "relative text-xs text-muted",
         data: hover_cluster_data("ill").merge(editor_data)
       ) do
         error_line if @error.present?

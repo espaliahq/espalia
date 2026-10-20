@@ -50,26 +50,25 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
   end
 
   def error_banner
-    div(class: "rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 " \
-               "dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300") { @error }
+    render Components::Kit::Alert.new(tone: :danger) { @error }
   end
 
   def intro
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "text-sm text-muted") do
       plain "Roles that "
-      span(class: "font-semibold text-gray-900 dark:text-white") { @capability.name }
+      span(class: "font-semibold text-default") { @capability.name }
       plain " applies to. A capability bound to no role is hidden from the role-filtered matrix."
     end
   end
 
   def current_bindings
     if bindings.empty?
-      p(class: "text-sm text-gray-500 dark:text-gray-400 italic") { "Not bound to any role yet." }
+      p(class: "text-sm text-muted italic") { "Not bound to any role yet." }
       return
     end
 
-    ul(class: "divide-y divide-gray-100 dark:divide-gray-800 rounded-md border " \
-              "border-gray-200 dark:border-gray-700") do
+    ul(class: "divide-y divide-subtle rounded-md border " \
+              "border-default") do
       bindings.each { |binding| binding_row(binding) }
     end
   end
@@ -81,7 +80,7 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
         # A binding added in the draft carries the wiggle (the universal
         # "differs from published" signal), not a separate "New in draft" pill.
         span(
-          class: "truncate text-sm text-gray-900 dark:text-gray-100 " \
+          class: "truncate text-sm text-default " \
                  "#{suggestion_text_classes(added_in_draft: binding.added_in_draft)}".strip,
           title: draft_change_title(binding.added_in_draft)
         ) { role_name(binding.role_id) }
@@ -99,18 +98,14 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "patch")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      label(class: "text-[11px] text-gray-500 dark:text-gray-400") { "Weight" }
-      input(
-        type: "number", name: "binding[weight]", value: format_weight(binding.weight),
-        step: "any", min: "0.1",
-        class: "w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
-               "px-2 py-1 text-sm text-gray-900 dark:text-white " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-      )
-      button(
-        type: "submit",
-        class: "rounded px-2 py-1 text-[11px] font-medium text-primary-ink hover:bg-primary/10 transition-colors"
-      ) { "Save" }
+      label(class: "text-[11px] text-muted") { "Weight" }
+      div(class: "w-16") do
+        input(
+          type: "number", name: "binding[weight]", value: format_weight(binding.weight),
+          step: "any", min: "0.1", class: Components::Kit::Field::INLINE
+        )
+      end
+      render Components::Kit::Button.new(variant: :ghost, tone: :brand, size: :xs, type: :submit) { "Save" }
     end
   end
 
@@ -123,18 +118,14 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "rounded px-2 py-1 text-[11px] font-medium text-red-600 dark:text-red-400 " \
-               "hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-      ) { "Remove" }
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :xs, type: :submit) { "Remove" }
     end
   end
 
   def add_role_form
     div(class: "pt-1") do
       if unbound_roles.empty?
-        p(class: "text-xs text-gray-500 dark:text-gray-400") { "Bound to every role." }
+        p(class: "text-xs text-muted") { "Bound to every role." }
         return
       end
 
@@ -146,11 +137,7 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
         input(type: "hidden", name: "binding[capability_id]", value: @capability.capability_id)
         role_select
         weight_input
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-semibold " \
-                 "text-white hover:bg-primary/90 transition-colors shrink-0"
-        ) { "Add role" }
+        render Components::Kit::Button.new(tone: :brand, type: :submit) { "Add role" }
       end
     end
   end
@@ -158,13 +145,11 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
   def role_select
     div(class: "min-w-0 flex-1") do
       label(for: "binding-add-role",
-            class: "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5") { "Add a role" }
+            class: "block text-[11px] text-muted mb-0.5") { "Add a role" }
       select(
         id: "binding-add-role",
         name: "binding[role_id]",
-        class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-white " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+        class: Components::Kit::Field::SELECT
       ) do
         unbound_roles.each do |role|
           option(value: role.role_id) { "#{role.code} · #{role.name}" }
@@ -174,13 +159,11 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
   end
 
   def weight_input
-    div(class: "shrink-0") do
-      label(class: "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5") { "Weight" }
+    div(class: "w-16 shrink-0") do
+      label(class: "block text-[11px] text-muted mb-0.5") { "Weight" }
       input(
         type: "number", name: "binding[weight]", value: "1.0", step: "any", min: "0.1",
-        class: "w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
-               "px-2 py-1.5 text-sm text-gray-900 dark:text-white " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+        class: Components::Kit::Field::INPUT
       )
     end
   end

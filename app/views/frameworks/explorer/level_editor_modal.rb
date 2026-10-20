@@ -37,7 +37,7 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
     ) do
       turbo_frame_tag("level-editor",
                       data: { level_editor_form_target: "frame", frame_error_target: "frame" }) do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
+        p(class: "text-sm text-muted") { "Loading…" }
       end
       render Components::Shared::FrameLoadError.new(
         id: "level-editor-error", subject: "the levels editor", closeable: true, classes: "space-y-3"

@@ -15,7 +15,7 @@ class Views::Frameworks::Explorer::CategoryDescriptionFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::InlineEditable
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
-  TEXT_CLASSES = "text-xs text-gray-500 dark:text-gray-400"
+  TEXT_CLASSES = "text-xs text-muted"
 
   # @param category [FrameworkState::CapabilityCategory, Frameworks::ExplorerGraph::CapabilityCategory]
   # @param framework_id [String]
@@ -72,7 +72,7 @@ class Views::Frameworks::Explorer::CategoryDescriptionFrame < Views::Base
             render_highlighted(@category.description.to_s, @search_query)
           end
         else
-          span(class: "italic text-gray-400 dark:text-gray-500") { "Add a description…" }
+          span(class: "italic text-subtle") { "Add a description…" }
         end
         render_inline_editor_pencil(aria_label: "Edit category description", scope: "cat")
       end

@@ -59,10 +59,8 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   def publish_button
     return publishing_button if @publishing
 
-    a(
-      href: new_framework_publication_path(@framework.framework_id),
-      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
-             "bg-primary text-white hover:bg-primary/90 transition-colors",
+    render Components::Kit::Button.new(
+      tone: :brand, size: :sm, href: new_framework_publication_path(@framework.framework_id),
       title: "Review and publish v#{@framework.draft_version}"
     ) { "Publish v#{@framework.draft_version}" }
   end
@@ -72,10 +70,8 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   # styled dead) so keyboard and screen-reader users get the state too. Opaque
   # neutral surface — the label is the only thing saying a publish is in flight.
   def publishing_button
-    button(
-      type: "button", disabled: true, aria_disabled: "true",
-      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-semibold " \
-             "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 cursor-not-allowed",
+    render Components::Kit::Button.new(
+      tone: :brand, size: :sm, disabled: true, aria: { disabled: "true" },
       title: "v#{@framework.draft_version} is being published — you'll be notified when it's live"
     ) { "Publishing v#{@framework.draft_version}…" }
   end

@@ -45,6 +45,17 @@ class FrameworksSettingsSystemTest < ApplicationSystemTestCase
       assert_text "weighted deficit in a capability's ratings"
     end
 
+    should "offer a reset only once a value leaves its default" do
+      sign_in @admin_user
+      visit framework_settings_path(framework_id: @framework_id)
+      assert_selector "[data-controller~='setting-field'][data-connected]", count: 5, visible: :all
+
+      assert_no_button "Reset to default (1.5)"
+
+      js_fill_in "settings[mastery_threshold]", with: "1.25"
+      assert_button "Reset to default (1.5)"
+    end
+
     should "save custom values and show them on reload" do
       sign_in @admin_user
       visit framework_settings_path(framework_id: @framework_id)

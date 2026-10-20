@@ -54,7 +54,7 @@ class Views::Frameworks::Explorer::LevelTitleFrame < Views::Base
 
   def plain_title
     span(
-      class: "text-xs text-gray-600 dark:text-gray-300 " \
+      class: "text-xs text-muted " \
              "#{suggestion_text_classes(added_in_draft: @added_in_draft)}".strip,
       title: draft_change_title(@added_in_draft)
     ) { @title }

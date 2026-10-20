@@ -14,7 +14,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::InlineEditable
   include Views::Frameworks::Explorer::Concerns::SearchHighlight
 
-  TEXT_CLASSES = "text-xs text-gray-600 dark:text-gray-300 mt-0.5"
+  TEXT_CLASSES = "text-xs text-muted mt-0.5"
 
   # @param capability [FrameworkState::Capability, Frameworks::ExplorerGraph::Capability]
   # @param framework_id [String]
@@ -71,7 +71,7 @@ class Views::Frameworks::Explorer::CapabilityDescriptionFrame < Views::Base
             render_highlighted(@capability.description.to_s, @search_query)
           end
         else
-          span(class: "italic text-gray-400 dark:text-gray-500") { "Add a description…" }
+          span(class: "italic text-subtle") { "Add a description…" }
         end
         render_inline_editor_pencil(aria_label: "Edit capability description", scope: "row")
       end

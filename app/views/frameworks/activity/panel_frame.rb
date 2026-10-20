@@ -45,10 +45,10 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   private
 
   def header
-    div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700") do
+    div(class: "px-4 py-3 border-b border-default") do
       div(class: "flex items-start justify-between gap-2") do
         div(class: "min-w-0 flex-1") do
-          h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") { focus_title }
+          h2(class: "text-sm font-semibold text-default truncate") { focus_title }
           focused? ? focus_breadcrumb : focus_hint
           # Count reflects entries loaded so far (running total across batches);
           # the "load older" Turbo Stream replaces this with the new total.
@@ -60,7 +60,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
         # there is no separate full-activity index page.
         a(
           href: framework_suggestions_path(@framework.framework_id),
-          class: "text-xs text-primary-ink hover:underline shrink-0",
+          class: "text-xs text-link hover:text-link-hover hover:underline shrink-0",
           data: { turbo_frame: "_top" },
           title: "Open the full suggestion-review page"
         ) { "All suggestions" }
@@ -74,7 +74,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   # replaced by the breadcrumb the moment focus is set, so the hint is on screen
   # exactly while it is actionable (#382).
   def focus_hint
-    p(class: "mt-1 text-[11px] text-gray-500 dark:text-gray-400") do
+    p(class: "mt-1 text-[11px] text-muted") do
       "Click a category name, expand a capability row, or click inside an " \
         "expanded cell to narrow this feed."
     end
@@ -95,13 +95,13 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
     segments = breadcrumb_segments
     return if segments.empty?
 
-    div(class: "mt-1 flex items-start gap-1 text-[11px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 flex items-start gap-1 text-[11px] text-muted") do
       # Stable id so a test can assert the ordered chain rather than the
       # presence of a name — "Thinking" is a substring of "Strategic Thinking",
       # so a substring check proves nothing about the category segment.
       div(id: BREADCRUMB_ID, class: "min-w-0 flex-1") do
         segments.each_with_index do |segment, index|
-          span(class: "text-gray-400 dark:text-gray-500", aria: { hidden: "true" }) { " › " } if index.positive?
+          span(class: "text-subtle", aria: { hidden: "true" }) { " › " } if index.positive?
           span { segment }
         end
       end
@@ -118,7 +118,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
     a(
       href: @clear_path,
       class: "shrink-0 inline-flex items-center justify-center min-w-11 min-h-11 -my-3 " \
-             "rounded text-base leading-none text-gray-600 dark:text-gray-300 hover:text-primary-ink",
+             "rounded text-base leading-none text-muted hover:text-brand",
       title: "Clear focus",
       aria_label: "Clear focus",
       data: {
@@ -143,7 +143,7 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
 
     a(
       href: @clear_path,
-      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink mt-1 inline-block",
+      class: "text-xs text-muted hover:text-brand mt-1 inline-block",
       data: {
         turbo_frame: "suggestion-panel",
         action: "click->context-pane#clearFocus"
@@ -195,9 +195,6 @@ class Views::Frameworks::Activity::PanelFrame < Views::Base
   end
 
   def empty_state
-    div(class: "rounded-lg border border-dashed border-gray-200 dark:border-gray-700 " \
-               "p-4 text-center text-xs text-gray-600 dark:text-gray-300") do
-      "No activity yet."
-    end
+    render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel)
   end
 end

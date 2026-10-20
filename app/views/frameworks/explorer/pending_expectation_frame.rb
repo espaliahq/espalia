@@ -81,7 +81,7 @@ class Views::Frameworks::Explorer::PendingExpectationFrame < Views::Base
   def display
     div(class: "mx-line", data: { editor_display: true }) do
       with_suggestion_click_affordance(@suggestion.suggestion_id) do
-        span(class: "text-sm text-gray-700 dark:text-gray-300 " \
+        span(class: "text-sm text-muted " \
                     "#{suggestion_text_classes(pending_edit_count: 1)}") { proposed_text }
       end
       # pencil · kebab (framework-explorer.md §11).

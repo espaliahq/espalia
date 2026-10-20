@@ -84,7 +84,7 @@ class Views::Frameworks::Explorer::MatrixCell < Views::Base
   # every other suggestion flow. With no proposal yet, show "+ Add expectation".
   def authorable_cell
     td(id: cell_id,
-       class: "px-2 py-1.5 border-b border-r border-gray-100 dark:border-gray-800 " \
+       class: "px-2 py-1.5 border-b border-r border-subtle " \
               "bg-gray-50/40 dark:bg-gray-800/20 align-top",
        data: hover_cluster_data("cell")) do
       creates = @cell_data[:pending_expectation_creates] || []

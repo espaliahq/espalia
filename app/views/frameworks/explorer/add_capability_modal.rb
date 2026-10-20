@@ -37,9 +37,9 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "capability[category_id]", data: { add_capability_form_target: "categoryId" })
 
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         plain "Adding to "
-        span(class: "font-semibold text-gray-900 dark:text-white",
+        span(class: "font-semibold text-default",
              data: { add_capability_form_target: "categoryName" }) { "this category" }
         plain "."
       end
@@ -54,14 +54,14 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
   def text_field(label_text, name, id)
     div do
       label(for: id, class: label_classes) { label_text }
-      input(type: "text", id: id, name: name, class: field_classes)
+      input(type: "text", id: id, name: name, class: Components::Kit::Field::INPUT)
     end
   end
 
   def textarea_field(label_text, name, id)
     div do
       label(for: id, class: label_classes) { label_text }
-      textarea(id: id, name: name, rows: "2", class: field_classes)
+      textarea(id: id, name: name, rows: "2", class: Components::Kit::Field::TEXTAREA)
     end
   end
 
@@ -69,13 +69,13 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
     div do
       span(class: label_classes) { "Applies to roles" }
       if @roles.empty?
-        p(class: "text-xs text-gray-500 dark:text-gray-400") { "No roles defined yet." }
+        p(class: "text-xs text-muted") { "No roles defined yet." }
       else
         div(class: "mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5") do
           @roles.each { |role| role_checkbox(role) }
         end
         p(
-          class: "hidden mt-1.5 text-xs text-red-600 dark:text-red-400",
+          class: "hidden mt-1.5 text-xs text-danger",
           data: { add_capability_form_target: "rolesError" }
         ) { "Select at least one role — a capability bound to no role is hidden from the matrix." }
       end
@@ -83,33 +83,20 @@ class Views::Frameworks::Explorer::AddCapabilityModal < Views::Base
   end
 
   def role_checkbox(role)
-    label(class: "inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200") do
+    label(class: "inline-flex items-center gap-1.5 text-sm text-muted") do
       input(type: "checkbox", name: "capability[role_ids][]", value: role[:id],
             data: { add_capability_form_target: "role" },
-            class: "rounded border-gray-300 dark:border-gray-600 text-primary focus-visible:ring-primary")
+            class: Components::Kit::Field::CHECKBOX)
       plain role[:label]
     end
   end
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-primary/90 transition-colors"
-      ) { "Add capability" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Add capability" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
   end
 
-  def label_classes = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-  end
+  def label_classes = "block text-sm font-medium text-default mb-1"
 end

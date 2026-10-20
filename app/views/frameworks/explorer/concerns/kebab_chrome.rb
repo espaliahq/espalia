@@ -16,9 +16,9 @@ module Views::Frameworks::Explorer::Concerns::KebabChrome
   # @param tone [String] text-colour utilities for the item
   # @param padding [String] item padding — the tree uses "px-3 py-1.5"
   # @return [String]
-  def kebab_item_classes(tone = "text-gray-700 dark:text-gray-200", padding: "px-4 py-2")
+  def kebab_item_classes(tone = "text-muted", padding: "px-4 py-2")
     "block w-full text-left #{padding} text-sm #{tone} " \
-      "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+      "hover:bg-default-hover transition-colors cursor-pointer"
   end
 
   # The hover-revealed ⋮ trigger for a `Kit::Dropdown`.
@@ -36,7 +36,7 @@ module Views::Frameworks::Explorer::Concerns::KebabChrome
       span(
         class: "#{reveal_classes} pointer-coarse:opacity-100 transition-opacity " \
                "inline-flex items-center justify-center " \
-               "w-5 h-5 rounded shrink-0 text-gray-400 hover:text-primary-ink"
+               "w-5 h-5 rounded shrink-0 text-subtle hover:text-brand"
       ) do
         # Sized here, not by a parent rule: this trigger is a `Kit::Dropdown`
         # span, not one of the grid's `.explorer-kebab` buttons (whose glyph the

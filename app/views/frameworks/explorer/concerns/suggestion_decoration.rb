@@ -26,7 +26,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
   PENDING_EDIT_CLASSES = "underline decoration-amber-400 decoration-wavy decoration-2 underline-offset-4"
   PENDING_DELETE_CLASSES = "line-through decoration-red-400 decoration-2"
   PENDING_ADD_CLASSES = "underline decoration-sky-400 decoration-wavy decoration-2 underline-offset-4 text-sky-700 dark:text-sky-300"
-  PENDING_REMOVE_CLASSES = "line-through decoration-current/60 decoration-2 text-gray-600 dark:text-gray-300"
+  PENDING_REMOVE_CLASSES = "line-through decoration-current/60 decoration-2 text-muted"
   PROPOSED_TEXT_CLASSES = PENDING_ADD_CLASSES
 
   # Returns Tailwind CSS classes for an entity wrapper when there are
@@ -102,8 +102,8 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     span(
       role: "button",
       tabindex: "0",
-      class: "cursor-pointer rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-900/30 " \
-             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+      class: "cursor-pointer rounded-xs hover:bg-warning-subtle " \
+             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
       title: "View this pending suggestion in the activity pane",
       data: {
         action: "click->matrix#openSuggestionCard " \
@@ -176,7 +176,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     title = suggestion_id ? "#{count} #{noun} — view" : "#{count} #{noun} — see the activity pane"
     attrs = {
       class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
-             "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-gray-600 dark:text-gray-300 shrink-0",
+             "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-muted shrink-0",
       title: title,
       aria: { label: title },
       data: { glyph: "clarification" }
@@ -184,7 +184,7 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
 
     if suggestion_id
       attrs[:class] += " cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 " \
-                       "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
+                       "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
       attrs[:role] = "button"
       attrs[:tabindex] = "0"
       attrs[:data] = attrs[:data].merge(

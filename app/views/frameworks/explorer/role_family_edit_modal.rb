@@ -91,7 +91,7 @@ class Views::Frameworks::Explorer::RoleFamilyEditModal < Views::Base
       label(for: field_id("name"), class: label_classes) { "Name" }
       input(
         type: "text", id: field_id("name"), name: "role_family[name]",
-        required: true, class: field_classes, data: { role_family_edit_form_target: "name" }
+        required: true, class: Components::Kit::Field::INPUT, data: { role_family_edit_form_target: "name" }
       )
     end
   end
@@ -101,7 +101,7 @@ class Views::Frameworks::Explorer::RoleFamilyEditModal < Views::Base
       label(for: field_id("description"), class: label_classes) { "Description" }
       textarea(
         id: field_id("description"), name: "role_family[description]", rows: "2",
-        class: field_classes, data: { role_family_edit_form_target: "description" }
+        class: Components::Kit::Field::TEXTAREA, data: { role_family_edit_form_target: "description" }
       )
     end
   end
@@ -110,12 +110,12 @@ class Views::Frameworks::Explorer::RoleFamilyEditModal < Views::Base
     div do
       label(for: field_id("department"), class: label_classes) do
         plain "Department "
-        span(class: "font-normal text-gray-500 dark:text-gray-400") { "(grouping)" }
+        span(class: "font-normal text-muted") { "(grouping)" }
       end
       input(
         type: "text", id: field_id("department"), name: "role_family[department]",
         list: field_id("departments"), autocomplete: "off",
-        placeholder: "e.g. Product + Engineering", class: field_classes,
+        placeholder: "e.g. Product + Engineering", class: Components::Kit::Field::INPUT,
         data: { role_family_edit_form_target: "department" }
       )
     end
@@ -129,23 +129,10 @@ class Views::Frameworks::Explorer::RoleFamilyEditModal < Views::Base
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-primary/90 transition-colors"
-      ) { new_mode? ? "Add role family" : "Save" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { new_mode? ? "Add role family" : "Save" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
   end
 
-  def label_classes = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-  end
+  def label_classes = "block text-sm font-medium text-default mb-1"
 end

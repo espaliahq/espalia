@@ -18,16 +18,8 @@
 #
 class Views::Frameworks::Explorer::WriteStatusMessage < Views::Base
   TONES = {
-    ok: {
-      classes: "bg-green-50 border-green-200 text-green-800 " \
-               "dark:bg-green-950 dark:border-green-800 dark:text-green-100",
-      delay: 4000
-    },
-    error: {
-      classes: "bg-red-50 border-red-200 text-red-800 " \
-               "dark:bg-red-950 dark:border-red-800 dark:text-red-100",
-      delay: 7000
-    }
+    ok: { tone: :success, delay: 4000 },
+    error: { tone: :danger, delay: 7000 }
   }.freeze
 
   # @param message [String] the user-facing sentence
@@ -39,19 +31,6 @@ class Views::Frameworks::Explorer::WriteStatusMessage < Views::Base
 
   def view_template
     tone = TONES[@tone]
-    div(
-      class: "pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 " \
-             "text-sm shadow-sm #{tone[:classes]}",
-      data: { controller: "flash", flash_delay_value: tone[:delay] }
-    ) do
-      span(class: "flex-1") { @message }
-      button(
-        type: "button",
-        class: "opacity-70 hover:opacity-100 focus:outline-hidden focus:ring-2 " \
-               "focus:ring-current rounded cursor-pointer",
-        aria_label: "Dismiss notification",
-        data: { action: "flash#dismiss" }
-      ) { "×" }
-    end
+    render Components::Kit::Toast.new(tone: tone[:tone], dismiss_after: tone[:delay]) { @message }
   end
 end

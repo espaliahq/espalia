@@ -28,19 +28,14 @@ class Views::Frameworks::Activity::FilterChips < Views::Base
   private
 
   def render_chip(chip)
-    button(
-      type: "button",
-      class: "px-2 py-1 rounded-md transition-colors " \
-             "aria-pressed:bg-primary aria-pressed:text-white " \
-             "aria-[pressed=false]:bg-gray-100 dark:aria-[pressed=false]:bg-gray-800 " \
-             "aria-[pressed=false]:text-gray-600 dark:aria-[pressed=false]:text-gray-300 " \
-             "aria-[pressed=false]:hover:bg-gray-200 dark:aria-[pressed=false]:hover:bg-gray-700",
+    render Components::Kit::Chip.new(
+      chip[:label],
+      pressed: chip[:value] == "all",
       data: {
         framework_activity_target: "filterChip",
         framework_activity_filter_param: chip[:value],
         action: "click->framework-activity#setFilter"
-      },
-      aria: { pressed: chip[:value] == "all" ? "true" : "false" }
-    ) { chip[:label] }
+      }
+    )
   end
 end

@@ -108,7 +108,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
       colspan: [ @merged_levels.size, 1 ].max,
       class: "mx-exp-placeholder"
     ) do
-      p(class: "text-gray-600 dark:text-gray-300", data: { expanded_row_state: "loading" }) do
+      p(class: "text-muted", data: { expanded_row_state: "loading" }) do
         "Loading examples…"
       end
       render Components::Shared::FrameLoadError.new(

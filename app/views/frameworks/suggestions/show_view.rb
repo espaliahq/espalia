@@ -69,7 +69,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def back_link
     a(
       href: framework_suggestions_path(@framework.framework_id),
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink"
+      class: "text-sm text-muted hover:text-brand"
     ) { plain "\u2190 Back to suggestions" }
   end
 
@@ -77,13 +77,13 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div(class: "mt-4 mb-6 flex items-start justify-between gap-4") do
       div do
         div(class: "flex items-center gap-3 mb-2") do
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { header_title }
+          h1(class: "text-2xl font-bold text-default") { header_title }
           render Components::Kit::Badge.new(
             @suggestion.status.humanize,
             variant: STATUS_VARIANTS.fetch(@suggestion.status, :default)
           )
         end
-        p(class: "text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "text-sm text-muted") do
           plain entity_label
           if @suggestion.kind == "edit"
             plain " \u00b7 field: "
@@ -119,12 +119,12 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     render Components::Kit::Card.new(title: "Text under question") do |card|
       card.body do
         if clarification_level.present?
-          p(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1") do
+          p(class: "text-xs font-semibold uppercase text-muted mb-1") do
             "#{entity_label} · L#{clarification_level}"
           end
         end
-        p(class: "rounded-md border border-gray-200 dark:border-gray-700 " \
-                 "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-gray-900 dark:text-gray-100 " \
+        p(class: "rounded-md border border-default " \
+                 "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-default " \
                  "whitespace-pre-wrap") do
           @suggestion.current_value.presence || "(no expectation defined at this level yet)"
         end
@@ -180,11 +180,10 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def create_attr_row(key, value)
     div do
-      dt(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300") do
+      dt(class: "text-xs font-semibold uppercase text-muted") do
         key.humanize
       end
-      dd(class: "mt-0.5 rounded-md border border-green-200 dark:border-green-900/50 " \
-                "bg-green-50 dark:bg-green-950/30 p-3 text-sm text-gray-900 dark:text-gray-100") do
+      dd(class: "mt-0.5 rounded-md border border-success bg-success-subtle p-3 text-sm text-default") do
         plain resolve_attr_value(key, value)
       end
     end
@@ -192,9 +191,9 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def parent_context_row
     div do
-      dt(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300") { "For" }
-      dd(class: "mt-0.5 rounded-md border border-gray-200 dark:border-gray-700 " \
-                "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-gray-900 dark:text-gray-100") do
+      dt(class: "text-xs font-semibold uppercase text-muted") { "For" }
+      dd(class: "mt-0.5 rounded-md border border-default " \
+                "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-default") do
         plain parent_context_label
       end
     end
@@ -258,15 +257,15 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def diff_column(label, value, color:)
     classes = case color
     when :red
-      "border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30"
+      "border-danger bg-danger-subtle"
     when :green
-      "border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950/30"
+      "border-success bg-success-subtle"
     end
 
     div do
-      h3(class: "text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1") { label }
+      h3(class: "text-xs font-semibold uppercase text-muted mb-1") { label }
       pre(
-        class: "rounded-md border #{classes} p-3 text-sm text-gray-900 dark:text-gray-100 " \
+        class: "rounded-md border #{classes} p-3 text-sm text-default " \
                "whitespace-pre-wrap font-sans"
       ) do
         plain value.presence || "(empty)"
@@ -279,7 +278,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       title = @suggestion.kind == "clarification" ? "The question" : "Rationale"
       render Components::Kit::Card.new(title: title) do |card|
         card.body do
-          render Components::Kit::Prose.new(@suggestion.rationale, class: "text-sm text-gray-700 dark:text-gray-300")
+          render Components::Kit::Prose.new(@suggestion.rationale, class: "text-sm text-muted")
         end
       end
     end
@@ -291,14 +290,14 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
         card.body do
           dl(class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm") do
             div do
-              dt(class: "text-gray-600 dark:text-gray-300") { "Reviewer" }
-              dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+              dt(class: "text-muted") { "Reviewer" }
+              dd(class: "mt-0.5 font-medium text-default") do
                 plain @author_names.resolve(@suggestion.reviewed_by)
               end
             end
             div do
-              dt(class: "text-gray-600 dark:text-gray-300") { "Reviewed at" }
-              dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+              dt(class: "text-muted") { "Reviewed at" }
+              dd(class: "mt-0.5 font-medium text-default") do
                 if @suggestion.reviewed_at
                   local_time(@suggestion.reviewed_at)
                 else
@@ -308,21 +307,21 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
             end
             if @suggestion.reviewer_comment.present?
               div(class: "sm:col-span-2") do
-                dt(class: "text-gray-600 dark:text-gray-300") do
+                dt(class: "text-muted") do
                   @suggestion.status == "resolved" ? "Resolution" : "Comment"
                 end
-                dd(class: "mt-0.5 text-gray-900 dark:text-white") do
+                dd(class: "mt-0.5 text-default") do
                   render Components::Kit::Prose.new(@suggestion.reviewer_comment)
                 end
               end
             end
             if @suggestion.resulting_suggestion_id.present?
               div(class: "sm:col-span-2") do
-                dt(class: "text-gray-600 dark:text-gray-300") { "Resulting change" }
+                dt(class: "text-muted") { "Resulting change" }
                 dd(class: "mt-0.5") do
                   a(
                     href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
-                    class: "text-primary-ink hover:underline text-sm"
+                    class: "text-link hover:text-link-hover hover:underline text-sm"
                   ) { "View the resulting suggestion →" }
                 end
               end
@@ -406,21 +405,15 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       div do
         label(
           for: "clarification_note",
-          class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
+          class: "block text-xs font-semibold uppercase text-muted mb-1"
         ) { "Resolution" }
         textarea(
           id: "clarification_note", name: "note", rows: "2", required: true,
           placeholder: "What settled the question?",
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+          class: Components::Kit::Field::TEXTAREA
         )
       end
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-3 py-2 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-primary/80 transition-colors"
-      ) { "Resolve clarification" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Resolve clarification" }
     end
   end
 
@@ -431,11 +424,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       class: "inline"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-green-600 px-3 py-2 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-green-700 transition-colors"
-      ) { "Approve" }
+      render Components::Kit::Button.new(tone: :success, type: :submit) { "Approve" }
     end
   end
 
@@ -447,25 +436,21 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
       data: { turbo_confirm: "Reject this suggestion?" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-red-600 px-3 py-2 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-red-700 transition-colors"
-      ) { "Reject" }
+      render Components::Kit::Button.new(tone: :danger, type: :submit) { "Reject" }
     end
   end
 
   def amend_section
-    details(class: "border-t border-gray-200 dark:border-gray-700 pt-4 group") do
+    details(class: "border-t border-default pt-4 group") do
       summary(
         class: "cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 " \
-               "text-sm font-semibold text-gray-900 dark:text-white select-none"
+               "text-sm font-semibold text-default select-none"
       ) do
         span(class: "flex items-center gap-2") do
           chevron_icon
           plain "Amend this suggestion"
         end
-        span(class: "text-xs font-normal text-gray-600 dark:text-gray-300") do
+        span(class: "text-xs font-normal text-muted") do
           "Revise your own pending suggestion."
         end
       end
@@ -482,14 +467,9 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
         amend_rationale_field
 
         div(class: "flex items-center gap-3") do
-          button(
-            type: "submit",
-            class: "inline-flex items-center rounded-md bg-primary px-3 py-2 " \
-                   "text-sm font-semibold text-white shadow-xs hover:bg-primary/90 transition-colors"
-          ) { "Save amendment" }
-          a(
-            href: framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id),
-            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300"
+          render Components::Kit::Button.new(tone: :brand, type: :submit) { "Save amendment" }
+          render Components::Kit::Button.new(
+            variant: :ghost, href: framework_suggestion_path(@framework.framework_id, @suggestion.suggestion_id)
           ) { "Cancel" }
         end
       end
@@ -500,15 +480,13 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div do
       label(
         for: "suggestion_suggested_value",
-        class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
+        class: "block text-xs font-semibold uppercase text-muted mb-1"
       ) { amend_value_label }
       textarea(
         id: "suggestion_suggested_value",
         name: "suggestion[suggested_value]",
         rows: "4",
-        class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+        class: Components::Kit::Field::TEXTAREA
       ) { amend_value_default }
     end
   end
@@ -517,16 +495,14 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     div do
       label(
         for: "suggestion_rationale",
-        class: "block text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1"
+        class: "block text-xs font-semibold uppercase text-muted mb-1"
       ) { "Rationale (optional)" }
       textarea(
         id: "suggestion_rationale",
         name: "suggestion[rationale]",
         rows: "2",
         placeholder: "Why this change?",
-        class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+        class: Components::Kit::Field::TEXTAREA
       ) { @suggestion.rationale.to_s }
     end
   end
@@ -575,7 +551,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
 
   def chevron_icon
     svg(
-      class: "w-4 h-4 text-gray-400 transition-transform group-open:rotate-90",
+      class: "w-4 h-4 text-subtle transition-transform group-open:rotate-90",
       fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
     ) do |s|
       s.path(stroke_linecap: "round", stroke_linejoin: "round", d: "M9 5l7 7-7 7")
@@ -591,10 +567,7 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm text-gray-500 hover:text-red-700 transition-colors"
-      ) { "Withdraw" }
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, type: :submit) { "Withdraw" }
     end
   end
 

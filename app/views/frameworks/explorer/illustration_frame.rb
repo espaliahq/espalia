@@ -63,7 +63,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       data: { reorder_item_id: @illustration.illustration_id }
     ) do
       attrs = {
-        class: "relative text-xs text-gray-600 dark:text-gray-400"
+        class: "relative text-xs text-muted"
       }
       attrs[:data] = hover_cluster_data("ill").merge(editor_data) if @mode == :edit
 
