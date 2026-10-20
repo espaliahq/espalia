@@ -84,19 +84,11 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal @tenant.id, metadata[:tenant_id]
     end
 
-    should "ask the manager to place it, once" do
-      travel_to Time.utc(2026, 10, 19) do
-        perform_enqueued_jobs { @importer.import(exchange_record) }
-      end
-
-      assert_equal [ "Priya gave Alex feedback in Chip" ], @manager_user.notifications.reload.map(&:inbox_title)
-    end
-
-    should "not page anyone about feedback given long ago" do
-      perform_enqueued_jobs { @importer.import(exchange_record(given_at: 3.months.ago.iso8601)) }
+    should "import silently: the system it was given in owns the notifications" do
+      perform_enqueued_jobs { @importer.import(exchange_record(given_at: 1.hour.ago.iso8601, notified: [])) }
 
       assert EvidenceItem.exists?(evidence_id)
-      assert_empty @manager_user.notifications.reload
+      assert_equal 0, Noticed::Notification.count
     end
 
     should "add nothing on a second run" do

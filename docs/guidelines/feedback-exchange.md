@@ -89,7 +89,7 @@ Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchang
 - **Counted in a cycle only when given in it.** `cycle_id` is the open cycle only when `given_at` falls inside the recipient's enrollment window there; otherwise nil, and reporting infers it as it does for history. A backfill of last year's feedback never counts as this cycle's.
 - **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"), and so does a newer version whose `audience` no longer covers everyone who can read it here (consent is data); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op, and so is a blank edit. An item withdrawn in GrowthOS stays withdrawn and is not acknowledged.
 - **A refused write never stops the page.** The domain can refuse an update or a withdrawal (the recipient was unassigned since, say); the importer logs it, leaves the ledger as it was and moves on, so one record cannot fail every run.
-- **Then** it asks the manager side to place it (`#notify_placement_needed`, see [evidence.md](assessments/evidence.md)), but only for feedback given in the last 30 days (`Importer::NOTIFY_WITHIN`). A first pull of a peer's history waits quietly on the hub; it does not page every manager once per item. `FeedbackNotifier` applies the same window to the recipient.
+- **Silently.** The system the feedback was given in owns its notifications, so GrowthOS sends nothing on import: no arrival notice and no request to place it (`FeedbackNotifier` returns early for every `acting_via: feedback_exchange` event; `notified` is kept in the metadata only as part of the record). Imported feedback surfaces on the hub under "Feedback to place", and through placement suggestions ([#558](https://github.com/mr-yum/growth-os/pull/558)) once they are enabled. See [evidence.md](assessments/evidence.md).
 
 ### Skip reasons
 
@@ -123,7 +123,7 @@ tenant.update_feedback_exchange!(settings: { cursor: nil, deletions_cursor: nil 
 FeedbackExchange::SyncJob.perform_later(tenant)
 ```
 
-Records already imported come back as no-ops (or updates, if the peer changed them), because the ledger and the evidence ids are keyed on the record. Nothing is duplicated, and nobody is notified twice.
+Records already imported come back as no-ops (or updates, if the peer changed them), because the ledger and the evidence ids are keyed on the record. Nothing is duplicated, and, imports being silent, nobody is notified.
 
 ## Inbound requests
 

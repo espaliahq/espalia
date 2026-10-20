@@ -31,21 +31,6 @@ class FeedbackExchange::Importer
   # Our own system name: a record from it, or copied from it, is an echo (§2.5).
   SELF = FeedbackExchange::Client::CONSUMER
 
-  # Feedback given longer ago than this arrives without a notification: a
-  # first pull of a peer's history must not page every manager for each item.
-  # It still waits on the hub under "Feedback to place".
-  NOTIFY_WITHIN = 30.days
-
-  # Whether feedback given at +given_at+ is recent enough to tell anyone about.
-  #
-  # @param given_at [Time, String, nil] nil counts as now
-  # @return [Boolean]
-  def self.notify?(given_at)
-    given_at = Time.iso8601(given_at) if given_at.is_a?(String)
-    given_at.nil? || given_at >= NOTIFY_WITHIN.ago
-  rescue ArgumentError
-    true
-  end
 
   # What the domain raises when it refuses a command: CommandError, or the
   # bare RuntimeError of an invariant such as "not yet assigned".
@@ -118,15 +103,6 @@ class FeedbackExchange::Importer
     scope = FeedbackExchangeImport.retriable
     scope = scope.where(recipient_id: recipient_id) if recipient_id
     scope.find_each.map { |ledger| import(ledger.record) }
-  end
-
-  # Asks the manager side to place an item that arrived unplaced. The
-  # placement-suggestion job calls this once it has suggestions instead.
-  #
-  # @param item [EvidenceItem]
-  # @return [void]
-  def notify_placement_needed(item)
-    FeedbackExchange::PlacementRequest.new(item).deliver
   end
 
   private
@@ -215,7 +191,6 @@ class FeedbackExchange::Importer
     item = record!(record, author, recipient, assignment)
     write(ledger, status: "imported", evidence_id: item.id, recipient_id: recipient.id, record: nil,
                   peer_updated_at: peer_updated_at(record))
-    notify_placement_needed(item) if self.class.notify?(record["given_at"])
     result(:imported, evidence_id: item.id, assignment_id: assignment.id)
   rescue *REFUSALS => e
     # Another run imported it first; that item is the answer, not a refusal.

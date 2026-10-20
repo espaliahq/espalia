@@ -77,12 +77,6 @@ class NotificationType
       description: "Someone records feedback on the assessment of someone you manage.",
       defaults: { in_app: true, slack: true, email: false }
     ),
-    feedback_to_place: Definition.new(
-      key: :feedback_to_place,
-      label: "Feedback from another system to place",
-      description: "Feedback a report was given in a connected system arrives, waiting for you to say which capabilities it speaks to.",
-      defaults: { in_app: true, slack: true, email: false }
-    ),
     team_assessment_commented: Definition.new(
       key: :team_assessment_commented,
       label: "A report commented on their assessment",

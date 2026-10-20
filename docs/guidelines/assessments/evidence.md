@@ -235,19 +235,17 @@ as its real author, dated by when it was given.
   to the original. It replaces the plain reference chip on those items. It is
   neutral grey on purpose: colour beside feedback already means a rating or a
   valence.
-- **The peer did the telling** (protocol §2.6). `FeedbackNotifier` tells the
-  recipient about an imported item only when the record's `notified` lacks
-  `recipient` (and the feedback is recent), and never tells the manager side
-  about it.
-- **The manager is asked to place it instead.** `FeedbackPlacementNotifier`
-  (`feedback_to_place`, in-app + Slack) goes to the recorded reporting
-  manager and active rating delegates, never the author: "Priya gave Alex
-  feedback in Chip. Confirm which capabilities it speaks to and what it
-  shows", linking to the hub card. The importer sends it through
-  `FeedbackExchange::Importer#notify_placement_needed`, the method the
-  placement-suggestion job calls instead once suggestions exist. One per
-  person per item, and only for feedback given in the last 30 days: a first
-  pull of a peer's history waits on the hub without paging anyone.
+- **An import is silent.** The system the feedback was given in owns its
+  notifications, so GrowthOS sends nothing for an imported item: not the
+  arrival, not a request to place it. `FeedbackNotifier` returns early for
+  every `acting_via: feedback_exchange` event, whatever the record's
+  `notified` says (that list stays in `external_reference.metadata` as part
+  of the record).
+- **The hub is where it surfaces.** An imported item is unplaced, so it waits
+  under "Feedback to place" for the recipient and the manager side, and the
+  assessment shows `UnplacedFeedbackNotice`. Placement suggestions
+  ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
+  on the same cards.
 - **Its author edits the text, not where it was given.** The edit modal shows
   the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
   the imported reference on save.

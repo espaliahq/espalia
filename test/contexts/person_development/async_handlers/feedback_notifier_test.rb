@@ -82,18 +82,15 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
   end
 
   context "feedback imported from a peer system" do
-    should "tell nobody when the peer already told the recipient" do
-      perform_enqueued_jobs { import!(notified: %w[recipient manager]) }
+    should "tell nobody, whoever the peer says it told" do
+      perform_enqueued_jobs do
+        import!(notified: %w[recipient manager])
+        import!(notified: [])
+      end
 
       assert_empty @assessee_user.notifications.reload
       assert_empty @manager_user.notifications.reload
-    end
-
-    should "tell only the recipient when the peer did not, never the manager side" do
-      perform_enqueued_jobs { import!(notified: %w[manager]) }
-
-      assert_equal [ "Jordan gave you feedback to place" ], @assessee_user.notifications.reload.map(&:inbox_title)
-      assert_empty @manager_user.notifications.reload
+      assert_empty @peer_user.notifications.reload
     end
   end
 
