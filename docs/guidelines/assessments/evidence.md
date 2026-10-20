@@ -293,8 +293,16 @@ Rules, all deliberate:
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an
   "Applies to" row (`suggestions=pending`, valence preselected, "Suggested —
-  rationale" note); on save a kept row is accepted as **edited** and a
-  removed one dismissed ("Removed while adjusting").
+  rationale" note); on save a kept row is accepted and recorded as
+  **edited**, and a removed one dismissed ("Removed while adjusting"). The
+  staged cells are checked against the role before any write, so a cell the
+  framework dropped refuses the whole save rather than half of it. Accept
+  outside the editor records **accepted**, or **edited** when the person
+  chose a different valence. "Suggest again" enqueues at most one run per
+  item a minute: every run is a paid model call.
+- **One run per item at a time.** The job takes a Postgres advisory lock on
+  the item before superseding and storing, and stores nothing if the
+  feedback was edited while the model answered; the edit's own run follows.
 - **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
   after each stored set and is empty; the placement notifier
   ([#534](https://github.com/mr-yum/growth-os/issues/534)) hooks in there.
