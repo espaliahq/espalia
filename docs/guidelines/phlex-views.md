@@ -98,7 +98,10 @@ end
 - **Previews render in the app's own layout**, so Tailwind, the colour tokens, dark mode and Stimulus all behave as they do in the app. The default theme applies; there is no tenant.
 - **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
 
-`Kit::Badge` is the first: `test/components/previews/kit/badge_preview.rb`.
+- **What's there:** **Design Tokens** (every colour token, read from `application.css` so a new one appears on its own, with its contrast in each scheme; the Tailwind palette and the type scale), then every Kit component and an **Icons** gallery. The app-shell components (Navbar, UserMenu, PageLayout, TenantAdminLayout, ImpersonationBanner) aren't previewed yet.
+- **Every Kit component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing; skip a component there by name, with the reason.
+- **The sidebar sorts folders alphabetically** and its path is the URL, so moving a preview changes its link. `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
+- **A class that appears only in a preview is still built into the CSS.** Pass a component its real arguments; don't write its class names into the preview, or a class the component builds by interpolation will render in Lookbook and nowhere else.
 
 ## Slots Pattern
 
