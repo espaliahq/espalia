@@ -273,3 +273,21 @@ The gate exists because without one, next-level credit masks current-level gaps 
 - Resolves ADR-19's deferred *role-aware rendering for horizontal moves*: a cycle is rendered against a role by scoping its ratings to that role, not by re-keying them.
 - Alignment events gained a role (`AlignmentStarted{role_id, level_ordinal, cell_keys}`, `FullAlignmentCompleted{role_id}`, `AlignmentReopened{role_id}`). History has none of them and keeps its meaning: the home role's alignment over every cell. `assessment_cycle_progress.status` stays the home lifecycle every cohort reader uses; `assessment_cycle_role_alignments` holds each role's.
 - Built in phases (plan: [role-lens-plan.md](../notes/role-lens-plan.md)): the scope guard (#439), the lens, per-role alignment and disclosure (a `CurrentAssessment` rebuild), and declared explorations.
+
+## ADR-23: Colour comes from roles, and a theme sets the roles
+
+**Decision:** Components colour themselves through semantic roles (`text-muted`, `bg-default`, `border-subtle`, `bg-tone-strong`…), never palette steps. A role is a `--gos-*` CSS variable with a light and a dark value, exposed as a Tailwind utility through property-scoped `@theme inline` namespaces (`--text-color-muted: var(--gos-content-muted)`). A theme is a set of role values: Default (today's look, in `app/assets/tailwind/theme/roles.css`), presets on `html[data-theme]`, and a tenant's Custom values injected on `:root`. Role names follow the Bento design system's vocabulary; only Bento's values come in, never its components.
+
+- **Components own their colour pairs.** Every fill role has a content role that sits on it, and a component picks the pair, not its call site. A `tone-*` class (`tone-brand`, `tone-danger`…) points the generic `--gos-tone-*` variables at one role set, so a component styles `bg-tone-strong text-tone-content-inverse` once for every tone.
+- **Meaning gets a token, exposed or not.** Status colours and the rating, score and activity palettes are tokens too, whether or not a tenant can ever change them.
+- **Text on a tenant-picked fill is computed, never picked.** A contrast helper returns black or white for the fill (`contrast-color()`, with a relative-colour fallback that does the WCAG maths: the two tie at luminance 0.17913, and the better one always reaches 4.58:1). Presets set their designed text colours instead.
+- **Light and dark is one rule.** Dark applies when the OS is dark unless `<html data-scheme="light">`, or when `data-scheme="dark"`. `@custom-variant dark` holds the rule, so `dark:` utilities, `@variant dark` blocks and the role values all follow it.
+- **Derived colours re-derive in a scope.** Roles computed from the brand are declared on `:root, [data-theme-scope]`: a custom property resolves where it is declared, so an element that sets its own `--gos-brand` (a preview card, a Lookbook proof) needs the attribute.
+
+**Why:** Tenant theming reached five variables (primary, secondary, nav background and text, font) while about 4,300 colour utilities stayed hard-coded palette, so no theme could change a surface, a text tier or a status colour, and brand fills carried white text whatever colour a tenant picked (#447). Remapping palette steps per theme was rejected: one step plays several roles (`gray-600` is muted text in one place and an icon or border in another), `dark:` pairings are written into the markup, and a designed theme such as Bento is a set of roles, not a grey scale.
+
+**Consequences:**
+- Moving a class onto a role renders the same under Default, so views migrate area by area (#543–#547) with no visual change except deliberate merges of near-duplicate spellings.
+- Every new role needs a Default value in both schemes and, once presets exist, a value in each preset.
+- Translucent fills under text become opaque mixes into the surface, because the contrast helper can't see what shows through.
+- Plan and steps: #539.

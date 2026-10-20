@@ -34,7 +34,7 @@
 ## UI Requirements
 
 - Make all views responsive with breakpoints: `sm:`, `md:`, `lg:`, `xl:`, `2xl:`
-- Add dark mode support with `dark:` prefix
+- Colour with role utilities (`text-muted`, `bg-default`…, see [ADR-23](../architecture/adrs.md)); they cover light and dark. Reach for `dark:` only for something no role covers
 - Implement proper ARIA attributes for accessibility
 - Use `dom_id` for HTML element IDs
 
