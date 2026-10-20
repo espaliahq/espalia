@@ -180,7 +180,7 @@ class Reporting::EvidenceCoverage
         end.to_set,
         withdrawn_ids: items.filter_map { |item| item.id if item.link_status == "withdrawn" }.to_set,
         feedback_directions: active.map { |item| reporting_direction(item) },
-        provided_origins: active.map { |item| Reporting::OriginLabels.key_for(item.origin_system) },
+        provided_origins: active.map { |item| Reporting::OriginLabels.key_for(item.origin_system) }.tally,
         request_statuses: requests_by_person.fetch(enrollment.person_id, []).map(&:status)
       )
     end
@@ -191,7 +191,7 @@ class Reporting::EvidenceCoverage
     provided = participants.sum { |participant| participant.provided_ids.size }
     requested = participants.sum { |participant| participant.requested_provided_ids.size }
     directions = participants.flat_map(&:feedback_directions).tally
-    origins = participants.flat_map(&:provided_origins).tally
+    origins = participants.map(&:provided_origins).reduce({}) { |sum, tally| sum.merge(tally) { |_, a, b| a + b } }
 
     Metrics.new(
       participant_count: participants.size,

@@ -144,9 +144,11 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
 
     should "agree with the coverage report's origin split" do
       coverage = Reporting::EvidenceCoverage.new(cycle: @cycle).call.metrics.by_origin
-      export = call_op[:rows].map { |row| Reporting::OriginLabels.key_for(row[:origin].downcase.tr(" ", "_")) }.tally
+      export = call_op[:rows].pluck(:origin).tally
+      expected = coverage.reject { |_, count| count.zero? }
+        .transform_keys { |key| Reporting::OriginLabels.label(key) }
 
-      assert_equal coverage.reject { |_, count| count.zero? }, export
+      assert_equal expected, export
     end
   end
 

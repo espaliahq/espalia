@@ -22,7 +22,7 @@ module Reporting::OriginLabels
   # @param system [String, nil] `external_reference.system`
   # @return [String] the origin key reports group by; nil and blank are GrowthOS
   def self.key_for(system)
-    system.to_s.strip.downcase.presence || NATIVE
+    system.to_s.strip.downcase.tr("-", "_").presence || NATIVE
   end
 
   # @param key [String, nil] an origin key, or a raw system slug

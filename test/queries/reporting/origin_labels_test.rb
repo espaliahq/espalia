@@ -12,6 +12,10 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
     should "normalise a system slug" do
       assert_equal "chip", Reporting::OriginLabels.key_for(" Chip ")
     end
+
+    should "treat hyphens and underscores as the same system" do
+      assert_equal "hr_portal", Reporting::OriginLabels.key_for("hr-portal")
+    end
   end
 
   context ".label" do
