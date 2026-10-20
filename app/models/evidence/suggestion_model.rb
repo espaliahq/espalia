@@ -65,8 +65,10 @@ class Evidence::SuggestionModel
 
   private
 
+  # The job's retry_on is the one retry layer; the SDK's own retries would
+  # multiply every attempt during a rate-limit storm.
   def client
-    @client ||= Anthropic::Client.new(api_key: self.class.api_key, timeout: TIMEOUT_SECONDS)
+    @client ||= Anthropic::Client.new(api_key: self.class.api_key, timeout: TIMEOUT_SECONDS, max_retries: 0)
   end
 
   def proposals_from(message)
