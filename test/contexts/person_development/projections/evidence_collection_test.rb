@@ -100,6 +100,8 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert item.unplaced?
       end
 
+      ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: evidence_id).update_all(updated_at: 1.day.ago) }
+
       # The first placement becomes the origin, so origin-anchored readers see it.
       emit(PersonDevelopment::Events::EvidenceLinkAdded,
         evidence_id: evidence_id, capability_stable_id: "0190f4b2-0000-7000-8000-000000000001",
@@ -111,6 +113,10 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert item.recorded_unplaced, "the fact that someone else chose the cell survives placement"
         assert_not item.unplaced?
         assert_not_includes EvidenceItem.unplaced, item
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_operator EvidenceItem.find(evidence_id).updated_at, :>, 1.minute.ago
       end
 
       # Re-applying the origin-less EvidenceRecorded (an at-least-once replay)
@@ -414,6 +420,17 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         source: "self", evidence_type: "project_outcome", custom_type_label: nil,
         title: "Before migration", content: "x", external_reference: nil,
         author_id: @author.id)
+    end
+
+    should "move the item's feed position when a mapping re-keys its cell" do
+      ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: @ev_id).update_all(updated_at: 1.day.ago) }
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "evolved", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) { assert_operator EvidenceItem.find(@ev_id).updated_at, :>, 1.hour.ago }
     end
 
     should "re-key evidence rows and links for a same mapping" do

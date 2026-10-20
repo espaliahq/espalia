@@ -113,7 +113,7 @@ class PersonDevelopment::Projections::EvidenceCollection
         # so a no-op mapping never sweeps up an unrelated link-less item.
         touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         rekey_links(link_scope, to_stable_id, timestamp)
-        item_scope.update_all(capability_stable_id: to_stable_id)
+        item_scope.update_all(capability_stable_id: to_stable_id, updated_at: Time.current)
       when "archived", "split"
         touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         link_scope.where(link_status: "active").update_all(
@@ -246,12 +246,15 @@ class PersonDevelopment::Projections::EvidenceCollection
 
   # An item recorded unplaced has no origin; its first placement becomes it,
   # so every reader anchored on the origin columns (the feed, the hub, the
-  # reporting joins) sees the cell the item now lives in. Deterministic on
+  # reporting joins) sees the cell the item now lives in. It also moves the item's
+  # `updated_at`: the exchange feed pages on it and the record's `source_url`
+  # names this cell. Deterministic on
   # replay: the first EvidenceLinkAdded after an origin-less EvidenceRecorded
   # always wins.
   def adopt_origin_from_first_placement(event)
     EvidenceItem.where(id: event.data[:evidence_id], capability_stable_id: nil)
-      .update_all(capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal])
+      .update_all(capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal],
+                  updated_at: Time.current)
   end
 
   def handle_link_revalenced(event)
