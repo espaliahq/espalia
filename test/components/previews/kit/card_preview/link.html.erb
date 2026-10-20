@@ -1,0 +1,10 @@
+<div class="grid max-w-3xl gap-4 sm:grid-cols-2">
+  <% [["People", "Invite people and set their roles."], ["Integrations", "Sync people from HiBob or BambooHR."]].each do |title, text| %>
+    <%= render Components::Kit::Card.new(title: title, href: "#") do |card| %>
+      <% card.body do %><p class="text-sm text-muted"><%= text %></p><% end %>
+    <% end %>
+  <% end %>
+  <%= render Components::Kit::Card.new(variant: :inset, density: :compact, title: "Inset link", href: "#") do |card| %>
+    <% card.body do %><p class="text-sm text-muted">E3 → E4 exploration</p><% end %>
+  <% end %>
+</div>

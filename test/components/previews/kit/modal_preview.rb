@@ -3,7 +3,7 @@
 # @label Modal
 class Kit::ModalPreview < Lookbook::Preview
   # @param title text
-  # @param size select { choices: [sm, md, lg] }
+  # @param size select { choices: [sm, md, lg, xl, 2xl, 3xl] }
   # @param dismiss_on_outside_click toggle
   def playground(title: "Manage delegates", size: :md, dismiss_on_outside_click: false)
     render Components::Kit::Modal.new(
@@ -64,7 +64,39 @@ class Kit::ModalPreview < Lookbook::Preview
     end
   end
 
+  def extra_large
+    render Components::Kit::Modal.new(id: "modal-xl", title: "Give feedback", size: :xl) do |modal|
+      modal.trigger { "Give feedback" }
+      modal.body do
+        modal.p(class: "text-sm text-muted") { "Room for a long form: the capability, the evidence and who can see it." }
+      end
+    end
+  end
+
+  def double_extra_large
+    render Components::Kit::Modal.new(id: "modal-2xl", title: "Request feedback", size: :"2xl") do |modal|
+      modal.trigger { "Request feedback" }
+      modal.body do
+        modal.p(class: "text-sm text-muted") { "Room for a form with a recipient picker beside it." }
+      end
+    end
+  end
+
+  def triple_extra_large
+    render Components::Kit::Modal.new(id: "modal-3xl", title: "Feedback / evidence", size: :"3xl") do |modal|
+      modal.trigger { "Add evidence" }
+      modal.body do
+        modal.p(class: "text-sm text-muted") { "The widest size, 768px: the evidence and request-evidence forms." }
+      end
+    end
+  end
+
   # @!endgroup
+
+  # No title bar: the body draws its own heading and ×, and the title still names the dialog
+  def without_header
+    render_with_template
+  end
 
   # Already open, as it looks after its trigger is clicked
   def open

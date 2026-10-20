@@ -56,4 +56,36 @@ class Components::Kit::ModalTest < ActiveSupport::TestCase
       assert_includes html, 'id="embedded"'
     end
   end
+
+  context "Components::Kit::Modal sizes and header" do
+    should "offer three wider sizes" do
+      %i[xl 2xl 3xl].each do |size|
+        html = Components::Kit::Modal.new(id: "m", title: "T", size: size, standalone: false).call { |m| m.body { } } # rubocop:disable Lint/EmptyBlock
+        assert_includes html, "max-w-#{size}"
+      end
+    end
+
+    should "drop the title bar without header, and name the dialog with its title" do
+      html = Components::Kit::Modal.new(id: "m", title: "Give feedback", header: false, standalone: false).call do |m|
+        m.body { } # rubocop:disable Lint/EmptyBlock
+      end
+      assert_includes html, 'aria-label="Give feedback"'
+      assert_not_includes html, "aria-labelledby"
+      assert_not_includes html, "<h2"
+      assert_not_includes html, "modal#close"
+    end
+
+    should "let the panel host controllers that wrap the whole body" do
+      html = Components::Kit::Modal.new(id: "m", title: "T", standalone: false,
+                                        panel_data: { controller: "frame-error" }).call { |m| m.body { } } # rubocop:disable Lint/EmptyBlock
+      panel = Nokogiri::HTML5.fragment(html).at_css("[data-modal-target='panel']")
+      assert_equal "frame-error", panel["data-controller"]
+    end
+
+    should "label the dialog by its heading when it has one" do
+      html = Components::Kit::Modal.new(id: "m", title: "T", standalone: false).call { |m| m.body { } } # rubocop:disable Lint/EmptyBlock
+      assert_includes html, 'aria-labelledby="m-title"'
+      assert_includes html, '<h2 id="m-title"'
+    end
+  end
 end

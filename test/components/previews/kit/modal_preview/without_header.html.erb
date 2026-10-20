@@ -1,0 +1,24 @@
+<%= render Components::Kit::Modal.new(id: "modal-headerless", title: "Give feedback", size: :xl, header: false) do |modal| %>
+  <% modal.trigger do %>Give feedback<% end %>
+  <% modal.body do %>
+    <div class="flex items-start justify-between gap-4 border-b border-default px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-default">Feedback for Priya Natarajan</h2>
+        <p class="text-sm text-muted">Systems design · E3</p>
+      </div>
+      <button type="button" class="inline-flex size-11 -m-3 items-center justify-center rounded-md text-muted hover:text-default cursor-pointer" data-action="click->modal#close" aria-label="Close">×</button>
+    </div>
+    <p class="px-6 py-4 text-sm text-muted">The body is a lazy frame in the app; it brings its own heading, × and padding.</p>
+  <% end %>
+<% end %>
+<%# Clicks the trigger once the modal controller connects, so the dialog is in its real open state. %>
+<script>
+  (function openWhenConnected() {
+    const host = document.querySelector("#modal-headerless").closest("[data-controller~=modal]")
+    if (window.Stimulus?.getControllerForElementAndIdentifier(host, "modal")) {
+      host.querySelector("[data-action~='modal#open']").click()
+    } else {
+      setTimeout(openWhenConnected, 50)
+    }
+  })()
+</script>

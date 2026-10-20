@@ -82,7 +82,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       html = name_row(score: SCORE.merge(weight: 2.0, required: true))
       chip = html[/<button[^>]*aria-describedby="assessment-term-weight-cap-a"[^>]*>/]
       assert chip, "expected the weight chip trigger"
-      assert_includes chip, "text-gray-700"
+      assert_includes chip, "text-muted"
       assert_not_includes chip, "text-score-performing"
     end
 

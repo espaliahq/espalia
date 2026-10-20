@@ -9,9 +9,9 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
 
   KIT_STEPS = {
     "alert.rb" => %w[rounded-md],
-    "badge.rb" => %w[rounded-full],
+    "badge.rb" => %w[rounded-sm],
     "button.rb" => %w[rounded-md],
-    "card.rb" => %w[rounded-2xl shadow-xl],
+    "card.rb" => %w[rounded-2xl rounded-md shadow-xl],
     "chip.rb" => %w[rounded-full],
     "definition_tip.rb" => %w[rounded-md shadow-lg],
     "description_list.rb" => %w[rounded-lg],

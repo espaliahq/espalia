@@ -3,12 +3,16 @@
 # @label Card
 class Kit::CardPreview < Lookbook::Preview
   # @param title text
-  # @param variant select { choices: [default, flush] }
+  # @param variant select { choices: [default, flush, inset] }
+  # @param density select { choices: [regular, compact] }
   # @param heading_level select { choices: [h2, h3, h4] }
+  # @param interactive toggle
   # @param with_actions toggle
-  def playground(title: "Assessment cycle", variant: :default, heading_level: :h3, with_actions: true)
+  def playground(title: "Assessment cycle", variant: :default, density: :regular, heading_level: :h3,
+                 interactive: false, with_actions: true)
     render Components::Kit::Card.new(
-      title: title.presence, variant: variant.to_sym, heading_level: heading_level.to_sym
+      title: title.presence, variant: variant.to_sym, density: density.to_sym, heading_level: heading_level.to_sym,
+      interactive: interactive
     ) do |card|
       card.body do
         card.p(class: "text-sm text-gray-600 dark:text-gray-300") do
@@ -114,6 +118,54 @@ class Kit::CardPreview < Lookbook::Preview
 
   def title_only
     render Components::Kit::Card.new(title: "Brand colours")
+  end
+
+  # @!endgroup
+
+  # @!group Inset and compact
+
+  # A panel inside a card: the subtle surface, no shadow
+  def inset
+    render_with_template
+  end
+
+  # Tighter padding, for a list or grouped fields inside a card
+  def compact
+    render Components::Kit::Card.new(title: "Bindings", density: :compact) do |card|
+      card.body do
+        card.p(class: "text-sm text-muted") { "Software Engineer ×2 · Engineering Manager ×1" }
+      end
+      card.actions do
+        card.a(href: "#", class: "text-sm font-medium text-link hover:text-link-hover") { "Edit bindings" }
+      end
+    end
+  end
+
+  def inset_compact
+    render_with_template
+  end
+
+  # An inset whose edge carries a state, as the assessment hero's verdict panel does
+  def inset_with_edge
+    render Components::Kit::Card.new(variant: :inset, density: :compact, edge: "border-warning") do |card|
+      card.body do
+        card.p(class: "text-sm text-muted") { "Two capabilities still to rate before this level counts." }
+      end
+    end
+  end
+
+  # @!endgroup
+
+  # @!group Interactive
+
+  # The whole card is a link: hover darkens the edge, and keyboard focus draws the ring
+  def link
+    render_with_template
+  end
+
+  # Interactive without being a link, for a card a script focuses; the second is marked focused
+  def interactive
+    render_with_template
   end
 
   # @!endgroup

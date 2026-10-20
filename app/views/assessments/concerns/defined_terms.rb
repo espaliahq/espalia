@@ -58,7 +58,7 @@ module Views::Assessments::Concerns::DefinedTerms
 
   # Grey, never a state colour: a binding fact is a property of the
   # framework, not a verdict on the person ([#431](https://github.com/mr-yum/growth-os/issues/431)).
-  EMPHASIS_CHIP = "#{Components::Kit::Badge::VARIANTS[:default]} text-[10px] font-medium px-1.5 py-0.5 rounded"
+  EMPHASIS_CHIP = "bg-neutral-subtle text-muted text-[10px] font-medium px-1.5 py-0.5 rounded"
 
   # @param weight [Numeric, nil]
   # @param suffix [String] see `defined_term`

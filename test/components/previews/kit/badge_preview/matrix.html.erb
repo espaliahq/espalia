@@ -1,0 +1,20 @@
+<div class="space-y-8">
+  <% [["On a card", "bg-default border border-default rounded-2xl p-4"], ["On the page", "p-4"]].each do |surface, box| %>
+    <section class="space-y-3">
+      <h2 class="text-sm font-semibold text-muted"><%= surface %></h2>
+      <div class="<%= box %> space-y-4">
+        <% variants.each do |variant| %>
+          <% sizes.each do |size| %>
+            <div class="flex flex-wrap items-center gap-2" data-badge-matrix="<%= variant %>-<%= size %>">
+              <span class="w-28 text-xs text-muted"><%= variant %> · <%= size %></span>
+              <% tones.each do |tone| %>
+                <%= render Components::Kit::Badge.new(tone.to_s.capitalize, variant: variant, tone: tone, size: size) %>
+              <% end %>
+              <%= render Components::Kit::Badge.new("12", variant: variant, tone: :neutral, size: size, leading_icon: "discuss") %>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+</div>

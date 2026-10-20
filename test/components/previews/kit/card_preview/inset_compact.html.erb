@@ -1,0 +1,12 @@
+<%= render Components::Kit::Card.new(title: "Feedback from Tom Nguyen") do |card| %>
+  <% card.body do %>
+    <%= render Components::Kit::Card.new(variant: :inset, density: :compact, title: "Linked evidence", heading_level: :h4) do |inset| %>
+      <% inset.body do %>
+        <ul class="space-y-1 text-sm text-default">
+          <li>Design review for the billing migration</li>
+          <li>Incident write-up, 14 October</li>
+        </ul>
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>

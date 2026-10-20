@@ -3,24 +3,37 @@
 require "test_helper"
 
 class Components::Kit::BadgeTest < ActiveSupport::TestCase
+  Badge = Components::Kit::Badge
+
   context "Components::Kit::Badge" do
-    should "render the label" do
-      html = Components::Kit::Badge.new("Pass", variant: :success).call
-      assert_includes html, "Pass"
+    should "render the label in a span" do
+      assert_match(%r{<span[^>]*>Pass</span>}, Badge.new("Pass").call)
     end
 
-    # Pin the AA-contrast text shades for tinted-fill variants: -700 on a -100
-    # fill sits right at the 4.5:1 borderline, so success/warning use -800.
-    should "use AA-contrast text on the success fill" do
-      html = Components::Kit::Badge.new("Pass", variant: :success).call
-      assert_includes html, "text-green-800"
-      assert_not_includes html, "text-green-700"
+    should "default to a subtle neutral badge" do
+      assert_equal Badge.classes(:subtle, tone: :neutral, size: :sm), Badge.classes
     end
 
-    should "use AA-contrast text on the warning fill" do
-      html = Components::Kit::Badge.new("Overdue", variant: :warning).call
-      assert_includes html, "text-amber-800"
-      assert_not_includes html, "text-amber-700"
+    should "draw a legacy job-named variant as a subtle badge in its tone" do
+      { default: :neutral, primary: :brand, info: :info, success: :success, warning: :warning }.each do |legacy, tone|
+        assert_equal Badge.classes(:subtle, tone: tone), Badge.classes(legacy), "variant: :#{legacy}"
+        assert_equal Badge.new("x", tone: tone).call, Badge.new("x", variant: legacy).call
+      end
+    end
+
+    should "reject a tone it doesn't have" do
+      assert_raises(KeyError) { Badge.new("x", tone: :primary).call }
+    end
+
+    should "put the icons either side of the label" do
+      html = Badge.new("Draft", leading_icon: "pencil", trailing_icon: "chevron-down").call
+      assert_match(/#icon-pencil.*Draft.*#icon-chevron-down/m, html)
+    end
+
+    should "mix extra attributes into its own" do
+      html = Badge.new("3", id: "unread", class: "ml-2").call
+      assert_includes html, 'id="unread"'
+      assert_includes html, "#{Badge.classes} ml-2"
     end
   end
 end

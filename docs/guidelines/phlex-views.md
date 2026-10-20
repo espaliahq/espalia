@@ -35,13 +35,21 @@ Tailwind's radius and shadow scales are the tokens; each component owns one step
 | Component | Radius | Shadow |
 |---|---|---|
 | `Kit::Card` | `rounded-2xl` | `shadow-xl` |
+| `Kit::Card` `variant: :inset`, a panel inside another surface | `rounded-md` | none |
 | Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-lg` |
 | `Kit::Modal` | `rounded-lg` | `shadow-2xl`, so it floats above the cards under it |
 | Controls: `Kit::Button`, `Kit::Field` | `rounded-md` | none |
 | `Kit::Tag`, `Kit::Chip` | `rounded-full` | none |
-| `Kit::Badge` | `rounded-full` today; square from [#563](https://github.com/mr-yum/growth-os/issues/563) | none |
+| `Kit::Badge` | `rounded-sm`, square so it reads apart from a tag | none |
 
 `test/lib/radius_shadow_steps_test.rb` holds Kit to these steps and keeps shadows out of Shared and Shell, except where a Shell piece draws its own surface.
+
+Reach for an option before hand-rolling a near copy:
+
+- **A grey panel inside a card:** `Kit::Card` `variant: :inset`. Add `density: :compact` for a list or grouped fields; compact also suits a small card of its own. `edge:` swaps its border for a state's, as the hero's verdict panel does.
+- **A clickable card:** `Kit::Card` `href:` renders an `a` with one hover and focus treatment, so it can't hold other links. `interactive: true` gives a `div` the same look, and `data-focused="true"` holds it on.
+- **A wide modal, or one whose body draws its own heading and ×:** `Kit::Modal` `size: :xl`, `:"2xl"` or `:"3xl"` (the evidence modals, 768px), and `header: false`. The title still names the dialog.
+- **A controller that must wrap the whole modal body** (a lazy frame's `frame-error`, `submit-fallback`): pass it as `Kit::Modal` `panel_data:`. The evidence shells do.
 
 ## Page View Pattern
 
@@ -409,4 +417,4 @@ When making minor updates to existing ERB views, use Kit helpers:
 **Kit variants:**
 - Buttons: `:primary`, `:secondary`, `:tertiary`, `:danger`, `:success`, `:link`
 - Alerts: `:info`, `:success`, `:warning`, `:danger`
-- Badges: `:primary`, `:secondary`, `:success`, `:warning`, `:danger`, `:info`
+- Badges: `variant:` `:subtle`, `:solid`, `:outline` × `tone:` `:neutral`, `:brand`, `:info`, `:success`, `:warning`, `:danger`
