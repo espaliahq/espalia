@@ -159,6 +159,22 @@ item ID, never by capability link.
   report, peer → peer, and report → manager. Self-provided feedback is separate;
   historical peer-source items without a persisted direction use a visible
   peer-or-upward combined bucket.
+- **Origin**: `by_origin` splits `feedback_provided` by
+  `external_reference.system` (none = `growthos`), so the values sum to the
+  provided total. `growthos` is always present, other systems appear when they
+  have items, largest first. The web report shows "Of which via Chip: N" under
+  the provided tile, only when an origin other than GrowthOS is non-zero; MCP
+  returns the map keyed by system slug (`Reporting::OriginLabels` turns a slug
+  into the display name). Imported items stay in every other figure: direction,
+  coverage and the month filter read them like any item. "By request" still means
+  a GrowthOS evidence request, so feedback a peer system collected in answer to
+  its own request counts as proactive here; the export's *Origin request* column
+  says it was asked for.
+- **Counted once.** A figure combined across systems counts each item in the
+  system it was given in. An item that crossed from Chip appears in both
+  systems' totals, so a People & Culture total that adds the two double-counts it.
+  Take the GrowthOS figure as `by_origin.growthos`, and the other system's as
+  that system's own native count.
 - **Grouping**: assessed person by live manager, enrollment-snapshot role, or
   enrollment-snapshot level. Contributor identities and feedback content never
   enter the result.
@@ -260,6 +276,8 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   | Applies to | active links (or, for a withdrawn item a migration left with none, the links it had): capability name (from the cycle's framework) · the recipient role's level code (`L<n>` when the role has none) · valence label |
   | Status / Withdrawn at | `link_status`, `withdrawn_at` |
   | Reference link | `external_reference.safe_url` (http/https only) |
+  | Origin | the system the item was given in, from `external_reference.system` through `Reporting::OriginLabels` ("GrowthOS" when there is none, "Slack", "Chip", "GitHub"…, else the slug titleised) |
+  | Origin request | `external_reference.metadata.request_context`: what the item answered in its source system. Blank when there is none. *Requested or proactive* is unchanged and means a GrowthOS request only, so a peer item that answered a request in Chip reads *Proactive* there and carries the request here |
 
 - **The file**: `text/csv`, UTF-8 with a byte-order mark (so Excel reads "→"
   and accented names correctly), named
