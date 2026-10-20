@@ -1,0 +1,8 @@
+<div role="menu" aria-label="Account" class="w-56 rounded-md border border-default bg-overlay px-4 py-2">
+  <p id="preview-appearance-label" class="text-xs font-semibold uppercase tracking-wider text-muted">Appearance</p>
+  <%= render Components::Kit::SegmentedControl.new(fill: true, item_role: :menuitemradio, class: "mt-1.5", aria: { labelledby: "preview-appearance-label" }) do |control| %>
+    <% control.segment("Auto") %>
+    <% control.segment("Light") %>
+    <% control.segment("Dark", selected: true) %>
+  <% end %>
+</div>

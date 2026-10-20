@@ -133,6 +133,7 @@ Labels follow the same rule:
 - **`Kit::Alert` and `Kit::Toast`:** `tone:` for meaning, `emphasis: :subtle` (the default) or `:solid` for weight.
 - **`Kit::Tag`:** a category hue from `category:`, hashed from a stable key so it keeps its hue on every screen; neutral without one.
 - **`Kit::Chip`:** neutral always; selected is a neutral fill and a heavier weight, never brand.
+- **`Kit::SegmentedControl`:** one choice from a few on a shared track; the chosen segment takes the card fill. Inside a `role="menu"`, `item_role: :menuitemradio` swaps `aria-pressed` for `aria-checked`, as the user menu's Appearance does.
 - **`Kit::Badge`:** `tone:` for meaning, `variant: :subtle` (the default), `:solid` or `:outline` for weight, `size: :sm` or `:md`. Square, so it reads apart from a tag. The old job names (`variant: :primary`, `:success`…) still render as a subtle badge in the matching tone until each view moves.
 
 ## Building a themed component
@@ -208,7 +209,7 @@ Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each
 | `Kit::Modal` | `rounded-lg` | `shadow-2xl` |
 | `Kit::Button`, `Kit::Field`, `Kit::Alert` | `rounded-md` | none |
 | `Kit::Badge` | `rounded-sm` | none |
-| `Kit::Tag`, `Kit::Chip` | `rounded-full` | none |
+| `Kit::Tag`, `Kit::Chip`, `Kit::SegmentedControl` | `rounded-full` | none |
 | `Kit::EmptyState`, `Kit::DescriptionList` | `rounded-lg` | none |
 
 ## Focus and selection

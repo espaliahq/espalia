@@ -19,6 +19,7 @@ class RadiusShadowStepsTest < ActiveSupport::TestCase
     "empty_state.rb" => %w[rounded-lg],
     "field.rb" => %w[rounded-md rounded-sm rounded-full],
     "modal.rb" => %w[rounded-lg rounded-md shadow-2xl],
+    "segmented_control.rb" => %w[rounded-full],
     "tag.rb" => %w[rounded-full],
     "toast.rb" => %w[shadow-lg]
   }.freeze
