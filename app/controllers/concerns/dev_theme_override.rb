@@ -26,6 +26,13 @@ module DevThemeOverride
     cookies[:dev_scheme].presence_in(SCHEMES) if Rails.env.development?
   end
 
+  # A scheme the person picks in the user menu replaces a `?scheme=` preview, or the menu and page disagree
+  #
+  # @return [void]
+  def forget_dev_scheme_override
+    cookies.delete(:dev_scheme) if Rails.env.development?
+  end
+
   # @return [void]
   def remember_dev_theme_override
     return unless Rails.env.development?

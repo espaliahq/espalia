@@ -3,6 +3,8 @@
 require "test_helper"
 
 class DevThemeOverrideTest < ActionDispatch::IntegrationTest
+  include Devise::Test::IntegrationHelpers
+
   context "in development" do
     setup do
       # Loads the lazy routes before the stub: under "development" they mount Lookbook, which test doesn't load
@@ -25,6 +27,21 @@ class DevThemeOverrideTest < ActionDispatch::IntegrationTest
         get new_user_session_path(scheme: "light")
         get new_user_session_path(scheme: "auto")
         assert_select "html[data-scheme]", count: 0
+      end
+    end
+
+    should "drop a ?scheme preview once the person picks a scheme in the menu" do
+      tenant = create(:tenant)
+      user = create(:user)
+      ActsAsTenant.with_tenant(tenant) { create(:tenant_user, tenant: tenant, user: user) }
+      sign_in user
+
+      Rails.stub(:env, @env) do
+        get root_path(scheme: "light")
+        patch settings_color_scheme_path, params: { color_scheme: "dark" }, as: :json
+
+        get root_path
+        assert_select "html[data-scheme='dark']"
       end
     end
 
