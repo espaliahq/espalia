@@ -157,6 +157,10 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
                          hint: "Signs the requests we send. The peer holds the same value as its inbound secret.")
             secret_field(:inbound_secret, "Inbound secret",
                          hint: "Verifies the requests the peer sends. Replacing it keeps the old value working for 24 hours.")
+            kinds_field(:export_kinds, "Types to send", @form_config.export_kinds,
+                        hint: "Which types of our feedback the peer may pull. Untick all to send nothing.")
+            kinds_field(:import_kinds, "Types to import", @form_config.import_kinds,
+                        hint: "Which types of the peer's feedback we take. Leave every box unticked to import everything it sends.")
             enabled_field
             inbound_address
 
@@ -199,6 +203,28 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             placeholder: stored ? "Leave blank to keep the stored value" : "Paste a 32+ character secret",
             class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(name)}-hint" })
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
+    end
+  end
+
+  def kinds_field(name, legend_text, selected, hint:)
+    div do
+      input(type: "hidden", name: "#{field_name(name)}[]", value: "")
+      fieldset(aria: { describedby: "#{field_id(name)}-hint" }) do
+        legend(class: LABEL_CLASSES) { legend_text }
+        div(class: "mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4") do
+          EvidenceItem::EVIDENCE_TYPES.each { |kind| kind_checkbox(name, kind, selected.include?(kind)) }
+        end
+      end
+      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
+    end
+  end
+
+  def kind_checkbox(name, kind, checked)
+    id = "#{field_id(name)}_#{kind}"
+    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer") do
+      input(type: "checkbox", id: id, name: "#{field_name(name)}[]", value: kind, checked: checked,
+            class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600")
+      plain kind.humanize
     end
   end
 

@@ -32,6 +32,7 @@ class FeedbackExchangeConfig
                         allow_blank: true
   validates :peer_name, :base_url, presence: true, if: :enabled?
   validate :base_url_is_secure
+  validate :kinds_are_evidence_types
 
   # Whether the exchange can run: a peer is named and reachable, switched on,
   # and both secrets are stored.
@@ -43,7 +44,10 @@ class FeedbackExchangeConfig
   end
 
   # The labels the settings form uses, so an error names the field the admin sees.
-  ATTRIBUTE_LABELS = { "base_url" => "Peer address", "peer_name" => "Peer name" }.freeze
+  ATTRIBUTE_LABELS = {
+    "base_url" => "Peer address", "peer_name" => "Peer name",
+    "import_kinds" => "Types to import", "export_kinds" => "Types to send"
+  }.freeze
 
   # @return [String]
   def self.human_attribute_name(attribute, options = {})
@@ -70,6 +74,14 @@ class FeedbackExchangeConfig
   end
 
   private
+
+  # Each kind is one of our evidence types, the vocabulary both lists filter on.
+  def kinds_are_evidence_types
+    { import_kinds: import_kinds, export_kinds: export_kinds }.each do |name, kinds|
+      unknown = Array(kinds).map(&:to_s) - EvidenceItem::EVIDENCE_TYPES
+      errors.add(name, "has unknown types: #{unknown.join(', ')}") if unknown.any?
+    end
+  end
 
   # https only, except in development where a local peer is plain http. The
   # address is a prefix the client appends paths to, so it carries no credentials,

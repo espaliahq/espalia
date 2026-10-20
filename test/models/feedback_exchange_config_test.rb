@@ -71,6 +71,25 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
     end
   end
 
+  context "kinds" do
+    should "accept evidence types" do
+      assert FeedbackExchangeConfig.new(import_kinds: %w[peer_feedback impact], export_kinds: EvidenceItem::EVIDENCE_TYPES).valid?
+    end
+
+    should "refuse anything else in either list" do
+      %i[import_kinds export_kinds].each do |list|
+        config = FeedbackExchangeConfig.new(list => %w[impact gossip])
+        assert_not config.valid?
+        assert_includes config.errors[list].first, "gossip"
+      end
+    end
+
+    should "have defaults that are all evidence types" do
+      assert FeedbackExchangeConfig.new.valid?
+      assert_empty FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS - EvidenceItem::EVIDENCE_TYPES
+    end
+  end
+
   context "peer_name" do
     should "accept a slug" do
       assert FeedbackExchangeConfig.new(peer_name: "chip").valid?

@@ -38,12 +38,20 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
         js_fill_in "feedback_exchange_outbound_secret", with: OUTBOUND
         js_fill_in "feedback_exchange_inbound_secret", with: INBOUND
         page.execute_script("document.getElementById('feedback_exchange_enabled').checked = true")
+        page.execute_script("document.getElementById('feedback_exchange_export_kinds_impact').checked = false")
+        page.execute_script("document.getElementById('feedback_exchange_import_kinds_peer_feedback').checked = true")
         screenshot("#{name}_form_filled")
         click_button_with_js_fallback "Save settings", expect_text: "Feedback exchange settings saved."
 
         assert_text "Active"
         assert_no_text OUTBOUND
         assert_no_text INBOUND
+        assert_no_checked "feedback_exchange_export_kinds_impact"
+        assert_checked "feedback_exchange_export_kinds_observation"
+        assert_checked "feedback_exchange_import_kinds_peer_feedback"
+        assert_no_checked "feedback_exchange_import_kinds_impact"
+        assert_equal %w[peer_feedback manager_feedback observation], @tenant.reload.feedback_exchange_config.export_kinds
+        assert_equal %w[peer_feedback], @tenant.feedback_exchange_config.import_kinds
         assert_equal "", find_by_id("feedback_exchange_outbound_secret").value
         assert_equal "Leave blank to keep the stored value", find_by_id("feedback_exchange_outbound_secret")[:placeholder]
         assert_no_horizontal_overflow
@@ -89,6 +97,15 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def assert_checked(id)
+    assert_selector "##{id}:checked"
+  end
+
+  def assert_no_checked(id)
+    assert_selector "##{id}", visible: :all
+    assert_no_selector "##{id}:checked"
+  end
 
   def assert_no_horizontal_overflow
     overflowing = page.evaluate_script(<<~JS)

@@ -14,9 +14,9 @@ class Tenant::FeedbackExchangesController < ApplicationController
     authorize :integrations, :update_feedback_exchange?
 
     current_tenant.update_feedback_exchange!(
-      settings: settings_params.to_h.symbolize_keys,
-      outbound_secret: secret_params[:outbound_secret],
-      inbound_secret: secret_params[:inbound_secret]
+      settings: settings,
+      outbound_secret: form_params[:outbound_secret],
+      inbound_secret: form_params[:inbound_secret]
     )
     redirect_to tenant_integration_path("feedback-exchange"), notice: "Feedback exchange settings saved.",
                                                                status: :see_other
@@ -43,12 +43,19 @@ class Tenant::FeedbackExchangesController < ApplicationController
     messages.presence || tenant.errors.full_messages
   end
 
-  def settings_params
-    params.expect(feedback_exchange: [ :base_url, :peer_name, :enabled ])
+  def form_params
+    @form_params ||= params.expect(
+      feedback_exchange: [ :base_url, :peer_name, :enabled, :outbound_secret, :inbound_secret,
+                           import_kinds: [], export_kinds: [] ]
+    )
   end
 
-  def secret_params
-    params.expect(feedback_exchange: [ :outbound_secret, :inbound_secret ])
+  # The checkbox groups submit a leading blank so that unticking every box is
+  # still a value; drop it.
+  def settings
+    form_params.slice(:base_url, :peer_name, :enabled, :import_kinds, :export_kinds).to_h.symbolize_keys.tap do |attrs|
+      %i[import_kinds export_kinds].each { |key| attrs[key] = attrs[key].compact_blank if attrs.key?(key) }
+    end
   end
 
   # Calls the peer's signed /health. The answer shown to the admin names the
