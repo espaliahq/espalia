@@ -8,6 +8,8 @@ require "test_helper"
 class ThemeRolesTest < ActiveSupport::TestCase
   THEME_DIR = Rails.root.join("app/assets/tailwind/theme")
   APPLICATION_CSS = Rails.root.join("app/assets/tailwind/application.css")
+  # Unstepped colours and the font-size scale: text-white, text-lg and the like already exist.
+  TAILWIND_NAMES = (%w[black white transparent current inherit xs sm base lg xl] + (2..9).map { |n| "#{n}xl" }).to_set
   UTILITY = /^\s*--(?:text|background|border|ring|outline)-color-([\w-]+):\s*var\((--gos-[\w-]+)\)/
 
   def theme_css
@@ -24,9 +26,9 @@ class ThemeRolesTest < ActiveSupport::TestCase
     assert_empty undefined, "Role utilities with no variable behind them:\n#{undefined.map(&:join).join("\n")}"
   end
 
-  should "not name a role after an existing colour token" do
-    colours = File.read(APPLICATION_CSS).scan(/^\s*--color-([\w-]+):/).flatten.to_set
-    clashes = utilities.map(&:first).select { |name| colours.include?(name) }
-    assert_empty clashes, "These role names already exist as --color-* utilities: #{clashes.join(", ")}"
+  should "not name a role after an existing utility" do
+    taken = File.read(APPLICATION_CSS).scan(/^\s*--color-([\w-]+):/).flatten.to_set + TAILWIND_NAMES
+    clashes = utilities.map(&:first).select { |name| taken.include?(name) }
+    assert_empty clashes, "These role names already mean something to Tailwind: #{clashes.join(", ")}"
   end
 end
