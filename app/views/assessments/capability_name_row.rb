@@ -55,7 +55,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
 
   def view_template
     div(id: "capability-name-#{@capability.stable_id}", class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { @capability.name }
+      h3(class: "text-sm font-semibold text-default") { @capability.name }
       weight_chip(@score&.dig(:weight), suffix: @capability.stable_id)
       required_chip(@score&.dig(:required), suffix: @capability.stable_id)
       blocked_badge if @blocked
@@ -73,8 +73,8 @@ class Views::Assessments::CapabilityNameRow < Views::Base
     span(title: @block_reason) do
       defined_term(
         :blocked, suffix: @capability.stable_id,
-        trigger_class: "text-[10px] font-medium text-red-700 dark:text-red-400 " \
-                       "bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded"
+        trigger_class: "text-[10px] font-medium text-danger " \
+                       "bg-danger-subtle px-1.5 py-0.5 rounded"
       )
     end
   end
@@ -96,7 +96,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
       else
         state = @score[:state]
         if (split = split_text)
-          span(class: "text-xs text-gray-600 dark:text-gray-300 tabular-nums hidden sm:inline") { split }
+          span(class: "text-xs text-muted tabular-nums hidden sm:inline") { split }
         end
         span(class: "text-base font-bold tabular-nums #{tone_text(state)}", title: state_label(state)) do
           "#{percent(@score[:score])}%"
@@ -109,7 +109,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
     end
   end
 
-  MUTED = "text-xs text-gray-600 dark:text-gray-300"
+  MUTED = "text-xs text-muted"
 
   # "100% · +50% toward E4" — the assessed-level share and the next-band
   # credit, so the net never stands alone. A prior-level deficit shows too.

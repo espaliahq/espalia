@@ -55,8 +55,8 @@ class Views::Assessments::IndexView < Views::Base
 
   def page_header
     div(class: "mb-6") do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "My Assessments" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      h1(class: "text-2xl font-bold text-default") { "My Assessments" }
+      p(class: "mt-1 text-sm text-muted") do
         "Self-assess your capabilities against your assigned framework."
       end
     end
@@ -80,8 +80,8 @@ class Views::Assessments::IndexView < Views::Base
     return if entries.empty?
 
     section(id: "explorations", class: "mt-10", aria: { labelledby: "explorations-heading" }) do
-      h2(id: "explorations-heading", class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Explorations" }
-      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+      h2(id: "explorations-heading", class: "text-xl font-bold text-default mb-1") { "Explorations" }
+      p(class: "text-sm text-muted mb-4") do
         "Roles and levels you're exploring. Your managers and admins can see them too."
       end
       ul(class: "grid gap-3 sm:grid-cols-2 lg:grid-cols-3") do
@@ -94,11 +94,11 @@ class Views::Assessments::IndexView < Views::Base
     li do
       a(href: assessment_path(entry.assignment, entry.lens_params),
         data: { exploration: entry.code },
-        class: "block rounded-lg border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-900 p-4 " \
+        class: "block rounded-lg border border-sky-200 dark:border-sky-800 bg-overlay p-4 " \
                "shadow-xs hover:border-sky-400 dark:hover:border-sky-600 transition-colors " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
-        p(class: "font-semibold text-gray-900 dark:text-white break-words") { entry.label }
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { exploration_meta(entry) }
+               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus") do
+        p(class: "font-semibold text-default break-words") { entry.label }
+        p(class: "mt-1 text-sm text-muted") { exploration_meta(entry) }
       end
     end
   end
@@ -124,8 +124,8 @@ class Views::Assessments::IndexView < Views::Base
 
   def report_assignments_section
     div(class: "mt-10") do
-      h2(class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Team Assessments" }
-      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+      h2(class: "text-xl font-bold text-default mb-1") { "Team Assessments" }
+      p(class: "text-sm text-muted mb-4") do
         "Review and rate your direct reports\u2019 assessments."
       end
       div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
@@ -140,8 +140,8 @@ class Views::Assessments::IndexView < Views::Base
   # Paginated (pagy) — a senior manager's subtree can hold hundreds.
   def skip_level_assignments_section
     div(id: "skip-level-assessments", class: "mt-10") do
-      h2(class: "text-xl font-bold text-gray-900 dark:text-white mb-1") { "Skip-Level Assessments" }
-      p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+      h2(class: "text-xl font-bold text-default mb-1") { "Skip-Level Assessments" }
+      p(class: "text-sm text-muted mb-4") do
         "Assessments across your wider team — people reporting below your direct reports."
       end
       div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
@@ -157,12 +157,12 @@ class Views::Assessments::IndexView < Views::Base
   def skip_level_pager
     pagy = @skip_level_pagy
     div(class: "mt-4 flex flex-wrap items-center justify-between gap-2") do
-      span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+      span(class: "text-xs text-muted tabular-nums") do
         "Showing #{pagy.from}–#{pagy.to} of #{pagy.count}"
       end
       div(class: "flex items-center gap-2") do
         skip_level_page_link("← Previous", pagy.previous)
-        span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+        span(class: "text-xs text-muted tabular-nums") do
           "Page #{pagy.page} of #{pagy.last}"
         end
         skip_level_page_link("Next →", pagy.next)
@@ -173,60 +173,43 @@ class Views::Assessments::IndexView < Views::Base
   # @param label [String]
   # @param page [Integer, nil] nil renders a disabled placeholder
   def skip_level_page_link(label, page)
-    shared = "inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium"
-    if page
-      a(
-        href: assessments_path(skip_page: page, anchor: "skip-level-assessments"),
-        class: "#{shared} border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
-               "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-      ) { label }
-    else
-      # Inactive, so exempt from 1.4.3 — but only if it says so: a bare span
-      # reads as ordinary text to axe and to a screen reader.
-      span(role: "link", aria: { disabled: "true" },
-           class: "#{shared} border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600") { label }
-    end
+    # Inactive, so exempt from 1.4.3 — but only if it says so: an `a` without an href
+    # reads as ordinary text to axe and to a screen reader, hence the role.
+    render Components::Kit::Button.new(
+      variant: :outline, size: :xs, role: "link", disabled: page.nil?,
+      href: assessments_path(skip_page: page || 1, anchor: "skip-level-assessments")
+    ) { label }
   end
 
   def report_assignment_card(assignment)
     person = @report_people[assignment.person_id]
     cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
 
-    div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-900 p-5 shadow-xs") do
-      div(class: "flex items-start justify-between") do
-        div do
-          h3(class: "text-lg font-semibold text-gray-900 dark:text-white") do
-            person&.name || "Team Member"
-          end
-          p(class: "text-sm text-gray-600 dark:text-gray-300") do
-            assignment.framework&.name || "Framework"
-          end
-          div(class: "mt-1 flex items-center gap-2") do
-            if assignment.role
-              render Components::Kit::Badge.new(assignment.role.name, variant: :info)
+    render Components::Kit::Card.new do |card|
+      card.body do
+        div(class: "flex items-start justify-between") do
+          div do
+            h3(class: "text-lg font-semibold text-default") do
+              person&.name || "Team Member"
             end
-            if assignment.level
-              render Components::Kit::Badge.new(assignment.level.title, variant: :default)
+            p(class: "text-sm text-muted") do
+              assignment.framework&.name || "Framework"
             end
+            assignment_badges(assignment)
+          end
+          status_badges(assignment, show_manager: true)
+        end
+
+        if cycle&.name.present?
+          p(class: "mt-3 text-sm text-muted") { cycle.name }
+        end
+        exploration_chips(assignment)
+
+        div(class: "mt-4") do
+          render Components::Kit::Button.new(variant: :outline, size: :sm, href: assessment_path(assignment)) do
+            "Review assessment"
           end
         end
-        status_badges(assignment, show_manager: true)
-      end
-
-      if cycle&.name.present?
-        p(class: "mt-3 text-sm text-gray-600 dark:text-gray-300") { cycle.name }
-      end
-      exploration_chips(assignment)
-
-      div(class: "mt-4") do
-        a(
-          href: assessment_path(assignment),
-          class: "inline-flex items-center gap-1.5 rounded-md border border-gray-300 " \
-                 "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
-                 "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
-                 "transition-colors"
-        ) { "Review assessment" }
       end
     end
   end
@@ -234,46 +217,41 @@ class Views::Assessments::IndexView < Views::Base
   def assignment_card(assignment)
     cycle = @open_cycles[[ assignment.framework_id, assignment.person_id ]]
 
-    div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-900 p-5 shadow-xs") do
-      div(class: "flex items-start justify-between") do
-        div do
-          h3(class: "text-lg font-semibold text-gray-900 dark:text-white") do
-            assignment.framework&.name || "Framework"
-          end
-          div(class: "mt-1 flex items-center gap-2") do
-            if assignment.role
-              render Components::Kit::Badge.new(assignment.role.name, variant: :info)
+    render Components::Kit::Card.new do |card|
+      card.body do
+        div(class: "flex items-start justify-between") do
+          div do
+            h3(class: "text-lg font-semibold text-default") do
+              assignment.framework&.name || "Framework"
             end
-            if assignment.level
-              render Components::Kit::Badge.new(assignment.level.title, variant: :default)
+            assignment_badges(assignment)
+          end
+          status_badges(assignment, show_manager: false)
+        end
+
+        if cycle&.name.present?
+          p(class: "mt-3 text-sm text-muted") { cycle.name }
+        end
+
+        div(class: "mt-4") do
+          if cycle
+            render Components::Kit::Button.new(tone: :brand, size: :sm, href: assessment_path(assignment)) do
+              "#{self_cta_verb(assignment)} self-assessment"
+            end
+          else
+            render Components::Kit::Button.new(variant: :outline, size: :sm, href: assessment_path(assignment)) do
+              "View self-assessment"
             end
           end
         end
-        status_badges(assignment, show_manager: false)
       end
+    end
+  end
 
-      if cycle&.name.present?
-        p(class: "mt-3 text-sm text-gray-600 dark:text-gray-300") { cycle.name }
-      end
-
-      div(class: "mt-4") do
-        if cycle
-          a(
-            href: assessment_path(assignment),
-            class: "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 " \
-                   "text-sm font-medium text-white hover:bg-primary/90 transition-colors"
-          ) { "#{self_cta_verb(assignment)} self-assessment" }
-        else
-          a(
-            href: assessment_path(assignment),
-            class: "inline-flex items-center gap-1.5 rounded-md border border-gray-300 " \
-                   "dark:border-gray-600 px-3 py-1.5 text-sm font-medium " \
-                   "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 " \
-                   "transition-colors"
-          ) { "View self-assessment" }
-        end
-      end
+  def assignment_badges(assignment)
+    div(class: "mt-1 flex items-center gap-2") do
+      render Components::Kit::Badge.new(assignment.role.name, variant: :info) if assignment.role
+      render Components::Kit::Badge.new(assignment.level.title, variant: :default) if assignment.level
     end
   end
 
@@ -327,7 +305,7 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def ready_for_alignment_cue
-    span(class: "text-xs text-gray-600 dark:text-gray-300") { Views::Assessments::StatusPill::READY_FOR_ALIGNMENT }
+    span(class: "text-xs text-muted") { Views::Assessments::StatusPill::READY_FOR_ALIGNMENT }
   end
 
   # "Start" until the viewer has touched a rating this cycle — carried
@@ -367,7 +345,7 @@ class Views::Assessments::IndexView < Views::Base
   def side_chip(label, state)
     variant, text = SIDE_STATES.fetch(state)
     div(class: "flex items-center gap-1.5") do
-      span(class: "text-xs text-gray-500 dark:text-gray-400") { label }
+      span(class: "text-xs text-muted") { label }
       if variant == :to_confirm
         render Components::Shared::ToConfirmChip.new(
           text, title: "Carried from the previous cycle — open the assessment to confirm or change"
@@ -379,11 +357,6 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def empty_state
-    div(class: "rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 " \
-               "p-12 text-center") do
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
-        "You have not been assigned to any frameworks yet."
-      end
-    end
+    render Components::Kit::EmptyState.new(title: "You have not been assigned to any frameworks yet.")
   end
 end

@@ -205,7 +205,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#cell-#{@cap_stable}-1 [data-split]", visible: :all
       # Base fill (the report's assumed-consistent slice) is blue, not grey.
       assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
-      assert_no_selector "#cell-#{@cap_stable}-1.bg-gray-100"
+      assert_no_selector "#cell-#{@cap_stable}-1.bg-neutral-subtle"
     end
 
     should "split explicit-consistent against assumed-consistent as two blue shades" do

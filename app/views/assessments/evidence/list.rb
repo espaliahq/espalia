@@ -30,7 +30,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
+      class: "mt-4 pt-3 border-t border-default"
     ) do
       header
       ul(class: "space-y-0.5") do
@@ -66,7 +66,7 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def header_label_classes
-    "flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-300"
+    "flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted"
   end
 
   def header_label_content

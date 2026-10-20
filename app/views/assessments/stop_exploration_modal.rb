@@ -39,8 +39,8 @@ class Views::Assessments::StopExplorationModal < Views::Base
 
   def outcome_fields
     fieldset do
-      legend(class: "text-sm font-medium text-gray-700 dark:text-gray-200") { "What came of it?" }
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { "#{@other_party.upcase_first} is told." }
+      legend(class: "text-sm font-medium text-muted") { "What came of it?" }
+      p(class: "text-xs text-muted") { "#{@other_party.upcase_first} is told." }
       div(class: "mt-2 space-y-2") do
         AssessmentExploration::OUTCOMES.each_with_index do |value, index|
           name, hint = OUTCOME_COPY.fetch(value)
@@ -52,13 +52,13 @@ class Views::Assessments::StopExplorationModal < Views::Base
 
   def outcome_option(value, name, hint, index)
     field_id = "#{ID}-outcome-#{value}"
-    label(for: field_id, class: "flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100 cursor-pointer") do
+    label(for: field_id, class: "flex items-start gap-2 text-sm text-default cursor-pointer") do
       input(type: "radio", id: field_id, name: "outcome", value: value, required: index.zero?,
-            class: "mt-0.5 accent-primary")
+            class: "mt-0.5 #{Components::Kit::Field::RADIO}")
       span do
         span(class: "font-medium") { name }
         plain " — "
-        span(class: "text-gray-600 dark:text-gray-300") { Kernel.format(hint, code: @exploration.code) }
+        span(class: "text-muted") { Kernel.format(hint, code: @exploration.code) }
       end
     end
   end

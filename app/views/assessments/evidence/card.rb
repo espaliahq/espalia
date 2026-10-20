@@ -58,7 +58,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   def view_template
     li(
       id: "evidence-#{@item.id}",
-      class: "group relative flex gap-2 py-1.5 text-xs text-gray-700 dark:text-gray-200"
+      class: "group relative flex gap-2 py-1.5 text-xs text-muted"
     ) do
       source_dot
       div(class: "min-w-0 flex-1") do
@@ -91,7 +91,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def also_linked_line
-    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400 italic") do
+    div(class: "mt-1 text-[10px] text-muted italic") do
       n = other_link_count
       plain "Also linked to #{n} other #{n == 1 ? 'place' : 'places'}"
     end
@@ -113,9 +113,8 @@ class Views::Assessments::Evidence::Card < Views::Base
       summary(
         class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
                "inline-flex max-w-full min-h-6 items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
-               "text-[10px] text-gray-600 dark:text-gray-300 " \
-               "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
-               "dark:hover:text-gray-200 transition-colors"
+               "text-[10px] text-muted " \
+               "hover:bg-default-hover hover:text-default transition-colors"
       ) do
         discussion_glyph
         if discussion_count.positive?
@@ -131,7 +130,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       end
       turbo_frame_tag(thread_frame_id, src: thread_frame_src, loading: "lazy",
                       data: { frame_error_target: "frame" }) do
-        div(class: "py-1 text-[10px] italic text-gray-600 dark:text-gray-300") do
+        div(class: "py-1 text-[10px] italic text-muted") do
           "Loading discussion…"
         end
       end
@@ -194,7 +193,7 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   def header_line
     div(class: "flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]") do
-      span(class: "font-medium text-gray-600 dark:text-gray-300") do
+      span(class: "font-medium text-muted") do
         type_label
       end
       # THIS cell's link valence (per-link, so the same item can read
@@ -210,7 +209,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def title_line
-    p(class: "font-medium text-gray-900 dark:text-gray-100 mt-0.5") { @item.title }
+    p(class: "font-medium text-default mt-0.5") { @item.title }
   end
 
   # The card only renders inside the focused expanded cell (the capability
@@ -220,11 +219,11 @@ class Views::Assessments::Evidence::Card < Views::Base
   # user has explicitly focused this cell, so render the full content —
   # clamping to two lines hides the very text they came to read.
   def content_line
-    render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-gray-700 dark:text-gray-300")
+    render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-muted")
   end
 
   def footer_line
-    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 text-[10px] text-muted") do
       span { @item.author&.name || "Unknown" }
       plain " · "
       span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
@@ -251,12 +250,12 @@ class Views::Assessments::Evidence::Card < Views::Base
     safe_url = ref.safe_url
     if safe_url
       a(href: safe_url, target: "_blank", rel: "noopener noreferrer",
-        class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-               "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300 hover:bg-gray-200 " \
-               "dark:hover:bg-gray-600 hover:underline") { label }
+        class: "inline-flex items-center gap-0.5 rounded bg-neutral-subtle " \
+               "px-1.5 py-0.5 text-[10px] text-muted hover:bg-neutral-muted " \
+               "hover:underline") { label }
     else
-      span(class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-                 "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300") { label }
+      span(class: "inline-flex items-center gap-0.5 rounded bg-neutral-subtle " \
+                 "px-1.5 py-0.5 text-[10px] text-muted") { label }
     end
   end
 

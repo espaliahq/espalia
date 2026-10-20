@@ -47,19 +47,13 @@ class Views::Assessments::Activity::Feed < Views::Base
   def header
     div(class: "mb-3 flex items-center justify-between gap-2") do
       div(class: "flex items-baseline gap-2 min-w-0") do
-        h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") { "Activity" }
-        span(class: "text-[11px] text-gray-600 dark:text-gray-300 shrink-0") do
+        h2(class: "text-sm font-semibold text-default truncate") { "Activity" }
+        span(class: "text-[11px] text-muted shrink-0") do
           "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
         end
       end
-      button(
-        type: "button",
-        class: "shrink-0 w-6 h-6 flex items-center justify-center rounded-full " \
-               "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 " \
-               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
-        data: { action: "click->activity-pane#close" },
-        aria: { label: "Close activity" }
-      ) { plain "×" }
+      render Components::Kit::Button.new(variant: :ghost, size: :xs, icon: true, aria_label: "Close activity",
+                                         data: { action: "click->activity-pane#close" }) { plain "×" }
     end
   end
 
@@ -76,27 +70,22 @@ class Views::Assessments::Activity::Feed < Views::Base
   # The "Show all activity" link inside dispatches activity-feed#clearFocus
   # to reset the feed's internal focus without collapsing the matrix.
   def focus_banner
-    div(
-      class: "hidden mb-2 flex items-center justify-between gap-2 rounded-md " \
-             "bg-amber-50 dark:bg-amber-900/30 px-2 py-1 text-[11px] text-amber-900 dark:text-amber-200",
-      data: { activity_feed_target: "focusBanner" }
-    ) do
-      span do
-        plain "Showing entries "
-        span(data: { activity_feed_target: "focusBannerLabel" }) { "for the focused capability" }
+    render Components::Kit::Alert.new(tone: :warning, size: :sm, class: "hidden mb-2",
+                                      data: { activity_feed_target: "focusBanner" }) do
+      div(class: "flex items-center justify-between gap-2") do
+        span do
+          plain "Showing entries "
+          span(data: { activity_feed_target: "focusBannerLabel" }) { "for the focused capability" }
+        end
+        button(type: "button", class: "font-medium hover:underline cursor-pointer",
+               data: { action: "click->activity-feed#clearFocus" }) { "Show all activity" }
       end
-      button(
-        type: "button",
-        class: "text-amber-900 dark:text-amber-200 hover:underline font-medium",
-        data: { action: "click->activity-feed#clearFocus" }
-      ) { "Show all activity" }
     end
   end
 
   def empty_state
-    div(class: "rounded-lg border border-dashed border-gray-200 dark:border-gray-700 " \
-               "p-4 text-center text-xs text-gray-600 dark:text-gray-300") do
-      "No activity yet. Record feedback or update a rating to begin."
+    render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel) do
+      "Record feedback or update a rating to begin."
     end
   end
 end

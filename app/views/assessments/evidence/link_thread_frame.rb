@@ -56,8 +56,8 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
   def view_template
     turbo_frame_tag(self.class.frame_id(@item.id, @capability_stable_id, @level_ordinal)) do
       div(
-        class: "mt-1 rounded-md border border-gray-200 dark:border-gray-700 " \
-               "bg-gray-50/50 dark:bg-gray-800 px-2 py-1.5",
+        class: "mt-1 rounded-md border border-default " \
+               "bg-subtle px-2 py-1.5",
         data: { controller: "comments-thread" }
       ) do
         error_line if @error.present?
@@ -87,7 +87,7 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
   end
 
   def error_line
-    p(class: "mb-1 text-[11px] text-red-700 dark:text-red-300", role: "alert") { @error }
+    p(class: "mb-1 text-[11px] text-danger", role: "alert") { @error }
   end
 
   # Withdrawal wins over removal — it retracts the item itself, so the
@@ -102,7 +102,7 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
   end
 
   def notice_text(text)
-    p(class: "mb-1 text-[10px] italic text-gray-600 dark:text-gray-300") { text }
+    p(class: "mb-1 text-[10px] italic text-muted") { text }
   end
 
   # One chronological stream: lifecycle rows + comment cards. The reply
@@ -162,9 +162,9 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
   # Muted system row — hollow dot, italic sentence, no kebab and no
   # reply affordance, so it can't be mistaken for a person's comment.
   def lifecycle_row(entry)
-    li(class: "flex gap-2 py-1 text-[11px] text-gray-600 dark:text-gray-300") do
+    li(class: "flex gap-2 py-1 text-[11px] text-muted") do
       span(
-        class: "mt-1.5 w-2 h-2 rounded-full shrink-0 border border-gray-400 dark:border-gray-500",
+        class: "mt-1.5 w-2 h-2 rounded-full shrink-0 border border-current text-subtle",
         aria_hidden: "true"
       ) { }
       div(class: "min-w-0 flex-1 italic") do
@@ -225,9 +225,7 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
         required: true,
         placeholder: "Discuss this feedback's relevance to this behaviour…",
         aria: { label: "Comment on this feedback linkage", describedby: composer_hint_id },
-        class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary",
+        class: Components::Kit::Field::INLINE,
         data: {
           comments_thread_target: "composerBody",
           action: "keydown->comments-thread#submitOnModEnter"
@@ -235,13 +233,10 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
       ) { "" }
 
       div(class: "mt-1 flex items-center justify-between gap-2") do
-        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") do
+        span(id: composer_hint_id, class: "text-[10px] text-muted") do
           plain "#{Prose::COMPOSER_HINT} · ⌘/Ctrl+Enter to post"
         end
-        button(
-          type: "submit",
-          class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"
-        ) { "Post" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Post" }
       end
     end
   end

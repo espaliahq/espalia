@@ -92,8 +92,8 @@ class Views::Assessments::HeroSummary < Views::Base
   def view_template
     ratio = primary_scoring[:performance_ratio] || 0.0
     div(id: "scoring-panel",
-        class: "mb-6 rounded-xl border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-900 overflow-hidden",
+        class: "mb-6 rounded-xl border border-default " \
+               "bg-overlay overflow-hidden",
         data: { performance_pct: (ratio * 100).round(0) }) do
       if current_level_total.zero?
         unscorable_header
@@ -158,7 +158,7 @@ class Views::Assessments::HeroSummary < Views::Base
         # collapses everything into a single visual rhythm and frees ~50
         # vertical pixels in the always-visible band.
         div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
-          h2(class: "text-xl font-bold text-gray-900 dark:text-white") { verdict_headline }
+          h2(class: "text-xl font-bold text-default") { verdict_headline }
           promotion_pill
           next_level_lens_link
           continue_assessing_cta(target) if target && can_rate?
@@ -191,9 +191,9 @@ class Views::Assessments::HeroSummary < Views::Base
   def explainer_trigger
     button(
       type: "button",
-      class: "mt-1 inline-flex min-h-6 items-center text-[11px] text-gray-600 dark:text-gray-300 underline decoration-dotted " \
-             "underline-offset-2 hover:text-gray-900 dark:hover:text-white cursor-pointer " \
-             "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+      class: "mt-1 inline-flex min-h-6 items-center text-[11px] text-muted underline decoration-dotted " \
+             "underline-offset-2 hover:text-default cursor-pointer " \
+             "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus",
       data: { action: "modal#open",
               modal_target_id: Views::Assessments::ScoreExplainerModal::ID }
     ) { "How is this calculated?" }
@@ -205,8 +205,8 @@ class Views::Assessments::HeroSummary < Views::Base
   # the engine returns 0.0 and would otherwise read as a red "Below".
   def unscorable_header
     div(class: "px-5 py-4") do
-      h2(class: "text-xl font-bold text-gray-900 dark:text-white") { "Nothing to score at #{current_code} yet" }
-      p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") do
+      h2(class: "text-xl font-bold text-default") { "Nothing to score at #{current_code} yet" }
+      p(class: "text-sm text-muted mt-1") do
         "No behavioural expectations are defined at #{current_code} for this role, so there is no score to show."
       end
     end
@@ -227,15 +227,15 @@ class Views::Assessments::HeroSummary < Views::Base
       # the headline a one-word-per-line column.
       div(class: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4") do
         div(class: "min-w-0 flex-1") do
-          h2(class: "text-xl font-bold text-gray-900 dark:text-white") { priming_headline }
-          p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { priming_gloss }
+          h2(class: "text-xl font-bold text-default") { priming_headline }
+          p(class: "text-sm text-muted mt-1") { priming_gloss }
           div(class: "mt-3") { priming_cta(target) } if target && can_rate?
         end
         div(class: "sm:text-right shrink-0") do
-          span(class: "text-4xl font-bold leading-none text-gray-900 dark:text-white tabular-nums") do
+          span(class: "text-4xl font-bold leading-none text-default tabular-nums") do
             "#{current_level_rated}/#{current_level_total}"
           end
-          div(class: "text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide") { "rated" }
+          div(class: "text-xs text-muted uppercase tracking-wide") { "rated" }
           coverage_progress_bar
         end
       end
@@ -329,8 +329,8 @@ class Views::Assessments::HeroSummary < Views::Base
     who = @context == :self ? "yourself" : (@assessee_name.to_s.split.first.presence || "them")
     a(href: assessment_path(@assessment_id, @lens.params_for(role_id: @lens.role.role_id, ordinal: next_ordinal)),
       data: { turbo_frame: "_top" },
-      class: "text-xs font-medium text-primary-ink hover:underline rounded-sm " \
-             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
+      class: "text-xs font-medium text-brand hover:underline rounded-sm " \
+             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus") do
       "See #{who} as #{next_code} →"
     end
   end
@@ -343,11 +343,11 @@ class Views::Assessments::HeroSummary < Views::Base
     fill = target.positive? ? [ current_level_rated.to_f / target, 1.0 ].min : 1.0
 
     div(class: "mt-2 w-32 sm:ml-auto") do
-      div(class: "h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden") do
-        div(class: "h-full rounded-full bg-gray-900 dark:bg-white",
+      div(class: "h-1.5 rounded-full bg-neutral-muted overflow-hidden") do
+        div(class: "h-full rounded-full bg-neutral-strong",
             style: "width: #{(fill * 100).round}%") { }
       end
-      div(class: "text-[11px] text-gray-500 dark:text-gray-400 mt-1") do
+      div(class: "text-[11px] text-muted mt-1") do
         "Score unlocks at #{target}"
       end
     end
@@ -358,16 +358,14 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "Rate next capability",
-      classes: "inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-semibold " \
-               "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
-               "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+      classes: Components::Kit::Button.classes(size: :sm)
     )
   end
 
   # Small muted "X of Y rated" badge shown in the unlocked header while the
   # assessment is still incomplete, so the partial score reads as honest.
   def coverage_chip
-    span(class: "text-xs text-gray-500 dark:text-gray-400 tabular-nums") do
+    span(class: "text-xs text-muted tabular-nums") do
       "#{current_level_rated} of #{current_level_total} rated"
     end
   end
@@ -383,7 +381,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "#{carried_to_confirm.size} to confirm",
-      classes: "#{Components::Shared::ToConfirmChip::CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950"
+      classes: "#{Components::Shared::ToConfirmChip::CLASSES} min-h-6 gap-1 hover:bg-warning-subtle"
     )
   end
 
@@ -439,7 +437,7 @@ class Views::Assessments::HeroSummary < Views::Base
   # one they differ from, and a second "Self: Below expectations" in the
   # same card says the same thing twice in more space.
   def gloss_and_secondaries
-    p(class: "text-sm text-gray-600 dark:text-gray-300 mt-1") { verdict_gloss }
+    p(class: "text-sm text-muted mt-1") { verdict_gloss }
   end
 
   # Builds the single state-driven panel for the middle band. Picks the
@@ -531,13 +529,13 @@ class Views::Assessments::HeroSummary < Views::Base
       { state_label: "#{state_label(:underperforming)} at #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
         border: "border-red-300 dark:border-red-700",
-        accent: "text-red-700 dark:text-red-300",
+        accent: "text-danger",
         caps: caps_by_id }
     when :progressing
       { state_label: "#{state_label(:progressing)} toward #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
         border: "border-amber-300 dark:border-amber-700",
-        accent: "text-amber-700 dark:text-amber-300",
+        accent: "text-warning",
         caps: caps_by_id }
     when :performing
       # Meeting the current bar, below the mastery waypoint. The gap that
@@ -553,7 +551,7 @@ class Views::Assessments::HeroSummary < Views::Base
         list_label: "Top contributors",
         items: strongest(scores_here),
         border: "border-green-300 dark:border-green-700",
-        accent: "text-green-700 dark:text-green-300",
+        accent: "text-success",
         caps: caps_by_id }
     when :mastering
       # Past the halfway waypoint — the meaningful question is what is
@@ -583,8 +581,8 @@ class Views::Assessments::HeroSummary < Views::Base
     else # unknown state
       { state_label: "#{state_label(:performing)} #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
-        border: "border-gray-200 dark:border-gray-700",
-        accent: "text-gray-600 dark:text-gray-400",
+        border: "border-default",
+        accent: "text-muted",
         caps: caps_by_id }
     end
   end
@@ -606,7 +604,7 @@ class Views::Assessments::HeroSummary < Views::Base
         span(class: "min-w-0 text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
           config[:state_label]
         end
-        span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider shrink-0") do
+        span(class: "text-[10px] font-medium text-muted uppercase tracking-wider shrink-0") do
           config[:list_label]
         end
       end
@@ -621,7 +619,7 @@ class Views::Assessments::HeroSummary < Views::Base
         next unless cap_data && score
 
         div(class: "flex items-center gap-2 py-0.5") do
-          span(class: "min-w-0 truncate text-sm text-gray-700 dark:text-gray-300") do
+          span(class: "min-w-0 truncate text-sm text-muted") do
             cap_data[:capability].name
           end
           weight_chip(cap_data[:weight], suffix: "hero-#{stable_id}")
@@ -640,7 +638,7 @@ class Views::Assessments::HeroSummary < Views::Base
   # concluded three were all that stood between them and the level.
   def gap_list_footer(config)
     if config[:items].empty?
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "No gaps to #{config[:gap_code]} — every capability there is demonstrated in full."
       end
       return
@@ -651,8 +649,8 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: config[:more].first.first,
       level_ordinal: config[:gap_ordinal],
       label: "+#{config[:more].size} more short of #{config[:gap_code]}",
-      classes: "mt-1 inline-flex min-h-6 items-center gap-1 text-xs text-gray-600 dark:text-gray-300 " \
-               "hover:text-gray-900 dark:hover:text-white hover:underline rounded-sm"
+      classes: "mt-1 inline-flex min-h-6 items-center gap-1 text-xs text-muted " \
+               "hover:text-default hover:underline rounded-sm"
     )
   end
 
@@ -704,15 +702,15 @@ class Views::Assessments::HeroSummary < Views::Base
 
     if readiness[:eligible]
       span(class: "text-xs font-medium px-2 py-1 rounded-md " \
-                  "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 " \
-                  "border border-green-200 dark:border-green-800") do
+                  "bg-success-subtle text-success " \
+                  "border border-success") do
         "Eligible for promotion to #{next_label}"
       end
     else
       reasons = [ blocked_phrase(readiness[:blocked_at_next_level]),
                   unrated_phrase(readiness[:unrated_at_next_level]) ].compact
       if reasons.any?
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{reasons.join(' · ')} at #{next_label}" }
+        span(class: "text-xs text-muted") { "#{reasons.join(' · ')} at #{next_label}" }
       end
     end
   end
@@ -740,9 +738,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "Continue",
-      classes: "inline-flex min-h-6 items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium " \
-               "bg-gray-900 dark:bg-white text-white dark:text-gray-900 " \
-               "hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+      classes: Components::Kit::Button.classes(size: :xs)
     )
   end
 
@@ -889,11 +885,11 @@ class Views::Assessments::HeroSummary < Views::Base
 
     div(id: "hero-secondary-percents",
         class: "flex items-center justify-end gap-1 text-[11px] " \
-               "text-gray-600 dark:text-gray-300 mt-1 tabular-nums") do
+               "text-muted mt-1 tabular-nums") do
       secondary_perspectives.each_with_index do |(label, scoring), i|
-        span(class: "text-gray-400 dark:text-gray-500") { "·" } if i.positive?
+        span(class: "text-subtle") { "·" } if i.positive?
         if diverges?(scoring)
-          span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0",
+          span(class: "w-1.5 h-1.5 rounded-full bg-warning-strong shrink-0",
                aria: { hidden: "true" }) { }
         end
         span { "#{label}: #{format_pct(scoring)}" }

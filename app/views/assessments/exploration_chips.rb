@@ -31,7 +31,7 @@ class Views::Assessments::ExplorationChips < Views::Base
       data: { turbo_frame: "_top", exploration: entry.code },
       class: "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium " \
              "ring-1 ring-inset hover:underline focus-visible:outline-hidden focus-visible:ring-2 " \
-             "focus-visible:ring-primary #{TONE}"
+             "focus-visible:ring-focus #{TONE}"
     ) { "Exploring #{entry.code}" }
   end
 end

@@ -32,15 +32,15 @@ class Views::Assessments::LensAlignmentChips < Views::Base
       data: { turbo_frame: "_top", lens_alignment: alignment.code },
       class: "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium " \
              "ring-1 ring-inset hover:underline focus-visible:outline-hidden focus-visible:ring-2 " \
-             "focus-visible:ring-primary #{tone(alignment.status)}"
+             "focus-visible:ring-focus #{tone(alignment.status)}"
     ) { "#{STATUS_TEXT.fetch(alignment.status)} · #{alignment.code}" }
   end
 
   def tone(status)
     if status == "aligned"
-      "bg-green-50 text-green-800 ring-green-200 dark:bg-green-900/30 dark:text-green-200 dark:ring-green-800"
+      "bg-success-subtle text-green-800 ring-green-200 dark:text-green-200 dark:ring-green-800"
     else
-      "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+      "bg-warning-subtle text-amber-800 ring-amber-200 dark:text-amber-200 dark:ring-amber-800"
     end
   end
 end

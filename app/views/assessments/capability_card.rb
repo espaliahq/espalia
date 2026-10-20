@@ -95,11 +95,11 @@ class Views::Assessments::CapabilityCard < Views::Base
     # past the sticky chrome. Styling stays in one place (Tailwind
     # data variants) regardless of who set the attribute.
     div(
-      class: "rounded-xl border border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 p-4 transition-shadow " \
+      class: "rounded-xl border border-default " \
+             "bg-overlay p-4 transition-shadow " \
              "hover:shadow-sm " \
              "data-[focused=true]:shadow-sm " \
-             "data-[focused=true]:ring-1 data-[focused=true]:ring-primary/20",
+             "data-[focused=true]:ring-1 data-[focused=true]:ring-(--gos-border-default)",
       # scroll-margin-top accounts for the unified sticky header. The
       # section sticky heading height varies per section (description
       # text wraps differently) so `matrix_controller#scrollCardUnderHeader`
@@ -165,7 +165,7 @@ class Views::Assessments::CapabilityCard < Views::Base
 
     div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
       if @category
-        span(class: "text-[10px] font-medium text-gray-600 dark:text-gray-300 " \
+        span(class: "text-[10px] font-medium text-muted " \
                     "uppercase tracking-wider") do
           @category.name
         end
@@ -221,7 +221,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def capability_description
-    p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
+    p(class: "text-xs text-muted mt-0.5") do
       @capability.description
     end
   end

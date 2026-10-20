@@ -86,12 +86,12 @@ class Views::Assessments::Activity::Entry < Views::Base
   def view_template
     li(
       id: "activity-entry-#{dom_safe_id}",
-      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 " \
+      class: "flex gap-2 text-xs text-muted " \
              "rounded -mx-2 px-2 py-1 transition-colors " \
-             "data-[match=true]:bg-amber-50/60 dark:data-[match=true]:bg-amber-900/15 " \
-             "data-[match=true]:border-l-2 data-[match=true]:border-amber-400 " \
+             "data-[match=true]:bg-warning-subtle " \
+             "data-[match=true]:border-l-2 data-[match=true]:border-warning-strong " \
              "data-[hidden=true]:hidden " \
-             "#{'cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40' if focusable?}",
+             "#{'cursor-pointer hover:bg-default-hover' if focusable?}",
       data: entry_data
     ) do
       span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{dot_class}") { }
@@ -157,17 +157,17 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   def summary
-    p(class: "font-medium text-gray-900 dark:text-gray-100") { summary_text }
+    p(class: "font-medium text-default") { summary_text }
   end
 
   def secondary_line
-    p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300 line-clamp-2") do
+    p(class: "mt-0.5 text-[11px] text-muted line-clamp-2") do
       secondary_text
     end
   end
 
   def footer
-    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 text-[10px] text-muted") do
       time_ago = @entry.occurred_at ? "#{time_ago_in_words(@entry.occurred_at)} ago" : "—"
       span { time_ago }
     end

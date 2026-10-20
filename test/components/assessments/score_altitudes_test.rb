@@ -165,7 +165,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       assert_includes html, "100%"
       assert_not_includes html, "Self:"
       # No annotation at all — the amber divergence dot is the row's marker.
-      assert_not_includes html, "bg-amber-400"
+      assert_not_includes html, "bg-warning-strong"
     end
 
     should "read as meeting at the top of the ladder" do

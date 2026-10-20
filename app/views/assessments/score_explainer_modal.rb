@@ -67,8 +67,8 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     return if @emphasised.empty?
 
     div do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "Counts differently for this role" }
-      ul(class: "space-y-1 text-sm text-gray-700 dark:text-gray-300") do
+      h3(class: "text-sm font-semibold text-default mb-2") { "Counts differently for this role" }
+      ul(class: "space-y-1 text-sm text-muted") do
         @emphasised.each do |cap|
           li(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
             span { cap[:name] }
@@ -88,15 +88,15 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
     parts = displayed_parts
     div do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "#{@subject} today" }
-      div(class: "rounded-lg border border-gray-200 dark:border-gray-700 " \
+      h3(class: "text-sm font-semibold text-default mb-2") { "#{@subject} today" }
+      div(class: "rounded-lg border border-default " \
                  "bg-gray-50/50 dark:bg-gray-800/30 p-3 space-y-1") do
         row("Shown at #{current_code}", parts[:current])
         row("Shown above #{current_code}", parts[:next], sign: "+") if next_level?
         row("Missing below #{current_code}", parts[:missing], sign: "−") if short_below?
         div(class: "flex items-center justify-between gap-3 pt-2 mt-1 " \
-                   "border-t border-gray-200 dark:border-gray-700") do
-          span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Score" }
+                   "border-t border-default") do
+          span(class: "text-sm font-semibold text-default") { "Score" }
           span(class: "text-sm font-bold tabular-nums #{tone_text(@state)}") do
             "#{parts[:score]}%"
           end
@@ -128,8 +128,8 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
   def row(label, value, sign: nil)
     div(class: "flex items-center justify-between gap-3") do
-      span(class: "text-sm text-gray-700 dark:text-gray-300") { label }
-      span(class: "text-sm tabular-nums text-gray-900 dark:text-white") { "#{sign}#{value}%" }
+      span(class: "text-sm text-muted") { label }
+      span(class: "text-sm tabular-nums text-default") { "#{sign}#{value}%" }
     end
   end
 
@@ -139,8 +139,8 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
   def rules
     div do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "How it adds up" }
-      ul(class: "space-y-1.5 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5") do
+      h3(class: "text-sm font-semibold text-default mb-2") { "How it adds up" }
+      ul(class: "space-y-1.5 text-sm text-muted list-disc pl-5") do
         li { glossary.definition(:score) }
         li { glossary.definition(:below_levels) }
         li { gate_sentence }
@@ -169,8 +169,8 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
 
   def not_counted
     div do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white mb-2") { "What doesn't count" }
-      ul(class: "space-y-1.5 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5") do
+      h3(class: "text-sm font-semibold text-default mb-2") { "What doesn't count" }
+      ul(class: "space-y-1.5 text-sm text-muted list-disc pl-5") do
         li { "Feedback and comments. They are how a rating is discussed and evidenced, never an input to it." }
         li { glossary.definition(:not_rated) }
         li { glossary.definition(:no_expectation) }

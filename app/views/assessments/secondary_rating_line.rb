@@ -39,12 +39,12 @@ class Views::Assessments::SecondaryRatingLine < Views::Base
     # the parent's flex `gap`. Dot precedes the label per the design;
     # phrase keeps the pill's natural case ("Most of the time", not
     # "most of the time") for a single consistent vocabulary.
-    span(class: "inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
+    span(class: "inline-flex items-center gap-1.5 text-xs text-muted") do
       span(class: "w-2 h-2 rounded-full #{config[:dot]} shrink-0",
            aria: { hidden: "true" })
       span do
         plain "#{@label} rating: "
-        span(class: "font-medium text-gray-800 dark:text-gray-200") { config[:phrase] }
+        span(class: "font-medium text-default") { config[:phrase] }
       end
     end
   end

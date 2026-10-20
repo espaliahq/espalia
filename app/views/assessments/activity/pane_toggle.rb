@@ -15,18 +15,13 @@ class Views::Assessments::Activity::PaneToggle < Views::Base
   end
 
   def view_template
-    button(
-      type: "button",
-      class: "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md " \
-             "bg-gray-100 dark:bg-gray-800 text-sm font-medium " \
-             "text-gray-700 dark:text-gray-300 hover:bg-gray-200 " \
-             "dark:hover:bg-gray-700 transition-colors",
-      data: { action: "click->activity-pane#toggle",
-              activity_pane_target: "toggle" },
+    render Components::Kit::Button.new(
+      variant: :subtle, size: :sm,
+      data: { action: "click->activity-pane#toggle", activity_pane_target: "toggle" },
       aria: { expanded: "false", controls: "assessment-activity-pane" }
     ) do
       span { "Activity" }
-      span(class: "text-xs font-mono text-gray-600 dark:text-gray-300") { @entry_count.to_s }
+      span(class: "text-xs font-mono text-muted") { @entry_count.to_s }
     end
   end
 end

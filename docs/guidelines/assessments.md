@@ -170,7 +170,7 @@ This rule is symmetric: scrolling down, the new card's visible area grows from b
 **Visual styling.** A focused card carries `data-focused="true"`; styling hangs off Tailwind data variants:
 
 ```ruby
-"data-[focused=true]:shadow-sm data-[focused=true]:ring-1 data-[focused=true]:ring-primary/20"
+"data-[focused=true]:shadow-sm data-[focused=true]:ring-1 data-[focused=true]:ring-(--gos-border-default)"
 ```
 
 Server stamps it from `?capability=` on initial render; `matrix_controller#applyCardFocus` toggles it on focus changes. Single source of truth.
@@ -373,7 +373,7 @@ The bottom of the scale reads **"Not yet"** on every surface — never "None" or
 
 Ordering is carried by **chip position** (E1…E8 left→right) and the **text label**, NOT by a single-axis colour gradient — so blue marking the top "Consistently" tier reads as a distinct band rather than "even greener than green". The phrase reads inside the inline pill ("…explains reasoning. **Most of the time**"); the compact label is for tight spaces. The hue backs both pill and level chip so the strip and the inline pill agree pixel-for-pixel.
 
-**Blue is only safe as a rating colour because the keyboard-focus ring and selected-state were moved off blue onto the brand teal (`--color-primary` = `#32c8c8`).** The chip and pill focus rings are `focus-visible:ring-primary`; without that move a blue "Consistently" chip would swallow its own focus ring, and blue already meant "selected" / `:performing`. The remaining blue use to watch when extending this: the hero's `:performing` performance-state accent — a separate surface (hero band, not chips), left as-is.
+**Blue is only safe as a rating colour because the keyboard-focus ring and selected-state are off blue.** Focus uses the neutral `focus-visible:ring-focus` role and selection the neutral fills ([#543](https://github.com/mr-yum/growth-os/issues/543)), never brand or blue; without that a blue "Consistently" chip would swallow its own focus ring, and blue already meant "selected" / `:performing`. The remaining blue use to watch when extending this: the hero's `:performing` performance-state accent — a separate surface (hero band, not chips), left as-is.
 
 ## Frequency pill (primary rating surface)
 
