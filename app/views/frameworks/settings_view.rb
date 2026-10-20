@@ -177,10 +177,7 @@ class Views::Frameworks::SettingsView < Views::Base
             div(class: "flex items-center gap-2") do
               h3(class: "text-sm font-semibold text-default") { setting[:label] }
               if is_default
-                span(class: "inline-flex items-center rounded-full bg-neutral-subtle " \
-                            "px-2 py-0.5 text-xs font-medium text-muted") do
-                  plain "System default"
-                end
+                render Components::Kit::Badge.new("System default")
               end
             end
             p(class: "mt-1 text-sm text-muted") { setting[:description] }

@@ -394,3 +394,34 @@ html[data-theme="bento"] {
   }
 }
 
+/* Framework explorer surfaces, suggestions and search (#545). The surfaces
+   follow Bento's own steps, so only the blue tint needs a dark value. */
+html[data-theme="bento"] {
+  --gos-surface-overlay-subtle: var(--gos-surface-subtle);
+  --gos-surface-overlay-muted: var(--gos-surface-default-hover);
+  --gos-surface-overlay-hover: var(--gos-surface-hover);
+  --gos-surface-empty: color-mix(in oklab, var(--gos-surface-subtle) 50%, transparent);
+  --gos-surface-expanded: color-mix(in srgb, var(--gos-info-subtle) 50%, var(--gos-surface-overlay));
+  --gos-surface-expanded-hover: var(--gos-info-subtle);
+
+  --gos-suggestion-edit: #dc6803;
+  --gos-suggestion-delete: #eb3f33;
+  --gos-suggestion-add: #2287f0;
+  --gos-suggestion-add-content: #1344a5;
+  --gos-search-hit: #fedf89;
+  --gos-search-hit-content: #4e1d09;
+  --gos-illustration-marker: #bcbec1;
+
+  @variant dark {
+    --gos-surface-empty: color-mix(in oklab, var(--gos-surface-hover) 50%, transparent);
+    --gos-surface-expanded: color-mix(in srgb, var(--gos-info-subtle) 20%, var(--gos-surface-overlay));
+    --gos-surface-expanded-hover: color-mix(in srgb, var(--gos-info-subtle) 35%, var(--gos-surface-overlay));
+
+    --gos-suggestion-edit: #fdb022;
+    --gos-suggestion-add: #44a3ee;
+    --gos-suggestion-add-content: #81c3f4;
+    --gos-search-hit: #93370d;
+    --gos-search-hit-content: #fffaeb;
+    --gos-illustration-marker: #51555c;
+  }
+}

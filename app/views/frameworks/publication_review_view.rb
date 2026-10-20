@@ -211,23 +211,27 @@ class Views::Frameworks::PublicationReviewView < Views::Base
 
   def mapping_row(capability, mapping, index)
     prefix = "migration_mappings[#{index}]"
-    div(
-      class: "rounded-md border #{mapping ? 'border-default' : 'border-amber-300 dark:border-amber-700'} p-4",
+    render Components::Kit::Card.new(
+      variant: :inset, density: :compact, edge: ("border-warning" unless mapping),
       data: { controller: "mapping-form",
               mapping_form_survivor_types_value: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.to_json }
-    ) do
-      div(class: "flex items-center justify-between") do
-        span(class: "font-medium text-default") { capability.name }
-        unless mapping
-          span(class: "text-xs font-semibold text-warning") { "Needs a mapping" }
-        end
+    ) do |card|
+      card.body { mapping_fields(capability, mapping, prefix) }
+    end
+  end
+
+  def mapping_fields(capability, mapping, prefix)
+    div(class: "flex items-center justify-between") do
+      span(class: "font-medium text-default") { capability.name }
+      unless mapping
+        span(class: "text-xs font-semibold text-warning") { "Needs a mapping" }
       end
-      input(type: "hidden", name: "#{prefix}[from_stable_id]", value: capability.stable_id)
-      input(type: "hidden", name: "#{prefix}[mapping_id]", value: mapping&.mapping_id)
-      div(class: "mt-3 flex flex-wrap items-end gap-3") do
-        type_select(mapping, prefix, capability)
-        survivor_select(mapping, prefix, capability)
-      end
+    end
+    input(type: "hidden", name: "#{prefix}[from_stable_id]", value: capability.stable_id)
+    input(type: "hidden", name: "#{prefix}[mapping_id]", value: mapping&.mapping_id)
+    div(class: "mt-3 flex flex-wrap items-end gap-3") do
+      type_select(mapping, prefix, capability)
+      survivor_select(mapping, prefix, capability)
     end
   end
 

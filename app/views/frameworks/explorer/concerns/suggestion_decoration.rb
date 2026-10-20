@@ -23,9 +23,9 @@
 # - Pending delete: red strikethrough on existing text.
 #
 module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
-  PENDING_EDIT_CLASSES = "underline decoration-amber-400 decoration-wavy decoration-2 underline-offset-4"
-  PENDING_DELETE_CLASSES = "line-through decoration-red-400 decoration-2"
-  PENDING_ADD_CLASSES = "underline decoration-sky-400 decoration-wavy decoration-2 underline-offset-4 text-sky-700 dark:text-sky-300"
+  PENDING_EDIT_CLASSES = "underline decoration-suggestion-edit decoration-wavy decoration-2 underline-offset-4"
+  PENDING_DELETE_CLASSES = "line-through decoration-suggestion-delete decoration-2"
+  PENDING_ADD_CLASSES = "underline decoration-suggestion-add decoration-wavy decoration-2 underline-offset-4 text-suggestion-add"
   PENDING_REMOVE_CLASSES = "line-through decoration-current/60 decoration-2 text-muted"
   PROPOSED_TEXT_CLASSES = PENDING_ADD_CLASSES
 
@@ -175,15 +175,14 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
     noun = "open #{'discussion'.pluralize(count)}"
     title = suggestion_id ? "#{count} #{noun} — view" : "#{count} #{noun} — see the activity pane"
     attrs = {
-      class: "inline-flex items-center gap-0.5 ml-1 align-middle rounded-full " \
-             "bg-gray-100 dark:bg-gray-800 px-1 py-0.5 text-muted shrink-0",
+      class: "ml-1 align-middle",
       title: title,
       aria: { label: title },
       data: { glyph: "clarification" }
     }
 
     if suggestion_id
-      attrs[:class] += " cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 " \
+      attrs[:class] += " cursor-pointer hover:bg-neutral-muted " \
                        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
       attrs[:role] = "button"
       attrs[:tabindex] = "0"
@@ -197,9 +196,6 @@ module Views::Frameworks::Explorer::Concerns::SuggestionDecoration
       attrs[:role] = "img"
     end
 
-    span(**attrs) do
-      icon("discuss", class: "w-2.5 h-2.5")
-      span(class: "text-[10px] font-medium leading-none") { count.to_s } if count.to_i > 1
-    end
+    render Components::Kit::Badge.new(count.to_i > 1 ? count.to_s : "", leading_icon: "discuss", **attrs)
   end
 end

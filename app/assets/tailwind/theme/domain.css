@@ -343,3 +343,40 @@
   --background-color-session-live: var(--gos-session-live);
 }
 
+/*
+ * Framework suggestions and search (#545): the marks that say text differs
+ * from the published framework (an edit or added-in-draft wiggle, an added
+ * run, a pending delete or archive strike), the search-hit highlight and the
+ * illustration bullet. Each mark clears 3:1 on the overlay surface; Default's
+ * light steps are darker than the 400s the views used, which didn't.
+ */
+:root {
+  --gos-suggestion-edit: var(--color-amber-600);
+  --gos-suggestion-delete: var(--color-red-500);
+  --gos-suggestion-add: var(--color-sky-600);
+  --gos-suggestion-add-content: var(--color-sky-700);
+  --gos-search-hit: var(--color-amber-200);
+  --gos-search-hit-content: var(--color-amber-950);
+  --gos-illustration-marker: var(--color-gray-300);
+
+  @variant dark {
+    --gos-suggestion-edit: var(--color-amber-400);
+    --gos-suggestion-delete: var(--color-red-400);
+    --gos-suggestion-add: var(--color-sky-400);
+    --gos-suggestion-add-content: var(--color-sky-300);
+    --gos-search-hit: color-mix(in srgb, var(--color-amber-400) 40%, var(--gos-surface-overlay));
+    --gos-search-hit-content: var(--color-amber-50);
+    --gos-illustration-marker: var(--color-gray-600);
+  }
+}
+
+@theme inline {
+  --text-decoration-color-suggestion-edit: var(--gos-suggestion-edit);
+  --text-decoration-color-suggestion-delete: var(--gos-suggestion-delete);
+  --text-decoration-color-suggestion-add: var(--gos-suggestion-add);
+  --text-color-suggestion-add: var(--gos-suggestion-add-content);
+  --background-color-suggestion-edit: var(--gos-suggestion-edit);
+  --background-color-search-hit: var(--gos-search-hit);
+  --text-color-search-hit: var(--gos-search-hit-content);
+  --background-color-illustration-marker: var(--gos-illustration-marker);
+}

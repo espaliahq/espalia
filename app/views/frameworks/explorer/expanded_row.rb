@@ -88,14 +88,13 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
   # Empty sticky column (row-actions kebab lives in the compact row, by the
   # capability name).
   #
-  # OPAQUE equivalents of the expanded row's tint, not the tint itself:
-  # #fafcff is blue-50/30 over white and #111b31 is blue-900/10 over
-  # gray-900, so this cell matches its neighbouring expanded cells while
-  # actually masking what scrolls beneath it. As `bg-blue-50/30
-  # dark:bg-blue-900/10` it was translucent, and a whole column of
-  # illustration text rendered through it (issue #371).
+  # `bg-expanded` is the expanded row's tint composited over the overlay, so
+  # this cell matches its neighbouring expanded cells while actually masking
+  # what scrolls beneath it. As `bg-blue-50/30 dark:bg-blue-900/10` it was
+  # translucent, and a whole column of illustration text rendered through it
+  # (issue #371).
   def gutter_cell
-    td(class: "sticky left-0 z-[2] bg-[#fafcff] dark:bg-[#111b31] " \
+    td(class: "sticky left-0 z-[2] bg-expanded " \
               "#{STICKY_EDGE_CLASSES} mx-exp-gutter") { }
   end
 

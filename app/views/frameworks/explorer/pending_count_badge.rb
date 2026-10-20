@@ -23,10 +23,7 @@ class Views::Frameworks::Explorer::PendingCountBadge < Views::Base
   def view_template
     span(id: BADGE_ID) do
       if @count.positive?
-        span(class: "inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 " \
-                    "px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200") do
-          "#{@count} pending"
-        end
+        render Components::Kit::Badge.new("#{@count} pending", tone: :warning)
       end
     end
   end

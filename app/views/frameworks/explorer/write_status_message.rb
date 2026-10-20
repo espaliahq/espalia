@@ -31,6 +31,7 @@ class Views::Frameworks::Explorer::WriteStatusMessage < Views::Base
 
   def view_template
     tone = TONES[@tone]
-    render Components::Kit::Toast.new(tone: tone[:tone], dismiss_after: tone[:delay]) { @message }
+    # WriteStatus is the live region; a role here nests a second one and the error is read twice
+    render Components::Kit::Toast.new(tone: tone[:tone], dismiss_after: tone[:delay], role: :none) { @message }
   end
 end

@@ -18,10 +18,9 @@ class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
                   "data-[outcome=propose]:border-warning-strong bg-field text-default " \
                   "resize-y focus:outline-none focus:ring-1 focus:ring-focus"
 
-  SUBMIT_CLASSES = "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
+  SUBMIT_CLASSES = Components::Kit::Button.classes(tone: :brand, size: :xs)
 
-  CANCEL_CLASSES = "text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 " \
-                   "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+  CANCEL_CLASSES = Components::Kit::Button.classes(variant: :outline, size: :xs)
 
   def view_template
     template(data: { field_editor_target: "template" }) do

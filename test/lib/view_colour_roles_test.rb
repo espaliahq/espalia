@@ -26,39 +26,9 @@ class ViewColourRolesTest < ActiveSupport::TestCase
     app/javascript/controllers/person_picker_controller.js
   ].freeze
 
-  # Waiting on a component variant or a domain token: the lens and exploration
-  # hue, the hero's per-state panel, the evidence valence hues, the cycle and
-  # calibration data-vis hues, the matrix surfaces the .mx-* classes share, and
-  # the suggestion and search marks. Remove an entry when its site moves; a
-  # stale entry fails too.
-  PENDING = {
-    "app/views/frameworks/explorer/concerns/pending_archive.rb" => %w[[&>td]:decoration-red-400],
-    "app/views/frameworks/explorer/concerns/search_highlight.rb" =>
-      %w[bg-amber-200 text-amber-950 dark:bg-amber-400/40 dark:text-amber-50],
-    "app/views/frameworks/explorer/concerns/suggestion_decoration.rb" =>
-      %w[decoration-amber-400 decoration-red-400 decoration-sky-400 text-sky-700 dark:text-sky-300
-         bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700],
-    "app/views/frameworks/explorer/illustration_frame.rb" => %w[bg-gray-300 dark:bg-gray-600],
-    "app/views/frameworks/explorer/matrix_category_group.rb" =>
-      %w[bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700],
-    "app/views/frameworks/explorer/matrix_cell.rb" => %w[bg-gray-50/40 dark:bg-gray-800/20 text-gray-300 dark:text-gray-600],
-    "app/views/frameworks/explorer/matrix_header.rb" => %w[bg-gray-50 dark:bg-gray-900],
-    "app/views/frameworks/explorer/matrix_row.rb" => %w[group-hover:bg-gray-50 bg-amber-100 dark:bg-amber-900/30],
-    "app/views/frameworks/explorer/pending_count_badge.rb" =>
-      %w[bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200],
-    "app/views/frameworks/explorer/pending_illustration_frame.rb" => %w[bg-amber-400],
-    "app/views/frameworks/publication_review_view.rb" => %w[border-amber-300 dark:border-amber-700],
-    # The role pane toggle's open state is set in framework_explorer_controller.js,
-    "app/views/frameworks/show_view.rb" => %w[bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700],
-    "app/views/frameworks/suggestions/inline_indicator.rb" => %w[bg-amber-100 dark:bg-amber-900/30],
-    "app/views/frameworks/suggestions/show_view.rb" => %w[bg-gray-50 dark:bg-gray-800/50]
-  }.freeze
-
-  # Moving onto roles in another pane
-  IN_PROGRESS = %w[
-    app/views/frameworks/explorer/role_tree.rb
-    app/views/frameworks/explorer/field_editor_template.rb
-  ].freeze
+  # Waiting on a component variant or a domain token. Remove an entry when its
+  # site moves; a stale entry fails too.
+  PENDING = {}.freeze
 
   should "colour the views with role utilities" do
     offenders = palette_utilities.flat_map do |path, utilities|
@@ -82,8 +52,6 @@ class ViewColourRolesTest < ActiveSupport::TestCase
   def palette_utilities
     SOURCES.flat_map { |glob| Dir[Rails.root.join(glob)] }.sort.filter_map do |path|
       relative = Pathname(path).relative_path_from(Rails.root).to_s
-      next if IN_PROGRESS.include?(relative)
-
       utilities = File.readlines(path).flat_map do |line|
         next [] if line.lstrip.start_with?("#", "//", "<%#")
 

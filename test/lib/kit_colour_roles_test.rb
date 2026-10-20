@@ -34,9 +34,9 @@ class KitColourRolesTest < ActiveSupport::TestCase
     assert_empty offenders, "Use a role utility from theme/roles.css instead of:\n#{offenders.join("\n")}"
   end
 
-  should "colour the Kit and explorer component classes with role variables" do
+  should "colour the Kit, explorer, matrix and role tree component classes with role variables" do
     css = Rails.root.join("app/assets/tailwind/application.css").read
-    offenders = css.scan(/^([^{}\n]*\.(?:kit|explorer)-[^{}]*)\{([^}]*)\}/).flat_map do |selector, body|
+    offenders = css.scan(/^([^{}\n]*\.(?:kit|explorer|mx|tree)-[^{}]*)\{([^}]*)\}/).flat_map do |selector, body|
       body.scan(PALETTE_VARIABLE).map { |variable| "#{selector.strip} #{variable}" }
     end
 

@@ -103,7 +103,7 @@ class Views::Frameworks::Explorer::PendingIllustrationFrame < Views::Base
       data: { editor_display: true }
     ) do
       # Amber marker — this entry is a pending proposal.
-      render_illustration_marker("bg-amber-400")
+      render_illustration_marker("bg-suggestion-edit")
       span(class: "flex-1") do
         with_suggestion_click_affordance(@suggestion.suggestion_id) do
           span(class: decoration) { @attrs[:description] }

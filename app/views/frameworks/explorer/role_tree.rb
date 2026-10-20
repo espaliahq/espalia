@@ -92,18 +92,18 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # ── Header ──
 
   def header_section
-    div(class: "p-3 border-b border-gray-200 dark:border-gray-700 space-y-3") do
+    div(class: "p-3 border-b border-default space-y-3") do
       div(class: "flex items-center justify-between") do
-        h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Roles" }
+        h3(class: "text-sm font-semibold text-default") { "Roles" }
         div(class: "flex items-center gap-3") do
           button(
             type: "button",
-            class: "text-xs text-primary-ink hover:underline",
+            class: "text-xs text-brand hover:underline",
             data: { action: "tree#showAll" }
           ) { "Show All" }
           button(
             type: "button",
-            class: "text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
+            class: "text-xs text-muted hover:text-default",
             data: { action: "tree#clearAll" }
           ) { "Clear All" }
         end
@@ -118,18 +118,17 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   def solo_hint
     div(
       class: "flex items-start gap-2 px-3 py-2 text-xs " \
-             "bg-primary/5 text-gray-600 dark:text-gray-300 " \
-             "border-b border-gray-200 dark:border-gray-700",
+             "bg-brand-subtle text-muted border-b border-default",
       data: { tree_target: "hint" }
     ) do
       span(class: "flex-1 leading-snug") do
         plain "Tip: hover a role and click "
-        span(class: "font-semibold text-primary-ink") { "Solo" }
+        span(class: "font-semibold text-brand") { "Solo" }
         plain " to focus on just that one."
       end
       button(
         type: "button",
-        class: "shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300",
+        class: "shrink-0 text-subtle hover:text-muted",
         aria: { label: "Dismiss tip" },
         data: { action: "tree#dismissHint" }
       ) do
@@ -206,13 +205,12 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       # The row owns its hover cluster: the family's inline-rename pencil reveals
       # with the row's other hover controls, not on the name span (§11a).
       div(class: "flex items-center gap-2 px-3 py-1.5 rounded-md " \
-                 "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer group",
+                 "hover:bg-overlay-muted cursor-pointer group",
           data: hover_cluster_data("tree")) do
         # Disclosure triangle
         button(
           type: "button",
-          class: "w-4 h-4 flex items-center justify-center text-gray-400 " \
-                 "hover:text-gray-600 dark:hover:text-gray-300 transition-transform",
+          class: "w-4 h-4 flex items-center justify-center text-subtle hover:text-muted transition-transform",
           data: { action: "tree#toggleGroup", family_id: role_family.role_family_id },
           aria: { expanded: true }
         ) do
@@ -222,8 +220,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         # Family checkbox
         input(
           type: "checkbox",
-          class: "rounded-xs border-gray-300 dark:border-gray-600 text-primary " \
-                 "focus:ring-primary dark:bg-gray-700",
+          class: Components::Kit::Field::CHECKBOX,
           checked: all_checked,
           indeterminate: some_checked && !all_checked,
           data: { action: "change->tree#toggleFamily", family_id: role_family.role_family_id, tree_target: "familyCheckbox" }
@@ -249,7 +246,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
           end
         end
 
-        span(class: "shrink-0 text-xs text-gray-600 dark:text-gray-300") { visible_roles.size.to_s }
+        span(class: "shrink-0 text-xs text-muted") { visible_roles.size.to_s }
       end
 
       # Roles
@@ -261,7 +258,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         # Only reachable in edit mode (the empty-family guard above) — a ghost
         # family renders its emptiness explicitly rather than a bare header.
         if visible_roles.empty?
-          div(class: "px-3 py-1 text-xs italic text-gray-400 dark:text-gray-500") { "No roles yet" }
+          div(class: "px-3 py-1 text-xs italic text-subtle") { "No roles yet" }
         end
         add_role_row(role_family) if structure_editable?
       end
@@ -276,7 +273,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     div(class: "px-3 py-1") do
       button(
         type: "button",
-        class: "inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline",
         data: {
           action: "click->modal#open",
           modal_target_id: "add-role-modal",
@@ -294,10 +291,10 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   # modal (the RoleFamilyEditModal in :new mode). Inside the families frame so
   # it survives frame re-renders.
   def add_role_family_row
-    div(class: "px-3 pt-2 mt-1 border-t border-gray-100 dark:border-gray-800") do
+    div(class: "px-3 pt-2 mt-1 border-t border-subtle") do
       button(
         type: "button",
-        class: "inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline",
+        class: "inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline",
         data: {
           action: "click->modal#open",
           modal_target_id: "role-family-new-modal",
@@ -320,7 +317,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
       type: "button",
       class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
              "focus-visible:opacity-100 shrink-0 p-0.5 rounded-sm " \
-             "text-gray-400 hover:text-primary-ink transition-opacity",
+             "text-subtle hover:text-brand transition-opacity",
       data: {
         action: "click->modal#open",
         modal_target_id: "role-family-edit-modal",
@@ -339,14 +336,13 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
   def role_node(role)
     div(
       class: "flex items-center gap-2 px-3 py-1 rounded-md " \
-             "hover:bg-gray-100 dark:hover:bg-gray-800 group",
+             "hover:bg-overlay-muted group",
       data: hover_cluster_data("tree")
               .merge(tree_target: "role", role_id: role.role_id, track: role.track)
     ) do
       input(
         type: "checkbox",
-        class: "rounded-xs border-gray-300 dark:border-gray-600 text-primary " \
-               "focus:ring-primary dark:bg-gray-700",
+        class: Components::Kit::Field::CHECKBOX,
         checked: role_checked?(role),
         data: { action: "change->tree#toggleRole", role_id: role.role_id }
       )
@@ -375,8 +371,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
             # `family_edit_trigger` carries.
             class: "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 " \
                    "focus-visible:opacity-100 shrink-0 px-1.5 py-0.5 text-xs rounded-sm " \
-                   "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-                   "hover:bg-primary/20 hover:text-primary-ink transition-opacity",
+                   "bg-neutral-muted text-muted hover:bg-brand-muted hover:text-brand transition-opacity",
             data: { action: "tree#solo", role_id: role.role_id },
             title: "Solo — focus on this role only"
           ) { "solo" }
@@ -397,8 +392,7 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     a(
       href: assessment_path(@viewer_assignment_id, as_role: role.role_id),
       class: "shrink-0 px-1.5 py-0.5 text-xs rounded-sm whitespace-nowrap " \
-             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-             "hover:bg-primary/20 hover:text-primary-ink",
+             "bg-neutral-muted text-muted hover:bg-brand-muted hover:text-brand",
       data: cluster_control_data("tree", "standalone").merge(turbo_frame: "_top", my_ratings_link: role.role_id),
       title: "See my ratings against this role",
       aria: { label: "See my ratings against #{role.name}" }

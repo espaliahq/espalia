@@ -61,6 +61,7 @@ Most work needs only this table.
 | A popover, menu, tooltip or modal | `bg-overlay` |
 | A quieter band inside a card, in steps | `bg-subtle`, `bg-muted`, `bg-emphasized` |
 | Row hover on the page / on a card | `hover:bg-hover` / `hover:bg-default-hover` |
+| Steps on the overlay: a table header, a band, a row hover (the explorer's tree and matrix) | `bg-overlay-subtle`, `bg-overlay-muted`, `hover:bg-overlay-hover` |
 | A field's fill | `bg-field` (or `Kit::Field`) |
 | The backdrop behind a modal | `bg-scrim` |
 | An inverted block | `bg-inverse text-inverse` |
@@ -76,6 +77,7 @@ Most work needs only this table.
 | A category | `Kit::Tag` with `category:` |
 | A dot or bar that stands for a category (a rater) | `mark-category-N` with `bg-mark` or `border-mark`; text on it `text-on-mark` |
 | A rating, score, activity or other data-vis meaning | the domain utilities: `bg-rating-some`, `text-rating-some-chip`, `text-score-below`, `bg-activity-self`, `bg-attainment-high`, `bg-progress-self`, `border-compared` |
+| A pending framework change or a search hit | `decoration-suggestion-edit`, `-add`, `-delete`; `bg-search-hit text-search-hit` |
 | The hero's verdict panel, a role lens, an evidence valence | `Views::Assessments::VerdictPanel`; `bg-lens-subtle text-lens ring-lens`; `bg-valence-growth-area text-valence-growth-area` |
 | The navbar | `bg-nav text-nav` (Shell only) |
 
@@ -168,7 +170,7 @@ Then:
 
 | Test | Fails when |
 |---|---|
-| `test/lib/kit_colour_roles_test.rb` | Kit, Shell, Shared, the controllers that write their classes, or a `.kit-*` / `.explorer-*` rule in `application.css` uses a palette colour |
+| `test/lib/kit_colour_roles_test.rb` | Kit, Shell, Shared, the controllers that write their classes, or a `.kit-*`, `.explorer-*`, `.mx-*` or `.tree-*` rule in `application.css` uses a palette colour |
 | `test/lib/theme_roles_test.rb` | a role utility points at an undefined variable, shares a name with a Tailwind colour or text size (`text-secondary`, `text-lg`), or a preset leaves a role unset in either scheme |
 | `test/lib/domain_palette_tokens_test.rb` | a view colours a rating, score or activity with a palette step |
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |

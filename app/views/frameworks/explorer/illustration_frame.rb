@@ -104,7 +104,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "flex items-start gap-1.5 pl-2",
       data: { editor_display: true }
     ) do
-      render_illustration_marker("bg-gray-300 dark:bg-gray-600")
+      render_illustration_marker("bg-illustration-marker")
       if @pending_edit
         span(class: "flex-1") do
           render_inline_diff(original: @illustration.description, pending_edit: @pending_edit)

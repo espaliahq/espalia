@@ -123,10 +123,9 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
             "#{entity_label} · L#{clarification_level}"
           end
         end
-        p(class: "rounded-md border border-default " \
-                 "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-default " \
-                 "whitespace-pre-wrap") do
-          @suggestion.current_value.presence || "(no expectation defined at this level yet)"
+        render Components::Kit::Card.new(variant: :inset, density: :compact,
+                                          class: "text-sm text-default whitespace-pre-wrap") do |inset|
+          inset.body { @suggestion.current_value.presence || "(no expectation defined at this level yet)" }
         end
       end
     end
@@ -192,9 +191,10 @@ class Views::Frameworks::Suggestions::ShowView < Views::Base
   def parent_context_row
     div do
       dt(class: "text-xs font-semibold uppercase text-muted") { "For" }
-      dd(class: "mt-0.5 rounded-md border border-default " \
-                "bg-gray-50 dark:bg-gray-800/50 p-3 text-sm text-default") do
-        plain parent_context_label
+      dd(class: "mt-0.5") do
+        render Components::Kit::Card.new(variant: :inset, density: :compact, class: "text-sm text-default") do |inset|
+          inset.body { parent_context_label }
+        end
       end
     end
   end

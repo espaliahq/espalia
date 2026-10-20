@@ -50,7 +50,7 @@ class Views::Frameworks::Explorer::DraftStatus < Views::Base
   # and the amber edit-mode badge. Drafts are the normal working state, so this
   # is an ambient status, not a warning.
   def draft_badge
-    render Components::Kit::Badge.new("v#{@framework.draft_version} draft", variant: :primary)
+    render Components::Kit::Badge.new("v#{@framework.draft_version} draft", tone: :brand)
   end
 
   # Links to the publish-review page, where the as-we-go migration mappings are

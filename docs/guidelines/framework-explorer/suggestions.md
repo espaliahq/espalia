@@ -117,7 +117,7 @@ In edit mode, suggestions surface directly on the grid — not just in the conte
 
 **Inline diff (primary affordance for text edits).** When an entity has a pending `kind: "edit"` on its text field, the entity re-renders as a character-level diff over the original text:
 
-- **Added graphemes** — light-blue wavy underline (`PENDING_ADD_CLASSES`, `decoration-sky-400 decoration-wavy`).
+- **Added graphemes** — light-blue wavy underline (`PENDING_ADD_CLASSES`, `decoration-suggestion-add decoration-wavy`).
 - **Removed graphemes** — strikethrough (`PENDING_REMOVE_CLASSES`).
 - When the diff exceeds `Frameworks::SuggestionDiff::MAX_CHANGE_RUNS` (3 change runs), the interleaved view is too dense to scan — we fall back to rendering just the proposed value styled with `PROPOSED_TEXT_CLASSES` (same sky-blue wavy underline, no strikethrough). Readers can still open the context pane for the full side-by-side.
 

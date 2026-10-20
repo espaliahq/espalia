@@ -7,6 +7,9 @@
 # Right pane: placeholder for future contextual feed.
 #
 class Views::Frameworks::ShowView < Views::Base
+  # framework_explorer_controller sets aria-expanded on the pane toggles; the fill follows it
+  PANE_TOGGLE_OPEN = "aria-expanded:bg-neutral-muted"
+
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
   # @param role_families [Array] role families with roles + levels
   # @param selected_role_ids [Array<String>]
@@ -398,11 +401,8 @@ class Views::Frameworks::ShowView < Views::Base
 
     div(class: "mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted") do
       # Roles stat doubles as the toggle button for the role pane
-      button(
-        type: "button",
-        class: "flex items-center gap-1.5 px-2.5 py-1 -ml-2.5 rounded-md " \
-               "bg-gray-100 dark:bg-gray-800 " \
-               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+      render Components::Kit::Button.new(
+        variant: :subtle, size: :sm, class: "-ml-2.5 #{PANE_TOGGLE_OPEN}",
         data: {
           action: "framework-explorer#toggleRolePane",
           framework_explorer_target: "rolePaneToggle"
@@ -501,11 +501,8 @@ class Views::Frameworks::ShowView < Views::Base
   # surfaces the pending-suggestion count (the actionable subset) without
   # claiming to be the whole feed.
   def activity_toggle
-    button(
-      type: "button",
-      class: "flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
-             "bg-gray-100 dark:bg-gray-800 " \
-             "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+    render Components::Kit::Button.new(
+      variant: :subtle, size: :sm, class: PANE_TOGGLE_OPEN,
       data: {
         action: "framework-explorer#toggleContextPane",
         framework_explorer_target: "contextPaneToggle"

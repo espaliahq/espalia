@@ -107,7 +107,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     ) do
       td(
         colspan: col_count,
-        class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-default"
+        class: "px-4 py-2 bg-overlay-muted border-b border-default"
       ) do
         # Edit mode only — view mode has no hover controls to reveal.
         div(class: "flex items-start gap-2",
@@ -116,7 +116,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
           button(
             type: "button",
             class: "flex items-center justify-center w-4 h-4 mt-0.5 cursor-pointer rounded " \
-                   "hover:bg-gray-200 dark:hover:bg-gray-700",
+                   "hover:bg-emphasized",
             data: {
               action: "click->matrix#toggleCategory",
               category_id: @category.category_id

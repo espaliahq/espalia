@@ -29,7 +29,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
 
   def view_template
     thead do
-      tr(class: "bg-gray-50 dark:bg-gray-900") do
+      tr(class: "bg-overlay-subtle") do
         corner_cell
         @merged_levels.each { |level| level_column(level) }
       end
@@ -39,7 +39,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
   private
 
   def corner_cell
-    th(class: "sticky top-0 left-0 z-20 bg-gray-50 dark:bg-gray-900 " \
+    th(class: "sticky top-0 left-0 z-20 bg-overlay-subtle " \
               "#{STICKY_EDGE_CLASSES} " \
               "px-4 py-3 text-left text-xs font-medium text-muted " \
               "uppercase tracking-wide border-b border-r border-default " \
@@ -49,7 +49,7 @@ class Views::Frameworks::Explorer::MatrixHeader < Views::Base
   end
 
   def level_column(level)
-    th(class: "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 " \
+    th(class: "sticky top-0 z-10 bg-overlay-subtle " \
               "px-3 py-3 text-center border-b border-r border-default " \
               "min-w-[180px]") do
       div(class: "text-sm font-semibold text-default mb-1") do
