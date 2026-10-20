@@ -224,7 +224,7 @@ shared by web, MCP and Slack:
   evidence, linking to that section.
 
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
-`/growthos feedback` and the "Give feedback on this message" shortcut open a
+`/growthos feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
 current level or unplaced; a giver who has never signed in gets a draft link
 that opens the hub's modal prefilled after sign-in. See

@@ -63,7 +63,7 @@ features:
       url: https://growthos.work/slack/commands
       should_escape: false
   shortcuts:
-    - name: Give feedback on this message
+    - name: Feedback on this message
       type: message
       callback_id: give_feedback_on_message
       description: Turn this message into feedback for someone in GrowthOS
