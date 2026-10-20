@@ -67,6 +67,10 @@ class FeedbackExchange::Importer
     item = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, origin, external_id))
     item ? revisit(ledger, item, record) : first_sight(ledger, record)
   rescue PersonDevelopment::Aggregate::CommandError => e
+    # Another run imported it first; the item is the answer, not a refusal.
+    raced = EvidenceItem.find_by(id: self.class.evidence_id_for(@tenant.id, origin, external_id))
+    return result(:unchanged, evidence_id: raced.id) if raced
+
     Rails.logger.warn("[FeedbackExchange] #{origin}:#{external_id} refused: #{e.message}")
     skip(ledger, record, "invalid_record")
   end
