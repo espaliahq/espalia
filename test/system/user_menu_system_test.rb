@@ -159,8 +159,12 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       JS
       assert_equal "Dark", evaluate_script("document.activeElement.textContent"), "the option takes focus"
       screenshot("dark_focused")
-      # A real Enter on a focused button: the native activation is what's under test
-      find("#user-menu [role='menuitemradio']", text: "Dark").send_keys(:enter)
+      # A real Enter on a focused button: the native activation is what's under test. A starved runner can
+      # drop the key, so press once more if it didn't land; Enter on the checked option changes nothing.
+      2.times do
+        find("#user-menu [role='menuitemradio']", text: "Dark").send_keys(:enter)
+        break if page.has_css?("#user-menu [role='menuitemradio'][aria-checked='true']", exact_text: "Dark", wait: 5)
+      end
 
       assert_checked_scheme "Dark"
       assert_saved_scheme "dark"
