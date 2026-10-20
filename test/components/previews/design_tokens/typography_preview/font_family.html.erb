@@ -1,0 +1,18 @@
+<section class="max-w-4xl space-y-4">
+  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Font family</h2>
+  <dl class="space-y-3 text-sm">
+    <div>
+      <dt class="text-gray-600 dark:text-gray-300"><code>--font-sans</code> in <code>app/assets/tailwind/application.css</code></dt>
+      <dd class="mt-1 font-mono text-xs text-gray-900 dark:text-white"><%= declared %></dd>
+    </div>
+    <div>
+      <dt class="text-gray-600 dark:text-gray-300">Computed on <code>body</code></dt>
+      <dd class="mt-1 font-mono text-xs text-gray-900 dark:text-white" data-computed-family>—</dd>
+    </div>
+  </dl>
+  <p class="text-2xl text-gray-900 dark:text-white"><%= sample %></p>
+  <p class="text-2xl text-gray-900 dark:text-white">0123456789 · AaBbCcDdEeFfGg · → ✓</p>
+</section>
+<script>
+  document.querySelector("[data-computed-family]").textContent = getComputedStyle(document.body).fontFamily
+</script>

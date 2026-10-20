@@ -1,0 +1,19 @@
+<section class="max-w-4xl space-y-6">
+  <div>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Tailwind palette in use</h2>
+    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">The gray scale and the status hues most views use today.</p>
+  </div>
+  <% palette.each do |hue, classes| %>
+    <div>
+      <h3 class="text-sm font-medium text-gray-900 dark:text-white"><%= hue %></h3>
+      <ul class="mt-2 flex flex-wrap gap-3">
+        <% classes.each do |css_class| %>
+          <li class="w-24">
+            <span class="<%= css_class %> block h-12 rounded-md ring-1 ring-gray-300 dark:ring-gray-700"></span>
+            <code class="mt-1 block text-xs text-gray-600 dark:text-gray-300"><%= css_class %></code>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+</section>
