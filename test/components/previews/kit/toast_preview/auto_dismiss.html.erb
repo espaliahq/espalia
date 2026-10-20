@@ -1,0 +1,4 @@
+<%= render Components::Kit::Toast::Stack.new do %>
+  <%= render Components::Kit::Toast.new(tone: :success) do %>Assessment cycle defined.<% end %>
+  <%= render Components::Kit::Toast.new(tone: :danger) do %>You are not authorised to perform this action.<% end %>
+<% end %>

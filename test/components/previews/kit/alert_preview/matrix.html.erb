@@ -1,0 +1,15 @@
+<div class="space-y-8">
+  <% %i[subtle solid].each do |emphasis| %>
+    <% %i[md sm].each do |size| %>
+      <section class="space-y-2">
+        <h2 class="text-sm font-semibold text-muted"><%= emphasis.to_s.capitalize %> · <%= size %></h2>
+        <div class="grid max-w-5xl gap-3 md:grid-cols-2" data-alert-matrix="<%= emphasis %>-<%= size %>">
+          <% Components::Kit::Alert::TONES.each_key do |tone| %>
+            <%= render Components::Kit::Alert.new(tone: tone, emphasis: emphasis, size: size, title: "#{tone.to_s.capitalize} title") do %>Two pieces of feedback are waiting to be placed on a capability.<% end %>
+            <%= render Components::Kit::Alert.new(tone: tone, emphasis: emphasis, size: size, dismissible: true) do %><%= tone.to_s.capitalize %>, dismissible, no title.<% end %>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+  <% end %>
+</div>

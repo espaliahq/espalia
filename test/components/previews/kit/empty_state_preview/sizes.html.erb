@@ -1,0 +1,20 @@
+<div class="grid gap-8 md:grid-cols-[2fr_1fr]">
+  <section class="space-y-4">
+    <h2 class="text-sm font-semibold text-muted">Page</h2>
+    <%= render Components::Kit::EmptyState.new(title: "You're all caught up") %>
+    <%= render Components::Kit::EmptyState.new(title: "No feedback requests") do %>When someone asks you for feedback, it'll appear here.<% end %>
+    <%= render Components::Kit::EmptyState.new(title: "No frameworks yet") do |empty| %>
+      <% empty.action do %><a href="#" class="inline-flex min-h-11 items-center rounded-md bg-neutral-strong px-4 text-sm font-semibold text-inverse">Create a framework</a><% end %>
+      A framework sets out the roles, levels and capabilities people are rated on.
+    <% end %>
+  </section>
+  <section class="space-y-4">
+    <h2 class="text-sm font-semibold text-muted">Panel</h2>
+    <%= render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel) %>
+    <%= render Components::Kit::EmptyState.new(title: "No activity yet", size: :panel) do %>Record feedback or update a rating to begin.<% end %>
+    <%= render Components::Kit::EmptyState.new(title: "No evidence yet", size: :panel) do |empty| %>
+      <% empty.action do %><a href="#" class="inline-flex min-h-11 items-center text-sm font-medium text-link underline">Add evidence</a><% end %>
+      Evidence you add for this capability shows here.
+    <% end %>
+  </section>
+</div>

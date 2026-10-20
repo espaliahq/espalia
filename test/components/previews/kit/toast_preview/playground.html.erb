@@ -1,0 +1,3 @@
+<%= render Components::Kit::Toast::Stack.new do %>
+  <%= render Components::Kit::Toast.new(tone: tone, emphasis: emphasis, dismiss_after: 0) do %><%= message %><% end %>
+<% end %>

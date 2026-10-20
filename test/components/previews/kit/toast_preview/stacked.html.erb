@@ -1,0 +1,9 @@
+<p class="text-sm text-muted">The page behind the toasts. They float top right, below where the navbar sits.</p>
+<%= render Components::Kit::Toast::Stack.new do %>
+  <% %i[subtle solid].each do |emphasis| %>
+    <% Components::Kit::Alert::TONES.each_key do |tone| %>
+      <%= render Components::Kit::Toast.new(tone: tone, emphasis: emphasis, dismiss_after: 0) do %><%= tone.to_s.capitalize %>, <%= emphasis %>: assessment cycle defined.<% end %>
+    <% end %>
+  <% end %>
+  <%= render Components::Kit::Toast.new(tone: :danger, title: "Couldn't save", dismiss_after: 0) do %>You are not authorised to perform this action.<% end %>
+<% end %>
