@@ -128,6 +128,40 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "focus outline in dark mode (WCAG 2.4.7)" do
+    teardown do
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
+      )
+    end
+
+    should "outline a focused button in the dark colour but leave form fields to the forms plugin" do
+      page.driver.browser.execute_cdp(
+        "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
+      )
+      visit root_path
+      assert_text "Home"
+
+      outlines = page.evaluate_script(<<~JS)
+        (() => {
+          const read = (tag, attrs) => {
+            const el = document.createElement(tag);
+            Object.assign(el, attrs);
+            document.querySelector("main").appendChild(el);
+            el.focus();
+            const style = getComputedStyle(el);
+            return { focusVisible: el.matches(":focus-visible"), colour: style.outlineColor };
+          };
+          return { button: read("button", { textContent: "Probe" }), field: read("input", { type: "text" }) };
+        })()
+      JS
+
+      assert outlines["button"]["focusVisible"], "a script focus with no prior pointer input should read as keyboard focus"
+      assert_equal "rgb(147, 197, 253)", outlines["button"]["colour"], "buttons take the dark focus colour"
+      assert_equal "rgba(0, 0, 0, 0)", outlines["field"]["colour"], "fields keep the forms plugin's transparent outline"
+    end
+  end
+
   private
 
   # Smaller of the rendered width/height for the first element matching the

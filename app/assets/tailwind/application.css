@@ -86,18 +86,16 @@ input[type="week"] {
  * the utilities layer and still win where a bespoke ring is defined.
  */
 @layer base {
-  a:focus-visible,
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  summary:focus-visible,
-  [role="button"]:focus-visible,
-  [role="menuitem"]:focus-visible,
-  [tabindex]:not([tabindex="-1"]):focus-visible {
-    outline: 2px solid #1d4ed8; /* blue-700 — ≥3:1 on white & brand surfaces */
-    outline-offset: 2px;
-    border-radius: 2px;
+  /* blue-700 / blue-300: >= 3:1 on white and brand surfaces, and on dark ones.
+     A variable, not @variant dark on the list: nesting a variant in a selector
+     list compiles to :is(), which lifts every selector to the most specific
+     one and beats the forms plugin's transparent outline on fields. */
+  :root {
+    --focus-outline: #1d4ed8;
+
+    @variant dark {
+      --focus-outline: #93c5fd;
+    }
   }
 
   a:focus-visible,
@@ -109,9 +107,9 @@ input[type="week"] {
   [role="button"]:focus-visible,
   [role="menuitem"]:focus-visible,
   [tabindex]:not([tabindex="-1"]):focus-visible {
-    @variant dark {
-      outline-color: #93c5fd; /* blue-300 — ≥3:1 on dark surfaces */
-    }
+    outline: 2px solid var(--focus-outline);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 }
 
