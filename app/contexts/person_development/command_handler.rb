@@ -645,13 +645,16 @@ class PersonDevelopment::CommandHandler
   # @param linked_by_id [String] UUID of the Person adding the link
   # @param valence [String] the linker's judgment — one of EvidenceLink::VALENCES
   # @param rationale [String, nil] optional explanation
+  # @param via_suggestion_id [String, nil] the placement suggestion accepted, if any
   def add_evidence_link(person_id, framework_id, evidence_id,
-                        capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil)
+                        capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil,
+                        via_suggestion_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.add_evidence_link(evidence_id,
         capability_stable_id: capability_stable_id,
         level_ordinal: level_ordinal,
-        linked_by_id: linked_by_id, valence: valence, rationale: rationale)
+        linked_by_id: linked_by_id, valence: valence, rationale: rationale,
+        via_suggestion_id: via_suggestion_id)
     end
   end
 
@@ -664,13 +667,16 @@ class PersonDevelopment::CommandHandler
   # @param level_ordinal [Integer] the link's level
   # @param valence [String] one of EvidenceLink::VALENCES
   # @param changed_by_id [String] UUID of the Person reclassifying
+  # @param via_suggestion_id [String, nil] the placement suggestion accepted, if any
   def set_evidence_link_valence(person_id, framework_id, evidence_id,
-                                capability_stable_id:, level_ordinal:, valence:, changed_by_id:)
+                                capability_stable_id:, level_ordinal:, valence:, changed_by_id:,
+                                via_suggestion_id: nil)
     @repository.with_person_development(person_id, framework_id) do |aggregate|
       aggregate.set_evidence_link_valence(evidence_id,
         capability_stable_id: capability_stable_id,
         level_ordinal: level_ordinal,
-        valence: valence, changed_by_id: changed_by_id)
+        valence: valence, changed_by_id: changed_by_id,
+        via_suggestion_id: via_suggestion_id)
     end
   end
 

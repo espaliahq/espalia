@@ -1393,6 +1393,19 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @author_id, event.data[:changed_by_id]
     end
 
+    should "carry the accepted suggestion's id, and omit the key otherwise" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "growth_area", changed_by_id: @author_id, via_suggestion_id: suggestion_id)
+      assert_equal suggestion_id, @aggregate.unpublished_events.to_a.last.data[:via_suggestion_id]
+
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "demonstrated", changed_by_id: @author_id)
+      assert_not @aggregate.unpublished_events.to_a.last.data.key?(:via_suggestion_id)
+    end
+
     should "be a no-op when the link already carries that valence" do
       before = @aggregate.unpublished_events.to_a.size
       @aggregate.set_evidence_link_valence(@evidence_id,
@@ -1518,6 +1531,16 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal 4, event.data[:level_ordinal]
       assert_equal "Also applies", event.data[:rationale]
       assert_equal "demonstrated", event.data[:valence]
+      assert_not event.data.key?(:via_suggestion_id)
+    end
+
+    should "carry the accepted suggestion's id on the link" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.add_evidence_link(@evidence_id,
+        capability_stable_id: @new_cap_sid, level_ordinal: 4,
+        linked_by_id: @author_id, valence: "demonstrated", via_suggestion_id: suggestion_id)
+
+      assert_equal suggestion_id, @aggregate.unpublished_events.to_a.last.data[:via_suggestion_id]
     end
 
     should "raise when adding a link without a valid valence" do
