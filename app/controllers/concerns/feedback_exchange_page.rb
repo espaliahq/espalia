@@ -7,6 +7,11 @@ module FeedbackExchangePage
 
   private
 
+  # @return [Array<Tenant>] the tenants the signed-in user can switch to
+  def tenants_for_user
+    ActsAsTenant.without_tenant { current_user.tenants.to_a }
+  end
+
   # @param errors [Array<String>] validation messages to show above the form
   # @param status [Symbol]
   def render_feedback_exchange_page(errors: [], status: :ok)
@@ -20,7 +25,7 @@ module FeedbackExchangePage
       errors: errors,
       user: current_user,
       current_tenant: tenant,
-      tenants: ActsAsTenant.without_tenant { current_user.tenants.to_a }
+      tenants: tenants_for_user
     ), status: status
   end
 end

@@ -65,7 +65,7 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
 
       should "show a refused signature when the peer rejects ours" do
         @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(peer_name: "chip", base_url: PEER))
-        @tenant.update_feedback_exchange_secrets!(outbound_secret: OUTBOUND, inbound_secret: INBOUND)
+        @tenant.update_feedback_exchange!(outbound_secret: OUTBOUND, inbound_secret: INBOUND)
         sign_in_as(@admin_user)
         visit tenant_integration_path("feedback-exchange")
         assert_text "Stored secrets are never shown"

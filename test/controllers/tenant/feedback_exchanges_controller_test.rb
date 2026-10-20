@@ -19,7 +19,7 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
 
   def configure_tenant
     @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(peer_name: "chip", base_url: PEER, enabled: true))
-    @tenant.update_feedback_exchange_secrets!(outbound_secret: OUTBOUND, inbound_secret: INBOUND)
+    @tenant.update_feedback_exchange!(outbound_secret: OUTBOUND, inbound_secret: INBOUND)
   end
 
   def fake_client(health: nil, error: nil)
@@ -126,6 +126,7 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_select "[role=alert]", text: /could not be saved/
         assert_includes response.body, "must start with https://"
         assert_not_includes response.body, OUTBOUND
+        assert_includes response.body, "Not set"
         assert_equal "Chip!", css_select("input[name='feedback_exchange[peer_name]']").first["value"]
         assert_nil @tenant.reload.feedback_exchange_config.base_url
       end

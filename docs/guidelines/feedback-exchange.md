@@ -16,7 +16,7 @@ Phase 0 (this guide's first content) is the foundation: config, secrets, signing
 |---|---|
 | `provider` | `exchange` for a protocol peer |
 | `peer_name` | A slug, `chip`. It becomes `origin` and `external_reference.system` |
-| `base_url` | The peer's exchange root **including its path prefix**, e.g. `https://chip.example.com/api/feedback-exchange`. https only; http is accepted in development |
+| `base_url` | The peer's exchange root **including its path prefix**, e.g. `https://chip.example.com/api/feedback-exchange`. https only, with no login, query or fragment, and not a private network host; development accepts http and local hosts |
 | `enabled` | Off by default. While off, inbound requests get 404 and nothing is pulled |
 | `import_kinds` / `export_kinds` | Which `kind`s cross. Empty `import_kinds` means everything |
 | `cursor`, `deletions_cursor`, `last_synced_at` | Consumer state |
@@ -24,7 +24,7 @@ Phase 0 (this guide's first content) is the foundation: config, secrets, signing
 
 `peer_name` and `base_url` are required once `enabled`. One peer per tenant for now.
 
-An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrations → Feedback exchange**. Config edits are web-only on purpose: the page holds signing secrets, which must not travel through an MCP client. MCP gets the read `integrations_feedback_exchange_status`, which reports state and whether each secret and cursor is present, never a value.
+An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrations → Feedback exchange**. Config edits are web-only on purpose: the page holds signing secrets, which must not travel through an MCP client. MCP gets the read `integrations_feedback_exchange_status`, which reports state and whether each secret and cursor is present, never a value. Its `connected` means set up (enabled, a peer, both secrets); only **Test connection** proves the peer answers.
 
 ## Secrets
 
@@ -54,11 +54,13 @@ signing_string = "v1:" + timestamp + ":" + METHOD + ":" + path_with_query + ":" 
 - `path_with_query` is the path **as sent**, query string included and in the order sent. Sign what goes on the wire: `FeedbackExchange::Client` takes it from Faraday's own URL builder rather than rebuilding it.
 - `raw_body` is the bytes as sent, empty for a GET. The verifier reads `request.raw_post`, never re-serialised params.
 - A timestamp more than 300 s from now is refused. The compare is constant-time and checks every accepted secret without short-circuiting.
-- **Replays.** The verifier claims each accepted signature in `Rails.cache` for the 300 s window, so a captured request cannot be sent twice. The test environment uses a null cache store, so a test that exercises a replay must swap in a `MemoryStore`.
+- **Replays.** The verifier claims each accepted signature in `Rails.cache`, so a captured request cannot be sent twice. The claim lasts **twice** the 300 s window, because a timestamp is acceptable from five minutes before now to five minutes after, so a signature can stay valid for ten. A claim of one window would let a request signed in the future be replayed once it expired. The test environment uses a null cache store, so a test that exercises a replay must swap in a `MemoryStore`.
 
 ## The client
 
 `FeedbackExchange::Client.for(tenant)` is Faraday with per-instance secrets and no global state, as `Hris::Hibob::Client` is. Methods: `feedback(since:, limit:)`, `deletions(since:, limit:)`, `ack(items)`, `health`. Every request carries `X-Exchange-Consumer: growthos` and a fresh signature.
+
+Before it opens a connection it refuses a peer host that is, or resolves to, a loopback, private or link-local address (`FeedbackExchange::HostGuard`), because a tenant admin types the address and the server calls it. That blocks the straightforward probe; it does not stop DNS rebinding, which needs an egress policy. Development is exempt.
 
 It does **not** retry. The sync job owns retries, from the error class:
 
@@ -71,6 +73,8 @@ It does **not** retry. The sync job owns retries, from the error class:
 ## Inbound requests
 
 `FeedbackExchangeSignedRequest` is the trust boundary, modelled on `SlackSignedRequest`. A controller inherits `ActionController::Base`, includes it and adds `around_action :authenticate_feedback_exchange_request!`. The signature is the only credential, so there is no Devise, no CSRF and no Pundit `authorize`.
+
+A stale or malformed timestamp is refused before any tenant is loaded. Production throttles the path to 120 requests a minute per IP (`config/initializers/rack_attack.rb`), since each remaining request decrypts the credentialed tenants.
 
 The concern finds the tenant whose inbound secret (or previous one, inside the window) verifies the request, claims the signature, and runs the action inside `ActsAsTenant.with_tenant`. Answers:
 
@@ -109,4 +113,6 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
 
 - `base_url` must carry the peer's prefix. A client pointed at the bare host signs a path the peer never serves.
 - Sign what Faraday sends. Hand-building a query string can order or encode it differently from the wire, and the peer's check then fails with a bare 401.
+- **Two identical requests within one second share a signature**, and the replay guard refuses the second. Space retries by more than a second; do not read that 401 as a wrong secret.
+- **Write settings through `Tenant#update_feedback_exchange!`.** It locks and reloads the row first. Anything that writes `feedback_exchange_config` from a job (the cursors, `last_synced_at`) must do the same, or an admin saving the form overwrites it with stale values, and the reverse.
 - The Integrations card's counts section is a placeholder until the importer ships.

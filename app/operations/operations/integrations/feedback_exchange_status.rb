@@ -7,8 +7,9 @@
 # here: only whether each is stored.
 class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
   description "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
-              "connected and enabled, the peer and its address, the last sync, and whether the signing " \
-              "secrets and sync cursors are present. Never returns a secret."
+              "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
+              "prove the peer answers), the peer and its address, the last sync, and whether the secrets " \
+              "and sync cursors are present. Never returns a secret."
   category :read
   approval :none
 

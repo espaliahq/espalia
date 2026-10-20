@@ -140,20 +140,13 @@ class Tenant < ApplicationRecord
     FeedbackExchangeSecrets.new(feedback_exchange_credentials)
   end
 
-  # Store new signing secrets. A blank argument leaves that secret as it is, so a
-  # form that never echoes a stored value can be saved without retyping it.
-  # Replacing the inbound secret keeps the old one as the previous secret, which
-  # still verifies for 24 hours (protocol §6).
-  #
-  # @param outbound_secret [String, nil]
-  # @param inbound_secret [String, nil]
-  # @return [Boolean] whether the tenant saved
-  def update_feedback_exchange_secrets!(outbound_secret: nil, inbound_secret: nil)
-    update_feedback_exchange!(outbound_secret: outbound_secret, inbound_secret: inbound_secret)
-  end
-
   # Save the feedback exchange settings and secrets in one write. Unlisted settings
-  # keep their value; blank secrets keep theirs (see {#update_feedback_exchange_secrets!}).
+  # keep their value. A blank secret keeps the stored one, so a form that never echoes
+  # a secret can be saved without retyping it. Replacing the inbound secret keeps the
+  # old one as the previous secret, which still verifies for 24 hours (protocol §6).
+  #
+  # The row is locked and reloaded first, so sync state a job wrote since this tenant
+  # was loaded (the cursors, `last_synced_at`) is kept, not overwritten.
   #
   # @param settings [Hash] FeedbackExchangeConfig attributes to change
   # @param outbound_secret [String, nil]
@@ -161,21 +154,23 @@ class Tenant < ApplicationRecord
   # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
   # @return [Boolean]
   def update_feedback_exchange!(settings: {}, outbound_secret: nil, inbound_secret: nil)
-    credentials = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
-    credentials["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
-    if inbound_secret.present? && inbound_secret.strip != credentials["inbound_secret"]
-      if credentials["inbound_secret"].present?
-        credentials["previous_inbound_secret"] = credentials["inbound_secret"]
-        credentials["previous_rotated_at"] = Time.current.iso8601
+    with_lock do
+      credentials = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
+      credentials["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
+      if inbound_secret.present? && inbound_secret.strip != credentials["inbound_secret"]
+        if credentials["inbound_secret"].present?
+          credentials["previous_inbound_secret"] = credentials["inbound_secret"]
+          credentials["previous_rotated_at"] = Time.current.iso8601
+        end
+        credentials["inbound_secret"] = inbound_secret.strip
       end
-      credentials["inbound_secret"] = inbound_secret.strip
-    end
 
-    assign_attributes(
-      feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge(settings.stringify_keys)),
-      feedback_exchange_credentials: credentials.presence
-    )
-    save!
+      assign_attributes(
+        feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge(settings.stringify_keys)),
+        feedback_exchange_credentials: credentials.presence
+      )
+      save!
+    end
   end
 
   # @return [Boolean] whether this tenant has a usable Slack connection

@@ -21,6 +21,8 @@ class Tenant::FeedbackExchangesController < ApplicationController
     redirect_to tenant_integration_path("feedback-exchange"), notice: "Feedback exchange settings saved.",
                                                                status: :see_other
   rescue ActiveRecord::RecordInvalid => e
+    # The save failed, so the secrets were not stored: do not show them as stored.
+    current_tenant.restore_attributes([ :feedback_exchange_credentials ])
     render_feedback_exchange_page(
       errors: e.record.errors.full_messages.map { |message| message.sub(/\AFeedback exchange config /, "") },
       status: :unprocessable_content
@@ -57,7 +59,7 @@ class Tenant::FeedbackExchangesController < ApplicationController
     body = FeedbackExchange::Client.for(current_tenant).health
     return [ :alert, "The peer answered, but not with { ok: true }." ] unless body["ok"] == true
 
-    [ :notice, "Connected to #{body['peer'].presence || config.peer_name || 'the peer'}. Our signature was accepted." ]
+    [ :notice, "Connected to #{config.peer_name.presence || 'the peer'}. Our signature was accepted." ]
   rescue FeedbackExchange::Errors::AuthenticationError
     [ :alert, "The peer rejected our signature. Check that its inbound secret matches our outbound secret." ]
   rescue FeedbackExchange::Errors::RateLimitError
