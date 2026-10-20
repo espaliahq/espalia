@@ -31,7 +31,9 @@
   --gos-surface-default-hover: var(--color-gray-100);
   --gos-scrim: color-mix(in oklab, black 50%, transparent);
 
-  /* Borders and focus */
+  /* Borders and focus. The keyboard focus ring is neutral on every theme; a coloured surface
+     (the navbar, a strong fill) resets it from the contrast helper for what sits on it. */
+  --gos-focus-ring: var(--gos-content-default);
   --gos-border-default: var(--color-gray-200);
   --gos-border-subtle: var(--color-gray-100);
   --gos-border-emphasized: var(--color-gray-300);
@@ -152,7 +154,6 @@
   --gos-border-brand: var(--gos-brand);
   --gos-content-link: var(--gos-content-brand);
   --gos-content-link-hover: var(--gos-content-brand);
-  --gos-focus-ring: var(--gos-content-brand);
 
   /* No separate accent in Default yet, so it follows brand */
   --gos-accent-strong: var(--gos-brand-strong);
