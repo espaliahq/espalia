@@ -55,8 +55,8 @@ class Views::Tenant::Users::IndexView < Views::Base
 
   def table_body
     div(class: "overflow-x-auto") do
-      table(class: "min-w-full divide-y divide-gray-200 dark:divide-gray-700") do
-        thead(class: "bg-gray-50 dark:bg-gray-900/50") do
+      table(class: "min-w-full divide-y divide-default") do
+        thead(class: "bg-subtle") do
           tr do
             th_label "Name"
             th_label "Email"
@@ -66,8 +66,7 @@ class Views::Tenant::Users::IndexView < Views::Base
             th_label "View as"
           end
         end
-        tbody(class: "divide-y divide-gray-200 dark:divide-gray-700 " \
-                     "bg-white dark:bg-gray-800") do
+        tbody(class: "divide-y divide-default bg-default") do
           @tenant_users.each { |tu| table_row(tu) }
         end
       end
@@ -75,10 +74,10 @@ class Views::Tenant::Users::IndexView < Views::Base
   end
 
   def table_row(tenant_user)
-    tr(class: "hover:bg-gray-50 dark:hover:bg-gray-900/30") do
+    tr(class: "hover:bg-hover") do
       cell do
         a(href: tenant_user_path(tenant_user),
-          class: "font-medium text-primary-ink hover:underline") { display_name(tenant_user) }
+          class: "font-medium text-brand hover:underline") { display_name(tenant_user) }
       end
       cell { tenant_user.user.email }
       cell { role_badge(tenant_user) }
@@ -94,29 +93,24 @@ class Views::Tenant::Users::IndexView < Views::Base
   # muted dash so the column stays aligned.
   def impersonate_action(tenant_user)
     unless @impersonatable_ids.include?(tenant_user.id)
-      return span(class: "text-gray-300 dark:text-gray-600") { "—" }
+      return span(class: "text-disabled") { "—" }
     end
 
     form(action: impersonation_path, method: "post") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "tenant_user_id", value: tenant_user.id)
-      button(
-        type: "submit",
-        aria: { label: "View as #{display_name(tenant_user)}" },
-        class: "rounded-md border border-gray-300 dark:border-gray-600 px-2.5 py-1 text-xs " \
-               "font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 " \
-               "focus:outline-hidden focus:ring-2 focus:ring-primary/40 cursor-pointer"
-      ) { "View as" }
+      render Components::Kit::Button.new(variant: :outline, size: :xs, type: :submit,
+                                         aria: { label: "View as #{display_name(tenant_user)}" }) { "View as" }
     end
   end
 
   def th_label(text)
     th(class: "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider " \
-              "text-gray-600 dark:text-gray-300") { text }
+              "text-muted") { text }
   end
 
   def cell(&block)
-    td(class: "px-4 py-3 text-sm text-gray-900 dark:text-gray-100", &block)
+    td(class: "px-4 py-3 text-sm text-default", &block)
   end
 
   def display_name(tenant_user)
@@ -135,7 +129,7 @@ class Views::Tenant::Users::IndexView < Views::Base
   def person_status(tenant_user)
     person = tenant_user.person
     if person.nil?
-      span(class: "text-gray-600 dark:text-gray-300") { "Not linked" }
+      span(class: "text-muted") { "Not linked" }
     elsif person.status == "active"
       render Components::Kit::Badge.new("Active", variant: :success)
     else
@@ -148,17 +142,11 @@ class Views::Tenant::Users::IndexView < Views::Base
     if count.positive?
       span { "#{count} #{'assignment'.pluralize(count)}" }
     else
-      span(class: "text-gray-600 dark:text-gray-300") { "None" }
+      span(class: "text-muted") { "None" }
     end
   end
 
   def empty_state
-    render Components::Kit::Card.new do |card|
-      card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300 text-center py-6") do
-          "No tenant members yet."
-        end
-      end
-    end
+    render Components::Kit::EmptyState.new(title: "No tenant members yet.")
   end
 end

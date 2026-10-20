@@ -24,7 +24,7 @@ class Views::Home::Cards::AwaitingYou < Views::Base
 
   def summary_line
     count = @reports.size
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "text-sm text-muted") do
       "#{count} #{count == 1 ? "report" : "reports"} need your rating or alignment."
     end
   end
@@ -34,13 +34,13 @@ class Views::Home::Cards::AwaitingYou < Views::Base
 
     ul(class: "mt-3 space-y-1") do
       @reports.first(PREVIEW_LIMIT).each do |report|
-        li(class: "text-sm text-gray-700 dark:text-gray-300") do
+        li(class: "text-sm text-muted") do
           plain report[:person]&.name || "Unknown"
-          span(class: "text-gray-600 dark:text-gray-300") { " · #{report[:cycle].name}" }
+          span(class: "text-muted") { " · #{report[:cycle].name}" }
         end
       end
       if @reports.size > PREVIEW_LIMIT
-        li(class: "text-sm text-gray-600 dark:text-gray-300") do
+        li(class: "text-sm text-muted") do
           "+#{@reports.size - PREVIEW_LIMIT} more"
         end
       end
@@ -51,7 +51,7 @@ class Views::Home::Cards::AwaitingYou < Views::Base
     a(
       href: assessments_path,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline"
     ) { "Review team →" }
   end
 end

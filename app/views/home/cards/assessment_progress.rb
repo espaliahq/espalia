@@ -37,10 +37,10 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   def header
     div(class: "flex items-start justify-between gap-3") do
       div do
-        p(class: "text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        p(class: "text-xs font-medium uppercase tracking-wide text-muted") do
           "Your assessment"
         end
-        h2(class: "text-base font-semibold text-gray-900 dark:text-white") { @state[:cycle].name }
+        h2(class: "text-base font-semibold text-default") { @state[:cycle].name }
       end
       label, variant = status_label
       div(class: "flex flex-col items-end gap-1") do
@@ -72,13 +72,13 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   def detail_line
     return unless @state[:assignment]
 
-    p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-2 text-sm text-muted") do
       [ @state[:assignment].role&.name, @state[:assignment].level&.title ].compact.join(" · ")
     end
   end
 
   def rated_line
-    p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 text-sm text-muted") do
       count = @state[:self_rated_count]
       "#{count} #{count == 1 ? "capability" : "capabilities"} rated so far"
     end
@@ -89,7 +89,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
     a(
       href: href,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline"
     ) { "#{cta_verb} self-assessment →" }
   end
 
@@ -108,7 +108,7 @@ class Views::Home::Cards::AssessmentProgress < Views::Base
   def empty
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300") { "No open assessment." }
+        p(class: "text-sm text-muted") { "No open assessment." }
       end
     end
   end

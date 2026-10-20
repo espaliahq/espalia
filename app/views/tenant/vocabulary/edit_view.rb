@@ -48,7 +48,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
   def mastering_card(form)
     render Components::Kit::Card.new(title: "Past the halfway mark") do |card|
       card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300 mb-4") do
+        p(class: "text-sm text-muted mb-4") do
           plain "The state past the halfway point to the next level. "
           plain "GrowthOS calls it "
           strong { Views::Assessments::StateLabels.default_for(:mastering) }
@@ -57,19 +57,16 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
 
         div(class: "flex flex-col gap-2 max-w-sm") do
           label(for: "tenant_mastering_label",
-                class: "text-sm font-medium text-gray-900 dark:text-white") { "Label" }
+                class: "text-sm font-medium text-default") { "Label" }
           form.text_field(
             :mastering_label,
             id: "tenant_mastering_label",
             value: @tenant.mastering_label,
             maxlength: Tenant::STATE_LABEL_MAX_LENGTH,
             placeholder: Views::Assessments::StateLabels.default_for(:mastering),
-            class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                   "bg-white dark:bg-gray-900 px-3 py-2 text-sm " \
-                   "text-gray-900 dark:text-white focus-visible:outline-hidden " \
-                   "focus-visible:ring-2 focus-visible:ring-primary"
+            class: Components::Kit::Field::INPUT
           )
-          span(class: "text-xs text-gray-600 dark:text-gray-300") do
+          span(class: "text-xs text-muted") do
             "Up to #{Tenant::STATE_LABEL_MAX_LENGTH} characters. It reads as a badge beside the score."
           end
         end
@@ -91,7 +88,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
   end
 
   def unchanged_note
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "text-sm text-muted") do
       "Renaming a state changes nobody's score. The thresholds each state starts at belong to " \
       "the framework, not here."
     end
@@ -99,10 +96,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
 
   def actions(form)
     div(class: "flex justify-end") do
-      form.submit "Save",
-        class: "px-4 py-2 rounded-md bg-primary text-white text-sm font-medium " \
-               "hover:bg-secondary focus:outline-hidden focus:ring-2 focus:ring-primary " \
-               "focus:ring-offset-2 cursor-pointer"
+      form.submit "Save", class: Components::Kit::Button.classes(tone: :brand)
     end
   end
 end

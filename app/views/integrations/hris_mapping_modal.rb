@@ -8,12 +8,9 @@
 class Views::Integrations::HrisMappingModal < Views::Base
   ID = "hris-mapping-modal"
 
-  FIELD_CLASSES = "w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-                  "px-3 py-2 text-sm text-gray-900 dark:text-white read-only:bg-gray-50 " \
-                  "dark:read-only:bg-gray-800 focus-visible:outline-hidden focus-visible:ring-2 " \
-                  "focus-visible:ring-primary"
-  LABEL_CLASSES = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
-  HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300"
+  FIELD_CLASSES = "#{Components::Kit::Field::INPUT} read-only:bg-subtle"
+  LABEL_CLASSES = "block text-sm font-medium text-default mb-1"
+  HINT_CLASSES = "mt-1 text-xs text-muted"
 
   # @param roles [Array<FrameworkState::Role>]
   # @param level_ordinals_by_role_code [Hash{String => Array<Integer>}]
@@ -49,7 +46,7 @@ class Views::Integrations::HrisMappingModal < Views::Base
       title_field
       role_field
       level_field
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "Nobody moves until the next HRIS sync. Sync now on this page applies it straight away."
       end
       actions
@@ -81,7 +78,7 @@ class Views::Integrations::HrisMappingModal < Views::Base
       label(for: "hris-mapping-role", class: LABEL_CLASSES) { "Framework role" }
       select(
         id: "hris-mapping-role", name: "hris_title_mapping[framework_role_code]", required: true,
-        class: FIELD_CLASSES,
+        class: Components::Kit::Field::SELECT,
         data: { hris_mapping_form_target: "role", action: "change->hris-mapping-form#roleChanged" }
       ) do
         option(value: "") { "Choose a role…" }
@@ -95,7 +92,7 @@ class Views::Integrations::HrisMappingModal < Views::Base
       label(for: "hris-mapping-level", class: LABEL_CLASSES) { "Level" }
       select(
         id: "hris-mapping-level", name: "hris_title_mapping[level_ordinal]",
-        required: !@level_column_configured, class: FIELD_CLASSES,
+        required: !@level_column_configured, class: Components::Kit::Field::SELECT,
         aria: { describedby: "hris-mapping-level-hint" },
         data: { hris_mapping_form_target: "level" }
       ) do
@@ -115,18 +112,10 @@ class Views::Integrations::HrisMappingModal < Views::Base
 
   def actions
     div(class: "flex justify-end gap-2 pt-2") do
-      button(
-        type: "button",
-        class: "px-4 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 " \
-               "hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer",
-        data: { action: "click->modal#close" }
-      ) { "Cancel" }
-      button(
-        type: "submit",
-        class: "px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-secondary " \
-               "focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer",
-        data: { turbo_submits_with: "Saving…" }
-      ) { "Save mapping" }
+      render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit, data: { turbo_submits_with: "Saving…" }) do
+        "Save mapping"
+      end
     end
   end
 

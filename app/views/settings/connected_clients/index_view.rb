@@ -41,8 +41,8 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
 
   def page_header
     div do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "AI assistants" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-400") do
+      h1(class: "text-2xl font-bold text-default") { "AI assistants" }
+      p(class: "mt-1 text-sm text-muted") do
         plain "Connect an AI assistant to act on your behalf in this workspace via the " \
               "Model Context Protocol (MCP), and manage the ones already connected."
       end
@@ -54,8 +54,8 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   def connect_section
     section(class: "space-y-4") do
       div do
-        h2(class: "text-lg font-semibold text-gray-900 dark:text-white") { "Connect an assistant" }
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-400") do
+        h2(class: "text-lg font-semibold text-default") { "Connect an assistant" }
+        p(class: "mt-1 text-sm text-muted") do
           plain "Point any MCP-compatible client at the server URL below. There are no API "
           plain "keys to paste — you'll sign in and pick a workspace in your browser when the "
           plain "client first connects."
@@ -71,23 +71,24 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def server_url_block
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow p-5") do
-      p(class: "text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider mb-2") do
-        plain "MCP server URL"
+    render Components::Kit::Card.new do |card|
+      card.body do
+        p(class: "text-xs font-semibold text-muted uppercase tracking-wider mb-2") do
+          plain "MCP server URL"
+        end
+        copyable(@mcp_url)
       end
-      copyable(@mcp_url)
     end
   end
 
   def client_card(name, &steps)
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow p-5 space-y-3") do
-      h3(class: "text-base font-semibold text-gray-900 dark:text-white") { name }
-      steps.call
+    render Components::Kit::Card.new(title: name) do |card|
+      card.body(&steps)
     end
   end
 
   def claude_code_steps
-    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-gray-700 dark:text-gray-200") do
+    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-muted") do
       li do
         plain "Add the server from your terminal:"
         copyable("claude mcp add --transport http growthos #{@mcp_url}", class: "mt-2")
@@ -103,7 +104,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def claude_app_steps
-    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-gray-700 dark:text-gray-200") do
+    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-muted") do
       li do
         plain "Open "
         strong { "Settings → Connectors" }
@@ -125,7 +126,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def chatgpt_steps
-    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-gray-700 dark:text-gray-200") do
+    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-muted") do
       li do
         plain "In a plan that supports connectors, enable "
         strong { "Settings → Connectors → Advanced → Developer mode" }
@@ -141,7 +142,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def codex_steps
-    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-gray-700 dark:text-gray-200") do
+    ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-muted") do
       li do
         plain "Add an entry to "
         inline_code("~/.codex/config.toml")
@@ -160,26 +161,21 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   def copyable(text, multiline: false, **attrs)
     base = "flex items-stretch gap-2"
     div(class: [ base, attrs[:class] ].compact.join(" "), data: { controller: "clipboard" }) do
-      pre_class = "flex-1 min-w-0 overflow-x-auto rounded-lg bg-gray-50 dark:bg-gray-800 " \
-                  "px-3 py-2 text-sm text-gray-900 dark:text-gray-100 font-mono"
+      pre_class = "flex-1 min-w-0 overflow-x-auto rounded-lg bg-muted " \
+                  "px-3 py-2 text-sm text-default font-mono"
       if multiline
         pre(class: pre_class, data: { clipboard_target: "source" }) { plain text }
       else
         # whitespace-nowrap keeps single-line commands/URLs on one line.
         div(class: "#{pre_class} whitespace-nowrap", data: { clipboard_target: "source" }) { plain text }
       end
-      button(
-        type: "button",
-        class: "shrink-0 self-start min-h-11 rounded-lg border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-900 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 " \
-               "hover:bg-gray-50 dark:hover:bg-gray-800",
-        data: { action: "clipboard#copy", clipboard_target: "button" }
-      ) { "Copy" }
+      render Components::Kit::Button.new(variant: :outline, touch: true, class: "self-start",
+                                         data: { action: "clipboard#copy", clipboard_target: "button" }) { "Copy" }
     end
   end
 
   def inline_code(text)
-    code(class: "rounded bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 text-sm font-mono text-gray-900 dark:text-gray-100") do
+    code(class: "rounded bg-neutral-subtle px-1.5 py-0.5 text-sm font-mono text-default") do
       plain text
     end
   end
@@ -188,7 +184,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
 
   def connected_section
     section(class: "space-y-4") do
-      h2(class: "text-lg font-semibold text-gray-900 dark:text-white") { "Connected clients" }
+      h2(class: "text-lg font-semibold text-default") { "Connected clients" }
       if @tokens.empty?
         empty_state
       else
@@ -198,39 +194,41 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def empty_state
-    div(class: "rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center") do
-      p(class: "text-sm text-gray-600 dark:text-gray-400") do
-        plain "No MCP clients connected. Connect one using the steps above and it'll appear here."
-      end
+    render Components::Kit::EmptyState.new(title: "No MCP clients connected") do
+      plain "Connect one using the steps above and it'll appear here."
     end
   end
 
   def tokens_table
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow overflow-hidden") do
-      table(class: "w-full text-sm") do
-        thead(class: "bg-gray-50 dark:bg-gray-800 text-xs uppercase tracking-wider text-gray-500") do
-          tr do
-            th(class: "px-4 py-3 text-left") { "Client" }
-            th(class: "px-4 py-3 text-left") { "Workspace" }
-            th(class: "px-4 py-3 text-left") { "Scopes" }
-            th(class: "px-4 py-3 text-left") { "Issued" }
-            th(class: "px-4 py-3 text-right") { "" }
-          end
+    render Components::Kit::Card.new(variant: :flush) do
+      div(class: "overflow-x-auto") { tokens_table_body }
+    end
+  end
+
+  def tokens_table_body
+    table(class: "w-full text-sm") do
+      thead(class: "bg-subtle text-xs uppercase tracking-wider text-muted") do
+        tr do
+          th(class: "px-4 py-3 text-left") { "Client" }
+          th(class: "px-4 py-3 text-left") { "Workspace" }
+          th(class: "px-4 py-3 text-left") { "Scopes" }
+          th(class: "px-4 py-3 text-left") { "Issued" }
+          th(class: "px-4 py-3 text-right") { "" }
         end
-        tbody(class: "divide-y divide-gray-100 dark:divide-gray-800") do
-          @tokens.each { |t| token_row(t) }
-        end
+      end
+      tbody(class: "divide-y divide-subtle") do
+        @tokens.each { |t| token_row(t) }
       end
     end
   end
 
   def token_row(token)
     tenant = @tenant_map[token.tenant_id]
-    tr(class: "text-gray-900 dark:text-gray-100") do
+    tr(class: "text-default") do
       td(class: "px-4 py-3 font-medium") { plain token.application.name }
       td(class: "px-4 py-3") { plain(tenant&.name || "—") }
-      td(class: "px-4 py-3 text-gray-600 dark:text-gray-400") { plain token.scopes.to_s }
-      td(class: "px-4 py-3 text-gray-600 dark:text-gray-400") { plain token.created_at.to_date.iso8601 }
+      td(class: "px-4 py-3 text-muted") { plain token.scopes.to_s }
+      td(class: "px-4 py-3 text-muted") { plain token.created_at.to_date.iso8601 }
       td(class: "px-4 py-3 text-right") { revoke_button(token) }
     end
   end
@@ -244,9 +242,8 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50",
+      render Components::Kit::Button.new(
+        variant: :outline, tone: :danger, size: :sm, type: :submit,
         data: { turbo_confirm: "Revoke access for #{token.application.name}? They'll have to re-authorise." }
       ) { "Revoke" }
     end

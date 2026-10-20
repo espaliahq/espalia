@@ -65,12 +65,12 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
   def tile_card(tile)
     a(
       href: public_send(tile[:path]),
-      class: "block bg-white dark:bg-gray-800 rounded-lg shadow-xs border " \
-             "border-gray-200 dark:border-gray-700 p-5 " \
-             "hover:border-primary hover:shadow-sm transition"
+      class: "block bg-default rounded-lg shadow-xs border " \
+             "border-default p-5 " \
+             "hover:border-brand hover:shadow-sm transition"
     ) do
-      h3(class: "text-base font-semibold text-gray-900 dark:text-white") { tile[:label] }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { tile[:description] }
+      h3(class: "text-base font-semibold text-default") { tile[:label] }
+      p(class: "mt-1 text-sm text-muted") { tile[:description] }
     end
   end
 end

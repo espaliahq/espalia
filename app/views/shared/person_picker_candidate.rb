@@ -29,10 +29,10 @@ class Views::Shared::PersonPickerCandidate < Views::Base
       plain("+ #{@person.name}")
     else
       div(class: "min-w-0 text-left") do
-        p(class: "truncate text-sm font-medium text-gray-900 dark:text-gray-100") { @person.name }
-        p(class: "truncate text-xs text-gray-600 dark:text-gray-300") { secondary }
+        p(class: "truncate text-sm font-medium text-default") { @person.name }
+        p(class: "truncate text-xs text-muted") { secondary }
       end
-      span(class: "shrink-0 text-xs font-medium text-primary-ink") { "Add" }
+      span(class: "shrink-0 text-xs font-medium text-brand") { "Add" }
     end
   end
 
@@ -42,11 +42,11 @@ class Views::Shared::PersonPickerCandidate < Views::Base
 
   def classes
     if @compact
-      "inline-flex items-center min-h-9 px-2.5 rounded-full border border-gray-300 dark:border-gray-600 " \
-        "text-xs font-medium text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+      "inline-flex items-center min-h-9 px-2.5 rounded-full border border-emphasized " \
+        "text-xs font-medium text-muted cursor-pointer hover:bg-hover"
     else
       "flex w-full items-center justify-between gap-3 min-h-11 px-3 py-2 rounded-md " \
-        "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+        "hover:bg-hover cursor-pointer"
     end
   end
 end

@@ -55,8 +55,8 @@ class Views::Integrations::IndexView < Views::Base
       card.body do
         div(class: "flex items-start justify-between") do
           div do
-            h3(class: "text-lg font-semibold text-gray-900 dark:text-white") { "Slack" }
-            p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { slack_subtitle }
+            h3(class: "text-lg font-semibold text-default") { "Slack" }
+            p(class: "mt-1 text-sm text-muted") { slack_subtitle }
           end
           render Components::Kit::Badge.new(
             @slack_connected ? "Connected" : "Not connected",
@@ -81,16 +81,16 @@ class Views::Integrations::IndexView < Views::Base
       a(
         href: tenant_slack_connection_path,
         data: { turbo_method: :delete, turbo_confirm: "Disconnect Slack from this workspace?" },
-        class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline"
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline"
       ) { "Disconnect" }
     elsif @slack_available
       a(
         href: tenant_slack_install_path,
         data: { turbo_frame: "_top" },
-        class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90"
+        class: Components::Kit::Button.classes(tone: :brand, touch: true)
       ) { "Connect Slack" }
     else
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Slack is not configured for this deployment." }
+      span(class: "text-xs text-muted") { "Slack is not configured for this deployment." }
     end
   end
 
@@ -100,16 +100,16 @@ class Views::Integrations::IndexView < Views::Base
         card.body do
           div(class: "flex items-start justify-between") do
             div do
-              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                        "group-hover:text-primary-ink transition-colors") { "HRIS" }
-              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+              h3(class: "text-lg font-semibold text-default " \
+                        "group-hover:text-brand transition-colors") { "HRIS" }
+              p(class: "mt-1 text-sm text-muted") do
                 plain provider_label
               end
             end
             render Components::Kit::Badge.new(status_label, variant: status_variant)
           end
 
-          div(class: "mt-4 text-xs text-gray-600 dark:text-gray-300") do
+          div(class: "mt-4 text-xs text-muted") do
             plain "Last synced: #{last_synced_label}"
           end
         end

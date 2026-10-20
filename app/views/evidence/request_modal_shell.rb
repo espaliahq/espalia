@@ -24,9 +24,9 @@ class Views::Evidence::RequestModalShell < Views::Base
     div(id: "evidence-request-modal-overlay",
         data: { modal_target: "overlay",
                 modal_dirty_guard: "Discard your unsaved request?" },
-        class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
+        class: "fixed inset-0 z-40 hidden items-center justify-center bg-scrim px-4",
         role: "dialog", aria: { modal: "true" }) do
-      div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
+      div(class: "w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-default bg-overlay shadow-2xl",
           tabindex: "-1",
           data: { modal_target: "panel",
                   controller: "submit-fallback frame-error",
@@ -39,7 +39,7 @@ class Views::Evidence::RequestModalShell < Views::Base
         render Components::Shared::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-request-modal", loading: "lazy",
                         data: { request_evidence_target: "frame", frame_error_target: "frame" }) do
-          div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
+          div(class: "p-6 text-sm text-muted") { "Loading…" }
         end
         render Components::Shared::FrameLoadError.new(
           id: "evidence-request-modal-error", subject: "the request form", closeable: true

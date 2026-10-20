@@ -27,7 +27,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
     render Components::Kit::Card.new(title: title, heading_level: :h2) do |card|
       card.body do
         if @items.empty?
-          p(class: "text-sm text-gray-600 dark:text-gray-300") { "No recent activity." }
+          p(class: "text-sm text-muted") { "No recent activity." }
         else
           ul(class: "space-y-3") { @items.each { |item| activity_row(item) } }
         end
@@ -43,8 +43,8 @@ class Views::Home::Cards::RecentActivity < Views::Base
     li(class: "flex items-start gap-2") do
       span(class: "mt-1.5 h-2 w-2 shrink-0 rounded-full #{DOT_COLOR.fetch(item.kind, "bg-activity-cleared")}")
       div(class: "min-w-0 flex-1") do
-        p(class: "text-sm text-gray-700 dark:text-gray-200") { sentence(item) }
-        p(class: "mt-0.5 text-xs text-gray-500 dark:text-gray-400") { local_time_ago(item.occurred_at) }
+        p(class: "text-sm text-muted") { sentence(item) }
+        p(class: "mt-0.5 text-xs text-muted") { local_time_ago(item.occurred_at) }
       end
     end
   end
@@ -76,7 +76,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
 
   # Emits a sequence of strings / rendered nodes, bolding the leading actor.
   def phrase(actor, *parts)
-    strong(class: "font-medium text-gray-900 dark:text-white") { actor }
+    strong(class: "font-medium text-default") { actor }
     parts.each { |part| part.respond_to?(:call) ? part.call : plain(part.to_s) }
   end
 
@@ -102,7 +102,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
     return "" if item.detail.blank?
 
     lambda do
-      span(class: "text-gray-500 dark:text-gray-400") { ": " }
+      span(class: "text-muted") { ": " }
       span { "“#{item.detail.to_s.truncate(SNIPPET_LIMIT)}”" }
     end
   end
@@ -115,7 +115,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
     return plain(label) unless item.assignment_id
 
     a(href: item_path(item), data: { turbo_frame: "_top" },
-      class: "font-medium text-primary-ink hover:underline") { label }
+      class: "font-medium text-brand hover:underline") { label }
   end
 
   def cell_label(item)

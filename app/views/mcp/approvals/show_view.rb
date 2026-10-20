@@ -12,7 +12,7 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   end
 
   def view_template
-    div(class: "min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4") do
+    div(class: "min-h-screen bg-page flex items-center justify-center p-4") do
       div(class: "w-full max-w-2xl space-y-6") do
         header
         details_card
@@ -27,37 +27,41 @@ class Views::Mcp::Approvals::ShowView < Views::Base
 
   def header
     div(class: "text-center") do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "MCP approval request" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-400") do
+      h1(class: "text-2xl font-bold text-default") { "MCP approval request" }
+      p(class: "mt-1 text-sm text-muted") do
         plain "Review and confirm this action before #{@approval.client_application.name} runs it."
       end
     end
   end
 
   def details_card
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow p-6 space-y-3") do
-      detail_row("Operation") { plain @approval.operation.description }
-      detail_row("Tool name") { plain Operations::Registry.tool_name_for(@approval.operation) }
-      detail_row("Requested by") { plain @approval.client_application.name }
-      detail_row("Status") { status_pill }
-      detail_row("Expires at") { plain @approval.expires_at.iso8601 }
-      detail_row("Executed at") { plain @approval.executed_at.iso8601 } if @approval.executed_at
+    render Components::Kit::Card.new do |card|
+      card.body do
+        div(class: "space-y-3") do
+          detail_row("Operation") { plain @approval.operation.description }
+          detail_row("Tool name") { plain Operations::Registry.tool_name_for(@approval.operation) }
+          detail_row("Requested by") { plain @approval.client_application.name }
+          detail_row("Status") { status_pill }
+          detail_row("Expires at") { plain @approval.expires_at.iso8601 }
+          detail_row("Executed at") { plain @approval.executed_at.iso8601 } if @approval.executed_at
+        end
+      end
     end
   end
 
   def detail_row(label_text, &block)
     div(class: "flex items-baseline gap-4") do
-      span(class: "text-xs uppercase tracking-wider text-gray-500 w-32 shrink-0") { label_text }
-      span(class: "text-sm text-gray-900 dark:text-gray-100", &block)
+      span(class: "text-xs uppercase tracking-wider text-muted w-32 shrink-0") { label_text }
+      span(class: "text-sm text-default", &block)
     end
   end
 
   def status_pill
     classes = case @approval.status
-    when "pending"  then "bg-amber-100 text-amber-800"
-    when "approved" then "bg-green-100 text-green-800"
-    when "rejected" then "bg-red-100 text-red-800"
-    when "expired"  then "bg-gray-200 text-gray-700"
+    when "pending"  then "bg-warning-muted text-warning"
+    when "approved" then "bg-success-muted text-success"
+    when "rejected" then "bg-danger-muted text-danger"
+    when "expired"  then "bg-neutral-subtle text-muted"
     end
     span(class: "inline-block rounded-full px-2 py-0.5 text-xs font-medium #{classes}") do
       plain @approval.status
@@ -65,20 +69,20 @@ class Views::Mcp::Approvals::ShowView < Views::Base
   end
 
   def arguments_card
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow p-6") do
-      h2(class: "text-sm font-semibold uppercase tracking-wider text-gray-500 mb-2") { "Arguments" }
-      pre(class: "bg-gray-100 dark:bg-gray-800 rounded p-3 text-xs overflow-x-auto") do
-        plain JSON.pretty_generate(@approval.arguments)
-      end
+    render Components::Kit::Card.new(title: "Arguments", heading_level: :h2) do |card|
+      card.body { json_block(@approval.arguments) }
     end
   end
 
   def result_card
-    div(class: "bg-white dark:bg-gray-900 rounded-2xl shadow p-6") do
-      h2(class: "text-sm font-semibold uppercase tracking-wider text-gray-500 mb-2") { "Result" }
-      pre(class: "bg-gray-100 dark:bg-gray-800 rounded p-3 text-xs overflow-x-auto") do
-        plain JSON.pretty_generate(@approval.result_payload || {})
-      end
+    render Components::Kit::Card.new(title: "Result", heading_level: :h2) do |card|
+      card.body { json_block(@approval.result_payload || {}) }
+    end
+  end
+
+  def json_block(value)
+    pre(class: "bg-muted rounded p-3 text-xs text-default overflow-x-auto") do
+      plain JSON.pretty_generate(value)
     end
   end
 
@@ -86,17 +90,11 @@ class Views::Mcp::Approvals::ShowView < Views::Base
     div(class: "flex gap-3") do
       form(action: approve_mcp_approval_path(@approval), method: :post, class: "flex-1") do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-        button(
-          type: "submit",
-          class: "w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-secondary"
-        ) { "Approve" }
+        render Components::Kit::Button.new(tone: :brand, touch: true, type: :submit, class: "w-full") { "Approve" }
       end
       form(action: reject_mcp_approval_path(@approval), method: :post, class: "flex-1") do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-        button(
-          type: "submit",
-          class: "w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-        ) { "Reject" }
+        render Components::Kit::Button.new(variant: :outline, touch: true, type: :submit, class: "w-full") { "Reject" }
       end
     end
   end

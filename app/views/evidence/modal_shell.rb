@@ -23,9 +23,9 @@ class Views::Evidence::ModalShell < Views::Base
     div(id: "evidence-modal-overlay",
         data: { modal_target: "overlay",
                 modal_dirty_guard: "Discard your unsaved feedback / evidence?" },
-        class: "fixed inset-0 z-40 hidden items-center justify-center bg-black/40 px-4",
+        class: "fixed inset-0 z-40 hidden items-center justify-center bg-scrim px-4",
         role: "dialog", aria: { modal: "true" }) do
-      div(class: "w-full max-w-xl lg:max-w-2xl xl:max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-xl",
+      div(class: "w-full max-w-xl lg:max-w-2xl xl:max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg border border-default bg-overlay shadow-2xl",
           tabindex: "-1",
           data: { modal_target: "panel",
                   controller: "submit-fallback frame-error",
@@ -37,7 +37,7 @@ class Views::Evidence::ModalShell < Views::Base
         render Components::Shared::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-modal", loading: "lazy",
                         data: { evidence_modal_target: "frame", frame_error_target: "frame" }) do
-          div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
+          div(class: "p-6 text-sm text-muted") { "Loading…" }
         end
         render Components::Shared::FrameLoadError.new(
           id: "evidence-modal-error", subject: "the form", closeable: true

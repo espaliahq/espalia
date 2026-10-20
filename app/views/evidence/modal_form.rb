@@ -26,11 +26,9 @@ class Views::Evidence::ModalForm < Views::Base
     [ "Figma", "figma" ], [ "Other", "other" ]
   ].freeze
 
-  INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-          "text-gray-900 dark:text-gray-100 text-sm " \
-          "focus-visible:ring-primary focus-visible:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
-  LABEL = "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1"
-  SECONDARY_BTN = Components::Shared::FrameLoadError::BUTTON_CLASSES
+  INPUT = Components::Kit::Field::INPUT
+  SELECT = Components::Kit::Field::SELECT
+  LABEL = "block text-xs font-medium text-muted mb-1"
 
   # @param mode [Symbol, String] :new, :edit, or :respond
   # @param assignment_id [String]
@@ -103,9 +101,9 @@ class Views::Evidence::ModalForm < Views::Base
 
   def header
     div(class: "flex items-center justify-between mb-3") do
-      h2(class: "text-base font-semibold text-gray-900 dark:text-white") { title }
-      button(type: "button", aria: { label: "Close" }, data: { action: "modal#close" },
-             class: "h-9 w-9 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200") { "×" }
+      h2(class: "text-base font-semibold text-default") { title }
+      render Components::Kit::Button.new(variant: :ghost, icon: true, aria_label: "Close",
+                                         data: { action: "modal#close" }) { "×" }
     end
   end
 
@@ -130,9 +128,9 @@ class Views::Evidence::ModalForm < Views::Base
 
   # Whose assessment, for a form with no cell card.
   def recipient_line
-    p(class: "text-sm text-gray-700 dark:text-gray-200 mb-3") do
+    p(class: "text-sm text-muted mb-3") do
       plain "For "
-      span(class: "font-medium text-gray-900 dark:text-white") { @recipient[:name] }
+      span(class: "font-medium text-default") { @recipient[:name] }
       plain " · #{@recipient[:scope]}" if @recipient[:scope]
     end
   end
@@ -143,15 +141,15 @@ class Views::Evidence::ModalForm < Views::Base
   # all context lives on the uniform "Applies to" rows.
   def context_card
     cx = @context_block
-    div(class: "rounded-md bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-3 space-y-2 mb-4") do
+    div(class: "rounded-md bg-subtle border border-subtle p-3 space-y-2 mb-4") do
       div do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white") { prompt_label(cx) }
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { scope_label(cx) } if cx[:show_role_level]
+        p(class: "text-sm font-medium text-default") { prompt_label(cx) }
+        p(class: "text-xs text-muted") { scope_label(cx) } if cx[:show_role_level]
       end
       if cx[:expectation].present?
         div do
-          span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "What good looks like" }
-          p(class: "mt-0.5 text-sm text-gray-700 dark:text-gray-200") { cx[:expectation] }
+          span(class: "block text-xs font-semibold uppercase tracking-wide text-muted") { "What good looks like" }
+          p(class: "mt-0.5 text-sm text-muted") { cx[:expectation] }
         end
       end
       examples_disclosure(cx[:illustrations], css: "text-sm") if cx[:illustrations].present?
@@ -161,7 +159,7 @@ class Views::Evidence::ModalForm < Views::Base
   # Whose assessment (hub-opened :edit only — the hub lists items across
   # people, and edit mode has no prompt card to say so).
   def hub_scope_line
-    p(class: "text-xs text-gray-600 dark:text-gray-300 mb-3") { "Feedback #{@scope_line}" }
+    p(class: "text-xs text-muted mb-3") { "Feedback #{@scope_line}" }
   end
 
   def prompt_label(cx)
@@ -186,11 +184,9 @@ class Views::Evidence::ModalForm < Views::Base
     end
     return if assessee.nil?
 
-    div(class: "rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-2 mb-4",
-        data: { testid: "visibility-note" }) do
-      p(class: "text-xs text-blue-800 dark:text-blue-200") do
-        "Your feedback will be added to #{assessee}'s assessment — visible to #{assessee}, their managers, and workspace admins."
-      end
+    render Components::Kit::Alert.new(tone: :info, size: :sm, role: :note, class: "mb-4",
+                                      data: { testid: "visibility-note" }) do
+      "Your feedback will be added to #{assessee}'s assessment — visible to #{assessee}, their managers, and workspace admins."
     end
   end
 
@@ -208,7 +204,7 @@ class Views::Evidence::ModalForm < Views::Base
 
   def content_fields
     unless @content_editable
-      p(class: "text-xs text-amber-700 dark:text-amber-400") do
+      p(class: "text-xs text-warning") do
         "You're linking #{@evidence&.author&.name || "someone else"}'s feedback — the content can't be edited here, only where it applies."
       end
     end
@@ -235,7 +231,7 @@ class Views::Evidence::ModalForm < Views::Base
   def type_field
     div do
       label(for: "evm-type", class: LABEL) { "Type" }
-      select(id: "evm-type", name: "evidence[evidence_type]", class: INPUT, disabled: !@content_editable,
+      select(id: "evm-type", name: "evidence[evidence_type]", class: SELECT, disabled: !@content_editable,
              data: { evidence_modal_target: "typeSelect", action: "change->evidence-modal#typeChanged" }) do
         TYPE_OPTIONS.each { |text, value| option(value: value, selected: value == selected_type) { text } }
       end
@@ -264,7 +260,7 @@ class Views::Evidence::ModalForm < Views::Base
       textarea(id: "evm-content", name: "evidence[content]", rows: 4, required: @content_editable,
                placeholder: "Describe what you observed…", class: INPUT, disabled: !@content_editable,
                aria: { describedby: "evm-content-hint" }) { @evidence&.content || @draft&.content }
-      p(id: "evm-content-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+      p(id: "evm-content-hint", class: "mt-1 text-xs text-muted") do
         "#{Prose::COMPOSER_HINT}: **bold**, _italic_, lists and [a link](https://…). A pasted URL becomes a link."
       end
     end
@@ -274,7 +270,7 @@ class Views::Evidence::ModalForm < Views::Base
     div(class: "grid grid-cols-2 gap-2") do
       div do
         label(for: "evm-sys", class: LABEL) { "Link to (optional)" }
-        select(id: "evm-sys", name: "evidence[external_reference][system]", class: INPUT, disabled: !@content_editable) do
+        select(id: "evm-sys", name: "evidence[external_reference][system]", class: SELECT, disabled: !@content_editable) do
           SYSTEM_OPTIONS.each { |text, value| option(value: value, selected: value == external_reference&.system) { text } }
         end
       end
@@ -295,8 +291,8 @@ class Views::Evidence::ModalForm < Views::Base
   # enforces the same floor). The entry-point row (the cell the modal was
   # opened from) sorts first, highlighted, with its examples pre-expanded.
   def links_section
-    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
-      span(class: "block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1") { "Applies to" }
+    div(class: "pt-2 border-t border-subtle") do
+      span(class: "block text-xs font-semibold uppercase tracking-wide text-muted mb-1") { "Applies to" }
       unplaced_hint if allow_unplaced?
       div(class: "space-y-2", data: { evidence_modal_target: "linkRows" }) do
         seed_row if @seed_cell
@@ -311,7 +307,7 @@ class Views::Evidence::ModalForm < Views::Base
   # can't name.
   def unplaced_hint
     whose = @recipient ? @recipient[:name] : "the person"
-    p(class: "text-xs text-gray-600 dark:text-gray-300 mb-2", data: { testid: "unplaced-hint" }) do
+    p(class: "text-xs text-muted mb-2", data: { testid: "unplaced-hint" }) do
       "Not sure which capability this speaks to? Save without one — #{whose} or their manager can place it."
     end
   end
@@ -331,26 +327,26 @@ class Views::Evidence::ModalForm < Views::Base
     token = "#{cell[:capability_stable_id]}|#{cell[:level_ordinal]}"
     entry = cell[:entry_point]
     div(class: "rounded-md border p-2 text-sm space-y-1 " \
-               "#{entry ? "border-primary/40 ring-1 ring-primary/40" : "border-gray-200 dark:border-gray-700"}",
+               "#{entry ? "border-strong ring-1 ring-(--gos-border-strong)" : "border-default"}",
         title: (entry ? "You opened this feedback from here" : nil),
         data: { link_row: "" }) do
       div(class: "flex items-start justify-between gap-2") do
-        span(class: "font-medium text-gray-900 dark:text-white") do
+        span(class: "font-medium text-default") do
           "#{cell[:capability_name] || "Capability"} · #{level_label(cell[:level_ordinal])}"
         end
         remove_button if removable
       end
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
+      p(class: "text-xs text-muted") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
       if cell[:comment_count].to_i.positive?
         # Disclose an active discussion before the user stages this link's
         # removal — the thread is preserved in history either way.
-        p(class: "text-xs italic text-gray-600 dark:text-gray-300") do
+        p(class: "text-xs italic text-muted") do
           "#{cell[:comment_count]} #{'comment'.pluralize(cell[:comment_count])} in discussion — " \
             "kept in history if this link is removed"
         end
       end
       valence_select(name: "evidence[link_valences][#{token}]", current: cell[:valence],
-                     required: required_valence, id: valence_id, css: "#{INPUT} text-xs")
+                     required: required_valence, id: valence_id, css: "#{SELECT} text-xs")
       examples_disclosure(cell[:illustrations], open: entry) if cell[:illustrations].present?
       input(type: "hidden", name: "evidence[desired_links][]", value: token)
     end
@@ -364,14 +360,14 @@ class Views::Evidence::ModalForm < Views::Base
     button(type: "button", aria: { label: "Remove link" }, data: { action: "evidence-modal#removeLink" },
            disabled: last,
            title: (last ? "Feedback must apply to at least one behaviour — withdraw it instead" : nil),
-           class: "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer " \
+           class: "text-subtle hover:text-default cursor-pointer " \
                   "disabled:opacity-40 disabled:cursor-not-allowed") { "×" }
   end
 
   def picker_row
     div(class: "mt-2 flex flex-wrap items-end gap-2") do
       div(class: "flex-1 min-w-40") do
-        select(class: INPUT, aria: { label: "Capability to also link" },
+        select(class: SELECT, aria: { label: "Capability to also link" },
                data: { evidence_modal_target: "linkCapability", action: "change->evidence-modal#capabilityChanged" }) do
           option(value: "") { "Capability…" }
           @link_options.each do |group|
@@ -384,13 +380,13 @@ class Views::Evidence::ModalForm < Views::Base
       # Levels are populated by the controller from the chosen capability's valid
       # cells, with already-linked levels disabled (see #capabilityChanged).
       div(class: "w-44") do
-        select(class: INPUT, data: { evidence_modal_target: "linkLevel" }, aria: { label: "Level to also link" }) do
+        select(class: SELECT, data: { evidence_modal_target: "linkLevel" }, aria: { label: "Level to also link" }) do
           option(value: "") { "Level…" }
         end
       end
       # The staged row carries the (required) valence dropdown — the picker
       # stays a plain capability + level pick.
-      button(type: "button", data: { action: "evidence-modal#addLink" }, class: SECONDARY_BTN) { "+ Add" }
+      render Components::Kit::Button.new(variant: :outline, touch: true, data: { action: "evidence-modal#addLink" }) { "+ Add" }
     end
   end
 
@@ -421,15 +417,15 @@ class Views::Evidence::ModalForm < Views::Base
 
   def footer
     div(class: "flex justify-end gap-2 pt-2") do
-      button(type: "button", data: { action: "modal#close" }, class: SECONDARY_BTN) { "Cancel" }
+      render Components::Kit::Button.new(variant: :outline, touch: true, data: { action: "modal#close" }) { "Cancel" }
       # Turbo owns the in-flight treatment: `data-turbo-submits-with` swaps the
       # label and `config.forms.submitter` ("disabled") disables the button,
       # both restored on `turbo:submit-end`. `submit-guard` on the form adds
       # only what Turbo can't — blocking a re-entrant submit (audit issue
       # #335). `min-w-44` limits how far the footer slides when the label
       # shortens; no single value fits all three labels exactly.
-      button(type: "submit", data: { turbo_submits_with: "Saving…" },
-             class: "inline-flex items-center justify-center min-h-11 min-w-44 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed") { submit_label }
+      render Components::Kit::Button.new(tone: :brand, touch: true, type: :submit, class: "min-w-44",
+                                         data: { turbo_submits_with: "Saving…" }) { submit_label }
     end
   end
 

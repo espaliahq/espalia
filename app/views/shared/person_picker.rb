@@ -20,8 +20,8 @@
 #     selected: [ { id: person.id, name: person.name } ]
 #   )
 class Views::Shared::PersonPicker < Views::Base
-  INPUT = "mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-          "bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white"
+  INPUT = "mt-1 block w-full rounded-md border border-emphasized " \
+          "bg-overlay px-3 py-2 text-sm text-default"
 
   # @param field_name [String] hidden-input name for selected ids (e.g. "foo[person_ids][]")
   # @param candidates_url [String] endpoint rendering a PersonPickerCandidatesFrame
@@ -53,9 +53,9 @@ class Views::Shared::PersonPicker < Views::Base
       person_picker_field_name_value: @field_name,
       person_picker_frame_id_value: @frame_id
     }) do
-      label(for: search_input_id, class: "block text-sm font-medium text-gray-900 dark:text-white") { @label }
+      label(for: search_input_id, class: "block text-sm font-medium text-default") { @label }
       if @hint
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { @hint }
+        p(class: "mt-1 text-sm text-muted") { @hint }
       end
 
       # Results float as a dropdown over the content below (absolute inside
@@ -73,11 +73,11 @@ class Views::Shared::PersonPicker < Views::Base
       suggestions_block
 
       div(class: "mt-3") do
-        span(class: "block text-sm font-medium text-gray-900 dark:text-white") { "Selected" }
+        span(class: "block text-sm font-medium text-default") { "Selected" }
         div(data: { person_picker_target: "selected" }, class: "mt-1 flex flex-wrap gap-2 min-h-9") do
           p(
             data: { person_picker_target: "empty" },
-            class: "text-xs text-gray-600 dark:text-gray-300 #{'hidden' if @selected.any?}"
+            class: "text-xs text-muted #{'hidden' if @selected.any?}"
           ) { @empty_text }
           @selected.each { |entry| selected_chip(entry) }
         end
@@ -100,7 +100,7 @@ class Views::Shared::PersonPicker < Views::Base
     return if @suggestions.empty?
 
     div(class: "mt-3") do
-      span(class: "block text-xs font-medium text-gray-600 dark:text-gray-300") { "Suggestions" }
+      span(class: "block text-xs font-medium text-muted") { "Suggestions" }
       div(class: "mt-1 flex flex-wrap gap-2", data: { person_picker_target: "suggestions" }) do
         @suggestions.each do |suggestion|
           render Views::Shared::PersonPickerCandidate.new(
@@ -115,13 +115,13 @@ class Views::Shared::PersonPicker < Views::Base
   # add — same structure so remove works identically on both.
   def selected_chip(entry)
     span(
-      class: "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary-ink text-xs font-medium",
+      class: "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-neutral-subtle text-default text-xs font-medium",
       data: { person_id: entry[:id] }
     ) do
       plain entry[:name]
       button(
         type: "button", aria: { label: "Remove #{entry[:name]}" },
-        class: "leading-none rounded-full text-primary-ink hover:bg-primary/20 cursor-pointer",
+        class: "leading-none rounded-full text-muted hover:text-default hover:bg-neutral-muted cursor-pointer",
         data: { action: "person-picker#remove", person_picker_person_id_param: entry[:id] }
       ) { "×" }
     end
