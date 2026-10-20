@@ -200,40 +200,24 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
   # Kebab stays visible at all times — the opacity-0/hover pattern hides
   # Reply on touch devices (see the assessment card for the full rationale).
   def actions_menu
-    div(
-      class: "absolute top-1 right-1",
-      data: { controller: "dropdown",
-              action: "keydown.esc@window->dropdown#close" }
-    ) do
-      kebab_trigger
-      kebab_menu
+    div(class: "absolute top-1 right-1") do
+      render Components::Kit::Dropdown.new do |dropdown|
+        kebab_trigger
+        dropdown.menu(width: "w-32") do
+          reply_menu_item if @can_reply
+          edit_menu_item if @can_edit
+          delete_menu_item if @can_delete
+        end
+      end
     end
   end
 
   def kebab_trigger
-    button(
-      type: "button",
-      class: "rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 " \
-             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :xs, icon: true, aria_label: "Comment actions",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { label: "Comment actions", haspopup: "menu", expanded: "false" }
-    ) do
-      span(class: "block leading-none -mt-1 text-base", aria_hidden: "true") { "⋮" }
-    end
-  end
-
-  def kebab_menu
-    div(
-      class: "hidden absolute right-0 mt-1 w-32 rounded-md border border-gray-200 " \
-             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-30 " \
-             "py-1 text-xs",
-      role: "menu",
-      data: { dropdown_target: "menu" }
-    ) do
-      reply_menu_item if @can_reply
-      edit_menu_item if @can_edit
-      delete_menu_item if @can_delete
-    end
+      aria: { haspopup: "menu", expanded: "false" }
+    ) { icon("kebab", class: "size-4") }
   end
 
   def reply_menu_item
@@ -267,15 +251,13 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
       framework_suggestion_comment_path(@framework_id, @suggestion_id, @comment.id,
                                         return_to: @return_to),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-red-700 dark:text-red-300 " \
-             "hover:bg-red-50 dark:hover:bg-red-900/30",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
       role: "menuitem",
       data: { turbo_confirm: "Delete this comment? Replies will stay visible." }
     ) { "Delete" }
   end
 
   def menu_item_classes
-    "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-      "hover:bg-gray-100 dark:hover:bg-gray-700"
+    "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover"
   end
 end

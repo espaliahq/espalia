@@ -75,20 +75,13 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def actions_menu
-    div(class: "relative", data: { controller: "dropdown", action: "keydown.esc@window->dropdown#close" }) do
-      button(
-        type: "button",
-        class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
-               "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
-               "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+    render Components::Kit::Dropdown.new do |dropdown|
+      render Components::Kit::Button.new(
+        variant: :ghost, size: :xs, icon: true, aria_label: "Feedback / evidence actions",
         data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-        aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }
-      ) { span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" } }
-      div(
-        class: "hidden absolute right-0 mt-1 w-48 rounded-md border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-900 shadow-lg z-10 py-1 text-xs",
-        role: "menu", data: { dropdown_target: "menu" }
-      ) do
+        aria: { haspopup: "menu", expanded: "false" }
+      ) { icon("kebab", class: "size-4") }
+      dropdown.menu(width: "w-48") do
         add_menu_item if @can_create
         request_menu_item if @can_request
       end
@@ -124,7 +117,7 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def menu_item_classes
-    "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+    "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover"
   end
 
   def can_withdraw?(item)

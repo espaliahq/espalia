@@ -65,21 +65,23 @@ class Views::Assessments::FrequencyPill < Views::Base
   private
 
   # Pill wrapped in a dropdown — click reveals the popover with four
-  # options + Clear. ARIA mirrors the comment kebab pattern.
+  # options + Clear. The submit-fallback wrapper catches the forms' Turbo
+  # events as they bubble out of the menu.
   def interactive_pill
     div(
       class: "relative inline-block",
       data: {
-        controller: "dropdown submit-fallback",
+        controller: "submit-fallback",
         submit_fallback_text_value: "Couldn't save this rating — check your connection and try again.",
-        action: "keydown.esc@window->dropdown#close " \
-                "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
+        action: "turbo:before-fetch-response->submit-fallback#beforeFetchResponse " \
                 "turbo:submit-start->submit-fallback#submitStart " \
                 "turbo:submit-end->submit-fallback#submitEnd"
       }
     ) do
-      pill_trigger
-      popover
+      render Components::Kit::Dropdown.new(align: :left) do |dropdown|
+        pill_trigger
+        dropdown.menu(width: "w-44") { popover_items }
+      end
       transport_error_region
     end
   end
@@ -115,7 +117,7 @@ class Views::Assessments::FrequencyPill < Views::Base
       class: "inline-flex min-h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium " \
              "#{pill_bg_classes} cursor-pointer " \
              "hover:brightness-95 dark:hover:brightness-110 transition " \
-             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
       title: @carried ? "Carried forward from #{carried_origin} — confirm or change" : nil,
       data: { dropdown_target: "trigger", action: "dropdown#toggle", carried: @carried ? "true" : nil },
       aria: { label: trigger_aria_label, haspopup: "menu", expanded: "false" }
@@ -135,31 +137,24 @@ class Views::Assessments::FrequencyPill < Views::Base
     end
   end
 
-  def popover
-    div(
-      class: "hidden absolute left-0 mt-1 z-30 w-44 rounded-md border border-gray-200 " \
-             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1 text-xs",
-      role: "menu",
-      data: { dropdown_target: "menu" }
-    ) do
-      if @carried
-        carried_note
-        keep_button
-        divider
-      end
-      Views::Assessments::FrequencyPalette::ORDERED_KEYS.each do |key|
-        option_button(key)
-      end
-      divider if @current_frequency.present?
-      clear_button if @current_frequency.present?
+  def popover_items
+    if @carried
+      carried_note
+      keep_button
+      divider
     end
+    Views::Assessments::FrequencyPalette::ORDERED_KEYS.each do |key|
+      option_button(key)
+    end
+    divider if @current_frequency.present?
+    clear_button if @current_frequency.present?
   end
 
   # Header line inside the popover when the value is carried forward — where
   # it came from, above the Keep button that confirms it.
   def carried_note
     origin = @context == :self ? "your last cycle" : "the last cycle"
-    div(class: "px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300") do
+    div(class: "px-3 py-1.5 text-[11px] text-muted") do
       plain "Carried from #{origin}. Keep it for this cycle, or pick another value."
     end
   end
@@ -179,14 +174,13 @@ class Views::Assessments::FrequencyPill < Views::Base
       button(
         type: "submit",
         role: "menuitem",
-        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left text-gray-700 " \
-               "dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 " \
-               "#{selected ? 'font-semibold' : ''}",
+        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-default " \
+               "hover:bg-default-hover #{selected ? 'font-semibold' : ''}",
         data: { action: "click->dropdown#close" }
       ) do
         span(class: "w-2 h-2 rounded-full #{config[:dot]} shrink-0")
         span(class: "flex-1") { config[:phrase] }
-        span(class: "text-[10px] text-gray-400") { "✓" } if selected
+        span(class: "text-[10px] text-subtle") { "✓" } if selected
       end
     end
   end
@@ -200,8 +194,8 @@ class Views::Assessments::FrequencyPill < Views::Base
       button(
         type: "submit",
         role: "menuitem",
-        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left font-semibold text-gray-900 " \
-               "dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700",
+        class: "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold text-default " \
+               "hover:bg-default-hover",
         data: { action: "click->dropdown#close" }
       ) { "Keep “#{phrase}”" }
     end
@@ -222,15 +216,14 @@ class Views::Assessments::FrequencyPill < Views::Base
       button(
         type: "submit",
         role: "menuitem",
-        class: "block w-full text-left px-3 py-1.5 text-gray-600 dark:text-gray-300 " \
-               "hover:bg-gray-100 dark:hover:bg-gray-700",
+        class: "block w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-default-hover",
         data: { action: "click->dropdown#close" }
       ) { "Clear rating" }
     end
   end
 
   def divider
-    div(class: "my-1 border-t border-gray-100 dark:border-gray-800")
+    div(class: "my-1 border-t border-default")
   end
 
   def hidden_inputs(frequency:, clear: false, confirm: false)

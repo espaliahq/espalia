@@ -142,6 +142,22 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "2 · I think it is"
   end
 
+  should "open a comment's menu from the keyboard and close it with Esc" do
+    open_suggestion_card
+    compose_and_submit(find("textarea[name='comment[body]']", match: :first), "Keyboard check")
+    assert_text "Keyboard check"
+
+    trigger = "li[id^='comment-'] button[aria-label='Comment actions']"
+    wait_for_stimulus "dropdown", scope: "li[id^='comment-']"
+    page.execute_script("document.querySelector(arguments[0]).focus()", trigger)
+    find(trigger).send_keys(:enter)
+    assert_selector "#{trigger}[aria-expanded='true']"
+    assert_selector "li[id^='comment-'] [role='menuitem']", text: "Reply", visible: true
+
+    press_escape
+    assert_no_selector "li[id^='comment-'] [role='menuitem']", text: "Reply", visible: true
+  end
+
   should "keep the thread and approve affordance together on the card" do
     open_suggestion_card
 
