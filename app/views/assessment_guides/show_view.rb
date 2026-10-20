@@ -261,7 +261,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
         [ :colleagues, "Colleagues share feedback",
           "Asked for or offered unprompted, pinned to a behaviour. It informs ratings; it never counts in the score." ],
         [ :growthos, "Your score unlocks once enough is rated",
-          "Until then you see progress, not a verdict. An unrated cell isn't a zero." ]
+          "Until then you see progress, not a verdict, so a fresh assessment never reads as a zero." ]
       ]
     ) do
       rating_scale
