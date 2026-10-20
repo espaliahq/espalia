@@ -41,7 +41,9 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
                                     expect_text: "Placed on Ownership · E3 as Demonstrates.")
     assert_no_selector row(@ownership_suggestion)
 
-    find("#{row(@collaboration_suggestion)} summary").click
+    # A dropped pointer click would leave the disclosure shut; open it directly.
+    page.execute_script("arguments[0].open = true", find("#{row(@collaboration_suggestion)} details"))
+    assert_selector "#dismiss-reason-#{@collaboration_suggestion.id}", visible: true
     js_fill_in "#dismiss-reason-#{@collaboration_suggestion.id}", with: "This is about the incident, not teamwork"
     click_selector_with_js_fallback("#{row(@collaboration_suggestion)} form[action$='/dismiss'] button",
                                     expect_text: "Dismissed the suggestion to place it on Collaboration · E4.")
