@@ -136,7 +136,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         end
       end
       # No Close: this is not a modal — collapsing the disclosure is the exit.
-      render Components::Kit::FrameLoadError.new(
+      render Components::Shared::FrameLoadError.new(
         id: "#{thread_frame_id}-error", subject: "the discussion", classes: "py-1 space-y-2"
       )
     end

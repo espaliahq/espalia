@@ -6,14 +6,14 @@
 # On mobile: hamburger button toggles the sidebar drawer.
 #
 # @example
-#   render Components::Kit::Navbar.new(
+#   render Components::Shell::Navbar.new(
 #     app_name: "GrowthOS",
 #     links: [{ label: "Home", href: "/" }],
 #     user: current_user,
 #     current_tenant: ActsAsTenant.current_tenant,
 #     tenants: current_user.tenants
 #   )
-class Components::Kit::Navbar < Components::Base
+class Components::Shell::Navbar < Components::Base
   # @param app_name [String] The application name displayed in the navbar
   # @param links [Array<Hash>] Navigation links with :label and :href
   # @param user [User, nil] The currently signed-in user
@@ -140,7 +140,7 @@ class Components::Kit::Navbar < Components::Base
     div(class: "flex items-center gap-2") do
       if @user
         notification_bell
-        render Components::Kit::UserMenu.new(
+        render Components::Shell::UserMenu.new(
           user: @user,
           current_tenant: @current_tenant,
           tenants: @tenants

@@ -5,9 +5,9 @@
 # says "to confirm" wears the same chip.
 #
 # @example
-#   render Components::Kit::ToConfirmChip.new("3 to confirm", title: "…")
+#   render Components::Shared::ToConfirmChip.new("3 to confirm", title: "…")
 #
-class Components::Kit::ToConfirmChip < Components::Base
+class Components::Shared::ToConfirmChip < Components::Base
   CLASSES = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium " \
             "border border-dashed border-amber-500 dark:border-amber-400 " \
             "text-amber-800 dark:text-amber-300"

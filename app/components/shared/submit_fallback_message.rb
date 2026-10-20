@@ -6,10 +6,10 @@
 # the controller owns showing/hiding and the copy.
 #
 # @example next to a rating pill (absolute positioning)
-#   render Components::Kit::SubmitFallbackMessage.new(
+#   render Components::Shared::SubmitFallbackMessage.new(
 #     classes: "absolute left-0 top-full mt-1 z-20 w-max max-w-64"
 #   )
-class Components::Kit::SubmitFallbackMessage < Components::Base
+class Components::Shared::SubmitFallbackMessage < Components::Base
   # The red inline-error panel. Public so other surfaces that render the same
   # "something went wrong here" panel outside this component's live region —
   # the evidence modal's frame-load error — share one definition instead of

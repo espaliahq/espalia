@@ -40,7 +40,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "w-full px-4 sm:px-6 py-8", data: { controller: "modal",

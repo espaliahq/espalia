@@ -316,7 +316,7 @@ client time parsing and mounting all of it.
 So `MatrixRow#expanded_row` renders only a placeholder `<tr>`
 (`Views::Frameworks::Explorer::ExpandedRow` with `loaded: false`): the
 accordion's target/data attributes, one loading cell (with the shared
-`Kit::FrameLoadError` block for failures), and `data-expanded-src` — the
+`Shared::FrameLoadError` block for failures), and `data-expanded-src` — the
 mode-specific `expanded_row` / `edit_expanded_row` path. The role/track scope
 rides ONCE on the `<table>` (`data-expanded-row-scope`), not once per row: at
 100 roles × 150 capabilities a per-row copy is ~700 KB of attribute text.

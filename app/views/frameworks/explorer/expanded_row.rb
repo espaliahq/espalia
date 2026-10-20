@@ -101,7 +101,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
 
   # One cell spanning every level column: the loading line, and the shared
   # (hidden) load-failure block the controller reveals when the fetch fails —
-  # the same `Kit::FrameLoadError` the lazy frames use, with the matrix's own
+  # the same `Shared::FrameLoadError` the lazy frames use, with the matrix's own
   # Retry action since no `frame-error` controller is involved.
   def placeholder_cell
     td(
@@ -111,7 +111,7 @@ class Views::Frameworks::Explorer::ExpandedRow < Views::Base
       p(class: "text-gray-600 dark:text-gray-300", data: { expanded_row_state: "loading" }) do
         "Loading examples…"
       end
-      render Components::Kit::FrameLoadError.new(
+      render Components::Shared::FrameLoadError.new(
         id: "expanded-row-error-#{@capability.capability_id}",
         subject: "the examples for this capability",
         classes: "space-y-2",

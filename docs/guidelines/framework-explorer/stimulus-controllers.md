@@ -198,7 +198,7 @@ them. Two rules matter when extending it here: it speaks **only for the frame's
 own GET** — a failed in-frame row save (a weight PATCH, a level rename) keeps its
 form and its typed values, because `turbo:frame-missing` is claimed only while a
 load armed it — and the error copy is built from `subject:` + `closeable:` by
-`Kit::FrameLoadError`, never passed in as free text.
+`Shared::FrameLoadError`, never passed in as free text.
 
 ### suggestion_action_controller.js (edit mode only)
 Wraps the action row on an actionable feed entry (and mounts bare on the grid kebabs' Approve items). `approve` POSTs to the suggestion's approve endpoint (`inline=1`) via `@rails/request.js`, showing "Approving…" during the round trip and swapping the row to a local "✓ Approved" state on success — instant feedback, ~1-2s ahead of the broadcast-driven feed reload. The response is either a surgical Turbo Stream (request.js renders it — the affected entity's frame swaps in place) or a 204 fallback. Dispatches the window `suggestion:resolved` event with `{ suggestionId, outcome, surgical }` (→ `matrix#refresh` for the non-surgical fallback only, and → other surfaces showing the same suggestion resolving in place via `onResolved` — a bare kebab mount outside the swapped frame marks itself terminal); the reject modal's dispatch carries the same detail so a rejection swaps the entry to "✓ Rejected" too. Reject is *not* handled here — it always opens the shared modal (§12).

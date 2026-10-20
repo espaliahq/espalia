@@ -6,11 +6,11 @@
 # On mobile: hamburger opens a Sidebar drawer overlay.
 #
 # @example
-#   render Components::Kit::PageLayout.new(user: current_user, current_tenant: tenant, tenants: tenants) do
+#   render Components::Shell::PageLayout.new(user: current_user, current_tenant: tenant, tenants: tenants) do
 #     h1 { "Page Title" }
 #   end
 #
-class Components::Kit::PageLayout < Components::Base
+class Components::Shell::PageLayout < Components::Base
   extend Phlex::Rails::HelperMacros
 
   # Reads the effective TenantUser for the request — the impersonated target
@@ -49,7 +49,7 @@ class Components::Kit::PageLayout < Components::Base
                "focus:shadow-lg focus:ring-2 focus:ring-blue-600"
       ) { "Skip to main content" }
 
-      render Components::Kit::Navbar.new(
+      render Components::Shell::Navbar.new(
         app_name: "GrowthOS",
         links: nav_links,
         user: @user,
@@ -58,7 +58,7 @@ class Components::Kit::PageLayout < Components::Base
       )
 
       # Mobile-only sidebar drawer
-      render Components::Kit::Sidebar.new(links: nav_links)
+      render Components::Shell::Sidebar.new(links: nav_links)
 
       main(id: "main-content", tabindex: "-1", class: "flex-1 p-6 focus:outline-hidden", &block)
     end

@@ -8,8 +8,8 @@
 # is true; the layout passes the target's display name.
 #
 # @example
-#   render Components::Kit::ImpersonationBanner.new(name: "Alex Chen")
-class Components::Kit::ImpersonationBanner < Components::Base
+#   render Components::Shell::ImpersonationBanner.new(name: "Alex Chen")
+class Components::Shell::ImpersonationBanner < Components::Base
   # @param name [String] display name of the impersonated user
   def initialize(name:)
     @name = name

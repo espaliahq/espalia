@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # @label Submit fallback message
-class Kit::SubmitFallbackMessagePreview < Lookbook::Preview
+class Shared::SubmitFallbackMessagePreview < Lookbook::Preview
   # @param message text
   def playground(message: "Couldn't save this rating — check your connection and try again.")
     revealed("playground", message, classes: "w-max max-w-64")
@@ -34,7 +34,7 @@ class Kit::SubmitFallbackMessagePreview < Lookbook::Preview
 
   def revealed(id, message, classes:)
     render_with_template(
-      template: "kit/submit_fallback_message_preview/revealed",
+      template: "shared/submit_fallback_message_preview/revealed",
       locals: { id: "submit-fallback-#{id}", message: message, classes: classes }
     )
   end

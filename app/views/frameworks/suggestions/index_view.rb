@@ -53,7 +53,7 @@ class Views::Frameworks::Suggestions::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "max-w-5xl mx-auto") do

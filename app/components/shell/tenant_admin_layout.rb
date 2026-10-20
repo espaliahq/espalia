@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Tenant-administration shell. Wraps {Components::Kit::PageLayout}
+# Tenant-administration shell. Wraps {Components::Shell::PageLayout}
 # and renders a left sidebar listing the admin sections (Dashboard,
 # Theme, Users, Integrations). The page view yields its content into
 # the right-hand pane.
@@ -10,7 +10,7 @@
 # for now; expand when a new admin surface lands.
 #
 # @example
-#   render Components::Kit::TenantAdminLayout.new(
+#   render Components::Shell::TenantAdminLayout.new(
 #     active_section: :theme,
 #     user: current_user,
 #     current_tenant: ActsAsTenant.current_tenant,
@@ -20,7 +20,7 @@
 #     # page content
 #   end
 #
-class Components::Kit::TenantAdminLayout < Components::Base
+class Components::Shell::TenantAdminLayout < Components::Base
   SECTIONS = [
     { key: :dashboard,    label: "Dashboard",    href: "/tenant" },
     { key: :theme,        label: "Theme",        href: "/tenant/theme" },
@@ -43,7 +43,7 @@ class Components::Kit::TenantAdminLayout < Components::Base
   end
 
   def view_template(&block)
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "flex flex-col md:flex-row gap-6") do

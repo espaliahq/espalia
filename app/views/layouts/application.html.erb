@@ -62,7 +62,7 @@
   <body>
     <%# Tenant-admin impersonation banner — sticky, on every page while active %>
     <% if respond_to?(:impersonating?) && impersonating? %>
-      <%= render Components::Kit::ImpersonationBanner.new(name: impersonated_display_name) %>
+      <%= render Components::Shell::ImpersonationBanner.new(name: impersonated_display_name) %>
     <% end %>
 
     <%# Devise pages handle flash inline — skip the toast to avoid duplication %>

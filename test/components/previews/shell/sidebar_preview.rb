@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # @label Sidebar
-class Kit::SidebarPreview < Lookbook::Preview
+class Shell::SidebarPreview < Lookbook::Preview
   MEMBER_LINKS = [
     { label: "Home", href: "#" },
     { label: "Framework", href: "#" },
@@ -50,6 +50,6 @@ class Kit::SidebarPreview < Lookbook::Preview
   private
 
   def drawer(links)
-    render_with_template(template: "kit/sidebar_preview/drawer", locals: { links: links })
+    render_with_template(template: "shell/sidebar_preview/drawer", locals: { links: links })
   end
 end

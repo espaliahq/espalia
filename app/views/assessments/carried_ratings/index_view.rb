@@ -29,7 +29,7 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
+    render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
       div(class: "max-w-3xl") do
         header
         rows.empty? ? empty_state : confirm_form

@@ -84,7 +84,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       # The log rides alongside the page as a side panel, so it stays in

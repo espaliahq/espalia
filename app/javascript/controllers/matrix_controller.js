@@ -2300,7 +2300,7 @@ export default class extends BaseController {
   }
 
   // Toggles the placeholder's server-rendered loading line and its
-  // Kit::FrameLoadError block; a failure moves focus into the alert so the
+  // Shared::FrameLoadError block; a failure moves focus into the alert so the
   // Retry is the next Tab stop (the same contract as frame-error#failLoad).
   #setExpandedRowState(row, state) {
     const loading = row.querySelector("[data-expanded-row-state='loading']")

@@ -36,7 +36,7 @@ class Views::Frameworks::Explorer::BindingEditorModal < Views::Base
                       data: { binding_editor_form_target: "frame", frame_error_target: "frame" }) do
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
-      render Components::Kit::FrameLoadError.new(
+      render Components::Shared::FrameLoadError.new(
         id: "binding-editor-error", subject: "the roles editor", closeable: true, classes: "space-y-3"
       )
     end

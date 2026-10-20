@@ -168,7 +168,8 @@ app/
 ├── controllers/     # Skinny controllers; every action calls `authorize`
 ├── policies/        # Pundit policies
 ├── views/           # Phlex page views
-├── components/kit/  # Phlex Kit components (Button, Card, Modal, Prose…)
+├── components/      # Phlex components: kit/ (generic primitives), shared/ (one-job
+│                    #   compositions of Kit), shell/ (layout chrome)
 ├── dashboard/       # Home-page cards (Phlex)
 ├── javascript/      # Stimulus controllers (import maps)
 ├── integrations/    # HRIS (HiBob) and Slack adapters
@@ -349,7 +350,7 @@ end
 | New model | UUID v7: `create_table :x, id: :uuid` |
 | API-facing ID | `has_prefix_id :prefix` |
 | New view | Phlex in `app/views/resource/action_view.rb` |
-| New component | Kit in `app/components/kit/component_name.rb` |
+| New component | `app/components/{kit,shared,shell}/name.rb`; layers in phlex-views.md |
 | Business logic | Model methods or concerns (not services) |
 | Async work | Background job in `app/jobs/` |
 | New test | Shoulda + FactoryBot |

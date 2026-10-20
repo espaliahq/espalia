@@ -49,7 +49,7 @@
 // itself to `frameTarget`, so listening on the host element is equivalent.
 //   <div data-controller="frame-error">
 //     <turbo-frame id="…" loading="lazy" data-frame-error-target="frame">Loading…</turbo-frame>
-//     <%= render Components::Kit::FrameLoadError.new(id: "…-error", subject: "the form") %>
+//     <%= render Components::Shared::FrameLoadError.new(id: "…-error", subject: "the form") %>
 //   </div>
 
 import BaseController from "controllers/base_controller"

@@ -6,11 +6,11 @@
 # hamburger button. On desktop, nav links are in the Navbar instead.
 #
 # @example
-#   render Components::Kit::Sidebar.new(links: [
+#   render Components::Shell::Sidebar.new(links: [
 #     { label: "Home", href: "/" },
 #     { label: "Reports", href: "/reports" }
 #   ])
-class Components::Kit::Sidebar < Components::Base
+class Components::Shell::Sidebar < Components::Base
   # @param links [Array<Hash>] Navigation links, each with :label and :href keys
   def initialize(links:)
     @links = links

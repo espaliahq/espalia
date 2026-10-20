@@ -243,7 +243,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
     when "to_confirm"
       carried = row[:carried_count]
       label = carried == row[:cell_total] ? "All #{carried} to confirm" : "#{carried} to confirm"
-      render Components::Kit::ToConfirmChip.new(
+      render Components::Shared::ToConfirmChip.new(
         label, title: "Every cell has a value; #{carried} were carried from the last cycle and not confirmed"
       )
     when "unrated"

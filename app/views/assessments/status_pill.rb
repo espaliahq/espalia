@@ -47,7 +47,7 @@ class Views::Assessments::StatusPill < Views::Base
       return unless @has_open_cycle
 
       if !@current_level_complete && only_confirmations_left?
-        render Components::Kit::ToConfirmChip.new(
+        render Components::Shared::ToConfirmChip.new(
           "#{@work[:to_confirm]} to confirm",
           title: "Carried from the last cycle — confirm each one or change it to complete the assessment"
         )

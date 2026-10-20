@@ -2,10 +2,10 @@
 
 require "test_helper"
 
-class Components::Kit::NavbarTest < ActiveSupport::TestCase
+class Components::Shell::NavbarTest < ActiveSupport::TestCase
   context "the brand" do
     setup do
-      @html = Components::Kit::Navbar.new(app_name: "GrowthOS").call
+      @html = Components::Shell::Navbar.new(app_name: "GrowthOS").call
     end
 
     should "be a button wired to the confetti controller" do

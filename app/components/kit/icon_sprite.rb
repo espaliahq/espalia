@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The ONE `<symbol>` set for the app's repeated inline icons, rendered once per
-# page by {Components::Kit::PageLayout}. Call sites emit
+# page by {Components::Shell::PageLayout}. Call sites emit
 # `<svg class="…"><use href="#icon-pencil"/></svg>` via
 # {Components::Helpers::IconHelpers#icon} instead of a full path definition.
 #

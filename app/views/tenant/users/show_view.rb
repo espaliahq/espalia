@@ -29,7 +29,7 @@ class Views::Tenant::Users::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::TenantAdminLayout.new(
+    render Components::Shell::TenantAdminLayout.new(
       active_section: :users,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do

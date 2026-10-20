@@ -8,12 +8,12 @@
 # - Sign out link
 #
 # @example
-#   render Components::Kit::UserMenu.new(
+#   render Components::Shell::UserMenu.new(
 #     user: current_user,
 #     current_tenant: ActsAsTenant.current_tenant,
 #     tenants: current_user.tenants
 #   )
-class Components::Kit::UserMenu < Components::Base
+class Components::Shell::UserMenu < Components::Base
   # @param user [User] the currently signed-in user
   # @param current_tenant [Tenant, nil] the active tenant
   # @param tenants [Array<Tenant>] all tenants the user belongs to

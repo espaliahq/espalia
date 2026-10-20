@@ -14,10 +14,10 @@
 # load has no exit at all.
 #
 # @example inside a modal panel that owns the `modal` + `frame-error` controllers
-#   render Components::Kit::FrameLoadError.new(
+#   render Components::Shared::FrameLoadError.new(
 #     id: "evidence-modal-error", subject: "the form", closeable: true
 #   )
-class Components::Kit::FrameLoadError < Components::Base
+class Components::Shared::FrameLoadError < Components::Base
   # The neutral secondary-button treatment. Canonical: the evidence forms'
   # SECONDARY_BTN point here, so the three copies can't drift apart.
   # A component class (app/assets/tailwind/application.css), not a utility
@@ -64,7 +64,7 @@ class Components::Kit::FrameLoadError < Components::Base
   def view_template
     div(id: @id, role: "alert", hidden: true, tabindex: "-1",
         class: @classes, data: { frame_error_target: "error" }) do
-      p(class: Components::Kit::SubmitFallbackMessage::PANEL_CLASSES) { message }
+      p(class: Components::Shared::SubmitFallbackMessage::PANEL_CLASSES) { message }
       div(class: "flex gap-2") do
         button(type: "button", data: { action: @retry_action }, class: BUTTON_CLASSES) { "Retry" }
         if @closeable

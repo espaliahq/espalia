@@ -39,7 +39,7 @@ class Views::Frameworks::Explorer::LevelEditorModal < Views::Base
                       data: { level_editor_form_target: "frame", frame_error_target: "frame" }) do
         p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
       end
-      render Components::Kit::FrameLoadError.new(
+      render Components::Shared::FrameLoadError.new(
         id: "level-editor-error", subject: "the levels editor", closeable: true, classes: "space-y-3"
       )
     end

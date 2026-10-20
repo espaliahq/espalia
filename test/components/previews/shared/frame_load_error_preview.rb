@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # @label Frame load error
-class Kit::FrameLoadErrorPreview < Lookbook::Preview
+class Shared::FrameLoadErrorPreview < Lookbook::Preview
   # @param subject text
   # @param closeable toggle
   def playground(subject: "the form", closeable: true)
@@ -32,8 +32,8 @@ class Kit::FrameLoadErrorPreview < Lookbook::Preview
 
   def revealed(**options)
     render_with_template(
-      template: "kit/frame_load_error_preview/revealed",
-      locals: { component: Components::Kit::FrameLoadError.new(**options), id: options[:id] }
+      template: "shared/frame_load_error_preview/revealed",
+      locals: { component: Components::Shared::FrameLoadError.new(**options), id: options[:id] }
     )
   end
 end
