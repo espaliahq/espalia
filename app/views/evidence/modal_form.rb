@@ -271,6 +271,8 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def external_fields
+    return imported_origin if external_reference&.imported?
+
     div(class: "grid grid-cols-2 gap-2") do
       div do
         label(for: "evm-sys", class: LABEL) { "Link to (optional)" }
@@ -283,6 +285,14 @@ class Views::Evidence::ModalForm < Views::Base
         input(id: "evm-url", type: "url", name: "evidence[external_reference][url]", value: external_reference&.url,
               placeholder: "https://", class: INPUT, disabled: !@content_editable)
       end
+    end
+  end
+
+  # Where an imported item was given is fixed; say so instead of offering fields.
+  def imported_origin
+    div(id: "evm-origin", class: "flex flex-wrap items-center gap-2 text-xs text-gray-700 dark:text-gray-200") do
+      span(class: LABEL.sub("mb-1", "mb-0")) { "Given in" }
+      render Views::Evidence::OriginBadge.new(external_reference, size: :sm)
     end
   end
 
