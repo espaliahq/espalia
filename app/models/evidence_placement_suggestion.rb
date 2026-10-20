@@ -28,6 +28,7 @@ class EvidencePlacementSuggestion < ApplicationRecord
   validates :confidence, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 1 }
   validates :rationale, presence: true, length: { maximum: RATIONALE_MAX_LENGTH }
   validates :status, inclusion: { in: STATUSES }
+  validates :provider, inclusion: { in: AiModelConfig::PROVIDERS }
   validates :model, :prompt_version, :generated_at, presence: true
 
   scope :pending, -> { where(status: "pending") }

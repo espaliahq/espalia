@@ -5,7 +5,7 @@
 #
 # Enqueued by {PersonDevelopment::AsyncHandlers::PlacementSuggester} when
 # feedback is recorded or edited, and by the hub's "Suggest again". A no-op
-# unless the tenant switched suggestions on and an API key is configured, and
+# unless the tenant switched suggestions on and has a model and key configured, and
 # for self feedback. Each run supersedes the pending set it replaces. Nothing
 # here can fail the write that triggered it: it runs after that write
 # committed, and every failure ends in "no suggestions".
@@ -45,13 +45,13 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     return unless prompt.available?
 
     asked_about = item.content
-    model = Evidence::SuggestionModel.new(model: item.tenant.effective_ai_config.model)
+    model = Evidence::SuggestionModel.new(tenant: item.tenant)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
-    after_generate(item) if store(item, proposals, model: model.model, asked_about: asked_about)
+    after_generate(item) if store(item, proposals, model: model, asked_about: asked_about)
   end
 
   def suggestable?(item)
-    item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured? &&
+    item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
       item.link_status == "active" && item.source != "self"
   end
 
@@ -97,7 +97,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
       valence: proposal.valence, confidence: proposal.confidence.round(2),
       rationale: proposal.rationale.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH),
       status: "pending", decided_by_id: nil, decided_at: nil, dismiss_reason: nil,
-      model: model, prompt_version: Evidence::PlacementPrompt::VERSION, generated_at: at
+      provider: model.provider, model: model.model, prompt_version: Evidence::PlacementPrompt::VERSION, generated_at: at
     )
   end
 end

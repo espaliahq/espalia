@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -294,6 +294,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000003) do
     t.datetime "generated_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "provider", null: false
     t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_placement_suggestions_cell", unique: true
     t.index ["person_id", "framework_id", "status"], name: "idx_evidence_placement_suggestions_person"
     t.index ["tenant_id"], name: "index_evidence_placement_suggestions_on_tenant_id"
