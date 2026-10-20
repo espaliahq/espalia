@@ -1,0 +1,11 @@
+<div class="space-y-4 rounded-2xl border border-default bg-default p-4">
+  <% [ [ :ghost, :neutral ], [ :outline, :neutral ], [ :subtle, :neutral ], [ :solid, :brand ], [ :ghost, :danger ] ].each do |form, tone| %>
+    <div class="flex flex-wrap items-center gap-3">
+      <% sizes.each do |size| %>
+        <%= render Components::Kit::Button.new(variant: form, tone: tone, size: size, icon: true, aria_label: "Edit capability") { tag.svg(class: "size-4", aria: { hidden: true }) { tag.use(href: "#icon-pencil") } } %>
+      <% end %>
+      <%= render Components::Kit::Button.new(variant: form, tone: tone, icon: true, touch: true, aria_label: "Add capability") { tag.svg(class: "size-4", aria: { hidden: true }) { tag.use(href: "#icon-plus") } } %>
+      <span class="text-xs text-muted"><%= form %> · <%= tone %>, then touch</span>
+    </div>
+  <% end %>
+</div>

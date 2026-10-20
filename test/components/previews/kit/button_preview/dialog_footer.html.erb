@@ -1,0 +1,10 @@
+<div class="max-w-md overflow-hidden rounded-2xl border border-default bg-default">
+  <div class="p-5">
+    <h3 class="text-base font-semibold text-default">Share with your manager?</h3>
+    <p class="mt-2 text-sm text-muted">Priya will see your self-ratings and evidence. You can keep editing until alignment starts.</p>
+  </div>
+  <div class="flex flex-wrap justify-end gap-2 border-t border-subtle bg-subtle px-5 py-3">
+    <%= render Components::Kit::Button.new(variant: :outline) { "Not yet" } %>
+    <%= render Components::Kit::Button.new(tone: :brand) { "Share" } %>
+  </div>
+</div>

@@ -1,0 +1,10 @@
+<% touch = local_assigns.fetch(:touch, false) %>
+<div class="space-y-4 rounded-2xl border border-default bg-default p-4">
+  <% %i[solid outline ghost link].each do |form| %>
+    <div class="flex flex-wrap items-center gap-3">
+      <% sizes.each do |size| %>
+        <%= render Components::Kit::Button.new(variant: form, tone: form == :solid ? :brand : :neutral, size: size, touch: touch) { "Size #{size}" } %>
+      <% end %>
+    </div>
+  <% end %>
+</div>

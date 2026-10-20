@@ -1,0 +1,6 @@
+<div class="flex flex-wrap items-center gap-3 rounded-2xl border border-default bg-default p-4">
+  <%= render Components::Kit::Button.new(variant: :outline, href: "#assessment") { "Open assessment" } %>
+  <%= render Components::Kit::Button.new(variant: :outline, href: "#assessment", disabled: true) { "Open assessment" } %>
+  <%= render Components::Kit::Button.new(variant: :link, tone: :brand, href: "#framework") { "View framework" } %>
+  <%= render Components::Kit::Button.new(variant: :link, tone: :brand, href: "#framework", disabled: true) { "View framework" } %>
+</div>

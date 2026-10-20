@@ -111,8 +111,8 @@
     --gos-border-strong: #ffffff;
     --gos-border-disabled: var(--color-gray-700);
 
-    --gos-neutral-subtle: var(--color-gray-800);
-    --gos-neutral-muted: var(--color-gray-700);
+    --gos-neutral-subtle: var(--color-gray-700);
+    --gos-neutral-muted: var(--color-gray-600);
     --gos-neutral-strong: #ffffff;
     --gos-neutral-strong-hover: var(--color-gray-200);
     --gos-neutral-content-inverse: var(--color-gray-900);

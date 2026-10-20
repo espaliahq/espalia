@@ -1,0 +1,16 @@
+<div class="max-w-md space-y-4">
+  <div class="flex items-center justify-between rounded-2xl border border-default bg-default p-4">
+    <span class="text-sm text-default">Engineering cycle, H2</span>
+    <%= render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm) { "Close cycle" } %>
+  </div>
+  <div class="overflow-hidden rounded-2xl border border-default bg-default">
+    <div class="p-5">
+      <h3 class="text-base font-semibold text-default">Close the Engineering cycle?</h3>
+      <p class="mt-2 text-sm text-muted">Nobody can rate in it once it's closed. Results stay on record.</p>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 border-t border-subtle bg-subtle px-5 py-3">
+      <%= render Components::Kit::Button.new(variant: :outline) { "Keep it open" } %>
+      <%= render Components::Kit::Button.new(tone: :danger) { "Close cycle" } %>
+    </div>
+  </div>
+</div>

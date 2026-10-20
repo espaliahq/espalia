@@ -1,0 +1,7 @@
+<div class="flex flex-wrap items-center gap-1 rounded-2xl border border-default bg-default p-2">
+  <%= render Components::Kit::Button.new(variant: :ghost, size: :sm) { "Expand all" } %>
+  <%= render Components::Kit::Button.new(variant: :ghost, size: :sm) { "Collapse all" } %>
+  <%= render Components::Kit::Button.new(variant: :subtle, size: :sm) { "Show suggestions" } %>
+  <span class="grow"></span>
+  <%= render Components::Kit::Button.new(variant: :ghost, size: :sm, icon: true, aria_label: "More actions") { tag.svg(class: "size-4", aria: { hidden: true }) { tag.use(href: "#icon-kebab") } } %>
+</div>
