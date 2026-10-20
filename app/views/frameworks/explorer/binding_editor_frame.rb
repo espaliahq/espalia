@@ -74,8 +74,9 @@ class Views::Frameworks::Explorer::BindingEditorFrame < Views::Base
   end
 
   def binding_row(binding)
-    li(class: "flex items-center gap-3 px-3 py-2") do
-      div(class: "min-w-0 flex-1 flex items-center gap-2") do
+    # On a phone the weight and remove controls wrap below the role, so its name stays readable
+    li(class: "flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2") do
+      div(class: "min-w-40 flex-1 flex items-center gap-2") do
         render Components::Kit::Badge.new(role_code(binding.role_id), variant: :default)
         # A binding added in the draft carries the wiggle (the universal
         # "differs from published" signal), not a separate "New in draft" pill.
