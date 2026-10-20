@@ -409,8 +409,8 @@
 }
 
 /*
- * Elevation (#597): one shadow per job, lowest first, so a theme sets its own ladder. Default takes
- * Tailwind's steps. Shadows read the same in dark, as Bento's do.
+ * Elevation (#597): one shadow per job, lowest first, on Tailwind's steps. Every theme shares it: a
+ * preset sets colours and a font, nothing else. Shadows read the same in dark.
  */
 :root {
   /* A card or bar that sits on the page */

@@ -31,7 +31,7 @@ class ThemeRolesTest < ActiveSupport::TestCase
       when "}" then stack.pop
       else
         role = text[/\A\s*(--gos-[\w-]+)\s*:/, 1]
-        next if role.nil? || role.start_with?("--gos-tone-") || stack.any? { |header| header.start_with?("@utility", "@theme") }
+        next if role.nil? || role.start_with?("--gos-tone-", "--gos-shadow-") || stack.any? { |header| header.start_with?("@utility", "@theme") }
         if stack.include?("@variant dark")
           roles[:dark] << role
         else
@@ -60,6 +60,14 @@ class ThemeRolesTest < ActiveSupport::TestCase
       default.each do |scheme, roles|
         assert_empty (roles - set[scheme]).sort, "#{preset}.css leaves these #{scheme} roles on Default's values"
       end
+    end
+  end
+
+  # A preset is colours and a font; elevation is shared, so cards look the same under every theme
+  should "leave elevation to roles.css in every preset" do
+    Themeable::PRESETS.each do |preset|
+      set = File.read(THEME_DIR.join("#{preset}.css")).scan(/^\s*(--gos-shadow-[\w-]+):/).flatten
+      assert_empty set, "#{preset}.css sets elevation, which every theme shares"
     end
   end
 

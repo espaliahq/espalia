@@ -1,9 +1,9 @@
-<section class="max-w-6xl space-y-6" data-elevation>
+<section class="max-w-6xl space-y-6">
   <div>
     <h2 class="text-lg font-semibold text-default">Elevation</h2>
     <p class="mt-1 text-sm text-muted">
-      One shadow role per job, lowest first, read from <code>app/assets/tailwind/theme/roles.css</code>. A preset sets its own;
-      switch theme and scheme with the toolbar's gear.
+      One shadow role per job, lowest first, read from <code>app/assets/tailwind/theme/roles.css</code>. Every theme shares
+      them, in both schemes: a preset sets colours and a font only.
     </p>
   </div>
 
@@ -24,10 +24,8 @@
           <div class="h-16 rounded-md border border-default bg-overlay <%= level[:utility] %>"></div>
         </div>
         <dl class="min-w-0 space-y-1 font-mono text-xs">
-          <dt class="text-muted">Now</dt>
-          <dd class="break-words text-default" data-resolved>—</dd>
-          <dt class="text-muted">Default</dt>
-          <dd class="break-words text-muted"><%= level[:declared] %></dd>
+          <dt class="text-muted">Value</dt>
+          <dd class="break-words text-default"><%= level[:declared] %></dd>
           <dt class="text-muted">Used by</dt>
           <% level[:used_by].each do |path| %>
             <dd class="break-all text-default"><%= path %></dd>
@@ -37,10 +35,3 @@
     <% end %>
   </ol>
 </section>
-
-<script>
-  document.querySelectorAll("[data-elevation] [data-role]").forEach((level) => {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(level.dataset.role).trim()
-    level.querySelector("[data-resolved]").textContent = value === "0 0 #0000" ? "none" : value
-  })
-</script>

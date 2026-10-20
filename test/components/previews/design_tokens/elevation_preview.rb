@@ -15,7 +15,7 @@ class DesignTokens::ElevationPreview < Lookbook::Preview
   }.freeze
   RADII = %w[rounded-sm rounded-md rounded-lg rounded-2xl rounded-full].freeze
 
-  # Each elevation role, lowest first, on the page and on a card, with its value under the current theme and scheme.
+  # Each elevation role, lowest first, on the page and on a card, with its value and the files that use it.
   def elevation
     levels = LEVELS.map do |utility, job|
       role = "--gos-#{utility}"
