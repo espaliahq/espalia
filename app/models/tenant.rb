@@ -101,23 +101,35 @@ class Tenant < ApplicationRecord
   # their value, and a blank key keeps the stored one, so a form that never
   # echoes the key can be saved without retyping it.
   #
+  # Two things refuse a save outright, because either would otherwise fail
+  # silently later: pointing a stored key at a different provider or address
+  # without entering it again (the key would go to a host its owner never
+  # chose), and switching suggestions on with no key at all.
+  #
   # Saving through the card is the move off the legacy `settings` switch: the
-  # old keys are dropped, so the card's switch is the only one left.
+  # old keys are dropped, so the card's switch is the only one left, and so is
+  # the deployment-wide key those tenants used.
   #
   # @param settings [Hash] AiModelConfig attributes to change
   # @param api_key [String, nil]
   # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
   # @return [Boolean]
   def update_ai_model!(settings: {}, api_key: nil)
+    errors.clear
     with_lock do
+      previous = ai_config
       credentials = (ai_credentials.is_a?(Hash) ? ai_credentials : {}).dup
-      credentials["api_key"] = api_key.strip if api_key.present?
+      stored_key = credentials["api_key"].presence
+      new_key = api_key.strip.presence if api_key.is_a?(String)
+      on_legacy_key = legacy_evidence_suggestions_enabled? && stored_key.nil?
+      credentials["api_key"] = new_key if new_key
 
       assign_attributes(
-        ai_config: AiModelConfig.new(ai_config.attributes.merge(settings.stringify_keys)),
+        ai_config: AiModelConfig.new(previous.attributes.merge(settings.stringify_keys)),
         ai_credentials: credentials.presence,
         settings: self.settings.to_h.except("evidence_suggestions_enabled", "evidence_suggestions_model")
       )
+      reject_unsafe_ai_model!(previous: previous, stored_key: stored_key, new_key: new_key, on_legacy_key: on_legacy_key)
       save!
     end
   end
@@ -267,5 +279,17 @@ class Tenant < ApplicationRecord
 
       public_send(:"#{attribute}=", value.strip)
     end
+  end
+
+  # @raise [ActiveRecord::RecordInvalid]
+  def reject_unsafe_ai_model!(previous:, stored_key:, new_key:, on_legacy_key:)
+    moved = [ previous.provider, previous.normalized_base_url ] != [ ai_config.provider, ai_config.normalized_base_url ]
+    if stored_key && !new_key && moved
+      errors.add(:base, "Enter the API key again. The stored one is only sent to the provider and address it was saved for.")
+    elsif ai_config.suggestions_enabled? && !(new_key || stored_key)
+      legacy = on_legacy_key ? " This workspace has been using the deployment's key, which the AI model card does not fall back to." : ""
+      errors.add(:base, "Add an API key to switch suggestions on.#{legacy}")
+    end
+    raise ActiveRecord::RecordInvalid, self if errors.any?
   end
 end

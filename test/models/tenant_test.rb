@@ -206,6 +206,35 @@ class TenantTest < ActiveSupport::TestCase
         assert_equal "Inter", tenant.font_family
       end
 
+      should "refuse to point a stored key at another provider or address without a new key" do
+        tenant = create(:tenant, :with_ai_model)
+
+        error = assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }) }
+        assert_includes error.message, "Enter the API key again"
+        assert_equal "sk-test-key", tenant.reload.ai_secrets.api_key
+        assert_nil tenant.ai_config.base_url
+
+        tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }, api_key: "sk-moved")
+        assert_equal "sk-moved", tenant.reload.ai_secrets.api_key
+      end
+
+      should "allow changing the model, effort and switches without re-entering the key" do
+        tenant = create(:tenant, :with_ai_model)
+
+        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5", effort: "", suggestions_enabled: false, pseudonymise_names: false })
+
+        assert_equal [ "claude-haiku-5-5", "", false, false ],
+                     [ tenant.reload.ai_config.model, tenant.ai_config.effort, tenant.ai_config.suggestions_enabled?, tenant.ai_config.pseudonymise_names? ]
+      end
+
+      should "refuse suggestions with no key, and not raise on a non-string key" do
+        tenant = create(:tenant)
+
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { suggestions_enabled: true }, api_key: [ "x" ]) }
+        assert_raises(ActiveRecord::RecordInvalid) { Tenant.find(tenant.id).update_ai_model!(settings: { suggestions_enabled: true }) }
+        assert_nothing_raised { Tenant.find(tenant.id).update_ai_model!(settings: { suggestions_enabled: false }, api_key: [ "x" ]) }
+      end
+
       should "raise on an invalid config and store nothing" do
         tenant = create(:tenant)
 

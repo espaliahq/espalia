@@ -15,7 +15,8 @@ class Tenant::AiModelsController < ApplicationController
   def update
     authorize :integrations, :update_ai_model?
 
-    current_tenant.update_ai_model!(settings: settings_params, api_key: params.dig(:ai_model, :api_key))
+    key = params.dig(:ai_model, :api_key)
+    current_tenant.update_ai_model!(settings: settings_params, api_key: key.is_a?(String) ? key : nil)
     redirect_to tenant_integration_path("ai-model"), notice: "AI model settings saved.", status: :see_other
   rescue ActiveRecord::RecordInvalid => e
     render_ai_model_page(errors: setting_errors(e.record), status: :unprocessable_content)
@@ -63,6 +64,8 @@ class Tenant::AiModelsController < ApplicationController
     [ :alert, "The endpoint is rate limiting us. Try again in a minute." ]
   rescue Ai::Errors::RefusalError
     [ :alert, "The model declined the test request. The key and address work." ]
+  rescue Ai::Errors::ConfigurationError => e
+    [ :alert, e.message ]
   rescue Ai::Errors::ApiError => e
     [ :alert, api_error_message(e) ]
   end

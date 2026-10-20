@@ -158,10 +158,56 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_includes response.body, "Model can&#39;t be blank"
       end
 
+      should "refuse a stored key being pointed at another address without entering it again" do
+        configure_gateway
+
+        patch tenant_ai_model_path, params: settings(base_url: "https://other-gateway.example.com/v1", api_key: "")
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "Enter the API key again."
+        assert_equal GATEWAY, @tenant.reload.ai_config.base_url
+        assert_equal KEY, @tenant.ai_secrets.api_key
+        assert_select "input[name='ai_model[base_url]'][value='https://other-gateway.example.com/v1']"
+      end
+
+      should "accept the move when the key is entered again" do
+        configure_gateway
+
+        patch tenant_ai_model_path, params: settings(base_url: "https://other-gateway.example.com/v1", api_key: "sk-new-key")
+
+        assert_redirected_to tenant_integration_path("ai-model")
+        assert_equal "sk-new-key", @tenant.reload.ai_secrets.api_key
+      end
+
+      should "refuse switching suggestions on with no key" do
+        patch tenant_ai_model_path, params: settings(api_key: "")
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "Add an API key to switch suggestions on."
+        assert_not @tenant.reload.ai_config.suggestions_enabled?
+      end
+
+      should "say a legacy tenant's deployment key does not carry over" do
+        @tenant.update!(settings: { "evidence_suggestions_enabled" => true })
+
+        patch tenant_ai_model_path, params: settings(provider: "anthropic", base_url: "", model: "", api_key: "")
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "using the deployment&#39;s key"
+        assert @tenant.reload.legacy_evidence_suggestions_enabled?, "a refused save changes nothing"
+      end
+
+      should "ignore a key that is not a string instead of failing" do
+        patch tenant_ai_model_path, params: { ai_model: settings[:ai_model].except(:api_key).merge(api_key: [ "x" ]) }
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "Add an API key to switch suggestions on."
+      end
+
       should "drop the legacy settings keys on save" do
         @tenant.update!(settings: { "evidence_suggestions_enabled" => true })
 
-        patch tenant_ai_model_path, params: settings(suggestions_enabled: "0")
+        patch tenant_ai_model_path, params: settings(suggestions_enabled: "0", api_key: "")
 
         assert_not @tenant.reload.legacy_evidence_suggestions_enabled?
         assert_not @tenant.evidence_suggestions_enabled?
@@ -185,6 +231,8 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         {
           Ai::Errors::AuthenticationError.new("bad") => "The endpoint rejected the API key.",
           Ai::Errors::RateLimitError.new(retry_after: 3) => "The endpoint is rate limiting us. Try again in a minute.",
+          Ai::Errors::ConfigurationError.new("The model endpoint's address points at a private network address, which is not allowed") =>
+            "The model endpoint's address points at a private network address, which is not allowed",
           Ai::Errors::RefusalError.new("no") => "The model declined the test request. The key and address work.",
           Ai::Errors::ApiError.new(status: 404, body: "model sk-leak not found") => "The endpoint answered with status 404. Check the address and the model id.",
           Ai::Errors::ApiError.new(status: 502, body: "<html>sk-leak</html>") => "The endpoint answered with status 502.",
