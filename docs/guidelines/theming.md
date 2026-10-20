@@ -167,7 +167,7 @@ Then:
 | Test | Fails when |
 |---|---|
 | `test/lib/kit_colour_roles_test.rb` | Kit, Shell, Shared, the controllers that write their classes, or a `.kit-*` / `.explorer-*` rule in `application.css` uses a palette colour |
-| `test/lib/theme_roles_test.rb` | a role utility points at an undefined variable, or shares a name with a Tailwind colour or text size (`text-secondary`, `text-lg`) |
+| `test/lib/theme_roles_test.rb` | a role utility points at an undefined variable, shares a name with a Tailwind colour or text size (`text-secondary`, `text-lg`), or a preset leaves a role unset in either scheme |
 | `test/lib/domain_palette_tokens_test.rb` | a view colours a rating, score or activity with a palette step |
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |
 | `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius or shadow step, or Shared or Shell adds a shadow |
@@ -231,15 +231,17 @@ Tailwind's radius and shadow scales are the tokens, and they aren't themed. Each
    ```
 
    A role computed from the brand goes in the `:root, [data-theme-scope]` block instead, so it re-derives inside a scope.
+
+   Pick values that hold in both schemes: every text role that will sit on a fill clears 4.5:1, and a fill stands apart from the fills it sits beside (page, card, hover, selected, and the status tints). A fill that rows hover over needs its own hover role, or the generic `hover:bg-default-hover` replaces the tint.
 2. **Expose it** in `@theme inline`, under the property it's for. The namespaces are property-scoped, so this makes `bg-sunken` and nothing else:
 
    ```css
    --background-color-sunken: var(--gos-surface-sunken);
    ```
 
-3. **Give every preset a value in both schemes**, in `theme/bento.css`. A preset that sets a role only in light keeps the light value in dark, because the preset's block outranks Default's dark values.
+3. **Give every preset a value in both schemes**, in `theme/bento.css`. A preset that sets a role only in light keeps the light value in dark, because the preset's block outranks Default's dark values; `test/lib/theme_roles_test.rb` fails on either gap. A preset with no colour of its own for the job sets Default's values explicitly, with a comment saying why.
 4. **Check the name**: `test/lib/theme_roles_test.rb` fails if it clashes with a Tailwind colour or text size.
-5. **Look at it** on Lookbook's Colour roles page, which reads `roles.css` and shows the new role with its contrast, under each theme and scheme.
+5. **Look at it** on Lookbook's Colour roles page, which reads `roles.css` and shows the new role under each theme and scheme. It measures contrast only for the pairs `checks` in `test/components/previews/design_tokens/roles_preview.rb` names, and a new surface has none, so add a case for the text that sits on it.
 
 Reach for a new role only when no existing one does the job. Two near-identical roles become two spellings again.
 
