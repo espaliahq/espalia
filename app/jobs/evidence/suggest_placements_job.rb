@@ -30,7 +30,8 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   end
 
   # Where whoever is asked to place the item hears that suggestions exist.
-  # Deliberately empty here; the placement notifier (#534) hooks in.
+  # Deliberately empty here; the placement notifier hooks in
+  # (https://github.com/mr-yum/growth-os/issues/534).
   #
   # @param item [EvidenceItem]
   def after_generate(item); end
@@ -43,10 +44,10 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     prompt = Evidence::PlacementPrompt.new(item)
     return unless prompt.available?
 
+    asked_about = item.content
     model = Evidence::SuggestionModel.new(model: item.tenant.evidence_suggestions_model)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
-    store(item, proposals, model: model.model)
-    after_generate(item)
+    after_generate(item) if store(item, proposals, model: model.model, asked_about: asked_about)
   end
 
   def suggestable?(item)
@@ -61,12 +62,26 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
       EvidenceLink::VALENCES.include?(proposal.valence) && proposal.rationale.present?
   end
 
-  def store(item, proposals, model:)
+  # Runs for one item are serialised (an edit and its original, or a double
+  # "Suggest again", can overlap), and a run whose feedback was edited while
+  # the model was answering stores nothing: the edit's own run is coming.
+  #
+  # @return [Boolean] whether a set was stored
+  def store(item, proposals, model:, asked_about:)
     now = Time.current
     EvidencePlacementSuggestion.transaction do
+      lock_item(item)
+      next false if EvidenceItem.where(id: item.id).pick(:content) != asked_about
+
       EvidencePlacementSuggestion.for_evidence(item.id).pending.update_all(status: "superseded", updated_at: now)
       proposals.each { |proposal| upsert(item, proposal, model: model, at: now) }
+      true
     end
+  end
+
+  def lock_item(item)
+    key = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "placement-suggestions:#{item.id}" ])
+    EvidencePlacementSuggestion.connection.execute(key)
   end
 
   # A superseded row for the same cell is reused (one row per cell); a cell

@@ -71,6 +71,23 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_equal %w[superseded], suggestions_for(item).map(&:status)
   end
 
+  should "store nothing when the feedback was edited while the model was answering" do
+    item = record_peer_feedback
+    editing_model = Object.new
+    editing_model.define_singleton_method(:model) { "claude-opus-5-5" }
+    tenant = @tenant
+    editing_model.define_singleton_method(:suggest) do |prompt|
+      ActsAsTenant.with_tenant(tenant) { EvidenceItem.where(id: prompt.item.id).update_all(content: "Edited meanwhile.") }
+      [ Evidence::SuggestionModel::Proposal.new(capability_stable_id: prompt.cells.values.first[:capability_stable_id],
+          level_ordinal: 3, valence: "demonstrated", confidence: 0.9, rationale: "x") ]
+    end
+
+    Evidence::SuggestionModel.stub(:configured?, true) do
+      Evidence::SuggestionModel.stub(:new, ->(**) { editing_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+    end
+    assert_empty suggestions_for(item)
+  end
+
   should "do nothing when the tenant has suggestions off, without a key, or for self feedback" do
     item = record_peer_feedback
     ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: false) }
