@@ -306,8 +306,13 @@ Rules, all deliberate:
   "Anna" is not found inside "Annabel"; a first name only one person has
   stands for that person, and one two people share gets a placeholder of its
   own. The number is the person's rank by id, so a placeholder is the same on
-  every request and the cached framework text stays cacheable. The mapping
-  lives in the instance for one request and is not stored. It hides names, not
+  every request and the cached framework text stays cacheable. The framework
+  text gets full names only, because a first name can be an ordinary word
+  (Will, Mark, Grace) and would rewrite "will deliver" into "Person 7 deliver";
+  the feedback gets first names too, and only the names whose first word a
+  text contains are compiled into its pattern, so thousands of people cost a
+  lookup per word. The mapping lives in the instance for one request and is
+  not stored. It hides names, not
   roles, projects or the story; a tenant can turn it off (`pseudonymise_names`).
   Test connection sends no names; the eval runs the same path as production.
 - **Admin: the AI model card.** Integrations → AI model
@@ -318,7 +323,13 @@ Rules, all deliberate:
   saved model one line and shows its reply or the failure, never the
   endpoint's body. The address is https only outside development, with no
   login, query or private-network host (`Ai::HostGuard`, also checked against
-  DNS at call time). Writes are web-only; the MCP surface is the read-only
+  the system resolver at call time, because `127.1` and `2130706433` reach
+  loopback through it while parsing as nothing to Ruby's `IPAddr`).
+  `Tenant#update_ai_model!` refuses a save that would send a stored key to a
+  different provider or address without the key entered again, and one that
+  switches suggestions on with no key: both would otherwise fail silently
+  later. Effort "Don't send" is for models that reject the parameter (Claude
+  Haiku 4.5, say). Writes are web-only; the MCP surface is the read-only
   `integrations_ai_model_status`.
 - **Suggestions are state, decisions are events.** `EvidencePlacementSuggestion`
   is a plain tenant table, one row per item × cell, recording provider, model,

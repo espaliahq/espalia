@@ -11,7 +11,9 @@
 #
 # The tenant's own adapter, effort and name hiding run, so a gateway model is
 # scored the way it will answer in production. The tenant is only read (its
-# model config and key); the fixture people are written to a throwaway one.
+# model config, key and the names of its people, which are swapped wherever
+# they appear as words in the fixture text, as they would be in its real
+# feedback); the fixture people are written to a throwaway one.
 #
 # The fixture framework and items are written into a throwaway tenant inside
 # a transaction that is always rolled back, so the real Evidence::PlacementPrompt
