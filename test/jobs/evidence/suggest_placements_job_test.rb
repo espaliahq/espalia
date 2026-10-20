@@ -90,11 +90,11 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
 
   should "do nothing when the tenant has suggestions off, without a key, or for self feedback" do
     item = record_peer_feedback
-    ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: false) }
+    switch_suggestions(@tenant, false)
     fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
     assert_empty fake.prompts
 
-    ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: true) }
+    switch_suggestions(@tenant, true)
     Evidence::SuggestionModel.stub(:configured?, false) do
       Evidence::SuggestionModel.stub(:new, ->(**) { flunk "the model must not be built without a key" }) do
         Evidence::SuggestPlacementsJob.perform_now(item.id)

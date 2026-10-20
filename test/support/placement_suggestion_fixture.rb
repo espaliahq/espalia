@@ -18,7 +18,7 @@ module PlacementSuggestionFixture
   end
 
   def build_placement_fixture(suggestions_enabled: true)
-    @tenant = create(:tenant, evidence_suggestions_enabled: suggestions_enabled)
+    @tenant = create(:tenant, ai_config: AiModelConfig.new(suggestions_enabled: suggestions_enabled), ai_credentials: { "api_key" => "sk-test-key" })
     @alex_user = create(:user, password: "password123", email: "alex@example.com")
     @morgan_user = create(:user, password: "password123", email: "morgan@example.com")
     @jordan_user = create(:user, password: "password123", email: "jordan@example.com")
@@ -84,6 +84,13 @@ module PlacementSuggestionFixture
       Evidence::SuggestionModel.stub(:new, ->(**) { fake }) { yield fake }
     end
     fake
+  end
+
+  # Switches the tenant's suggestions on or off the way the AI model card does.
+  def switch_suggestions(tenant, on)
+    ActsAsTenant.with_tenant(tenant) do
+      tenant.update!(ai_config: AiModelConfig.new(tenant.ai_config.attributes.merge("suggestions_enabled" => on)))
+    end
   end
 
   def context_for(person)

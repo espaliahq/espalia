@@ -181,7 +181,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
     end
 
     should "say so when suggestions are off, and enqueue nothing" do
-      ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: false) }
+      switch_suggestions(@tenant, false)
       sign_in @alex_user
       assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) do
         stream_post evidence_item_placement_suggestions_path(@item)

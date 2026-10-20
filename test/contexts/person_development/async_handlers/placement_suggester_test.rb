@@ -40,8 +40,8 @@ class PersonDevelopment::AsyncHandlers::PlacementSuggesterTest < ActiveJob::Test
 
     ActsAsTenant.with_tenant(@tenant) do
       item.update_columns(source: "peer")
-      @tenant.update!(evidence_suggestions_enabled: false)
     end
+    switch_suggestions(@tenant, false)
     assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { handle(event_for(item)) }
   end
 

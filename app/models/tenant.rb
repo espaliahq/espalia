@@ -26,6 +26,12 @@ class Tenant < ApplicationRecord
   serialize :hris_credentials, coder: JSON
   encrypts :hris_credentials
 
+  # The model behind AI features. The config is plain settings; the credentials
+  # are encrypted JSON: { api_key: }.
+  attribute :ai_config, AiModelConfig.to_type, default: -> { AiModelConfig.new }
+  serialize :ai_credentials, coder: JSON
+  encrypts :ai_credentials
+
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the GrowthOS Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
@@ -36,16 +42,84 @@ class Tenant < ApplicationRecord
     :secondary_color, :secondary_color_dark,
     :nav_bg_color, :nav_bg_color_dark,
     :nav_fg_color, :nav_fg_color_dark,
-    :font_family,
-    :evidence_suggestions_enabled, :evidence_suggestions_model
+    :font_family
 
   # Whether feedback recorded here is sent to the model for placement
   # suggestions. Off until the data-handling decision (plan D2) is made, and
-  # never switched on by seeds.
+  # never switched on by seeds. The switch lives in {#ai_config}; a tenant
+  # that was switched on under the earlier `settings` key stays on until its
+  # admin saves the AI model card (see {#legacy_evidence_suggestions_enabled?}).
   #
   # @return [Boolean]
   def evidence_suggestions_enabled?
-    ActiveModel::Type::Boolean.new.cast(evidence_suggestions_enabled) || false
+    ai_config.suggestions_enabled? || legacy_evidence_suggestions_enabled?
+  end
+
+  # One-release reader for the switch and model id that placement suggestions
+  # kept in `settings` before the AI model card existed. Remove with the
+  # Anthropic key fallback in {#ai_api_key} once every tenant has been saved
+  # through the card.
+  #
+  # @return [Boolean]
+  def legacy_evidence_suggestions_enabled?
+    ActiveModel::Type::Boolean.new.cast(settings&.dig("evidence_suggestions_enabled")) || false
+  end
+
+  # @return [String, nil]
+  def legacy_evidence_suggestions_model
+    settings&.dig("evidence_suggestions_model").presence
+  end
+
+  # {#ai_config} with the legacy switch and model id folded in, which is what
+  # requests are built from and what the card's form starts from.
+  #
+  # @return [AiModelConfig]
+  def effective_ai_config
+    AiModelConfig.new(ai_config.attributes.merge(
+      "suggestions_enabled" => evidence_suggestions_enabled?,
+      "model" => ai_config.model.presence || legacy_evidence_suggestions_model
+    ))
+  end
+
+  # The AI model's API key wrapped so no accessor can print it.
+  #
+  # @return [AiModelCredentials]
+  def ai_secrets
+    AiModelCredentials.new(ai_credentials)
+  end
+
+  # The key requests are made with: the one stored through the AI model card,
+  # else, for a tenant still on the legacy switch, the deployment's Anthropic
+  # key from the credentials file as before.
+  #
+  # @return [String, nil]
+  def ai_api_key
+    ai_secrets.api_key || (Rails.application.credentials.dig(:anthropic, :api_key).presence if legacy_evidence_suggestions_enabled?)
+  end
+
+  # Save the AI model settings and key in one write. Unlisted settings keep
+  # their value, and a blank key keeps the stored one, so a form that never
+  # echoes the key can be saved without retyping it.
+  #
+  # Saving through the card is the move off the legacy `settings` switch: the
+  # old keys are dropped, so the card's switch is the only one left.
+  #
+  # @param settings [Hash] AiModelConfig attributes to change
+  # @param api_key [String, nil]
+  # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
+  # @return [Boolean]
+  def update_ai_model!(settings: {}, api_key: nil)
+    with_lock do
+      credentials = (ai_credentials.is_a?(Hash) ? ai_credentials : {}).dup
+      credentials["api_key"] = api_key.strip if api_key.present?
+
+      assign_attributes(
+        ai_config: AiModelConfig.new(ai_config.attributes.merge(settings.stringify_keys)),
+        ai_credentials: credentials.presence,
+        settings: self.settings.to_h.except("evidence_suggestions_enabled", "evidence_suggestions_model")
+      )
+      save!
+    end
   end
 
   # The word this tenant uses for each performance state. The state itself
@@ -83,6 +157,7 @@ class Tenant < ApplicationRecord
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
   validates(*STATE_LABEL_ATTRIBUTES, length: { maximum: STATE_LABEL_MAX_LENGTH }, allow_blank: true)
   validates :hris_config, store_model: true
+  validates :ai_config, store_model: true
 
   # The colour the browser should paint its own chrome (address bar, title
   # bar, task switcher) for a page of this tenant: the tenant's navbar

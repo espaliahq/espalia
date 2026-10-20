@@ -5,6 +5,12 @@ FactoryBot.define do
     sequence(:name) { |n| "Tenant #{n}" }
     sequence(:slug) { |n| "tenant-#{n}" }
 
+    # A tenant with an AI model key stored and placement suggestions switched on.
+    trait :with_ai_model do
+      ai_config { AiModelConfig.new(provider: "anthropic", model: "claude-opus-5-5", suggestions_enabled: true) }
+      ai_credentials { { "api_key" => "sk-test-key" } }
+    end
+
     trait :with_hibob_config do
       hris_config do
         HrisConfig.new(

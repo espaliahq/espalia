@@ -45,7 +45,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     return unless prompt.available?
 
     asked_about = item.content
-    model = Evidence::SuggestionModel.new(model: item.tenant.evidence_suggestions_model)
+    model = Evidence::SuggestionModel.new(model: item.tenant.effective_ai_config.model)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
     after_generate(item) if store(item, proposals, model: model.model, asked_about: asked_about)
   end
