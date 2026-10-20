@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -326,6 +326,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
     t.datetime "updated_at", null: false
     t.index ["tenant_id"], name: "index_feedback_drafts_on_tenant_id"
     t.index ["token"], name: "index_feedback_drafts_on_token", unique: true
+  end
+
+  create_table "feedback_exchange_acks", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "evidence_id", null: false
+    t.string "consumer", null: false
+    t.string "remote_id", null: false
+    t.string "remote_url"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "evidence_id", "consumer"], name: "idx_feedback_exchange_acks_item_consumer", unique: true
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -844,6 +855,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "feedback_drafts", "tenants"
+  add_foreign_key "feedback_exchange_acks", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"
