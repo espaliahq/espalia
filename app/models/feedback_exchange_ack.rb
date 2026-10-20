@@ -51,13 +51,22 @@ class FeedbackExchangeAck < ApplicationRecord
     true
   end
 
+  # @return [String, nil] the peer's address, only when it is safe to link to
+  def safe_remote_url
+    remote_url if remote_url.present? && !remote_url_invalid?
+  end
+
   private
+
+  def remote_url_invalid?
+    uri = URI.parse(remote_url)
+    !(%w[http https].include?(uri.scheme) && uri.host.present?)
+  rescue URI::InvalidURIError
+    true
+  end
 
   # The URL is shown to people as a link, so only http(s) is allowed.
   def remote_url_is_http
-    uri = URI.parse(remote_url)
-    errors.add(:remote_url, "must be an http(s) URL") unless %w[http https].include?(uri.scheme) && uri.host.present?
-  rescue URI::InvalidURIError
-    errors.add(:remote_url, "is not a valid URL")
+    errors.add(:remote_url, "must be an http(s) URL") if remote_url_invalid?
   end
 end

@@ -6,7 +6,7 @@
 
 Two feedback systems each serve the feedback given in them and pull the other's. GrowthOS plays both roles under one namespace, `FeedbackExchange`. The first peer is Chip. Nothing is pushed: a consumer pulls on its own schedule, so a missed run costs nothing.
 
-Phase 0 (this guide's first content) is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Nothing calls the client yet. The importer, the producer feed and suggestions land on top of it.
+Phase 0 is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Phase 3, the producer feed, is built on it (see *Serving the feed*). Nothing calls the client yet. The importer and suggestions land on top.
 
 ## Configuration
 
@@ -87,6 +87,38 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
 
 `GET /api/feedback_exchange/health` returns `{ "ok": true, "peer": "<peer_name>" }`.
 
+## Serving the feed (GrowthOS as producer)
+
+Three more signed endpoints, all `ActionController::Base` controllers that include `FeedbackExchangeProducer` (the signed-request concern plus the consumer name and a 400 for a bad cursor, limit or body). Nothing here is an MCP tool: the peer is the only caller and the credential is a shared secret, not a user.
+
+| Endpoint | Controller | Answers |
+|---|---|---|
+| `GET /api/feedback_exchange/feedback?since=&limit=` | `FeedbackExchange::FeedController` | `{ items, next_cursor, has_more }` |
+| `GET /api/feedback_exchange/feedback/deletions` | `DeletionsController` | always `{ items: [], next_cursor: <since>, has_more: false }`; GrowthOS withdraws, never deletes |
+| `POST /api/feedback_exchange/feedback/ack` | `AcksController` | 204; `400` for a malformed body |
+
+**The feed** (`FeedbackExchange::Feed`) reads `EvidenceItem` rows keyset-paged on `(updated_at, id)`. The cursor (`FeedCursor`) is URL-safe base64 of `[updated_at at microsecond precision, id]`; an edit or withdrawal moves a row to a newer position, so it comes back, and a row inserted mid-walk sorts after the cursor and is never skipped. `limit` defaults to 100 and is capped at 200; zero, negative or non-integer is a 400, as is a cursor we did not issue. An empty page hands the caller's own cursor back. The cursor advances over every row read, including rows the serializer then skips, so an unnameable person cannot stall it.
+
+What is left out (protocol §2.5, §2.3):
+
+- `source: self`, a person's own self-assessment evidence.
+- Items nobody wrote: `recorded_via` of `feedback_exchange`, `hris` or `system`. A nil `recorded_via` is history and counts as human.
+- What the asking consumer itself sent us: `external_reference.system` equal to its name. Matching is case-insensitive.
+- An import the consumer has since acknowledged (an ack row from this consumer for an item recorded via the exchange or carrying a non-link `external_reference` system). An ack on an ordinary item does not hide it.
+- Kinds outside `export_kinds`.
+
+The consumer is the `X-Exchange-Consumer` header, lower-cased; a request without one is the tenant's one peer.
+
+**The record** (`FeedbackExchange::Record`) is protocol §4 field by field: `kind` is `evidence_type`; `text_format` is `markdown`; `audience` is always `[recipient, management_line, hr]` (who can read it here) and `notified` always `[recipient, manager]`; `status` is `link_status`, so a withdrawn item travels with its text and `status: "withdrawn"`; `request` is the answered `evidence_requests` row (`context` is the ask's message); `period` is the item's cycle; `source_url` is the assessment deep link with the cell params, or the feedback hub anchor for an unplaced item; `external_reference` is set only for an item that itself came in through the exchange. A title leads the text as a bold line, because the protocol has no field for it. People are `{ email, display_name, active, external_ids: { <hris_source>: <external_id> } }` and no internal id ever leaves. A record whose author or recipient is gone is skipped.
+
+**Cost.** One query for the page, then one each for people, answered requests, cycles and assessment ids, however many items the page holds. `feed_controller_test.rb` asserts the query count is the same for one item and six.
+
+**Acks** land in `feedback_exchange_acks` (tenant, `evidence_id`, `consumer`, `remote_id`, `remote_url`; unique on item × consumer). `FeedbackExchangeAck.record_all` validates the whole page first and writes nothing if any item is malformed, skips ids that are not this tenant's items, then upserts, so a repeat is a no-op and a changed link updates the row. `remote_url` is shown to people, so it must be http(s). The evidence card reads them (`EvidenceItem.load_exchange_acks`, one query) and links "Also in Chip" to the peer.
+
+**`recorded_via`** is `evidence_items.recorded_via`, written by `EvidenceCollection` from the event's `acting_via` metadata. It is additive and nil on history, so there is no `CODE_VERSION` bump; a rebuild of the projection backfills it. A rebuild also re-inserts every row with a new `updated_at`, so the whole feed reappears once. Consumers are idempotent on `(origin, id)`, so that costs bandwidth, not correctness.
+
+**Things the importer must know.** `ExternalReference` validates `system` against a fixed list of link targets, which a peer's name is not. The feed filters in SQL on the raw JSON, so it does not care, but the importer that records `{ system: "chip", … }` has to extend that list or write the column directly. `AuditMetadata::ACTING_VIA` has no `feedback_exchange` yet; the importer adds it, and the feed already excludes the value.
+
 ## Verifying a pair
 
 1. On Integrations → Feedback exchange, save the peer's address and both secrets.
@@ -102,6 +134,7 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
    ```
 
    A 200 means the pair works. The same request sent again within five minutes returns 401. A 404 means the exchange is still disabled.
+4. To read the feed the same way, sign `GET /api/feedback_exchange/feedback?limit=2` (the query string is part of the signed path), then repeat with `since=<next_cursor>` and a fresh timestamp; only newer rows come back.
 
 ## Testing
 

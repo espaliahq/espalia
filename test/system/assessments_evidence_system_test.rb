@@ -57,6 +57,28 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
+  context "an item a peer feedback system also holds" do
+    should "link to it from the card as Also in <peer>" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @evidence_id = SecureRandom.uuid_v7
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, @evidence_id,
+          capability_stable_id: @cap_stable, level_ordinal: 1,
+          source: "self", evidence_type: "project_outcome",
+          content: "Shipped it.", author_id: @person.id, valence: "demonstrated"
+        )
+        FeedbackExchangeAck.create!(evidence_id: @evidence_id, consumer: "chip", remote_id: "chip-7",
+                                    remote_url: "https://chip.example.com/feedback/7")
+      end
+
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+
+      link = find("#evidence-#{@evidence_id} a[data-exchange-ack='chip']", text: "Also in Chip")
+      assert_equal "https://chip.example.com/feedback/7", link[:href]
+      assert_equal "_blank", link[:target]
+    end
+  end
+
   context "edit modal" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
