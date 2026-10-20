@@ -5,6 +5,7 @@ class ApplicationController < ActionController::Base
   include Impersonatable
   include Pagy::Method
   include DevThemeOverride
+  include ColorSchemePreference
 
   set_current_tenant_through_filter
 

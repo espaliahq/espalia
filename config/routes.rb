@@ -33,6 +33,7 @@ Rails.application.routes.draw do
   namespace :settings do
     resources :connected_clients, only: [ :index, :destroy ]
     resource :notifications, only: [ :show, :update ], controller: "notifications"
+    resource :color_scheme, only: :update
   end
 
   # In-app approval surface for high-stakes MCP tools. The MCP server

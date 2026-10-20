@@ -54,6 +54,30 @@ class UserTest < ActiveSupport::TestCase
     should validate_uniqueness_of(:email).case_insensitive
   end
 
+  context "color scheme" do
+    should "default to auto" do
+      assert_equal "auto", build(:user).color_scheme
+    end
+
+    should "accept light and dark and reject anything else" do
+      user = build(:user)
+      %w[auto light dark].each do |scheme|
+        user.color_scheme = scheme
+        assert user.valid?, "#{scheme} should be valid"
+      end
+
+      user.color_scheme = "sepia"
+      assert_not user.valid?
+      assert user.errors.added?(:color_scheme, :inclusion, value: "sepia")
+    end
+
+    should "give data_scheme only for an explicit choice" do
+      assert_nil build(:user, color_scheme: :auto).data_scheme
+      assert_equal "light", build(:user, color_scheme: :light).data_scheme
+      assert_equal "dark", build(:user, color_scheme: :dark).data_scheme
+    end
+  end
+
   context "global_admin?" do
     should "return false by default" do
       assert_not subject.global_admin?

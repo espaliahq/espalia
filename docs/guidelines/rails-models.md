@@ -5,6 +5,7 @@
 - `# frozen_string_literal: true` at top of every file
 - Define constants at the top of the file
 - Use positional arguments in enums: `enum status: [:draft, :published]`
+- A string column takes a hash enum, so the stored value is the name: `enum :role, { member: "member", admin: "admin" }` (`TenantUser`, `User#color_scheme`)
 - Use `normalizes` for attribute normalization
 - Use `attribute` declarations for strong typing with defaults
 - Use `counter_cache` for belongs_to relationships that need counts

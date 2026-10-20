@@ -70,6 +70,7 @@ A tenant's theme is Default, the Bento preset, or Custom (ADR-23). Custom stores
 # Schema: users
 #   id (uuid), email (unique, global), encrypted_password,
 #   global_admin (boolean, default: false),
+#   color_scheme (string: auto | light | dark, default: "auto"),
 #   reset_password_token, reset_password_sent_at, remember_created_at
 #
 # NOT tenant-scoped — a single User can belong to multiple tenants
@@ -86,6 +87,8 @@ class User < ApplicationRecord
   attribute :global_admin, :boolean, default: false
 end
 ```
+
+`color_scheme` is the person's own Auto / Light / Dark choice. It lives on User, not the tenant, so it follows them across tenants and no tenant can lock it. Auto follows the operating system; Light or Dark is written to `<html data-scheme>` (ADR-23).
 
 ---
 
