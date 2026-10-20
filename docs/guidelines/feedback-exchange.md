@@ -18,7 +18,7 @@ Phase 0 (this guide's first content) is the foundation: config, secrets, signing
 | `peer_name` | A slug, `chip`. It becomes `origin` and `external_reference.system` |
 | `base_url` | The peer's exchange root **including its path prefix**, e.g. `https://chip.example.com/api/feedback-exchange`. https only, with no login, query or fragment, and not a private network host; development accepts http and local hosts |
 | `enabled` | Off by default. While off, inbound requests get 404 and nothing is pulled |
-| `import_kinds` / `export_kinds` | Which `kind`s cross. Empty `import_kinds` means everything |
+| `import_kinds` / `export_kinds` | Which `kind`s cross, each one of `EvidenceItem::EVIDENCE_TYPES` (validated). Both are checkbox groups on the settings form. Empty `import_kinds` means everything; empty `export_kinds` sends nothing |
 | `cursor`, `deletions_cursor`, `last_synced_at` | Consumer state |
 | `suggestions_enabled` | Placement suggestions, off by default |
 
