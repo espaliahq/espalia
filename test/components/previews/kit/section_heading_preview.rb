@@ -10,7 +10,7 @@ class Kit::SectionHeadingPreview < Lookbook::Preview
     render Components::Kit::SectionHeading.new(title, subtitle: subtitle.presence, tag: tag.to_sym) do |heading|
       if with_action
         heading.action do
-          heading.a(href: "#", class: "text-sm font-medium text-primary-ink") { "View all" }
+          heading.a(href: "#", class: "text-sm font-medium text-link hover:text-link-hover") { "View all" }
         end
       end
     end
@@ -44,7 +44,7 @@ class Kit::SectionHeadingPreview < Lookbook::Preview
   def with_action
     render Components::Kit::SectionHeading.new("Capabilities", subtitle: "40 capabilities") do |heading|
       heading.action do
-        heading.a(href: "#", class: "text-sm font-medium text-primary-ink") { "View all" }
+        heading.a(href: "#", class: "text-sm font-medium text-link hover:text-link-hover") { "View all" }
       end
     end
   end
@@ -55,7 +55,7 @@ class Kit::SectionHeadingPreview < Lookbook::Preview
       subtitle: "Read-only view of the HRIS configuration for this workspace. Changes are made by a platform admin."
     ) do |heading|
       heading.action do
-        heading.a(href: "#", class: "text-sm font-medium text-primary-ink") { "Sync now" }
+        heading.a(href: "#", class: "text-sm font-medium text-link hover:text-link-hover") { "Sync now" }
       end
     end
   end
