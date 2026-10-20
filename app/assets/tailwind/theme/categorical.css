@@ -1,0 +1,72 @@
+/*
+ * Categorical palette: one hue per category for tags (and later people), the
+ * same in every view. Eight hues, ordered so neighbours sit far apart on the
+ * wheel; each is a tinted fill with text in the same hue (palette A, #563).
+ * Every fill and content pair clears 4.5:1 in both schemes.
+ */
+:root {
+  --gos-category-1-hue: 250;
+  --gos-category-2-hue: 20;
+  --gos-category-3-hue: 150;
+  --gos-category-4-hue: 300;
+  --gos-category-5-hue: 60;
+  --gos-category-6-hue: 200;
+  --gos-category-7-hue: 340;
+  --gos-category-8-hue: 110;
+
+  --gos-category-1: oklch(0.95 0.035 var(--gos-category-1-hue));
+  --gos-category-1-content: oklch(0.43 0.11 var(--gos-category-1-hue));
+  --gos-category-2: oklch(0.95 0.035 var(--gos-category-2-hue));
+  --gos-category-2-content: oklch(0.43 0.11 var(--gos-category-2-hue));
+  --gos-category-3: oklch(0.95 0.035 var(--gos-category-3-hue));
+  --gos-category-3-content: oklch(0.43 0.11 var(--gos-category-3-hue));
+  --gos-category-4: oklch(0.95 0.035 var(--gos-category-4-hue));
+  --gos-category-4-content: oklch(0.43 0.11 var(--gos-category-4-hue));
+  --gos-category-5: oklch(0.95 0.035 var(--gos-category-5-hue));
+  --gos-category-5-content: oklch(0.43 0.11 var(--gos-category-5-hue));
+  --gos-category-6: oklch(0.95 0.035 var(--gos-category-6-hue));
+  --gos-category-6-content: oklch(0.43 0.11 var(--gos-category-6-hue));
+  --gos-category-7: oklch(0.95 0.035 var(--gos-category-7-hue));
+  --gos-category-7-content: oklch(0.43 0.11 var(--gos-category-7-hue));
+  --gos-category-8: oklch(0.95 0.035 var(--gos-category-8-hue));
+  --gos-category-8-content: oklch(0.43 0.11 var(--gos-category-8-hue));
+
+  @variant dark {
+    --gos-category-1: oklch(0.33 0.055 var(--gos-category-1-hue));
+    --gos-category-1-content: oklch(0.89 0.08 var(--gos-category-1-hue));
+    --gos-category-2: oklch(0.33 0.055 var(--gos-category-2-hue));
+    --gos-category-2-content: oklch(0.89 0.08 var(--gos-category-2-hue));
+    --gos-category-3: oklch(0.33 0.055 var(--gos-category-3-hue));
+    --gos-category-3-content: oklch(0.89 0.08 var(--gos-category-3-hue));
+    --gos-category-4: oklch(0.33 0.055 var(--gos-category-4-hue));
+    --gos-category-4-content: oklch(0.89 0.08 var(--gos-category-4-hue));
+    --gos-category-5: oklch(0.33 0.055 var(--gos-category-5-hue));
+    --gos-category-5-content: oklch(0.89 0.08 var(--gos-category-5-hue));
+    --gos-category-6: oklch(0.33 0.055 var(--gos-category-6-hue));
+    --gos-category-6-content: oklch(0.89 0.08 var(--gos-category-6-hue));
+    --gos-category-7: oklch(0.33 0.055 var(--gos-category-7-hue));
+    --gos-category-7-content: oklch(0.89 0.08 var(--gos-category-7-hue));
+    --gos-category-8: oklch(0.33 0.055 var(--gos-category-8-hue));
+    --gos-category-8-content: oklch(0.89 0.08 var(--gos-category-8-hue));
+  }
+}
+
+@theme inline {
+  --background-color-category-1: var(--gos-category-1);
+  --background-color-category-2: var(--gos-category-2);
+  --background-color-category-3: var(--gos-category-3);
+  --background-color-category-4: var(--gos-category-4);
+  --background-color-category-5: var(--gos-category-5);
+  --background-color-category-6: var(--gos-category-6);
+  --background-color-category-7: var(--gos-category-7);
+  --background-color-category-8: var(--gos-category-8);
+
+  --text-color-category-1: var(--gos-category-1-content);
+  --text-color-category-2: var(--gos-category-2-content);
+  --text-color-category-3: var(--gos-category-3-content);
+  --text-color-category-4: var(--gos-category-4-content);
+  --text-color-category-5: var(--gos-category-5-content);
+  --text-color-category-6: var(--gos-category-6-content);
+  --text-color-category-7: var(--gos-category-7-content);
+  --text-color-category-8: var(--gos-category-8-content);
+}
