@@ -5,9 +5,13 @@
 # feedback and the cells a manager would place them on. Run it on every
 # prompt change, before widening suggestions to more tenants:
 #
-#   bin/rails evidence:suggestions:eval                          # claude-opus-5-5, needs the API key
-#   MODEL=claude-haiku-5-5 bin/rails evidence:suggestions:eval  # another model
-#   SUGGESTION_MODEL=baseline bin/rails evidence:suggestions:eval  # word-overlap baseline, no API call
+#   bin/rails "evidence:suggestions:eval[acme]"                       # the model tenant "acme" has configured
+#   MODEL=claude-haiku-5-5 bin/rails "evidence:suggestions:eval[acme]" # another model on the same endpoint
+#   SUGGESTION_MODEL=baseline bin/rails evidence:suggestions:eval      # word-overlap baseline, no API call
+#
+# The tenant's own adapter, effort and name hiding run, so a gateway model is
+# scored the way it will answer in production. The tenant is only read (its
+# model config and key); the fixture people are written to a throwaway one.
 #
 # The fixture framework and items are written into a throwaway tenant inside
 # a transaction that is always rolled back, so the real Evidence::PlacementPrompt
@@ -22,6 +26,7 @@ class EvidenceSuggestionsEval
     STOPWORDS = %w[the a an and or to of in on for with they their them was were is are it that this as at by].freeze
 
     def model = "baseline"
+    def provider = "baseline"
 
     def suggest(prompt)
       words = tokens(prompt.item.content)
@@ -37,6 +42,24 @@ class EvidenceSuggestionsEval
     private
 
     def tokens(text) = text.to_s.downcase.scan(/[a-z]+/) - STOPWORDS
+  end
+
+  # The model a tenant has configured, as the eval scores it: the real
+  # pipeline, adapter and pseudonymiser included.
+  #
+  # @param slug [String, nil] the tenant whose AI model to run
+  # @param model [String, nil] a model id to use instead of the configured one
+  # @return [Evidence::SuggestionModel]
+  # @raise [ArgumentError] when there is no such tenant or it has no model and key
+  def self.model_for(slug:, model: nil)
+    raise ArgumentError, "Name a tenant: bin/rails \"evidence:suggestions:eval[<slug>]\" (or SUGGESTION_MODEL=baseline)" if slug.blank?
+
+    tenant = Tenant.find_by(slug: slug) or raise ArgumentError, "No tenant with the slug #{slug.inspect}"
+    unless Evidence::SuggestionModel.configured?(tenant)
+      raise ArgumentError, "#{tenant.name} has no AI model configured (Integrations > AI model); try SUGGESTION_MODEL=baseline"
+    end
+
+    Evidence::SuggestionModel.new(tenant: tenant, adapter: Ai::ModelClient.for(tenant, model: model))
   end
 
   Result = Struct.new(:id, :expected, :proposals, keyword_init: true)
@@ -123,7 +146,7 @@ class EvidenceSuggestionsEval
     correct = placeable.sum { |r| r.proposals.count { |p| expected_cells(r).include?(cell(p)) } }
 
     {
-      prompt_version: Evidence::PlacementPrompt::VERSION, model: @model.model, items: results.size,
+      prompt_version: Evidence::PlacementPrompt::VERSION, provider: @model.provider, model: @model.model, items: results.size,
       placeable: placeable.size, uncovered: uncovered.size,
       cell_match_top: rate(top_hits, placeable.size), cell_match_any: rate(any_hits, placeable.size),
       valence_match: rate(matched.count { |p, e| p.valence == e.last }, matched.size),

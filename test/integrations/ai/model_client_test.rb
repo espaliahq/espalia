@@ -43,6 +43,11 @@ class Ai::ModelClientTest < ActiveSupport::TestCase
     assert_equal "claude-haiku-5-5", Ai::ModelClient.for(tenant).model
   end
 
+  should "use a model override in place of the configured model" do
+    assert_equal "openai/gpt-5", Ai::ModelClient.for(gateway_tenant, model: "openai/gpt-5").model
+    assert_equal "anthropic/claude-opus-5-5", Ai::ModelClient.for(gateway_tenant, model: "").model
+  end
+
   should "build nothing for a tenant with no key, or an incomplete endpoint" do
     assert_not Ai::ModelClient.configured?(build(:tenant))
     assert_raises(ArgumentError) { Ai::ModelClient.for(build(:tenant)) }

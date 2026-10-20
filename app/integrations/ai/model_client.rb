@@ -17,18 +17,21 @@ module Ai::ModelClient
   end
 
   # @param tenant [Tenant]
+  # @param model [String, nil] a model id to use in place of the configured
+  #   one, for trying another model on the same endpoint
   # @return [Ai::Anthropic::Adapter, Ai::OpenAiCompatible::Adapter]
   # @raise [ArgumentError] when the tenant has no usable config or key; check
   #   {.configured?} first
-  def for(tenant)
+  def for(tenant, model: nil)
     config = tenant.effective_ai_config
     raise ArgumentError, "No AI model is configured for this workspace" unless config.configured?(tenant)
 
+    model = model.presence || config.model
     case config.provider
     when "openai_compatible"
-      Ai::OpenAiCompatible::Adapter.new(api_key: tenant.ai_api_key, base_url: config.normalized_base_url, model: config.model)
+      Ai::OpenAiCompatible::Adapter.new(api_key: tenant.ai_api_key, base_url: config.normalized_base_url, model: model)
     else
-      Ai::Anthropic::Adapter.new(api_key: tenant.ai_api_key, base_url: config.normalized_base_url, model: config.model,
+      Ai::Anthropic::Adapter.new(api_key: tenant.ai_api_key, base_url: config.normalized_base_url, model: model,
                                  effort: config.effort)
     end
   end
