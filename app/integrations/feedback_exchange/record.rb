@@ -32,7 +32,7 @@ class FeedbackExchange::Record
   def record_for(item)
     author = people[item.author_id]
     recipient = people[item.person_id]
-    return nil if author.nil? || recipient.nil?
+    return nil unless nameable?(author) && nameable?(recipient)
 
     {
       id: item.id,
@@ -52,6 +52,11 @@ class FeedbackExchange::Record
       source_url: source_url(item),
       external_reference: external_reference(item)
     }
+  end
+
+  # Email is the only identity the protocol matches on (§3).
+  def nameable?(person)
+    person.present? && person.email.present?
   end
 
   # The title is the author's own headline; the protocol has no field for it,
@@ -95,15 +100,25 @@ class FeedbackExchange::Record
   # feedback hub while it is still unplaced. The recipient and their managers
   # can open the first; the second is the viewer's own list.
   def source_url(item)
-    options = Rails.application.config.action_mailer.default_url_options.to_h
-    helpers = Rails.application.routes.url_helpers
+    return nil if url_options[:host].blank?
+
     assignment_id = assignment_ids[[ item.person_id, item.framework_id ]]
     if assignment_id && item.capability_stable_id
-      helpers.assessment_url(assignment_id, capability: item.capability_stable_id,
-                                            level_ordinal: item.level_ordinal, **options)
+      url_helpers.assessment_url(assignment_id, capability: item.capability_stable_id,
+                                                level_ordinal: item.level_ordinal, **url_options)
     else
-      helpers.evidence_hub_url(anchor: EvidenceItem.dom_id(item.id), **options)
+      url_helpers.evidence_hub_url(anchor: EvidenceItem.dom_id(item.id), **url_options)
     end
+  end
+
+  # The app's own address, as mail links use. Without a host there is no
+  # absolute link to give, and `source_url` is null rather than a failed page.
+  def url_options
+    @url_options ||= Rails.application.config.action_mailer.default_url_options.to_h
+  end
+
+  def url_helpers
+    Rails.application.routes.url_helpers
   end
 
   # Set only when this item itself came from another system through the exchange.

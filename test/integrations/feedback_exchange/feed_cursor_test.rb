@@ -19,7 +19,8 @@ class FeedbackExchange::FeedCursorTest < ActiveSupport::TestCase
   end
 
   should "refuse a token that is not a position" do
-    [ "!!", Base64.urlsafe_encode64("{}"), Base64.urlsafe_encode64("[1]"), Base64.urlsafe_encode64("nope") ].each do |token|
+    [ "!!", Base64.urlsafe_encode64("{}"), Base64.urlsafe_encode64("[1]"), Base64.urlsafe_encode64("nope"),
+       Base64.urlsafe_encode64([ "2026-10-20T10:00:00.000000", SecureRandom.uuid ].to_json) ].each do |token|
       assert_raises(FeedbackExchange::FeedCursor::Invalid) { FeedbackExchange::FeedCursor.decode(token) }
     end
   end

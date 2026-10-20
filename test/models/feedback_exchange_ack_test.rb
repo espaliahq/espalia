@@ -40,6 +40,13 @@ class FeedbackExchangeAckTest < ActiveSupport::TestCase
       assert_equal @tenant.id, ack.tenant_id
     end
 
+    should "keep the last word when a page names an item twice" do
+      items = [ { id: @item.id, remote_id: "first" }, { id: @item.id, remote_id: "second" } ]
+
+      assert FeedbackExchangeAck.record_all(consumer: "chip", items: items)
+      assert_equal "second", FeedbackExchangeAck.sole.remote_id
+    end
+
     should "keep a separate row for another consumer" do
       FeedbackExchangeAck.record_all(consumer: "chip", items: [ { id: @item.id, remote_id: "a" } ])
       FeedbackExchangeAck.record_all(consumer: "other", items: [ { id: @item.id, remote_id: "b" } ])

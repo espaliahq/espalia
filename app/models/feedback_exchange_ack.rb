@@ -40,7 +40,9 @@ class FeedbackExchangeAck < ApplicationRecord
     return false unless acks.all?(&:valid?)
 
     known = EvidenceItem.where(id: acks.map(&:evidence_id)).pluck(:id).to_set
-    rows = acks.select { |ack| known.include?(ack.evidence_id) }.map do |ack|
+    # One row per item: Postgres refuses an upsert that touches a row twice, so a
+    # page that names an item twice keeps its last word.
+    rows = acks.select { |ack| known.include?(ack.evidence_id) }.index_by(&:evidence_id).values.map do |ack|
       ack.attributes.slice("evidence_id", "consumer", "remote_id", "remote_url")
          .merge("id" => SecureRandom.uuid_v7, "tenant_id" => ActsAsTenant.current_tenant.id)
     end

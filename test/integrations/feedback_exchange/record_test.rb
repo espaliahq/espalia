@@ -36,4 +36,20 @@ class FeedbackExchange::RecordTest < ActiveSupport::TestCase
 
     assert_nil FeedbackExchange::Record.for([ item ]).sole[:external_reference]
   end
+
+  should "skip an item whose person has no email" do
+    ActsAsTenant.with_tenant(@tenant) { @author.update_column(:email, "") }
+    item = create(:evidence_item, tenant: @tenant, author: @author, person_id: @recipient.id)
+
+    assert_empty FeedbackExchange::Record.for([ item ])
+  end
+
+  should "leave source_url null rather than fail when the app has no host" do
+    item = create(:evidence_item, tenant: @tenant, author: @author, person_id: @recipient.id)
+    options = Rails.application.config.action_mailer.default_url_options
+
+    Rails.application.config.action_mailer.stub(:default_url_options, options.except(:host)) do
+      assert_nil FeedbackExchange::Record.for([ item ]).sole[:source_url]
+    end
+  end
 end

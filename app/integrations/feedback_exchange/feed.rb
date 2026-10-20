@@ -9,9 +9,14 @@
 # What leaves is limited by who wrote it and where it already lives:
 # - not the person's own self-assessment (`source: self`);
 # - only a person's own writing, not an HRIS, system or exchange import;
-# - not what the asking consumer itself sent us (protocol §2.5), nor an import
-#   it has since acknowledged;
+# - not what the asking consumer itself sent us (protocol §2.5), nor another
+#   system's import it has since acknowledged;
 # - only the kinds the tenant exports.
+#
+# The cursor is the last row read, so a row that commits late with an
+# `updated_at` behind it (a long transaction that began before a faster one) is
+# missed until the peer resets its cursor. Projection writes are short, so the
+# window is small; it is the usual limit of keyset paging on a timestamp.
 #
 # Costs one query for the page and one each for the people, answered requests,
 # cycles and assignments the records name, whatever the page size.
@@ -72,15 +77,14 @@ class FeedbackExchange::Feed
     scope
   end
 
-  # An item that came in from elsewhere (through the exchange, or carrying a
-  # reference to a system that is not one of the plain link targets) and that the
-  # consumer has since acknowledged: it lives there already, so it must not
-  # travel back.
+  # An item that came in from another system, one that carries a reference to a
+  # system that is not a plain link target, and that the consumer has since
+  # acknowledged: it lives there already, so it must not travel back. (An import
+  # through the exchange itself never gets this far: {NON_HUMAN_VIA} drops it.)
   def acknowledged_import_sql
+    link_systems = ExternalReference::SYSTEMS.map { |system| "'#{system}'" }.join(", ")
     <<~SQL.squish
-      ((COALESCE(evidence_items.recorded_via, '') = '#{IMPORTED_VIA}'
-        OR COALESCE(evidence_items.external_reference ->> 'system', '#{ExternalReference::SYSTEMS.first}')
-           NOT IN (#{ExternalReference::SYSTEMS.map { |system| "'#{system}'" }.join(', ')}))
+      (COALESCE(evidence_items.external_reference ->> 'system', '#{ExternalReference::SYSTEMS.first}') NOT IN (#{link_systems})
        AND EXISTS (
         SELECT 1 FROM feedback_exchange_acks acks
         WHERE acks.tenant_id = evidence_items.tenant_id

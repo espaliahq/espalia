@@ -27,6 +27,12 @@ class FeedbackExchange::DeletionsControllerTest < ActionDispatch::IntegrationTes
     assert_equal "abc", response.parsed_body["next_cursor"]
   end
 
+  should "echo no cursor that is not a plain string" do
+    signed_get("#{PATH}?since[]=a&since[]=b")
+
+    assert_nil response.parsed_body["next_cursor"]
+  end
+
   should "refuse an unsigned request" do
     get PATH
     assert_response :unauthorized

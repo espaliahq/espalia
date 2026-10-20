@@ -27,6 +27,7 @@ class FeedbackExchange::FeedCursor
 
     timestamp, id = JSON.parse(Base64.urlsafe_decode64(token.to_s))
     raise Invalid, "cursor is malformed" unless timestamp.is_a?(String) && id.is_a?(String)
+    raise Invalid, "cursor is malformed" unless timestamp.end_with?("Z")
     raise Invalid, "cursor is malformed" unless id.match?(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
 
     new(updated_at: Time.iso8601(timestamp).utc, id: id)
