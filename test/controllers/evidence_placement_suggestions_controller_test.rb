@@ -31,6 +31,16 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
     ActsAsTenant.with_tenant(@tenant) { EvidenceLink.active.where(evidence_id: @item.id).pluck(:capability_stable_id, :level_ordinal) }
   end
 
+  # The ownership suggestion kept through "Adjust", after any rows picked by hand.
+  def save_adjusted(valence: "demonstrated", picked: [])
+    patch evidence_item_path(@item), params: { evidence: {
+      evidence_id: @item.id, assignment_id: @assignment.id,
+      desired_links: picked + [ "#{@ownership.stable_id}|3" ],
+      link_valences: (picked + [ "#{@ownership.stable_id}|3" ]).index_with(valence),
+      suggestion_ids: [ @ownership_suggestion.id ], staged_suggestion_ids: [ @ownership_suggestion.id ]
+    } }
+  end
+
   context "the hub" do
     should "list suggestions under the item for the person it is about, most confident first" do
       sign_in @alex_user
@@ -186,6 +196,33 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
         .stream(EventStreamNaming.person_development_stream(@alex.id, @framework_id, tenant: @tenant))
         .of_type([ PersonDevelopment::Events::EvidenceLinkAdded ]).backward.first
       assert_equal [ @ownership_suggestion.id, "strongly_demonstrated" ], [ event.data[:via_suggestion_id], event.data[:valence] ]
+    end
+
+    should "settle a kept suggestion on a cell someone linked meanwhile" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.add_evidence_link(@alex.id, @framework_id, @item.id,
+          capability_stable_id: @ownership.stable_id, level_ordinal: 3, linked_by_id: @alex.id, valence: "growth_area")
+      end
+      sign_in @morgan_user
+      save_adjusted
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "edited", @ownership_suggestion.reload.status
+        assert_equal "demonstrated", EvidenceLink.active.find_by(evidence_id: @item.id).valence
+      end
+    end
+
+    should "refuse the whole save, writing nothing, when a staged cell left the role" do
+      ActsAsTenant.with_tenant(@tenant) do
+        FrameworkState::CapabilityRoleBinding.where(capability_id: @ownership.capability_id).delete_all
+      end
+      sign_in @morgan_user
+      save_adjusted(picked: [ "#{@collaboration.stable_id}|3" ])
+
+      assert_redirected_to evidence_hub_path
+      assert_match(/no longer on this person's role/, flash[:alert])
+      assert_empty links
+      ActsAsTenant.with_tenant(@tenant) { assert @ownership_suggestion.reload.pending? }
     end
   end
 end

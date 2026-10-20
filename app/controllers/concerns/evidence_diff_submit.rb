@@ -117,20 +117,17 @@ module EvidenceDiffSubmit
     # partially-applied diff behind.
     new_cells = desired - current_cells
     new_cells.each { |cell| valence_for!(valences, cell) }
+    kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
+    ensure_staged_cells_exist!(item, kept_suggestions)
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
         assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
       })
     end
-    kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
     new_cells.each do |cap, level|
       if (suggestion = kept_suggestions[[ cap, level ]])
-        # Adjusted in the editor: the person checked it, so it is recorded
-        # as edited whatever valence they left on it.
-        Operations::Assessments::AcceptEvidenceSuggestion.call(context: pundit_user, params: {
-          suggestion_id: suggestion.id, valence: valences[[ cap, level ]]
-        })
+        accept_adjusted(suggestion, valences[[ cap, level ]])
       else
         Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
           assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
@@ -148,6 +145,12 @@ module EvidenceDiffSubmit
     # existing links are never force-reclassified.
     (desired & current_cells).each do |cap, level|
       valence = valences[[ cap, level ]]
+      # A staged suggestion on a cell someone linked meanwhile is still the
+      # person's decision; accepting it reclassifies the link if they changed it.
+      if (suggestion = kept_suggestions[[ cap, level ]])
+        accept_adjusted(suggestion, valence || current_valences[[ cap, level ]])
+        next
+      end
       next if valence.nil? || valence == current_valences[[ cap, level ]]
 
       Operations::Assessments::SetEvidenceLinkValence.call(context: pundit_user, params: {
@@ -167,6 +170,30 @@ module EvidenceDiffSubmit
     return {} if ids.blank?
 
     EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
+  end
+
+  # A suggestion kept through "Adjust" is accepted, attributed, and recorded
+  # as edited: the person reviewed it in the editor, whatever valence they
+  # left on it.
+  def accept_adjusted(suggestion, valence)
+    Operations::Assessments::AcceptEvidenceSuggestion.call(context: pundit_user, params: {
+      suggestion_id: suggestion.id, valence: valence
+    })
+    EvidencePlacementSuggestion.where(id: suggestion.id, status: "accepted").update_all(status: "edited", updated_at: Time.current)
+  end
+
+  # Checked before any write, like the valences: the framework may have
+  # dropped a staged cell since the suggestion was made, and failing on it
+  # halfway would leave the save half-applied.
+  def ensure_staged_cells_exist!(item, kept)
+    return if kept.empty?
+
+    assignment = PersonFrameworkAssignment.find_by!(person_id: item.person_id, framework_id: item.framework_id)
+    map = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id).expectation_map
+    gone = kept.keys.reject { |cap, level| map.key?("#{cap}|#{level}") }
+    return if gone.empty?
+
+    raise Operations::Base::ParameterError, "A suggested capability and level are no longer on this person's role; remove that row and save again"
   end
 
   # A staged suggestion whose row the person removed before saving was
