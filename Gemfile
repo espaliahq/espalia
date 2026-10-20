@@ -103,6 +103,9 @@ group :development do
 
   # Process manager for Procfile.dev (runs Rails server + Tailwind CSS watcher)
   gem "overmind", require: false
+
+  # Component previews at /lookbook [https://lookbook.build]
+  gem "lookbook", ">= 2.3.15"
 end
 
 group :test do

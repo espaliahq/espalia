@@ -89,6 +89,17 @@ module Kit
 end
 ```
 
+## Previewing components (Lookbook)
+
+[Lookbook](https://lookbook.build) shows Kit components on their own, outside any page, at **`/lookbook`** in development. Use it to build or restyle a component, state by state, before wiring it into a view.
+
+- **One preview class per component**, in `test/components/previews/kit/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
+- **A `playground` scenario with `# @param` tags** gives live controls (text fields, selects) in the Lookbook UI.
+- **Previews render in the app's own layout**, so Tailwind, the colour tokens, dark mode and Stimulus all behave as they do in the app. The default theme applies; there is no tenant.
+- **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
+
+`Kit::Badge` is the first: `test/components/previews/kit/badge_preview.rb`.
+
 ## Slots Pattern
 
 ```ruby
