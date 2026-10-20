@@ -2324,9 +2324,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "for monthly reporting (tenant admins only): recipient and provider with their roles, " \
           "direction, requested or proactive (a GrowthOS request), where it was given (origin) and the request " \
           "it answered there, type, title, the feedback text, the behaviours it applies to, and status. " \
-          "The rows are exactly the feedback the cycle's coverage report counts. Pass month (YYYY-MM) to " \
-          "narrow to feedback recorded in one calendar month, and " \
-          "include_withdrawn to list withdrawn feedback too. The response carries every row's full text, " \
+          "The rows match the feedback the cycle's coverage report counts as provided; include_withdrawn " \
+          "adds the withdrawn items it reports separately. Pass month (YYYY-MM) to narrow to feedback " \
+          "recorded in one calendar month. The response carries every row's full text, " \
           "so a month is far smaller than a whole cycle; for counts alone use reporting_evidence_coverage.",
         "inputSchema" => {
           "type" => "object",
