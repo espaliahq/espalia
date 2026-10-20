@@ -17,7 +17,7 @@ class Views::Integrations::AiModelView < Views::Base
 
   PROVIDER_LABELS = {
     "anthropic" => "Anthropic API",
-    "openai_compatible" => "OpenAI-compatible endpoint"
+    "openai_compatible" => "OpenAI-compatible"
   }.freeze
 
   INPUT_CLASSES = "block w-full min-h-11 rounded-md border-gray-300 dark:border-gray-600 " \
@@ -238,7 +238,7 @@ class Views::Integrations::AiModelView < Views::Base
         span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { @key_stored ? "Stored" : "Not set" }
       end
       input(type: "password", id: field_id(:api_key), name: field_name(:api_key), value: "", autocomplete: "new-password",
-            placeholder: @key_stored ? "Leave blank to keep the stored value" : "Paste the provider's or gateway's key",
+            placeholder: @key_stored ? "Leave blank to keep it" : "Paste the provider's or gateway's key",
             class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(:api_key)}-hint" })
       p(id: "#{field_id(:api_key)}-hint", class: HINT_CLASSES) do
         plain "Stored encrypted and only ever sent to the address above. It is never shown again."
