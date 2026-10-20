@@ -170,6 +170,16 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "input[name='ai_model[base_url]'][value='https://other-gateway.example.com/v1']"
       end
 
+      should "report a bad address before the key rule, so both are fixed in one go" do
+        configure_gateway
+
+        patch tenant_ai_model_path, params: settings(base_url: "http://gateway.example.com/v1", api_key: "")
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "must start with https://"
+        assert_not_includes response.body, "Enter the API key again."
+      end
+
       should "accept the move when the key is entered again" do
         configure_gateway
 

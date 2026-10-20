@@ -283,6 +283,8 @@ class Tenant < ApplicationRecord
 
   # @raise [ActiveRecord::RecordInvalid]
   def reject_unsafe_ai_model!(previous:, stored_key:, new_key:, on_legacy_key:)
+    return unless ai_config.valid? # save! reports what is wrong with the settings first
+
     moved = [ previous.provider, previous.normalized_base_url ] != [ ai_config.provider, ai_config.normalized_base_url ]
     if stored_key && !new_key && moved
       errors.add(:base, "Enter the API key again. The stored one is only sent to the provider and address it was saved for.")
