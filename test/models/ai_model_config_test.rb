@@ -20,6 +20,7 @@ class AiModelConfigTest < ActiveSupport::TestCase
       assert_not AiModelConfig.new(provider: "gemini").valid?
       assert_not AiModelConfig.new(effort: "extreme").valid?
       AiModelConfig::EFFORTS.each { |effort| assert AiModelConfig.new(effort: effort).valid?, effort }
+      assert AiModelConfig.new(effort: "").valid?, "blank sends no effort"
     end
 
     should "need an address and a model for an OpenAI-compatible endpoint, but not for Anthropic" do
@@ -48,6 +49,8 @@ class AiModelConfigTest < ActiveSupport::TestCase
         "https://10.0.0.5/v1" => "must not be a private network address",
         "https://localhost:11434/v1" => "must not be a private network address",
         "https://[::1]/v1" => "must not be a private network address",
+        "https://127.1/v1" => "must not be a private network address",
+        "https://2130706433/v1" => "must not be a private network address",
         "https://169.254.169.254/" => "must not be a private network address",
         "not a url" => "is not a valid URL"
       }.each do |url, message|

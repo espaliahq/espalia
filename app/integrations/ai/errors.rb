@@ -39,6 +39,10 @@ module Ai::Errors
     end
   end
 
+  # The saved config cannot be used as it stands, and retrying will not change
+  # that: the address is on a private network. A human has to fix it.
+  class ConfigurationError < Error; end
+
   # The model declined to answer. Not worth retrying: the same request is
   # declined again.
   class RefusalError < Error; end
