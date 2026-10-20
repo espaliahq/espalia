@@ -45,6 +45,19 @@ class PersonDevelopment::AsyncHandlers::PlacementSuggesterTest < ActiveJob::Test
     assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { handle(event_for(item)) }
   end
 
+  should "leave pending suggestions behind once recorded feedback's jobs have run" do
+    with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) do
+      perform_enqueued_jobs(only: [ PersonDevelopment::AsyncHandlers::PlacementSuggester, Evidence::SuggestPlacementsJob ]) do
+        @item = record_peer_feedback
+      end
+    end
+
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal [ [ @ownership.stable_id, 3, "pending" ] ],
+        EvidencePlacementSuggestion.for_evidence(@item.id).pluck(:capability_stable_id, :level_ordinal, :status)
+    end
+  end
+
   should "be subscribed to the evidence events" do
     subscribers = Rails.configuration.event_store.subscribers_for(PersonDevelopment::Events::EvidenceRecorded)
     assert_includes subscribers, PersonDevelopment::AsyncHandlers::PlacementSuggester
