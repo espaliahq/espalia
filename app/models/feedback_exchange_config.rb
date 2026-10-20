@@ -42,6 +42,14 @@ class FeedbackExchangeConfig
     peer_name.present? && state(secrets_complete: tenant.feedback_exchange_secrets.complete?) == :active
   end
 
+  # The labels the settings form uses, so an error names the field the admin sees.
+  ATTRIBUTE_LABELS = { "base_url" => "Peer address", "peer_name" => "Peer name" }.freeze
+
+  # @return [String]
+  def self.human_attribute_name(attribute, options = {})
+    ATTRIBUTE_LABELS.fetch(attribute.to_s) { super }
+  end
+
   # Where the exchange stands, from least to most set up.
   #
   # @param secrets_complete [Boolean] both signing secrets stored

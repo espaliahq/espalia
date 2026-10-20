@@ -218,7 +218,7 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
       } }
 
       assert_response :unprocessable_content
-      assert_includes response.body, "must be a plain address"
+      assert_includes response.body, "Peer address must be a plain address"
       assert_select "dd", text: "Stored", count: 0
       assert_select "dd", text: "Not set", count: 2
     end
