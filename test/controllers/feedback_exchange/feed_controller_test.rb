@@ -120,6 +120,14 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
       assert_empty feed_ids
     end
 
+    should "leave out what the consumer sent even when the stored system is mixed case" do
+      create_item(author: @author, recipient: @recipient, external_reference: { system: "Chip", external_id: "c-3" })
+
+      signed_get(consumer: "chip")
+
+      assert_empty feed_ids
+    end
+
     should "leave out items nobody wrote" do
       %w[hris system feedback_exchange].each { |via| create_item(author: @author, recipient: @recipient, recorded_via: via) }
       kept = %w[web mcp slack].map { |via| create_item(author: @author, recipient: @recipient, recorded_via: via) }

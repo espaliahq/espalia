@@ -71,7 +71,7 @@ class FeedbackExchange::Feed
     scope = EvidenceItem.where.not(source: "self")
                         .where(evidence_type: @config.export_kinds)
                         .where("evidence_items.recorded_via IS NULL OR evidence_items.recorded_via NOT IN (?)", NON_HUMAN_VIA)
-                        .where("COALESCE(evidence_items.external_reference ->> 'system', '') <> ?", @consumer)
+                        .where("LOWER(COALESCE(evidence_items.external_reference ->> 'system', '')) <> ?", @consumer.downcase)
                         .where.not(acknowledged_import_sql, @consumer)
     scope = scope.where("(evidence_items.updated_at, evidence_items.id) > (?, ?)", @cursor.updated_at, @cursor.id) if @cursor
     scope
