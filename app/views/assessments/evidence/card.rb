@@ -201,7 +201,11 @@ class Views::Assessments::Evidence::Card < Views::Base
       # "Demonstrates" in one cell and "Growth area" in another). No badge
       # for pre-valence links — unclassified stays visually quiet.
       valence_badge(cell_valence)
-      external_chip if @item.external_reference&.present?
+      if @item.external_reference&.imported?
+        render Views::Evidence::OriginBadge.new(@item.external_reference)
+      elsif @item.external_reference&.present?
+        external_chip
+      end
     end
   end
 

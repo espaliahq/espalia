@@ -10,11 +10,13 @@ class Views::Integrations::IndexView < Views::Base
   # @param hris_credentials_present [Boolean]
   # @param feedback_exchange_config [FeedbackExchangeConfig]
   # @param feedback_exchange_secrets_present [Boolean] both signing secrets stored
+  # @param feedback_exchange_summary [Hash, nil] {FeedbackExchangeImport.summary}
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_credentials_present:, slack_connected: false, slack_team_name: nil, slack_available: false,
                  feedback_exchange_config: FeedbackExchangeConfig.new, feedback_exchange_secrets_present: false,
+                 feedback_exchange_summary: nil,
                  user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_credentials_present = hris_credentials_present
@@ -23,6 +25,7 @@ class Views::Integrations::IndexView < Views::Base
     @slack_available = slack_available
     @feedback_exchange_config = feedback_exchange_config
     @feedback_exchange_secrets_present = feedback_exchange_secrets_present
+    @feedback_exchange_summary = feedback_exchange_summary
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -113,12 +116,21 @@ class Views::Integrations::IndexView < Views::Base
             end
             render Components::Kit::Badge.new(feedback_exchange_status.first, variant: feedback_exchange_status.last)
           end
-          div(class: "mt-4 text-xs text-gray-600 dark:text-gray-300") do
-            plain "Last synced: #{@feedback_exchange_config.last_synced_at&.to_fs(:long) || 'Never'}"
+          div(class: "mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+            span { "Last synced: #{@feedback_exchange_config.last_synced_at&.to_fs(:long) || 'Never'}" }
+            span(id: "feedback-exchange-card-counts") { feedback_exchange_counts } if feedback_exchange_counts
           end
         end
       end
     end
+  end
+
+  # @return [String, nil] "Imported 12 · Updated 2 · Skipped 3", once anything has crossed
+  def feedback_exchange_counts
+    summary = @feedback_exchange_summary
+    return if summary.nil? || summary.values_at(:imported, :updated, :skipped, :withdrawn).sum.zero?
+
+    "Imported #{summary[:imported]} · Updated #{summary[:updated]} · Skipped #{summary[:skipped]}"
   end
 
   def feedback_exchange_subtitle

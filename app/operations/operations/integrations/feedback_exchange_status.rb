@@ -9,7 +9,9 @@ class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
   description "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
               "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
               "prove the peer answers), the peer and its address, the last sync, and whether the secrets " \
-              "and sync cursors are present. Never returns a secret."
+              "and sync cursors are present, and what the import has done: records imported, updated, " \
+              "withdrawn and skipped, with each skip reason and the people the peer named that GrowthOS " \
+              "could not find. Never returns a secret."
   category :read
   approval :none
 
@@ -32,7 +34,9 @@ class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
       last_synced_at: config.last_synced_at&.iso8601,
       secrets: { outbound: secrets.outbound_secret.present?, inbound: secrets.inbound_secret.present? },
       cursors: { feedback: config.cursor.present?, deletions: config.deletions_cursor.present? },
-      suggestions_enabled: config.suggestions_enabled?
+      suggestions_enabled: config.suggestions_enabled?,
+      imports: FeedbackExchangeImport.summary,
+      unmatched_people: FeedbackExchangeImport.unmatched_people
     }
   end
 end

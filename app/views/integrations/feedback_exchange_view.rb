@@ -36,17 +36,21 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   # @param inbound_url [String] the address the peer calls on this app
   # @param can_edit [Boolean]
   # @param errors [Array<String>] validation messages from a failed save
+  # @param summary [Hash, nil] {FeedbackExchangeImport.summary}
+  # @param unmatched_people [Array<Hash>] {FeedbackExchangeImport.unmatched_people}
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(config:, form_config: nil, secrets_present:, inbound_url:, can_edit: false, errors: [],
-                 user: nil, current_tenant: nil, tenants: [])
+                 summary: nil, unmatched_people: [], user: nil, current_tenant: nil, tenants: [])
     @config = config
     @form_config = form_config || config
     @secrets_present = secrets_present
     @inbound_url = inbound_url
     @can_edit = can_edit
     @errors = errors
+    @summary = summary
+    @unmatched_people = unmatched_people
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -228,13 +232,85 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   # ── Counts ──
 
+  # What a skip reason means to the admin who has to act on it.
+  SKIP_REASON_LABELS = {
+    "author_unmatched" => "Giver not found in GrowthOS",
+    "recipient_unmatched" => "Recipient not found in GrowthOS",
+    "recipient_inactive" => "Recipient inactive",
+    "self_feedback" => "Feedback on themselves",
+    "audience_too_narrow" => "Not shared with the manager line and HR",
+    "kind_not_imported" => "A kind of feedback not imported",
+    "no_assignment" => "Recipient has no framework assignment",
+    "echo" => "Came from GrowthOS",
+    "invalid_record" => "Malformed or refused"
+  }.freeze
+
   def counts_section
     div(id: "feedback-exchange-counts") do
       render Components::Kit::SectionHeading.new("Activity", subtitle: "What has crossed between the two systems")
       render Components::Kit::Card.new do |card|
         card.body do
-          p(class: "text-sm text-gray-600 dark:text-gray-300") do
-            plain "Imported, updated and skipped counts appear here once feedback starts flowing."
+          if crossed?
+            render Components::Kit::DescriptionList.new(items: count_items, columns: 4)
+            skip_reasons
+            unmatched_people
+          else
+            p(class: "text-sm text-gray-600 dark:text-gray-300") do
+              plain "Imported, updated and skipped counts appear here once feedback starts flowing."
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def crossed?
+    @summary.present? && @summary.values_at(:imported, :updated, :withdrawn, :skipped).sum.positive?
+  end
+
+  def count_items
+    [
+      { term: "Imported", detail: @summary[:imported].to_s },
+      { term: "Updated", detail: @summary[:updated].to_s },
+      { term: "Withdrawn", detail: @summary[:withdrawn].to_s },
+      { term: "Skipped", detail: @summary[:skipped].to_s }
+    ]
+  end
+
+  def skip_reasons
+    return if @summary[:skip_reasons].blank?
+
+    div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
+      h3(class: "text-sm font-medium text-gray-900 dark:text-white") { "Why records were skipped" }
+      ul(class: "mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200") do
+        @summary[:skip_reasons].each do |reason, count|
+          li(class: "flex justify-between gap-4", data: { skip_reason: reason }) do
+            span { SKIP_REASON_LABELS.fetch(reason, reason.humanize) }
+            span(class: "tabular-nums") { count.to_s }
+          end
+        end
+      end
+    end
+  end
+
+  def unmatched_people
+    return if @unmatched_people.empty?
+
+    div(id: "feedback-exchange-unmatched", class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
+      h3(class: "text-sm font-medium text-gray-900 dark:text-white") { "People not found in GrowthOS" }
+      p(class: HINT_CLASSES) do
+        plain "Their feedback waits here and imports on the next sync once they exist in GrowthOS with this email."
+      end
+      ul(class: "mt-2 divide-y divide-gray-100 dark:divide-gray-800 text-sm") do
+        @unmatched_people.each do |person|
+          li(class: "flex flex-wrap justify-between gap-x-4 py-2") do
+            span(class: "min-w-0 [overflow-wrap:anywhere] text-gray-900 dark:text-white") do
+              plain person[:email]
+              span(class: "text-gray-600 dark:text-gray-300") { " · #{person[:display_name]}" } if person[:display_name].present?
+            end
+            span(class: "text-gray-600 dark:text-gray-300") do
+              "#{person[:role] == 'author' ? 'Gave' : 'Received'} #{person[:records]} #{'record'.pluralize(person[:records])}"
+            end
           end
         end
       end

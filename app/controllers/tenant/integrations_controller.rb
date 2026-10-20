@@ -28,6 +28,7 @@ class Tenant::IntegrationsController < ApplicationController
       slack_available: Slack.configured?,
       feedback_exchange_config: current_tenant.feedback_exchange_config,
       feedback_exchange_secrets_present: current_tenant.feedback_exchange_secrets.complete?,
+      feedback_exchange_summary: FeedbackExchangeImport.summary,
       user: current_user,
       current_tenant: current_tenant,
       tenants: tenants_for_user

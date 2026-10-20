@@ -67,6 +67,25 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_select "#feedback-exchange-counts"
       end
 
+      should "show what the import has done and whom it could not find" do
+        configure_tenant
+        ActsAsTenant.with_tenant(@tenant) do
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "1", status: "imported", synced_at: Time.current)
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "2", status: "skipped", skip_reason: "author_unmatched",
+                                         record: { author: { email: "ghost@example.com", display_name: "Ghost" } },
+                                         synced_at: Time.current)
+        end
+
+        get tenant_integration_path("feedback-exchange")
+
+        assert_select "#feedback-exchange-counts dd", text: "1", count: 2
+        assert_select "[data-skip-reason='author_unmatched']", text: /Giver not found in GrowthOS\s*1/
+        assert_select "#feedback-exchange-unmatched li", text: /ghost@example.com · Ghost\s*Gave 1 record/
+
+        get tenant_integrations_path
+        assert_select "#feedback-exchange-card-counts", text: "Imported 1 · Updated 0 · Skipped 1"
+      end
+
       should "never echo a stored secret" do
         configure_tenant
         get tenant_integration_path("feedback-exchange")

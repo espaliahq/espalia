@@ -358,6 +358,8 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def external_link(item)
+    return render(Views::Evidence::OriginBadge.new(item.external_reference, size: :sm)) if item.external_reference&.imported?
+
     url = item.external_reference&.url
     return if url.blank?
 

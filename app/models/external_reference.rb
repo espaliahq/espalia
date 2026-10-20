@@ -111,6 +111,15 @@ class ExternalReference
     }
   end
 
+  # Whether the item this points from was imported from a feedback exchange
+  # peer: the importer is the only writer of `given_at`, which every protocol
+  # record carries.
+  #
+  # @return [Boolean]
+  def imported?
+    metadata.is_a?(Hash) && (metadata["given_at"] || metadata[:given_at]).present? && system.present?
+  end
+
   # Whether this reference carries any populated information.
   #
   # @return [Boolean]
