@@ -244,7 +244,7 @@ Reach for a new role only when no existing one does the job. Two near-identical 
 
 1. **A file** `app/assets/tailwind/theme/<name>.css` with one `html[data-theme="<name>"]` block that sets the font and every role, with an `@variant dark` block for the dark values. Copy `bento.css` for the shape. Import it in `application.css`.
 2. **Set its text colours.** Presets set `--gos-*-content-inverse` to designed values; the contrast helper is only for fills a tenant picks.
-3. **Register it:** `Themeable::THEMES` and `Themeable::PRESETS` (`app/models/concerns/themeable.rb`), its font in `PRESET_FONT_URLS`, its navbar in `NAV_SURFACES` for the browser chrome, `DevThemeOverride::THEMES` (`app/controllers/concerns/dev_theme_override.rb`), and the `theme:` list in `config.lookbook.preview_display_options` (`config/environments/development.rb`).
+3. **Register it:** `Themeable::THEMES` and `Themeable::PRESETS` (`app/models/concerns/themeable.rb`), its font in `PRESET_FONT_URLS`, its navbar in `NAV_SURFACES` for the browser chrome (the `--gos-nav-surface` values from its file, light and dark), and the `theme:` list in `config.lookbook.preview_display_options` (`config/environments/development.rb`). `?theme=<name>` (`DevThemeOverride`) reads `PRESETS`, so it needs nothing.
 
 ### Add a domain palette
 
