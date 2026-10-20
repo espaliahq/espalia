@@ -444,7 +444,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
       lead: "When the cycle closes, the agreed ratings become your record for the period. " \
             "They read on one scale, and they carry into the next cycle.",
       steps: [
-        [ :admin, "Admin closes the cycle", "Everyone in it is marked concluded and stays part of its history." ],
+        [ :admin, "Admin closes the cycle", "Everyone still enrolled when it closes is marked concluded and stays part of its history." ],
         [ :growthos, "Your score reads on one scale",
           "100% means meeting your level. 200% means demonstrating the next one." ],
         [ :growthos, "The next cycle starts where this one ended",
