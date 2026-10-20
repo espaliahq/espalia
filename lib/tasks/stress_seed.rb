@@ -397,36 +397,39 @@ class StressSeed
     framework_id = @framework.framework_id
     return if FrameworkState::SuggestedEdit.where(framework_id: framework_id).exists?
 
-    editor, collaborator = @heads[0], @mega
-    @framework_handler.add_collaborator(framework_id, @ceo.id, "owner", added_by: @ceo.id)
-    @framework_handler.add_collaborator(framework_id, editor.id, "editor", added_by: @ceo.id)
-    @framework_handler.add_collaborator(framework_id, collaborator.id, "collaborator", added_by: @ceo.id)
+    # One batch: a single replay and append, so a failure part-way leaves nothing to trip the re-run guard.
+    @framework_handler.batch(framework_id) do
+      editor, collaborator = @heads[0], @mega
+      @framework_handler.add_collaborator(framework_id, @ceo.id, "owner", added_by: @ceo.id)
+      @framework_handler.add_collaborator(framework_id, editor.id, "editor", added_by: @ceo.id)
+      @framework_handler.add_collaborator(framework_id, collaborator.id, "collaborator", added_by: @ceo.id)
 
-    capabilities = FrameworkState::Capability.joins(:category)
-      .where(framework_capability_categories: { framework_id: framework_id }).order(:name).to_a
-    capabilities.first(8).each_with_index do |capability, i|
-      expectation = FrameworkState::BehaviouralExpectation.find_by!(capability_id: capability.capability_id, level_ordinal: 3)
-      value = i.even? ? "#{LONG_TEXT} (suggested rewrite #{i + 1})" : NO_SPACES
-      suggestion_id = SecureRandom.uuid_v7
-      @framework_handler.suggest_edit(framework_id, suggestion_id, "behavioural_expectation", expectation.expectation_id,
-        "description", value, collaborator.id, rationale: "Clearer for people at this level. #{LONG_TEXT if i.zero?}",
-        mode: :suggesting)
-      next unless i.zero?
+      capabilities = FrameworkState::Capability.joins(:category)
+        .where(framework_capability_categories: { framework_id: framework_id }).order(:name).to_a
+      capabilities.first(8).each_with_index do |capability, i|
+        expectation = FrameworkState::BehaviouralExpectation.find_by!(capability_id: capability.capability_id, level_ordinal: 3)
+        value = i.even? ? "#{LONG_TEXT} (suggested rewrite #{i + 1})" : NO_SPACES
+        suggestion_id = SecureRandom.uuid_v7
+        @framework_handler.suggest_edit(framework_id, suggestion_id, "behavioural_expectation", expectation.expectation_id,
+          "description", value, collaborator.id, rationale: "Clearer for people at this level. #{LONG_TEXT if i.zero?}",
+          mode: :suggesting)
+        next unless i.zero?
 
-      parent = nil
-      12.times do |n|
-        comment_id = SecureRandom.uuid_v7
-        @framework_handler.comment_on_suggestion(framework_id, suggestion_id, comment_id,
-          body: "Review note #{n + 1}: #{n.even? ? 'I think this reads better, but check the level above.' : LONG_TEXT}",
-          author_id: n.even? ? editor.id : collaborator.id, parent_id: parent)
-        parent = comment_id if n < 3
+        parent = nil
+        12.times do |n|
+          comment_id = SecureRandom.uuid_v7
+          @framework_handler.comment_on_suggestion(framework_id, suggestion_id, comment_id,
+            body: "Review note #{n + 1}: #{n.even? ? 'I think this reads better, but check the level above.' : LONG_TEXT}",
+            author_id: n.even? ? editor.id : collaborator.id, parent_id: parent)
+          parent = comment_id if n < 3
+        end
       end
-    end
 
-    capability = capabilities.first
-    @framework_handler.suggest_edit(framework_id, SecureRandom.uuid_v7, "capability", capability.capability_id,
-      "name", "#{capability.name} and Everything Adjacent to It, Renamed for Clarity", collaborator.id,
-      rationale: "Broaden the scope", mode: :suggesting)
+      capability = capabilities.first
+      @framework_handler.suggest_edit(framework_id, SecureRandom.uuid_v7, "capability", capability.capability_id,
+        "name", "#{capability.name} and Everything Adjacent to It, Renamed for Clarity", collaborator.id,
+        rationale: "Broaden the scope", mode: :suggesting)
+    end
     @io.puts "Framework suggestions seeded"
   end
 
