@@ -14,6 +14,11 @@
 # statuses are their current state — a request sent in the window and
 # answered later still reads as fulfilled.
 #
+# Each item is also counted once under the system it was given in
+# (`external_reference.system`, nil meaning GrowthOS), so a figure combined
+# with another system's counts every item where it was given. Imported items
+# stay in `feedback_provided`; `by_origin` shows them apart.
+#
 # Privacy: this query returns workflow counts only. It never exposes evidence
 # content, contributor identity, or individual request details.
 class Reporting::EvidenceCoverage
@@ -43,7 +48,7 @@ class Reporting::EvidenceCoverage
   Metrics = Data.define(
     :participant_count, :participants_with_feedback,
     :feedback_provided, :provided_by_request, :provided_unsolicited,
-    :feedback_withdrawn, :directionality, :requests_sent, :requests_fulfilled,
+    :feedback_withdrawn, :directionality, :by_origin, :requests_sent, :requests_fulfilled,
     :requests_pending, :requests_declined, :requests_cancelled
   ) do
     # @return [Integer] percent of participants with active cycle feedback
@@ -67,6 +72,9 @@ class Reporting::EvidenceCoverage
   # One manager, role, or level breakdown row.
   Group = Data.define(:key, :label, :metrics)
 
+  ORIGIN_SYSTEM_SQL = "evidence_items.external_reference ->> 'system'"
+  private_constant :ORIGIN_SYSTEM_SQL
+
   # Complete query result. `period` is the time window the counts were
   # narrowed to, or nil for the whole cycle.
   Result = Data.define(:cycle, :period, :metrics, :groups) do
@@ -76,10 +84,11 @@ class Reporting::EvidenceCoverage
   Participant = Data.define(
     :person_id, :manager_id, :role_id, :role_name, :level_ordinal,
     :provided_ids, :requested_provided_ids, :withdrawn_ids,
-    :feedback_directions, :request_statuses
+    :feedback_directions, :provided_origins, :request_statuses
   )
   EvidenceRow = Data.define(
-    :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction
+    :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
+    :origin_system
   )
   private_constant :Participant, :EvidenceRow
 
@@ -132,7 +141,8 @@ class Reporting::EvidenceCoverage
 
   def load_evidence_rows
     rows = @attribution.evidence_scope(period: @period)
-      .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction)
+      .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
+             Arel.sql(ORIGIN_SYSTEM_SQL))
       .map { |attributes| EvidenceRow.new(*attributes) }
     attributed = @attribution.attribute_evidence(rows)
 
@@ -170,6 +180,7 @@ class Reporting::EvidenceCoverage
         end.to_set,
         withdrawn_ids: items.filter_map { |item| item.id if item.link_status == "withdrawn" }.to_set,
         feedback_directions: active.map { |item| reporting_direction(item) },
+        provided_origins: active.map { |item| Reporting::OriginLabels.key_for(item.origin_system) }.tally,
         request_statuses: requests_by_person.fetch(enrollment.person_id, []).map(&:status)
       )
     end
@@ -180,6 +191,7 @@ class Reporting::EvidenceCoverage
     provided = participants.sum { |participant| participant.provided_ids.size }
     requested = participants.sum { |participant| participant.requested_provided_ids.size }
     directions = participants.flat_map(&:feedback_directions).tally
+    origins = participants.map(&:provided_origins).reduce({}) { |sum, tally| sum.merge(tally) { |_, a, b| a + b } }
 
     Metrics.new(
       participant_count: participants.size,
@@ -195,12 +207,21 @@ class Reporting::EvidenceCoverage
         self_provided: directions.fetch("self", 0),
         legacy_peer_or_upward: directions.fetch("legacy_peer_or_upward", 0)
       ),
+      by_origin: origin_counts(origins),
       requests_sent: statuses.size,
       requests_fulfilled: statuses.count("responded"),
       requests_pending: statuses.count("pending"),
       requests_declined: statuses.count("declined"),
       requests_cancelled: statuses.count("cancelled")
     )
+  end
+
+  # GrowthOS first (always present, so a client can rely on the key), then
+  # every other origin by count. The values sum to `feedback_provided`.
+  def origin_counts(origins)
+    native = Reporting::OriginLabels::NATIVE
+    others = origins.except(native).sort_by { |origin, count| [ -count, origin ] }
+    { native => origins.fetch(native, 0) }.merge(others.to_h)
   end
 
   def build_groups(participants)

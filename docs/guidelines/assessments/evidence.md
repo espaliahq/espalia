@@ -336,6 +336,11 @@ from request workflow:
 - Active feedback is also grouped by immutable provider-to-recipient direction:
   manager → report, peer → peer, or report → manager. Self feedback is separate
   and requested versus proactive remains an orthogonal split.
+- Active feedback is also split by origin: `external_reference.system`, with
+  none meaning GrowthOS. The report shows "Of which via Chip: N" under the
+  provided tile when any item came from another system, and the MCP payload
+  carries `by_origin`. Origin does not change what "requested" means: that is
+  still a GrowthOS evidence request.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
