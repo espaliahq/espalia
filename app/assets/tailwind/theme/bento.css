@@ -203,6 +203,8 @@ html[data-theme="bento"] {
     --gos-neutral-strong: #c1c1c2;
     --gos-neutral-content-inverse: #0a0d12;
 
+    /* Bento's lime is its brand in both schemes */
+    --gos-brand: #c6f226;
     --gos-brand-strong: #c6f226;
     --gos-brand-subtle: #374f0e;
     --gos-brand-muted: #4a690c;
