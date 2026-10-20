@@ -2,21 +2,26 @@
 
 # Lists every integration available to the current tenant.
 #
-# Currently surfaces the HRIS integration only — additional integration
-# types (Slack, notifications, SSO) will appear here as they're built.
+# Surfaces HRIS, Slack and the AI model; further integration types
+# (notifications, SSO) will appear here as they're built.
 #
 class Views::Integrations::IndexView < Views::Base
   # @param hris_config [HrisConfig]
   # @param hris_credentials_present [Boolean]
+  # @param ai_config [AiModelConfig]
+  # @param ai_state [Symbol] one of {Views::Integrations::AiModelView::STATE_BADGES}
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(hris_config:, hris_credentials_present:, slack_connected: false, slack_team_name: nil, slack_available: false, user: nil, current_tenant: nil, tenants: [])
+  def initialize(hris_config:, hris_credentials_present:, slack_connected: false, slack_team_name: nil, slack_available: false,
+                 ai_config: AiModelConfig.new, ai_state: :not_configured, user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_credentials_present = hris_credentials_present
     @slack_connected = slack_connected
     @slack_team_name = slack_team_name
     @slack_available = slack_available
+    @ai_config = ai_config
+    @ai_state = ai_state
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -47,7 +52,33 @@ class Views::Integrations::IndexView < Views::Base
     div(class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6") do
       hris_card
       slack_card
+      ai_model_card
     end
+  end
+
+  def ai_model_card
+    a(href: tenant_integration_path("ai-model"), class: "block group") do
+      render Components::Kit::Card.new do |card|
+        card.body do
+          div(class: "flex items-start justify-between") do
+            div do
+              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
+                        "group-hover:text-primary-ink transition-colors") { "AI model" }
+              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { ai_model_subtitle }
+            end
+            label, variant = Views::Integrations::AiModelView::STATE_BADGES.fetch(@ai_state)
+            render Components::Kit::Badge.new(label, variant: variant)
+          end
+        end
+      end
+    end
+  end
+
+  def ai_model_subtitle
+    return "Choose the model that suggests where feedback belongs" if @ai_state == :not_configured
+
+    "#{@ai_config.model.presence || AiModelConfig::DEFAULT_ANTHROPIC_MODEL} · " \
+      "#{@ai_config.base_host || Views::Integrations::AiModelView::PROVIDER_LABELS.fetch(@ai_config.provider)}"
   end
 
   def slack_card

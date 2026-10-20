@@ -97,6 +97,13 @@ Rails.application.routes.draw do
       end
     end
 
+    # AI model: save settings and key, and test the connection. The page itself
+    # is integrations#show with id "ai-model".
+    resource :ai_model, only: [ :update ],
+      path: "integrations/ai-model", controller: "ai_models" do
+      post :test_connection
+    end
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],

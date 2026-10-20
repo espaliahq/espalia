@@ -28,6 +28,11 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
     end
+
+    should "deny the AI model" do
+      assert_not policy.update_ai_model?
+      assert_not policy.test_ai_model?
+    end
   end
 
   context "as a tenant admin" do
@@ -50,6 +55,11 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
     should "allow sync" do
       assert policy.sync?
       assert policy.update_role_mappings?
+    end
+
+    should "allow the AI model" do
+      assert policy.update_ai_model?
+      assert policy.test_ai_model?
     end
   end
 
@@ -84,6 +94,8 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
+      assert_not policy.update_ai_model?
+      assert_not policy.test_ai_model?
     end
   end
 

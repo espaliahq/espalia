@@ -85,6 +85,17 @@ class AiModelConfig
     valid? && tenant.ai_api_key.present?
   end
 
+  # Where the AI model stands, from least to most set up.
+  #
+  # @param tenant [Tenant] the parent tenant, which holds the key
+  # @return [Symbol] :not_configured, :disabled or :active
+  def state(tenant)
+    return :not_configured unless configured?(tenant)
+    return :disabled unless suggestions_enabled?
+
+    :active
+  end
+
   private
 
   # https only, except in development where a local model server is plain
