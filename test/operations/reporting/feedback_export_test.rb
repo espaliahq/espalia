@@ -96,6 +96,60 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
     end
   end
 
+  context "origin" do
+    setup do
+      @native = feedback(person: @first, content: "Native.")
+      @slack = feedback(person: @first, content: "From Slack.", external_reference: { system: "slack" })
+      @chip = peer_feedback(person: @second, content: "From Chip.", system: "chip",
+        metadata: { request_context: "Q3 growth check-in" })
+      @chip_plain = peer_feedback(person: @second, content: "Chip, unasked.", system: "chip")
+      @unknown = peer_feedback(person: @second, content: "Elsewhere.", system: "hr_portal")
+    end
+
+    should "name where each item was given, GrowthOS for native ones" do
+      rows = call_op[:rows].index_by { |row| row[:feedback] }
+
+      assert_equal "GrowthOS", rows["Native."][:origin]
+      assert_equal "Slack", rows["From Slack."][:origin]
+      assert_equal "Chip", rows["From Chip."][:origin]
+      assert_equal "Hr Portal", rows["Elsewhere."][:origin]
+    end
+
+    should "carry the request the item answered in its source system" do
+      rows = call_op[:rows].index_by { |row| row[:feedback] }
+
+      assert_equal "Q3 growth check-in", rows["From Chip."][:origin_request]
+      assert_nil rows["Chip, unasked."][:origin_request]
+      assert_nil rows["Native."][:origin_request]
+    end
+
+    should "leave Requested or proactive about GrowthOS requests only" do
+      row = call_op[:rows].find { |candidate| candidate[:feedback] == "From Chip." }
+
+      assert_equal "Proactive", row[:requested]
+    end
+
+    should "ignore a request context that is not text" do
+      @chip_plain.update_columns(external_reference: { system: "chip", metadata: { request_context: { a: 1 } } })
+      row = call_op[:rows].find { |candidate| candidate[:feedback] == "Chip, unasked." }
+
+      assert_nil row[:origin_request]
+    end
+
+    should "list the origin columns after the reference link" do
+      keys = Operations::Reporting::FeedbackExport::COLUMNS.keys
+
+      assert_equal %i[reference_link origin origin_request], keys.last(3)
+    end
+
+    should "agree with the coverage report's origin split" do
+      coverage = Reporting::EvidenceCoverage.new(cycle: @cycle).call.metrics.by_origin
+      export = call_op[:rows].map { |row| Reporting::OriginLabels.key_for(row[:origin].downcase.tr(" ", "_")) }.tally
+
+      assert_equal coverage.reject { |_, count| count.zero? }, export
+    end
+  end
+
   context "cycle attribution" do
     setup do
       feedback(person: @first, content: "explicit")
@@ -261,6 +315,14 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       tenant: @tenant, author: @peer, person_id: person.id, framework_id: @framework_id,
       cycle_id: cycle_id, link_status: status, recorded_at: recorded_at,
       withdrawn_at: (Time.current if status == "withdrawn"), **attributes)
+  end
+
+  # `chip` and the like are not in ExternalReference::SYSTEMS yet, so the
+  # reference is written past validation, as an importer's projection would.
+  def peer_feedback(person:, system:, metadata: {}, **attributes)
+    feedback(person: person, **attributes).tap do |item|
+      item.update_columns(external_reference: { system: system, metadata: metadata })
+    end
   end
 
   def request(person:, evidence_id:, status:, requested_at:)
