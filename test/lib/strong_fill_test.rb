@@ -22,6 +22,7 @@ class StrongFillTest < ActiveSupport::TestCase
     # A Shell surface: tone-warning pairs its text, and the focus ring follows it
     "app/components/shell/impersonation_banner.rb" => %w[bg-tone-strong],
     # Text on the fill
+    "app/views/calibration_sessions/show_view.rb" => %w[bg-neutral-strong],
     "app/views/assessments/category_chip_bar.rb" => %w[aria-[current=page]:bg-neutral-strong],
     "app/views/assessments/activity/focus_mode_toggle.rb" => %w[aria-pressed:bg-neutral-strong],
     "app/views/assessments/activity/filter_chips.rb" => %w[aria-pressed:bg-neutral-strong],
@@ -30,8 +31,10 @@ class StrongFillTest < ActiveSupport::TestCase
     # The sign-in page's 44px Log in keeps its own size and radius, which Kit::Button lacks
     "app/views/users/sessions/new_view.rb" => %w[bg-tone-strong hover:bg-tone-strong-hover],
     # Marks with no text
+    "app/views/calibration_sessions/cohort_view.rb" => %w[bg-neutral-strong],
     "app/views/assessments/hero_summary.rb" => %w[bg-neutral-strong bg-warning-strong],
     "app/views/assessments/category_indicators.rb" => %w[bg-warning-strong],
+    "app/views/assessment_cycles/evidence_report/show_view.rb" => %w[bg-info-strong],
     "app/views/notifications/row.rb" => %w[bg-info-strong]
   }.freeze
 

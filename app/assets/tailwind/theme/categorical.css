@@ -70,3 +70,65 @@
   --text-color-category-7: var(--gos-category-7-content);
   --text-color-category-8: var(--gos-category-8-content);
 }
+
+/*
+ * Category marks (#546): a solid step of each hue for a dot or bar that
+ * stands for a category (a rater, on the calibration pages). Each clears 3:1
+ * on the surfaces in both schemes. A `mark-*` class picks the hue; `bg-mark`
+ * and `border-mark` paint it, and `text-on-mark` is the contrast helper's
+ * black or white for text on it.
+ */
+:root {
+  --gos-mark: var(--gos-content-muted);
+
+  --gos-category-1-strong: oklch(0.52 0.13 var(--gos-category-1-hue));
+  --gos-category-2-strong: oklch(0.52 0.13 var(--gos-category-2-hue));
+  --gos-category-3-strong: oklch(0.52 0.13 var(--gos-category-3-hue));
+  --gos-category-4-strong: oklch(0.52 0.13 var(--gos-category-4-hue));
+  --gos-category-5-strong: oklch(0.52 0.13 var(--gos-category-5-hue));
+  --gos-category-6-strong: oklch(0.52 0.13 var(--gos-category-6-hue));
+  --gos-category-7-strong: oklch(0.52 0.13 var(--gos-category-7-hue));
+  --gos-category-8-strong: oklch(0.52 0.13 var(--gos-category-8-hue));
+
+  @variant dark {
+    --gos-category-1-strong: oklch(0.76 0.12 var(--gos-category-1-hue));
+    --gos-category-2-strong: oklch(0.76 0.12 var(--gos-category-2-hue));
+    --gos-category-3-strong: oklch(0.76 0.12 var(--gos-category-3-hue));
+    --gos-category-4-strong: oklch(0.76 0.12 var(--gos-category-4-hue));
+    --gos-category-5-strong: oklch(0.76 0.12 var(--gos-category-5-hue));
+    --gos-category-6-strong: oklch(0.76 0.12 var(--gos-category-6-hue));
+    --gos-category-7-strong: oklch(0.76 0.12 var(--gos-category-7-hue));
+    --gos-category-8-strong: oklch(0.76 0.12 var(--gos-category-8-hue));
+  }
+}
+
+@utility mark-category-1 { --gos-mark: var(--gos-category-1-strong); }
+@utility mark-category-2 { --gos-mark: var(--gos-category-2-strong); }
+@utility mark-category-3 { --gos-mark: var(--gos-category-3-strong); }
+@utility mark-category-4 { --gos-mark: var(--gos-category-4-strong); }
+@utility mark-category-5 { --gos-mark: var(--gos-category-5-strong); }
+@utility mark-category-6 { --gos-mark: var(--gos-category-6-strong); }
+@utility mark-category-7 { --gos-mark: var(--gos-category-7-strong); }
+@utility mark-category-8 { --gos-mark: var(--gos-category-8-strong); }
+@utility mark-rater-outside { --gos-mark: var(--gos-rater-outside); }
+
+/* The helper in roles.css, on whichever mark the element carries */
+@utility text-on-mark {
+  color: var(--gos-content-default);
+
+  @supports (color: color(from red srgb-linear r g b)) {
+    color: color(from var(--gos-mark) srgb-linear
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));
+  }
+
+  @supports (color: contrast-color(red)) {
+    color: contrast-color(var(--gos-mark));
+  }
+}
+
+@theme inline {
+  --background-color-mark: var(--gos-mark);
+  --border-color-mark: var(--gos-mark);
+}

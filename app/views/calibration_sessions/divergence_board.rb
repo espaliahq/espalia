@@ -159,7 +159,7 @@ class Views::CalibrationSessions::DivergenceBoard < Views::Base
         left = (stats_hash[:mean] / AXIS_MAX * 100).clamp(0, 100).round(1)
         div(
           class: "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-6 w-6 items-center " \
-                 "justify-center rounded-full text-[10px] font-semibold text-white #{rater_dot_class(index)}",
+                 "justify-center rounded-full text-[10px] font-semibold #{rater_dot_class(index)} #{rater_text_class(index)}",
           style: "left: #{left}%",
           title: "#{rater_name(participant_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})"
         ) { rater_initials(participant_id) }

@@ -74,7 +74,8 @@ Most work needs only this table.
 | A neutral fill: chip, toggle, track | `bg-neutral-subtle`; selected `bg-neutral-muted` |
 | A status message | `Kit::Alert` with `tone:` |
 | A category | `Kit::Tag` with `category:` |
-| A rating, score or activity type | the domain utilities: `bg-rating-some`, `text-rating-some-chip`, `text-score-below`, `bg-activity-self` |
+| A dot or bar that stands for a category (a rater) | `mark-category-N` with `bg-mark` or `border-mark`; text on it `text-on-mark` |
+| A rating, score, activity or other data-vis meaning | the domain utilities: `bg-rating-some`, `text-rating-some-chip`, `text-score-below`, `bg-activity-self`, `bg-attainment-high`, `bg-progress-self`, `border-compared` |
 | The hero's verdict panel, a role lens, an evidence valence | `Views::Assessments::VerdictPanel`; `bg-lens-subtle text-lens ring-lens`; `bg-valence-growth-area text-valence-growth-area` |
 | The navbar | `bg-nav text-nav` (Shell only) |
 

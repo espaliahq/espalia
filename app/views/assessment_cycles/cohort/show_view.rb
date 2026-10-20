@@ -116,9 +116,9 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
     render Components::Kit::Card.new(title: "Progress funnel") do |card|
       card.body do
         div(class: "space-y-3") do
-          funnel_bar("Self-assessed", @result.funnel.self_done, @result.funnel.self_pct, "bg-blue-500")
-          funnel_bar("Manager-assessed", @result.funnel.manager_done, @result.funnel.manager_pct, "bg-amber-500")
-          funnel_bar("Aligned", @result.funnel.aligned, @result.funnel.aligned_pct, "bg-green-500")
+          funnel_bar("Self-assessed", @result.funnel.self_done, @result.funnel.self_pct, "bg-progress-self")
+          funnel_bar("Manager-assessed", @result.funnel.manager_done, @result.funnel.manager_pct, "bg-progress-manager")
+          funnel_bar("Aligned", @result.funnel.aligned, @result.funnel.aligned_pct, "bg-progress-aligned")
         end
       end
     end
@@ -267,10 +267,7 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   end
 
   def coverage_chip(label, done)
-    classes = done ? "bg-success-subtle text-success" : "bg-neutral-subtle text-muted"
-    span(class: "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium #{classes}") do
-      "#{label} #{done ? "✓" : "—"}"
-    end
+    render Components::Kit::Badge.new("#{label} #{done ? "✓" : "—"}", tone: done ? :success : :neutral)
   end
 
   def status_badge(participant)

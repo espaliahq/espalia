@@ -87,7 +87,7 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
         assert_select "[data-level-menu='3']", text: /2 people/
         # Consistently is the last column; Mia is the session's first rater,
         # so the backed dot wears the first rater hue.
-        assert_select "[data-frequency='consistent'] a[data-person-id='#{@report.id}'] span.bg-teal-600"
+        assert_select "[data-frequency='consistent'] a[data-person-id='#{@report.id}'] span.mark-category-4.bg-mark"
         # Unrated: off the axis, hollow grey, still a link to the card.
         assert_select "a[data-person-id='#{@omar.id}'] span.border-emphasized"
         assert_select "[data-frequency] a[data-person-id='#{@omar.id}']", count: 0
@@ -99,6 +99,13 @@ class CalibrationSessions::CapabilitiesControllerTest < ActionDispatch::Integrat
       assert_select "p[data-silent-raters]", count: 0
       # One rater: the board has no row to orient by, and says so.
       assert_select "[data-orientation-row]", text: /nothing to compare yet/
+    end
+
+    should "announce each level's examples panel as the dialog it is" do
+      get calibration_session_capability_path(@session, @cap.stable_id)
+
+      assert_select "[data-level-menu='3'] [aria-haspopup='dialog']", count: 1
+      assert_select "[data-level-menu='3'] [aria-haspopup='menu']", count: 0
     end
 
     should "dim every other rater under ?rater= and carry it on every pane link" do

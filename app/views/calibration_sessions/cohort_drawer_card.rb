@@ -48,7 +48,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
     div(
       class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-default " \
              "p-3 h-full overflow-y-auto " \
-             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-default'}",
+             "#{pinned ? 'border-compared ring-1 ring-compared' : 'border-default'}",
       data: { drawer_card: @dot[:person_id] }
     ) do
       header_row(pinned)
@@ -93,7 +93,7 @@ class Views::CalibrationSessions::CohortDrawerCard < Views::Base
       a(
         href: session_path(pins: @pin_ids - [ @dot[:person_id] ]),
         class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
-               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
+               "text-compared hover:bg-compared-subtle rounded-md",
         aria: { label: "Unpin #{person_name(@dot[:person_id])} from the comparison drawer" }
       ) { "×" }
     elsif @pin_ids.size < @max_pins

@@ -178,7 +178,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # the role examples (each flaggable) and the cell's ⚑ flag affordance.
   def level_menu(ordinal)
     example_count = Array(@stats[:illustrations]&.dig(ordinal)).sum { |group| group[:items].size }
-    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
+    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left, role: "dialog") do |dropdown|
       dropdown.trigger do
         # 44px tap target — the only route to the level's examples and
         # flags. A DRAWN info glyph, not the ⓘ character: headless/minimal
@@ -193,7 +193,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           span(class: "sr-only") { " at L#{ordinal}" }
         end
       end
-      dropdown.menu(width: "w-[min(24rem,calc(100vw-2rem))]", role: "dialog",
+      dropdown.menu(width: "w-[min(24rem,calc(100vw-2rem))]",
                     label: "L#{ordinal} — what good looks like") do
         div(class: "px-3 py-2 text-left") do
           p(class: "text-xs font-semibold uppercase tracking-wide text-muted") do
@@ -555,8 +555,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def level_header(ordinal, count, elsewhere)
     div(class: "min-w-0", data: { level_menu: ordinal }) do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
-        span(class: "rounded-md border border-emphasized bg-subtle " \
-                    "px-2 py-0.5 text-xs font-bold text-default") { "L#{ordinal}" }
+        render Components::Kit::Badge.new("L#{ordinal}", variant: :outline)
         span(class: "text-xs text-muted") { level_count(count, elsewhere) }
         clarifications = @stats[:clarifications][ordinal].to_i
         if clarifications.positive?
@@ -734,7 +733,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
     index = rater_index(dot[:rater_id])
     if dot[:backed]
-      fill = index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : "#{NOT_IN_SESSION_FILL} text-inverse"
+      fill = index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : "#{NOT_IN_SESSION_FILL} text-on-mark"
       edge = dot[:carried] ? "border-dashed border-strong" : "border-(--gos-surface-default)"
       "#{fill} border-2 #{edge}"
     else
@@ -1024,7 +1023,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     div(
       class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-default " \
              "p-3 h-full overflow-y-auto " \
-             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-default'}",
+             "#{pinned ? 'border-compared ring-1 ring-compared' : 'border-default'}",
       id: (inspector ? "calibration-person-card" : nil),
       data: { drawer_card: dot[:person_id] }
     ) do
@@ -1066,7 +1065,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       a(
         href: drill_in_path(view: @view, pins: @pin_ids - [ dot[:person_id] ]),
         class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
-               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
+               "text-compared hover:bg-compared-subtle rounded-md",
         aria: { label: "Unpin #{dot[:name]} from the comparison drawer" }
       ) { "×" }
     elsif @pin_ids.size < MAX_PINS

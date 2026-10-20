@@ -20,8 +20,8 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   # The dashed carried vocabulary as a bar segment: amber stripes, so a
   # carried share never reads as a confirmed one in greyscale either.
   CARRIED_SEGMENT = "bg-[repeating-linear-gradient(135deg,var(--color-amber-500)_0_3px,transparent_3px_6px)]"
-  CONFIRMED_SEGMENT = "bg-primary"
-  EVIDENCE_SEGMENT = "bg-gray-600 dark:bg-gray-300"
+  CONFIRMED_SEGMENT = "bg-readiness-confirmed"
+  EVIDENCE_SEGMENT = "bg-readiness-evidence"
   TRACK = "relative flex overflow-hidden rounded-full bg-neutral-subtle"
 
   # @param readiness [Hash, nil] OverviewStats `readiness` (nil: nobody to measure)
@@ -173,7 +173,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   def reference_row(row)
     tr(class: "border-t border-subtle", data: { readiness_reference: "true" }) do
       td(class: "py-2 pr-3 whitespace-nowrap text-muted") do
-        span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle bg-gray-400 dark:bg-gray-500",
+        span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle #{NOT_IN_SESSION_FILL}",
              aria: { hidden: "true" })
         plain "Not in session "
         span(class: "text-xs") do

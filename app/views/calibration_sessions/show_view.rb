@@ -224,7 +224,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
   def freshness_line
     p(class: "mt-1 flex items-center gap-2 text-xs text-muted") do
       if @session.started?
-        span(class: "h-2 w-2 rounded-full bg-green-500 motion-safe:animate-pulse", aria: { hidden: "true" })
+        span(class: "h-2 w-2 rounded-full bg-session-live motion-safe:animate-pulse", aria: { hidden: "true" })
       end
       plain "#{STATUS_LABELS.fetch(@session.status, @session.status)} · ratings as of "
       time(datetime: @rendered_at.utc.iso8601, data: { calibration_freshness_target: "asOf" }) do

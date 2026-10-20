@@ -259,3 +259,87 @@
   --text-color-valence-significant-growth-area: var(--gos-valence-significant-growth-area-content);
 }
 
+/* Cycle and calibration data-vis (#546) */
+:root {
+  /* Attainment: the share of a cohort at or above its level, in four tiers */
+  --gos-attainment-high: var(--color-green-100);
+  --gos-attainment-high-content: var(--color-green-800);
+  --gos-attainment-good: var(--color-lime-100);
+  --gos-attainment-good-content: var(--color-lime-800);
+  --gos-attainment-fair: var(--color-amber-100);
+  --gos-attainment-fair-content: var(--color-amber-800);
+  --gos-attainment-low: var(--color-red-100);
+  --gos-attainment-low-content: var(--color-red-800);
+
+  /* Cycle progress: who has done their part, as a bar on a neutral track */
+  --gos-progress-self: var(--color-blue-600);
+  --gos-progress-manager: var(--color-amber-700);
+  --gos-progress-aligned: var(--color-green-700);
+
+  /* Calibration readiness: cells confirmed this cycle, cells with evidence behind them */
+  --gos-readiness-confirmed: var(--gos-brand-strong);
+  --gos-readiness-evidence: var(--color-gray-600);
+
+  /* A person pinned for comparison: their card and the drawer that holds it */
+  --gos-compared: var(--color-violet-500);
+  --gos-compared-content: var(--color-violet-700);
+  --gos-compared-subtle: var(--color-violet-50);
+
+  /* A mark for a rater who isn't in the session */
+  --gos-rater-outside: var(--color-gray-500);
+
+  /* The pulse beside a session that is running */
+  --gos-session-live: var(--color-green-600);
+
+  @variant dark {
+    --gos-attainment-high: color-mix(in srgb, var(--color-green-900) 40%, var(--gos-surface-default));
+    --gos-attainment-high-content: var(--color-green-300);
+    --gos-attainment-good: color-mix(in srgb, var(--color-lime-900) 40%, var(--gos-surface-default));
+    --gos-attainment-good-content: var(--color-lime-300);
+    --gos-attainment-fair: color-mix(in srgb, var(--color-amber-900) 40%, var(--gos-surface-default));
+    --gos-attainment-fair-content: var(--color-amber-300);
+    --gos-attainment-low: color-mix(in srgb, var(--color-red-900) 40%, var(--gos-surface-default));
+    --gos-attainment-low-content: var(--color-red-300);
+
+    --gos-progress-self: var(--color-blue-400);
+    --gos-progress-manager: var(--color-amber-400);
+    --gos-progress-aligned: var(--color-green-400);
+
+    /* The track is dark, so the brand itself, not its deeper step */
+    --gos-readiness-confirmed: var(--gos-brand);
+    --gos-readiness-evidence: var(--color-gray-300);
+
+    --gos-compared-content: var(--color-violet-300);
+    --gos-compared-subtle: color-mix(in srgb, var(--color-violet-900) 30%, var(--gos-surface-default));
+
+    --gos-rater-outside: var(--color-gray-400);
+    --gos-session-live: var(--color-green-400);
+  }
+}
+
+@theme inline {
+  --background-color-attainment-high: var(--gos-attainment-high);
+  --background-color-attainment-good: var(--gos-attainment-good);
+  --background-color-attainment-fair: var(--gos-attainment-fair);
+  --background-color-attainment-low: var(--gos-attainment-low);
+  --text-color-attainment-high: var(--gos-attainment-high-content);
+  --text-color-attainment-good: var(--gos-attainment-good-content);
+  --text-color-attainment-fair: var(--gos-attainment-fair-content);
+  --text-color-attainment-low: var(--gos-attainment-low-content);
+
+  --background-color-progress-self: var(--gos-progress-self);
+  --background-color-progress-manager: var(--gos-progress-manager);
+  --background-color-progress-aligned: var(--gos-progress-aligned);
+
+  --background-color-readiness-confirmed: var(--gos-readiness-confirmed);
+  --background-color-readiness-evidence: var(--gos-readiness-evidence);
+
+  --background-color-compared: var(--gos-compared);
+  --background-color-compared-subtle: var(--gos-compared-subtle);
+  --border-color-compared: var(--gos-compared);
+  --ring-color-compared: var(--gos-compared);
+  --text-color-compared: var(--gos-compared-content);
+
+  --background-color-session-live: var(--gos-session-live);
+}
+

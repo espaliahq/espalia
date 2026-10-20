@@ -271,10 +271,10 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   end
 
   def suppressed_marker(n_in_group)
-    span(
-      class: "inline-flex items-center rounded-md bg-neutral-subtle px-2 py-0.5 text-xs font-medium text-muted",
+    render Components::Kit::Badge.new(
+      "n = #{n_in_group}",
       title: "Fewer than #{@result.suppression_floor} people — values hidden to avoid exposing individual assessments"
-    ) { "n = #{n_in_group}" }
+    )
   end
 
   # Heatmap tint tiers for the at-or-above share. A cell nobody has been
@@ -285,13 +285,13 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
     pct = cell.at_or_above_pct
     if pct >= 80
-      "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+      "bg-attainment-high text-attainment-high"
     elsif pct >= 60
-      "bg-lime-100 text-lime-800 dark:bg-lime-900/40 dark:text-lime-300"
+      "bg-attainment-good text-attainment-good"
     elsif pct >= 40
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      "bg-attainment-fair text-attainment-fair"
     else
-      "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+      "bg-attainment-low text-attainment-low"
     end
   end
 

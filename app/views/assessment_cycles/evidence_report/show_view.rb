@@ -267,26 +267,27 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   end
 
   def direction_row(label, count, percent)
-    div(class: "min-w-0 rounded-lg border border-default bg-subtle p-4") do
-      div(class: "flex items-start justify-between gap-3 text-sm") do
-        span(class: "font-medium text-default") { label }
-        span(class: "shrink-0 tabular-nums text-muted") { "#{count} (#{percent}%)" }
-      end
-      div(
-        class: "mt-2 h-2 w-full overflow-hidden rounded-full bg-neutral-subtle",
-        role: "progressbar",
-        aria: {
-          label: "#{label}: #{count} feedback items, #{percent}% of interpersonal feedback",
-          valuenow: percent,
-          valuemin: 0,
-          valuemax: 100
-        }
-      ) do
-        div(
-          class: "h-2 rounded-full bg-info-strong",
-          style: "width: #{percent}%"
-        )
-      end
+    render Components::Kit::Card.new(variant: :inset, density: :compact, class: "min-w-0") do |card|
+      card.body { direction_row_body(label, count, percent) }
+    end
+  end
+
+  def direction_row_body(label, count, percent)
+    div(class: "flex items-start justify-between gap-3 text-sm") do
+      span(class: "font-medium text-default") { label }
+      span(class: "shrink-0 tabular-nums text-muted") { "#{count} (#{percent}%)" }
+    end
+    div(
+      class: "mt-2 h-2 w-full overflow-hidden rounded-full bg-neutral-subtle",
+      role: "progressbar",
+      aria: {
+        label: "#{label}: #{count} feedback items, #{percent}% of interpersonal feedback",
+        valuenow: percent,
+        valuemin: 0,
+        valuemax: 100
+      }
+    ) do
+      div(class: "h-2 rounded-full bg-info-strong", style: "width: #{percent}%")
     end
   end
 

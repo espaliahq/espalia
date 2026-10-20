@@ -130,10 +130,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   def cohort_header(cohort)
     div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
-      span(class: "text-xs font-bold rounded-md border border-default " \
-                  "bg-subtle px-2 py-0.5 text-default") do
-        "L#{cohort[:ordinal]}"
-      end
+      render Components::Kit::Badge.new("L#{cohort[:ordinal]}", variant: :outline)
       span(class: "text-xs text-muted") do
         plain "#{cohort[:people].size} #{'person'.pluralize(cohort[:people].size)}"
         if cohort[:median_pct]
