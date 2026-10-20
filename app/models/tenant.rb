@@ -26,6 +26,13 @@ class Tenant < ApplicationRecord
   serialize :hris_credentials, coder: JSON
   encrypts :hris_credentials
 
+  # Feedback exchange with a peer system. The config is plain settings; the
+  # credentials are the two signing secrets, encrypted JSON:
+  # { outbound_secret:, inbound_secret:, previous_inbound_secret:, previous_rotated_at: }.
+  attribute :feedback_exchange_config, FeedbackExchangeConfig.to_type, default: -> { FeedbackExchangeConfig.new }
+  serialize :feedback_exchange_credentials, coder: JSON
+  encrypts :feedback_exchange_credentials
+
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the GrowthOS Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
@@ -73,6 +80,7 @@ class Tenant < ApplicationRecord
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
   validates(*STATE_LABEL_ATTRIBUTES, length: { maximum: STATE_LABEL_MAX_LENGTH }, allow_blank: true)
   validates :hris_config, store_model: true
+  validates :feedback_exchange_config, store_model: true
 
   # The colour the browser should paint its own chrome (address bar, title
   # bar, task switcher) for a page of this tenant: the tenant's navbar
@@ -123,6 +131,32 @@ class Tenant < ApplicationRecord
 
     family = font_family.gsub(" ", "+")
     "https://fonts.googleapis.com/css2?family=#{family}:wght@300;400;500;600;700&display=swap"
+  end
+
+  # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
+  #
+  # @return [FeedbackExchangeSecrets]
+  def feedback_exchange_secrets
+    FeedbackExchangeSecrets.new(feedback_exchange_credentials)
+  end
+
+  # Store new signing secrets. A blank argument leaves that secret as it is, so a
+  # form that never echoes a stored value can be saved without retyping it.
+  # Replacing the inbound secret keeps the old one as the previous secret, which
+  # still verifies for 24 hours (protocol §6).
+  #
+  # @param outbound_secret [String, nil]
+  # @param inbound_secret [String, nil]
+  # @return [Boolean] whether the tenant saved
+  def update_feedback_exchange_secrets!(outbound_secret: nil, inbound_secret: nil)
+    secrets = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
+    secrets["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
+    if inbound_secret.present? && inbound_secret.strip != secrets["inbound_secret"]
+      secrets["previous_inbound_secret"] = secrets["inbound_secret"] if secrets["inbound_secret"].present?
+      secrets["previous_rotated_at"] = Time.current.iso8601 if secrets["inbound_secret"].present?
+      secrets["inbound_secret"] = inbound_secret.strip
+    end
+    update!(feedback_exchange_credentials: secrets)
   end
 
   # @return [Boolean] whether this tenant has a usable Slack connection
