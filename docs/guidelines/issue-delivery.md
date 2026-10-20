@@ -89,6 +89,16 @@ touches **before** writing code; do not rely on defaults.
 CodeRabbit can also post no review at all and still show a green row. Check for each skip before reading silence as clean:
 
 - **CodeRabbit's rate limit also refuses the manual `@coderabbitai review` trigger, and its "wait N minutes" is not reliable.** A limited PR shows a "Review limit reached" comment and `gh pr checks` reports the CodeRabbit row as `pass` with "Review rate limited" — a green row, no review. Posting `@coderabbitai review` inside the limit answers "Action not completed — Review rate limited" ([PR #404](https://github.com/mr-yum/growth-os/pull/404) was refused 22 minutes after a "wait 7 minutes" notice; a later retry got "Review triggered"). So: never read a rate-limited PR as clean, retry the trigger until the reply says "Review triggered", then poll for the summary comment ("No actionable comments…" / "Actionable comments posted: N") plus the GraphQL unresolved-thread count. The "Run on-demand review" checkbox draws on paid capacity after the free window; leave that to a human.
+- **When CodeRabbit is rate-limited, run `/code-review` twice, on two models, and
+  land the findings before merging.** A "Review rate limited" reply means no
+  review happened, and the retry can keep failing for hours. The fallback (Tal,
+  21 Oct 2026) is two independent `/code-review` passes at `high` effort over
+  the branch diff, one on an Opus 5.5 agent and one on a Sonnet 5.5 agent, each
+  verifying its findings against the code and reporting them rather than editing
+  (so the two cannot collide in the worktree). The branch owner lands the real
+  findings as stacked commits, says in the PR which were rejected and why, and
+  retries the CodeRabbit trigger afterwards; a later CodeRabbit review is
+  welcome but no longer gates the merge.
 - **CodeRabbit does not auto-review a PR whose base is not the default branch.** It posts "Review skipped — Auto reviews are disabled on base/target branches other than the default branch" and nothing else, which reads exactly like a clean review. This bites every stacked PR (base = the branch below it), which is the shape this repo asks for when work is split across issues. Two remedies: comment `@coderabbitai review` to trigger a single review while the PR is still stacked, and re-check after `gh pr edit <n> --base <next>` retargets it as the stack lands. Never treat the absence of CodeRabbit comments on a stacked PR as "no findings" — check for the skip notice first (`gh pr view <n> --json comments -q '.comments[]|select(.author.login=="coderabbitai")|.body'`). Repo-wide auto-review on other bases would need `reviews.auto_review.base_branches` in `.coderabbit.yaml`; it is deliberately not set today.
 - **A PR opened by a bot gets no review.** Every Dependabot PR is unreviewed; see [dependencies.md](dependencies.md).
 
