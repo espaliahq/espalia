@@ -14,6 +14,12 @@
 # An unplaced item's copy asks the recipient to place it and links to its card
 # on the hub, where placing happens; a placed item links to its cell.
 #
+# Feedback imported from a peer system (`acting_via: feedback_exchange`) was
+# announced by the peer, which lists whom it told in the record's `notified`
+# (protocol §2.6). The recipient hears from GrowthOS only when the peer did not
+# tell them, and the manager side never does: {FeedbackExchange::PlacementRequest}
+# asks them to place it instead, which is an action, not a second arrival.
+#
 # Runs via SolidQueue (prepended AsyncHandler). NOT a projection — it
 # dispatches side effects and must never be registered in
 # Projections::Registry (replaying it would re-send notifications).
@@ -32,7 +38,11 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
       item = EvidenceItem.find_by(id: event.data[:evidence_id])
       next if item.nil? || item.source == "self"
 
-      notify_recipients(item, event.data[:request_id])
+      if event.metadata[:acting_via].to_s == "feedback_exchange"
+        notify_imported(item)
+      else
+        notify_recipients(item, event.data[:request_id])
+      end
     end
   end
 
@@ -53,6 +63,13 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
       deliver(TeamFeedbackReceivedNotifier, item, person_id, params)
       skipped << person_id
     end
+  end
+
+  def notify_imported(item)
+    return if item.person_id == item.author_id
+    return if Array(item.external_reference&.metadata&.dig("notified")).include?("recipient")
+
+    deliver(FeedbackReceivedNotifier, item, item.person_id, presentation(item))
   end
 
   def deliver(notifier_class, item, person_id, params)
