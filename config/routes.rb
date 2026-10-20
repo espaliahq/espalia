@@ -28,6 +28,12 @@ Rails.application.routes.draw do
   post "/slack/commands", to: "slack/commands#create", as: :slack_commands
   post "/slack/interactions", to: "slack/interactions#create", as: :slack_interactions
 
+  # The feedback exchange's inbound surface. Sessionless; the request signature is
+  # the only credential (see FeedbackExchangeSignedRequest).
+  scope "/api/feedback_exchange", module: :feedback_exchange, as: :feedback_exchange do
+    get "health", to: "health#show", as: :health
+  end
+
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
   namespace :settings do
