@@ -12,7 +12,7 @@ class Kit::ModalPreview < Lookbook::Preview
     ) do |modal|
       modal.trigger { "Delegates" }
       modal.body do
-        modal.p(class: "text-sm text-gray-600 dark:text-gray-400") do
+        modal.p(class: "text-sm text-muted") do
           "Delegates can record manager ratings for Priya Natarajan but cannot start or complete alignment."
         end
       end
@@ -25,7 +25,7 @@ class Kit::ModalPreview < Lookbook::Preview
     render Components::Kit::Modal.new(id: "modal-small", title: "Stop exploring E3?", size: :sm) do |modal|
       modal.trigger { "Stop exploring" }
       modal.body do
-        modal.p(class: "text-sm text-gray-600 dark:text-gray-400") do
+        modal.p(class: "text-sm text-muted") do
           "Your ratings against E3 stay on record. You can explore it again later."
         end
       end
@@ -36,7 +36,7 @@ class Kit::ModalPreview < Lookbook::Preview
     render Components::Kit::Modal.new(id: "modal-medium", title: "Manage delegates") do |modal|
       modal.trigger { "Delegates · 2" }
       modal.body do
-        modal.p(class: "text-sm text-gray-600 dark:text-gray-400") do
+        modal.p(class: "text-sm text-muted") do
           "Delegates can record manager ratings for Priya Natarajan but cannot start or complete alignment."
         end
       end
@@ -50,7 +50,7 @@ class Kit::ModalPreview < Lookbook::Preview
     ) do |modal|
       modal.trigger { "How is this calculated?" }
       modal.body do
-        modal.div(class: "space-y-3 text-sm text-gray-600 dark:text-gray-400") do
+        modal.div(class: "space-y-3 text-sm text-muted") do
           modal.p do
             "The score is how much of what E3 expects the ratings show, across every capability. " \
               "Feedback and comments are not part of it."
