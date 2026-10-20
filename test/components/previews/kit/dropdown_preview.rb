@@ -8,18 +8,6 @@ class Kit::DropdownPreview < Lookbook::Preview
     comment_menu(align: align.to_sym, strategy: strategy.to_sym)
   end
 
-  # @!group Alignment
-
-  def align_left
-    comment_menu(align: :left, strategy: :absolute)
-  end
-
-  def align_right
-    comment_menu(align: :right, strategy: :absolute)
-  end
-
-  # @!endgroup
-
   # @!group Strategy
 
   # Inside a box that clips its overflow: the open menu is cut off

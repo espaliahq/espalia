@@ -12,19 +12,6 @@ class Kit::DefinitionTipPreview < Lookbook::Preview
     tip(term, definition: definition, id: "deftip-playground", align: align.to_sym)
   end
 
-  # @!group Alignment
-
-  def align_left
-    tip("Weight", definition: WEIGHT, id: "deftip-align-left", align: :left)
-  end
-
-  # For a term near the right-hand edge
-  def align_right
-    tip("Weight", definition: WEIGHT, id: "deftip-align-right", align: :right)
-  end
-
-  # @!endgroup
-
   # @!group Terms
 
   def carried
