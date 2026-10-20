@@ -1,0 +1,291 @@
+/*
+ * The Bento preset: Bento's colours and font as values for the GrowthOS roles.
+ * Values are copied from Bento's semantic tokens (bento-ui theme.css), resolved
+ * to hex so GrowthOS never loads Bento's package. Bento writes dark as its own
+ * inverted scale; these are the hexes that scale lands on.
+ *
+ * Every role is set in both schemes: this block outranks Default's dark values,
+ * so a role set only in light would keep its light value in dark.
+ */
+html[data-theme="bento"] {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans--font-feature-settings: normal;
+
+  --gos-brand: #c6f226;
+
+  --gos-content-default: #0a0d12;
+  --gos-content-muted: #484e59;
+  --gos-content-subtle: #7b808a;
+  --gos-content-disabled: #9b9ea5;
+  --gos-content-inverse: #ffffff;
+
+  /* Bento has one surface under content; the page and hovers take steps of its grey */
+  --gos-surface-page: #f6f6f6;
+  --gos-surface-default: #ffffff;
+  --gos-surface-overlay: #ffffff;
+  --gos-surface-subtle: #f6f6f6;
+  --gos-surface-muted: #d7d8d9;
+  --gos-surface-emphasized: #bcbec1;
+  --gos-surface-inverse: #1b202a;
+  --gos-surface-hover: #f6f6f6;
+  --gos-surface-default-hover: #ebebeb;
+  --gos-surface-field: #ffffff;
+  /* Bento calls the backdrop surface-overlay; GrowthOS's overlay is the popover itself */
+  --gos-scrim: rgb(0 0 0 / 0.6);
+
+  --gos-focus-ring: #1b202a;
+  --gos-border-default: #d7d8d9;
+  --gos-border-subtle: #ebebeb;
+  --gos-border-emphasized: #7b808a;
+  --gos-border-strong: #1b202a;
+  --gos-border-disabled: #ebebeb;
+  --gos-border-field: #7b808a;
+
+  --gos-neutral-subtle: #ebebeb;
+  --gos-neutral-muted: #d7d8d9;
+  --gos-neutral-strong: #303643;
+  --gos-neutral-content-inverse: #ffffff;
+
+  /* The lime is a fill, never text: it carries near-black, and brand text is the hue's deepest step */
+  --gos-brand-strong: #c6f226;
+  --gos-brand-subtle: #edfed4;
+  --gos-brand-muted: #e0fead;
+  --gos-content-brand: #1d3102;
+  --gos-brand-content-inverse: #0a0d12;
+  --gos-border-brand: #7fb102;
+  /* Links take the accent hue, readable on both surfaces, where brand text is near-black */
+  --gos-content-link: #5b46c3;
+  --gos-content-link-hover: #47389f;
+
+  --gos-accent-strong: #6b58da;
+  --gos-accent-subtle: #f0f2fd;
+  --gos-accent-muted: #ced2f7;
+  --gos-content-accent: #251f4d;
+  --gos-accent-content-inverse: #ffffff;
+  --gos-border-accent: #6b58da;
+
+  --gos-content-danger: #4c0d04;
+  --gos-danger-subtle: #fbf0ef;
+  --gos-danger-muted: #f6c8c5;
+  --gos-danger-strong: #d02115; /* Bento red-600, not its 500: white text needs 4.5:1 */
+  --gos-danger-content-inverse: #ffffff;
+  --gos-border-danger: #eb3f33;
+  --gos-border-danger-strong: #d02115;
+
+  --gos-content-success: #02301e;
+  --gos-success-subtle: #e7f8ee;
+  --gos-success-muted: #a4e7bf;
+  --gos-success-strong: #007345; /* green-700, for the same reason */
+  --gos-success-content-inverse: #ffffff;
+  --gos-border-success: #00a15d;
+
+  --gos-content-warning: #4e1d09;
+  --gos-warning-subtle: #fffaeb;
+  --gos-warning-muted: #fedf89;
+  --gos-warning-strong: #fdb022;
+  --gos-warning-content-inverse: #4e1d09;
+  --gos-border-warning: #fdb022;
+  --gos-border-warning-strong: #dc6803;
+
+  --gos-content-info: #0b2551;
+  --gos-info-subtle: #ebf4fb;
+  --gos-info-muted: #b5daf9;
+  --gos-info-strong: #0869e7; /* blue-600, for the same reason */
+  --gos-info-content-inverse: #ffffff;
+  --gos-border-info: #2287f0;
+
+  /* Bento's solid hover: the fill mixed 5% toward the surface, in either scheme */
+  --gos-neutral-strong-hover: color-mix(in oklab, var(--gos-neutral-strong) 95%, var(--gos-surface-default));
+  --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 95%, var(--gos-surface-default));
+  --gos-accent-strong-hover: color-mix(in oklab, var(--gos-accent-strong) 95%, var(--gos-surface-default));
+  --gos-danger-strong-hover: color-mix(in oklab, var(--gos-danger-strong) 95%, var(--gos-surface-default));
+  --gos-success-strong-hover: color-mix(in oklab, var(--gos-success-strong) 95%, var(--gos-surface-default));
+  --gos-warning-strong-hover: color-mix(in oklab, var(--gos-warning-strong) 95%, var(--gos-surface-default));
+  --gos-info-strong-hover: color-mix(in oklab, var(--gos-info-strong) 95%, var(--gos-surface-default));
+
+  --gos-nav-surface: #ffffff;
+  --gos-nav-content: #0a0d12;
+
+  /* Rating, score and activity: Default's steps on Bento's hue ramps (yellow → amber, purple → sloe).
+     Bento's 500s run darker than Tailwind's, so three rating hues take 400 to keep chip text at 4.5:1 */
+  --gos-rating-none: #eb7268;
+  --gos-rating-none-chip-content: #4c0d04;
+  --gos-rating-none-carried: #f1a39d;
+  --gos-rating-none-carried-border: #d02115;
+  --gos-rating-none-pill: #fbe2e1;
+  --gos-rating-none-pill-content: #8d1c14;
+  --gos-rating-none-pill-carried-border: #eb7268;
+
+  --gos-rating-some: #f79009;
+  --gos-rating-some-chip-content: #4e1d09;
+  --gos-rating-some-carried: #fec84b;
+  --gos-rating-some-carried-border: #dc6803;
+  --gos-rating-some-pill: #fef0c7;
+  --gos-rating-some-pill-content: #93370d;
+  --gos-rating-some-pill-carried-border: #f79009;
+
+  --gos-rating-occasional: #2ab876;
+  --gos-rating-occasional-chip-content: #02301e;
+  --gos-rating-occasional-carried: #69d49b;
+  --gos-rating-occasional-carried-border: #00884d;
+  --gos-rating-occasional-pill: #d3f1dd;
+  --gos-rating-occasional-pill-content: #065c3a;
+  --gos-rating-occasional-pill-carried-border: #00a15d;
+
+  --gos-rating-consistent: #44a3ee;
+  --gos-rating-consistent-chip-content: #0b2551;
+  --gos-rating-consistent-carried: #81c3f4;
+  --gos-rating-consistent-carried-border: #0869e7;
+  --gos-rating-consistent-pill: #d7ebfd;
+  --gos-rating-consistent-pill-content: #1344a5;
+  --gos-rating-consistent-pill-carried-border: #44a3ee;
+
+  --gos-score-below: #b01f14;
+  --gos-score-below-fill: #eb3f33;
+  --gos-score-progressing: #b54708;
+  --gos-score-progressing-fill: #f79009;
+  --gos-score-performing: #007345;
+  --gos-score-performing-fill: #00a15d;
+  --gos-score-ahead: #6b58da;
+  --gos-score-ahead-fill: #7e74e7;
+
+  /* Self takes the lime so it stays apart from complete's green */
+  --gos-activity-self: #7fb102;
+  --gos-activity-manager: #7e74e7;
+  --gos-activity-attention: #f79009;
+  --gos-activity-discussion: #44a3ee;
+  --gos-activity-complete: #00884d;
+  --gos-activity-cleared: #9b9ea5;
+  --gos-activity-version: #5b46c3;
+
+  /* Six categories on Bento's ramps; 6 (cyan) and 7 (pink) have none and keep Default's */
+  --gos-category-1: #d7ebfd;
+  --gos-category-1-content: #1344a5;
+  --gos-category-2: #fbe2e1;
+  --gos-category-2-content: #8d1c14;
+  --gos-category-3: #d3f1dd;
+  --gos-category-3-content: #065c3a;
+  --gos-category-4: #e4e7fb;
+  --gos-category-4-content: #47389f;
+  --gos-category-5: #fef0c7;
+  --gos-category-5-content: #93370d;
+  --gos-category-8: #edfed4;
+  --gos-category-8-content: #4a690c;
+
+  @variant dark {
+    --gos-content-default: #fafafa;
+    --gos-content-muted: #a5a6a9;
+    --gos-content-subtle: #6e7177;
+    --gos-content-disabled: #51555c;
+    --gos-content-inverse: #0a0d12;
+
+    --gos-surface-page: #0f1115;
+    --gos-surface-default: #0a0d12;
+    --gos-surface-overlay: #0a0d12;
+    --gos-surface-subtle: #0f1115;
+    --gos-surface-muted: #22262f;
+    --gos-surface-emphasized: #383b42;
+    --gos-surface-inverse: #dededf;
+    --gos-surface-hover: #16191e;
+    --gos-surface-default-hover: #22262f;
+    --gos-surface-field: #0a0d12;
+
+    --gos-focus-ring: #dededf;
+    --gos-border-default: #51555c;
+    --gos-border-subtle: #383b42;
+    --gos-border-emphasized: #6e7177;
+    --gos-border-strong: #dededf;
+    --gos-border-disabled: #383b42;
+    --gos-border-field: #6e7177;
+
+    --gos-neutral-subtle: #383b42;
+    --gos-neutral-muted: #51555c;
+    --gos-neutral-strong: #c1c1c2;
+    --gos-neutral-content-inverse: #0a0d12;
+
+    --gos-brand-strong: #c6f226;
+    --gos-brand-subtle: #374f0e;
+    --gos-brand-muted: #4a690c;
+    --gos-content-brand: #f7ffec;
+    --gos-brand-content-inverse: #0a0d12;
+    --gos-border-brand: #c6f226;
+    --gos-content-link: #b0b5f1;
+    --gos-content-link-hover: #ced2f7;
+
+    --gos-accent-strong: #b0b5f1;
+    --gos-accent-subtle: #372e73;
+    --gos-accent-muted: #47389f;
+    --gos-content-accent: #f0f2fd;
+    --gos-accent-content-inverse: #0a0d12;
+    --gos-border-accent: #b0b5f1;
+
+    --gos-content-danger: #fbf0ef;
+    --gos-danger-subtle: #6b1e12;
+    --gos-danger-muted: #8d1c14;
+    --gos-danger-strong: #d02115;
+    --gos-border-danger: #d02115;
+    --gos-border-danger-strong: #eb7268;
+
+    --gos-content-success: #e7f8ee;
+    --gos-success-subtle: #09472e;
+    --gos-success-muted: #065c3a;
+    --gos-success-strong: #00884d;
+    --gos-border-success: #00884d;
+
+    --gos-content-warning: #fffaeb;
+    --gos-warning-subtle: #732b0d;
+    --gos-warning-muted: #93370d;
+    --gos-warning-strong: #fdb022;
+    --gos-border-warning: #fdb022;
+    --gos-border-warning-strong: #fdb022;
+
+    --gos-content-info: #ebf4fb;
+    --gos-info-subtle: #153b7a;
+    --gos-info-muted: #1344a5;
+    --gos-info-strong: #0869e7;
+    --gos-border-info: #0869e7;
+
+    --gos-nav-surface: #0a0d12;
+    --gos-nav-content: #fafafa;
+
+    --gos-rating-none: #eb7268;
+    --gos-rating-none-carried-border: #eb3f33;
+    --gos-rating-none-pill: color-mix(in srgb, #742114 30%, var(--gos-surface-overlay));
+    --gos-rating-none-pill-content: #f1a39d;
+    --gos-rating-none-pill-carried-border: #eb3f33;
+
+    --gos-rating-some: #fdb022;
+    --gos-rating-some-carried-border: #f79009;
+    --gos-rating-some-pill: color-mix(in srgb, #7a2e0e 30%, var(--gos-surface-overlay));
+    --gos-rating-some-pill-content: #fec84b;
+
+    --gos-rating-occasional: #2ab876;
+    --gos-rating-occasional-carried-border: #00a15d;
+    --gos-rating-occasional-pill: color-mix(in srgb, #0a4e32 30%, var(--gos-surface-overlay));
+    --gos-rating-occasional-pill-content: #69d49b;
+
+    --gos-rating-consistent: #44a3ee;
+    --gos-rating-consistent-carried-border: #2287f0;
+    --gos-rating-consistent-pill: color-mix(in srgb, #163e81 30%, var(--gos-surface-overlay));
+    --gos-rating-consistent-pill-content: #81c3f4;
+    --gos-rating-consistent-pill-carried-border: #2287f0;
+
+    --gos-score-below: #eb7268;
+    --gos-score-progressing: #fdb022;
+    --gos-score-performing: #2ab876;
+    --gos-score-ahead: #9191e9;
+
+    --gos-category-1: #153b7a;
+    --gos-category-1-content: #d7ebfd;
+    --gos-category-2: #6b1e12;
+    --gos-category-2-content: #fbe2e1;
+    --gos-category-3: #09472e;
+    --gos-category-3-content: #d3f1dd;
+    --gos-category-4: #372e73;
+    --gos-category-4-content: #e4e7fb;
+    --gos-category-5: #732b0d;
+    --gos-category-5-content: #fef0c7;
+    --gos-category-8: #374f0e;
+    --gos-category-8-content: #edfed4;
+  }
+}

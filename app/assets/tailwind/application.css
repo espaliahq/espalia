@@ -2,6 +2,7 @@
 @import "./theme/roles.css";
 @import "./theme/domain.css";
 @import "./theme/categorical.css";
+@import "./theme/bento.css";
 
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";

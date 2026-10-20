@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
-# Development only: `?scheme=dark` (or `light`), and `?theme=<preset>` once a
-# preset exists, preview the app in any colour scheme and theme before tenants
-# and people can choose one. The choice sticks in a cookie until
-# `?theme=default` or `?scheme=auto`.
+# Development only: `?scheme=dark` (or `light`) and `?theme=<preset>` preview
+# the app in any colour scheme and theme before tenants and people can choose
+# one. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`.
 module DevThemeOverride
   extend ActiveSupport::Concern
 
-  # Presets with a [data-theme] block in app/assets/tailwind/theme/; Bento joins with #548.
-  THEMES = %w[].freeze
+  # Presets with a [data-theme] block in app/assets/tailwind/theme/
+  THEMES = %w[bento].freeze
   SCHEMES = %w[light dark].freeze
 
   included do

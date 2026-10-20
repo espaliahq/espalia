@@ -94,7 +94,7 @@ Rails.application.configure do
   config.lookbook.preview_layout = "component_preview"
   # Toolbar switches; the preview layout turns them into <html data-theme / data-scheme>
   config.lookbook.preview_display_options = {
-    theme: [ [ "Default", "default" ] ],
+    theme: [ [ "Default", "default" ], [ "Bento", "bento" ] ],
     scheme: [ [ "Auto", "auto" ], [ "Light", "light" ], [ "Dark", "dark" ] ]
   }
 end
