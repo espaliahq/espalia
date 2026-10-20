@@ -9,15 +9,26 @@
 #   ])
 #
 class Components::Kit::DescriptionList < Components::Base
+  # Whole class names: Tailwind builds only classes it finds spelled out in the source.
+  COLUMNS = {
+    1 => "sm:grid-cols-1",
+    2 => "sm:grid-cols-2",
+    3 => "sm:grid-cols-3",
+    4 => "sm:grid-cols-4"
+  }.freeze
+
   # @param items [Array<Hash>] list of { term:, detail: } pairs
-  # @param columns [Integer] number of grid columns (default 3)
+  # @param columns [Integer] number of grid columns from `sm` up, 1–4 (default 3)
+  # @raise [ArgumentError] for any other column count
   def initialize(items:, columns: 3)
+    raise ArgumentError, "columns must be 1–#{COLUMNS.size}, got #{columns.inspect}" unless COLUMNS.key?(columns)
+
     @items = items
     @columns = columns
   end
 
   def view_template
-    dl(class: "grid grid-cols-1 sm:grid-cols-#{@columns} gap-4") do
+    dl(class: "grid grid-cols-1 #{COLUMNS.fetch(@columns)} gap-4") do
       @items.each { |item| description_item(item) }
     end
   end
