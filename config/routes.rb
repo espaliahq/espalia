@@ -103,6 +103,13 @@ Rails.application.routes.draw do
       end
     end
 
+    # Feedback exchange: save settings and secrets, and test the connection. The
+    # page itself is integrations#show with id "feedback-exchange".
+    resource :feedback_exchange, only: [ :update ],
+      path: "integrations/feedback-exchange", controller: "feedback_exchanges" do
+      post :test_connection
+    end
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],

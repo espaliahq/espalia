@@ -39,7 +39,19 @@ class FeedbackExchangeConfig
   # @param tenant [Tenant] the parent tenant, which holds the secrets
   # @return [Boolean]
   def configured?(tenant)
-    enabled? && peer_name.present? && base_url.present? && tenant.feedback_exchange_secrets.complete?
+    peer_name.present? && state(secrets_complete: tenant.feedback_exchange_secrets.complete?) == :active
+  end
+
+  # Where the exchange stands, from least to most set up.
+  #
+  # @param secrets_complete [Boolean] both signing secrets stored
+  # @return [Symbol] :not_configured, :missing_secrets, :disabled or :active
+  def state(secrets_complete:)
+    return :not_configured if base_url.blank?
+    return :missing_secrets unless secrets_complete
+    return :disabled unless enabled?
+
+    :active
   end
 
   # The peer's address with no trailing slash, ready to take a path.

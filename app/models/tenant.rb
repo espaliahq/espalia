@@ -149,14 +149,33 @@ class Tenant < ApplicationRecord
   # @param inbound_secret [String, nil]
   # @return [Boolean] whether the tenant saved
   def update_feedback_exchange_secrets!(outbound_secret: nil, inbound_secret: nil)
-    secrets = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
-    secrets["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
-    if inbound_secret.present? && inbound_secret.strip != secrets["inbound_secret"]
-      secrets["previous_inbound_secret"] = secrets["inbound_secret"] if secrets["inbound_secret"].present?
-      secrets["previous_rotated_at"] = Time.current.iso8601 if secrets["inbound_secret"].present?
-      secrets["inbound_secret"] = inbound_secret.strip
+    update_feedback_exchange!(outbound_secret: outbound_secret, inbound_secret: inbound_secret)
+  end
+
+  # Save the feedback exchange settings and secrets in one write. Unlisted settings
+  # keep their value; blank secrets keep theirs (see {#update_feedback_exchange_secrets!}).
+  #
+  # @param settings [Hash] FeedbackExchangeConfig attributes to change
+  # @param outbound_secret [String, nil]
+  # @param inbound_secret [String, nil]
+  # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
+  # @return [Boolean]
+  def update_feedback_exchange!(settings: {}, outbound_secret: nil, inbound_secret: nil)
+    credentials = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
+    credentials["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
+    if inbound_secret.present? && inbound_secret.strip != credentials["inbound_secret"]
+      if credentials["inbound_secret"].present?
+        credentials["previous_inbound_secret"] = credentials["inbound_secret"]
+        credentials["previous_rotated_at"] = Time.current.iso8601
+      end
+      credentials["inbound_secret"] = inbound_secret.strip
     end
-    update!(feedback_exchange_credentials: secrets)
+
+    assign_attributes(
+      feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge(settings.stringify_keys)),
+      feedback_exchange_credentials: credentials.presence
+    )
+    save!
   end
 
   # @return [Boolean] whether this tenant has a usable Slack connection
