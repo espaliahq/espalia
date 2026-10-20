@@ -6,8 +6,7 @@
 module DevThemeOverride
   extend ActiveSupport::Concern
 
-  # Presets with a [data-theme] block in app/assets/tailwind/theme/
-  THEMES = %w[bento].freeze
+  THEMES = Themeable::PRESETS
   SCHEMES = %w[light dark].freeze
 
   included do

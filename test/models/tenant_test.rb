@@ -112,10 +112,22 @@ class TenantTest < ActiveSupport::TestCase
   end
 
   context ".browser_theme_color" do
-    should "use Default's navbar with no tenant, on Default, and on a preset" do
-      [ nil, build(:tenant), build(:tenant, theme: "bento") ].each do |tenant|
+    should "use Default's navbar with no tenant and on Default" do
+      [ nil, build(:tenant) ].each do |tenant|
         assert_equal Tenant::DEFAULT_NAV_BG_COLOR, Tenant.browser_theme_color(tenant, :light)
         assert_equal Tenant::DEFAULT_NAV_BG_COLOR_DARK, Tenant.browser_theme_color(tenant, :dark)
+      end
+    end
+
+    should "use a preset's own navbar" do
+      tenant = build(:tenant, theme: "bento")
+      assert_equal "#ffffff", Tenant.browser_theme_color(tenant, :light)
+      assert_equal "#0a0d12", Tenant.browser_theme_color(tenant, :dark)
+    end
+
+    should "hold a navbar in both schemes for every preset" do
+      Tenant::PRESETS.each do |preset|
+        assert_equal %w[dark light], Tenant::NAV_SURFACES.fetch(preset).keys.sort, preset
       end
     end
 
