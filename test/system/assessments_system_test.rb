@@ -758,7 +758,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       chip_classes = page.evaluate_script(
         "document.getElementById('cell-#{@cap1_stable}-1').className"
       )
-      assert_match(/bg-blue/, chip_classes,
+      assert_match(/bg-rating-consistent-assumed/, chip_classes,
         "Unrated below-level chip should carry assumed-consistent blue tint. Classes: #{chip_classes}")
     end
 
@@ -906,6 +906,28 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_selector "#category-tabs a[aria-current='page']"
 
       assert_operator rendered_contrast("#category-tabs [data-all-chip] span"), :>=, 4.5
+    end
+
+    should "recolour a chip's percent and count once it is no longer current" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap1_stable,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
+      visit assessment_path(@assignment)
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+      wait_for_stimulus "category-nav"
+      old_chip = "nav#category-tabs a[data-category-id='#{@cat_id}']"
+      assert_selector "#{old_chip}[aria-current='page']"
+
+      page.execute_script("document.querySelector(\"nav#category-tabs [data-category-id='#{@cat2_id}']\").click()")
+      assert_selector "nav#category-tabs a[data-category-id='#{@cat2_id}'][aria-current='page']"
+      assert_no_selector "#{old_chip}[aria-current]"
+
+      # The dot is the first span, then the percent, then the count.
+      assert_operator rendered_contrast("#{old_chip} > span:nth-of-type(2)"), :>=, 4.5
+      assert_operator rendered_contrast("#{old_chip} > span:nth-of-type(3)"), :>=, 4.5
     end
 
     should "keep the activity pane's pressed filters at AA in dark mode" do

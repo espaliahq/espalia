@@ -5,7 +5,7 @@
 # The sky tone is the lens chip's: an exploration is a lens someone chose to
 # share.
 class Views::Assessments::ExplorationChips < Views::Base
-  TONE = "bg-sky-50 text-sky-800 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-200 dark:ring-sky-800"
+  TONE = "bg-lens-subtle text-lens ring-lens"
 
   # @param entries [Array<Assessments::OpenExplorations::Entry>]
   # @param assessment_id [String]

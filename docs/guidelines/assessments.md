@@ -413,7 +413,7 @@ The chip fill is the **rating language**; small corner glyphs (below) are a sepa
 
 | Level position | Frequency | Background |
 |---|---|---|
-| Below person_level | Unrated | Mid blue `blue-300` (assumed consistent — "Consistently" is blue, so a clearly-blue tint reads as consistent at a glance; kept a shade lighter than the solid `blue-500` of an explicit "Consistently" so the two stay distinguishable. An earlier near-invisible `blue-100/60` wash failed to register as a rating) |
+| Below person_level | Unrated | Mid blue `bg-rating-consistent-assumed`, `blue-300` in Default (assumed consistent — "Consistently" is blue, so a clearly-blue tint reads as consistent at a glance; kept a shade lighter than the solid `blue-500` of an explicit "Consistently" so the two stay distinguishable. An earlier near-invisible `blue-100/60` wash failed to register as a rating) |
 | Below person_level | rated | Solid hue from the palette (red / yellow / green / blue) |
 | At/above person_level | Unrated | Neutral gray |
 | At/above person_level | rated | Solid hue from the palette — same fill regardless of level position |

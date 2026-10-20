@@ -528,14 +528,12 @@ class Views::Assessments::HeroSummary < Views::Base
     when :underperforming
       { state_label: "#{state_label(:underperforming)} at #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
-        border: "border-red-300 dark:border-red-700",
-        accent: "text-danger",
+        state: :underperforming,
         caps: caps_by_id }
     when :progressing
       { state_label: "#{state_label(:progressing)} toward #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
-        border: "border-amber-300 dark:border-amber-700",
-        accent: "text-warning",
+        state: :progressing,
         caps: caps_by_id }
     when :performing
       # Meeting the current bar, below the mastery waypoint. The gap that
@@ -543,15 +541,13 @@ class Views::Assessments::HeroSummary < Views::Base
       # if its L+1 is unrated (contribution -1.0 there) it is the real gap.
       { state_label: "#{state_label(:performing)} #{current_code} · #{progress_label}",
         **gap_list(ranked_gaps(gap_scores, caps_by_id), gap_code, gap_ordinal),
-        border: "border-blue-300 dark:border-blue-700",
-        accent: "text-blue-700 dark:text-blue-300",
+        state: :performing,
         caps: caps_by_id }
     when :eligible
       { state_label: next_code ? "#{state_label(:eligible)} · #{next_code}" : state_label(:eligible),
         list_label: "Top contributors",
         items: strongest(scores_here),
-        border: "border-green-300 dark:border-green-700",
-        accent: "text-success",
+        state: :eligible,
         caps: caps_by_id }
     when :mastering
       # Past the halfway waypoint — the meaningful question is what is
@@ -566,8 +562,7 @@ class Views::Assessments::HeroSummary < Views::Base
       gaps = ranked_gaps(gap_scores, caps_by_id, lead_ids: gap_ordinal == @person_level ? [] : holding_next_level)
       { state_label: "#{state_label(:mastering)} #{current_code} · #{progress_label}",
         **gap_list(gaps, gap_code, gap_ordinal),
-        border: "border-purple-300 dark:border-purple-700",
-        accent: "text-purple-700 dark:text-purple-300",
+        state: :mastering,
         caps: caps_by_id }
     when :top_of_ladder
       # No band above this level to progress into — show what carries the
@@ -575,14 +570,11 @@ class Views::Assessments::HeroSummary < Views::Base
       { state_label: "#{state_label(:top_of_ladder)} #{current_code} · top of the ladder",
         list_label: "Strongest at #{current_code}",
         items: strongest(scores_here),
-        border: "border-blue-300 dark:border-blue-700",
-        accent: "text-blue-700 dark:text-blue-300",
+        state: :top_of_ladder,
         caps: caps_by_id }
     else # unknown state
       { state_label: "#{state_label(:performing)} #{current_code}",
         **gap_list(ranked_gaps(scores_here, caps_by_id), current_code, @person_level),
-        border: "border-default",
-        accent: "text-muted",
         caps: caps_by_id }
     end
   end
@@ -595,15 +587,9 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def state_panel(config)
-    div(class: "p-3 rounded-lg border #{config[:border]} bg-gray-50/50 dark:bg-gray-800/30") do
+    render Views::Assessments::VerdictPanel.new(state: config[:state]) do |panel|
       div(class: "flex items-baseline justify-between gap-3 mb-2") do
-        # `min-w-0` is what makes `truncate` actually clip inside a flex
-        # row — without it the span grows to fit its content and pushes
-        # the sibling delta past the panel's right edge (visible as
-        # the deltas being cut off on mobile).
-        span(class: "min-w-0 text-xs font-semibold #{config[:accent]} uppercase tracking-wide") do
-          config[:state_label]
-        end
+        panel.heading(config[:state_label])
         span(class: "text-[10px] font-medium text-muted uppercase tracking-wider shrink-0") do
           config[:list_label]
         end

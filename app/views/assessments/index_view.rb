@@ -94,8 +94,8 @@ class Views::Assessments::IndexView < Views::Base
     li do
       a(href: assessment_path(entry.assignment, entry.lens_params),
         data: { exploration: entry.code },
-        class: "block rounded-lg border border-sky-200 dark:border-sky-800 bg-overlay p-4 " \
-               "shadow-xs hover:border-sky-400 dark:hover:border-sky-600 transition-colors " \
+        class: "block rounded-lg border border-lens bg-overlay p-4 " \
+               "shadow-xs hover:border-lens-strong transition-colors " \
                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus") do
         p(class: "font-semibold text-default break-words") { entry.label }
         p(class: "mt-1 text-sm text-muted") { exploration_meta(entry) }

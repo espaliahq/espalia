@@ -12,7 +12,7 @@ The short version: **colour with a role, never a palette step.** Write `text-mut
 | **Utility** | The Tailwind class for a role: `text-muted`, `bg-default`, `border-subtle`. | `@theme inline` at the foot of each theme file |
 | **Theme** | A set of role values. | Default: `roles.css`. Bento: `theme/bento.css` on `html[data-theme="bento"]`. Custom: a tenant's values, injected by the layout. |
 | **Tone** | A class (`tone-brand`, `tone-danger`…) that points the generic `--gos-tone-*` roles at one role set. | `@utility tone-*` in `roles.css` |
-| **Domain palette** | Colours that carry assessment meaning: rating, score, activity. | `theme/domain.css` |
+| **Domain palette** | Colours that carry assessment meaning: rating, score, activity, the hero's verdict, the role lens, evidence valence. | `theme/domain.css` |
 | **Categorical palette** | Eight hues for tags. | `theme/categorical.css` |
 | **Contrast helper** | Black or white text for a fill a tenant picks. | the `@supports` blocks in `roles.css` |
 | **Scheme rule** | When dark applies. | `@custom-variant dark` in `application.css` |
@@ -75,6 +75,7 @@ Most work needs only this table.
 | A status message | `Kit::Alert` with `tone:` |
 | A category | `Kit::Tag` with `category:` |
 | A rating, score or activity type | the domain utilities: `bg-rating-some`, `text-rating-some-chip`, `text-score-below`, `bg-activity-self` |
+| The hero's verdict panel, a role lens, an evidence valence | `Views::Assessments::VerdictPanel`; `bg-lens-subtle text-lens ring-lens`; `bg-valence-growth-area text-valence-growth-area` |
 | The navbar | `bg-nav text-nav` (Shell only) |
 
 The Lookbook page **Design Tokens → Colour roles** lists every role with its utilities, its value under the current theme and scheme, and its measured contrast.

@@ -245,46 +245,30 @@ class Views::Assessments::Comments::Card < Views::Base
     # desktop.
     div(class: "absolute top-1 right-1") do
       render Components::Kit::Dropdown.new do |dropdown|
-        kebab_trigger
+        dropdown.trigger(label: "Comment actions", button: { variant: :ghost, size: :xs, icon: true }) do
+          icon("kebab", class: "size-4")
+        end
         dropdown.menu(width: "w-32") do
-          reply_menu_item if @can_reply
-          edit_menu_item if @can_edit
+          reply_menu_item(dropdown) if @can_reply
+          edit_menu_item(dropdown) if @can_edit
           delete_menu_item if @can_delete
         end
       end
     end
   end
 
-  def kebab_trigger
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :xs, icon: true, aria_label: "Comment actions",
-      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { haspopup: "menu", expanded: "false" }
-    ) { icon("kebab", class: "size-4") }
+  def reply_menu_item(dropdown)
+    dropdown.item(size: :xs, data: {
+      action: "click->dropdown#close click->comments-thread#startReply",
+      comments_thread_comment_id_param: @comment.id
+    }) { "Reply" }
   end
 
-  def reply_menu_item
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
-      data: {
-        action: "click->dropdown#close click->comments-thread#startReply",
-        comments_thread_comment_id_param: @comment.id
-      }
-    ) { "Reply" }
-  end
-
-  def edit_menu_item
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
-      data: {
-        action: "click->dropdown#close click->comments-thread#startEdit",
-        comments_thread_comment_id_param: @comment.id
-      }
-    ) { "Edit" }
+  def edit_menu_item(dropdown)
+    dropdown.item(size: :xs, data: {
+      action: "click->dropdown#close click->comments-thread#startEdit",
+      comments_thread_comment_id_param: @comment.id
+    }) { "Edit" }
   end
 
   def delete_menu_item
@@ -296,7 +280,7 @@ class Views::Assessments::Comments::Card < Views::Base
     button_to(
       assessment_comment_path(@assessment_id, @comment.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
+      class: Components::Kit::Dropdown.item_classes(tone: :danger, size: :xs),
       role: "menuitem",
       data: { turbo_confirm: "Delete this comment? Replies will stay visible." }
     ) { "Delete" }

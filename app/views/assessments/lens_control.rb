@@ -10,7 +10,7 @@
 # sharing.
 class Views::Assessments::LensControl < Views::Base
   HOME_CHIP = "bg-neutral-subtle text-muted"
-  LENS_CHIP = "bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200 ring-1 ring-sky-300 dark:ring-sky-700"
+  LENS_CHIP = "bg-lens-muted text-lens ring-1 ring-lens-strong"
   ITEM = "flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-muted " \
          "hover:bg-default-hover focus-visible:bg-default-hover " \
          "focus-visible:outline-hidden"

@@ -26,7 +26,7 @@ class Views::Assessments::LevelChip < Views::Base
   # default. Clearly blue ("Consistently" is blue in the palette), but a
   # shade lighter than the solid blue-500 of an explicit "Consistently"
   # so an assumed value stays distinguishable from a rated one.
-  ASSUMED_CONSISTENT_BG = "bg-blue-300 dark:bg-blue-700"
+  ASSUMED_CONSISTENT_BG = "bg-rating-consistent-assumed"
 
   # Sentinel marking a split slice whose value is the assumed-consistent
   # default (an unrated perspective on a below-level cell) rather than an
@@ -132,7 +132,7 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_text
     freq = primary_frequency
     if freq.nil?
-      assumed? ? "text-blue-900 dark:text-blue-100" : "text-muted"
+      assumed? ? "text-rating-consistent-assumed" : "text-muted"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
       config ? config[:chip_txt] : "text-muted"

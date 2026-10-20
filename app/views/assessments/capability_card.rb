@@ -178,8 +178,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   # scope, not about the rating: it counts here and nowhere on the record.
   def scope_chip
     span(class: "inline-flex items-center px-1.5 py-px rounded text-[10px] font-medium " \
-                "bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 " \
-                "ring-1 ring-inset ring-sky-200 dark:ring-sky-800",
+                "bg-lens-subtle text-lens ring-1 ring-inset ring-lens",
          data: { scope_chip: "outside-home" }) do
       "Not in #{@viewer_is_manager ? 'their' : 'your'} #{@lens.home_code} role"
     end

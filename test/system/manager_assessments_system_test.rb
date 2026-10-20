@@ -204,7 +204,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
 
       assert_selector "#cell-#{@cap_stable}-1 [data-split]", visible: :all
       # Base fill (the report's assumed-consistent slice) is blue, not grey.
-      assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
+      assert_selector "#cell-#{@cap_stable}-1.bg-rating-consistent-assumed"
       assert_no_selector "#cell-#{@cap_stable}-1.bg-neutral-subtle"
     end
 
@@ -228,7 +228,7 @@ class ManagerAssessmentsSystemTest < ApplicationSystemTestCase
       # Manager's explicit slice (top-left overlay) is solid blue-500.
       assert_selector "#cell-#{@cap_stable}-1 [data-split].bg-rating-consistent", visible: :all
       # Report's assumed slice (chip base) is the lighter blue-300.
-      assert_selector "#cell-#{@cap_stable}-1.bg-blue-300"
+      assert_selector "#cell-#{@cap_stable}-1.bg-rating-consistent-assumed"
     end
 
     should "label the assessee's current level CURRENT, not YOU, for the manager" do
