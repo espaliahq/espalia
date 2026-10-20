@@ -125,6 +125,9 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_response :unprocessable_content
         assert_select "[role=alert]", text: /could not be saved/
         assert_includes response.body, "must start with https://"
+        assert_includes response.body, "Peer name must be a slug"
+        assert_not_includes response.body, "is invalid"
+        assert_includes response.body, "Not configured" # the badge shows what is saved, not what was typed
         assert_not_includes response.body, OUTBOUND
         assert_includes response.body, "Not set"
         assert_equal "Chip!", css_select("input[name='feedback_exchange[peer_name]']").first["value"]
@@ -204,6 +207,20 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
 
         assert_match(/Save the peer's address/, flash[:alert])
       end
+    end
+  end
+
+  context "a rejected save with a login in the address" do
+    should "name the field and keep the status on what is saved" do
+      sign_in @admin_user
+      patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+        peer_name: "chip", base_url: "https://u:p@chip.example.com/x", enabled: "1", outbound_secret: OUTBOUND, inbound_secret: INBOUND
+      } }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "must be a plain address"
+      assert_select "dd", text: "Stored", count: 0
+      assert_select "dd", text: "Not set", count: 2
     end
   end
 

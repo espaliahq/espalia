@@ -28,7 +28,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   SECONDARY_BUTTON_CLASSES = "#{BUTTON_CLASSES} border border-gray-300 dark:border-gray-600 text-gray-700 " \
                              "dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
 
-  # @param config [FeedbackExchangeConfig]
+  # @param config [FeedbackExchangeConfig] what is saved; drives the status
+  # @param form_config [FeedbackExchangeConfig, nil] what the form shows; defaults
+  #   to +config+, differs after a rejected save
   # @param secrets_present [Hash{String => Boolean}] which secrets are stored
   # @param inbound_url [String] the address the peer calls on this app
   # @param can_edit [Boolean]
@@ -36,9 +38,10 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(config:, secrets_present:, inbound_url:, can_edit: false, errors: [],
+  def initialize(config:, form_config: nil, secrets_present:, inbound_url:, can_edit: false, errors: [],
                  user: nil, current_tenant: nil, tenants: [])
     @config = config
+    @form_config = form_config || config
     @secrets_present = secrets_present
     @inbound_url = inbound_url
     @can_edit = can_edit
@@ -144,9 +147,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
             input(type: "hidden", name: "_method", value: "patch")
 
-            text_field(:peer_name, "Peer name", value: @config.peer_name,
+            text_field(:peer_name, "Peer name", value: @form_config.peer_name,
                        hint: "A short lowercase slug, such as chip. It labels imported feedback.")
-            text_field(:base_url, "Peer address", value: @config.base_url, type: "url",
+            text_field(:base_url, "Peer address", value: @form_config.base_url, type: "url",
                        placeholder: "https://chip.example.com/api/feedback-exchange",
                        hint: "The peer's exchange address, including its path prefix. It must start with https://.")
             secret_field(:outbound_secret, "Outbound secret",
@@ -202,7 +205,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     div do
       input(type: "hidden", name: field_name(:enabled), value: "0")
       label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-gray-900 dark:text-white cursor-pointer") do
-        input(type: "checkbox", id: field_id(:enabled), name: field_name(:enabled), value: "1", checked: @config.enabled?,
+        input(type: "checkbox", id: field_id(:enabled), name: field_name(:enabled), value: "1", checked: @form_config.enabled?,
               class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600", aria: { describedby: "#{field_id(:enabled)}-hint" })
         plain "Exchange enabled"
       end

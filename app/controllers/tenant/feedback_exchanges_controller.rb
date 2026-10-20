@@ -21,12 +21,7 @@ class Tenant::FeedbackExchangesController < ApplicationController
     redirect_to tenant_integration_path("feedback-exchange"), notice: "Feedback exchange settings saved.",
                                                                status: :see_other
   rescue ActiveRecord::RecordInvalid => e
-    # The save failed, so the secrets were not stored: do not show them as stored.
-    current_tenant.restore_attributes([ :feedback_exchange_credentials ])
-    render_feedback_exchange_page(
-      errors: e.record.errors.full_messages.map { |message| message.sub(/\AFeedback exchange config /, "") },
-      status: :unprocessable_content
-    )
+    render_feedback_exchange_page(errors: setting_errors(e.record), status: :unprocessable_content)
   end
 
   # POST /tenant/integrations/feedback-exchange/test_connection
@@ -38,6 +33,15 @@ class Tenant::FeedbackExchangesController < ApplicationController
   end
 
   private
+
+  # The field-level messages ("Base url must be a plain address...") live on the
+  # config, not on the tenant, whose own message is only "is invalid".
+  def setting_errors(tenant)
+    config = tenant.feedback_exchange_config
+    config.valid?
+    messages = config.errors.full_messages
+    messages.presence || tenant.errors.full_messages
+  end
 
   def settings_params
     params.expect(feedback_exchange: [ :base_url, :peer_name, :enabled ])
