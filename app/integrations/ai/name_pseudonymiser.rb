@@ -11,7 +11,14 @@
 # person.
 #
 # Matching is case-insensitive and on whole words, longest name first: "Anna"
-# does not match inside "Annabel", and "Alex Chen" is taken before "Alex".
+# does not match inside "Annabel", and "Alex Chen" is taken before "Alex". Only
+# the names whose first word appears in a text are compiled into its pattern,
+# so a tenant with thousands of people costs a lookup per word, not a scan per
+# name.
+#
+# A first name can be an ordinary word (Will, Mark, Grace). {#pseudonymise} can
+# be told to leave first names alone for text that is about the framework, not a
+# person, where a swap would only rewrite "will deliver" into "Person 7 deliver".
 #
 # The mapping lives in the instance and nowhere else: it is not stored, logged
 # or sent. One instance serves one request, since {#restore} only undoes the
@@ -38,17 +45,20 @@ class Ai::NamePseudonymiser
 
   # @param people [Array<Array(String, String)>] [id, name] pairs
   def initialize(people)
-    @placeholders = build_placeholders(people)
-    @pattern = build_pattern
+    @placeholders, @first_names_only = build_placeholders(people)
+    @by_first_word = @placeholders.keys.group_by { |name| name[/[\p{L}\p{N}]+/] }
     @seen = Hash.new { |hash, label| hash[label] = [] }
   end
 
   # @param text [String, nil]
+  # @param first_names [Boolean] whether a name that is only somebody's first
+  #   name is swapped too
   # @return [String, nil] the text with every name replaced
-  def pseudonymise(text)
-    return text if text.blank? || @pattern.nil?
+  def pseudonymise(text, first_names: true)
+    pattern = pattern_for(text, first_names)
+    return text if pattern.nil?
 
-    text.gsub(@pattern) do |match|
+    text.gsub(pattern) do |match|
       label = @placeholders[match.squish.downcase]
       next match if label.nil?
 
@@ -78,9 +88,11 @@ class Ai::NamePseudonymiser
   def build_placeholders(people)
     owners = Hash.new { |hash, name| hash[name] = [] }
     ranked = people.each_with_index.map { |(id, name), index| [ id, name.to_s.squish, index + 1 ] }
+    full_names = []
     ranked.each do |id, name, _rank|
       next if name.blank?
 
+      full_names << name.downcase
       owners[name.downcase] << id
       first = name.split(" ").first
       owners[first.downcase] << id if first != name && first.length >= 2
@@ -88,16 +100,23 @@ class Ai::NamePseudonymiser
 
     rank_of = ranked.to_h { |id, _name, rank| [ id, rank ] }
     next_shared = ranked.size
-    owners.sort_by(&:first).to_h do |name, ids|
+    placeholders = owners.sort_by(&:first).to_h do |name, ids|
       ids = ids.uniq
       [ name, "Person #{ids.one? ? rank_of.fetch(ids.first) : (next_shared += 1)}" ]
     end
+    [ placeholders, (owners.keys - full_names).to_set ]
   end
 
-  def build_pattern
-    return nil if @placeholders.empty?
+  def pattern_for(text, first_names)
+    return nil if text.blank? || @placeholders.empty?
 
-    names = @placeholders.keys.sort_by { |name| [ -name.length, name ] }
-    Regexp.new("#{WORD_EDGE_BEFORE}(?:#{names.map { |name| Regexp.escape(name).gsub("\\ ") { "\\s+" } }.join('|')})#{WORD_EDGE_AFTER}", Regexp::IGNORECASE)
+    words = text.downcase.scan(/[\p{L}\p{N}]+/).to_set
+    names = words.flat_map { |word| @by_first_word.fetch(word, []) }
+    names = names.reject { |name| @first_names_only.include?(name) } unless first_names
+    return nil if names.empty?
+
+    names = names.sort_by { |name| [ -name.length, name ] }
+    alternatives = names.map { |name| Regexp.escape(name).gsub("\\ ") { "\\s+" } }
+    Regexp.new("#{WORD_EDGE_BEFORE}(?:#{alternatives.join('|')})#{WORD_EDGE_AFTER}", Regexp::IGNORECASE)
   end
 end

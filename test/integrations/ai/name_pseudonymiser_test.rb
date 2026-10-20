@@ -71,6 +71,34 @@ class Ai::NamePseudonymiserTest < ActiveSupport::TestCase
     end
   end
 
+  context "first names that are ordinary words" do
+    should "be left alone on request, while full names still go" do
+      people = [ [ "01", "Will Hart" ], [ "02", "Grace Ng" ] ]
+      names = pseudonymiser(people)
+      text = "Will Hart will show the grace period to Grace Ng."
+
+      assert_equal "Person 1 will show the grace period to Person 2.", names.pseudonymise(text, first_names: false)
+      assert_equal "Person 1 Person 1 show the Person 2 period to Person 2.", names.pseudonymise(text)
+    end
+
+    should "treat a one-word name as a full name even when first names are left alone" do
+      assert_equal "Person 1 helped", pseudonymiser([ [ "01", "Madonna" ] ]).pseudonymise("Madonna helped", first_names: false)
+    end
+  end
+
+  should "stay fast with thousands of people, compiling only names whose first word is in the text" do
+    people = Array.new(5_000) { |i| [ format("%08d", i), "Given#{i} Family#{i}" ] } + [ [ "99999999", "Alex Chen" ] ]
+    names = pseudonymiser(people)
+    text = ("The quarter went well. " * 400) + "Alex Chen led it."
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = names.pseudonymise(text)
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+    assert_match(/Person 5001 led it\.\z/, result)
+    assert_operator elapsed, :<, 0.5
+  end
+
   context "#restore" do
     should "put names back in what came back" do
       names = pseudonymiser
