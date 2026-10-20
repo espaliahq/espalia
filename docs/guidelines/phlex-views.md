@@ -28,6 +28,21 @@
 
 Anything used by one screen stays with that screen's views, not here.
 
+### Radius and shadow: one step per component
+
+Tailwind's radius and shadow scales are the tokens; each component owns one step ([#565](https://github.com/mr-yum/growth-os/issues/565)). To change the look, change the one file. Views don't set radius or shadow on anything a component provides.
+
+| Component | Radius | Shadow |
+|---|---|---|
+| `Kit::Card` | `rounded-2xl` | `shadow-xl` |
+| Overlays: `Kit::Dropdown`, `Kit::DefinitionTip`, `Kit::Toast`, every popover, menu and tooltip | `rounded-md` | `shadow-lg` |
+| `Kit::Modal` | `rounded-lg` | `shadow-2xl`, so it floats above the cards under it |
+| Controls: `Kit::Button`, `Kit::Field` | `rounded-md` | none |
+| `Kit::Tag`, `Kit::Chip` | `rounded-full` | none |
+| `Kit::Badge` | `rounded-full` today; square from [#563](https://github.com/mr-yum/growth-os/issues/563) | none |
+
+`test/lib/radius_shadow_steps_test.rb` holds Kit to these steps and keeps shadows out of Shared and Shell, except where a Shell piece draws its own surface.
+
 ## Page View Pattern
 
 ```ruby

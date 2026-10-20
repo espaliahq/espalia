@@ -20,8 +20,8 @@
 #
 class Components::Kit::Card < Components::Base
   VARIANTS = {
-    default: "bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700",
-    flush: "bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden"
+    default: "bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700",
+    flush: "bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
   }.freeze
 
   # @param title [String, nil] optional card title

@@ -21,7 +21,7 @@ class Components::Kit::DefinitionTip < Components::Base
                     "decoration-gray-400 dark:decoration-gray-500 underline-offset-4 " \
                     "hover:decoration-gray-900 dark:hover:decoration-white"
 
-  FOCUS = "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+  FOCUS = "rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
 
   # @param term [String] the word as it reads in the UI
   # @param definition [String] one or two sentences, plain language

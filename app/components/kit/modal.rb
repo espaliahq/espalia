@@ -104,7 +104,7 @@ class Components::Kit::Modal < Components::Base
       # body scrolling under it, so the way out is always visible.
       div(
         class: "w-full #{SIZES[@size]} max-h-[90dvh] flex flex-col " \
-               "rounded-lg bg-white dark:bg-gray-900 p-5 shadow-xl",
+               "rounded-lg bg-white dark:bg-gray-900 p-5 shadow-2xl",
         tabindex: "-1",
         data: { modal_target: "panel" }
       ) do
