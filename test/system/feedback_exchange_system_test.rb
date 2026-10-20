@@ -91,7 +91,13 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
   private
 
   def assert_no_horizontal_overflow
+    overflowing = page.evaluate_script(<<~JS)
+      Array.from(document.querySelectorAll("body *"))
+        .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 5)
+        .map((el) => el.tagName.toLowerCase() + "." + String(el.className).slice(0, 60))
+    JS
     assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
-           "the page scrolls sideways"
+           "the page scrolls sideways; wider than the viewport: #{overflowing.inspect}"
   end
 end

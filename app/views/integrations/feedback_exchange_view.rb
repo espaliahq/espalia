@@ -20,7 +20,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
                   "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary " \
                   "placeholder:text-gray-600 dark:placeholder:text-gray-300"
   LABEL_CLASSES = "block text-sm font-medium text-gray-900 dark:text-white"
-  HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300"
+  HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300 [overflow-wrap:anywhere]"
   BUTTON_CLASSES = "inline-flex items-center justify-center min-h-11 px-4 rounded-md text-sm font-medium cursor-pointer " \
                    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-900 " \
                    "dark:focus-visible:ring-white"
