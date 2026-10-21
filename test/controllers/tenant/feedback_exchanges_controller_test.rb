@@ -124,9 +124,14 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
           assert_select "input[type=checkbox][name='feedback_exchange[export_kinds][]'][value='#{kind}']"
           assert_select "input[type=checkbox][name='feedback_exchange[import_kinds][]'][value='#{kind}']"
         end
+        assert_select "input[name='feedback_exchange[import_kinds][]'][value='feedback']"
+        assert_select "input[name='feedback_exchange[export_kinds][]'][value='feedback']", count: 0
+        assert_select "label", text: "Any feedback (generic)", count: 1
+        assert_equal "feedback", css_select("input[type=checkbox][name='feedback_exchange[import_kinds][]']").first["value"]
         assert_select "input[name='feedback_exchange[export_kinds][]'][checked]", count: 4
         assert_select "input[name='feedback_exchange[import_kinds][]'][checked]", count: 0
         assert_includes response.body, "import everything"
+        assert_includes response.body, "Ticking every box is narrower than ticking none"
       end
 
       should "save the types to send and to import" do
@@ -139,6 +144,23 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         config = @tenant.reload.feedback_exchange_config
         assert_equal %w[impact observation], config.export_kinds
         assert_equal %w[peer_feedback], config.import_kinds
+      end
+
+      should "save the generic feedback kind as an import filter" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "chip", base_url: PEER, enabled: "0", import_kinds: [ "", "feedback" ]
+        } }
+
+        assert_equal %w[feedback], @tenant.reload.feedback_exchange_config.import_kinds
+      end
+
+      should "refuse the generic feedback kind as an export filter" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "chip", base_url: PEER, enabled: "0", export_kinds: [ "", "feedback" ]
+        } }
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "Types to send has unknown types: feedback"
       end
 
       should "send nothing when every export box is unticked, and import everything when no import box is" do

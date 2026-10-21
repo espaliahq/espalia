@@ -157,10 +157,13 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
                          hint: "Signs the requests we send. The peer holds the same value as its inbound secret. At least 32 characters; `openssl rand -hex 32` makes one.")
             secret_field(:inbound_secret, "Inbound secret",
                          hint: "Verifies the requests the peer sends, so it must differ from the outbound secret. At least 32 characters. Replacing it keeps the old value working for 24 hours.")
-            kinds_field(:export_kinds, "Types to send", @form_config.export_kinds,
+            kinds_field(:export_kinds, "Types to send", @form_config.export_kinds, FeedbackExchangeConfig::EXPORT_KINDS,
                         hint: "Which types of our feedback the peer may pull. Untick all to send nothing.")
-            kinds_field(:import_kinds, "Types to import", @form_config.import_kinds,
-                        hint: "Which types of the peer's feedback we take. Leave every box unticked to import everything it sends.")
+            kinds_field(:import_kinds, "Types to import", @form_config.import_kinds, FeedbackExchangeConfig::IMPORT_KINDS,
+                        hint: "Which types of the peer's feedback we take, matched against the type the peer sends. " \
+                              "Leave every box unticked to import everything it sends. Ticking every box is narrower " \
+                              "than ticking none: a type not listed here is left out. \"Any feedback\" matches a peer " \
+                              "that sends no finer type.")
             enabled_field
             inbound_address
 
@@ -206,13 +209,13 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     end
   end
 
-  def kinds_field(name, legend_text, selected, hint:)
+  def kinds_field(name, legend_text, selected, options, hint:)
     div do
       input(type: "hidden", name: "#{field_name(name)}[]", value: "")
       fieldset(aria: { describedby: "#{field_id(name)}-hint" }) do
         legend(class: LABEL_CLASSES) { legend_text }
         div(class: "mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4") do
-          EvidenceItem::EVIDENCE_TYPES.each { |kind| kind_checkbox(name, kind, selected.include?(kind)) }
+          options.each { |kind| kind_checkbox(name, kind, selected.include?(kind)) }
         end
       end
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
@@ -224,7 +227,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer") do
       input(type: "checkbox", id: id, name: "#{field_name(name)}[]", value: kind, checked: checked,
             class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600")
-      plain kind.humanize
+      plain(kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize)
     end
   end
 

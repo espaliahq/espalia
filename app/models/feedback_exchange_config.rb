@@ -13,6 +13,11 @@ class FeedbackExchangeConfig
   include StoreModel::Model
 
   PROVIDERS = %w[exchange].freeze
+  # The kind a conforming peer must send. A peer may send a finer type, one of our
+  # evidence types, so an import filter matches the peer's raw `kind` against both.
+  GENERIC_KIND = "feedback"
+  IMPORT_KINDS = ([ GENERIC_KIND ] + EvidenceItem::EVIDENCE_TYPES).freeze
+  EXPORT_KINDS = EvidenceItem::EVIDENCE_TYPES
   DEFAULT_EXPORT_KINDS = %w[peer_feedback manager_feedback observation impact].freeze
   SLUG_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
@@ -75,10 +80,11 @@ class FeedbackExchangeConfig
 
   private
 
-  # Each kind is one of our evidence types, the vocabulary both lists filter on.
+  # Each kind is one we know: the evidence types, plus the generic `feedback` on the
+  # import side, where it matches a peer that sends nothing finer.
   def kinds_are_evidence_types
-    { import_kinds: import_kinds, export_kinds: export_kinds }.each do |name, kinds|
-      unknown = Array(kinds).map(&:to_s) - EvidenceItem::EVIDENCE_TYPES
+    { import_kinds: [ import_kinds, IMPORT_KINDS ], export_kinds: [ export_kinds, EXPORT_KINDS ] }.each do |name, (kinds, allowed)|
+      unknown = Array(kinds).map(&:to_s) - allowed
       errors.add(name, "has unknown types: #{unknown.join(', ')}") if unknown.any?
     end
   end

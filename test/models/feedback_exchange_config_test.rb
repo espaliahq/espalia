@@ -83,6 +83,14 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       assert FeedbackExchangeConfig.new(import_kinds: %w[peer_feedback impact], export_kinds: EvidenceItem::EVIDENCE_TYPES).valid?
     end
 
+    should "accept the generic feedback kind as an import filter only" do
+      assert FeedbackExchangeConfig.new(import_kinds: %w[feedback]).valid?
+
+      config = FeedbackExchangeConfig.new(export_kinds: %w[feedback impact])
+      assert_not config.valid?
+      assert_includes config.errors[:export_kinds].first, "feedback"
+    end
+
     should "refuse anything else in either list" do
       %i[import_kinds export_kinds].each do |list|
         config = FeedbackExchangeConfig.new(list => %w[impact gossip])
