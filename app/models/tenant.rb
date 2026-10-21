@@ -102,7 +102,7 @@ class Tenant < ApplicationRecord
   #
   # @return [String, nil]
   def ai_api_key
-    ai_secrets.api_key || (Rails.application.credentials.dig(:anthropic, :api_key).presence if legacy_evidence_suggestions_enabled?)
+    ai_secrets.api_key || legacy_deployment_key
   end
 
   # Save the AI model settings and key in one write. Unlisted settings keep
@@ -367,6 +367,17 @@ class Tenant < ApplicationRecord
 
       public_send(:"#{attribute}=", value.strip)
     end
+  end
+
+  # The deployment's Anthropic key goes only to the Anthropic API itself: a
+  # tenant-chosen address must never receive a key its owner did not give.
+  #
+  # @return [String, nil]
+  def legacy_deployment_key
+    return unless legacy_evidence_suggestions_enabled?
+    return unless ai_config.anthropic? && ai_config.normalized_base_url.nil?
+
+    Rails.application.credentials.dig(:anthropic, :api_key).presence
   end
 
   # @raise [ActiveRecord::RecordInvalid]

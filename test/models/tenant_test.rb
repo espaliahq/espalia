@@ -171,6 +171,11 @@ class TenantTest < ActiveSupport::TestCase
         assert_nil build(:tenant).ai_api_key
         assert_equal "sk-deployment", build(:tenant, settings: { "evidence_suggestions_enabled" => true }).ai_api_key
         assert_equal "sk-test-key", build(:tenant, :with_ai_model, settings: { "evidence_suggestions_enabled" => true }).ai_api_key
+        custom = build(:tenant, settings: { "evidence_suggestions_enabled" => true }, ai_config: AiModelConfig.new(base_url: "https://proxy.example.com"))
+        assert_nil custom.ai_api_key, "the deployment key never goes to a tenant-chosen address"
+        gateway = build(:tenant, settings: { "evidence_suggestions_enabled" => true },
+                                 ai_config: AiModelConfig.new(provider: "openai_compatible", base_url: "https://gw.example.com/v1", model: "a/b"))
+        assert_nil gateway.ai_api_key
       end
     end
 
