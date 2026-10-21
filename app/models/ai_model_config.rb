@@ -111,7 +111,9 @@ class AiModelConfig
       errors.add(:base_url, "must start with https://")
     elsif uri.userinfo.present? || uri.query.present? || uri.fragment.present?
       errors.add(:base_url, "must be a plain address, with no login, query or fragment")
-    elsif !Rails.env.development? && Ai::HostGuard.private_host?(uri.host)
+    elsif !Rails.env.development? && !FeedbackExchange::HostGuard.canonical_host?(uri.host)
+      errors.add(:base_url, "must use a plain hostname or IP address")
+    elsif !Rails.env.development? && FeedbackExchange::HostGuard.private_host?(uri.host)
       errors.add(:base_url, "must not be a private network address")
     end
   rescue URI::InvalidURIError

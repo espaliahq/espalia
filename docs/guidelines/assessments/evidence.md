@@ -328,7 +328,8 @@ Rules, all deliberate:
   gem appends; `openai_compatible` ones take it with whatever prefix serves
   `/chat/completions`. The Anthropic gem follows redirects and resends the body, so with an
   address set a middleware (`Ai::Anthropic::Adapter::GUARD_REDIRECTS`) puts every
-  leg through `Ai::HostGuard`; Faraday never follows one. The OpenAI-compatible
+  leg through `Ai::Endpoint` (the exchange's `FeedbackExchange::HostGuard`);
+  Faraday never follows one. The OpenAI-compatible
   adapter sends `max_tokens`, or `max_completion_tokens` for `api.openai.com`
   and OpenAI's reasoning model families (`o3…`, `gpt-5…`), which reject the
   old name.
@@ -354,9 +355,12 @@ Rules, all deliberate:
   blank keeps it), the two switches, and **Test connection**, which sends the
   saved model one line and shows its reply or the failure, never the
   endpoint's body. The address is https only outside development, with no
-  login, query or private-network host (`Ai::HostGuard`, also checked against
-  the system resolver at call time, because `127.1` and `2130706433` reach
-  loopback through it while parsing as nothing to Ruby's `IPAddr`).
+  login, query or private-network host: `FeedbackExchange::HostGuard` through
+  `Ai::Endpoint.vet!`, which also refuses `127.1` and `2130706433` (loopback to
+  the system resolver, nothing to Ruby's `IPAddr`) and checks every resolved
+  address at call time. The Faraday adapter then connects to the accepted
+  address; the Anthropic gem cannot pin, so it is checked per request and
+  redirect leg only.
   `Tenant#update_ai_model!` refuses a save that would send a stored key to a
   different provider or address without the key entered again, and one that
   switches suggestions on with no key: both would otherwise fail silently

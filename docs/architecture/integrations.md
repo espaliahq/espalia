@@ -191,9 +191,12 @@ Evidence::SuggestPlacementsJob
   more, and no adapter special-cases it.
 - **The address is typed by an admin and called by the server**, so it is
   https only outside development, carries no login, query or fragment, and may
-  not be a private-network host (`Ai::HostGuard`: by name when saved, and by
-  name and DNS answer at call time). `FeedbackExchange::HostGuard` solves the
-  same problem for the exchange; the two are copies and want merging.
+  not be a private-network host. The guard is the exchange's
+  `FeedbackExchange::HostGuard`, reached through `Ai::Endpoint.vet!`: a
+  canonical hostname or IP literal, every resolved address public. The
+  Faraday adapter connects to the address the guard accepted; the Anthropic
+  gem cannot be told an address, so it is checked on every request and
+  redirect leg but not pinned.
 - **The key is write-only.** It is never rendered, logged or returned by
   MCP; `AiModelCredentials#inspect` prints only whether one is present. The
   Anthropic adapter passes it to the gem explicitly, so the environment's

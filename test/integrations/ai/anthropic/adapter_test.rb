@@ -167,7 +167,7 @@ class Ai::Anthropic::AdapterTest < ActiveSupport::TestCase
     should "be built with the tenant's key and address, never the environment's" do
       built = nil
       adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant", base_url: "https://proxy.example.com")
-      Ai::HostGuard.stub(:check!, nil) do
+      Ai::Endpoint.stub(:vet!, nil) do
         Anthropic::Client.stub(:new, ->(**options) { built = options; FakeClient.new(FakeMessages.new(answer("{}"))) }) do
           suggest(adapter)
         end
@@ -181,14 +181,14 @@ class Ai::Anthropic::AdapterTest < ActiveSupport::TestCase
     should "guard every leg of a redirect, not only the saved address" do
       built = nil
       adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant", base_url: "https://proxy.example.com")
-      Ai::HostGuard.stub(:check!, nil) do
+      Ai::Endpoint.stub(:vet!, nil) do
         Anthropic::Client.stub(:new, ->(**options) { built = options; FakeClient.new(FakeMessages.new(answer("{}"))) }) { suggest(adapter) }
       end
       guard = built[:middleware].first
       seen = []
       leg = Struct.new(:url).new(URI("https://elsewhere.example.com/v1/messages"))
 
-      Ai::HostGuard.stub(:check!, ->(url) { seen << url }) { assert_equal :sent, guard.call(leg, ->(_) { :sent }) }
+      Ai::Endpoint.stub(:vet!, ->(url) { seen << url }) { assert_equal :sent, guard.call(leg, ->(_) { :sent }) }
       assert_equal [ "https://elsewhere.example.com/v1/messages" ], seen
 
       private_leg = Struct.new(:url).new(URI("https://127.1/v1/messages"))
