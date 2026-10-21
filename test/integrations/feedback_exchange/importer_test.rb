@@ -255,8 +255,8 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
     end
 
     should "match the import list against the peer's raw kind, then type it by the author" do
-      @tenant.feedback_exchange_config.import_kinds = %w[feedback]
-      @importer = FeedbackExchange::Importer.new(@tenant)
+      @tenant.update_feedback_exchange!(settings: { import_kinds: %w[feedback] })
+      @importer = FeedbackExchange::Importer.new(Tenant.find(@tenant.id))
 
       assert_equal :imported, @importer.import(exchange_record(kind: "feedback")).outcome
       assert_equal "peer_feedback", EvidenceItem.find(evidence_id).evidence_type
