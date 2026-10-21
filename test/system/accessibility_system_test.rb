@@ -162,6 +162,27 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "pointer cursor" do
+    should "show the pointer on a plain button and not-allowed once it is disabled" do
+      visit root_path
+      assert_text "Home"
+
+      cursors = page.evaluate_script(<<~JS)
+        (() => {
+          const button = document.querySelector("#user-menu button");
+          const before = getComputedStyle(button).cursor;
+          button.disabled = true;
+          const disabled = getComputedStyle(button).cursor;
+          button.disabled = false;
+          return { before, disabled };
+        })()
+      JS
+
+      assert_equal "pointer", cursors["before"], "the avatar trigger carries no cursor utility, so the base rule must supply it"
+      assert_equal "not-allowed", cursors["disabled"]
+    end
+  end
+
   private
 
   # Smaller of the rendered width/height for the first element matching the

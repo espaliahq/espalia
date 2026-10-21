@@ -36,6 +36,7 @@
 - Make all views responsive with breakpoints: `sm:`, `md:`, `lg:`, `xl:`, `2xl:`
 - Colour with role utilities (`text-muted`, `bg-default`…), never palette steps or `dark:` for anything a role covers: [theming.md](theming.md)
 - Shadows are elevation roles (`shadow-raised`, `shadow-overlay`…), never a raw step: [theming.md → Radius and shadow](theming.md#radius-and-shadow)
+- Clickable things show the pointer. Tailwind v4 dropped it from buttons, so the base layer in `application.css` gives it to buttons, `summary`, `select`, checkboxes and radios, and the button, tab, option, switch and menu-item roles, with `not-allowed` once disabled. A clickable `div` or `span` gets it by taking `role="button"`, which it needs anyway
 - Implement proper ARIA attributes for accessibility
 - Use `dom_id` for HTML element IDs
 
