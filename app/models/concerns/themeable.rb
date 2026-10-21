@@ -33,7 +33,7 @@ module Themeable
   DEFAULT_NAV_BG_COLOR_DARK = "#1a1a2e"
   NAV_SURFACES = {
     "default" => { "light" => DEFAULT_NAV_BG_COLOR, "dark" => DEFAULT_NAV_BG_COLOR_DARK },
-    "bento" => { "light" => "#ffffff", "dark" => "#0a0d12" }
+    "bento" => { "light" => "#c6f226", "dark" => "#c6f226" }
   }.freeze
 
   included do
