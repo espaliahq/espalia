@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -795,6 +795,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
     t.string "slug", null: false
     t.jsonb "underperforming_label_translations", default: {}, null: false
     t.datetime "updated_at", null: false
+    t.jsonb "feedback_exchange_config", default: {}, null: false
+    t.string "feedback_exchange_credentials"
+    t.string "inbound_key_id"
+    t.string "previous_inbound_key_id"
+    t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
+    t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
     t.index ["slack_team_id"], name: "index_tenants_on_slack_team_id", unique: true, where: "(slack_team_id IS NOT NULL)"
     t.index ["slug"], name: "index_tenants_on_slug", unique: true
   end

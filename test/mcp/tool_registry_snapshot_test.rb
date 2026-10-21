@@ -2183,6 +2183,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_feedback_exchange_status",
+        "description" => "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
+                         "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
+                         "prove the peer answers), the peer and its address, the last sync, the types it sends and imports " \
+                         "(an empty import list means everything), and whether the secrets and sync cursors are present. " \
+                         "Never returns a secret.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "integrations_hris_titles",
         "description" => "List the job titles active HRIS people hold, each with the framework role mapping it " \
                          "resolves to (nil = unmapped, so the sync skips those people) and the people the next " \

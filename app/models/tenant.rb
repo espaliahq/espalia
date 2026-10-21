@@ -9,6 +9,7 @@
 #   tenant = Tenant.create!(name: "ACME Corp", slug: "acme-corp")
 #
 class Tenant < ApplicationRecord
+  FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH = 32
   HEX_COLOR_FORMAT = /\A#[0-9a-fA-F]{6}\z/
 
   # The navbar colours the app ships with (`--color-nav-bg` in
@@ -25,6 +26,13 @@ class Tenant < ApplicationRecord
   attribute :hris_config, HrisConfig.to_type, default: -> { HrisConfig.new }
   serialize :hris_credentials, coder: JSON
   encrypts :hris_credentials
+
+  # Feedback exchange with a peer system. The config is plain settings; the
+  # credentials are the two signing secrets, encrypted JSON:
+  # { outbound_secret:, inbound_secret:, previous_inbound_secret:, previous_rotated_at: }.
+  attribute :feedback_exchange_config, FeedbackExchangeConfig.to_type, default: -> { FeedbackExchangeConfig.new }
+  serialize :feedback_exchange_credentials, coder: JSON
+  encrypts :feedback_exchange_credentials
 
   # Slack bot credentials for this workspace, set when a tenant admin installs
   # the GrowthOS Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
@@ -73,6 +81,10 @@ class Tenant < ApplicationRecord
   validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
   validates(*STATE_LABEL_ATTRIBUTES, length: { maximum: STATE_LABEL_MAX_LENGTH }, allow_blank: true)
   validates :hris_config, store_model: true
+  validates :feedback_exchange_config, store_model: true
+  before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
+  validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
+  validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
 
   # The colour the browser should paint its own chrome (address bar, title
   # bar, task switcher) for a page of this tenant: the tenant's navbar
@@ -125,6 +137,49 @@ class Tenant < ApplicationRecord
     "https://fonts.googleapis.com/css2?family=#{family}:wght@300;400;500;600;700&display=swap"
   end
 
+  # The feedback exchange's signing secrets, wrapped so no accessor can print a value.
+  #
+  # @return [FeedbackExchangeSecrets]
+  def feedback_exchange_secrets
+    FeedbackExchangeSecrets.new(feedback_exchange_credentials)
+  end
+
+  # Save the feedback exchange settings and secrets in one write. Unlisted settings
+  # keep their value. A blank secret keeps the stored one, so a form that never echoes
+  # a secret can be saved without retyping it. Replacing the inbound secret keeps the
+  # old one as the previous secret, which still verifies for 24 hours (protocol §6).
+  #
+  # The row is locked and reloaded first, so sync state a job wrote since this tenant
+  # was loaded (the cursors, `last_synced_at`) is kept, not overwritten.
+  #
+  # @param settings [Hash] FeedbackExchangeConfig attributes to change
+  # @param outbound_secret [String, nil]
+  # @param inbound_secret [String, nil]
+  # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
+  # @return [Boolean]
+  def update_feedback_exchange!(settings: {}, outbound_secret: nil, inbound_secret: nil)
+    # A save that failed validation leaves its assignments behind, and a locked
+    # reload refuses unsaved changes: start from what is stored.
+    restore_attributes(%w[feedback_exchange_config feedback_exchange_credentials inbound_key_id previous_inbound_key_id])
+    with_lock do
+      credentials = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
+      credentials["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
+      if inbound_secret.present? && inbound_secret.strip != credentials["inbound_secret"]
+        if credentials["inbound_secret"].present?
+          credentials["previous_inbound_secret"] = credentials["inbound_secret"]
+          credentials["previous_rotated_at"] = Time.current.iso8601
+        end
+        credentials["inbound_secret"] = inbound_secret.strip
+      end
+
+      assign_attributes(
+        feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge(settings.stringify_keys)),
+        feedback_exchange_credentials: credentials.presence
+      )
+      save!
+    end
+  end
+
   # @return [Boolean] whether this tenant has a usable Slack connection
   def slack_connected?
     slack_bot_token.present?
@@ -173,6 +228,39 @@ class Tenant < ApplicationRecord
   end
 
   private
+
+  # The key ids the verifier looks a tenant up by, derived from the stored secrets.
+  def sync_feedback_exchange_key_ids
+    secrets = feedback_exchange_secrets
+    self.inbound_key_id = secrets.inbound_secret && FeedbackExchange::Signature.key_id(secrets.inbound_secret)
+    self.previous_inbound_key_id = secrets.previous_inbound_secret &&
+                                   FeedbackExchange::Signature.key_id(secrets.previous_inbound_secret)
+  end
+
+  # Each signing secret is long enough to be random, and the two differ: protocol §6
+  # asks for one secret per direction.
+  def feedback_exchange_secrets_are_strong
+    secrets = feedback_exchange_secrets
+    { "Outbound secret" => secrets.outbound_secret, "Inbound secret" => secrets.inbound_secret }.each do |label, value|
+      next if value.nil? || value.length >= FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH
+
+      errors.add(:base, "#{label} must be at least #{FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH} characters. " \
+                        "Generate one with `openssl rand -hex 32`.")
+    end
+    return unless secrets.outbound_secret && secrets.outbound_secret == secrets.inbound_secret
+
+    errors.add(:base, "The outbound and inbound secrets must differ: use one secret per direction.")
+  end
+
+  # An inbound secret identifies the tenant a request is for, so two tenants must
+  # not share one, current or previous.
+  def feedback_exchange_inbound_secret_is_ours
+    ids = [ inbound_key_id, previous_inbound_key_id ].compact
+    return if ids.empty?
+
+    taken = Tenant.where.not(id: id).where("inbound_key_id IN (:ids) OR previous_inbound_key_id IN (:ids)", ids: ids)
+    errors.add(:base, "That inbound secret is already in use by another workspace. Use a new random secret.") if taken.exists?
+  end
 
   # @return [void]
   def strip_state_labels
