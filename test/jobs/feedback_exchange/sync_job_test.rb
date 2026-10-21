@@ -63,6 +63,15 @@ class FeedbackExchange::SyncJobTest < ActiveSupport::TestCase
     assert_not_nil config.last_synced_at
   end
 
+  should "fail rather than fetch the same page again when the peer does not move its cursor" do
+    @feed[nil] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: true }
+    @feed["c1"] = { items: [], next_cursor: "c1", has_more: true }
+
+    error = assert_raises(FeedbackExchange::Errors::ApiError) { FeedbackExchange::SyncJob.new.perform(@tenant, client: client) }
+    assert_match(/did not move its cursor/, error.message)
+    assert_equal "c1", config.cursor
+  end
+
   should "add nothing when run again" do
     @feed[nil] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: false }
     @feed["c1"] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: false }

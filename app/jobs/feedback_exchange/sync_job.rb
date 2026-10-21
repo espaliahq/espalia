@@ -60,6 +60,9 @@ class FeedbackExchange::SyncJob < ApplicationJob
       processed += items.size
 
       next_cursor = page["next_cursor"].presence
+      if page["has_more"] && next_cursor == since
+        raise FeedbackExchange::Errors::ApiError.new(status: 200, message: "The peer said it had more but did not move its cursor")
+      end
       if next_cursor && next_cursor != since
         @tenant.update_feedback_exchange!(settings: { cursor_key => next_cursor })
         since = next_cursor
