@@ -236,8 +236,25 @@ class TenantTest < ActiveSupport::TestCase
         tenant = create(:tenant)
 
         assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { suggestions_enabled: true }, api_key: [ "x" ]) }
-        assert_raises(ActiveRecord::RecordInvalid) { Tenant.find(tenant.id).update_ai_model!(settings: { suggestions_enabled: true }) }
-        assert_nothing_raised { Tenant.find(tenant.id).update_ai_model!(settings: { suggestions_enabled: false }, api_key: [ "x" ]) }
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { suggestions_enabled: true }) }
+        assert_nothing_raised { tenant.update_ai_model!(settings: { suggestions_enabled: false }, api_key: [ "x" ]) }
+      end
+
+      should "work again on the same instance after a refused save, starting from what is stored" do
+        tenant = create(:tenant, :with_ai_model)
+
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }) }
+        assert_raises(ActiveRecord::RecordInvalid) do
+          tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: "http://gw.example.com", model: "a/b" }, api_key: "sk-x")
+        end
+
+        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5" })
+        tenant.reload
+
+        assert_equal "claude-haiku-5-5", tenant.ai_config.model
+        assert_equal "anthropic", tenant.ai_config.provider, "the refused attempts left nothing behind"
+        assert_nil tenant.ai_config.base_url
+        assert_equal "sk-test-key", tenant.ai_secrets.api_key
       end
 
       should "raise on an invalid config and store nothing" do

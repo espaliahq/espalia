@@ -116,7 +116,7 @@ class Ai::NamePseudonymiser
     return nil if names.empty?
 
     names = names.sort_by { |name| [ -name.length, name ] }
-    alternatives = names.map { |name| Regexp.escape(name).gsub("\\ ") { "\\s+" } }
+    alternatives = names.map { |name| Regexp.escape(name).gsub("\\ ") { "[[:space:]]+" } }
     Regexp.new("#{WORD_EDGE_BEFORE}(?:#{alternatives.join('|')})#{WORD_EDGE_AFTER}", Regexp::IGNORECASE)
   end
 end

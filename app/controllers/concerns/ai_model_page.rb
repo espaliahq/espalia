@@ -27,6 +27,7 @@ module AiModelPage
       form_config: errors.empty? ? tenant.effective_ai_config : tenant.ai_config,
       state: saved.effective_ai_config.state(saved),
       key_stored: saved.ai_api_key.present?,
+      key_field_stored: saved.ai_secrets.api_key?,
       can_edit: policy(:integrations).update_ai_model?,
       errors: errors,
       user: current_user,

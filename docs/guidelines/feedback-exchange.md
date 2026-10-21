@@ -124,7 +124,11 @@ tenant.update_feedback_exchange!(settings: { cursor: nil, deletions_cursor: nil 
 FeedbackExchange::SyncJob.perform_later(tenant)
 ```
 
-Records already imported come back as no-ops (or updates, if the peer changed them), because the ledger and the evidence ids are keyed on the record. Nothing is duplicated, and, imports being silent, nobody is notified.
+Records already imported come back as no-ops (or updates, if the peer changed them), because the ledger and the evidence ids are keyed on the record. Nothing is duplicated, and, imports being silent, nobody is notified. A record skipped for a reason that is not retried is assessed again, so a cursor reset is also the backfill after widening `import_kinds`.
+
+### Testing against a real peer
+
+The first end-to-end run against Chip (21 Oct 2026, written up on Linear AIX-3392) left three rules for the next one. Use **synthetic people** on both sides: the dev database carries real colleagues' emails from the HiBob sync, and a test with those would attach made-up feedback to real people. Keep the **seeded demo evidence out of the feed**: it is between real addresses, the peer would skip every item as unmatched, and its skip log would then hold those addresses (in a throwaway staging database, marking the demo items `recorded_via: "system"` hides them, since the feed excludes non-human recorders). And expect the **evidence ids to change** if the staging tenant is re-seeded, because they are UUIDv5 over the tenant id; the peer must then accept a re-ack with a new id (latest ack wins, protocol §5.3).
 
 ## Inbound requests
 

@@ -64,7 +64,7 @@ class Ai::OpenAiCompatible::Adapter
     Rails.logger.info("[ai] no suggestions: finish_reason=#{choice['finish_reason']}") unless finished
 
     Ai::SuggestionResponse.new(
-      suggestions: finished && !refused ? Ai::SuggestionResponse.suggestions_from(choice.dig("message", "content")) : [],
+      suggestions: finished && !refused ? Ai::SuggestionResponse.suggestions_from(content_text(choice)) : [],
       model: body["model"].presence || model,
       usage: usage_of(body),
       refused: refused
@@ -80,7 +80,7 @@ class Ai::OpenAiCompatible::Adapter
     choice = first_choice(body)
     raise Ai::Errors::RefusalError, "The model declined the test request" if refused?(choice)
 
-    choice.dig("message", "content").to_s.strip
+    content_text(choice).strip
   end
 
   private
@@ -97,6 +97,15 @@ class Ai::OpenAiCompatible::Adapter
     return choice if choice.is_a?(Hash) && choice["message"].is_a?(Hash)
 
     raise Ai::Errors::ApiError.new(status: 200, body: body.to_json, message: "The model endpoint answered without a choice")
+  end
+
+  # Some servers answer with the message content as a list of parts, each
+  # `{ "type" => "text", "text" => … }`, instead of one string.
+  def content_text(choice)
+    content = choice.dig("message", "content")
+    return content.to_s unless content.is_a?(Array)
+
+    content.filter_map { |part| part["text"] if part.is_a?(Hash) && part["text"].is_a?(String) }.join
   end
 
   def refused?(choice)
