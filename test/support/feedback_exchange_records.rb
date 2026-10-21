@@ -16,6 +16,6 @@ module FeedbackExchangeRecords
     tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(
       peer_name: "chip", base_url: "https://chip.example.com/api/feedback-exchange", enabled: true, **settings
     ))
-    tenant.update_feedback_exchange!(outbound_secret: "o" * 64, inbound_secret: "i" * 64)
+    tenant.update_feedback_exchange!(outbound_secret: SecureRandom.hex(32), inbound_secret: SecureRandom.hex(32))
   end
 end
