@@ -324,6 +324,26 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
   end
 
   context "retrying" do
+    should "carry on past a row that fails, leaving it for the next run" do
+      record = exchange_record(recipient: { email: "priya@example.com" }, author: { email: "alex@example.com" })
+      @importer.import(record)
+      @importer.import(record.merge("id" => "chip-fb-0002"))
+      @handler.assign_to_framework(@priya.id, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+      calls = 0
+      original = @importer.method(:import)
+      flaky = lambda do |r|
+        calls += 1
+        raise ActiveRecord::StatementInvalid, "boom" if calls == 1
+
+        original.call(r)
+      end
+
+      results = @importer.stub(:import, flaky) { @importer.retry_skipped }
+
+      assert_equal %i[imported skipped], results.map(&:outcome).sort
+      assert_equal 1, FeedbackExchangeImport.retriable.count
+    end
+
     should "import a skipped record once the recipient is assigned" do
       record = exchange_record(recipient: { email: "priya@example.com" }, author: { email: "alex@example.com" })
       @importer.import(record)

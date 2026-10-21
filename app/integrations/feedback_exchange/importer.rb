@@ -95,14 +95,21 @@ class FeedbackExchange::Importer
   end
 
   # Imports again every record skipped for a reason our side can fix,
-  # optionally only those for one recipient.
+  # optionally only those for one recipient. A run retries these before it
+  # pulls, so one row that fails is logged and left for next time rather than
+  # stopping every sync.
   #
   # @param recipient_id [String, nil]
   # @return [Array<Result>]
   def retry_skipped(recipient_id: nil)
     scope = FeedbackExchangeImport.retriable
     scope = scope.where(recipient_id: recipient_id) if recipient_id
-    scope.find_each.map { |ledger| import(ledger.record) }
+    scope.find_each.map do |ledger|
+      import(ledger.record)
+    rescue StandardError => e
+      Rails.logger.error("[FeedbackExchange] Retry of #{ledger.origin}:#{ledger.external_id} failed: #{e.class}: #{e.message}")
+      result(:skipped, skip_reason: "invalid_record")
+    end
   end
 
   private
