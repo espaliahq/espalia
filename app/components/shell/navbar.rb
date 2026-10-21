@@ -115,8 +115,10 @@ class Components::Shell::Navbar < Components::Base
   def nav_link(link)
     a(
       href: link[:href],
+      aria: { current: ("page" if link[:current]) },
       class: "px-3 py-1.5 rounded-md text-sm font-medium " \
-             "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors"
+             "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors " \
+             "aria-[current=page]:bg-current/12 aria-[current=page]:font-semibold aria-[current=page]:text-nav"
     ) do
       plain link[:label]
     end

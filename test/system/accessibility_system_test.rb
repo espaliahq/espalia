@@ -162,6 +162,17 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "current page (WCAG 2.4.8)" do
+    should "mark the navbar link for the section the page is in, and only that one" do
+      visit root_path
+      assert_selector "nav a[aria-current='page']", text: "Home", count: 1
+
+      visit frameworks_path
+      assert_selector "nav a[aria-current='page']", text: "Frameworks", count: 1
+      assert_no_selector "nav a[aria-current='page']", text: "Home"
+    end
+  end
+
   context "pointer cursor" do
     should "show the pointer on a plain button and not-allowed once it is disabled" do
       visit root_path
