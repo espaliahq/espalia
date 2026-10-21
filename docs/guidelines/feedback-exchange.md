@@ -106,7 +106,7 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 | `author_inactive` / `recipient_inactive` | our Person or the peer says that person is inactive (protocol §4.2) | yes |
 | `self_feedback` | author and recipient are the same person | no |
 | `no_assignment` | the recipient has no framework assignment | yes, and at once on `PersonAssignedToFramework` |
-| `invalid_record` | no `id`, an `origin` that is not the configured peer, or the domain refused it | no |
+| `invalid_record` | no `id`, no usable `given_at`, an `origin` that is not the configured peer, a malformed nested part, or the domain refused it | no |
 
 A retriable skip keeps the record in the ledger's `record` column so a retry needs no pull; nothing else does. `FeedbackExchange::AssignmentRetry` (a sync handler subscribed in the RES initializer, never a projection) enqueues a sync when a newly assigned person has a `no_assignment` record waiting. A record skipped for a reason that is not retried is evaluated again if the peer sends a newer version.
 

@@ -313,6 +313,11 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "invalid_record", exchange_record(id: "chip-fb-0004", request: { requested_by: "morgan" })
     end
 
+    should "skip a record that does not say when it was given" do
+      assert_skipped "invalid_record", exchange_record(given_at: nil)
+      assert_skipped "invalid_record", exchange_record(id: "chip-fb-0002", given_at: "last Tuesday")
+    end
+
     should "skip a record that names an origin other than the peer" do
       assert_skipped "invalid_record", exchange_record(origin: "lattice")
     end

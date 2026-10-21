@@ -233,9 +233,11 @@ class FeedbackExchange::Importer
 
   # Every nested part the importer digs into is an object, or absent where the
   # protocol allows it, so a malformed record is skipped instead of raising.
+  # `given_at` is required: it dates the item and decides its cycle.
   def well_shaped?(record)
     people = record.values_at("author", "recipient")
-    people.all?(Hash) &&
+    parse_time(record["given_at"]).present? &&
+      people.all?(Hash) &&
       people.all? { |person| person["external_ids"].nil? || person["external_ids"].is_a?(Hash) } &&
       record.values_at("request", "period", "external_reference").all? { |part| part.nil? || part.is_a?(Hash) } &&
       (record.dig("request", "requested_by").nil? || record.dig("request", "requested_by").is_a?(Hash))
@@ -377,6 +379,6 @@ class FeedbackExchange::Importer
   end
 
   def peer_label(origin)
-    Reporting::OriginLabels.label(origin)
+    Reporting::OriginLabels.peer_label(origin)
   end
 end
