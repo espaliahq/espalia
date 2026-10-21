@@ -51,6 +51,14 @@ class Ai::NamePseudonymiserTest < ActiveSupport::TestCase
       assert_equal "(Person 1), thanks!", pseudonymiser.pseudonymise("(Alex   Chen), thanks!")
     end
 
+    should "match a multi-word name across any Unicode space, so the surname never leaks" do
+      names = pseudonymiser
+      text = "Alex\u00A0Chen helped, then Alex\u3000Chen and Alex\u2009Chen and Alex \t Chen again."
+
+      assert_equal "Person 1 helped, then Person 1 and Person 1 and Person 1 again.", names.pseudonymise(text)
+      assert_equal "Alex Chen helped", names.restore("Person 1 helped"), "restored with a plain space"
+    end
+
     should "handle names with apostrophes, hyphens and accents" do
       people = [ [ "01", "Siobhán O'Brien-Lee" ], [ "02", "Zoë Ångström" ] ]
       text = pseudonymiser(people).pseudonymise("Siobhán O'Brien-Lee thanked zoë, and Ångström too.")
