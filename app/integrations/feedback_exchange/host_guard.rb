@@ -69,9 +69,9 @@ module FeedbackExchange::HostGuard
 
   # @param url [String] the peer's base URL
   # @return [String, nil] a public address for the host, which the connection must
-  #   use; nil in development, or when the name does not resolve (the connection
-  #   then fails on its own)
+  #   use; nil only in development
   # @raise [FeedbackExchange::Errors::AddressRefused] when the host is not canonical,
+  #   does not resolve (a name that fails once and answers later could be anything),
   #   or is, or resolves to, a private address
   def check!(url)
     return if Rails.env.development?
@@ -80,6 +80,7 @@ module FeedbackExchange::HostGuard
     refuse!("The peer's address is not a plain hostname or IP address") unless canonical_host?(host)
     refuse!("The peer's address points at a private network address") if private_host?(host)
     addresses = resolved_addresses(host)
+    refuse!("The peer's address does not resolve") if addresses.empty?
     refuse!("The peer's address resolves to a private network address") if addresses.any? { |a| private_address?(a) }
     addresses.first
   end

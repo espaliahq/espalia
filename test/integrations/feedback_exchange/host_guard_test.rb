@@ -97,10 +97,13 @@ class FeedbackExchange::HostGuardTest < ActiveSupport::TestCase
       assert_equal "93.184.216.34", FeedbackExchange::HostGuard.check!("https://93.184.216.34/x")
     end
 
-    should "leave an unresolvable name to the connection to fail" do
+    should "refuse a name that does not resolve, so a later answer cannot choose the destination" do
       Addrinfo.stub(:getaddrinfo, ->(*) { raise SocketError, "nope" }) do
-        assert_nil FeedbackExchange::HostGuard.check!("https://nowhere.example.com")
+        error = assert_raises(FeedbackExchange::Errors::AddressRefused) { FeedbackExchange::HostGuard.check!("https://nowhere.example.com") }
+        assert_match(/does not resolve/, error.message)
       end
+
+      Addrinfo.stub(:getaddrinfo, []) { assert refused?("https://nowhere.example.com") }
     end
 
     should "stand down in development" do
