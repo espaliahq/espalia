@@ -17,7 +17,8 @@ class Views::Integrations::AiModelView < Views::Base
 
   PROVIDER_LABELS = {
     "anthropic" => "Anthropic API",
-    "openai_compatible" => "OpenAI-compatible"
+    "openai_compatible" => "OpenAI-compatible",
+    "typesafe_jev" => "Jev (TypeSafe AI)"
   }.freeze
 
   INPUT_CLASSES = "block w-full min-h-11 rounded-md border-gray-300 dark:border-gray-600 " \
@@ -149,11 +150,11 @@ class Views::Integrations::AiModelView < Views::Base
             provider_field
             text_field(:base_url, "Address", value: @form_config.base_url, type: "url", target: "baseUrl",
                        placeholder: "https://ai-gateway.vercel.sh/v1",
-                       hint: "Required for an OpenAI-compatible endpoint: the address that serves /chat/completions. " \
-                             "Optional for Anthropic, where it points the API at a compatible endpoint, without /v1. " \
-                             "It must start with https://.")
+                       hint: "Required for an OpenAI-compatible endpoint, the address that serves /chat/completions, " \
+                             "and for Jev, the address that serves /evaluate. Optional for Anthropic, where it points " \
+                             "the API at a compatible endpoint, without /v1. It must start with https://.")
             text_field(:model, "Model", value: @form_config.model, target: "model", placeholder: AiModelConfig::DEFAULT_ANTHROPIC_MODEL,
-                       hint: "The provider's or gateway's model id, such as claude-opus-5-5, or anthropic/claude-opus-5-5 on the gateway.")
+                       hint: "The provider's or gateway's model id, such as claude-opus-5-5, or #{AiModelConfig::JEV_MODEL} on the gateway.")
             key_field
             effort_field
             switch_field(:suggestions_enabled, "Suggest where feedback belongs", @form_config.suggestions_enabled?,
@@ -187,7 +188,8 @@ class Views::Integrations::AiModelView < Views::Base
 
   def current_preset
     config = @form_config
-    return "vercel_ai_gateway" if config.base_url.to_s.strip.chomp("/") == AiModelConfig::PRESETS.dig("vercel_ai_gateway", :base_url)
+    return "vercel_ai_gateway" if config.typesafe_jev?
+    return "vercel_ai_gateway_chat" if config.normalized_base_url == AiModelConfig::VERCEL_AI_GATEWAY_URL
     return config.base_url.present? ? "anthropic_compatible" : "anthropic" if config.anthropic?
 
     "openai_compatible"
@@ -204,7 +206,8 @@ class Views::Integrations::AiModelView < Views::Base
         end
       end
       p(id: "ai_model_preset-hint", class: HINT_CLASSES) do
-        plain "Fills the fields below. Vercel's AI Gateway is an OpenAI-compatible endpoint with a known address."
+        plain "Fills the fields below. On Vercel's AI Gateway, Jev is a decision model: it picks the likeliest cells " \
+              "and says how sure it is, but writes no reason. A chat model writes one."
       end
     end
   end

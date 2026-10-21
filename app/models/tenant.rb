@@ -90,11 +90,15 @@ class Tenant < ApplicationRecord
 
   # The key requests are made with: the one stored through the AI model card,
   # else, for a tenant still on the legacy switch, the deployment's Anthropic
-  # key from the credentials file as before.
+  # key from the credentials file as before, else, in development only, the
+  # Vercel AI Gateway key from the credentials file for a tenant pointed at
+  # the gateway.
   #
   # @return [String, nil]
   def ai_api_key
-    ai_secrets.api_key || (Rails.application.credentials.dig(:anthropic, :api_key).presence if legacy_evidence_suggestions_enabled?)
+    ai_secrets.api_key ||
+      (Rails.application.credentials.dig(:anthropic, :api_key).presence if legacy_evidence_suggestions_enabled?) ||
+      development_gateway_key(ai_config)
   end
 
   # Save the AI model settings and key in one write. Unlisted settings keep
@@ -281,6 +285,18 @@ class Tenant < ApplicationRecord
     end
   end
 
+  # Development only, and only to the gateway's own host, so a developer can
+  # run suggestions against the seeded tenant without pasting a key. Never in
+  # production: a tenant there always supplies its own.
+  #
+  # @param config [AiModelConfig]
+  # @return [String, nil]
+  def development_gateway_key(config)
+    return unless Rails.env.development? && config.base_host == URI(AiModelConfig::VERCEL_AI_GATEWAY_URL).host
+
+    Rails.application.credentials.dig(:vercel, :ai_gateway_api_key).presence
+  end
+
   # @raise [ActiveRecord::RecordInvalid]
   def reject_unsafe_ai_model!(previous:, stored_key:, new_key:, on_legacy_key:)
     return unless ai_config.valid? # save! reports what is wrong with the settings first
@@ -288,7 +304,7 @@ class Tenant < ApplicationRecord
     moved = [ previous.provider, previous.normalized_base_url ] != [ ai_config.provider, ai_config.normalized_base_url ]
     if stored_key && !new_key && moved
       errors.add(:base, "Enter the API key again. The stored one is only sent to the provider and address it was saved for.")
-    elsif ai_config.suggestions_enabled? && !(new_key || stored_key)
+    elsif ai_config.suggestions_enabled? && !(new_key || stored_key || development_gateway_key(ai_config))
       legacy = on_legacy_key ? " This workspace has been using the deployment's key, which the AI model card does not fall back to." : ""
       errors.add(:base, "Add an API key to switch suggestions on.#{legacy}")
     end

@@ -15,11 +15,11 @@
 #   )
 #   adapter.suggest(system: framework, user: feedback, schema: schema)
 class Ai::OpenAiCompatible::Adapter
+  include Ai::JsonEndpoint
+
   MAX_TOKENS = 8_000
   PING_MAX_TOKENS = 1_000
   PING_PROMPT = "Reply with the single word: ready"
-  OPEN_TIMEOUT = 5
-  READ_TIMEOUT = 60
   SCHEMA_NAME = "placement_suggestions"
   # OpenAI deprecated max_tokens and its reasoning models reject it; most other
   # servers (the gateway, vLLM, Ollama) only know max_tokens. Models named for
@@ -52,7 +52,8 @@ class Ai::OpenAiCompatible::Adapter
   # @return [Ai::SuggestionResponse]
   # @raise [Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def suggest(system:, user:, schema:)
-    body = post(
+    body = post_json(
+      "chat/completions",
       model: model, **token_limit(MAX_TOKENS),
       messages: [ { role: "system", content: system }, { role: "user", content: user } ],
       response_format: { type: "json_schema", json_schema: { name: SCHEMA_NAME, strict: true, schema: schema } }
@@ -75,7 +76,7 @@ class Ai::OpenAiCompatible::Adapter
   # @return [String] what the model said
   # @raise [Ai::Errors::RefusalError, Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def ping
-    body = post(model: model, **token_limit(PING_MAX_TOKENS), messages: [ { role: "user", content: PING_PROMPT } ])
+    body = post_json("chat/completions", model: model, **token_limit(PING_MAX_TOKENS), messages: [ { role: "user", content: PING_PROMPT } ])
     choice = first_choice(body)
     raise Ai::Errors::RefusalError, "The model declined the test request" if refused?(choice)
 
@@ -89,31 +90,6 @@ class Ai::OpenAiCompatible::Adapter
   def token_limit(tokens)
     openai_style = base_url.match?(%r{\Ahttps://api\.openai\.com(?:/|\z)}i) || model.match?(OPENAI_REASONING_MODEL)
     { (openai_style ? :max_completion_tokens : :max_tokens) => tokens }
-  end
-
-  def post(payload)
-    response = connection.post("chat/completions", JSON.generate(payload))
-    parse(response)
-  rescue Faraday::TimeoutError, Faraday::ConnectionFailed, Faraday::SSLError => e
-    raise Ai::Errors::ApiError.new(status: nil, message: "Could not reach the model endpoint: #{e.class.name.demodulize}")
-  end
-
-  def parse(response)
-    case response.status
-    when 200..299 then parse_json(response.body)
-    when 401, 403 then raise Ai::Errors::AuthenticationError, "The model endpoint rejected the API key (#{response.status})"
-    when 429 then raise Ai::Errors::RateLimitError.new(retry_after: response.headers["Retry-After"]&.to_i)
-    else raise Ai::Errors::ApiError.new(status: response.status, body: response.body)
-    end
-  end
-
-  def parse_json(body)
-    parsed = JSON.parse(body.to_s)
-    return parsed if parsed.is_a?(Hash)
-
-    raise Ai::Errors::ApiError.new(status: 200, body: body, message: "The model endpoint answered with JSON that is not an object")
-  rescue JSON::ParserError
-    raise Ai::Errors::ApiError.new(status: 200, body: body, message: "The model endpoint answered with something that is not JSON")
   end
 
   def first_choice(body)
@@ -130,19 +106,5 @@ class Ai::OpenAiCompatible::Adapter
   def usage_of(body)
     usage = body["usage"].is_a?(Hash) ? body["usage"] : {}
     Ai::SuggestionResponse::Usage.new(input_tokens: usage["prompt_tokens"], output_tokens: usage["completion_tokens"])
-  end
-
-  def connection
-    @connection ||= begin
-      Ai::HostGuard.check!(base_url)
-      Faraday.new(url: "#{base_url}/") do |f|
-        f.options.open_timeout = OPEN_TIMEOUT
-        f.options.timeout = READ_TIMEOUT
-        f.adapter Faraday.default_adapter
-        f.headers["Authorization"] = "Bearer #{api_key}"
-        f.headers["Content-Type"] = "application/json"
-        f.headers["Accept"] = "application/json"
-      end
-    end
   end
 end

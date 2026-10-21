@@ -194,4 +194,44 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
       assert_empty suggestions_for(item)
     end
   end
+
+  context "for a tenant on Jev through the gateway" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @tenant.update_ai_model!(
+          settings: { provider: "typesafe_jev", base_url: AiModelConfig::VERCEL_AI_GATEWAY_URL, model: AiModelConfig::JEV_MODEL,
+                      suggestions_enabled: true },
+          api_key: "sk-gw"
+        )
+      end
+    end
+
+    should "store the likeliest cells with their probability as the confidence, no rationale and no names sent" do
+      item = record_peer_feedback
+      sent = nil
+      stubs = Faraday::Adapter::Test::Stubs.new
+      stubs.post("/v1/evaluate") do |env|
+        sent = JSON.parse(env.body)
+        answers = {
+          placement: { type: "choice", choice: "#{@ownership.stable_id}|3",
+                       probabilities: { "#{@ownership.stable_id}|3" => 0.71, "#{@collaboration.stable_id}|3" => 0.2, "none" => 0.09 } },
+          valence: { type: "choice", choice: "demonstrated", probabilities: { "demonstrated" => 0.8, "strongly_demonstrated" => 0.2 } }
+        }
+        [ 200, { "Content-Type" => "application/json" },
+          { model: "typesafe-ai/jev", answers: answers, usage: { inputTokens: 1200, outputTokens: 20 } }.to_json ]
+      end
+      connection = Faraday.new(url: "https://ai-gateway.vercel.sh/v1/") { |f| f.adapter :test, stubs }
+      adapter = Ai::TypesafeJev::Adapter.new(api_key: "sk-gw", base_url: AiModelConfig::VERCEL_AI_GATEWAY_URL,
+                                             model: AiModelConfig::JEV_MODEL, connection: connection)
+
+      Ai::ModelClient.stub(:for, adapter) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+
+      assert_equal "typesafe-ai/jev", sent["model"]
+      assert_no_match(/Alex|Jordan|Morgan|Chen|Lee|Reid/, sent.to_json, "no name may leave the process")
+      rows = suggestions_for(item).sort_by { |row| -row.confidence }
+      assert_equal [ [ @ownership.stable_id, 0.71 ], [ @collaboration.stable_id, 0.2 ] ], rows.map { |r| [ r.capability_stable_id, r.confidence.to_f ] }
+      assert_equal [ "typesafe_jev", "typesafe-ai/jev", "demonstrated", nil ],
+                   [ rows.first.provider, rows.first.model, rows.first.valence, rows.first.rationale ]
+    end
+  end
 end

@@ -2,8 +2,8 @@
 // an Anthropic provider.
 //
 // A preset is a convenience: it sets the generic provider, address and model
-// fields and nothing else, so what is saved is never "a gateway", only an
-// OpenAI-compatible endpoint at an address.
+// fields and nothing else, so what is saved is never "a gateway", only a
+// provider kind at an address.
 //
 // Usage:
 //   <form data-controller="ai-model-preset"

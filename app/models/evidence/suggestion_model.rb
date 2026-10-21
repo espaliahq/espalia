@@ -11,6 +11,9 @@
 # retrying, {Rejected} is not. A refusal, a truncated answer or an unparseable
 # one is "no suggestions", never an error.
 #
+# A chat model answers with structured JSON; a decision model (Jev) with
+# probabilities over the candidate cells, read by {Evidence::PlacementDecision}.
+#
 # When the tenant keeps pseudonymisation on (the default), every person's name
 # is swapped for a placeholder on the way out and swapped back in the rationales
 # that come in. See {Ai::NamePseudonymiser}. The framework text gets full names
@@ -46,7 +49,7 @@ class Evidence::SuggestionModel
   # @return [String] the configured model id, recorded on every row
   def model = adapter.model
 
-  # @return [String] "anthropic" or "openai_compatible", recorded on every row
+  # @return [String] one of {AiModelConfig::PROVIDERS}, recorded on every row
   def provider = adapter.provider
 
   # @param prompt [Evidence::PlacementPrompt]
@@ -54,14 +57,7 @@ class Evidence::SuggestionModel
   #   them; unvalidated against the framework (the caller does that)
   # @raise [RateLimited, Unavailable, Rejected]
   def suggest(prompt)
-    names = pseudonymiser
-    response = adapter.suggest(
-      system: names ? names.pseudonymise(prompt.framework_text, first_names: false) : prompt.framework_text,
-      user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
-      schema: prompt.schema
-    )
-    log(response)
-    response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }
+    adapter.respond_to?(:decide) ? decide(prompt, pseudonymiser) : chat(prompt, pseudonymiser)
   rescue Ai::Errors::RateLimitError => e
     raise RateLimited, e.message
   rescue Ai::Errors::AuthenticationError, Ai::Errors::ConfigurationError => e
@@ -81,6 +77,26 @@ class Evidence::SuggestionModel
 
   attr_reader :tenant
 
+  def chat(prompt, names)
+    response = adapter.suggest(
+      system: names ? names.pseudonymise(prompt.framework_text, first_names: false) : prompt.framework_text,
+      user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
+      schema: prompt.schema
+    )
+    log(response, response.suggestions.size, refused: response.refused?)
+    response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }
+  end
+
+  # A decision model answers typed questions with probabilities, not prose:
+  # see {Evidence::PlacementDecision}.
+  def decide(prompt, names)
+    decision = Evidence::PlacementDecision.new(prompt, names: names)
+    response = adapter.decide(state: decision.state, questions: decision.questions)
+    proposals = decision.proposals(response, limit: MAX_SUGGESTIONS)
+    log(response, proposals.size)
+    proposals
+  end
+
   def adapter
     @adapter ||= Ai::ModelClient.for(tenant)
   end
@@ -89,10 +105,10 @@ class Evidence::SuggestionModel
     Ai::NamePseudonymiser.for(tenant) if tenant.effective_ai_config.pseudonymise_names?
   end
 
-  def log(response)
+  def log(response, count, refused: false)
     Rails.logger.info(
-      "[evidence-suggestions] #{provider} #{response.model}: #{response.suggestions.size} suggestions, " \
-      "refused=#{response.refused?}, tokens in=#{response.usage.input_tokens} out=#{response.usage.output_tokens}"
+      "[evidence-suggestions] #{provider} #{response.model}: #{count} suggestions, " \
+      "refused=#{refused}, tokens in=#{response.usage.input_tokens} out=#{response.usage.output_tokens}"
     )
   end
 
