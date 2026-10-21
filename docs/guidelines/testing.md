@@ -583,6 +583,13 @@ under a full parallel precommit and passed alone
   CPU throttling never failed these tests; a 1.5s delay prepended to the frame
   action failed both every time.
 
+**Sideways overflow is a layout reading too: use `assert_no_sideways_overflow`.**
+Reading `scrollWidth` forces a layout, but async work can still change the next
+one: an observer, a frame load, a transition. The explorer's rename test once
+read 375 against 360 on CI, a scrollbar its own failure screenshot no longer
+showed. The helper polls until two reads in a row fit, so lasting overflow and
+a layout that keeps flipping both still fail.
+
 ## Stimulus-Driven UI in System Tests (NON-NEGOTIABLE)
 
 **Always assert visibility after triggering Stimulus actions before interacting with the resulting DOM.** Elements toggled by Stimulus controllers (dropdowns, modals, expanded rows) exist in the DOM as hidden elements. Capybara's `find` and `within` will locate hidden elements and fail — or worse, pass locally but fail on slower CI runners due to race conditions.

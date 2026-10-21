@@ -58,7 +58,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       assert_selector "svg[data-brand-mark]"
       assert_selector "meta[name='theme-color']", visible: false, count: 1
       assert_selector "meta[name='theme-color'][content='#6b58da']", visible: false
-      assert_no_sideways_scroll
+      assert_no_sideways_overflow
       assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
                                "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
     end
@@ -69,7 +69,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       screenshot("sign_in_page_mobile")
 
       assert_selector "svg[data-brand-mark]"
-      assert_no_sideways_scroll
+      assert_no_sideways_overflow
       assert_control_heights([ "#user_email", "#user_password", "button[type='submit']",
                                "label[for='user_remember_me']", "a" ]) { |height| height >= 44 }
     end
@@ -204,11 +204,6 @@ class AuthSystemTest < ApplicationSystemTestCase
   end
 
   private
-
-  def assert_no_sideways_scroll
-    widths = page.evaluate_script("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
-    assert_operator widths[0], :<=, widths[1], "the page scrolls sideways (scrollWidth #{widths[0]} > #{widths[1]})"
-  end
 
   def log_in_css = "#{SIGN_IN_FORM_SELECTOR} button[type='submit']"
 
