@@ -52,12 +52,15 @@ class Evidence::SuggestionModel
   # @return [String] one of {AiModelConfig::PROVIDERS}, recorded on every row
   def provider = adapter.provider
 
+  # @return [String] the version of what was asked, recorded on every row
+  def prompt_version = decision_model? ? Evidence::PlacementDecision::VERSION : Evidence::PlacementPrompt::VERSION
+
   # @param prompt [Evidence::PlacementPrompt]
   # @return [Array<Proposal>] at most {MAX_SUGGESTIONS}, as the model ranked
   #   them; unvalidated against the framework (the caller does that)
   # @raise [RateLimited, Unavailable, Rejected]
   def suggest(prompt)
-    adapter.respond_to?(:decide) ? decide(prompt, pseudonymiser) : chat(prompt, pseudonymiser)
+    decision_model? ? decide(prompt, pseudonymiser) : chat(prompt, pseudonymiser)
   rescue Ai::Errors::RateLimitError => e
     raise RateLimited, e.message
   rescue Ai::Errors::AuthenticationError, Ai::Errors::ConfigurationError => e
@@ -76,6 +79,8 @@ class Evidence::SuggestionModel
   end
 
   attr_reader :tenant
+
+  def decision_model? = adapter.respond_to?(:decide)
 
   def chat(prompt, names)
     response = adapter.suggest(

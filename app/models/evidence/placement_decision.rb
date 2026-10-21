@@ -17,6 +17,9 @@
 # The cells come back ranked by probability; those under {FLOOR} are dropped,
 # and the probability is the confidence. Jev writes no rationale.
 class Evidence::PlacementDecision
+  # Recorded on every row in place of {Evidence::PlacementPrompt::VERSION}.
+  # Bump it whenever the questions or the state change.
+  VERSION = "jev-2026-10-21.1"
   FLOOR = 0.15
   NONE = "none"
 

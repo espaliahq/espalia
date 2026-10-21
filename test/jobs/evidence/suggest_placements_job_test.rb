@@ -230,8 +230,8 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
       assert_no_match(/Alex|Jordan|Morgan|Chen|Lee|Reid/, sent.to_json, "no name may leave the process")
       rows = suggestions_for(item).sort_by { |row| -row.confidence }
       assert_equal [ [ @ownership.stable_id, 0.71 ], [ @collaboration.stable_id, 0.2 ] ], rows.map { |r| [ r.capability_stable_id, r.confidence.to_f ] }
-      assert_equal [ "typesafe_jev", "typesafe-ai/jev", "demonstrated", nil ],
-                   [ rows.first.provider, rows.first.model, rows.first.valence, rows.first.rationale ]
+      assert_equal [ "typesafe_jev", "typesafe-ai/jev", Evidence::PlacementDecision::VERSION, "demonstrated", nil ],
+                   [ rows.first.provider, rows.first.model, rows.first.prompt_version, rows.first.valence, rows.first.rationale ]
     end
   end
 end

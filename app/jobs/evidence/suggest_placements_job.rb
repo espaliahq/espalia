@@ -97,7 +97,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
       valence: proposal.valence, confidence: proposal.confidence.round(2),
       rationale: proposal.rationale&.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH),
       status: "pending", decided_by_id: nil, decided_at: nil, dismiss_reason: nil,
-      provider: model.provider, model: model.model, prompt_version: Evidence::PlacementPrompt::VERSION, generated_at: at
+      provider: model.provider, model: model.model, prompt_version: model.prompt_version, generated_at: at
     )
   end
 end

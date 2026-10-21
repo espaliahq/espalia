@@ -9,6 +9,7 @@ module PlacementSuggestionFixture
   FakeModel = Struct.new(:proposals, :error, :prompts, keyword_init: true) do
     def model = "claude-opus-5-5"
     def provider = "anthropic"
+    def prompt_version = Evidence::PlacementPrompt::VERSION
 
     def suggest(prompt)
       prompts << prompt

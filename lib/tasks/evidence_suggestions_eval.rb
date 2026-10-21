@@ -31,6 +31,8 @@ class EvidenceSuggestionsEval
     def model = "baseline"
     # @return [String] recorded in the report in place of an adapter's provider
     def provider = "baseline"
+    # @return [String] the prompt whose candidate cells it reads
+    def prompt_version = Evidence::PlacementPrompt::VERSION
 
     def suggest(prompt)
       words = tokens(prompt.item.content)
@@ -150,7 +152,7 @@ class EvidenceSuggestionsEval
     correct = placeable.sum { |r| r.proposals.count { |p| expected_cells(r).include?(cell(p)) } }
 
     {
-      prompt_version: Evidence::PlacementPrompt::VERSION, provider: @model.provider, model: @model.model, items: results.size,
+      prompt_version: @model.prompt_version, provider: @model.provider, model: @model.model, items: results.size,
       placeable: placeable.size, uncovered: uncovered.size,
       cell_match_top: rate(top_hits, placeable.size), cell_match_any: rate(any_hits, placeable.size),
       valence_match: rate(matched.count { |p, e| p.valence == e.last }, matched.size),
