@@ -49,7 +49,7 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     assert_equal "bento", @tenant.reload.theme
     visit tenant_root_path
     assert_equal "bento", html_theme
-    assert_equal "rgb(255, 255, 255)", computed("nav", "backgroundColor")
+    assert_equal "rgb(198, 242, 38)", computed("nav", "backgroundColor")
   end
 
   should "customise brand and nav, show the helper's text, save and keep them on reload" do

@@ -103,7 +103,8 @@ html[data-theme="bento"] {
   --gos-warning-strong-hover: color-mix(in oklab, var(--gos-warning-strong) 95%, var(--gos-surface-default));
   --gos-info-strong-hover: color-mix(in oklab, var(--gos-info-strong) 95%, var(--gos-surface-default));
 
-  --gos-nav-surface: #ffffff;
+  /* The bar is Bento's lime in both schemes, carrying near-black like every lime fill */
+  --gos-nav-surface: #c6f226;
   --gos-nav-content: #0a0d12;
 
   /* Rating, score and activity: Default's steps on Bento's hue ramps (yellow → amber, purple → sloe).
@@ -247,8 +248,8 @@ html[data-theme="bento"] {
     --gos-info-strong: #0869e7;
     --gos-border-info: #0869e7;
 
-    --gos-nav-surface: #0a0d12;
-    --gos-nav-content: #fafafa;
+    --gos-nav-surface: #c6f226;
+    --gos-nav-content: #0a0d12;
 
     --gos-rating-none: #eb7268;
     --gos-rating-none-carried-border: #eb3f33;
