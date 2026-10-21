@@ -60,6 +60,17 @@ end
 
 Use `strategy: :fixed` inside a scrolling container, so the menu isn't clipped.
 
+**`Kit::SegmentedControl`**: one choice from a few, on a shared track.
+
+```ruby
+render Components::Kit::SegmentedControl.new(label: "Activity feed focus mode", size: :sm) do |control|
+  control.segment("Highlight", data: { action: "activity-feed#setMode" })
+  control.segment("Filter", selected: true, data: { action: "activity-feed#setMode" })
+end
+```
+
+A segment given `href:` is a link to that view of the page. Inside a menu, pass `item_role: :menuitemradio`.
+
 **`Kit::Modal`**: a dialog that closes on Esc and locks the page's scroll.
 
 ```ruby
@@ -97,7 +108,7 @@ end
 ```
 
 - **`Kit::Alert`**: a message in the page. `emphasis: :subtle` (the default) or `:solid`; `dismissible: true` adds a ×. Danger is announced at once; other tones politely.
-- **`Kit::Toast`**: an alert that floats and removes itself, inside a `Kit::Toast::Stack`.
+- **`Kit::Toast`**: an alert that floats and removes itself, inside a `Kit::Toast::Stack`. The layout renders flash messages this way.
 - **`Kit::EmptyState`**: what a list shows before it has anything. `size: :panel` for a side panel or card.
 
 ### Layout and content
@@ -153,7 +164,7 @@ When a view needs colour of its own, use a **role**, never a palette step: `text
 Three rules:
 
 - **Strong fills belong to Kit.** A view that wants `bg-brand-strong` wants a `Kit::Button` or a solid `Kit::Alert`.
-- **Kit owns radius and shadow.** Don't set either on a Kit surface.
+- **Kit owns radius and shadow.** Don't set either on a Kit surface. Anything else that floats uses an elevation role: `shadow-raised`, `shadow-lifted`, `shadow-overlay`, `shadow-drawer` or `shadow-modal`.
 - **Selected means neutral, not brand.** Flip `aria-pressed` and let the component's classes follow.
 
 ## Themes
