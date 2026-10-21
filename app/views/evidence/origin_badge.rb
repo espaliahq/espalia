@@ -39,5 +39,5 @@ class Views::Evidence::OriginBadge < Views::Base
 
   private
 
-  def label = Reporting::OriginLabels.label(@reference.system)
+  def label = Reporting::OriginLabels.peer_label(@reference.system)
 end

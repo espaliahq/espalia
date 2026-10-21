@@ -27,7 +27,16 @@ module Reporting::OriginLabels
   # @param key [String, nil] an origin key, or a raw system slug
   # @return [String] a display name, falling back to the titleised slug
   def self.label(key)
-    key = key_for(key)
-    LABELS.fetch(key) { key.tr("_-", "  ").titleize }
+    peer_label(key_for(key))
+  end
+
+  # The name of the peer system an imported item came from. Unlike {.label} it
+  # reads the slug as given, so a peer is never mistaken for a link target.
+  #
+  # @param slug [String] `external_reference.system` of an imported item
+  # @return [String]
+  def self.peer_label(slug)
+    key = slug.to_s.strip.downcase.tr("-", "_")
+    LABELS.fetch(key) { key.tr("_", " ").titleize }
   end
 end

@@ -33,6 +33,12 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
       assert_equal "GrowthOS", Reporting::OriginLabels.label("github")
     end
 
+    should "name an imported item's peer by its slug, even one that matches a link target" do
+      assert_equal "Chip", Reporting::OriginLabels.peer_label("chip")
+      assert_equal "Slack", Reporting::OriginLabels.peer_label("slack")
+      assert_equal "Kudos Board", Reporting::OriginLabels.peer_label("kudos-board")
+    end
+
     should "titleise a slug it does not know" do
       assert_equal "Hr Portal", Reporting::OriginLabels.label("hr_portal")
     end

@@ -29,6 +29,10 @@ class Views::Evidence::OriginBadgeTest < ActiveSupport::TestCase
     assert_includes render_badge(imported(system: "kudos-board")).text, "via Kudos Board"
   end
 
+  should "name a peer that shares a link target's slug as that peer, not GrowthOS" do
+    assert_includes render_badge(imported(system: "slack")).text, "via Slack"
+  end
+
   context "ExternalReference#imported?" do
     should "be true only for a reference the exchange importer wrote" do
       assert imported.imported?
