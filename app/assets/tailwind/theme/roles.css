@@ -93,7 +93,7 @@
 
   @variant dark {
     --gos-brand: var(--tenant-brand-dark, #5ee0e0);
-    --gos-nav-surface: var(--tenant-nav-surface-dark, #1a1a2e);
+    --gos-nav-surface: var(--tenant-nav-surface-dark, #32c8c8);
 
     --gos-content-default: #ffffff;
     --gos-content-muted: var(--color-gray-300);
@@ -101,25 +101,26 @@
     --gos-content-disabled: var(--color-gray-600);
     --gos-content-inverse: var(--color-gray-900);
 
-    --gos-surface-page: var(--color-gray-950);
-    --gos-surface-default: var(--color-gray-800);
-    --gos-surface-overlay: var(--color-gray-900);
-    --gos-surface-subtle: var(--color-gray-800);
-    --gos-surface-muted: var(--color-gray-900);
-    --gos-surface-emphasized: var(--color-gray-700);
+    /* Soft slate: a lighter blue-grey than Tailwind's gray-950, with small steps so a border, not the fill, separates a card */
+    --gos-surface-page: #181c23;
+    --gos-surface-default: #20252e;
+    --gos-surface-overlay: #1c2028;
+    --gos-surface-subtle: #20252e;
+    --gos-surface-muted: #1c2028;
+    --gos-surface-emphasized: #323945;
     --gos-surface-inverse: #ffffff;
-    --gos-surface-hover: var(--color-gray-800);
-    --gos-surface-default-hover: var(--color-gray-700);
-    --gos-surface-field: var(--color-gray-900);
+    --gos-surface-hover: #20252e;
+    --gos-surface-default-hover: #2a303a;
+    --gos-surface-field: #1c2028;
 
-    --gos-border-default: var(--color-gray-700);
-    --gos-border-subtle: var(--color-gray-800);
-    --gos-border-emphasized: var(--color-gray-600);
+    --gos-border-default: #323945;
+    --gos-border-subtle: #2a303a;
+    --gos-border-emphasized: #4a5260;
     --gos-border-strong: #ffffff;
-    --gos-border-disabled: var(--color-gray-700);
+    --gos-border-disabled: #323945;
 
-    --gos-neutral-subtle: var(--color-gray-700);
-    --gos-neutral-muted: var(--color-gray-600);
+    --gos-neutral-subtle: #323945;
+    --gos-neutral-muted: #4a5260;
     --gos-neutral-strong: #ffffff;
     --gos-neutral-strong-hover: var(--color-gray-200);
     --gos-neutral-content-inverse: var(--color-gray-900);
@@ -389,10 +390,10 @@
   --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-100) 50%, var(--gos-surface-overlay));
 
   @variant dark {
-    --gos-surface-overlay-subtle: var(--color-gray-900);
-    --gos-surface-overlay-muted: var(--color-gray-800);
-    --gos-surface-overlay-hover: color-mix(in srgb, var(--color-gray-800) 50%, var(--gos-surface-overlay));
-    --gos-surface-empty: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
+    --gos-surface-overlay-subtle: var(--gos-surface-overlay);
+    --gos-surface-overlay-muted: var(--gos-surface-default);
+    --gos-surface-overlay-hover: color-mix(in srgb, var(--gos-surface-default) 50%, var(--gos-surface-overlay));
+    --gos-surface-empty: color-mix(in oklab, var(--gos-surface-default) 20%, transparent);
     --gos-surface-expanded: color-mix(in srgb, var(--color-blue-900) 10%, var(--gos-surface-overlay));
     --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-900) 20%, var(--gos-surface-overlay));
   }

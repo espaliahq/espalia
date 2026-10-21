@@ -480,10 +480,10 @@ The fills are roles from `theme/roles.css`, shared with the `.mx-*` classes; eac
 
 | Sticky cell | Role | Default (light / dark) |
 |---|---|---|
-| Header corner + level columns | `bg-overlay-subtle` | gray-50 / gray-900 |
-| Compact row (capability name) | `bg-overlay`, hover `bg-overlay-hover` | white / gray-900; hover gray-50 / gray-800 at 50% over gray-900 |
-| Expanded row (empty gutter) | `bg-expanded` | blue-50 at 30% over white / blue-900 at 10% over gray-900 |
-| Category header row | `bg-overlay-muted` | gray-100 / gray-800 |
+| Header corner + level columns | `bg-overlay-subtle` | gray-50 / the overlay (`#1c2028`) |
+| Compact row (capability name) | `bg-overlay`, hover `bg-overlay-hover` | white / `#1c2028`; hover gray-50 / the card at 50% over the overlay |
+| Expanded row (empty gutter) | `bg-expanded` | blue-50 at 30% over white / blue-900 at 10% over the overlay |
+| Category header row | `bg-overlay-muted` | gray-100 / the card (`#20252e`) |
 
 **The sticky offsets are MEASURED, never constants (NON-NEGOTIABLE).** The
 matrix header's height depends on the role selection — ~41 px of code badges

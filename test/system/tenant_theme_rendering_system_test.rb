@@ -29,15 +29,15 @@ class TenantThemeRenderingSystemTest < ApplicationSystemTestCase
 
     should "fall back to Default's dark value for a role with no dark value" do
       set_scheme("dark")
-      assert_equal [ 26, 26, 46 ], rendered_rgb("--gos-nav-surface")
+      assert_equal [ 50, 200, 200 ], rendered_rgb("--gos-nav-surface")
     end
 
-    should "pick nav text from the contrast helper: black on lime, white on Default's dark navy" do
+    should "pick nav text from the contrast helper: black on lime, and on Default's dark teal" do
       set_scheme("light")
       assert_equal [ 0, 0, 0 ], rendered_rgb("--gos-nav-content")
 
       set_scheme("dark")
-      assert_equal [ 255, 255, 255 ], rendered_rgb("--gos-nav-content")
+      assert_equal [ 0, 0, 0 ], rendered_rgb("--gos-nav-content")
     end
   end
 
