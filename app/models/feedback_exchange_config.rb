@@ -21,6 +21,12 @@ class FeedbackExchangeConfig
   DEFAULT_EXPORT_KINDS = %w[peer_feedback manager_feedback observation impact].freeze
   SLUG_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
+  # The labels the settings form uses, so an error names the field the admin sees.
+  ATTRIBUTE_LABELS = {
+    "base_url" => "Peer address", "peer_name" => "Peer name",
+    "import_kinds" => "Types to import", "export_kinds" => "Types to send"
+  }.freeze
+
   attribute :provider, :string, default: "exchange"
   attribute :peer_name, :string
   attribute :base_url, :string
@@ -47,12 +53,6 @@ class FeedbackExchangeConfig
   def configured?(tenant)
     peer_name.present? && state(secrets_complete: tenant.feedback_exchange_secrets.complete?) == :active
   end
-
-  # The labels the settings form uses, so an error names the field the admin sees.
-  ATTRIBUTE_LABELS = {
-    "base_url" => "Peer address", "peer_name" => "Peer name",
-    "import_kinds" => "Types to import", "export_kinds" => "Types to send"
-  }.freeze
 
   # @return [String]
   def self.human_attribute_name(attribute, options = {})

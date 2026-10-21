@@ -35,7 +35,7 @@ module FeedbackExchangePage
     render Views::Integrations::FeedbackExchangeView.new(
       config: saved.feedback_exchange_config,
       form_config: tenant.feedback_exchange_config,
-      secrets_present: saved.feedback_exchange_secrets.presence,
+      secrets_present: saved.feedback_exchange_secrets.stored,
       inbound_url: feedback_exchange_inbound_url,
       can_edit: policy(:integrations).update_feedback_exchange?,
       errors: errors,

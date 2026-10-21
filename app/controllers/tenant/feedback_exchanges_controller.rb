@@ -54,7 +54,7 @@ class Tenant::FeedbackExchangesController < ApplicationController
   # still a value; drop it.
   def settings
     form_params.slice(:base_url, :peer_name, :enabled, :import_kinds, :export_kinds).to_h.symbolize_keys.tap do |attrs|
-      %i[import_kinds export_kinds].each { |key| attrs[key] = attrs[key].compact_blank if attrs.key?(key) }
+      %i[import_kinds export_kinds].each { |key| attrs[key] = attrs[key].compact_blank.uniq if attrs.key?(key) }
     end
   end
 

@@ -153,6 +153,14 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_equal %w[peer_feedback], config.import_kinds
       end
 
+      should "store each type once" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "chip", base_url: PEER, enabled: "0", export_kinds: [ "", "impact", "impact" ]
+        } }
+
+        assert_equal %w[impact], @tenant.reload.feedback_exchange_config.export_kinds
+      end
+
       should "save the generic feedback kind as an import filter" do
         patch tenant_feedback_exchange_path, params: { feedback_exchange: {
           peer_name: "chip", base_url: PEER, enabled: "0", import_kinds: [ "", "feedback" ]

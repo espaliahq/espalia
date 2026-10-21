@@ -140,6 +140,14 @@ class FeedbackExchangeSecretsTest < ActiveSupport::TestCase
     end
   end
 
+  should "say which secrets are stored without shadowing Object#presence" do
+    assert_equal({ "outbound_secret" => false, "inbound_secret" => false }, @tenant.feedback_exchange_secrets.stored)
+
+    @tenant.update_feedback_exchange!(outbound_secret: "o" * 40)
+
+    assert_equal({ "outbound_secret" => true, "inbound_secret" => false }, @tenant.feedback_exchange_secrets.stored)
+  end
+
   should "never print a value" do
     @tenant.update_feedback_exchange!(outbound_secret: "out-secret-0123456789abcdef0123456789abcd", inbound_secret: "in-secret-0123456789abcdef0123456789abcd")
     secrets = @tenant.feedback_exchange_secrets

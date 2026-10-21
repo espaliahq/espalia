@@ -45,10 +45,7 @@ module FeedbackExchangeSignedRequest
   # A stale or malformed timestamp is refused before any tenant is loaded and
   # decrypted, so an unauthenticated flood costs no more than a header check.
   def fresh_timestamp?
-    timestamp = Integer(request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER].to_s, 10)
-    (Time.current.to_i - timestamp).abs <= FeedbackExchange::Signature::MAX_SKEW
-  rescue ArgumentError
-    false
+    FeedbackExchange::Signature.fresh?(request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER], Time.current)
   end
 
   # With `X-Exchange-Key-Id` the one tenant whose current or previous inbound secret

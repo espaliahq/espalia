@@ -37,7 +37,7 @@ class FeedbackExchangeSecrets
   def complete? = outbound_secret.present? && inbound_secret.present?
 
   # @return [Hash{String => Boolean}] which values are set, for display
-  def presence
+  def stored
     { "outbound_secret" => outbound_secret.present?, "inbound_secret" => inbound_secret.present? }
   end
 
