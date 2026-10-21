@@ -2310,7 +2310,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
           "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
-          "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+          "withdrawn feedback, where it was given (by_origin: GrowthOS, or the system it arrived from), " \
+          "request statuses, fulfilment rate, participant coverage, " \
           "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
           "recorded and requests sent in one calendar month of the cycle; the response lists " \
           "the months available.",
@@ -2340,10 +2341,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "reporting_feedback_export",
         "description" => "Export every piece of feedback / evidence in an assessment cycle, one row each, " \
           "for monthly reporting (tenant admins only): recipient and provider with their roles, " \
-          "direction, requested or proactive, type, title, the feedback text, the behaviours it " \
-          "applies to, and status. The rows are exactly the feedback the cycle's coverage report " \
-          "counts. Pass month (YYYY-MM) to narrow to feedback recorded in one calendar month, and " \
-          "include_withdrawn to list withdrawn feedback too. The response carries every row's full text, " \
+          "direction, requested or proactive (a GrowthOS request), where it was given (origin) and the request " \
+          "it answered there, type, title, the feedback text, the behaviours it applies to, and status. " \
+          "The rows match the feedback the cycle's coverage report counts as provided; include_withdrawn " \
+          "adds the withdrawn items it reports separately. Pass month (YYYY-MM) to narrow to feedback " \
+          "recorded in one calendar month. The response carries every row's full text, " \
           "so a month is far smaller than a whole cycle; for counts alone use reporting_evidence_coverage.",
         "inputSchema" => {
           "type" => "object",
