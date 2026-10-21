@@ -101,6 +101,26 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     end
   end
 
+  context "a link decision taken from a placement suggestion" do
+    should "say so on a link" do
+      html = render_entry(kind: "evidence_linked",
+        payload: { actor_name: "Ada", valence: "demonstrated", via_suggestion_id: SecureRandom.uuid_v7 })
+      assert_includes html, "Demonstrates · from a suggestion"
+    end
+
+    should "say so on a reclassification" do
+      html = render_entry(kind: "evidence_revalenced",
+        payload: { actor_name: "Ada", valence: "growth_area", previous_valence: "demonstrated",
+                   via_suggestion_id: SecureRandom.uuid_v7 })
+      assert_includes html, "Growth area (was Demonstrates) · from a suggestion"
+    end
+
+    should "say nothing when the person chose the cell themselves" do
+      html = render_entry(kind: "evidence_linked", payload: { actor_name: "Ada", valence: "demonstrated" })
+      refute_includes html, "from a suggestion"
+    end
+  end
+
   context "evidence_relinked" do
     should "name who moved the evidence" do
       html = render_entry(kind: "evidence_relinked", payload: {

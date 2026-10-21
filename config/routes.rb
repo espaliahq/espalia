@@ -158,7 +158,17 @@ Rails.application.routes.draw do
       post :nudge
     end
   end
-  resources :evidence_items, only: [ :create, :update, :destroy ]
+  resources :evidence_items, only: [ :create, :update, :destroy ] do
+    # "Suggest again": ask the model for a fresh set of placement suggestions.
+    resources :placement_suggestions, only: [ :create ], controller: "evidence_placement_suggestions"
+  end
+  # Decide one placement suggestion from the hub, in place (Turbo Stream).
+  resources :evidence_placement_suggestions, only: [] do
+    member do
+      post :accept
+      post :dismiss
+    end
+  end
 
   # Unified evidence modal body (server-rendered into the #evidence-modal frame),
   # and the "who is it for?" step's typeahead when feedback is volunteered.

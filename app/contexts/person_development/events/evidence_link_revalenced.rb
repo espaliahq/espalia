@@ -18,6 +18,9 @@
 #     pre-valence link classified for the first time)
 #   @option data [String] :valence the new value — one of EvidenceLink::VALENCES
 #   @option data [String] :changed_by_id UUID of the Person reclassifying
+#   @option data [String, nil] :via_suggestion_id the {EvidencePlacementSuggestion}
+#     the person accepted (ADR-18 payload attribution). Present only when the
+#     decision came from a suggestion; consumers must tolerate its absence.
 #
 class PersonDevelopment::Events::EvidenceLinkRevalenced < RubyEventStore::Event
 end

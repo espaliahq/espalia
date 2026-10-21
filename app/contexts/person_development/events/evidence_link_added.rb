@@ -25,6 +25,9 @@
 #     evidence says about the behaviour at this cell — one of
 #     EvidenceLink::VALENCES. Required on new events; absent on events
 #     published before valence existed (consumers must tolerate nil).
+#   @option data [String, nil] :via_suggestion_id the {EvidencePlacementSuggestion}
+#     the person accepted (ADR-18 payload attribution). Present only when the
+#     decision came from a suggestion; consumers must tolerate its absence.
 #
 class PersonDevelopment::Events::EvidenceLinkAdded < RubyEventStore::Event
 end

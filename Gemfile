@@ -151,3 +151,6 @@ gem "diff-lcs", "~> 2.0"
 
 # We recommend using strong migrations when your app is in production
 # gem "strong_migrations"
+
+# Claude API client for evidence placement suggestions (Evidence::SuggestionModel).
+gem "anthropic", "~> 1.80"

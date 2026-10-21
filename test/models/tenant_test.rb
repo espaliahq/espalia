@@ -133,6 +133,17 @@ class TenantTest < ActiveSupport::TestCase
     end
   end
 
+  context "#evidence_suggestions_enabled?" do
+    should "be off unless switched on" do
+      assert_not build(:tenant).evidence_suggestions_enabled?
+    end
+
+    should "read a stored string as the boolean it names" do
+      assert build(:tenant, evidence_suggestions_enabled: "true").evidence_suggestions_enabled?
+      assert_not build(:tenant, evidence_suggestions_enabled: "false").evidence_suggestions_enabled?
+    end
+  end
+
   context "slug normalization" do
     should "downcase and replace invalid characters with dashes" do
       tenant = build(:tenant, slug: "ACME Corp!")

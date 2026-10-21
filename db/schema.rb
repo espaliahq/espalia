@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_100001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -273,6 +273,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
     t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"
     t.index ["tenant_id"], name: "index_evidence_links_on_tenant_id"
+  end
+
+  create_table "evidence_placement_suggestions", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "evidence_id", null: false
+    t.uuid "person_id", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "capability_stable_id", null: false
+    t.integer "level_ordinal", null: false
+    t.string "valence", null: false
+    t.decimal "confidence", precision: 3, scale: 2, null: false
+    t.text "rationale", null: false
+    t.string "status", default: "pending", null: false
+    t.uuid "decided_by_id"
+    t.datetime "decided_at"
+    t.text "dismiss_reason"
+    t.string "model", null: false
+    t.string "prompt_version", null: false
+    t.datetime "generated_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_placement_suggestions_cell", unique: true
+    t.index ["person_id", "framework_id", "status"], name: "idx_evidence_placement_suggestions_person"
+    t.index ["tenant_id"], name: "index_evidence_placement_suggestions_on_tenant_id"
   end
 
   create_table "evidence_requests", id: :uuid, default: nil, force: :cascade do |t|
@@ -842,6 +866,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000002) do
   add_foreign_key "evidence_links", "people", column: "linked_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "people", column: "removed_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "tenants"
+  add_foreign_key "evidence_placement_suggestions", "tenants"
   add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"

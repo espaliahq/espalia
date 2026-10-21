@@ -958,9 +958,12 @@ class PersonDevelopment::Aggregate
   # @param valence [String] the linker's judgment — one of
   #   EVIDENCE_VALENCES. Required on every new link.
   # @param rationale [String, nil] optional explanation of the link
+  # @param via_suggestion_id [String, nil] the placement suggestion the
+  #   linker accepted, when the link came from one
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
   #   already linked to that coordinate, or the valence is invalid
-  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil)
+  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil,
+                        via_suggestion_id: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
@@ -977,7 +980,7 @@ class PersonDevelopment::Aggregate
       linked_by_id: linked_by_id,
       valence: valence,
       rationale: rationale
-    }))
+    }.merge(suggestion_attribution(via_suggestion_id))))
   end
 
   # Removes one of an evidence item's (capability, level) links. The item
@@ -1030,9 +1033,12 @@ class PersonDevelopment::Aggregate
   # @param level_ordinal [Integer] the link's level
   # @param valence [String] one of EVIDENCE_VALENCES
   # @param changed_by_id [String] UUID of the Person reclassifying
+  # @param via_suggestion_id [String, nil] the placement suggestion the
+  #   reclassifier accepted, when the new valence came from one
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
   #   not linked to that coordinate, or the valence is invalid
-  def set_evidence_link_valence(evidence_id, capability_stable_id:, level_ordinal:, valence:, changed_by_id:)
+  def set_evidence_link_valence(evidence_id, capability_stable_id:, level_ordinal:, valence:, changed_by_id:,
+                                via_suggestion_id: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
@@ -1052,7 +1058,7 @@ class PersonDevelopment::Aggregate
       previous_valence: previous,
       valence: valence,
       changed_by_id: changed_by_id
-    }))
+    }.merge(suggestion_attribution(via_suggestion_id))))
   end
 
   # Edits the user-correctable fields of an existing evidence item.
@@ -1371,6 +1377,12 @@ class PersonDevelopment::Aggregate
   end
 
   private
+
+  # Present only when a link decision came from a placement suggestion, so
+  # every event published without one keeps its exact historical shape.
+  def suggestion_attribution(via_suggestion_id)
+    via_suggestion_id.present? ? { via_suggestion_id: via_suggestion_id } : {}
+  end
 
   # Direct aggregate callers cannot inspect the org chart. The command handler
   # supplies the exact value; this source-based default keeps lower-level
