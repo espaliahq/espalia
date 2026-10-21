@@ -254,6 +254,16 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "audience_too_narrow", exchange_record(audience: %w[recipient manager])
     end
 
+    should "match the import list against the peer's raw kind, then type it by the author" do
+      connect_feedback_exchange(@tenant, import_kinds: %w[feedback])
+      @importer = FeedbackExchange::Importer.new(@tenant.reload)
+
+      assert_equal :imported, @importer.import(exchange_record(kind: "feedback")).outcome
+      assert_equal "peer_feedback", EvidenceItem.find(evidence_id).evidence_type
+      skipped = @importer.import(exchange_record(id: "chip-fb-0002", kind: "observation"))
+      assert_equal [ :skipped, "kind_not_imported" ], [ skipped.outcome, skipped.skip_reason ]
+    end
+
     should "skip a kind the tenant does not import" do
       connect_feedback_exchange(@tenant, import_kinds: %w[observation])
       @importer = FeedbackExchange::Importer.new(@tenant.reload)
