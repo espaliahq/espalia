@@ -84,10 +84,7 @@ class Frameworks::FrameworkRenameSystemTest < ApplicationSystemTestCase
       form_width = form.evaluate_script("this.getBoundingClientRect().width")
       assert_operator form_width, :>, heading_width, "the editor must not pin to the short name's width"
       assert_operator form_width, :>=, 300, "the editor should span the phone's content width"
-      # The test window's 375px includes the scrollbar, so compare against the
-      # document's own client width rather than a literal.
-      assert_equal page.evaluate_script("document.documentElement.clientWidth"),
-                   page.evaluate_script("document.documentElement.scrollWidth"), "no sideways overflow"
+      assert_no_sideways_overflow
       cancel_inline_edit(form)
     end
 
