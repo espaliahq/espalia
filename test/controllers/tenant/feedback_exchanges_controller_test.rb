@@ -67,6 +67,13 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_select "#feedback-exchange-counts"
       end
 
+      should "give the peer our address from the route and the configured host, not the browsing host" do
+        get tenant_integration_path("feedback-exchange") # integration tests browse as www.example.com
+
+        assert_includes response.body, "http://example.com/api/feedback_exchange"
+        assert_not_includes response.body, "www.example.com/api"
+      end
+
       should "never echo a stored secret" do
         configure_tenant
         get tenant_integration_path("feedback-exchange")
