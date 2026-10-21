@@ -203,6 +203,23 @@ Rules for the copy, pinned by `test/components/assessments/glossary_test.rb`:
 spans people standing at different levels and no single code is true for the
 column. Everywhere a code IS known, the copy names it instead.
 
+### The process, before the numbers
+
+The explanation layer defines what a score means. `/assessments/how-it-works`
+(`Views::AssessmentGuides::ShowView`) explains the process around it: an
+illustrated walk through one cycle (set up, rate and gather, align, close),
+the participation statuses, and the four rules that keep it fair. Any tenant
+member may read it (`AssessmentGuidePolicy`); it shows no one's data. Rules
+for keeping it honest:
+
+- **Draw with the real vocabulary.** Chips, the rating scale and the split
+  take their classes from `FrequencyPalette` and `LevelChip`, so a palette
+  change reaches the guide too.
+- **Read tenant settings, never restate them.** The state word comes from
+  `StateLabels`, the unlock count from `HeroSummary.unlock_target_for`.
+- **It is not an MCP surface.** It carries no data an agent could act on;
+  the tool descriptions already explain the same process.
+
 ## Multi-perspective scoring
 
 `Assessments::MatrixDataBuilder` builds four parallel scoring outputs:

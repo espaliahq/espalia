@@ -160,6 +160,9 @@ Rails.application.routes.draw do
   # push yet. Wire app/views/pwa/service-worker.js here when that changes:
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  # Declared before `resources :assessments` so the path isn't read as an id.
+  get "assessments/how-it-works", to: "assessment_guides#show", as: :assessment_guide
+
   resources :assessments, only: [ :index, :show ] do
     member do
       get :matrix
