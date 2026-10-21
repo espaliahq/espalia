@@ -457,12 +457,12 @@ class Views::Assessments::Activity::Entry < Views::Base
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content : nil
       Prose.to_plain(content).presence
     when "evidence_relinked", "evidence_linked"
-      [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence ].compact
+      [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence, from_suggestion_note ].compact
         .join(" · ").presence
     when "evidence_unlinked"
       Prose.to_plain(payload_value(:reason)).presence
     when "evidence_revalenced"
-      revalence_secondary
+      [ revalence_secondary, from_suggestion_note ].compact.join(" · ").presence
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       Prose.to_plain(reason).presence
@@ -483,6 +483,12 @@ class Views::Assessments::Activity::Entry < Views::Base
   # pre-valence events.
   def valence_label_or_nil
     Views::Evidence::Valence::LABELS[payload_value(:valence)]
+  end
+
+  # Said when a person accepted a placement suggestion rather than choosing
+  # the cell themselves; the event carries the suggestion's id.
+  def from_suggestion_note
+    "from a suggestion" if payload_value(:via_suggestion_id).present?
   end
 
   # "Growth area (was Demonstrates)" — or just the new label when the link

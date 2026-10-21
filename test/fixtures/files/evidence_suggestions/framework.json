@@ -1,0 +1,99 @@
+{
+  "note": "An invented engineering framework for the placement-suggestion eval. Not any tenant's real framework.",
+  "role": { "name": "Software Engineer", "code": "E" },
+  "levels": [
+    { "ordinal": 2, "title": "Engineer" },
+    { "ordinal": 3, "title": "Senior Engineer" },
+    { "ordinal": 4, "title": "Staff Engineer" },
+    { "ordinal": 5, "title": "Principal Engineer" }
+  ],
+  "capabilities": [
+    {
+      "key": "delivery", "name": "Delivery", "category": "Execution",
+      "description": "Turning plans into shipped, working software.",
+      "expectations": {
+        "2": "Delivers well-defined tasks on time, asking for help when blocked.",
+        "3": "Delivers features end to end with little guidance, breaking work into small steps and flagging slips early.",
+        "4": "Leads delivery of multi-person projects, managing scope, sequencing and risk.",
+        "5": "Shapes how several teams plan and deliver, removing systemic causes of delay."
+      },
+      "illustrations": { "3": [ "Split a large migration into shippable slices and reported progress weekly." ] }
+    },
+    {
+      "key": "code_quality", "name": "Code quality", "category": "Execution",
+      "description": "Writing and reviewing code others can trust and change.",
+      "expectations": {
+        "2": "Writes readable, tested code and responds well to review.",
+        "3": "Writes well-structured, well-tested code and gives reviews that improve others' work.",
+        "4": "Sets quality practices for a codebase and raises the bar through review and tooling.",
+        "5": "Defines engineering standards adopted across the organisation."
+      },
+      "illustrations": { "3": [ "Review comments explain the why and suggest a concrete alternative." ] }
+    },
+    {
+      "key": "ownership", "name": "Ownership", "category": "Execution",
+      "description": "Seeing work through and caring about outcomes, not just tasks.",
+      "expectations": {
+        "2": "Follows their own work through to completion and fixes what they break.",
+        "3": "Owns outcomes for their area, following up after release and closing loose ends without being asked.",
+        "4": "Takes ownership of problems that span teams and drives them to resolution.",
+        "5": "Owns the long-term health of a domain and the decisions that shape it."
+      },
+      "illustrations": { "3": [ "Noticed a flaky job nobody owned and fixed it." ] }
+    },
+    {
+      "key": "communication", "name": "Communication", "category": "Working with others",
+      "description": "Sharing information clearly in writing and in person.",
+      "expectations": {
+        "2": "Communicates status and questions clearly within the team.",
+        "3": "Writes clear designs and updates, adjusting the message to the audience.",
+        "4": "Communicates complex trade-offs to technical and non-technical leaders.",
+        "5": "Shapes organisation-wide understanding of technical direction."
+      },
+      "illustrations": { "3": [ "Wrote a one-page design that product and design could both follow." ] }
+    },
+    {
+      "key": "collaboration", "name": "Collaboration", "category": "Working with others",
+      "description": "Working well with others to reach shared goals.",
+      "expectations": {
+        "2": "Works constructively with teammates and asks for and offers help.",
+        "3": "Builds strong working relationships across functions and resolves disagreements constructively.",
+        "4": "Aligns several teams around shared goals and brokers agreement on contested decisions.",
+        "5": "Builds partnerships across the organisation that unblock large initiatives."
+      },
+      "illustrations": { "3": [ "Paired with design to settle a disagreement about an empty state." ] }
+    },
+    {
+      "key": "mentoring", "name": "Mentoring", "category": "Working with others",
+      "description": "Helping others grow.",
+      "expectations": {
+        "3": "Mentors newer engineers through onboarding, pairing and thoughtful review.",
+        "4": "Grows other senior engineers and builds mentoring practices in the team.",
+        "5": "Develops technical leaders across the organisation."
+      },
+      "illustrations": { "3": [ "Ran a pairing rotation for two new starters." ] }
+    },
+    {
+      "key": "operations", "name": "Operational excellence", "category": "Execution",
+      "description": "Keeping systems healthy and responding well when they are not.",
+      "expectations": {
+        "2": "Takes part in on-call and follows runbooks during incidents.",
+        "3": "Leads incident response for their area, communicates calmly and drives follow-up actions.",
+        "4": "Improves reliability across services and leads major incidents.",
+        "5": "Sets the reliability strategy for the organisation."
+      },
+      "illustrations": { "3": [ "Ran the incident channel and posted updates every 30 minutes." ] }
+    },
+    {
+      "key": "product_thinking", "name": "Product thinking", "category": "Impact",
+      "description": "Understanding users and the business, and building what matters.",
+      "expectations": {
+        "2": "Understands the purpose of the features they build.",
+        "3": "Questions requirements with user and business context, and proposes simpler ways to reach the goal.",
+        "4": "Shapes product direction with product partners using data and user insight.",
+        "5": "Influences product strategy across several areas."
+      },
+      "illustrations": { "3": [ "Suggested a smaller first release that answered the riskiest question." ] }
+    }
+  ]
+}
