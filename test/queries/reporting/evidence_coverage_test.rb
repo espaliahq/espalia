@@ -116,6 +116,45 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     end
   end
 
+  context "origin" do
+    setup do
+      feedback(person: @first)
+      feedback(person: @first, external_reference: { system: "slack" })
+      feedback(person: @second, external_reference: { system: "chip", metadata: { request_context: "Q3 check-in" } })
+      feedback(person: @second, external_reference: { system: "chip" })
+      feedback(person: @second, status: "withdrawn", external_reference: { system: "chip" })
+    end
+
+    should "split provided feedback by the system it was given in, GrowthOS first" do
+      by_origin = result.metrics.by_origin
+
+      assert_equal({ "growthos" => 1, "chip" => 2, "slack" => 1 }, by_origin)
+      assert_equal %w[growthos chip slack], by_origin.keys
+      assert_equal result.metrics.feedback_provided, by_origin.values.sum
+    end
+
+    should "report GrowthOS as zero rather than omit it" do
+      only_peer = Reporting::EvidenceCoverage.new(cycle: @cycle, scope_person_ids: [ @second.id ]).call
+      assert_equal({ "growthos" => 0, "chip" => 2 }, only_peer.metrics.by_origin)
+
+      nobody = Reporting::EvidenceCoverage.new(cycle: @cycle, scope_person_ids: [ SecureRandom.uuid ]).call
+      assert_equal({ "growthos" => 0 }, nobody.metrics.by_origin)
+    end
+
+    should "carry the split into each group" do
+      by_manager = result.groups[:manager].index_by(&:label)
+
+      assert_equal({ "growthos" => 1, "slack" => 1 }, by_manager["Manager"].metrics.by_origin)
+      assert_equal({ "growthos" => 0, "chip" => 2 }, by_manager["Other Manager"].metrics.by_origin)
+    end
+
+    should "count a blank system as GrowthOS" do
+      feedback(person: @first, external_reference: { system: "" })
+
+      assert_equal 2, result.metrics.by_origin["growthos"]
+    end
+  end
+
   context "monthly reporting period" do
     setup do
       @this_month = Time.current.beginning_of_month
@@ -257,12 +296,15 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
 
   def feedback(person:, cycle_id: @cycle.cycle_id, framework_id: @framework_id,
                status: "active", recorded_at: Time.current, source: "self",
-               feedback_direction: nil)
+               feedback_direction: nil, external_reference: {})
     create(:evidence_item, with_link: false,
       tenant: @tenant, author: @peer, person_id: person.id,
       framework_id: framework_id, cycle_id: cycle_id,
       source: source, feedback_direction: feedback_direction,
-      link_status: status, recorded_at: recorded_at)
+      link_status: status, recorded_at: recorded_at).tap do |item|
+      # `chip` is not in ExternalReference::SYSTEMS yet, so skip validation.
+      item.update_columns(external_reference: external_reference) if external_reference.present?
+    end
   end
 
   def request(person:, cycle_id: @cycle.cycle_id, framework_id: @framework_id,
