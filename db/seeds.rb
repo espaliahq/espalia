@@ -298,8 +298,6 @@ end
 # Feedback exchange with a Chip running on the developer's laptop.
 chip_creds = Rails.application.credentials.dig(:feedback, :chip, :meandu)
 if Rails.env.development? && meandu && chip_creds
-  # The credential names are Chip's: what Chip verifies us with (its INBOUND
-  # secret) is our OUTBOUND secret, and what Chip signs with is our INBOUND one.
   meandu.update_feedback_exchange!(
     settings: {
       provider: "exchange",
@@ -307,8 +305,8 @@ if Rails.env.development? && meandu && chip_creds
       enabled: true,
       base_url: chip_creds[:base_url].presence || "http://host.docker.internal:3000/chip/api/feedback-exchange"
     },
-    outbound_secret: chip_creds[:feedback_exchange_growthos_inbound_secret],
-    inbound_secret: chip_creds[:feedback_exchange_growthos_outbound_secret]
+    outbound_secret: chip_creds[:feedback_exchange_growthos_outbound_secret],
+    inbound_secret: chip_creds[:feedback_exchange_growthos_inbound_secret]
   )
   puts "Configured the feedback exchange with Chip for me&u at #{meandu.feedback_exchange_config.base_url}"
 end
