@@ -1,6 +1,6 @@
 # Integration Architecture
 
-> Read this when: working on HRIS sync, notification adapters, SSO/SAML, or any external system integration.
+> Read this when: working on HRIS sync, the feedback exchange, notification adapters, SSO/SAML, or any external system integration.
 > For the how-to of configuring HRIS mappings or adding new providers, see [docs/guidelines/hris-integration.md](../guidelines/hris-integration.md).
 
 ---
@@ -162,6 +162,10 @@ MCP use, stamped `acting_via: slack`. A Person who has never signed in gets a
 `FeedbackDraft` and a link that opens the hub's modal prefilled after their
 first sign-in. The how-to, the trust model and the three-second rule are in
 [docs/guidelines/slack-integration.md](../guidelines/slack-integration.md).
+
+## Feedback exchange
+
+A tenant can exchange named feedback with a peer feedback system (Chip is the first). Each side serves the feedback given in it and pulls the other's; nothing is pushed. `Tenant.feedback_exchange_config` holds the peer and its address, `Tenant.feedback_exchange_credentials` the two shared secrets (encrypted, one per direction). Every request, both ways, is HMAC-signed over its method, path, query and body, with a five-minute window, a replay claim in the cache and a 24-hour overlap when a secret rotates. The client (`FeedbackExchange::Client`) is Faraday with typed errors and no retries; inbound requests are authenticated by `FeedbackExchangeSignedRequest`, which also resolves the tenant from the signature. The signature scheme, the endpoints and how to verify a pair are in [docs/guidelines/feedback-exchange.md](../guidelines/feedback-exchange.md); the contract is [the protocol](../notes/feedback-exchange-protocol.md).
 
 ## Notifications
 
