@@ -95,7 +95,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
 
   should "run the action in the signing tenant" do
     other = create(:tenant)
-    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret")
+    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret-0123456789abcdef0123456789")
     other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
 
     get_health
@@ -106,9 +106,9 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
   should "resolve a different tenant from a different secret" do
     other = create(:tenant)
     other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
-    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret")
+    other.update_feedback_exchange!(inbound_secret: "someone-elses-secret-0123456789abcdef0123456789")
 
-    get_health(headers: signed_headers(secret: "someone-elses-secret"))
+    get_health(headers: signed_headers(secret: "someone-elses-secret-0123456789abcdef0123456789"))
 
     assert_equal "acme", response.parsed_body["peer"]
   end
@@ -187,7 +187,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
 
   should "accept the previous secret inside the rotation window" do
     freeze_time do
-      @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret")
+      @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret-0123456789abcdef0123456789")
 
       get_health(headers: signed_headers(secret: INBOUND))
       assert_response :success
@@ -195,7 +195,7 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
   end
 
   should "refuse the previous secret once the window has passed" do
-    @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret")
+    @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret-0123456789abcdef0123456789")
 
     travel 25.hours do
       get_health(headers: signed_headers(secret: INBOUND))

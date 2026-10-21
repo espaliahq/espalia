@@ -39,8 +39,8 @@ class Tenant::FeedbackExchangesController < ApplicationController
   def setting_errors(tenant)
     config = tenant.feedback_exchange_config
     config.valid?
-    messages = config.errors.full_messages
-    messages.presence || tenant.errors.full_messages
+    others = tenant.errors.full_messages.grep_v(/\AFeedback exchange config/)
+    (config.errors.full_messages + others).presence || tenant.errors.full_messages
   end
 
   def form_params

@@ -111,7 +111,7 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         configure_tenant
 
         patch tenant_feedback_exchange_path, params: { feedback_exchange: {
-          peer_name: "chip", base_url: PEER, enabled: "1", inbound_secret: "a-brand-new-inbound-secret"
+          peer_name: "chip", base_url: PEER, enabled: "1", inbound_secret: "a-brand-new-inbound-secret-0123456789abcdef0123456789"
         } }
 
         assert_equal INBOUND, @tenant.reload.feedback_exchange_secrets.previous_inbound_secret
@@ -166,6 +166,27 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_response :unprocessable_content
         assert_includes response.body, "Types to send has unknown types: gossip"
         assert_equal FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS, @tenant.reload.feedback_exchange_config.export_kinds
+      end
+
+      should "refuse short and identical secrets with a message for each, and store neither" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "chip", base_url: PEER, enabled: "0", outbound_secret: "tooshort", inbound_secret: "tooshort"
+        } }
+
+        assert_response :unprocessable_content
+        assert_includes response.body, "Outbound secret must be at least 32 characters"
+        assert_includes response.body, "Inbound secret must be at least 32 characters"
+        assert_includes response.body, "must differ"
+        assert_not @tenant.reload.feedback_exchange_secrets.complete?
+      end
+
+      should "show the settings and the secret problems together" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "Chip!", base_url: PEER, enabled: "0", outbound_secret: "tooshort"
+        } }
+
+        assert_includes response.body, "Peer name must be a slug"
+        assert_includes response.body, "Outbound secret must be at least 32 characters"
       end
 
       should "re-render with the errors and without the secrets when invalid" do

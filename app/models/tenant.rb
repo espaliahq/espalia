@@ -9,6 +9,7 @@
 #   tenant = Tenant.create!(name: "ACME Corp", slug: "acme-corp")
 #
 class Tenant < ApplicationRecord
+  FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH = 32
   HEX_COLOR_FORMAT = /\A#[0-9a-fA-F]{6}\z/
 
   # The navbar colours the app ships with (`--color-nav-bg` in
@@ -83,6 +84,7 @@ class Tenant < ApplicationRecord
   validates :feedback_exchange_config, store_model: true
   before_validation :sync_feedback_exchange_key_ids, if: :feedback_exchange_credentials_changed?
   validate :feedback_exchange_inbound_secret_is_ours, if: :feedback_exchange_credentials_changed?
+  validate :feedback_exchange_secrets_are_strong, if: :feedback_exchange_credentials_changed?
 
   # The colour the browser should paint its own chrome (address bar, title
   # bar, task switcher) for a page of this tenant: the tenant's navbar
@@ -156,6 +158,9 @@ class Tenant < ApplicationRecord
   # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
   # @return [Boolean]
   def update_feedback_exchange!(settings: {}, outbound_secret: nil, inbound_secret: nil)
+    # A save that failed validation leaves its assignments behind, and a locked
+    # reload refuses unsaved changes: start from what is stored.
+    restore_attributes(%w[feedback_exchange_config feedback_exchange_credentials inbound_key_id previous_inbound_key_id])
     with_lock do
       credentials = (feedback_exchange_credentials.is_a?(Hash) ? feedback_exchange_credentials : {}).dup
       credentials["outbound_secret"] = outbound_secret.strip if outbound_secret.present?
@@ -230,6 +235,21 @@ class Tenant < ApplicationRecord
     self.inbound_key_id = secrets.inbound_secret && FeedbackExchange::Signature.key_id(secrets.inbound_secret)
     self.previous_inbound_key_id = secrets.previous_inbound_secret &&
                                    FeedbackExchange::Signature.key_id(secrets.previous_inbound_secret)
+  end
+
+  # Each signing secret is long enough to be random, and the two differ: protocol §6
+  # asks for one secret per direction.
+  def feedback_exchange_secrets_are_strong
+    secrets = feedback_exchange_secrets
+    { "Outbound secret" => secrets.outbound_secret, "Inbound secret" => secrets.inbound_secret }.each do |label, value|
+      next if value.nil? || value.length >= FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH
+
+      errors.add(:base, "#{label} must be at least #{FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH} characters. " \
+                        "Generate one with `openssl rand -hex 32`.")
+    end
+    return unless secrets.outbound_secret && secrets.outbound_secret == secrets.inbound_secret
+
+    errors.add(:base, "The outbound and inbound secrets must differ: use one secret per direction.")
   end
 
   # An inbound secret identifies the tenant a request is for, so two tenants must

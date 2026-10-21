@@ -163,7 +163,7 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     should "build from the tenant's config and secrets" do
       tenant = create(:tenant)
       tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(base_url: "https://chip.example.com/x/", peer_name: "chip"))
-      tenant.update_feedback_exchange!(outbound_secret: SECRET, inbound_secret: "in")
+      tenant.update_feedback_exchange!(outbound_secret: SECRET, inbound_secret: "inbound-for-the-client-test-0123456789abcdef0123456789")
 
       assert_instance_of FeedbackExchange::Client, FeedbackExchange::Client.for(tenant)
     end

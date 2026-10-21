@@ -37,7 +37,7 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
         peer_name: "chip", base_url: "https://chip.example.com/x", enabled: true,
         cursor: "c1", last_synced_at: Time.current
       ))
-      @tenant.update_feedback_exchange!(outbound_secret: "out-secret-value", inbound_secret: "in-secret-value")
+      @tenant.update_feedback_exchange!(outbound_secret: "out-secret-value-0123456789abcdef0123456789", inbound_secret: "in-secret-value-0123456789abcdef0123456789")
 
       result = call
 
