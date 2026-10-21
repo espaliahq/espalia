@@ -59,7 +59,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # which pairs exist, and what is already linked or was turned down.
   def usable?(prompt, proposal)
     prompt.open_cell?(proposal.capability_stable_id, proposal.level_ordinal) &&
-      EvidenceLink::VALENCES.include?(proposal.valence) && proposal.rationale.present?
+      EvidenceLink::VALENCES.include?(proposal.valence)
   end
 
   # Runs for one item are serialised (an edit and its original, or a double
@@ -95,7 +95,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     row.update!(
       person_id: item.person_id, framework_id: item.framework_id,
       valence: proposal.valence, confidence: proposal.confidence.round(2),
-      rationale: proposal.rationale.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH),
+      rationale: proposal.rationale&.truncate(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH),
       status: "pending", decided_by_id: nil, decided_at: nil, dismiss_reason: nil,
       provider: model.provider, model: model.model, prompt_version: Evidence::PlacementPrompt::VERSION, generated_at: at
     )

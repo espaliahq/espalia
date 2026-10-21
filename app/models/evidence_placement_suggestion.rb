@@ -13,7 +13,8 @@ class EvidencePlacementSuggestion < ApplicationRecord
   STATUSES = %w[pending accepted edited dismissed superseded].freeze
   DECIDED_STATUSES = %w[accepted edited dismissed].freeze
   # A rationale quotes the feedback in one sentence; anything longer is the
-  # model rambling, and the hub row has room for one line.
+  # model rambling, and the hub row has room for one line. A decision model
+  # (Jev) writes none, so it may be blank.
   RATIONALE_MAX_LENGTH = 400
 
   acts_as_tenant :tenant
@@ -26,7 +27,7 @@ class EvidencePlacementSuggestion < ApplicationRecord
   validates :level_ordinal, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validates :valence, inclusion: { in: EvidenceLink::VALENCES }
   validates :confidence, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 1 }
-  validates :rationale, presence: true, length: { maximum: RATIONALE_MAX_LENGTH }
+  validates :rationale, length: { maximum: RATIONALE_MAX_LENGTH }
   validates :status, inclusion: { in: STATUSES }
   validates :provider, inclusion: { in: AiModelConfig::PROVIDERS }
   validates :model, :prompt_version, :generated_at, presence: true

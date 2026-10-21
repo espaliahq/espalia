@@ -2,7 +2,8 @@
 
 # The model's suggested placements for one piece of feedback, under its hub
 # card: capability · level, the valence it reads as, how confident the model
-# is, and the words in the feedback it rests on. Each row is accepted or
+# is, and the words in the feedback it rests on (a decision model such as Jev
+# gives no words, only the confidence). Each row is accepted or
 # dismissed in place; "Adjust" opens the evidence modal with every suggestion
 # staged as an "Applies to" row; "Suggest again" asks for a fresh set.
 #
@@ -60,7 +61,7 @@ class Views::Evidence::PlacementSuggestions < Views::Base
     div(class: "mt-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3 space-y-3") do
       div(class: "flex flex-wrap items-baseline justify-between gap-2") do
         h4(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Suggested placements" }
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { "Suggested by Claude from the feedback. Nothing is placed until you accept." }
+        p(class: "text-xs text-gray-600 dark:text-gray-300") { "Suggested by an AI model from the feedback. Nothing is placed until you accept." }
       end
       ul(class: "space-y-3", role: "list") { @suggestions.each { |suggestion| row(suggestion) } }
       div(class: "flex flex-wrap items-center gap-x-4 border-t border-gray-200 dark:border-gray-700 pt-2") do
@@ -81,7 +82,7 @@ class Views::Evidence::PlacementSuggestions < Views::Base
         span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{(suggestion.confidence.to_f * 100).round}% confident" }
       end
       p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
-      p(class: "text-sm text-gray-700 dark:text-gray-200") { suggestion.rationale }
+      p(class: "text-sm text-gray-700 dark:text-gray-200") { suggestion.rationale } if suggestion.rationale.present?
       actions(suggestion, cell)
     end
   end

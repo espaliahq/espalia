@@ -3,8 +3,8 @@
 # The pending placement suggestions on an assessment — where the model thinks
 # feedback belongs, for a person to accept or dismiss — optionally for one
 # item. Each carries the capability, level, valence, a confidence from 0 to 1
-# and a rationale quoting the feedback, plus the model and prompt version that
-# produced it.
+# and a rationale quoting the feedback (null from a decision model such as
+# Jev), plus the model and prompt version that produced it.
 #
 # Read-only. Across an assessment: {EvidencePolicy#index?} (the people who
 # see all its evidence). For one item: {EvidencePolicy#add_link?}, which also
@@ -14,7 +14,7 @@ class Operations::Assessments::EvidenceSuggestionsList < Operations::Base
 
   description "List the pending placement suggestions on an assessment, or for one feedback / evidence item: " \
               "the suggested capability × level and valence, a confidence from 0 to 1 and a rationale quoting " \
-              "the feedback. Accept or dismiss them with assessments_accept_evidence_suggestion / " \
+              "the feedback (null when the model gives none). Accept or dismiss them with assessments_accept_evidence_suggestion / " \
               "assessments_dismiss_evidence_suggestion."
   category :read
   approval :none

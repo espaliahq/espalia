@@ -15,7 +15,7 @@ class EvidencePlacementSuggestionTest < ActiveSupport::TestCase
   context "validations" do
     should validate_inclusion_of(:status).in_array(EvidencePlacementSuggestion::STATUSES)
     should validate_inclusion_of(:valence).in_array(EvidenceLink::VALENCES)
-    should validate_presence_of(:rationale)
+    should allow_value(nil).for(:rationale)
     should validate_length_of(:rationale).is_at_most(EvidencePlacementSuggestion::RATIONALE_MAX_LENGTH)
     should validate_presence_of(:model)
     should validate_presence_of(:prompt_version)

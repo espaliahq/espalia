@@ -31,6 +31,17 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_equal @alex.id, row.person_id
   end
 
+  should "store a placement that comes with no rationale, as a decision model's do" do
+    item = record_peer_feedback
+    with_fake_suggestion_model(proposals: [ proposal(@ownership, confidence: 0.62, rationale: nil) ]) do
+      Evidence::SuggestPlacementsJob.perform_now(item.id)
+    end
+
+    row = suggestions_for(item).sole
+    assert_equal [ @ownership.stable_id, 0.62 ], [ row.capability_stable_id, row.confidence.to_f ]
+    assert_nil row.rationale
+  end
+
   should "drop a cell the role doesn't read, a level outside the window and a cell already linked" do
     item = record_peer_feedback(placed_on: @collaboration)
     hallucinated = Evidence::SuggestionModel::Proposal.new(capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3,

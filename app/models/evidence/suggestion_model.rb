@@ -97,13 +97,13 @@ class Evidence::SuggestionModel
   end
 
   def proposal(raw, names)
-    rationale = raw["rationale"].to_s.strip
+    rationale = raw["rationale"].to_s.strip.presence
     Proposal.new(
       capability_stable_id: raw["capability_stable_id"].to_s,
       level_ordinal: raw["level_ordinal"].to_i,
       valence: raw["valence"].to_s,
       confidence: raw["confidence"].to_f.clamp(0.0, 1.0),
-      rationale: names ? names.restore(rationale) : rationale
+      rationale: names && rationale ? names.restore(rationale) : rationale
     )
   end
 end

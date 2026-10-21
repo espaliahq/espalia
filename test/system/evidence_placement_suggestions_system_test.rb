@@ -74,6 +74,26 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     assert_decided
   end
 
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "show a decision model's suggestion as its confidence alone, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      ActsAsTenant.with_tenant(@tenant) do
+        @collaboration_suggestion.update!(rationale: nil, confidence: 0.57)
+      end
+      open_hub
+
+      within(row(@collaboration_suggestion)) do
+        assert_text "Collaboration · E4"
+        assert_text "57% confident"
+        assert_no_text "speaks to collaboration"
+      end
+      assert_text "Suggested by an AI model from the feedback."
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
+        "the suggestion rows must fit the viewport"
+      screenshot("#{name}_confidence_only")
+    end
+  end
+
   should "stage the suggestions in the editor and keep the ones left" do
     open_hub
     click_button_with_js_fallback("Adjust in the editor", expect_text: "Edit feedback / evidence")
