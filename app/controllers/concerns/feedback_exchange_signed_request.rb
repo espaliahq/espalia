@@ -45,16 +45,24 @@ module FeedbackExchangeSignedRequest
   # A stale or malformed timestamp is refused before any tenant is loaded and
   # decrypted, so an unauthenticated flood costs no more than a header check.
   def fresh_timestamp?
-    timestamp = Integer(request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER].to_s, 10)
-    (Time.current.to_i - timestamp).abs <= FeedbackExchange::Signature::MAX_SKEW
-  rescue ArgumentError
-    false
+    FeedbackExchange::Signature.fresh?(request.headers[FeedbackExchange::Signature::TIMESTAMP_HEADER], Time.current)
+  end
+
+  # With `X-Exchange-Key-Id` the one tenant whose current or previous inbound secret
+  # has that key id (an indexed lookup); without it, every credentialed tenant, for a
+  # peer that does not send the header. A malformed key id matches nothing.
+  def candidate_tenants
+    key_id = request.headers[FeedbackExchange::Signature::KEY_ID_HEADER]
+    return Tenant.where.not(feedback_exchange_credentials: nil) if key_id.nil?
+    return Tenant.none unless key_id.match?(FeedbackExchange::Signature::KEY_ID_FORMAT)
+
+    Tenant.where("inbound_key_id = :key OR previous_inbound_key_id = :key", key: key_id.downcase)
   end
 
   # @return [Tenant, nil] the tenant whose inbound secret signed this request
   def signing_tenant
     body = request.raw_post
-    Tenant.where.not(feedback_exchange_credentials: nil).find_each do |tenant|
+    candidate_tenants.find_each do |tenant|
       secrets = tenant.feedback_exchange_secrets
       next if secrets.inbound_secret.blank?
 

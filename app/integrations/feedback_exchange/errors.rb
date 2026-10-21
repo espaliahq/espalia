@@ -7,6 +7,10 @@
 module FeedbackExchange::Errors
   class Error < StandardError; end
 
+  # Raised before any request when the peer's address points at the app's own
+  # network or is not a plain host. The message is safe to show an admin.
+  class AddressRefused < Error; end
+
   # Raised on HTTP 401: the peer rejected our signature. A human has to fix the secret.
   class AuthenticationError < Error; end
 

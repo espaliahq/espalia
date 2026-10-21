@@ -21,8 +21,18 @@ module FeedbackExchange::Signature
   TIMESTAMP_HEADER = "X-Exchange-Timestamp"
   SIGNATURE_HEADER = "X-Exchange-Signature"
   CONSUMER_HEADER = "X-Exchange-Consumer"
+  # Optional, outside the signature: names the secret that signed the request so
+  # a verifier can load one tenant rather than try each.
+  KEY_ID_HEADER = "X-Exchange-Key-Id"
+  KEY_ID_FORMAT = /\A\h{16}\z/
 
   module_function
+
+  # @param secret [String]
+  # @return [String] the first 16 hex characters of the secret's SHA-256
+  def key_id(secret)
+    Digest::SHA256.hexdigest(secret.to_s)[0, 16]
+  end
 
   # @param secret [String]
   # @param method [String, Symbol] HTTP method, any case
