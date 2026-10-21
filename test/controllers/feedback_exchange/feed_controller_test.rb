@@ -79,13 +79,18 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
       assert_equal "http://example.com/evidence#evidence-item-#{item.id}", response.parsed_body["items"].sole["source_url"]
     end
 
-    should "send a withdrawn item with its status" do
-      item = create_item(author: @author, recipient: @recipient, link_status: "withdrawn", withdrawn_at: Time.current)
+    should "send a withdrawn item with its status and no text" do
+      item = create_item(author: @author, recipient: @recipient, link_status: "withdrawn", withdrawn_at: Time.current,
+                         title: "Incident call", content: "Calm under pressure.")
 
       signed_get
 
       assert_equal [ item.id ], feed_ids
-      assert_equal "withdrawn", response.parsed_body["items"].sole["status"]
+      record = response.parsed_body["items"].sole
+      assert_equal "withdrawn", record["status"]
+      assert_equal "", record["text"]
+      assert_not_includes response.body, "Calm under pressure."
+      assert_not_includes response.body, "Incident call"
     end
   end
 
