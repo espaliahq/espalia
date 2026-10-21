@@ -87,10 +87,14 @@ class FeedbackExchange::HostGuardTest < ActiveSupport::TestCase
       assert_match(/private network address/, error.message)
     end
 
-    should "pass a name that resolves to public addresses" do
+    should "return the public address it accepted, for the connection to use" do
       Addrinfo.stub(:getaddrinfo, [ Addrinfo.ip("93.184.216.34") ]) do
-        assert_nil FeedbackExchange::HostGuard.check!("https://x.example.com")
+        assert_equal "93.184.216.34", FeedbackExchange::HostGuard.check!("https://x.example.com")
       end
+    end
+
+    should "return an IP literal as it is" do
+      assert_equal "93.184.216.34", FeedbackExchange::HostGuard.check!("https://93.184.216.34/x")
     end
 
     should "leave an unresolvable name to the connection to fail" do

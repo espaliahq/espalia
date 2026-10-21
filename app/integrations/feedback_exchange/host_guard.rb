@@ -15,8 +15,9 @@
 # 2. Every address the host resolves to, by the same resolver Net::HTTP uses
 #    (`Addrinfo`), must be public.
 #
-# This closes the straightforward cases. It does not stop DNS rebinding between
-# the check and the connection; an egress policy at the network layer does.
+# {.check!} returns the address it accepted, and the client connects to exactly
+# that address (keeping the hostname for TLS and the Host header), so a second DNS
+# answer cannot send the request somewhere the check never saw.
 module FeedbackExchange::HostGuard
   LOCAL_SUFFIXES = %w[.localhost .local .internal .lan].freeze
   # One to 63 letters, digits or hyphens, not starting or ending with a hyphen.
@@ -67,6 +68,9 @@ module FeedbackExchange::HostGuard
   end
 
   # @param url [String] the peer's base URL
+  # @return [String, nil] a public address for the host, which the connection must
+  #   use; nil in development, or when the name does not resolve (the connection
+  #   then fails on its own)
   # @raise [FeedbackExchange::Errors::AddressRefused] when the host is not canonical,
   #   or is, or resolves to, a private address
   def check!(url)
@@ -75,7 +79,9 @@ module FeedbackExchange::HostGuard
     host = unbracket(URI.parse(url).host)
     refuse!("The peer's address is not a plain hostname or IP address") unless canonical_host?(host)
     refuse!("The peer's address points at a private network address") if private_host?(host)
-    refuse!("The peer's address resolves to a private network address") if resolved_addresses(host).any? { |a| private_address?(a) }
+    addresses = resolved_addresses(host)
+    refuse!("The peer's address resolves to a private network address") if addresses.any? { |a| private_address?(a) }
+    addresses.first
   end
 
   def resolved_addresses(host)

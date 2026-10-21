@@ -159,6 +159,38 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     end
   end
 
+  context "connecting to the accepted address" do
+    should "connect to the address the guard returned while the Host header keeps the peer's name" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      seen = {}
+      thread = Thread.new do
+        socket = server.accept
+        request = []
+        while (line = socket.gets) && line != "\r\n"
+          request << line
+        end
+        seen[:host] = request.find { |l| l.start_with?("Host:") }&.strip
+        body = { ok: true, peer: "chip" }.to_json
+        socket.write "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}"
+        socket.close
+      end
+
+      client = FeedbackExchange::Client.new(base_url: "http://rebind.invalid:#{port}/api", outbound_secret: SECRET)
+
+      # "rebind.invalid" never resolves: only the pinned address can answer.
+      FeedbackExchange::HostGuard.stub(:check!, "127.0.0.1") do
+        assert_equal({ "ok" => true, "peer" => "chip" }, client.health)
+      end
+      thread.join(5)
+
+      assert_equal "Host: rebind.invalid:#{port}", seen[:host]
+    ensure
+      server&.close
+      thread&.kill
+    end
+  end
+
   context ".for" do
     should "build from the tenant's config and secrets" do
       tenant = create(:tenant)
