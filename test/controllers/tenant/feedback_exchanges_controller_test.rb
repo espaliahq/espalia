@@ -235,6 +235,23 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_match(/Could not reach/, flash[:alert])
       end
 
+      should "say why an address was refused rather than that the peer was unreachable" do
+        error = FeedbackExchange::Errors::AddressRefused.new("The peer's address points at a private network address")
+        FeedbackExchange::Client.stub(:for, fake_client(error: error)) do
+          post test_connection_tenant_feedback_exchange_path
+        end
+
+        assert_equal "The peer's address points at a private network address.", flash[:alert]
+      end
+
+      should "refuse a loopback written as 127.1 without calling out" do
+        @tenant.update_columns(feedback_exchange_config: @tenant.feedback_exchange_config.as_json.merge("base_url" => "https://127.1/x"))
+
+        post test_connection_tenant_feedback_exchange_path
+
+        assert_match(/plain hostname or IP address/, flash[:alert])
+      end
+
       should "say so when rate limited" do
         FeedbackExchange::Client.stub(:for, fake_client(error: FeedbackExchange::Errors::RateLimitError.new(retry_after: 30))) do
           post test_connection_tenant_feedback_exchange_path

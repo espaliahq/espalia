@@ -60,7 +60,7 @@ signing_string = "v1:" + timestamp + ":" + METHOD + ":" + path_with_query + ":" 
 
 `FeedbackExchange::Client.for(tenant)` is Faraday with per-instance secrets and no global state, as `Hris::Hibob::Client` is. Methods: `feedback(since:, limit:)`, `deletions(since:, limit:)`, `ack(items)`, `health`. Every request carries `X-Exchange-Consumer: growthos` and a fresh signature.
 
-Before it opens a connection it refuses a peer host that is, or resolves to, a loopback, private or link-local address (`FeedbackExchange::HostGuard`), because a tenant admin types the address and the server calls it. That blocks the straightforward probe; it does not stop DNS rebinding, which needs an egress policy. Development is exempt.
+Before it opens a connection it refuses a peer host that is not a canonical hostname or IP literal (so `127.1`, `2130706433`, `0x7f000001` and `0177.0.0.1` are out), or that is, or resolves to, a loopback, private, link-local, carrier-grade-NAT or reserved address, including IPv4 wrapped in IPv6 (`FeedbackExchange::HostGuard`, which resolves with `Addrinfo`, the resolver Net::HTTP uses). A tenant admin types the address and the server calls it, so without this "Test connection" probes internal services. It raises `Errors::AddressRefused`, whose message the page shows. That blocks the straightforward probe; it does not stop DNS rebinding, which needs an egress policy. Development is exempt.
 
 It does **not** retry. The sync job owns retries, from the error class:
 

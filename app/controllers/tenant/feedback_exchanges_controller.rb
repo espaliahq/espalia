@@ -71,6 +71,8 @@ class Tenant::FeedbackExchangesController < ApplicationController
     return [ :alert, "The peer answered, but not with { ok: true }." ] unless body["ok"] == true
 
     [ :notice, "Connected to #{config.peer_name.presence || 'the peer'}. Our signature was accepted." ]
+  rescue FeedbackExchange::Errors::AddressRefused => e
+    [ :alert, "#{e.message}." ]
   rescue FeedbackExchange::Errors::AuthenticationError
     [ :alert, "The peer rejected our signature. Check that its inbound secret matches our outbound secret." ]
   rescue FeedbackExchange::Errors::RateLimitError
