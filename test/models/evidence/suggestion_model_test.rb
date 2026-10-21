@@ -2,76 +2,133 @@
 
 require "test_helper"
 
-# The SDK boundary: what goes out and what comes back. The client is stubbed;
-# nothing here reaches the network.
+# What the placement code asks of the model and gets back, with the adapter
+# faked: pseudonymising on the way out, restoring on the way in, and turning
+# the adapter's errors into the ones the job chooses a policy for.
 class Evidence::SuggestionModelTest < ActiveSupport::TestCase
   Prompt = Struct.new(:framework_text, :item_text, :schema)
-  Block = Struct.new(:type, :text)
-  Message = Struct.new(:stop_reason, :content)
 
-  class FakeMessages
-    attr_reader :params
+  class FakeAdapter
+    attr_reader :calls
 
-    def initialize(result) = @result = result
+    def initialize(suggestions: [], error: nil, refused: false)
+      @suggestions = suggestions
+      @error = error
+      @refused = refused
+      @calls = []
+    end
 
-    def create(**params)
-      @params = params
-      raise @result if @result.is_a?(Exception)
+    def model = "fake-model"
+    def provider = "openai_compatible"
 
-      @result
+    def suggest(system:, user:, schema:)
+      @calls << { system: system, user: user, schema: schema }
+      raise @error if @error
+
+      Ai::SuggestionResponse.new(suggestions: @suggestions, model: model,
+                                 usage: Ai::SuggestionResponse::Usage.new(input_tokens: 10, output_tokens: 5), refused: @refused)
     end
   end
 
-  FakeClient = Struct.new(:messages)
-
-  def run_model(result)
-    messages = FakeMessages.new(result)
-    model = Evidence::SuggestionModel.new
-    model.instance_variable_set(:@client, FakeClient.new(messages))
-    [ model.suggest(Prompt.new("framework", "item", { type: "object" })), messages.params ]
+  setup do
+    @tenant = create(:tenant, :with_ai_model)
+    ActsAsTenant.with_tenant(@tenant) do
+      create(:person, tenant: @tenant, name: "Alex Chen")
+      create(:person, tenant: @tenant, name: "Anna Reid")
+    end
   end
 
-  def answer(json, stop_reason: :end_turn)
-    Message.new(stop_reason, [ Block.new(:thinking, nil), Block.new(:text, json) ])
+  def run_model(adapter, tenant: @tenant, text: "Alex Chen led the review; Anna wrote it up.", framework: "Framework for Alex Chen.")
+    model = Evidence::SuggestionModel.new(tenant: tenant, adapter: adapter)
+    [ model.suggest(Prompt.new(framework, text, { type: "object" })), adapter.calls.first ]
   end
 
-  def status_error(klass, status)
-    klass.new(url: URI("https://api.anthropic.com/v1/messages"), status: status, headers: {}, body: nil,
-              request: nil, response: nil, message: "boom")
+  def raw(**overrides)
+    { "capability_stable_id" => "c1", "level_ordinal" => 3, "valence" => "demonstrated", "confidence" => 0.8,
+      "rationale" => "“Person 1 led the review” shows ownership." }.merge(overrides.stringify_keys)
   end
 
-  should "cache the framework text, put the item last, and ask for low effort and the schema" do
-    _, params = run_model(answer({ suggestions: [] }.to_json))
+  should "report the adapter's provider and model, for the row" do
+    model = Evidence::SuggestionModel.new(tenant: @tenant, adapter: FakeAdapter.new)
 
-    assert_equal "claude-opus-5-5", params[:model]
-    assert_equal [ { type: "text", text: "framework", cache_control: { type: "ephemeral" } } ], params[:system_]
-    assert_equal [ { role: "user", content: "item" } ], params[:messages]
-    assert_equal :low, params.dig(:output_config, :effort)
-    assert_equal({ type: :json_schema, schema: { type: "object" } }, params.dig(:output_config, :format_))
-    assert_not params.key?(:thinking), "Opus 5.5 thinks adaptively; budgets and disabling are rejected"
+    assert_equal [ "openai_compatible", "fake-model" ], [ model.provider, model.model ]
   end
 
-  should "return at most three proposals, confidence clamped" do
-    raw = Array.new(4) { |i| { capability_stable_id: "c#{i}", level_ordinal: 3, valence: "demonstrated", confidence: 1.4, rationale: " r " } }
-    proposals, = run_model(answer({ suggestions: raw }.to_json))
+  context "pseudonymisation" do
+    should "swap names for placeholders in both texts and the schema untouched" do
+      _, call = run_model(FakeAdapter.new)
+
+      assert_equal "Framework for Person 1.", call[:system]
+      assert_equal "Person 1 led the review; Person 2 wrote it up.", call[:user]
+      assert_equal({ type: "object" }, call[:schema])
+    end
+
+    should "leave first names alone in the framework text, where they are only words" do
+      ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "Will Hart") }
+      _, call = run_model(FakeAdapter.new, text: "Will Hart will present.", framework: "Will Hart will review; will deliver.")
+
+      assert_match(/\APerson \d+ will review; will deliver\.\z/, call[:system])
+      assert_match(/\APerson \d+ Person \d+ present\.\z/, call[:user], "the feedback itself gets first names too")
+    end
+
+    should "put the names back in the rationales that come back" do
+      proposals, = run_model(FakeAdapter.new(suggestions: [ raw ]))
+
+      assert_equal "“Alex Chen led the review” shows ownership.", proposals.first.rationale
+    end
+
+    should "send names as written when the tenant turned it off" do
+      @tenant.update!(ai_config: AiModelConfig.new(@tenant.ai_config.attributes.merge("pseudonymise_names" => false)))
+      proposals, call = run_model(FakeAdapter.new(suggestions: [ raw(rationale: "Person 1 is left alone.") ]))
+
+      assert_equal "Alex Chen led the review; Anna wrote it up.", call[:user]
+      assert_equal "Person 1 is left alone.", proposals.first.rationale
+    end
+
+    should "keep another tenant's people out of the mapping" do
+      other = create(:tenant, :with_ai_model)
+      ActsAsTenant.with_tenant(other) { create(:person, tenant: other, name: "Morgan Park") }
+      _, call = run_model(FakeAdapter.new, tenant: other, text: "Alex Chen met Morgan Park.")
+
+      assert_equal "Alex Chen met Person 1.", call[:user]
+    end
+  end
+
+  should "return at most three proposals, confidence clamped, rationale stripped" do
+    suggestions = Array.new(4) { |i| raw(capability_stable_id: "c#{i}", confidence: 1.4, rationale: " plain ") }
+    proposals, = run_model(FakeAdapter.new(suggestions: suggestions))
 
     assert_equal 3, proposals.size
-    assert_equal 1.0, proposals.first.confidence
-    assert_equal "r", proposals.first.rationale
+    assert_equal [ 1.0, "plain" ], [ proposals.first.confidence, proposals.first.rationale ]
+    assert_kind_of Evidence::SuggestionModel::Proposal, proposals.first
   end
 
-  should "treat a refusal, a truncated answer and unparseable text as no suggestions" do
-    assert_equal [], run_model(answer("{}", stop_reason: :refusal)).first
-    assert_equal [], run_model(answer('{"sugg', stop_reason: :max_tokens)).first
-    assert_equal [], run_model(answer("not json")).first
+  should "treat a refusal as no suggestions" do
+    proposals, = run_model(FakeAdapter.new(refused: true))
+
+    assert_empty proposals
   end
 
-  should "turn the SDK's errors into ones the job can choose a policy for" do
-    assert_raises(Evidence::SuggestionModel::RateLimited) { run_model(status_error(Anthropic::Errors::RateLimitError, 429)) }
-    assert_raises(Evidence::SuggestionModel::Unavailable) { run_model(status_error(Anthropic::Errors::InternalServerError, 529)) }
-    assert_raises(Evidence::SuggestionModel::Rejected) { run_model(status_error(Anthropic::Errors::BadRequestError, 400)) }
-    assert_raises(Evidence::SuggestionModel::Unavailable) do
-      run_model(Anthropic::Errors::APIConnectionError.new(url: URI("https://api.anthropic.com"), request: nil))
+  should "turn the adapter's errors into ones the job can choose a policy for" do
+    {
+      Ai::Errors::RateLimitError.new(retry_after: 3) => Evidence::SuggestionModel::RateLimited,
+      Ai::Errors::AuthenticationError.new("key rejected") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ApiError.new(status: 400, body: "bad") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ApiError.new(status: 404, body: "no model") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ConfigurationError.new("private address") => Evidence::SuggestionModel::Rejected,
+      Ai::Errors::ApiError.new(status: 408, body: "slow") => Evidence::SuggestionModel::Unavailable,
+      Ai::Errors::ApiError.new(status: 503, body: "down") => Evidence::SuggestionModel::Unavailable,
+      Ai::Errors::ApiError.new(status: nil, message: "unreachable") => Evidence::SuggestionModel::Unavailable,
+      Ai::Errors::ApiError.new(status: 200, message: "not JSON") => Evidence::SuggestionModel::Unavailable
+    }.each do |failure, expected|
+      assert_raises(expected, failure.message) { run_model(FakeAdapter.new(error: failure)) }
+    end
+  end
+
+  context ".configured?" do
+    should "follow the tenant's own model and key" do
+      assert Evidence::SuggestionModel.configured?(@tenant)
+      assert_not Evidence::SuggestionModel.configured?(create(:tenant))
     end
   end
 end

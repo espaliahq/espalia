@@ -2243,6 +2243,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_ai_model_status",
+        "description" => "Show how this workspace's AI model is set up for feedback placement suggestions: whether it is " \
+                         "ready (a complete provider, address and model with an API key stored; it does not prove the " \
+                         "endpoint answers), the provider, the host of its address, the model id, whether suggestions are " \
+                         "on, whether people's names are hidden from the model, and whether a key is stored. Never " \
+                         "returns the key.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "integrations_feedback_exchange_status",
         "description" => "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
                          "set up (connected means enabled with a peer and both signing secrets stored; it does not " \

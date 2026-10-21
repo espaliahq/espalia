@@ -36,7 +36,6 @@ class FeedbackExchangeConfig
   attribute :cursor, :string
   attribute :deletions_cursor, :string
   attribute :last_synced_at, :datetime
-  attribute :suggestions_enabled, :boolean, default: false
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :peer_name, format: { with: SLUG_FORMAT, message: "must be a slug: lowercase letters, numbers and dashes" },

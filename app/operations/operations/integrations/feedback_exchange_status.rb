@@ -36,7 +36,6 @@ class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
       cursors: { feedback: config.cursor.present?, deletions: config.deletions_cursor.present? },
       export_kinds: config.export_kinds,
       import_kinds: config.import_kinds,
-      suggestions_enabled: config.suggestions_enabled?,
       imports: FeedbackExchangeImport.summary,
       unmatched_people: FeedbackExchangeImport.unmatched_people
     }

@@ -2,21 +2,25 @@
 
 namespace :evidence do
   namespace :suggestions do
-    desc "Score placement suggestions against the hand-placed fixtures (MODEL=…, SUGGESTION_MODEL=baseline). Not run in CI."
-    task eval: :environment do
+    desc "Score placement suggestions against the hand-placed fixtures, through a tenant's configured model " \
+         "(evidence:suggestions:eval[slug], MODEL=… to try another id; SUGGESTION_MODEL=baseline needs no tenant). Not run in CI."
+    task :eval, [ :tenant ] => :environment do |_task, args|
       require_relative "evidence_suggestions_eval"
 
       model =
         if ENV["SUGGESTION_MODEL"] == "baseline"
           EvidenceSuggestionsEval::BaselineModel.new
         else
-          abort "No Anthropic API key in credentials (anthropic.api_key); try SUGGESTION_MODEL=baseline" unless Evidence::SuggestionModel.configured?
-          Evidence::SuggestionModel.new(model: ENV.fetch("MODEL", Evidence::SuggestionModel::DEFAULT_MODEL))
+          begin
+            EvidenceSuggestionsEval.model_for(slug: args[:tenant].presence || ENV["TENANT"], model: ENV["MODEL"])
+          rescue ArgumentError => e
+            abort e.message
+          end
         end
 
       report = EvidenceSuggestionsEval.new(model: model).run
       percent = ->(value) { value.nil? ? "n/a" : "#{(value * 100).round(1)}%" }
-      puts "Prompt #{report[:prompt_version]} · model #{report[:model]} · #{report[:items]} items " \
+      puts "Prompt #{report[:prompt_version]} · #{report[:provider]} #{report[:model]} · #{report[:items]} items " \
            "(#{report[:placeable]} placeable, #{report[:uncovered]} the framework doesn't cover)"
       puts "  Cell match, top suggestion:  #{percent.(report[:cell_match_top])}"
       puts "  Cell match, any suggestion:  #{percent.(report[:cell_match_any])}"

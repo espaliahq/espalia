@@ -24,6 +24,6 @@ class Evidence::PlacementSuggestionRows
   # @param tenant [Tenant]
   # @return [Boolean]
   def self.regenerable?(tenant)
-    tenant.present? && tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?
+    tenant.present? && tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(tenant)
   end
 end

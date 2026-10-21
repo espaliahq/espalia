@@ -16,6 +16,7 @@ FactoryBot.define do
     confidence { 0.8 }
     rationale { "“Led the incident review calmly” shows composure under pressure." }
     status { "pending" }
+    provider { "anthropic" }
     model { "claude-opus-5-5" }
     prompt_version { "test" }
     generated_at { Time.current }

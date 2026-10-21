@@ -9,10 +9,17 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
     should "be off, with the standard export kinds and everything imported" do
       assert_equal "exchange", subject.provider
       assert_not subject.enabled?
-      assert_not subject.suggestions_enabled?
       assert_empty subject.import_kinds
       assert_equal %w[peer_feedback manager_feedback observation impact], subject.export_kinds
     end
+  end
+
+  should "load a config stored with the switch it used to carry, and ignore it" do
+    config = FeedbackExchangeConfig.to_type.cast_value({ "peer_name" => "chip", "suggestions_enabled" => true })
+
+    assert_equal "chip", config.peer_name
+    assert_not_respond_to config, :suggestions_enabled?
+    assert config.valid?
   end
 
   context "base_url" do

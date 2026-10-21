@@ -20,9 +20,8 @@ Phase 0 is the foundation: config, secrets, signing, the client, the verifier, t
 | `enabled` | Off by default. While off, inbound requests get 404 and nothing is pulled |
 | `import_kinds` / `export_kinds` | Which `kind`s cross. `export_kinds` are `EvidenceItem::EVIDENCE_TYPES`. `import_kinds` are matched against the peer's raw `kind`, so they also allow `feedback`, the one kind a conforming peer must send ("Any feedback (generic)" on the form). Both are validated and are checkbox groups on the settings form. Empty `import_kinds` means everything; ticking every box is narrower, since a kind not listed is left out. Empty `export_kinds` sends nothing |
 | `cursor`, `deletions_cursor`, `last_synced_at` | Consumer state |
-| `suggestions_enabled` | Placement suggestions, off by default |
 
-`peer_name` and `base_url` are required once `enabled`. One peer per tenant for now.
+`peer_name` and `base_url` are required once `enabled`. One peer per tenant for now. Placement suggestions are not switched here: **Integrations → AI model** holds the one switch, which covers every evidence item whatever surface it came from.
 
 An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrations → Feedback exchange**. Config edits are web-only on purpose: the page holds signing secrets, which must not travel through an MCP client. MCP gets the read `integrations_feedback_exchange_status`, which reports state and whether each secret and cursor is present, never a value. Its `connected` means set up (enabled, a peer, both secrets); only **Test connection** proves the peer answers.
 

@@ -27,7 +27,7 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_equal %w[pending], rows.map(&:status).uniq
     row = rows.find { |r| r.capability_stable_id == @collaboration.stable_id }
     assert_equal [ 4, "growth_area" ], [ row.level_ordinal, row.valence ]
-    assert_equal [ "claude-opus-5-5", Evidence::PlacementPrompt::VERSION ], [ row.model, row.prompt_version ]
+    assert_equal [ "anthropic", "claude-opus-5-5", Evidence::PlacementPrompt::VERSION ], [ row.provider, row.model, row.prompt_version ]
     assert_equal @alex.id, row.person_id
   end
 
@@ -75,6 +75,7 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     item = record_peer_feedback
     editing_model = Object.new
     editing_model.define_singleton_method(:model) { "claude-opus-5-5" }
+    editing_model.define_singleton_method(:provider) { "anthropic" }
     tenant = @tenant
     editing_model.define_singleton_method(:suggest) do |prompt|
       ActsAsTenant.with_tenant(tenant) { EvidenceItem.where(id: prompt.item.id).update_all(content: "Edited meanwhile.") }
@@ -90,11 +91,11 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
 
   should "do nothing when the tenant has suggestions off, without a key, or for self feedback" do
     item = record_peer_feedback
-    ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: false) }
+    switch_suggestions(@tenant, false)
     fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
     assert_empty fake.prompts
 
-    ActsAsTenant.with_tenant(@tenant) { @tenant.update!(evidence_suggestions_enabled: true) }
+    switch_suggestions(@tenant, true)
     Evidence::SuggestionModel.stub(:configured?, false) do
       Evidence::SuggestionModel.stub(:new, ->(**) { flunk "the model must not be built without a key" }) do
         Evidence::SuggestPlacementsJob.perform_now(item.id)
@@ -130,5 +131,56 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     job.define_singleton_method(:after_generate) { |i| hooked << i.id }
     with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { job.perform_now }
     assert_equal [ item.id ], hooked
+  end
+
+  context "for a tenant on an OpenAI-compatible gateway" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @tenant.update_ai_model!(
+          settings: { provider: "openai_compatible", base_url: "https://ai-gateway.vercel.sh/v1", model: "anthropic/claude-opus-5-5",
+                      suggestions_enabled: true },
+          api_key: "sk-gw"
+        )
+      end
+    end
+
+    should "get suggestions through the gateway, with names hidden in transit and restored in the rationale" do
+      item = record_peer_feedback
+      sent = nil
+      stubs = Faraday::Adapter::Test::Stubs.new
+      stubs.post("/v1/chat/completions") do |env|
+        sent = JSON.parse(env.body)
+        placeholder = sent["messages"].last["content"][/Person \d+/]
+        answer = { suggestions: [
+          { capability_stable_id: @ownership.stable_id, level_ordinal: 3, valence: "demonstrated", confidence: 0.8,
+            rationale: "“#{placeholder} owned the outage follow-up” shows ownership." },
+          { capability_stable_id: SecureRandom.uuid_v7, level_ordinal: 3, valence: "demonstrated", confidence: 0.9, rationale: "invented" }
+        ] }
+        [ 200, { "Content-Type" => "application/json" },
+          { model: "anthropic/claude-opus-5-5", usage: { prompt_tokens: 1, completion_tokens: 1 },
+            choices: [ { finish_reason: "stop", message: { content: answer.to_json } } ] }.to_json ]
+      end
+      connection = Faraday.new(url: "https://ai-gateway.vercel.sh/v1/") { |f| f.adapter :test, stubs }
+      adapter = Ai::OpenAiCompatible::Adapter.new(api_key: "sk-gw", base_url: "https://ai-gateway.vercel.sh/v1",
+                                                   model: "anthropic/claude-opus-5-5", connection: connection)
+
+      Ai::ModelClient.stub(:for, adapter) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+
+      assert_no_match(/Alex|Jordan|Morgan|Chen|Lee|Reid/, sent.to_json, "no name may leave the process")
+      rows = suggestions_for(item)
+      assert_equal 1, rows.size, "an id outside the candidates yields no row"
+      assert_equal [ "openai_compatible", "anthropic/claude-opus-5-5", "pending" ], [ rows.first.provider, rows.first.model, rows.first.status ]
+      assert_equal "“Alex owned the outage follow-up” shows ownership.", rows.first.rationale
+    end
+
+    should "do nothing for a tenant whose model is incomplete" do
+      ActsAsTenant.with_tenant(@tenant) { @tenant.update_columns(ai_credentials: nil) }
+      item = record_peer_feedback
+
+      Ai::ModelClient.stub(:for, ->(*) { flunk "no client may be built without a key" }) do
+        Evidence::SuggestPlacementsJob.perform_now(item.id)
+      end
+      assert_empty suggestions_for(item)
+    end
   end
 end

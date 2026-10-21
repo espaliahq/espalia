@@ -23,6 +23,14 @@ class IntegrationsPolicy < ApplicationPolicy
   # @return [Boolean]
   def update_role_mappings? = tenant_admin?
 
+  # Save the AI model settings and key.
+  # @return [Boolean]
+  def update_ai_model? = tenant_admin?
+
+  # Send the AI model one short request to check the key, address and model id.
+  # @return [Boolean]
+  def test_ai_model? = tenant_admin?
+
   # Save the feedback exchange settings and secrets.
   # @return [Boolean]
   def update_feedback_exchange? = tenant_admin?

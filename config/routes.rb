@@ -106,6 +106,13 @@ Rails.application.routes.draw do
       end
     end
 
+    # AI model: save settings and key, and test the connection. The page itself
+    # is integrations#show with id "ai-model".
+    resource :ai_model, only: [ :update ],
+      path: "integrations/ai-model", controller: "ai_models" do
+      post :test_connection
+    end
+
     # Feedback exchange: save settings and secrets, and test the connection. The
     # page itself is integrations#show with id "feedback-exchange".
     resource :feedback_exchange, only: [ :update ],

@@ -2,12 +2,14 @@
 
 # Lists every integration available to the current tenant.
 #
-# Surfaces HRIS, Slack and the feedback exchange; further integration types
+# Surfaces HRIS, Slack, the AI model and the feedback exchange; further integration types
 # (notifications, SSO) will appear here as they're built.
 #
 class Views::Integrations::IndexView < Views::Base
   # @param hris_config [HrisConfig]
   # @param hris_credentials_present [Boolean]
+  # @param ai_config [AiModelConfig]
+  # @param ai_state [Symbol] one of {Views::Integrations::AiModelView::STATE_BADGES}
   # @param feedback_exchange_config [FeedbackExchangeConfig]
   # @param feedback_exchange_secrets_present [Boolean] both signing secrets stored
   # @param feedback_exchange_summary [Hash, nil] {FeedbackExchangeImport.summary}
@@ -15,6 +17,7 @@ class Views::Integrations::IndexView < Views::Base
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_credentials_present:, slack_connected: false, slack_team_name: nil, slack_available: false,
+                 ai_config: AiModelConfig.new, ai_state: :not_configured,
                  feedback_exchange_config: FeedbackExchangeConfig.new, feedback_exchange_secrets_present: false,
                  feedback_exchange_summary: nil,
                  user: nil, current_tenant: nil, tenants: [])
@@ -23,6 +26,8 @@ class Views::Integrations::IndexView < Views::Base
     @slack_connected = slack_connected
     @slack_team_name = slack_team_name
     @slack_available = slack_available
+    @ai_config = ai_config
+    @ai_state = ai_state
     @feedback_exchange_config = feedback_exchange_config
     @feedback_exchange_secrets_present = feedback_exchange_secrets_present
     @feedback_exchange_summary = feedback_exchange_summary
@@ -56,8 +61,34 @@ class Views::Integrations::IndexView < Views::Base
     div(class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6") do
       hris_card
       slack_card
+      ai_model_card
       feedback_exchange_card
     end
+  end
+
+  def ai_model_card
+    a(href: tenant_integration_path("ai-model"), class: "block group") do
+      render Components::Kit::Card.new do |card|
+        card.body do
+          div(class: "flex items-start justify-between") do
+            div do
+              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
+                        "group-hover:text-primary-ink transition-colors") { "AI model" }
+              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { ai_model_subtitle }
+            end
+            label, variant = Views::Integrations::AiModelView::STATE_BADGES.fetch(@ai_state)
+            render Components::Kit::Badge.new(label, variant: variant)
+          end
+        end
+      end
+    end
+  end
+
+  def ai_model_subtitle
+    return "Choose the model that suggests where feedback belongs" if @ai_state == :not_configured
+
+    "#{@ai_config.model.presence || AiModelConfig::DEFAULT_ANTHROPIC_MODEL} · " \
+      "#{@ai_config.base_host || Views::Integrations::AiModelView::PROVIDER_LABELS.fetch(@ai_config.provider)}"
   end
 
   def slack_card

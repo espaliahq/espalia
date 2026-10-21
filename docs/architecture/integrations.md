@@ -163,6 +163,49 @@ MCP use, stamped `acting_via: slack`. A Person who has never signed in gets a
 first sign-in. The how-to, the trust model and the three-second rule are in
 [docs/guidelines/slack-integration.md](../guidelines/slack-integration.md).
 
+## AI model
+
+Which model answers AI features is the tenant's choice, stored the way HRIS
+stores its provider: `Tenant.ai_config` (`AiModelConfig`, plain settings) and
+`Tenant.ai_credentials` (encrypted JSON `{ "api_key" }`). Today the one
+feature is placement suggestions for feedback
+([evidence.md](../guidelines/assessments/evidence.md)).
+
+```
+Evidence::SuggestPlacementsJob
+  └─ Evidence::SuggestionModel      (pseudonymise → adapter → map errors)
+       ├─ Ai::NamePseudonymiser
+       └─ Ai::ModelClient.for(tenant)
+            ├─ Ai::Anthropic::Adapter          (anthropic gem; base_url: optional)
+            └─ Ai::OpenAiCompatible::Adapter   (Faraday → POST {base_url}/chat/completions)
+```
+
+- **Two adapters, one response, one error set.** Both return
+  `Ai::SuggestionResponse` (suggestions, model, usage, refused) and raise
+  `Ai::Errors::{AuthenticationError, RateLimitError, ApiError, RefusalError}`.
+  Neither retries: the job owns retries.
+- **The stored config is generic.** `provider` is `anthropic` (the Anthropic
+  API, or any Anthropic-compatible endpoint) or `openai_compatible` (any
+  `/chat/completions` endpoint). Vercel's AI Gateway is an
+  `openai_compatible` endpoint; the form's preset fills its address and nothing
+  more, and no adapter special-cases it.
+- **The address is typed by an admin and called by the server**, so it is
+  https only outside development, carries no login, query or fragment, and may
+  not be a private-network host. The guard is the exchange's
+  `FeedbackExchange::HostGuard`, reached through `Ai::Endpoint.vet!`: a
+  canonical hostname or IP literal, every resolved address public. The
+  Faraday adapter connects to the address the guard accepted; the Anthropic
+  gem cannot be told an address, so it is checked on every request and
+  redirect leg but not pinned.
+- **The key is write-only.** It is never rendered, logged or returned by
+  MCP; `AiModelCredentials#inspect` prints only whether one is present. The
+  Anthropic adapter passes it to the gem explicitly, so the environment's
+  `ANTHROPIC_API_KEY` cannot answer for a tenant.
+- **Admin and MCP.** Integrations → AI model, tenant admins only
+  (`IntegrationsPolicy#update_ai_model?` / `#test_ai_model?`). Writes and the
+  connection test are web-only; MCP has the read-only
+  `integrations_ai_model_status`.
+
 ## Feedback exchange
 
 A tenant can exchange named feedback with a peer feedback system (Chip is the first). Each side serves the feedback given in it and pulls the other's; nothing is pushed. `Tenant.feedback_exchange_config` holds the peer and its address, `Tenant.feedback_exchange_credentials` the two shared secrets (encrypted, one per direction). Every request, both ways, is HMAC-signed over its method, path, query and body, with a five-minute window, a replay claim in the cache and a 24-hour overlap when a secret rotates. The client (`FeedbackExchange::Client`) is Faraday with typed errors and no retries; inbound requests are authenticated by `FeedbackExchangeSignedRequest`, which also resolves the tenant from the signature. The signature scheme, the endpoints and how to verify a pair are in [docs/guidelines/feedback-exchange.md](../guidelines/feedback-exchange.md); the contract is [the protocol](../notes/feedback-exchange-protocol.md).
