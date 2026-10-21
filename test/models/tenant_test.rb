@@ -174,33 +174,6 @@ class TenantTest < ActiveSupport::TestCase
       end
     end
 
-    context "the development gateway key" do
-      should "stand in for a missing key in development, for the gateway's host only" do
-        with_gateway_key do
-          assert_equal "sk-vercel-dev", gateway_tenant.ai_api_key
-          assert_equal "sk-own", gateway_tenant(ai_credentials: { "api_key" => "sk-own" }).ai_api_key
-          assert_nil gateway_tenant(base_url: "https://gw.example.com/v1").ai_api_key
-          assert_nil gateway_tenant(base_url: "http://ai-gateway.vercel.sh/v1").ai_api_key, "never over plain http"
-        end
-      end
-
-      should "never stand in outside development" do
-        with_gateway_key(env: "production") { assert_nil gateway_tenant.ai_api_key }
-        with_gateway_key(env: "test") { assert_nil gateway_tenant.ai_api_key }
-      end
-
-      should "let a development tenant switch suggestions on with no key of its own" do
-        tenant = create(:tenant)
-        with_gateway_key do
-          tenant.update_ai_model!(settings: { provider: "typesafe_jev", base_url: AiModelConfig::VERCEL_AI_GATEWAY_URL,
-                                              model: AiModelConfig::JEV_MODEL, suggestions_enabled: true })
-        end
-
-        assert tenant.reload.ai_config.suggestions_enabled?
-        assert_nil tenant.ai_secrets.api_key
-      end
-    end
-
     context "#update_ai_model!" do
       should "save settings and key, and keep the stored key when the new one is blank" do
         tenant = create(:tenant)
@@ -320,19 +293,6 @@ class TenantTest < ActiveSupport::TestCase
       assert_not tenant.reload.slack_connected?
       assert_nil tenant.slack_team_id
       assert_nil membership.reload.slack_user_id
-    end
-  end
-
-  private
-
-  def gateway_tenant(base_url: AiModelConfig::VERCEL_AI_GATEWAY_URL, **attrs)
-    build(:tenant, ai_config: AiModelConfig.new(provider: "typesafe_jev", base_url: base_url, model: AiModelConfig::JEV_MODEL), **attrs)
-  end
-
-  def with_gateway_key(env: "development", &block)
-    credentials = ->(*path) { path == [ :vercel, :ai_gateway_api_key ] ? "sk-vercel-dev" : nil }
-    Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new(env)) do
-      Rails.application.credentials.stub(:dig, credentials, &block)
     end
   end
 end

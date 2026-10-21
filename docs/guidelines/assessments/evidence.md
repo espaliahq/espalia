@@ -336,9 +336,9 @@ Rules, all deliberate:
   prompt bump moves it too) instead of the prompt's.
   Effort does not apply and the form hides it. Test connection asks one
   `boolean` ("Is this a connection check?") and shows the answer in words.
-  Jev's context is 32k tokens; the eval's largest request is about 8.5k
-  characters (~2k tokens), so a role would need ten times the eval
-  framework's cells to come near it. **The wire, as verified** against
+  Jev's context is 32k tokens; the eval's requests measured 2.4k–3.1k input
+  tokens, so a role would need about ten times the eval framework's cells to
+  come near it. **The wire, as verified** against
   Vercel's [Decision docs](https://vercel.com/docs/ai-gateway/modalities/decision)
   on 2026-10-21: `POST {base_url}/evaluate`, `Authorization: Bearer`, body
   `{ "model": "typesafe-ai/jev", "state": <string|object|array>, "questions":
@@ -348,14 +348,17 @@ Rules, all deliberate:
   { "<name>": { "type": "choice", "choice": "<option>", "probabilities": {
   "<option>": 0..1 } } }, "usage": { "inputTokens", "outputTokens" },
   "providerMetadata" }`, a boolean answering `{ "type": "boolean",
-  "probability" }`. Errors are `{ "error": { "message", "type" } }` with the
+  "probability" }`. A real call on 2026-10-21 matched this, and each choice
+  answer also carried a `confidence` (0..1) the docs do not mention; we read
+  only `choice` and `probabilities`. Errors are `{ "error": { "message", "type" } }` with the
   usual statuses (an unauthenticated call answers 401), mapped to `Ai::Errors`
   like the OpenAI-compatible adapter's, whose HTTP half (`Ai::JsonEndpoint`)
-  it shares. **Development key:** with no key of its own, a tenant whose
-  address is `https://ai-gateway.vercel.sh…` uses
-  `credentials.dig(:vercel, :ai_gateway_api_key)` in development only
-  (`Tenant#ai_api_key`); the card's "Add an API key" rule counts it there.
-  Production tenants always supply their own.
+  it shares. **Development key:** seeded, not a fallback. In development,
+  `db/seeds.rb` saves the me&u tenant onto Jev on the gateway with the key at
+  `credentials.dig(:ai, :vercel, :meandu, :ai_gateway_api_key)`, through
+  `Tenant#update_ai_model!` like the card; nothing reads the credentials file
+  at request time. Every other tenant, and every production one, enters its
+  key on the card.
 - **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
   in the tenant for `Person N` in both texts before they leave, and swaps them
   back in the rationales that return. Whole words only, longest first, so

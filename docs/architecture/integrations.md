@@ -195,8 +195,9 @@ Evidence::SuggestPlacementsJob
   chat model), and no adapter special-cases it. Jev writes no rationale, so
   its suggestions show a confidence alone; the wire shape and the trade-off
   are in [evidence.md](../guidelines/assessments/evidence.md). In development
-  only, a tenant on the gateway with no key uses the credentials file's
-  `vercel.ai_gateway_api_key`.
+  the seeds save the me&u tenant onto Jev with the credentials file's
+  `ai.vercel.meandu.ai_gateway_api_key`; no tenant's key is read from the
+  credentials file at request time.
 - **The address is typed by an admin and called by the server**, so it is
   https only outside development, carries no login, query or fragment, and may
   not be a private-network host (`Ai::HostGuard`: by name when saved, and by
