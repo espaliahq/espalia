@@ -281,6 +281,16 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_match(/Connected to chip/, flash[:notice])
       end
 
+      should "say when only development lets a private peer address through" do
+        FeedbackExchange::HostGuard.stub(:development_allowance?, true) do
+          FeedbackExchange::Client.stub(:for, fake_client(health: { "ok" => true, "peer" => "chip" })) do
+            post test_connection_tenant_feedback_exchange_path
+          end
+        end
+
+        assert_match(/Connected to chip\. .*private network, which only development allows/, flash[:notice])
+      end
+
       should "work before the exchange is enabled" do
         @tenant.update!(feedback_exchange_config: @tenant.feedback_exchange_config.tap { |c| c.enabled = false })
 

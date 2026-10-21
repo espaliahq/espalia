@@ -70,7 +70,10 @@ class Tenant::FeedbackExchangesController < ApplicationController
     body = FeedbackExchange::Client.for(current_tenant).health
     return [ :alert, "The peer answered, but not with { ok: true }." ] unless body["ok"] == true
 
-    [ :notice, "Connected to #{config.peer_name.presence || 'the peer'}. Our signature was accepted." ]
+    allowance = if FeedbackExchange::HostGuard.development_allowance?(config.normalized_base_url)
+      " Its address is on a private network, which only development allows."
+    end
+    [ :notice, "Connected to #{config.peer_name.presence || 'the peer'}. Our signature was accepted.#{allowance}" ]
   rescue FeedbackExchange::Errors::AddressRefused => e
     [ :alert, "#{e.message}." ]
   rescue FeedbackExchange::Errors::AuthenticationError
