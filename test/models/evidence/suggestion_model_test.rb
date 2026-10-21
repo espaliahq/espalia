@@ -90,6 +90,12 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
       assert_match(/\APerson \d+ Person \d+ present\.\z/, call[:user], "the feedback itself gets first names too")
     end
 
+    should "drop a chat placement that came without the rationale it was asked for" do
+      proposals, = run_model(FakeAdapter.new(suggestions: [ raw(rationale: "  "), raw(capability_stable_id: "c2") ]))
+
+      assert_equal [ "c2" ], proposals.map(&:capability_stable_id)
+    end
+
     should "put the names back in the rationales that come back" do
       proposals, = run_model(FakeAdapter.new(suggestions: [ raw ]))
 

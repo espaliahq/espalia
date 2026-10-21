@@ -15,11 +15,14 @@
 # another, and a second request would double the latency and cost of every run.
 #
 # The cells come back ranked by probability; those under {FLOOR} are dropped,
-# and the probability is the confidence. Jev writes no rationale.
+# and the probability is the confidence. When Jev chooses `none`, or reads the
+# feedback as no valence it was offered, nothing is suggested. Jev writes no
+# rationale.
 class Evidence::PlacementDecision
   # Recorded on every row in place of {Evidence::PlacementPrompt::VERSION}.
-  # Bump it whenever the questions or the state change.
-  VERSION = "jev-2026-10-21.1"
+  # The state and the options come from the prompt, so its version is part of
+  # this one; bump the first part whenever the questions here change.
+  VERSION = "jev-1+#{Evidence::PlacementPrompt::VERSION}".freeze
   FLOOR = 0.15
   NONE = "none"
 
@@ -59,14 +62,18 @@ class Evidence::PlacementDecision
   # @param limit [Integer]
   # @return [Array<Evidence::SuggestionModel::Proposal>] most probable first
   def proposals(response, limit:)
-    valence = response.choice(:valence)
+    return [] if response.choice(:placement) == NONE
+
+    valence = response.probabilities(:valence).keys.prepend(response.choice(:valence)).find { |v| EvidenceLink::VALENCES.include?(v) }
+    return [] if valence.nil?
+
     response.probabilities(:placement)
       .select { |option, probability| probability >= FLOOR && prompt.open_cells.key?(option) }
       .first(limit)
       .map do |option, probability|
         stable_id, ordinal = option.split("|")
         Evidence::SuggestionModel::Proposal.new(capability_stable_id: stable_id, level_ordinal: ordinal.to_i,
-                                                valence: valence.to_s, confidence: probability, rationale: nil)
+                                                valence: valence, confidence: probability, rationale: nil)
       end
   end
 

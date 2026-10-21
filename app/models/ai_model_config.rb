@@ -33,6 +33,7 @@ class AiModelConfig
                              base_url: VERCEL_AI_GATEWAY_URL, model: JEV_MODEL },
     "vercel_ai_gateway_chat" => { label: "Vercel AI Gateway: a chat model", provider: "openai_compatible",
                                   base_url: VERCEL_AI_GATEWAY_URL, model: "anthropic/claude-opus-5-5" },
+    "typesafe_jev" => { label: "Other Jev endpoint", provider: "typesafe_jev", base_url: nil, model: JEV_MODEL },
     "openai_compatible" => { label: "Other OpenAI-compatible endpoint", provider: "openai_compatible", base_url: nil, model: nil },
     "anthropic_compatible" => { label: "Other Anthropic-compatible endpoint", provider: "anthropic", base_url: nil, model: nil }
   }.freeze

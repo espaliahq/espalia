@@ -188,8 +188,9 @@ class Views::Integrations::AiModelView < Views::Base
 
   def current_preset
     config = @form_config
-    return "vercel_ai_gateway" if config.typesafe_jev?
-    return "vercel_ai_gateway_chat" if config.normalized_base_url == AiModelConfig::VERCEL_AI_GATEWAY_URL
+    on_gateway = config.normalized_base_url == AiModelConfig::VERCEL_AI_GATEWAY_URL
+    return on_gateway ? "vercel_ai_gateway" : "typesafe_jev" if config.typesafe_jev?
+    return "vercel_ai_gateway_chat" if on_gateway
     return config.base_url.present? ? "anthropic_compatible" : "anthropic" if config.anthropic?
 
     "openai_compatible"

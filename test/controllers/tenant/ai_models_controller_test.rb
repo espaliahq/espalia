@@ -126,6 +126,13 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "[data-ai-model-preset-target='effortRow'][hidden]"
       end
 
+      should "show Jev off the gateway as the other Jev endpoint" do
+        patch tenant_ai_model_path, params: settings(provider: "typesafe_jev", base_url: "https://jev.example.com/v1", model: "typesafe-ai/jev")
+
+        get tenant_integration_path("ai-model")
+        assert_select "select#ai_model_preset option[selected]", text: "Other Jev endpoint"
+      end
+
       should "keep the stored key when the field is left blank, and turn switches off" do
         configure_gateway
 

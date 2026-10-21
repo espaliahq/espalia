@@ -326,10 +326,14 @@ Rules, all deliberate:
   because a piece of feedback rarely praises one behaviour and faults another
   and a second call would double the latency and cost of every run. Up to
   three cells at or above `PlacementDecision::FLOOR` (0.15) are kept, most
-  probable first; `none` never becomes a suggestion. **No rationale:** the
+  probable first (ties in the order Jev sent them); `none` never becomes a
+  suggestion, and when Jev chooses it nothing is suggested at all. A valence
+  outside the four falls back to the likeliest of the four, or to nothing. **No rationale:** the
   column is nullable, the card shows "57% confident" with no sentence, and the
   editor's staged row says only "Suggested"; the chat providers still write
-  one. Rows record `PlacementDecision::VERSION` instead of the prompt's.
+  one, and a chat placement without one is dropped. Rows record
+  `PlacementDecision::VERSION` (`jev-1+<PlacementPrompt::VERSION>`, so a
+  prompt bump moves it too) instead of the prompt's.
   Effort does not apply and the form hides it. Test connection asks one
   `boolean` ("Is this a connection check?") and shows the answer in words.
   Jev's context is 32k tokens; the eval's largest request is about 8.5k
@@ -348,7 +352,7 @@ Rules, all deliberate:
   usual statuses (an unauthenticated call answers 401), mapped to `Ai::Errors`
   like the OpenAI-compatible adapter's, whose HTTP half (`Ai::JsonEndpoint`)
   it shares. **Development key:** with no key of its own, a tenant whose
-  address is on `ai-gateway.vercel.sh` uses
+  address is `https://ai-gateway.vercel.sh…` uses
   `credentials.dig(:vercel, :ai_gateway_api_key)` in development only
   (`Tenant#ai_api_key`); the card's "Add an API key" rule counts it there.
   Production tenants always supply their own.

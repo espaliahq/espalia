@@ -3,7 +3,8 @@
 # The one place GrowthOS asks a model where feedback belongs: given a placement
 # prompt, return the placements the model proposes. Which model answers is the
 # tenant's choice ({AiModelConfig}); {Ai::ModelClient} picks the adapter, and
-# nothing here knows which kind it is. Everything else — which cells exist,
+# all this class knows of it is whether it is a chat model (`#suggest`) or a
+# decision model (`#decide`). Everything else — which cells exist,
 # what gets stored — is the caller's; tests stub {#suggest} and never an adapter.
 #
 # Failures come back as this class's own errors so the job can choose a retry
@@ -11,8 +12,10 @@
 # retrying, {Rejected} is not. A refusal, a truncated answer or an unparseable
 # one is "no suggestions", never an error.
 #
-# A chat model answers with structured JSON; a decision model (Jev) with
-# probabilities over the candidate cells, read by {Evidence::PlacementDecision}.
+# A chat model answers with structured JSON, and a placement without the
+# rationale it was asked for is dropped; a decision model (Jev) answers with
+# probabilities over the candidate cells, read by {Evidence::PlacementDecision},
+# and writes no rationale.
 #
 # When the tenant keeps pseudonymisation on (the default), every person's name
 # is swapped for a placeholder on the way out and swapped back in the rationales
@@ -88,8 +91,9 @@ class Evidence::SuggestionModel
       user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
       schema: prompt.schema
     )
-    log(response, response.suggestions.size, refused: response.refused?)
-    response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }
+    proposals = response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }.select(&:rationale)
+    log(response, proposals.size, refused: response.refused?)
+    proposals
   end
 
   # A decision model answers typed questions with probabilities, not prose:

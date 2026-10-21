@@ -285,14 +285,15 @@ class Tenant < ApplicationRecord
     end
   end
 
-  # Development only, and only to the gateway's own host, so a developer can
+  # Development only, and only to the gateway's own host over https, so a developer can
   # run suggestions against the seeded tenant without pasting a key. Never in
   # production: a tenant there always supplies its own.
   #
   # @param config [AiModelConfig]
   # @return [String, nil]
   def development_gateway_key(config)
-    return unless Rails.env.development? && config.base_host == URI(AiModelConfig::VERCEL_AI_GATEWAY_URL).host
+    return unless Rails.env.development? && config.normalized_base_url&.start_with?("https://") &&
+                  config.base_host == URI(AiModelConfig::VERCEL_AI_GATEWAY_URL).host
 
     Rails.application.credentials.dig(:vercel, :ai_gateway_api_key).presence
   end

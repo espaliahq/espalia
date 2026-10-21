@@ -74,6 +74,32 @@ class Evidence::PlacementDecisionTest < ActiveSupport::TestCase
     assert_empty proposals
   end
 
+  should "suggest nothing when Jev chooses none, whatever the cells' share" do
+    proposals = decision_for(record_peer_feedback).proposals(
+      response({ "none" => 0.6, token(@ownership, 3) => 0.22, token(@collaboration, 3) => 0.18 }), limit: 3
+    )
+
+    assert_empty proposals
+  end
+
+  should "fall back to the likeliest known valence, and suggest nothing without one" do
+    decision = decision_for(record_peer_feedback)
+    cells = { token(@ownership, 3) => 0.7 }
+    odd = response(cells)
+    odd.answers["valence"] = { "type" => "choice", "choice" => "praise", "probabilities" => { "praise" => 0.6, "growth_area" => 0.4 } }
+    assert_equal [ "growth_area" ], decision.proposals(odd, limit: 3).map(&:valence)
+
+    odd.answers["valence"] = { "type" => "choice" }
+    assert_empty decision.proposals(odd, limit: 3)
+  end
+
+  should "keep the endpoint's order among equal probabilities" do
+    tokens = [ token(@collaboration, 4), token(@ownership, 2), token(@ownership, 4), token(@collaboration, 2) ]
+    proposals = decision_for(record_peer_feedback).proposals(response(tokens.to_h { |t| [ t, 0.25 ] }), limit: 3)
+
+    assert_equal tokens.first(3), proposals.map { |p| "#{p.capability_stable_id}|#{p.level_ordinal}" }
+  end
+
   should "keep to the limit" do
     probabilities = [ 2, 3, 4 ].to_h { |level| [ token(@ownership, level), 0.3 ] }
     assert_equal 2, decision_for(record_peer_feedback).proposals(response(probabilities), limit: 2).size

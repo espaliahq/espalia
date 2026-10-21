@@ -180,6 +180,7 @@ class TenantTest < ActiveSupport::TestCase
           assert_equal "sk-vercel-dev", gateway_tenant.ai_api_key
           assert_equal "sk-own", gateway_tenant(ai_credentials: { "api_key" => "sk-own" }).ai_api_key
           assert_nil gateway_tenant(base_url: "https://gw.example.com/v1").ai_api_key
+          assert_nil gateway_tenant(base_url: "http://ai-gateway.vercel.sh/v1").ai_api_key, "never over plain http"
         end
       end
 

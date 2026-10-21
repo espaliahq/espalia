@@ -15,14 +15,15 @@
 #   @return [Ai::SuggestionResponse::Usage]
 class Ai::DecisionResponse < Data.define(:answers, :model, :usage)
   # @param name [String, Symbol] a question's name
-  # @return [Hash{String => Float}] each option's probability, highest first;
-  #   empty when the answer carries none
+  # @return [Hash{String => Float}] each option's probability, highest first
+  #   (ties in the order the endpoint sent them); empty when the answer
+  #   carries none
   def probabilities(name)
     raw = answers.dig(name.to_s, "probabilities")
     return {} unless raw.is_a?(Hash)
 
     raw.filter_map { |option, p| [ option.to_s, p.to_f.clamp(0.0, 1.0) ] if p.is_a?(Numeric) }
-       .sort_by { |_, p| -p }.to_h
+       .each_with_index.sort_by { |(_, p), index| [ -p, index ] }.map(&:first).to_h
   end
 
   # @param name [String, Symbol] a choice question's name
