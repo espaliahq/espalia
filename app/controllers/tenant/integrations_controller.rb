@@ -5,16 +5,18 @@
 # Surfaces the HRIS integration (provider/credential status, role mappings,
 # titles nobody has mapped, and the resulting per-person assignments; tenant
 # admins can trigger an on-demand re-sync, and mapping edits live in
-# {Tenant::HrisTitleMappingsController}) and the AI model page (settings live
-# in {Tenant::AiModelsController}).
+# {Tenant::HrisTitleMappingsController}), the AI model page (settings live in
+# {Tenant::AiModelsController}) and the feedback exchange page (settings live in
+# {Tenant::FeedbackExchangesController}).
 #
 # Designed to be extended with additional integration types (Slack,
 # notifications, SSO) by adding new branches in {#show}.
 #
 class Tenant::IntegrationsController < ApplicationController
   include AiModelPage
+  include FeedbackExchangePage
 
-  KNOWN_INTEGRATIONS = %w[hris ai-model].freeze
+  KNOWN_INTEGRATIONS = %w[hris ai-model feedback-exchange].freeze
 
   # GET /integrations
   def index
@@ -28,6 +30,9 @@ class Tenant::IntegrationsController < ApplicationController
       slack_available: Slack.configured?,
       ai_config: current_tenant.effective_ai_config,
       ai_state: current_tenant.effective_ai_config.state(current_tenant),
+      feedback_exchange_config: current_tenant.feedback_exchange_config,
+      feedback_exchange_secrets_present: current_tenant.feedback_exchange_secrets.complete?,
+      feedback_exchange_summary: FeedbackExchangeImport.summary,
       user: current_user,
       current_tenant: current_tenant,
       tenants: tenants_for_user
@@ -43,6 +48,8 @@ class Tenant::IntegrationsController < ApplicationController
       render_hris
     when "ai-model"
       render_ai_model_page
+    when "feedback-exchange"
+      render_feedback_exchange_page
     else
       redirect_to tenant_integrations_path, alert: "Unknown integration."
     end

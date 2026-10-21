@@ -92,6 +92,14 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::AutoEnrollNewAssignments.handled_events
   )
 
+  # FeedbackExchange::AssignmentRetry enqueues a feedback exchange sync when a
+  # newly assigned person has peer feedback waiting for an assignment. It
+  # starts jobs — MUST NOT be registered as a projection.
+  event_store.subscribe(
+    FeedbackExchange::AssignmentRetry.new,
+    to: FeedbackExchange::AssignmentRetry.handled_events
+  )
+
   # FrameworkVersionMigrationSync dispatches PersonDevelopment commands
   # per affected person whenever a framework version publishes. Same
   # projection-rebuild hazard — MUST NOT be registered as a projection.

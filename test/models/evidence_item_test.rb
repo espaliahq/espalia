@@ -114,6 +114,23 @@ class EvidenceItemTest < ActiveSupport::TestCase
       end
     end
   end
+  context ".source_for" do
+    should "read self, any manager above, or peer from the relationship" do
+      ActsAsTenant.with_tenant(@tenant) do
+        skip_level = create(:person, tenant: @tenant, name: "Skip")
+        manager = create(:person, tenant: @tenant, manager: skip_level, name: "Manager")
+        report = create(:person, tenant: @tenant, manager: manager, name: "Report")
+        peer = create(:person, tenant: @tenant, name: "Peer")
+
+        assert_equal "self", EvidenceItem.source_for(author: report, recipient: report)
+        assert_equal "manager", EvidenceItem.source_for(author: manager, recipient: report)
+        assert_equal "manager", EvidenceItem.source_for(author: skip_level, recipient: report)
+        assert_equal "peer", EvidenceItem.source_for(author: peer, recipient: report)
+        assert_equal "peer", EvidenceItem.source_for(author: report, recipient: manager)
+      end
+    end
+  end
+
   context ".feedback_direction_for" do
     should "classify self, manager, upward, and lateral feedback at recording time" do
       ActsAsTenant.with_tenant(@tenant) do

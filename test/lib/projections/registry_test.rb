@@ -44,7 +44,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
         AssessmentCycles::SyncHandlers::ParticipantRoleSync,
         AssessmentCycles::SyncHandlers::CalibrationSessionCloseSync,
         AssessmentCycles::SyncHandlers::CalibrationRevisitSync,
-        Frameworks::SyncHandlers::FrameworkVersionMigrationSync
+        Frameworks::SyncHandlers::FrameworkVersionMigrationSync,
+        FeedbackExchange::AssignmentRetry
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end

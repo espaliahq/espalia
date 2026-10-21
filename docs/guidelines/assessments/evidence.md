@@ -223,6 +223,33 @@ shared by web, MCP and Slack:
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
 
+**From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
+feedback given in a peer such as Chip arrives through the feedback exchange
+([feedback-exchange.md](../feedback-exchange.md)) as unplaced feedback written
+as its real author, dated by when it was given.
+
+- **"via Chip" says where it came from.** `Views::Evidence::OriginBadge`
+  renders on the evidence card, the hub card and the activity entry for an
+  item whose `external_reference.imported?` (the importer is the only writer
+  of `metadata.given_at`), named through `Reporting::OriginLabels` and linking
+  to the original. It replaces the plain reference chip on those items. It is
+  neutral grey on purpose: colour beside feedback already means a rating or a
+  valence.
+- **An import is silent.** The system the feedback was given in owns its
+  notifications, so GrowthOS sends nothing for an imported item: not the
+  arrival, not a request to place it. `FeedbackNotifier` returns early for
+  every `acting_via: feedback_exchange` event, whatever the record's
+  `notified` says (that list stays in `external_reference.metadata` as part
+  of the record).
+- **The hub is where it surfaces.** An imported item is unplaced, so it waits
+  under "Feedback to place" for the recipient and the manager side, and the
+  assessment shows `UnplacedFeedbackNotice`. Placement suggestions
+  ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
+  on the same cards.
+- **Its author edits the text, not where it was given.** The edit modal shows
+  the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
+  the imported reference on save.
+
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
 `/growthos feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
@@ -488,6 +515,11 @@ from request workflow:
 - Active feedback is also grouped by immutable provider-to-recipient direction:
   manager → report, peer → peer, or report → manager. Self feedback is separate
   and requested versus proactive remains an orthogonal split.
+- Active feedback is also split by origin: `external_reference.system`, with
+  none meaning GrowthOS. The report shows "Of which via Chip: N" under the
+  provided tile when any item came from another system, and the MCP payload
+  carries `by_origin`. Origin does not change what "requested" means: that is
+  still a GrowthOS evidence request.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
@@ -577,3 +609,7 @@ receives** carries a one-time footer disclosing this model and linking
 post — see [`SlackDeliveryMethod`](../../../app/notifiers/slack_delivery_method.rb));
 the notification bell's dropdown links the same page persistently via a gear
 icon.
+
+## Also in a peer system
+
+When a peer feedback system (Chip) acknowledges that it imported one of our items through the [feedback exchange](../feedback-exchange.md), the evidence card wears an **Also in Chip** chip beside the type label, linking to the peer's own copy in a new tab. It is read from `feedback_exchange_acks` through the transient `EvidenceItem#exchange_acks`, filled by `EvidenceItem.load_exchange_acks` in the matrix builder and in the single-cell evidence controller (one query for the page). An address that is not http(s), or an ack without one, renders as a plain chip with no link. Nothing about the item changes: the ack only says where else it lives.

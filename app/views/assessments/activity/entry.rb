@@ -167,10 +167,19 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   def footer
-    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 flex flex-wrap items-center gap-x-1.5 text-[10px] text-gray-600 dark:text-gray-300") do
       time_ago = @entry.occurred_at ? "#{time_ago_in_words(@entry.occurred_at)} ago" : "—"
       span { time_ago }
+      render Views::Evidence::OriginBadge.new(imported_reference) if imported_reference
     end
+  end
+
+  # The item's reference when the feedback was given in a peer system.
+  def imported_reference
+    return unless @entry.kind == "evidence_recorded" && @entry.payload.respond_to?(:external_reference)
+
+    reference = @entry.payload.external_reference
+    reference if reference&.imported?
   end
 
   # The summary line is the first thing the eye lands on, so it carries

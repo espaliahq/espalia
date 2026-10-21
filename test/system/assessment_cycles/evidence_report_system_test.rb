@@ -12,7 +12,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       FactoryBot.create(:tenant_user,
         tenant: @tenant, user: @user, person: admin, role: :admin)
 
-      framework_id = SecureRandom.uuid_v7
+      framework_id = @framework_id = SecureRandom.uuid_v7
       FactoryBot.create(:framework_state,
         framework_id: framework_id, name: "Engineering Growth")
       role = FactoryBot.create(:framework_role, name: "Engineer")
@@ -26,9 +26,9 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       @manager_user = FactoryBot.create(:user, password: "password123")
       manager = FactoryBot.create(:person, tenant: @tenant, name: "Team Manager", email: @manager_user.email)
       FactoryBot.create(:tenant_user, tenant: @tenant, user: @manager_user, person: manager, role: :member)
-      report = FactoryBot.create(:person,
+      report = @report = FactoryBot.create(:person,
         tenant: @tenant, name: "Report One", manager: manager)
-      author = FactoryBot.create(:person, tenant: @tenant, name: "Feedback Author")
+      author = @author = FactoryBot.create(:person, tenant: @tenant, name: "Feedback Author")
       [ report, manager ].each do |participant|
         FactoryBot.create(:person_framework_assignment,
           tenant: @tenant, person_id: participant.id, framework_id: framework_id,
@@ -93,6 +93,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     assert_text "Self-provided feedback"
     assert_text "Historical peer-source feedback cannot be split reliably"
     assert_text "Team Manager"
+    assert_no_text "Of which via"
     screenshot("light_desktop")
   end
 
@@ -129,6 +130,23 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
     page.driver.browser.execute_cdp(
       "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "light" } ]
     )
+  end
+
+  [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
+    should "show how much feedback came from another system on #{name}" do
+      record_feedback_from("chip", 2)
+      record_feedback_from("slack", 1)
+      page.driver.browser.manage.window.resize_to(*size)
+      visit evidence_assessment_cycle_path(@cycle)
+
+      assert_text "Feedback provided"
+      assert_selector "[data-origin-split] dt", text: "Of which via Chip"
+      assert_selector "[data-origin-split] [data-origin='chip']", text: "2"
+      assert_selector "[data-origin-split] dt", text: "Of which via Slack"
+      assert_selector "[data-origin-split] [data-origin='slack']", text: "1"
+      assert_no_text "Of which via GrowthOS"
+      screenshot("light_#{name}_origin_split")
+    end
   end
 
   should "reach feedback coverage from the cycle page" do
@@ -196,6 +214,19 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # Written straight to the column, as the importer's projection writes it.
+  def record_feedback_from(system, count)
+    ActsAsTenant.with_tenant(@tenant) do
+      count.times do
+        FactoryBot.create(:evidence_item, with_link: false,
+          tenant: @tenant, author: @author, person_id: @report.id,
+          framework_id: @framework_id, cycle_id: @cycle.cycle_id,
+          source: "peer", feedback_direction: "peer_to_peer"
+        ).update_columns(external_reference: { system: system })
+      end
+    end
+  end
 
   def assert_csv_link_for(month)
     link = find_link("Download CSV", visible: true)

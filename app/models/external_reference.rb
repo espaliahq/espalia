@@ -14,7 +14,13 @@
 class ExternalReference
   include StoreModel::Model
 
-  SYSTEMS = %w[github gitlab linear jira slack notion google_doc figma other].freeze
+  # Places a person links to as supporting material. An item pointing at one
+  # of these was written here; any other system names where it was given.
+  LINK_SYSTEMS = %w[github gitlab linear jira slack notion google_doc figma other].freeze
+  # Systems offered to MCP clients as examples. Any slug is accepted, so a new
+  # feedback exchange peer needs no code change.
+  KNOWN_SYSTEMS = [ *LINK_SYSTEMS, "chip" ].freeze
+  SYSTEM_FORMAT = /\A[a-z0-9]+(?:[_-][a-z0-9]+)*\z/
 
   # The only keys an external_reference payload may carry. Used both to
   # reject unknown keys with a clear message (rather than the opaque
@@ -34,10 +40,11 @@ class ExternalReference
   # reference left untouched in the form (the modal's inputs always
   # submit, even when the user doesn't fill them in) round-trips as a
   # blank reference rather than persisting `""` and tripping the
-  # inclusion validation below.
+  # format validation below.
   normalizes :system, :url, :external_id, with: ->(v) { v.to_s.strip.presence }
 
-  validates :system, inclusion: { in: SYSTEMS }, allow_nil: true
+  validates :system, format: { with: SYSTEM_FORMAT, message: "must be a lowercase slug, such as github or google_doc" },
+                     allow_nil: true
   validate :url_scheme_must_be_http_or_https
 
   # Returns the URL only if it has a safe http(s) scheme. Blocks
@@ -87,7 +94,7 @@ class ExternalReference
   end
 
   # JSON Schema fragment describing the accepted payload shape, published
-  # in the MCP tool schema so clients see the keys (and the `system` enum)
+  # in the MCP tool schema so clients see the keys (and the systems we know)
   # instead of a bare free-form object they have to guess at.
   #
   # @return [Hash]
@@ -96,14 +103,24 @@ class ExternalReference
       type: "object",
       description: "Optional pointer to a supporting source in an external system.",
       properties: {
-        system:      { type: "string", enum: SYSTEMS,
-                       description: "Originating system." },
+        system:      { type: "string", pattern: SYSTEM_FORMAT.source.sub("\\A", "^").sub("\\z", "$"),
+                       examples: KNOWN_SYSTEMS,
+                       description: "Originating system, as a lowercase slug." },
         url:         { type: "string", description: "An http(s) link to the source." },
         external_id: { type: "string", description: "The item's ID within that system." },
         metadata:    { type: "object", description: "Free-form additional fields." }
       },
       additionalProperties: false
     }
+  end
+
+  # Whether the item this points from was imported from a feedback exchange
+  # peer: the importer is the only writer of `given_at`, which every protocol
+  # record carries.
+  #
+  # @return [Boolean]
+  def imported?
+    metadata.is_a?(Hash) && (metadata["given_at"] || metadata[:given_at]).present? && system.present?
   end
 
   # Whether this reference carries any populated information.
