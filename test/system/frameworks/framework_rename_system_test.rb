@@ -84,14 +84,7 @@ class Frameworks::FrameworkRenameSystemTest < ApplicationSystemTestCase
       form_width = form.evaluate_script("this.getBoundingClientRect().width")
       assert_operator form_width, :>, heading_width, "the editor must not pin to the short name's width"
       assert_operator form_width, :>=, 300, "the editor should span the phone's content width"
-      # The window's width includes the scrollbar, so compare the document's own client width. Opening the
-      # editor can bring in the scrollbar a frame after layout, so wait for the widths to settle.
-      overflow = "document.documentElement.scrollWidth - document.documentElement.clientWidth"
-      begin
-        page.document.synchronize { raise Capybara::ExpectationNotMet unless page.evaluate_script(overflow).zero? }
-      rescue Capybara::ExpectationNotMet
-        flunk "no sideways overflow: #{page.evaluate_script(overflow)}px"
-      end
+      assert_no_sideways_overflow
       cancel_inline_edit(form)
     end
 

@@ -10,6 +10,7 @@
 | `app/views/assessments/show_view.rb` | Self-assessment shell — unified sticky header + main column + activity sidebar |
 | `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
+| `app/views/assessment_guides/show_view.rb` | "How assessments work" — the illustrated walk through one cycle (`/assessments/how-it-works`) |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
 | `app/components/shared/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
 | `app/controllers/assessments/carried_ratings_controller.rb` | A category's carried ratings: the review page (GET) and the bulk confirm (POST → `ConfirmCarriedRatings`) |
