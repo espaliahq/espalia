@@ -54,10 +54,16 @@ class Views::Assessments::IndexView < Views::Base
   private
 
   def page_header
-    div(class: "mb-6") do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "My Assessments" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
-        "Self-assess your capabilities against your assigned framework."
+    div(class: "mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-2") do
+      div do
+        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "My Assessments" }
+        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+          "Self-assess your capabilities against your assigned framework."
+        end
+      end
+      a(href: assessment_guide_path,
+        class: "inline-flex min-h-11 items-center text-sm font-semibold text-primary-ink hover:underline") do
+        "How assessments work →"
       end
     end
   end
