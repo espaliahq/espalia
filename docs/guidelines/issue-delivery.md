@@ -85,6 +85,7 @@ touches **before** writing code; do not rely on defaults.
 - **Always `--paginate`** on `gh api repos/{owner}/{repo}/pulls/<n>/comments` — the default page is 30 and a multi-round PR exceeds it quietly.
 - `gh pr view <n> --json reviews --jq '…coderabbitai…'` still covers review-level bodies (walkthrough, "actionable comments posted: N").
 - Replying does NOT resolve a thread; a fix push usually gets auto-resolved by CodeRabbit once verified. Check the unresolved count again after replies/pushes rather than assuming.
+- **CodeRabbit is an approver, and an open thread blocks the merge.** `reviews.request_changes_workflow: true` in `.coderabbit.yaml` (flipped 2026-10-21) makes CodeRabbit submit "changes requested" while any of its threads is unresolved and an approving review once every one is resolved; that approval satisfies main's one required review, so a PR with no human reviewer still merges on CodeRabbit's say-so. Before it, CodeRabbit only ever commented, and the docs PR [#532](https://github.com/mr-yum/growth-os/pull/532) sat `REVIEW_REQUIRED` with every thread answered. Resolve each thread with a fix or a reply that says why not (`resolveReviewThread` over GraphQL); a thread left open is a merge you are waiting on.
 
 CodeRabbit can also post no review at all and still show a green row. Check for each skip before reading silence as clean:
 
