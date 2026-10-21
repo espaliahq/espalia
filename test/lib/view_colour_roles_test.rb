@@ -8,6 +8,7 @@ require_relative "kit_colour_roles_test"
 class ViewColourRolesTest < ActiveSupport::TestCase
   SOURCES = %w[
     app/views/assessments/**/*.rb
+    app/views/assessment_guides/**/*.rb
     app/views/frameworks/**/*.rb
     app/views/assessment_cycles/**/*.rb
     app/views/calibration_sessions/**/*.rb
