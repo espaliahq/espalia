@@ -120,6 +120,11 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal "How did the incident call go?", item.external_reference.metadata["request_context"]
     end
 
+    should "ignore a requester email that is not a string" do
+      @importer.import(exchange_record(request: { id: "r1", context: "Ask", requested_by: { email: 42 } }))
+      assert_equal "42", EvidenceItem.find(evidence_id).external_reference.metadata["requested_by_email"]
+    end
+
     should "drop a source link that is not http(s)" do
       @importer.import(exchange_record(source_url: "javascript:alert(1)"))
       assert_nil EvidenceItem.find(evidence_id).external_reference.url

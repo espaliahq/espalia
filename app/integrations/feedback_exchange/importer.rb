@@ -309,7 +309,7 @@ class FeedbackExchange::Importer
       metadata: {
         kind: record["kind"],
         request_context: record.dig("request", "context"),
-        requested_by_email: record.dig("request", "requested_by", "email")&.downcase,
+        requested_by_email: record.dig("request", "requested_by", "email").to_s.strip.downcase.presence,
         period_name: record.dig("period", "name"),
         given_at: record["given_at"],
         notified: Array(record["notified"]).map(&:to_s)
