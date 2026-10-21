@@ -37,18 +37,22 @@ class Views::Integrations::AiModelView < Views::Base
   # @param form_config [AiModelConfig, nil] what the form shows; defaults to
   #   +config+, differs after a rejected save
   # @param state [Symbol] one of {STATE_BADGES}
-  # @param key_stored [Boolean] whether an API key is available
+  # @param key_stored [Boolean] whether an API key is available to the model,
+  #   the deployment's included: what the status card reports
+  # @param key_field_stored [Boolean, nil] whether a key was stored through this
+  #   form, which is the only one a blank field keeps; defaults to +key_stored+
   # @param can_edit [Boolean]
   # @param errors [Array<String>] validation messages from a failed save
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(config:, state:, key_stored:, form_config: nil, can_edit: false, errors: [],
+  def initialize(config:, state:, key_stored:, key_field_stored: nil, form_config: nil, can_edit: false, errors: [],
                  user: nil, current_tenant: nil, tenants: [])
     @config = config
     @form_config = form_config || config
     @state = state
     @key_stored = key_stored
+    @key_field_stored = key_field_stored.nil? ? key_stored : key_field_stored
     @can_edit = can_edit
     @errors = errors
     @user = user
@@ -235,10 +239,10 @@ class Views::Integrations::AiModelView < Views::Base
     div do
       label(for: field_id(:api_key), class: LABEL_CLASSES) do
         plain "API key"
-        span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { @key_stored ? "Stored" : "Not set" }
+        span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { @key_field_stored ? "Stored" : "Not set" }
       end
       input(type: "password", id: field_id(:api_key), name: field_name(:api_key), value: "", autocomplete: "new-password",
-            placeholder: @key_stored ? "Leave blank to keep it" : "Paste the provider's or gateway's key",
+            placeholder: @key_field_stored ? "Leave blank to keep it" : "Paste the provider's or gateway's key",
             class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(:api_key)}-hint" })
       p(id: "#{field_id(:api_key)}-hint", class: HINT_CLASSES) do
         plain "Stored encrypted and only ever sent to the address above. It is never shown again."
