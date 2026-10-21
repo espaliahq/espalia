@@ -27,7 +27,9 @@ class EvidenceSuggestionsEval
   class BaselineModel
     STOPWORDS = %w[the a an and or to of in on for with they their them was were is are it that this as at by].freeze
 
+    # @return [String] recorded in the report in place of a model id
     def model = "baseline"
+    # @return [String] recorded in the report in place of an adapter's provider
     def provider = "baseline"
 
     def suggest(prompt)

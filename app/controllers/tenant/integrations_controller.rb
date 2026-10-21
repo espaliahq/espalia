@@ -134,9 +134,4 @@ class Tenant::IntegrationsController < ApplicationController
   def current_tenant
     ActsAsTenant.current_tenant
   end
-
-  # @return [Array<Tenant>]
-  def tenants_for_user
-    ActsAsTenant.without_tenant { current_user.tenants.to_a }
-  end
 end
