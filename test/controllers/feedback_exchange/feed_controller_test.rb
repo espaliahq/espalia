@@ -305,6 +305,12 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "access" do
+    should "refuse a consumer header that names another system than the tenant's peer" do
+      signed_get(consumer: "other")
+
+      assert_response :bad_request
+    end
+
     should "refuse an unsigned request" do
       get FEED_PATH
       assert_response :unauthorized
