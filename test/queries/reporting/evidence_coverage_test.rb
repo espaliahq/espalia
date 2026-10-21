@@ -119,7 +119,8 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
   context "origin" do
     setup do
       feedback(person: @first)
-      feedback(person: @first, external_reference: { system: "slack" })
+      feedback(person: @first, external_reference: { system: "kudos" })
+      feedback(person: @first, external_reference: { system: "github", url: "https://github.com/o/r/pull/1" })
       feedback(person: @second, external_reference: { system: "chip", metadata: { request_context: "Q3 check-in" } })
       feedback(person: @second, external_reference: { system: "chip" })
       feedback(person: @second, status: "withdrawn", external_reference: { system: "chip" })
@@ -128,8 +129,8 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     should "split provided feedback by the system it was given in, GrowthOS first" do
       by_origin = result.metrics.by_origin
 
-      assert_equal({ "growthos" => 1, "chip" => 2, "slack" => 1 }, by_origin)
-      assert_equal %w[growthos chip slack], by_origin.keys
+      assert_equal({ "growthos" => 2, "chip" => 2, "kudos" => 1 }, by_origin)
+      assert_equal %w[growthos chip kudos], by_origin.keys
       assert_equal result.metrics.feedback_provided, by_origin.values.sum
     end
 
@@ -144,14 +145,14 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     should "carry the split into each group" do
       by_manager = result.groups[:manager].index_by(&:label)
 
-      assert_equal({ "growthos" => 1, "slack" => 1 }, by_manager["Manager"].metrics.by_origin)
+      assert_equal({ "growthos" => 2, "kudos" => 1 }, by_manager["Manager"].metrics.by_origin)
       assert_equal({ "growthos" => 0, "chip" => 2 }, by_manager["Other Manager"].metrics.by_origin)
     end
 
     should "count a blank system as GrowthOS" do
       feedback(person: @first, external_reference: { system: "" })
 
-      assert_equal 2, result.metrics.by_origin["growthos"]
+      assert_equal 3, result.metrics.by_origin["growthos"]
     end
   end
 

@@ -1,28 +1,27 @@
 # frozen_string_literal: true
 
 # Display names for where a piece of feedback was given, read from
-# `external_reference.system`. A nil system means GrowthOS itself. Shared by
-# the cycle report, the feedback export and anything else that shows origin.
+# `external_reference.system`. Feedback is foreign only when it came from
+# another feedback system; a nil system, or one of the plain link targets in
+# `ExternalReference::LINK_SYSTEMS` (a GitHub PR, a Slack message, a Notion
+# doc someone pointed at), was given in GrowthOS. Shared by the cycle report,
+# the feedback export and anything else that shows origin.
 module Reporting::OriginLabels
   NATIVE = "growthos"
 
   LABELS = {
     NATIVE => "GrowthOS",
-    "slack" => "Slack",
-    "chip" => "Chip",
-    "github" => "GitHub",
-    "gitlab" => "GitLab",
-    "linear" => "Linear",
-    "jira" => "Jira",
-    "notion" => "Notion",
-    "google_doc" => "Google Docs",
-    "figma" => "Figma"
+    "chip" => "Chip"
   }.freeze
 
   # @param system [String, nil] `external_reference.system`
-  # @return [String] the origin key reports group by; nil and blank are GrowthOS
+  # @return [String] the origin key reports group by; nil, blank and link
+  #   targets are GrowthOS
   def self.key_for(system)
-    system.to_s.strip.downcase.tr("-", "_").presence || NATIVE
+    key = system.to_s.strip.downcase.tr("-", "_")
+    return NATIVE if key.empty? || ExternalReference::LINK_SYSTEMS.include?(key)
+
+    key
   end
 
   # @param key [String, nil] an origin key, or a raw system slug

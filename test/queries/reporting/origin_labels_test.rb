@@ -16,15 +16,21 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
     should "treat hyphens and underscores as the same system" do
       assert_equal "hr_portal", Reporting::OriginLabels.key_for("hr-portal")
     end
+
+    should "count a plain link target as GrowthOS, since the feedback was given here" do
+      ExternalReference::LINK_SYSTEMS.each do |system|
+        assert_equal "growthos", Reporting::OriginLabels.key_for(system), system
+      end
+      assert_equal "growthos", Reporting::OriginLabels.key_for("Google-Doc")
+    end
   end
 
   context ".label" do
     should "name the systems it knows" do
       assert_equal "GrowthOS", Reporting::OriginLabels.label(nil)
-      assert_equal "Slack", Reporting::OriginLabels.label("slack")
       assert_equal "Chip", Reporting::OriginLabels.label("chip")
-      assert_equal "GitHub", Reporting::OriginLabels.label("github")
       assert_equal "GrowthOS", Reporting::OriginLabels.label("growthos")
+      assert_equal "GrowthOS", Reporting::OriginLabels.label("github")
     end
 
     should "titleise a slug it does not know" do

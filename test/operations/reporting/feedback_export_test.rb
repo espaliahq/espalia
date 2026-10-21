@@ -106,11 +106,11 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       @unknown = peer_feedback(person: @second, content: "Elsewhere.", system: "hr_portal")
     end
 
-    should "name where each item was given, GrowthOS for native ones" do
+    should "name where each item was given, GrowthOS for native ones and plain links" do
       rows = call_op[:rows].index_by { |row| row[:feedback] }
 
       assert_equal "GrowthOS", rows["Native."][:origin]
-      assert_equal "Slack", rows["From Slack."][:origin]
+      assert_equal "GrowthOS", rows["From Slack."][:origin]
       assert_equal "Chip", rows["From Chip."][:origin]
       assert_equal "Hr Portal", rows["Elsewhere."][:origin]
     end
