@@ -101,6 +101,10 @@ module FeedbackExchange::HostGuard
     false
   end
 
+  # Lets a private peer through in development, logging each host the first time.
+  #
+  # @param url [String]
+  # @return [nil] there is no address to pin the connection to
   def allow_in_development(url)
     return unless development_allowance?(url)
 

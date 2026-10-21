@@ -329,7 +329,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     div(id: "feedback-exchange-unmatched", class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
       h3(class: "text-sm font-medium text-gray-900 dark:text-white") { "People not found in GrowthOS" }
       p(class: HINT_CLASSES) do
-        plain "Their feedback waits here and imports on the next sync once they exist in GrowthOS with this email."
+        plain "Their feedback waits here and imports on the next sync once GrowthOS has them, matched by their HRIS id or this email."
       end
       ul(class: "mt-2 divide-y divide-gray-100 dark:divide-gray-800 text-sm") do
         @unmatched_people.each do |person|
