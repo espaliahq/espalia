@@ -273,7 +273,8 @@ Rules, all deliberate:
   `Evidence::SuggestionModel#suggest` is the one method the job calls and the
   one tests stub. It builds the request from the prompt, asks the adapter
   `Ai::ModelClient.for(tenant)` picks, and turns the answer into at most
-  three `Proposal`s. Two adapters live under `app/integrations/ai/`:
+  three `Proposal`s. Three adapters live under `app/integrations/ai/`; the
+  two chat adapters are described here and Jev in the next rule:
   `Ai::Anthropic::Adapter` (the official gem; the Anthropic API, or any
   Anthropic-compatible endpoint through `base_url:`; `cache_control` on the
   system text, `output_config.format` for the schema, the tenant's `effort`,
@@ -282,9 +283,10 @@ Rules, all deliberate:
   `response_format`, `Authorization: Bearer`). Both return one
   `Ai::SuggestionResponse` and raise the shared `Ai::Errors`. The stored
   config (`AiModelConfig`: `provider`, `base_url`, `model`, `effort`) is
-  generic: "Vercel AI Gateway" is only a preset in the form that fills
-  `openai_compatible` and `https://ai-gateway.vercel.sh/v1`, and no adapter
-  special-cases it. The tenant's key is passed to the gem explicitly, so an
+  generic: "Vercel AI Gateway" is only a preset in the form that fills a
+  provider, `https://ai-gateway.vercel.sh/v1` and a model id (`typesafe_jev`
+  and `typesafe-ai/jev`; a second preset fills `openai_compatible` and a chat
+  model), and no adapter special-cases the gateway. The tenant's key is passed to the gem explicitly, so an
   `ANTHROPIC_API_KEY` in the environment never answers for a tenant.
   `Evidence::SuggestionModel` maps the errors to its own: `RateLimited`
   and `Unavailable` (5xx, no answer, a malformed one) retry with backoff;
@@ -305,6 +307,51 @@ Rules, all deliberate:
   adapter sends `max_tokens`, or `max_completion_tokens` for `api.openai.com`
   and OpenAI's reasoning model families (`o3…`, `gpt-5…`), which reject the
   old name.
+- **Jev, a decision model (`typesafe_jev`).** TypeSafe AI's Jev answers
+  typed questions about a shared state with probabilities and writes no
+  prose. Placement fits it: the job already limits the answer to candidate
+  cells, so "which cell" is a choice, "which valence" is a choice over four,
+  and the probability is the confidence. `Ai::TypesafeJev::Adapter#decide`
+  posts one request per item; `Evidence::PlacementDecision` builds it and
+  reads the answer. The state is `{ framework:, feedback: }`: the prompt's
+  framework description without the chat instructions, and the item text,
+  pseudonymised exactly as the chat path does (full names only in the
+  framework, the option descriptions too). Two questions: `placement`, a
+  choice whose options are the open cells (`"<capability_stable_id>|<level_ordinal>"`,
+  the evidence form's token, described as "Capability, level N: expectation")
+  plus `none`, so the probability has somewhere to go when nothing fits; and
+  `valence`, a choice over the four valences, read from the feedback as a
+  whole. Jev answers each question independently, so the valence cannot be
+  asked of the chosen cell in the same request; one request is the trade,
+  because a piece of feedback rarely praises one behaviour and faults another
+  and a second call would double the latency and cost of every run. Up to
+  three cells at or above `PlacementDecision::FLOOR` (0.15) are kept, most
+  probable first; `none` never becomes a suggestion. **No rationale:** the
+  column is nullable, the card shows "57% confident" with no sentence, and the
+  editor's staged row says only "Suggested"; the chat providers still write
+  one. Rows record `PlacementDecision::VERSION` instead of the prompt's.
+  Effort does not apply and the form hides it. Test connection asks one
+  `boolean` ("Is this a connection check?") and shows the answer in words.
+  Jev's context is 32k tokens; the eval's largest request is about 8.5k
+  characters (~2k tokens), so a role would need ten times the eval
+  framework's cells to come near it. **The wire, as verified** against
+  Vercel's [Decision docs](https://vercel.com/docs/ai-gateway/modalities/decision)
+  on 2026-10-21: `POST {base_url}/evaluate`, `Authorization: Bearer`, body
+  `{ "model": "typesafe-ai/jev", "state": <string|object|array>, "questions":
+  { "<name>": { "type": "choice", "instructions": "…", "criteria": { "<option>":
+  "<what it means>" } } } }` (a `boolean` takes optional `criteria: { true:, false: }`,
+  a `score` an array of rungs lowest first); the answer is `{ "model", "answers":
+  { "<name>": { "type": "choice", "choice": "<option>", "probabilities": {
+  "<option>": 0..1 } } }, "usage": { "inputTokens", "outputTokens" },
+  "providerMetadata" }`, a boolean answering `{ "type": "boolean",
+  "probability" }`. Errors are `{ "error": { "message", "type" } }` with the
+  usual statuses (an unauthenticated call answers 401), mapped to `Ai::Errors`
+  like the OpenAI-compatible adapter's, whose HTTP half (`Ai::JsonEndpoint`)
+  it shares. **Development key:** with no key of its own, a tenant whose
+  address is on `ai-gateway.vercel.sh` uses
+  `credentials.dig(:vercel, :ai_gateway_api_key)` in development only
+  (`Tenant#ai_api_key`); the card's "Add an API key" rule counts it there.
+  Production tenants always supply their own.
 - **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
   in the tenant for `Person N` in both texts before they leave, and swaps them
   back in the rationales that return. Whole words only, longest first, so
@@ -349,7 +396,7 @@ Rules, all deliberate:
   the manager side.
 - **On the hub, in place.** Each item the viewer may place shows its pending
   suggestions — capability · level, the valence badge, "82% confident" as
-  text, the expectation and the quoted rationale — on "Feedback to place",
+  text, the expectation and the quoted rationale when the model wrote one — on "Feedback to place",
   "Feedback you've provided", the responses you asked for, and a "May fit
   elsewhere too" group for placed items about you or your reports with more
   cells to go (a different name from the block's own "Suggested placements"
@@ -378,7 +425,8 @@ Rules, all deliberate:
   feedback the framework doesn't cover left alone), through the model that
   tenant has configured: its adapter, effort and name hiding, so a gateway
   model is scored the way it will answer. `MODEL=…` tries another model id on
-  the same endpoint. The tenant is only read. `SUGGESTION_MODEL=baseline`
+  the same endpoint; a `typesafe_jev` tenant is scored through Jev. The
+  tenant is only read. `SUGGESTION_MODEL=baseline`
   scores a word-overlap baseline with no tenant and no call. Bump `VERSION`
   whenever the instructions, framework text or schema change, and rerun.
 
