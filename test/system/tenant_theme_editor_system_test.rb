@@ -82,16 +82,14 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     assert_equal "rgb(255, 255, 255)", computed("nav", "color")
   end
 
-  should "show the darker fill buttons use under a light brand, and the brand itself under a dark one" do
+  should "fill buttons with the brand itself and name the text the helper picks for it" do
     open_editor
     choose_theme "custom"
 
     set_color_field(BRAND_LIGHT, "#facc15")
-    within("#theme-brand-light-readout") { assert_text "Buttons use a darker shade, with white text" }
-    swatch = rgb(computed("#theme-brand-light-readout [data-theme-shade] [aria-hidden]", "backgroundColor"))
-    assert_equal rgb(frame_button_background("light")), swatch
-    assert_not_equal [ 250, 204, 21 ], swatch
-    within("#theme-brand-dark-readout") { assert_text "Buttons use a darker shade, with white text" }
+    within("#theme-brand-light-readout") { assert_text "#facc15 · button text black" }
+    assert_equal [ 250, 204, 21 ], rgb(frame_button_background("light"))
+    assert_no_selector "#theme-brand-light-readout [data-theme-shade]"
 
     set_color_field(BRAND_LIGHT, "#1e3a8a")
     within("#theme-brand-light-readout") { assert_text "#1e3a8a · button text white" }

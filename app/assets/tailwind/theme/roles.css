@@ -157,8 +157,8 @@
  */
 :root,
 [data-theme-scope] {
-  /* A deeper fill that carries text (#447), and the brand as readable text on surfaces */
-  --gos-brand-strong: color-mix(in oklab, var(--gos-brand) 55%, black);
+  /* The brand itself is the strong fill, and the contrast helper picks its text; brand as text stays clamped */
+  --gos-brand-strong: var(--gos-brand);
   --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 88%, black);
   --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
   --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
@@ -184,7 +184,6 @@
 
   /* The exact clamps where relative colours work; the mixes above are the fallback */
   @supports (color: oklch(from red min(l, 0.5) c h)) {
-    --gos-brand-strong: oklch(from var(--gos-brand) min(l, 0.5) c h);
     --gos-brand-strong-hover: oklch(from var(--gos-brand-strong) calc(l - 0.06) c h);
     --gos-content-brand: oklch(from var(--gos-brand) min(l, 0.5) c h);
 
