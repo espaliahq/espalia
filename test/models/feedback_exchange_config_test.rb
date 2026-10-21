@@ -54,6 +54,13 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse non-canonical IPv4 forms and IPv4 wrapped in IPv6" do
+      %w[https://127.1/x https://2130706433/x https://0x7f000001/x https://0177.0.0.1/x https://[::ffff:127.0.0.1]/x
+         https://[::127.0.0.1]/x https://100.64.0.1/x].each do |url|
+        assert_not FeedbackExchangeConfig.new(base_url: url).valid?, "expected #{url} to be refused"
+      end
+    end
+
     should "allow a private address in development" do
       Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new("development")) do
         assert FeedbackExchangeConfig.new(base_url: "https://127.0.0.1:4000/api").valid?

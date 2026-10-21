@@ -145,11 +145,16 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     should "refuse a peer address that resolves to a private address" do
       client = FeedbackExchange::Client.new(base_url: "https://sneaky.example.com/x", outbound_secret: SECRET)
 
-      Resolv.stub(:getaddresses, [ "10.0.0.5" ]) do
-        error = assert_raises(FeedbackExchange::Errors::ApiError) { client.health }
-        assert_nil error.status
+      Addrinfo.stub(:getaddrinfo, [ Addrinfo.ip("10.0.0.5") ]) do
+        error = assert_raises(FeedbackExchange::Errors::AddressRefused) { client.health }
         assert_match(/private network/, error.message)
       end
+    end
+
+    should "refuse a loopback written in a form only the system resolver understands" do
+      client = FeedbackExchange::Client.new(base_url: "https://127.1/x", outbound_secret: SECRET)
+
+      assert_raises(FeedbackExchange::Errors::AddressRefused) { client.health }
     end
   end
 
