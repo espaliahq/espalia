@@ -516,3 +516,7 @@ receives** carries a one-time footer disclosing this model and linking
 post — see [`SlackDeliveryMethod`](../../../app/notifiers/slack_delivery_method.rb));
 the notification bell's dropdown links the same page persistently via a gear
 icon.
+
+## Also in a peer system
+
+When a peer feedback system (Chip) acknowledges that it imported one of our items through the [feedback exchange](../feedback-exchange.md), the evidence card wears an **Also in Chip** chip beside the type label, linking to the peer's own copy in a new tab. It is read from `feedback_exchange_acks` through the transient `EvidenceItem#exchange_acks`, filled by `EvidenceItem.load_exchange_acks` in the matrix builder and in the single-cell evidence controller (one query for the page). An address that is not http(s), or an ack without one, renders as a plain chip with no link. Nothing about the item changes: the ack only says where else it lives.

@@ -32,6 +32,9 @@ Rails.application.routes.draw do
   # the only credential (see FeedbackExchangeSignedRequest).
   scope "/api/feedback_exchange", module: :feedback_exchange, as: :feedback_exchange do
     get "health", to: "health#show", as: :health
+    get "feedback", to: "feed#show", as: :feed
+    get "feedback/deletions", to: "deletions#show", as: :deletions
+    post "feedback/ack", to: "acks#create", as: :acks
   end
 
   # User-facing settings — for now just the connected MCP clients page;

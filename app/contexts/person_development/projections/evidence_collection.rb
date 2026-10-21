@@ -113,7 +113,7 @@ class PersonDevelopment::Projections::EvidenceCollection
         # so a no-op mapping never sweeps up an unrelated link-less item.
         touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         rekey_links(link_scope, to_stable_id, timestamp)
-        item_scope.update_all(capability_stable_id: to_stable_id)
+        item_scope.update_all(capability_stable_id: to_stable_id, updated_at: Time.current)
       when "archived", "split"
         touched_evidence_ids.concat(link_scope.pluck(:evidence_id))
         link_scope.where(link_status: "active").update_all(
@@ -199,7 +199,8 @@ class PersonDevelopment::Projections::EvidenceCollection
     # cycle_id and feedback_direction were introduced with the event payloads
     # that can populate them. Historical events lack the keys and therefore
     # replay to the columns' existing nil values, so these additive
-    # attributions need no version bump.
+    # attributions need no version bump (`recorded_via` too: nil on history,
+    # and a rebuild fills it).
     item = EvidenceItem.find_or_initialize_by(id: event.data[:evidence_id])
     # An unplaced item re-processed after its first placement keeps the origin
     # that placement gave it; only a cell on the event, or a fresh row, sets it.
@@ -224,6 +225,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       external_reference: external_reference_attrs(event.data[:external_reference]),
       author_id: event.data[:author_id],
       link_status: "active",
+      recorded_via: event.metadata[:acting_via],
       recorded_at: event.metadata[:timestamp] || Time.current
     )
     item.save!
@@ -244,12 +246,15 @@ class PersonDevelopment::Projections::EvidenceCollection
 
   # An item recorded unplaced has no origin; its first placement becomes it,
   # so every reader anchored on the origin columns (the feed, the hub, the
-  # reporting joins) sees the cell the item now lives in. Deterministic on
+  # reporting joins) sees the cell the item now lives in. It also moves the item's
+  # `updated_at`: the exchange feed pages on it and the record's `source_url`
+  # names this cell. Deterministic on
   # replay: the first EvidenceLinkAdded after an origin-less EvidenceRecorded
   # always wins.
   def adopt_origin_from_first_placement(event)
     EvidenceItem.where(id: event.data[:evidence_id], capability_stable_id: nil)
-      .update_all(capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal])
+      .update_all(capability_stable_id: event.data[:capability_stable_id], level_ordinal: event.data[:level_ordinal],
+                  updated_at: Time.current)
   end
 
   def handle_link_revalenced(event)
