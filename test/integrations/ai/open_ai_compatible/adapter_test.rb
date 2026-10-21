@@ -87,6 +87,25 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
     assert_not response.refused?
   end
 
+  should "read message content that arrives as a list of parts" do
+    raw = [ { "capability_stable_id" => "c1", "level_ordinal" => 3, "valence" => "demonstrated", "confidence" => 0.9, "rationale" => "r" } ]
+    json_text = { suggestions: raw }.to_json
+    parts = [ { "type" => "text", "text" => json_text[0, 20] }, { "type" => "text", "text" => json_text[20..] } ]
+    @stubs.post("/v1/chat/completions") { json(completion(parts)) }
+
+    assert_equal raw, suggest.suggestions
+  end
+
+  should "treat content that is neither text nor a list of text parts as no suggestions, not an error" do
+    [ [ { "type" => "image_url" } ], { "unexpected" => "object" }, 42, [ nil, 3 ] ].each do |content|
+      @stubs.post("/v1/chat/completions") { json(completion(content)) }
+      response = suggest
+
+      assert_empty response.suggestions
+      assert_not response.refused?
+    end
+  end
+
   should "flag a refusal, and a content filter, with no suggestions" do
     @stubs.post("/v1/chat/completions") { json(completion(nil, finish_reason: "stop", refusal: "I can't help with that.")) }
     response = suggest
@@ -157,6 +176,12 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
   end
 
   context "#ping" do
+    should "return the reply when the content is a list of parts" do
+      @stubs.post("/v1/chat/completions") { json(completion([ { "type" => "text", "text" => " rea" }, { "type" => "text", "text" => "dy " } ])) }
+
+      assert_equal "ready", @adapter.ping
+    end
+
     should "send one line and return the reply" do
       seen = nil
       @stubs.post("/v1/chat/completions") do |env|

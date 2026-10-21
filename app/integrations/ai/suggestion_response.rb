@@ -28,7 +28,7 @@ class Ai::SuggestionResponse < Data.define(:suggestions, :model, :usage, :refuse
   # @param text [String, nil]
   # @return [Array<Hash>]
   def self.suggestions_from(text)
-    return [] if text.blank?
+    return [] unless text.is_a?(String) && text.present?
 
     parsed = JSON.parse(text)
     list = parsed.is_a?(Hash) ? parsed["suggestions"] : nil
