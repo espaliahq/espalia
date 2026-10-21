@@ -85,7 +85,7 @@ touches **before** writing code; do not rely on defaults.
 - **Always `--paginate`** on `gh api repos/{owner}/{repo}/pulls/<n>/comments` — the default page is 30 and a multi-round PR exceeds it quietly.
 - `gh pr view <n> --json reviews --jq '…coderabbitai…'` still covers review-level bodies (walkthrough, "actionable comments posted: N").
 - Replying does NOT resolve a thread; a fix push usually gets auto-resolved by CodeRabbit once verified. Check the unresolved count again after replies/pushes rather than assuming.
-- **CodeRabbit is an approver, and an open thread blocks the merge.** `reviews.request_changes_workflow: true` in `.coderabbit.yaml` (flipped 2026-10-21) makes CodeRabbit submit "changes requested" while any of its threads is unresolved and an approving review once every one is resolved; that approval satisfies main's one required review, so a PR with no human reviewer still merges on CodeRabbit's say-so. Before it, CodeRabbit only ever commented, and the docs PR [#532](https://github.com/mr-yum/growth-os/pull/532) sat `REVIEW_REQUIRED` with every thread answered. Resolve each thread with a fix or a reply that says why not (`resolveReviewThread` over GraphQL); a thread left open is a merge you are waiting on.
+- **CodeRabbit is an approver, and an open thread blocks the merge.** `reviews.request_changes_workflow: true` in `.coderabbit.yaml` (flipped 2026-10-21) makes CodeRabbit submit "changes requested" while any of its threads is unresolved and an approving review once every one is resolved, the latest commit has been reviewed and no pre-merge check is failing (`allow_author_approval: false` keeps the author from `@coderabbitai approve`-ing their own PR); that approval satisfies main's one required review, so a PR with no human reviewer still merges on CodeRabbit's say-so. Before it, CodeRabbit only ever commented, and the docs PR [#532](https://github.com/mr-yum/growth-os/pull/532) sat `REVIEW_REQUIRED` with every thread answered. Resolve each thread with a fix or a reply that says why not (`resolveReviewThread` over GraphQL); a thread left open is a merge you are waiting on.
 
 CodeRabbit can also post no review at all and still show a green row. Check for each skip before reading silence as clean:
 
@@ -98,8 +98,10 @@ CodeRabbit can also post no review at all and still show a green row. Check for 
   verifying its findings against the code and reporting them rather than editing
   (so the two cannot collide in the worktree). The branch owner lands the real
   findings as stacked commits, says in the PR which were rejected and why, and
-  retries the CodeRabbit trigger afterwards; a later CodeRabbit review is
-  welcome but no longer gates the merge.
+  retries the CodeRabbit trigger afterwards. The two passes create no GitHub
+  review, and main still requires one: before merging, the PR needs an
+  independent GitHub approval, or a maintainer's admin merge recorded in a PR
+  comment. A later CodeRabbit review is welcome but no longer gates the merge.
 - **CodeRabbit does not auto-review a PR whose base is not the default branch.** It posts "Review skipped — Auto reviews are disabled on base/target branches other than the default branch" and nothing else, which reads exactly like a clean review. This bites every stacked PR (base = the branch below it), which is the shape this repo asks for when work is split across issues. Two remedies: comment `@coderabbitai review` to trigger a single review while the PR is still stacked, and re-check after `gh pr edit <n> --base <next>` retargets it as the stack lands. Never treat the absence of CodeRabbit comments on a stacked PR as "no findings" — check for the skip notice first (`gh pr view <n> --json comments -q '.comments[]|select(.author.login=="coderabbitai")|.body'`). Repo-wide auto-review on other bases would need `reviews.auto_review.base_branches` in `.coderabbit.yaml`; it is deliberately not set today.
 - **A PR opened by a bot gets no review.** Every Dependabot PR is unreviewed; see [dependencies.md](dependencies.md).
 
