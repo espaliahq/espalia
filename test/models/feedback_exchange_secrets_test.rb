@@ -64,6 +64,49 @@ class FeedbackExchangeSecretsTest < ActiveSupport::TestCase
     assert_not_nil config.last_synced_at
   end
 
+  context "inbound key ids" do
+    should "follow the stored inbound and previous secrets" do
+      @tenant.update_feedback_exchange!(inbound_secret: "inbound-one-inbound-one-inbound-one-1")
+      @tenant.update_feedback_exchange!(inbound_secret: "inbound-two-inbound-two-inbound-two-2")
+
+      @tenant.reload
+      assert_equal FeedbackExchange::Signature.key_id("inbound-two-inbound-two-inbound-two-2"), @tenant.inbound_key_id
+      assert_equal FeedbackExchange::Signature.key_id("inbound-one-inbound-one-inbound-one-1"), @tenant.previous_inbound_key_id
+    end
+
+    should "be empty without an inbound secret" do
+      @tenant.update_feedback_exchange!(outbound_secret: "outbound-only-outbound-only-0123456789")
+
+      assert_nil @tenant.reload.inbound_key_id
+    end
+
+    should "refuse an inbound secret another workspace already uses" do
+      other = create(:tenant)
+      other.update_feedback_exchange!(inbound_secret: "shared-by-mistake-shared-by-mistake-1")
+
+      error = assert_raises(ActiveRecord::RecordInvalid) do
+        @tenant.update_feedback_exchange!(inbound_secret: "shared-by-mistake-shared-by-mistake-1")
+      end
+      assert_match(/already in use by another workspace/, error.message)
+      assert_nil @tenant.reload.inbound_key_id
+    end
+
+    should "refuse an inbound secret another workspace still accepts as its previous one" do
+      other = create(:tenant)
+      other.update_feedback_exchange!(inbound_secret: "old-one-old-one-old-one-old-one-old-1")
+      other.update_feedback_exchange!(inbound_secret: "new-one-new-one-new-one-new-one-new-1")
+
+      assert_raises(ActiveRecord::RecordInvalid) do
+        @tenant.update_feedback_exchange!(inbound_secret: "old-one-old-one-old-one-old-one-old-1")
+      end
+    end
+
+    should "let a tenant save its own secret again" do
+      @tenant.update_feedback_exchange!(inbound_secret: "mine-mine-mine-mine-mine-mine-mine-1")
+      assert @tenant.update_feedback_exchange!(settings: { peer_name: "chip" })
+    end
+  end
+
   should "never print a value" do
     @tenant.update_feedback_exchange!(outbound_secret: "out-secret", inbound_secret: "in-secret")
     secrets = @tenant.feedback_exchange_secrets

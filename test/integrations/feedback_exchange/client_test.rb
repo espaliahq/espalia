@@ -19,6 +19,7 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
 
   def assert_signed(env, body: "")
     assert_equal "growthos", env.request_headers["X-Exchange-Consumer"]
+    assert_equal FeedbackExchange::Signature.key_id(SECRET), env.request_headers["X-Exchange-Key-Id"]
     assert FeedbackExchange::Signature.verify(
       signature: env.request_headers["X-Exchange-Signature"],
       timestamp: env.request_headers["X-Exchange-Timestamp"],

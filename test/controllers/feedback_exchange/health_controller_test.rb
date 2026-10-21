@@ -29,6 +29,63 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
     Rails.stub(:cache, @cache) { get path, headers: headers }
   end
 
+  def key_id_header(secret = INBOUND) = { "X-Exchange-Key-Id" => FeedbackExchange::Signature.key_id(secret) }
+
+  context "with a key id" do
+    should "verify only the tenant it names" do
+      other = create(:tenant)
+      other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
+      other.update_feedback_exchange!(inbound_secret: "someone-elses-inbound-secret-0123456789")
+
+      get_health(headers: signed_headers.merge(key_id_header))
+      assert_response :success
+      assert_equal "chip", response.parsed_body["peer"]
+    end
+
+    should "refuse a key id that belongs to another tenant than the secret" do
+      other = create(:tenant)
+      other.update_feedback_exchange!(inbound_secret: "someone-elses-inbound-secret-0123456789")
+
+      get_health(headers: signed_headers.merge(key_id_header("someone-elses-inbound-secret-0123456789")))
+      assert_response :unauthorized
+    end
+
+    should "refuse an unknown or malformed key id without trying any tenant" do
+      [ "0123456789abcdef", "nope", "", "0123456789abcdeg" ].each do |bad|
+        @cache.clear
+        get_health(headers: signed_headers.merge("X-Exchange-Key-Id" => bad))
+        assert_response :unauthorized, "expected key id #{bad.inspect} to be refused"
+      end
+    end
+
+    should "accept an upper-case key id" do
+      get_health(headers: signed_headers.merge("X-Exchange-Key-Id" => FeedbackExchange::Signature.key_id(INBOUND).upcase))
+      assert_response :success
+    end
+
+    should "find the tenant by its previous secret's key id inside the rotation window" do
+      @tenant.update_feedback_exchange!(inbound_secret: "the-new-inbound-secret-0123456789abcdef")
+
+      get_health(headers: signed_headers(secret: INBOUND).merge(key_id_header(INBOUND)))
+      assert_response :success
+    end
+
+    should "not load every tenant" do
+      loaded = []
+      Tenant.stub(:where, ->(*args, **kw) { loaded << args; Tenant.unscoped.where(*args, **kw) }) do
+        get_health(headers: signed_headers.merge(key_id_header))
+      end
+      assert_response :success
+      assert(loaded.any? { |args| args.first.to_s.include?("inbound_key_id") })
+      assert(loaded.none? { |args| args.first.is_a?(Hash) && args.first.key?(:feedback_exchange_credentials) })
+    end
+  end
+
+  should "still serve a peer that sends no key id" do
+    get_health(headers: signed_headers)
+    assert_response :success
+  end
+
   should "answer 200 with the peer name to a signed request" do
     get_health
 

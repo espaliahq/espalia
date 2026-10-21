@@ -101,6 +101,7 @@ class FeedbackExchange::Client
   def headers(method:, path_with_query:, body:, timestamp:)
     headers = {
       FeedbackExchange::Signature::CONSUMER_HEADER => CONSUMER,
+      FeedbackExchange::Signature::KEY_ID_HEADER => FeedbackExchange::Signature.key_id(outbound_secret),
       FeedbackExchange::Signature::TIMESTAMP_HEADER => timestamp,
       FeedbackExchange::Signature::SIGNATURE_HEADER => FeedbackExchange::Signature.sign(
         secret: outbound_secret, method:, path_with_query:, body:, timestamp:

@@ -37,6 +37,7 @@ An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrati
 
 - **Outbound** signs what we send. The peer holds the same value as its *inbound* secret. **Inbound** verifies what the peer sends.
 - Read them through `Tenant#feedback_exchange_secrets`, a `FeedbackExchangeSecrets` whose `inspect` and `to_s` print only whether a value is set. Do not read the raw column in new code, and never log a secret. The parameter filter already covers `*secret*`.
+- **An inbound secret belongs to one workspace.** Saving an inbound secret whose key id another tenant holds, current or previous, is refused, since the secret is what tells the verifier whose request it is.
 - The settings form never echoes a secret. A blank field keeps the stored value.
 - **Rotation.** Saving a different inbound secret moves the old one to `previous_inbound_secret` and stamps `previous_rotated_at`. The verifier accepts the previous secret for 24 hours, so the two sides rotate without a coordinated deploy. Rotating the *outbound* secret has no window: change the peer's inbound value first, then ours.
 - Use 32+ random bytes: `SecureRandom.hex(32)`.
@@ -53,6 +54,7 @@ signing_string = "v1:" + timestamp + ":" + METHOD + ":" + path_with_query + ":" 
 
 - `path_with_query` is the path **as sent**, query string included and in the order sent. Sign what goes on the wire: `FeedbackExchange::Client` takes it from Faraday's own URL builder rather than rebuilding it.
 - `raw_body` is the bytes as sent, empty for a GET. The verifier reads `request.raw_post`, never re-serialised params.
+- **`X-Exchange-Key-Id: <first 16 hex of SHA-256(secret)>` is optional and recommended.** It sits outside the signature and names the secret that signed the request, so the verifier loads one tenant by an indexed lookup instead of decrypting and trying every credentialed tenant. Our client always sends it (`Signature.key_id`). Without it the verifier falls back to that scan, so a peer built before the header still works. A key id that matches no tenant, or is malformed, is refused with 401 without trying anyone.
 - A timestamp more than 300 s from now is refused. The compare is constant-time and checks every accepted secret without short-circuiting.
 - **Replays.** The verifier claims each accepted signature in `Rails.cache`, so a captured request cannot be sent twice. The claim lasts **twice** the 300 s window, because a timestamp is acceptable from five minutes before now to five minutes after, so a signature can stay valid for ten. A claim of one window would let a request signed in the future be replayed once it expired. The test environment uses a null cache store, so a test that exercises a replay must swap in a `MemoryStore`.
 
@@ -76,7 +78,7 @@ It does **not** retry. The sync job owns retries, from the error class:
 
 A stale or malformed timestamp is refused before any tenant is loaded. Production throttles the path to 120 requests a minute per IP (`config/initializers/rack_attack.rb`), since each remaining request decrypts the credentialed tenants.
 
-The concern finds the tenant whose inbound secret (or previous one, inside the window) verifies the request, claims the signature, and runs the action inside `ActsAsTenant.with_tenant`. Answers:
+The concern finds the tenant by `X-Exchange-Key-Id` (the `inbound_key_id` or `previous_inbound_key_id` column, derived from the stored secrets on every save) and verifies only that tenant, or, when the header is absent, tries each credentialed tenant. Either way it takes the one whose inbound secret (or previous one, inside the window) verifies the request, claims the signature, and runs the action inside `ActsAsTenant.with_tenant`. Answers:
 
 | Status | When |
 |---|---|
