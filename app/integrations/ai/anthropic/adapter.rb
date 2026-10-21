@@ -23,6 +23,15 @@ class Ai::Anthropic::Adapter
   PING_PROMPT = "Reply with the single word: ready"
   TIMEOUT_SECONDS = 60
 
+  # The gem follows redirects, resending the body, so a vetted address could
+  # send us anywhere. This runs once per attempt, redirect legs included, and
+  # puts every destination through the same guard as the saved address. (The
+  # Faraday adapter never follows one.)
+  GUARD_REDIRECTS = lambda do |request, next_in_chain|
+    Ai::HostGuard.check!(request.url.to_s)
+    next_in_chain.call(request)
+  end
+
   # @param api_key [String]
   # @param model [String, nil] defaults to {AiModelConfig::DEFAULT_ANTHROPIC_MODEL}
   # @param base_url [String, nil] an Anthropic-compatible endpoint, without
@@ -84,7 +93,8 @@ class Ai::Anthropic::Adapter
   def client
     @client ||= begin
       Ai::HostGuard.check!(@base_url) if @base_url
-      ::Anthropic::Client.new(api_key: @api_key, base_url: @base_url, timeout: TIMEOUT_SECONDS, max_retries: 0)
+      ::Anthropic::Client.new(api_key: @api_key, base_url: @base_url, timeout: TIMEOUT_SECONDS, max_retries: 0,
+                              middleware: @base_url ? [ GUARD_REDIRECTS ] : nil)
     end
   end
 

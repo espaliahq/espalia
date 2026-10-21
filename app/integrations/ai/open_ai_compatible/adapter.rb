@@ -21,6 +21,10 @@ class Ai::OpenAiCompatible::Adapter
   OPEN_TIMEOUT = 5
   READ_TIMEOUT = 60
   SCHEMA_NAME = "placement_suggestions"
+  # OpenAI deprecated max_tokens and its reasoning models reject it; most other
+  # servers (the gateway, vLLM, Ollama) only know max_tokens. Models named for
+  # OpenAI's reasoning families, or served from api.openai.com, get the new name.
+  OPENAI_REASONING_MODEL = %r{\A(?:openai/)?(?:o\d|gpt-5)}i
 
   # @param api_key [String]
   # @param base_url [String] the endpoint root, without /chat/completions
@@ -49,7 +53,7 @@ class Ai::OpenAiCompatible::Adapter
   # @raise [Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def suggest(system:, user:, schema:)
     body = post(
-      model: model, max_tokens: MAX_TOKENS,
+      model: model, **token_limit(MAX_TOKENS),
       messages: [ { role: "system", content: system }, { role: "user", content: user } ],
       response_format: { type: "json_schema", json_schema: { name: SCHEMA_NAME, strict: true, schema: schema } }
     )
@@ -71,7 +75,7 @@ class Ai::OpenAiCompatible::Adapter
   # @return [String] what the model said
   # @raise [Ai::Errors::RefusalError, Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError]
   def ping
-    body = post(model: model, max_tokens: PING_MAX_TOKENS, messages: [ { role: "user", content: PING_PROMPT } ])
+    body = post(model: model, **token_limit(PING_MAX_TOKENS), messages: [ { role: "user", content: PING_PROMPT } ])
     choice = first_choice(body)
     raise Ai::Errors::RefusalError, "The model declined the test request" if refused?(choice)
 
@@ -81,6 +85,11 @@ class Ai::OpenAiCompatible::Adapter
   private
 
   attr_reader :api_key, :base_url
+
+  def token_limit(tokens)
+    openai_style = base_url.match?(%r{\Ahttps://api\.openai\.com(?:/|\z)}i) || model.match?(OPENAI_REASONING_MODEL)
+    { (openai_style ? :max_completion_tokens : :max_tokens) => tokens }
+  end
 
   def post(payload)
     response = connection.post("chat/completions", JSON.generate(payload))

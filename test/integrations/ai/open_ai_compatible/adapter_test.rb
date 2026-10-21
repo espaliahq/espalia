@@ -26,6 +26,15 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
       choices: [ { finish_reason: finish_reason, message: { role: "assistant", content: content, refusal: refusal } } ] }
   end
 
+  def limit_params(base_url:, model:)
+    stubs = Faraday::Adapter::Test::Stubs.new
+    body = nil
+    stubs.post("/v1/chat/completions") { |env| body = JSON.parse(env.body); json(completion("ready")) }
+    connection = Faraday.new(url: "#{base_url}/") { |f| f.adapter :test, stubs }
+    Ai::OpenAiCompatible::Adapter.new(api_key: "k", base_url: base_url, model: model, connection: connection).ping
+    body.slice("max_tokens", "max_completion_tokens").keys
+  end
+
   def suggest = @adapter.suggest(system: "framework", user: "item", schema: SCHEMA)
 
   should "post the schema as strict response_format, with the system text first and the item last" do
@@ -43,6 +52,27 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
     assert_equal({ "type" => "json_schema", "json_schema" => { "name" => "placement_suggestions", "strict" => true, "schema" => SCHEMA.deep_stringify_keys } },
                  body["response_format"])
     assert_equal "Bearer sk-gw", authorization
+  end
+
+  context "the token limit" do
+    should "be max_tokens for the gateway and other servers" do
+      assert_equal [ "max_tokens" ], limit_params(base_url: BASE, model: MODEL)
+      assert_equal [ "max_tokens" ], limit_params(base_url: "https://llm.example.com/v1", model: "llama-3.3-70b")
+    end
+
+    should "be max_completion_tokens for OpenAI's own API and its reasoning models" do
+      assert_equal [ "max_completion_tokens" ], limit_params(base_url: "https://api.openai.com/v1", model: "gpt-4.1")
+      assert_equal [ "max_completion_tokens" ], limit_params(base_url: BASE, model: "openai/gpt-5")
+      assert_equal [ "max_completion_tokens" ], limit_params(base_url: "https://llm.example.com/v1", model: "o3-mini")
+    end
+
+    should "cap a suggest request at 8,000 tokens" do
+      body = nil
+      @stubs.post("/v1/chat/completions") { |env| body = JSON.parse(env.body); json(completion({ suggestions: [] }.to_json)) }
+      suggest
+
+      assert_equal 8_000, body["max_tokens"]
+    end
   end
 
   should "return the parsed suggestions, the reported model and the usage" do

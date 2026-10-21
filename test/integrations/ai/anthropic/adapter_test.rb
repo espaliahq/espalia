@@ -178,6 +178,31 @@ class Ai::Anthropic::AdapterTest < ActiveSupport::TestCase
       assert_equal 0, built[:max_retries]
     end
 
+    should "guard every leg of a redirect, not only the saved address" do
+      built = nil
+      adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant", base_url: "https://proxy.example.com")
+      Ai::HostGuard.stub(:check!, nil) do
+        Anthropic::Client.stub(:new, ->(**options) { built = options; FakeClient.new(FakeMessages.new(answer("{}"))) }) { suggest(adapter) }
+      end
+      guard = built[:middleware].first
+      seen = []
+      leg = Struct.new(:url).new(URI("https://elsewhere.example.com/v1/messages"))
+
+      Ai::HostGuard.stub(:check!, ->(url) { seen << url }) { assert_equal :sent, guard.call(leg, ->(_) { :sent }) }
+      assert_equal [ "https://elsewhere.example.com/v1/messages" ], seen
+
+      private_leg = Struct.new(:url).new(URI("https://127.1/v1/messages"))
+      assert_raises(Ai::Errors::ConfigurationError) { guard.call(private_leg, ->(_) { flunk "must not be sent" }) }
+    end
+
+    should "not add the guard for the Anthropic API itself" do
+      built = nil
+      adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant")
+      Anthropic::Client.stub(:new, ->(**options) { built = options; FakeClient.new(FakeMessages.new(answer("{}"))) }) { suggest(adapter) }
+
+      assert_nil built[:middleware]
+    end
+
     should "refuse an endpoint on a private network before connecting" do
       adapter = Ai::Anthropic::Adapter.new(api_key: "sk-tenant", base_url: "https://10.0.0.5")
 

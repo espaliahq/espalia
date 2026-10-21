@@ -299,7 +299,12 @@ Rules, all deliberate:
   `system` and `format` are Ruby methods; it sends them as `system` and
   `format`. `anthropic` endpoints take the address without `/v1`, which the
   gem appends; `openai_compatible` ones take it with whatever prefix serves
-  `/chat/completions`.
+  `/chat/completions`. The Anthropic gem follows redirects and resends the body, so with an
+  address set a middleware (`Ai::Anthropic::Adapter::GUARD_REDIRECTS`) puts every
+  leg through `Ai::HostGuard`; Faraday never follows one. The OpenAI-compatible
+  adapter sends `max_tokens`, or `max_completion_tokens` for `api.openai.com`
+  and OpenAI's reasoning model families (`o3…`, `gpt-5…`), which reject the
+  old name.
 - **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
   in the tenant for `Person N` in both texts before they leave, and swaps them
   back in the rationales that return. Whole words only, longest first, so
