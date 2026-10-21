@@ -15,25 +15,31 @@ module Reporting::OriginLabels
   }.freeze
 
   # @param system [String, nil] `external_reference.system`
+  # @param imported [Boolean] the item came in through the feedback exchange
+  #   ({ExternalReference#imported?}), so its system is a peer even when it
+  #   shares a link target's slug
   # @return [String] the origin key reports group by; nil, blank and link
   #   targets are GrowthOS
-  def self.key_for(system)
+  def self.key_for(system, imported: false)
     key = system.to_s.strip.downcase.tr("-", "_")
-    return NATIVE if key.empty? || ExternalReference::LINK_SYSTEMS.include?(key)
+    return NATIVE if key.empty?
+    return key if imported
 
-    key
+    ExternalReference::LINK_SYSTEMS.include?(key) ? NATIVE : key
   end
 
   # @param key [String, nil] an origin key, or a raw system slug
+  # @param imported [Boolean] see {.key_for}
   # @return [String] a display name, falling back to the titleised slug
-  def self.label(key)
-    peer_label(key_for(key))
+  def self.label(key, imported: false)
+    peer_label(key_for(key, imported: imported))
   end
 
-  # The name of the peer system an imported item came from. Unlike {.label} it
-  # reads the slug as given, so a peer is never mistaken for a link target.
+  # The display name for an origin key (from {.key_for}, or a report's
+  # `by_origin`) or for an imported item's peer slug. Unlike {.label} it reads
+  # the slug as given, so a peer is never mistaken for a link target.
   #
-  # @param slug [String] `external_reference.system` of an imported item
+  # @param slug [String] an origin key or a peer's `external_reference.system`
   # @return [String]
   def self.peer_label(slug)
     key = slug.to_s.strip.downcase.tr("-", "_")

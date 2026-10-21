@@ -23,6 +23,12 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
       end
       assert_equal "growthos", Reporting::OriginLabels.key_for("Google-Doc")
     end
+
+    should "keep an imported peer's origin even when its slug is a link target's" do
+      assert_equal "slack", Reporting::OriginLabels.key_for("slack", imported: true)
+      assert_equal "Slack", Reporting::OriginLabels.label("slack", imported: true)
+      assert_equal "growthos", Reporting::OriginLabels.key_for(nil, imported: true)
+    end
   end
 
   context ".label" do

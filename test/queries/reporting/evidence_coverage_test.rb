@@ -149,6 +149,13 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_equal({ "growthos" => 0, "chip" => 2 }, by_manager["Other Manager"].metrics.by_origin)
     end
 
+    should "count an imported peer that shares a link target's slug as that peer" do
+      feedback(person: @first, external_reference: { system: "slack", metadata: { given_at: "2026-10-18T03:12:44Z" } })
+
+      assert_equal 1, result.metrics.by_origin["slack"]
+      assert_equal 2, result.metrics.by_origin["growthos"]
+    end
+
     should "count a blank system as GrowthOS" do
       feedback(person: @first, external_reference: { system: "" })
 

@@ -104,6 +104,8 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
         metadata: { request_context: "Q3 growth check-in" })
       @chip_plain = peer_feedback(person: @second, content: "Chip, unasked.", system: "chip")
       @unknown = peer_feedback(person: @second, content: "Elsewhere.", system: "hr_portal")
+      @slack_peer = peer_feedback(person: @second, content: "Imported from a peer named slack.", system: "slack",
+        metadata: { given_at: "2026-10-18T03:12:44Z" })
     end
 
     should "name where each item was given, GrowthOS for native ones and plain links" do
@@ -111,6 +113,7 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
 
       assert_equal "GrowthOS", rows["Native."][:origin]
       assert_equal "GrowthOS", rows["From Slack."][:origin]
+      assert_equal "Slack", rows["Imported from a peer named slack."][:origin]
       assert_equal "Chip", rows["From Chip."][:origin]
       assert_equal "Hr Portal", rows["Elsewhere."][:origin]
     end
@@ -146,7 +149,7 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       coverage = Reporting::EvidenceCoverage.new(cycle: @cycle).call.metrics.by_origin
       export = call_op[:rows].pluck(:origin).tally
       expected = coverage.reject { |_, count| count.zero? }
-        .transform_keys { |key| Reporting::OriginLabels.label(key) }
+        .transform_keys { |key| Reporting::OriginLabels.peer_label(key) }
 
       assert_equal expected, export
     end
