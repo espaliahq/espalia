@@ -37,6 +37,17 @@ class FeedbackExchange::SignatureTest < ActiveSupport::TestCase
     end
   end
 
+  context ".key_id" do
+    should "be the first 16 hex characters of the secret's SHA-256" do
+      assert_equal Digest::SHA256.hexdigest(SECRET)[0, 16], FeedbackExchange::Signature.key_id(SECRET)
+      assert_match(FeedbackExchange::Signature::KEY_ID_FORMAT, FeedbackExchange::Signature.key_id(SECRET))
+    end
+
+    should "differ between secrets" do
+      assert_not_equal FeedbackExchange::Signature.key_id("a" * 32), FeedbackExchange::Signature.key_id("b" * 32)
+    end
+  end
+
   context ".verify" do
     should "round trip" do
       assert verify(sign)

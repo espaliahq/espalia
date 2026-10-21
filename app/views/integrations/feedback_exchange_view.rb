@@ -154,9 +154,16 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
                        placeholder: "https://chip.example.com/api/feedback-exchange",
                        hint: "The peer's exchange address, including its path prefix. It must start with https://.")
             secret_field(:outbound_secret, "Outbound secret",
-                         hint: "Signs the requests we send. The peer holds the same value as its inbound secret.")
+                         hint: "Signs the requests we send. The peer holds the same value as its inbound secret. At least 32 characters; `openssl rand -hex 32` makes one.")
             secret_field(:inbound_secret, "Inbound secret",
-                         hint: "Verifies the requests the peer sends. Replacing it keeps the old value working for 24 hours.")
+                         hint: "Verifies the requests the peer sends, so it must differ from the outbound secret. At least 32 characters. Replacing it keeps the old value working for 24 hours.")
+            kinds_field(:export_kinds, "Types to send", @form_config.export_kinds, FeedbackExchangeConfig::EXPORT_KINDS,
+                        hint: "Which types of our feedback the peer may pull. Untick all to send nothing.")
+            kinds_field(:import_kinds, "Types to import", @form_config.import_kinds, FeedbackExchangeConfig::IMPORT_KINDS,
+                        hint: "Which types of the peer's feedback we take, matched against the type the peer sends. " \
+                              "Leave every box unticked to import everything it sends. Ticking every box is narrower " \
+                              "than ticking none: a type not listed here is left out. \"Any feedback\" matches a peer " \
+                              "that sends no finer type.")
             enabled_field
             inbound_address
 
@@ -196,9 +203,31 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
         span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { stored ? "Stored" : "Not set" }
       end
       input(type: "password", id: field_id(name), name: field_name(name), value: "", autocomplete: "new-password",
-            placeholder: stored ? "Leave blank to keep the stored value" : "Paste a 32+ character secret",
+            placeholder: stored ? "Leave blank to keep the stored value" : "Paste a secret of 32 or more characters",
             class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(name)}-hint" })
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
+    end
+  end
+
+  def kinds_field(name, legend_text, selected, options, hint:)
+    div do
+      input(type: "hidden", name: "#{field_name(name)}[]", value: "")
+      fieldset(aria: { describedby: "#{field_id(name)}-hint" }) do
+        legend(class: LABEL_CLASSES) { legend_text }
+        div(class: "mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4") do
+          options.each { |kind| kind_checkbox(name, kind, selected.include?(kind)) }
+        end
+      end
+      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
+    end
+  end
+
+  def kind_checkbox(name, kind, checked)
+    id = "#{field_id(name)}_#{kind}"
+    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer") do
+      input(type: "checkbox", id: id, name: "#{field_name(name)}[]", value: kind, checked: checked,
+            class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600")
+      plain(kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize)
     end
   end
 

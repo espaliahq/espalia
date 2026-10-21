@@ -19,6 +19,7 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
 
   def assert_signed(env, body: "")
     assert_equal "growthos", env.request_headers["X-Exchange-Consumer"]
+    assert_equal FeedbackExchange::Signature.key_id(SECRET), env.request_headers["X-Exchange-Key-Id"]
     assert FeedbackExchange::Signature.verify(
       signature: env.request_headers["X-Exchange-Signature"],
       timestamp: env.request_headers["X-Exchange-Timestamp"],
@@ -145,11 +146,48 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     should "refuse a peer address that resolves to a private address" do
       client = FeedbackExchange::Client.new(base_url: "https://sneaky.example.com/x", outbound_secret: SECRET)
 
-      Resolv.stub(:getaddresses, [ "10.0.0.5" ]) do
-        error = assert_raises(FeedbackExchange::Errors::ApiError) { client.health }
-        assert_nil error.status
+      Addrinfo.stub(:getaddrinfo, [ Addrinfo.ip("10.0.0.5") ]) do
+        error = assert_raises(FeedbackExchange::Errors::AddressRefused) { client.health }
         assert_match(/private network/, error.message)
       end
+    end
+
+    should "refuse a loopback written in a form only the system resolver understands" do
+      client = FeedbackExchange::Client.new(base_url: "https://127.1/x", outbound_secret: SECRET)
+
+      assert_raises(FeedbackExchange::Errors::AddressRefused) { client.health }
+    end
+  end
+
+  context "connecting to the accepted address" do
+    should "connect to the address the guard returned while the Host header keeps the peer's name" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      seen = {}
+      thread = Thread.new do
+        socket = server.accept
+        request = []
+        while (line = socket.gets) && line != "\r\n"
+          request << line
+        end
+        seen[:host] = request.find { |l| l.start_with?("Host:") }&.strip
+        body = { ok: true, peer: "chip" }.to_json
+        socket.write "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}"
+        socket.close
+      end
+
+      client = FeedbackExchange::Client.new(base_url: "http://rebind.invalid:#{port}/api", outbound_secret: SECRET)
+
+      # "rebind.invalid" never resolves: only the pinned address can answer.
+      FeedbackExchange::HostGuard.stub(:check!, "127.0.0.1") do
+        assert_equal({ "ok" => true, "peer" => "chip" }, client.health)
+      end
+      thread.join(5)
+
+      assert_equal "Host: rebind.invalid:#{port}", seen[:host]
+    ensure
+      server&.close
+      thread&.kill
     end
   end
 
@@ -157,7 +195,7 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
     should "build from the tenant's config and secrets" do
       tenant = create(:tenant)
       tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(base_url: "https://chip.example.com/x/", peer_name: "chip"))
-      tenant.update_feedback_exchange!(outbound_secret: SECRET, inbound_secret: "in")
+      tenant.update_feedback_exchange!(outbound_secret: SECRET, inbound_secret: "inbound-for-the-client-test-0123456789abcdef0123456789")
 
       assert_instance_of FeedbackExchange::Client, FeedbackExchange::Client.for(tenant)
     end

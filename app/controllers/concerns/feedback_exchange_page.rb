@@ -7,6 +7,16 @@ module FeedbackExchangePage
 
   private
 
+  # Where a peer reaches us, from the route and the app's configured host (the one
+  # outbound links already use), not from whichever host this admin happens to
+  # be browsing on. Falls back to the request's host when none is configured.
+  #
+  # @return [String]
+  def feedback_exchange_inbound_url
+    options = Rails.application.config.action_mailer.default_url_options.presence || {}
+    feedback_exchange_health_url(**options).delete_suffix("/health")
+  end
+
   # @return [Array<Tenant>] the tenants the signed-in user can switch to
   def tenants_for_user
     ActsAsTenant.without_tenant { current_user.tenants.to_a }
@@ -25,8 +35,8 @@ module FeedbackExchangePage
     render Views::Integrations::FeedbackExchangeView.new(
       config: saved.feedback_exchange_config,
       form_config: tenant.feedback_exchange_config,
-      secrets_present: saved.feedback_exchange_secrets.presence,
-      inbound_url: "#{request.base_url}/api/feedback_exchange",
+      secrets_present: saved.feedback_exchange_secrets.stored,
+      inbound_url: feedback_exchange_inbound_url,
       can_edit: policy(:integrations).update_feedback_exchange?,
       errors: errors,
       user: current_user,

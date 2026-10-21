@@ -29,6 +29,17 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
     assert_not result[:connected]
     assert_equal({ outbound: false, inbound: false }, result[:secrets])
     assert_equal({ feedback: false, deletions: false }, result[:cursors])
+    assert_equal FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS, result[:export_kinds]
+    assert_empty result[:import_kinds]
+  end
+
+  should "report the chosen types" do
+    @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(export_kinds: %w[impact], import_kinds: %w[feedback peer_feedback]))
+
+    result = call
+
+    assert_equal %w[impact], result[:export_kinds]
+    assert_equal %w[feedback peer_feedback], result[:import_kinds]
   end
 
   should "report a connected exchange without exposing a secret" do
@@ -37,7 +48,7 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
         peer_name: "chip", base_url: "https://chip.example.com/x", enabled: true,
         cursor: "c1", last_synced_at: Time.current
       ))
-      @tenant.update_feedback_exchange!(outbound_secret: "out-secret-value", inbound_secret: "in-secret-value")
+      @tenant.update_feedback_exchange!(outbound_secret: "out-secret-value-0123456789abcdef0123456789", inbound_secret: "in-secret-value-0123456789abcdef0123456789")
 
       result = call
 

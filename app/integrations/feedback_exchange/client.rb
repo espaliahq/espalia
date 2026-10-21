@@ -101,6 +101,7 @@ class FeedbackExchange::Client
   def headers(method:, path_with_query:, body:, timestamp:)
     headers = {
       FeedbackExchange::Signature::CONSUMER_HEADER => CONSUMER,
+      FeedbackExchange::Signature::KEY_ID_HEADER => FeedbackExchange::Signature.key_id(outbound_secret),
       FeedbackExchange::Signature::TIMESTAMP_HEADER => timestamp,
       FeedbackExchange::Signature::SIGNATURE_HEADER => FeedbackExchange::Signature.sign(
         secret: outbound_secret, method:, path_with_query:, body:, timestamp:
@@ -135,11 +136,15 @@ class FeedbackExchange::Client
   end
 
   def build_connection
-    FeedbackExchange::HostGuard.check!(base_url)
+    address = FeedbackExchange::HostGuard.check!(base_url)
     Faraday.new(url: "#{base_url}/") do |f|
       f.options.open_timeout = OPEN_TIMEOUT
       f.options.timeout = READ_TIMEOUT
-      f.adapter Faraday.default_adapter
+      # Connect to the address the guard accepted; the hostname still drives TLS
+      # verification and the Host header.
+      f.adapter :net_http do |http|
+        http.ipaddr = address if address
+      end
       f.headers["Accept"] = "application/json"
     end
   end

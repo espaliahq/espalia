@@ -8,8 +8,9 @@
 class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
   description "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
               "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
-              "prove the peer answers), the peer and its address, the last sync, and whether the secrets " \
-              "and sync cursors are present. Never returns a secret."
+              "prove the peer answers), the peer and its address, the last sync, the types it sends and imports " \
+              "(an empty import list means everything), and whether the secrets and sync cursors are present. " \
+              "Never returns a secret."
   category :read
   approval :none
 
@@ -32,6 +33,8 @@ class Operations::Integrations::FeedbackExchangeStatus < Operations::Base
       last_synced_at: config.last_synced_at&.iso8601,
       secrets: { outbound: secrets.outbound_secret.present?, inbound: secrets.inbound_secret.present? },
       cursors: { feedback: config.cursor.present?, deletions: config.deletions_cursor.present? },
+      export_kinds: config.export_kinds,
+      import_kinds: config.import_kinds,
       suggestions_enabled: config.suggestions_enabled?
     }
   end
