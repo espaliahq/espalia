@@ -73,9 +73,8 @@ class AssessmentsEvidenceSystemTest < ApplicationSystemTestCase
 
       visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
 
-      link = find("#evidence-#{@evidence_id} a[data-exchange-ack='chip']", text: "Also in Chip")
-      assert_equal "https://chip.example.com/feedback/7", link[:href]
-      assert_equal "_blank", link[:target]
+      assert_selector "#evidence-#{@evidence_id} a[data-exchange-ack='chip'][target='_blank']" \
+                      "[href='https://chip.example.com/feedback/7']", text: "Also in Chip"
     end
   end
 
