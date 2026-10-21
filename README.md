@@ -33,7 +33,7 @@ An organisation's admin picks a theme under **Tenant admin → Theme**:
 
 Each person chooses Auto, Light or Dark under **Appearance** in the user menu. Auto follows their device.
 
-To build or change anything with colour, read [the theming guide](docs/guidelines/theming.md).
+To build a screen, start with [the component catalogue](app/components/README.md). To build or change anything with colour, read [the theming guide](docs/guidelines/theming.md).
 
 ## Claude Code
 
