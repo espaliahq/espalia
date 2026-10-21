@@ -240,9 +240,8 @@ module EvidenceDiffSubmit
   end
 
   # Content attrs for the record/update/respond ops; external_reference dropped
-  # when its URL is blank. An item imported from a peer keeps its reference:
-  # the form offers no fields for it, and where it was given is not the
-  # editor's to change.
+  # when its URL is blank. An item imported from a peer keeps its reference
+  # (UpdateEvidence enforces that too): the form offers no fields for it.
   def content_params(p, item = nil)
     attrs = {
       evidence_type: p[:evidence_type], content: p[:content].to_s,

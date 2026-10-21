@@ -152,6 +152,13 @@ class ExternalReferenceTest < ActiveSupport::TestCase
       assert_match(/title/, ExternalReference.validation_error_for({ url: "https://x.test", title: "x" }))
     end
 
+    should "refuse metadata only the feedback exchange writes, so nobody can pose as an import" do
+      assert_match(/given_at is set only by the feedback exchange/,
+                   ExternalReference.validation_error_for({ "system" => "chip", "metadata" => { "given_at" => "x" } }))
+      assert_match(/given_at/, ExternalReference.validation_error_for({ metadata: { given_at: "x" } }))
+      assert_nil ExternalReference.validation_error_for({ "system" => "chip", "metadata" => { "kind" => "feedback" } })
+    end
+
     should "report an invalid system or unsafe url without raising" do
       assert_match(/system/i, ExternalReference.validation_error_for({ "system" => "My Space" }))
       assert_match(/url/i, ExternalReference.validation_error_for({ "url" => "javascript:alert(1)" }))

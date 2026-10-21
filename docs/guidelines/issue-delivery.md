@@ -50,7 +50,11 @@ touches **before** writing code; do not rely on defaults.
    gotchas. One browser driver at a time.
 8. **`bin/rails development:precommit` must be fully green before the PR.** Run
    it directly, never piped, as a foreground call with a long timeout. Fix
-   everything it reports, including what looks unrelated.
+   everything it reports, including what looks unrelated. **From a second
+   worktree, never run it:** it resets the shared `growth_os_test` database.
+   Run its steps one by one under the worktree's own test database, as
+   [dev-environment.md → A second worktree](dev-environment.md#a-second-worktree)
+   lists them, and say in the PR that you did.
 9. **Run `/code-review` on the branch diff before opening the PR.** Verify each
    finding against the code, land the real ones as their own stacked commits,
    and say in your final report which you skipped and why.

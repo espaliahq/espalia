@@ -160,7 +160,8 @@ item ID, never by capability link.
   historical peer-source items without a persisted direction use a visible
   peer-or-upward combined bucket.
 - **Origin**: `by_origin` splits `feedback_provided` by
-  `external_reference.system` (none = `growthos`), so the values sum to the
+  `external_reference.system` (none, or a plain link target such as a GitHub
+  PR or a Slack message, = `growthos`: that feedback was given here), so the values sum to the
   provided total. `growthos` is always present, other systems appear when they
   have items, largest first. The web report shows "Of which via Chip: N" under
   the provided tile, only when an origin other than GrowthOS is non-zero; MCP
@@ -276,7 +277,7 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   | Applies to | active links (or, for a withdrawn item a migration left with none, the links it had): capability name (from the cycle's framework) · the recipient role's level code (`L<n>` when the role has none) · valence label |
   | Status / Withdrawn at | `link_status`, `withdrawn_at` |
   | Reference link | `external_reference.safe_url` (http/https only) |
-  | Origin | the system the item was given in, from `external_reference.system` through `Reporting::OriginLabels` ("GrowthOS" when there is none, "Slack", "Chip", "GitHub"…, else the slug titleised) |
+  | Origin | the system the item was given in, from `external_reference.system` through `Reporting::OriginLabels` ("GrowthOS" when there is none or it is a plain link target such as GitHub or a Slack message, since that feedback was given here; "Chip" or another peer's name titleised otherwise) |
   | Origin request | `external_reference.metadata.request_context`: what the item answered in its source system. Blank when there is none. *Requested or proactive* is unchanged and means a GrowthOS request only, so a peer item that answered a request in Chip reads *Proactive* there and carries the request here |
 
 - **The file**: `text/csv`, UTF-8 with a byte-order mark (so Excel reads "→"

@@ -50,7 +50,6 @@ class FeedbackExchangeImportSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     sign_in_as(@manager_user)
     assert_imported_card
-    assert page.evaluate_script("document.documentElement.scrollWidth <= document.documentElement.clientWidth"),
-           "the hub scrolls sideways on a phone"
+    assert_no_sideways_overflow("the hub scrolls sideways on a phone")
   end
 end

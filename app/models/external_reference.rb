@@ -27,6 +27,9 @@ class ExternalReference
   # ActiveModel::UnknownAttributeError StoreModel raises on construction)
   # and to publish the accepted shape in the MCP tool schema.
   ATTRIBUTE_NAMES = %w[system url external_id metadata].freeze
+  # Metadata only the feedback exchange importer writes; it is what marks an
+  # item as imported ({#imported?}), so no caller may supply it.
+  IMPORTER_METADATA = %w[given_at].freeze
 
   attribute :system, :string
   attribute :url, :string
@@ -83,6 +86,9 @@ class ExternalReference
       return "unknown field#{'s' if unknown.size > 1} #{unknown.sort.join(', ')} " \
              "(allowed: #{ATTRIBUTE_NAMES.join(', ')})"
     end
+    metadata = payload["metadata"] || payload[:metadata]
+    reserved = metadata.respond_to?(:keys) ? metadata.keys.map(&:to_s) & IMPORTER_METADATA : []
+    return "metadata.#{reserved.first} is set only by the feedback exchange" if reserved.any?
 
     candidate = new(payload)
     return nil if candidate.valid?

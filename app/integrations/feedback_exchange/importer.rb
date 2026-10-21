@@ -95,14 +95,21 @@ class FeedbackExchange::Importer
   end
 
   # Imports again every record skipped for a reason our side can fix,
-  # optionally only those for one recipient.
+  # optionally only those for one recipient. A run retries these before it
+  # pulls, so one row that fails is logged and left for next time rather than
+  # stopping every sync.
   #
   # @param recipient_id [String, nil]
   # @return [Array<Result>]
   def retry_skipped(recipient_id: nil)
     scope = FeedbackExchangeImport.retriable
     scope = scope.where(recipient_id: recipient_id) if recipient_id
-    scope.find_each.map { |ledger| import(ledger.record) }
+    scope.find_each.map do |ledger|
+      import(ledger.record)
+    rescue StandardError => e
+      Rails.logger.error("[FeedbackExchange] Retry of #{ledger.origin}:#{ledger.external_id} failed: #{e.class}: #{e.message}")
+      result(:skipped, skip_reason: "invalid_record")
+    end
   end
 
   private
@@ -233,9 +240,11 @@ class FeedbackExchange::Importer
 
   # Every nested part the importer digs into is an object, or absent where the
   # protocol allows it, so a malformed record is skipped instead of raising.
+  # `given_at` is required: it dates the item and decides its cycle.
   def well_shaped?(record)
     people = record.values_at("author", "recipient")
-    people.all?(Hash) &&
+    parse_time(record["given_at"]).present? &&
+      people.all?(Hash) &&
       people.all? { |person| person["external_ids"].nil? || person["external_ids"].is_a?(Hash) } &&
       record.values_at("request", "period", "external_reference").all? { |part| part.nil? || part.is_a?(Hash) } &&
       (record.dig("request", "requested_by").nil? || record.dig("request", "requested_by").is_a?(Hash))
@@ -300,7 +309,7 @@ class FeedbackExchange::Importer
       metadata: {
         kind: record["kind"],
         request_context: record.dig("request", "context"),
-        requested_by_email: record.dig("request", "requested_by", "email")&.downcase,
+        requested_by_email: record.dig("request", "requested_by", "email").to_s.strip.downcase.presence,
         period_name: record.dig("period", "name"),
         given_at: record["given_at"],
         notified: Array(record["notified"]).map(&:to_s)
@@ -377,6 +386,6 @@ class FeedbackExchange::Importer
   end
 
   def peer_label(origin)
-    Reporting::OriginLabels.label(origin)
+    Reporting::OriginLabels.peer_label(origin)
   end
 end

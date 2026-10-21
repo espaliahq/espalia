@@ -59,9 +59,12 @@ class FeedbackExchange::Record
     person.present? && person.email.present?
   end
 
-  # The title is the author's own headline; the protocol has no field for it,
-  # so it leads the text.
+  # A withdrawn record carries no text: the author took the feedback back, and
+  # the consumer needs only the status. Otherwise the title, which the protocol
+  # has no field for, leads the text as a bold line.
   def text(item)
+    return "" if item.withdrawn?
+
     item.title.present? ? "**#{item.title}**\n\n#{item.content}" : item.content
   end
 

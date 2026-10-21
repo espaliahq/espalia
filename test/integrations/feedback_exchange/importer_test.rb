@@ -120,6 +120,11 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal "How did the incident call go?", item.external_reference.metadata["request_context"]
     end
 
+    should "ignore a requester email that is not a string" do
+      @importer.import(exchange_record(request: { id: "r1", context: "Ask", requested_by: { email: 42 } }))
+      assert_equal "42", EvidenceItem.find(evidence_id).external_reference.metadata["requested_by_email"]
+    end
+
     should "drop a source link that is not http(s)" do
       @importer.import(exchange_record(source_url: "javascript:alert(1)"))
       assert_nil EvidenceItem.find(evidence_id).external_reference.url
@@ -313,12 +318,37 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "invalid_record", exchange_record(id: "chip-fb-0004", request: { requested_by: "morgan" })
     end
 
+    should "skip a record that does not say when it was given" do
+      assert_skipped "invalid_record", exchange_record(given_at: nil)
+      assert_skipped "invalid_record", exchange_record(id: "chip-fb-0002", given_at: "last Tuesday")
+    end
+
     should "skip a record that names an origin other than the peer" do
       assert_skipped "invalid_record", exchange_record(origin: "lattice")
     end
   end
 
   context "retrying" do
+    should "carry on past a row that fails, leaving it for the next run" do
+      record = exchange_record(recipient: { email: "priya@example.com" }, author: { email: "alex@example.com" })
+      @importer.import(record)
+      @importer.import(record.merge("id" => "chip-fb-0002"))
+      @handler.assign_to_framework(@priya.id, @framework_id, SecureRandom.uuid_v7, SecureRandom.uuid_v7)
+      calls = 0
+      original = @importer.method(:import)
+      flaky = lambda do |r|
+        calls += 1
+        raise ActiveRecord::StatementInvalid, "boom" if calls == 1
+
+        original.call(r)
+      end
+
+      results = @importer.stub(:import, flaky) { @importer.retry_skipped }
+
+      assert_equal %i[imported skipped], results.map(&:outcome).sort
+      assert_equal 1, FeedbackExchangeImport.retriable.count
+    end
+
     should "import a skipped record once the recipient is assigned" do
       record = exchange_record(recipient: { email: "priya@example.com" }, author: { email: "alex@example.com" })
       @importer.import(record)

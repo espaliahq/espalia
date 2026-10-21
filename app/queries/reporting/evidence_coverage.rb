@@ -73,7 +73,9 @@ class Reporting::EvidenceCoverage
   Group = Data.define(:key, :label, :metrics)
 
   ORIGIN_SYSTEM_SQL = "evidence_items.external_reference ->> 'system'"
-  private_constant :ORIGIN_SYSTEM_SQL
+  # Only the exchange importer writes `given_at`; it marks the system as a peer.
+  ORIGIN_IMPORTED_SQL = "(evidence_items.external_reference -> 'metadata' ->> 'given_at') IS NOT NULL"
+  private_constant :ORIGIN_SYSTEM_SQL, :ORIGIN_IMPORTED_SQL
 
   # Complete query result. `period` is the time window the counts were
   # narrowed to, or nil for the whole cycle.
@@ -88,7 +90,7 @@ class Reporting::EvidenceCoverage
   )
   EvidenceRow = Data.define(
     :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
-    :origin_system
+    :origin_system, :origin_imported
   )
   private_constant :Participant, :EvidenceRow
 
@@ -142,7 +144,7 @@ class Reporting::EvidenceCoverage
   def load_evidence_rows
     rows = @attribution.evidence_scope(period: @period)
       .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
-             Arel.sql(ORIGIN_SYSTEM_SQL))
+             Arel.sql(ORIGIN_SYSTEM_SQL), Arel.sql(ORIGIN_IMPORTED_SQL))
       .map { |attributes| EvidenceRow.new(*attributes) }
     attributed = @attribution.attribute_evidence(rows)
 
@@ -180,7 +182,7 @@ class Reporting::EvidenceCoverage
         end.to_set,
         withdrawn_ids: items.filter_map { |item| item.id if item.link_status == "withdrawn" }.to_set,
         feedback_directions: active.map { |item| reporting_direction(item) },
-        provided_origins: active.map { |item| Reporting::OriginLabels.key_for(item.origin_system) }.tally,
+        provided_origins: active.map { |item| Reporting::OriginLabels.key_for(item.origin_system, imported: item.origin_imported) }.tally,
         request_statuses: requests_by_person.fetch(enrollment.person_id, []).map(&:status)
       )
     end

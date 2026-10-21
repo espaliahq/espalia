@@ -315,7 +315,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
        data: { origin_split: "" }) do
       peers.each do |origin, count|
         div(class: "flex items-baseline justify-between gap-3") do
-          dt(class: "text-gray-600 dark:text-gray-300") { "Of which via #{Reporting::OriginLabels.label(origin)}" }
+          dt(class: "text-gray-600 dark:text-gray-300") { "Of which via #{Reporting::OriginLabels.peer_label(origin)}" }
           dd(class: "font-semibold text-gray-900 dark:text-white", data: { origin: origin }) { count.to_s }
         end
       end
