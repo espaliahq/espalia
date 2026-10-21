@@ -43,11 +43,11 @@ class Ai::TypesafeJev::Adapter
   # @param questions [Hash{Symbol => Hash}] name => { type:, instructions:, criteria: }
   # @return [Ai::DecisionResponse]
   # @raise [Ai::Errors::AuthenticationError, Ai::Errors::RateLimitError, Ai::Errors::ApiError] including
-  #   a 200 that does not answer every question
+  #   a 200 that does not answer every question in the shape its type promises
   def decide(state:, questions:)
     body = post_json("evaluate", model: model, state: state, questions: questions)
     answers = body["answers"]
-    unless answers.is_a?(Hash) && questions.keys.all? { |name| answers[name.to_s].is_a?(Hash) }
+    unless answers.is_a?(Hash) && questions.all? { |name, question| valid_answer?(question, answers[name.to_s]) }
       raise Ai::Errors::ApiError.new(status: 200, body: body.to_json, message: "The model endpoint answered without every answer")
     end
 
@@ -68,6 +68,19 @@ class Ai::TypesafeJev::Adapter
   private
 
   attr_reader :api_key, :base_url
+
+  def valid_answer?(question, answer)
+    return false unless answer.is_a?(Hash) && answer["type"] == question[:type].to_s
+
+    case answer["type"]
+    when "choice" then answer["choice"].present? && probabilities?(answer["probabilities"])
+    when "score" then answer["score"].is_a?(Numeric) && probabilities?(answer["probabilities"])
+    when "boolean" then answer["probability"].is_a?(Numeric)
+    else false
+    end
+  end
+
+  def probabilities?(raw) = raw.is_a?(Hash) && raw.values.all?(Numeric)
 
   # The gateway's HTTP API reports camelCase usage; TypeSafe's own API snake_case.
   def usage_of(body)

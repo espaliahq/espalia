@@ -64,6 +64,19 @@ class Ai::TypesafeJev::AdapterTest < ActiveSupport::TestCase
     assert_equal 200, error.status
   end
 
+  should "treat an answer that does not match its question's type as an endpoint error" do
+    wrong_type = answered.deep_dup.tap { |a| a[:answers][:valence] = { type: "boolean", probability: 0.4 } }
+    no_choice = answered.deep_dup.tap { |a| a[:answers][:placement].delete(:choice) }
+    odd_probabilities = answered.deep_dup.tap { |a| a[:answers][:placement][:probabilities] = { "a|3" => "high" } }
+
+    [ wrong_type, no_choice, odd_probabilities ].each do |body|
+      stubs = Faraday::Adapter::Test::Stubs.new { |s| s.post("/v1/evaluate") { json(body) } }
+      adapter = Ai::TypesafeJev::Adapter.new(api_key: "k", base_url: BASE, model: MODEL,
+                                             connection: Faraday.new(url: "#{BASE}/") { |f| f.adapter :test, stubs })
+      assert_equal 200, assert_raises(Ai::Errors::ApiError) { adapter.decide(state: "s", questions: QUESTIONS) }.status
+    end
+  end
+
   should "map a refused key, a rate limit, a server error and no answer to the shared errors" do
     @stubs.post("/v1/evaluate") { json({ error: { message: "Authentication failed", type: "authentication_error" } }, status: 401) }
     assert_raises(Ai::Errors::AuthenticationError) { decide }
