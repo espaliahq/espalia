@@ -38,6 +38,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_accept_evidence_suggestion",
+        "description" => "Accept a placement suggestion: link the feedback / evidence to the suggested capability × level. " \
+                         "Pass valence to place it with a different judgement than the one suggested; the decision is then " \
+                         "recorded as edited rather than accepted.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "suggestion_id" => { "type" => "string" },
+            "valence"       => { "type" => "string", "enum" => EvidenceLink::VALENCES }
+          },
+          "required" => %w[suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_add_evidence_link",
         "description" => "Link an existing feedback / evidence item to an additional capability × level.",
         "inputSchema" => {
@@ -284,6 +304,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_dismiss_evidence_suggestion",
+        "description" => "Dismiss a placement suggestion for a piece of feedback / evidence, optionally saying why. " \
+                         "The same capability × level is not suggested for that item again.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "suggestion_id" => { "type" => "string" },
+            "reason"        => { "type" => "string" }
+          },
+          "required" => %w[suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_edit_comment",
         "description" => "Edit the body of one of your own comments on an assessment. " \
                          "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
@@ -335,6 +374,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "status" => { "type" => "string", "enum" => %w[pending responded declined cancelled] }
           },
           "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_evidence_suggestions_list",
+        "description" => "List the pending placement suggestions on an assessment, or for one feedback / evidence item: " \
+                         "the suggested capability × level and valence, a confidence from 0 to 1 and a rationale quoting " \
+                         "the feedback. Accept or dismiss them with assessments_accept_evidence_suggestion / " \
+                         "assessments_dismiss_evidence_suggestion.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "evidence_id"   => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[assignment_id],
           "additionalProperties" => false
         },
         "annotations" => {

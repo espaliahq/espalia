@@ -44,7 +44,17 @@ class Tenant < ApplicationRecord
     :secondary_color, :secondary_color_dark,
     :nav_bg_color, :nav_bg_color_dark,
     :nav_fg_color, :nav_fg_color_dark,
-    :font_family
+    :font_family,
+    :evidence_suggestions_enabled, :evidence_suggestions_model
+
+  # Whether feedback recorded here is sent to the model for placement
+  # suggestions. Off until the data-handling decision (plan D2) is made, and
+  # never switched on by seeds.
+  #
+  # @return [Boolean]
+  def evidence_suggestions_enabled?
+    ActiveModel::Type::Boolean.new.cast(evidence_suggestions_enabled) || false
+  end
 
   # The word this tenant uses for each performance state. The state itself
   # is scoring policy and stays internal; the word is culture (#415). A

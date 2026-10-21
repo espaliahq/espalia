@@ -111,10 +111,17 @@ Evidence and feedback:
   EvidenceRequestReminderSent { request_id, kind, nudged_by_id? }
     kind: no_response | due_soon | manual
   EvidenceLinkAdded { evidence_id, capability_stable_id, level_ordinal, valence,
-                      linked_by_id }
+                      linked_by_id, via_suggestion_id? }
   EvidenceLinkRemoved { evidence_id, capability_stable_id, level_ordinal, removed_by_id }
   EvidenceLinkRevalenced { evidence_id, capability_stable_id, level_ordinal,
-                           valence, changed_by_id }
+                           valence, changed_by_id, via_suggestion_id? }
+    ← via_suggestion_id: the EvidencePlacementSuggestion the person accepted
+      (ADR-18 payload attribution). Present only when the link decision came
+      from a suggestion; absent on every other event, historical or not, so
+      consumers tolerate nil and no projection needed a CODE_VERSION bump.
+      The suggestion itself is plain state, not an event: machine output,
+      regenerable, worthless once decided (assessments/evidence.md →
+      Suggested placement and valence).
   EvidenceUpdated { evidence_id, title?, content, evidence_type, custom_type_label?,
                     external_reference?, edited_by_id }
   EvidenceWithdrawn { evidence_id, reason, withdrawn_by_id }

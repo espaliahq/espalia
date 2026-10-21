@@ -90,6 +90,11 @@ class EvidenceItem < ApplicationRecord
   # own independent thread. Nil when not loaded.
   attr_accessor :link_comment_stats
 
+  # Transient list of the {FeedbackExchangeAck}s for this item (where a peer
+  # system says it also holds the item), populated by {.load_exchange_acks} so a
+  # card can link to them. Nil when not loaded; treat as none.
+  attr_accessor :exchange_acks
+
   validates :person_id, presence: true
   validates :framework_id, presence: true
   validates :level_ordinal, numericality: { only_integer: true, greater_than_or_equal_to: 1 }, allow_nil: true
@@ -149,6 +154,15 @@ class EvidenceItem < ApplicationRecord
     return "report_to_manager" if author&.managed_by?(recipient)
 
     "peer_to_peer"
+  end
+
+  # Fills {#exchange_acks} on each item with one query.
+  #
+  # @param items [Array<EvidenceItem>]
+  # @return [Array<EvidenceItem>] the same items
+  def self.load_exchange_acks(items)
+    acks = FeedbackExchangeAck.where(evidence_id: items.map(&:id)).order(:consumer).group_by(&:evidence_id)
+    items.each { |item| item.exchange_acks = acks.fetch(item.id, []) }
   end
 
   # The hub anchor for one item — where an unplaced item is placed, and

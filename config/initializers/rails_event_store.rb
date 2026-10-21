@@ -177,4 +177,12 @@ Rails.configuration.to_prepare do
     PersonDevelopment::AsyncHandlers::ExplorationNotifier,
     to: PersonDevelopment::AsyncHandlers::ExplorationNotifier.handled_events
   )
+
+  # Asks the model where new or edited feedback belongs (behind the tenant's
+  # evidence_suggestions_enabled switch). Calls an outside service, so it
+  # MUST NOT be registered as a projection.
+  event_store.subscribe(
+    PersonDevelopment::AsyncHandlers::PlacementSuggester,
+    to: PersonDevelopment::AsyncHandlers::PlacementSuggester.handled_events
+  )
 end

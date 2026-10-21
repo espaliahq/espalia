@@ -14,9 +14,12 @@
 class ExternalReference
   include StoreModel::Model
 
-  # Systems people commonly point at, offered to MCP clients as examples. Any
-  # slug is accepted, so a new feedback exchange peer needs no code change.
-  KNOWN_SYSTEMS = %w[github gitlab linear jira slack notion google_doc figma chip other].freeze
+  # Places a person links to as supporting material. An item pointing at one
+  # of these was written here; any other system names where it was given.
+  LINK_SYSTEMS = %w[github gitlab linear jira slack notion google_doc figma other].freeze
+  # Systems offered to MCP clients as examples. Any slug is accepted, so a new
+  # feedback exchange peer needs no code change.
+  KNOWN_SYSTEMS = [ *LINK_SYSTEMS, "chip" ].freeze
   SYSTEM_FORMAT = /\A[a-z0-9]+(?:[_-][a-z0-9]+)*\z/
 
   # The only keys an external_reference payload may carry. Used both to

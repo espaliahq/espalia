@@ -169,6 +169,8 @@ A tenant can exchange named feedback with a peer feedback system (Chip is the fi
 
 As consumer, `FeedbackExchange::SyncJob` (every 15 minutes, `HrisSyncJob`'s retry policy) pulls the peer's feed page by page; `FeedbackExchange::Importer` turns each record into unplaced evidence written as its real author (`acting_via: feedback_exchange`, dated by `given_at`), and the `feedback_exchange_imports` ledger records every outcome and skip reason. Imports are silent: the peer owns notifications, and imported feedback surfaces on the hub under "Feedback to place".
 
+As a producer, GrowthOS serves `GET /api/feedback_exchange/feedback` (human-written peer and manager feedback, keyset-paged on `(updated_at, id)` with an opaque cursor, minus anything the asking peer sent us), an always-empty `/feedback/deletions` and `POST /feedback/ack`, which records where the peer now also holds an item so the evidence card can say "Also in Chip". Withdrawals ride the feed as `status: "withdrawn"`. The filters, the record mapping and the cost guarantees are in the guideline above.
+
 ## Notifications
 
 RES async handlers dispatched via Solid Queue. Adapter pattern for Slack, Teams, email.

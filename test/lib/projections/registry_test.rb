@@ -58,7 +58,8 @@ class Projections::RegistryTest < ActiveSupport::TestCase
         PersonDevelopment::AsyncHandlers::FeedbackNotifier,
         PersonDevelopment::AsyncHandlers::RatingRevisitNotifier,
         PersonDevelopment::AsyncHandlers::LensAlignmentNotifier,
-        PersonDevelopment::AsyncHandlers::ExplorationNotifier
+        PersonDevelopment::AsyncHandlers::ExplorationNotifier,
+        PersonDevelopment::AsyncHandlers::PlacementSuggester
       ]
       assert_empty(Projections::Registry.classes & forbidden)
     end
