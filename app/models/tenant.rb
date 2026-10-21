@@ -123,6 +123,9 @@ class Tenant < ApplicationRecord
   # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
   # @return [Boolean]
   def update_ai_model!(settings: {}, api_key: nil)
+    # A refused or failed save leaves its assignments behind, and a locked
+    # reload refuses unsaved changes: start from what is stored.
+    restore_attributes(%w[ai_config ai_credentials settings])
     errors.clear
     with_lock do
       previous = ai_config
