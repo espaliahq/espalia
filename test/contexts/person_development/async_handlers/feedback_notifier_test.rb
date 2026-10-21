@@ -42,6 +42,17 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
     id
   end
 
+  def import!(notified:)
+    AuditMetadata.with(acting_via: :feedback_exchange, actor_id: @peer.id) do
+      AuditMetadata.wrap_event_store do
+        @handler.record_evidence(@assessee.id, @framework_id, SecureRandom.uuid_v7,
+          source: "peer", evidence_type: "peer_feedback", content: "Ran the incident call calmly.",
+          author_id: @peer.id, cycle_id: nil,
+          external_reference: { system: "chip", external_id: "c-1", metadata: { notified: notified } })
+      end
+    end
+  end
+
   context "a peer records placed feedback" do
     should "notify the recipient and the manager with the cell, and not the author" do
       perform_enqueued_jobs { record!(author: @peer, source: "peer") }
@@ -67,6 +78,19 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
 
       assert_equal 1, @assessee_user.notifications.reload.size
       assert_equal 1, @manager_user.notifications.reload.size
+    end
+  end
+
+  context "feedback imported from a peer system" do
+    should "tell nobody, whoever the peer says it told" do
+      perform_enqueued_jobs do
+        import!(notified: %w[recipient manager])
+        import!(notified: [])
+      end
+
+      assert_empty @assessee_user.notifications.reload
+      assert_empty @manager_user.notifications.reload
+      assert_empty @peer_user.notifications.reload
     end
   end
 

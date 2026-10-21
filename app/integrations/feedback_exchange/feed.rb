@@ -82,9 +82,9 @@ class FeedbackExchange::Feed
   # acknowledged: it lives there already, so it must not travel back. (An import
   # through the exchange itself never gets this far: {NON_HUMAN_VIA} drops it.)
   def acknowledged_import_sql
-    link_systems = ExternalReference::SYSTEMS.map { |system| "'#{system}'" }.join(", ")
+    link_systems = ExternalReference::LINK_SYSTEMS.map { |system| "'#{system}'" }.join(", ")
     <<~SQL.squish
-      (COALESCE(evidence_items.external_reference ->> 'system', '#{ExternalReference::SYSTEMS.first}') NOT IN (#{link_systems})
+      (COALESCE(evidence_items.external_reference ->> 'system', '#{ExternalReference::LINK_SYSTEMS.first}') NOT IN (#{link_systems})
        AND EXISTS (
         SELECT 1 FROM feedback_exchange_acks acks
         WHERE acks.tenant_id = evidence_items.tenant_id

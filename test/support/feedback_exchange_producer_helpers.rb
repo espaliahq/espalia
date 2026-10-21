@@ -48,9 +48,7 @@ module FeedbackExchangeProducerHelpers
   # A peer feedback item from `author` to `recipient`, eligible for the feed
   # unless an option says otherwise.
   #
-  # A peer's name is not one of ExternalReference::SYSTEMS, which the model would
-  # refuse, so an external reference is written straight to the column, as the
-  # importer will have to.
+  # Written straight to the column, as the importer's projection writes it.
   def create_item(author:, recipient:, external_reference: nil, **attrs)
     item = create(:evidence_item, tenant: @tenant, author: author, person_id: recipient.id,
                                   source: "peer", evidence_type: "peer_feedback", **attrs)

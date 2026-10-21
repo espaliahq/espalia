@@ -155,6 +155,25 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       end
     end
 
+    should "date an imported item by when it was given, and any other by its event" do
+      given = SecureRandom.uuid_v7
+      native = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: given, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil, title: nil,
+        content: "Imported", external_reference: { system: "chip" }, author_id: @author.id,
+        recorded_at: "2026-03-04T05:06:07.000000Z")
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: native, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil, title: nil,
+        content: "Native", external_reference: nil, author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Time.utc(2026, 3, 4, 5, 6, 7), EvidenceItem.find(given).recorded_at
+        assert_in_delta Time.current, EvidenceItem.find(native).recorded_at, 5.seconds
+      end
+    end
+
     should "default external_reference to empty when nil" do
       evidence_id = SecureRandom.uuid_v7
 
@@ -632,8 +651,17 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         evidence_id: ev3_id, capability_stable_id: cap_sid, level_ordinal: 2,
         linked_by_id: @author.id, valence: "demonstrated")
 
+      # ev4 was imported, dated when it was given rather than when it arrived.
+      ev4_id = SecureRandom.uuid_v7
+      append_and_project(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: ev4_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil,
+        title: nil, content: "imported", external_reference: { system: "chip", external_id: "c-1" },
+        author_id: @author.id, feedback_direction: "peer_to_peer", cycle_id: nil,
+        recorded_at: "2025-11-02T09:30:00.000000Z")
+
       before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
-      assert_equal 3, before_snapshot[:evidence_items].size
+      assert_equal 4, before_snapshot[:evidence_items].size
 
       PersonDevelopment::Projections::EvidenceCollection.reset!(tenant: @tenant)
       ActsAsTenant.with_tenant(@tenant) { assert_equal 0, EvidenceItem.count }
@@ -645,6 +673,9 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
 
       after_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
       assert_equal before_snapshot, after_snapshot
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Time.utc(2025, 11, 2, 9, 30), EvidenceItem.find(ev4_id).recorded_at
+      end
     end
   end
 

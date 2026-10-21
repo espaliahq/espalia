@@ -2247,8 +2247,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
                          "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
                          "prove the peer answers), the peer and its address, the last sync, the types it sends and imports " \
-                         "(an empty import list means everything), and whether the secrets and sync cursors are present. " \
-                         "Never returns a secret.",
+                         "(an empty import list means everything), whether the secrets and sync cursors are present, and " \
+                         "what the import has done: records imported, updated, withdrawn and skipped, with each skip reason " \
+                         "and the people the peer named that GrowthOS could not find. Never returns a secret.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
@@ -2495,14 +2496,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   # The published JSON Schema for an evidence item's external_reference,
   # shared by every evidence-write tool's snapshot. Mirrors
   # ExternalReference.json_schema (deep-stringified) so clients see the
-  # accepted keys + the `system` enum instead of a bare free-form object.
+  # accepted keys + the known systems instead of a bare free-form object.
   def external_reference_schema
     {
       "type" => "object",
       "description" => "Optional pointer to a supporting source in an external system.",
       "properties" => {
-        "system"      => { "type" => "string", "enum" => ExternalReference::SYSTEMS,
-                           "description" => "Originating system." },
+        "system"      => { "type" => "string", "pattern" => "^[a-z0-9]+(?:[_-][a-z0-9]+)*$",
+                           "examples" => ExternalReference::KNOWN_SYSTEMS,
+                           "description" => "Originating system, as a lowercase slug." },
         "url"         => { "type" => "string", "description" => "An http(s) link to the source." },
         "external_id" => { "type" => "string", "description" => "The item's ID within that system." },
         "metadata"    => { "type" => "object", "description" => "Free-form additional fields." }

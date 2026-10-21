@@ -63,6 +63,23 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
     end
   end
 
+  should "report what the import has done, and whom it could not find" do
+    ActsAsTenant.with_tenant(@tenant) do
+      %w[imported imported updated].each_with_index do |status, i|
+        FeedbackExchangeImport.create!(origin: "chip", external_id: "r#{i}", status: status, synced_at: Time.current)
+      end
+      FeedbackExchangeImport.create!(origin: "chip", external_id: "r9", status: "skipped", skip_reason: "recipient_unmatched",
+                                     record: { recipient: { email: "new@example.com", display_name: "New" } },
+                                     synced_at: Time.current)
+    end
+
+    result = call
+
+    assert_equal({ imported: 2, updated: 1, withdrawn: 0, skipped: 1, skip_reasons: { "recipient_unmatched" => 1 } },
+                 result[:imports])
+    assert_equal [ { email: "new@example.com", display_name: "New", role: "recipient", records: 1 } ], result[:unmatched_people]
+  end
+
   should "report missing secrets" do
     @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(peer_name: "chip", base_url: "https://chip.example.com", enabled: true))
 

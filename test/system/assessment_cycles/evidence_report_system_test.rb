@@ -135,15 +135,17 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
   [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |name, size|
     should "show how much feedback came from another system on #{name}" do
       record_feedback_from("chip", 2)
-      record_feedback_from("slack", 1)
+      record_feedback_from("kudos", 1)
+      record_feedback_from("github", 1)
       page.driver.browser.manage.window.resize_to(*size)
       visit evidence_assessment_cycle_path(@cycle)
 
       assert_text "Feedback provided"
       assert_selector "[data-origin-split] dt", text: "Of which via Chip"
       assert_selector "[data-origin-split] [data-origin='chip']", text: "2"
-      assert_selector "[data-origin-split] dt", text: "Of which via Slack"
-      assert_selector "[data-origin-split] [data-origin='slack']", text: "1"
+      assert_selector "[data-origin-split] dt", text: "Of which via Kudos"
+      assert_selector "[data-origin-split] [data-origin='kudos']", text: "1"
+      assert_no_selector "[data-origin-split] [data-origin='github']"
       assert_no_text "Of which via GrowthOS"
       screenshot("light_#{name}_origin_split")
     end
@@ -215,8 +217,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
 
   private
 
-  # `chip` is not in ExternalReference::SYSTEMS yet, so the reference is
-  # written past validation, as the importer's projection will.
+  # Written straight to the column, as the importer's projection writes it.
   def record_feedback_from(system, count)
     ActsAsTenant.with_tenant(@tenant) do
       count.times do

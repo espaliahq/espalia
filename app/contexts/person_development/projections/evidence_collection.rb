@@ -226,7 +226,7 @@ class PersonDevelopment::Projections::EvidenceCollection
       author_id: event.data[:author_id],
       link_status: "active",
       recorded_via: event.metadata[:acting_via],
-      recorded_at: event.metadata[:timestamp] || Time.current
+      recorded_at: given_at(event) || event.metadata[:timestamp] || Time.current
     )
     item.save!
 
@@ -236,6 +236,16 @@ class PersonDevelopment::Projections::EvidenceCollection
 
     upsert_link(event, event.data[:capability_stable_id], event.data[:level_ordinal],
                 linked_by_id: event.data[:author_id], valence: event.data[:valence])
+  end
+
+  # An imported item says when it was given; every other event (and every
+  # event before `recorded_at` existed) is dated by its own timestamp, so this
+  # needs no CODE_VERSION bump.
+  def given_at(event)
+    value = event.data[:recorded_at]
+    value.is_a?(String) ? Time.iso8601(value) : value
+  rescue ArgumentError
+    nil
   end
 
   def handle_link_added(event)

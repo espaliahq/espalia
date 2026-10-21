@@ -39,6 +39,8 @@ module FeedbackExchangePage
       inbound_url: feedback_exchange_inbound_url,
       can_edit: policy(:integrations).update_feedback_exchange?,
       errors: errors,
+      summary: FeedbackExchangeImport.summary,
+      unmatched_people: FeedbackExchangeImport.unmatched_people,
       user: current_user,
       current_tenant: tenant,
       tenants: tenants_for_user

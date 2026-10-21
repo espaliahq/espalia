@@ -76,7 +76,8 @@ class Reporting::FeedbackExport
       status: item.link_status.humanize,
       withdrawn_at: timestamp(item.withdrawn_at),
       reference_link: item.external_reference&.safe_url,
-      origin: Reporting::OriginLabels.label(item.external_reference&.system),
+      origin: Reporting::OriginLabels.label(item.external_reference&.system,
+                                            imported: item.external_reference&.imported? || false),
       origin_request: origin_request(item)
     }
   end

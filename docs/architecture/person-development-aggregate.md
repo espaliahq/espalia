@@ -83,8 +83,16 @@ Assessment cycle:
 Evidence and feedback:
   EvidenceRecorded { evidence_id, capability_stable_id?, level_ordinal?, source,
                      evidence_type, custom_type_label?, title?, content,
-                     external_reference?, author_id, cycle_id?, valence?, request_id? }
+                     external_reference?, author_id, cycle_id?, valence?, request_id?,
+                     recorded_at? }
     ← The cell and its valence are nil together for an UNPLACED item (see above).
+    ← recorded_at (UTC ISO 8601) is when the feedback was GIVEN, carried only when
+      that is earlier than the event: an item imported from a peer system
+      (FeedbackExchange::Importer, `acting_via: feedback_exchange`) is dated by the
+      peer's `given_at`, so a backfill reports in the month it was given. The
+      EvidenceCollection projection reads it and falls back to the event's own
+      timestamp, which is what every other event and every historical event uses;
+      the field is additive and needed no CODE_VERSION bump.
     ← request_id names the request this item answers (record_evidence_for_request
       publishes it with EvidenceRequestResponded in one unit of work). A reader of
       this event alone — the feedback notifier — can tell a response from

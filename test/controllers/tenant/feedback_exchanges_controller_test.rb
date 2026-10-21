@@ -67,6 +67,31 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_select "#feedback-exchange-counts"
       end
 
+      should "show what the import has done and whom it could not find" do
+        configure_tenant
+        ActsAsTenant.with_tenant(@tenant) do
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "1", status: "imported", synced_at: Time.current)
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "2", status: "skipped", skip_reason: "author_unmatched",
+                                         record: { author: { email: "ghost@example.com", display_name: "Ghost" } },
+                                         synced_at: Time.current)
+        end
+
+        get tenant_integration_path("feedback-exchange")
+
+        assert_select "#feedback-exchange-counts dd", text: "1", count: 2
+        assert_select "[data-skip-reason='author_unmatched']", text: /Giver not found in GrowthOS\s*1/
+        assert_select "#feedback-exchange-unmatched li", text: /ghost@example.com · Ghost\s*Gave 1 record/
+
+        get tenant_integrations_path
+        assert_select "#feedback-exchange-card-counts", text: "Imported 1 · Updated 0 · Skipped 1"
+
+        ActsAsTenant.with_tenant(@tenant) do
+          FeedbackExchangeImport.create!(origin: "chip", external_id: "3", status: "withdrawn", synced_at: Time.current)
+        end
+        get tenant_integrations_path
+        assert_select "#feedback-exchange-card-counts", text: "Imported 1 · Updated 0 · Skipped 1 · Withdrawn 1"
+      end
+
       should "give the peer our address from the route and the configured host, not the browsing host" do
         get tenant_integration_path("feedback-exchange") # integration tests browse as www.example.com
 
@@ -254,6 +279,16 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
 
         assert_redirected_to tenant_integration_path("feedback-exchange")
         assert_match(/Connected to chip/, flash[:notice])
+      end
+
+      should "say when only development lets a private peer address through" do
+        FeedbackExchange::HostGuard.stub(:development_allowance?, true) do
+          FeedbackExchange::Client.stub(:for, fake_client(health: { "ok" => true, "peer" => "chip" })) do
+            post test_connection_tenant_feedback_exchange_path
+          end
+        end
+
+        assert_match(/Connected to chip\. .*private network, which only development allows/, flash[:notice])
       end
 
       should "work before the exchange is enabled" do

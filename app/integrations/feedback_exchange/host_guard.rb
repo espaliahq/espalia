@@ -6,7 +6,11 @@
 # server, so an address like https://10.0.0.5, or a name that resolves to
 # 169.254.169.254, would turn "Test connection" into a probe of internal services.
 #
-# Two checks, both skipped in development, where the peer is a local app:
+# Two checks. Development skips them, since the peer there is an app on the
+# developer's machine (`host.docker.internal` from the devcontainer); it logs
+# once per host when that lets a private address through. No other
+# environment has the allowance.
+#
 #
 # 1. The host must be a canonical hostname or a canonical IP literal. A host such
 #    as `127.1`, `2130706433`, `0x7f000001` or `0177.0.0.1` is loopback to the
@@ -74,7 +78,7 @@ module FeedbackExchange::HostGuard
   #   does not resolve (a name that fails once and answers later could be anything),
   #   or is, or resolves to, a private address
   def check!(url)
-    return if Rails.env.development?
+    return allow_in_development(url) if Rails.env.development?
 
     host = unbracket(URI.parse(url).host)
     refuse!("The peer's address is not a plain hostname or IP address") unless canonical_host?(host)
@@ -83,6 +87,33 @@ module FeedbackExchange::HostGuard
     refuse!("The peer's address does not resolve") if addresses.empty?
     refuse!("The peer's address resolves to a private network address") if addresses.any? { |a| private_address?(a) }
     addresses.first
+  end
+
+  # @param url [String]
+  # @return [Boolean] whether development is letting a private or loopback peer
+  #   through that any other environment would refuse
+  def development_allowance?(url)
+    return false unless Rails.env.development?
+
+    host = unbracket(URI.parse(url.to_s).host)
+    private_host?(host) || resolved_addresses(host).any? { |address| private_address?(address) }
+  rescue URI::InvalidURIError
+    false
+  end
+
+  # Lets a private peer through in development, logging each host the first time.
+  #
+  # @param url [String]
+  # @return [nil] there is no address to pin the connection to
+  def allow_in_development(url)
+    return unless development_allowance?(url)
+
+    host = URI.parse(url).host
+    @allowed_in_development ||= Set.new
+    return unless @allowed_in_development.add?(host)
+
+    Rails.logger.info("[FeedbackExchange] Development only: allowing the private peer address #{host}")
+    nil
   end
 
   def resolved_addresses(host)

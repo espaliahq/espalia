@@ -106,10 +106,29 @@ class FeedbackExchange::HostGuardTest < ActiveSupport::TestCase
       Addrinfo.stub(:getaddrinfo, []) { assert refused?("https://nowhere.example.com") }
     end
 
-    should "stand down in development" do
+    should "stand down in development, logging the private peer it lets through once" do
+      logged = []
       Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new("development")) do
-        assert_nil FeedbackExchange::HostGuard.check!("http://localhost:4000")
-        assert_nil FeedbackExchange::HostGuard.check!("http://127.1:4000")
+        Rails.logger.stub(:info, ->(message) { logged << message }) do
+          Addrinfo.stub(:getaddrinfo, [ Addrinfo.ip("192.168.65.254") ]) do
+            assert_nil FeedbackExchange::HostGuard.check!("http://host.docker.internal:3000/chip/api/feedback-exchange")
+            assert_nil FeedbackExchange::HostGuard.check!("http://host.docker.internal:3000/chip/api/feedback-exchange")
+            assert FeedbackExchange::HostGuard.development_allowance?("http://host.docker.internal:3000/chip")
+          end
+          assert_nil FeedbackExchange::HostGuard.check!("http://localhost:4000")
+          assert_nil FeedbackExchange::HostGuard.check!("http://127.1:4000")
+        end
+      end
+
+      assert_equal 1, logged.count { |message| message.include?("host.docker.internal") }
+    end
+
+    should "allow private peers in development only" do
+      assert_not FeedbackExchange::HostGuard.development_allowance?("http://host.docker.internal:3000/chip")
+      assert refused?("http://host.docker.internal:3000/chip")
+      Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new("production")) do
+        assert_not FeedbackExchange::HostGuard.development_allowance?("http://localhost:3000")
+        assert refused?("https://localhost:3000")
       end
     end
   end

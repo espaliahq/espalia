@@ -223,6 +223,33 @@ shared by web, MCP and Slack:
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
 
+**From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
+feedback given in a peer such as Chip arrives through the feedback exchange
+([feedback-exchange.md](../feedback-exchange.md)) as unplaced feedback written
+as its real author, dated by when it was given.
+
+- **"via Chip" says where it came from.** `Views::Evidence::OriginBadge`
+  renders on the evidence card, the hub card and the activity entry for an
+  item whose `external_reference.imported?` (the importer is the only writer
+  of `metadata.given_at`), named through `Reporting::OriginLabels` and linking
+  to the original. It replaces the plain reference chip on those items. It is
+  neutral grey on purpose: colour beside feedback already means a rating or a
+  valence.
+- **An import is silent.** The system the feedback was given in owns its
+  notifications, so GrowthOS sends nothing for an imported item: not the
+  arrival, not a request to place it. `FeedbackNotifier` returns early for
+  every `acting_via: feedback_exchange` event, whatever the record's
+  `notified` says (that list stays in `external_reference.metadata` as part
+  of the record).
+- **The hub is where it surfaces.** An imported item is unplaced, so it waits
+  under "Feedback to place" for the recipient and the manager side, and the
+  assessment shows `UnplacedFeedbackNotice`. Placement suggestions
+  ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
+  on the same cards.
+- **Its author edits the text, not where it was given.** The edit modal shows
+  the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
+  the imported reference on save.
+
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
 `/growthos feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
