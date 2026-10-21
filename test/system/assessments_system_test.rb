@@ -1042,10 +1042,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         visit assessment_path(@assignment)
         assert_selector "#rating-#{@cap1_stable}-2", text: "Most of the time"
 
-        widths = page.evaluate_script(
-          "({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })"
-        )
-        assert_operator widths["scroll"], :<=, widths["client"], "the page scrolls sideways at #{label}"
+        assert_no_sideways_overflow("the page scrolls sideways at #{label}")
       end
     end
 
