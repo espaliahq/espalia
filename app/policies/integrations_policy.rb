@@ -31,6 +31,14 @@ class IntegrationsPolicy < ApplicationPolicy
   # @return [Boolean]
   def test_ai_model? = tenant_admin?
 
+  # Save the feedback exchange settings and secrets.
+  # @return [Boolean]
+  def update_feedback_exchange? = tenant_admin?
+
+  # Call the feedback exchange peer's /health to check the pair.
+  # @return [Boolean]
+  def test_feedback_exchange? = tenant_admin?
+
   # Connect / disconnect the tenant's Slack workspace.
   # @return [Boolean]
   def connect?    = tenant_admin?

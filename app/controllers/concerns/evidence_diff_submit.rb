@@ -122,7 +122,7 @@ module EvidenceDiffSubmit
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
+        assignment_id: assignment_id, evidence_id: item.id, **content_params(p, item)
       })
     end
     new_cells.each do |cap, level|
@@ -240,12 +240,15 @@ module EvidenceDiffSubmit
   end
 
   # Content attrs for the record/update/respond ops; external_reference dropped
-  # when its URL is blank.
-  def content_params(p)
+  # when its URL is blank. An item imported from a peer keeps its reference
+  # (UpdateEvidence enforces that too): the form offers no fields for it.
+  def content_params(p, item = nil)
     attrs = {
       evidence_type: p[:evidence_type], content: p[:content].to_s,
       custom_type_label: p[:custom_type_label].presence, title: p[:title].presence
     }
+    return attrs.merge(external_reference: item.external_reference.as_json) if item&.external_reference&.imported?
+
     ref = p[:external_reference]
     attrs[:external_reference] = ref if ref.present? && ref["url"].present?
     attrs
@@ -256,12 +259,17 @@ module EvidenceDiffSubmit
   def content_changed?(item, p)
     return false if p[:content].nil?
 
-    ref = p[:external_reference] || {}
     p[:evidence_type] != item.evidence_type ||
       p[:custom_type_label].presence != item.custom_type_label.presence ||
       p[:title].presence != item.title.presence ||
       p[:content].to_s != item.content.to_s ||
-      ref["system"].presence != item.external_reference&.system.presence ||
+      reference_changed?(item, p[:external_reference] || {})
+  end
+
+  def reference_changed?(item, ref)
+    return false if item.external_reference&.imported?
+
+    ref["system"].presence != item.external_reference&.system.presence ||
       ref["url"].presence != item.external_reference&.url.presence
   end
 

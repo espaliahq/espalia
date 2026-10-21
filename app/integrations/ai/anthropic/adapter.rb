@@ -25,10 +25,11 @@ class Ai::Anthropic::Adapter
 
   # The gem follows redirects, resending the body, so a vetted address could
   # send us anywhere. This runs once per attempt, redirect legs included, and
-  # puts every destination through the same guard as the saved address. (The
-  # Faraday adapter never follows one.)
+  # puts every destination through the same guard as the saved address. The gem
+  # cannot be told which address to connect to, so unlike the Faraday adapter it
+  # checks and does not pin; a second DNS answer could still differ.
   GUARD_REDIRECTS = lambda do |request, next_in_chain|
-    Ai::HostGuard.check!(request.url.to_s)
+    Ai::Endpoint.vet!(request.url.to_s)
     next_in_chain.call(request)
   end
 
@@ -92,7 +93,7 @@ class Ai::Anthropic::Adapter
   # multiply every attempt during a rate-limit storm.
   def client
     @client ||= begin
-      Ai::HostGuard.check!(@base_url) if @base_url
+      Ai::Endpoint.vet!(@base_url) if @base_url
       ::Anthropic::Client.new(api_key: @api_key, base_url: @base_url, timeout: TIMEOUT_SECONDS, max_retries: 0,
                               middleware: @base_url ? [ GUARD_REDIRECTS ] : nil)
     end

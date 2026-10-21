@@ -48,6 +48,24 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     assert_equal 0, result.dig(:metrics, :feedback_directionality, :self_provided)
   end
 
+  should "split provided feedback by origin, keyed by system with GrowthOS always present" do
+    item = EvidenceItem.where(person_id: @report.id).sole
+    item.update_columns(external_reference: { system: "chip" })
+
+    result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, mode: "full" })
+
+    assert_equal({ "growthos" => 0, "chip" => 1 }, result.dig(:metrics, :by_origin))
+    assert_equal({ "growthos" => 0, "chip" => 1 }, result.dig(:groups, :role, 0, :metrics, :by_origin))
+    assert_equal({ "growthos" => 0, "chip" => 1 },
+      JSON.parse(JSON.generate(result)).dig("metrics", "by_origin"))
+  end
+
+  should "report only GrowthOS when nothing was imported" do
+    result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
+
+    assert_equal({ "growthos" => 1 }, result.dig(:metrics, :by_origin))
+  end
+
   should "return aggregate groups in full mode without feedback content or contributors" do
     result = call_op(
       context: @manager_ctx,

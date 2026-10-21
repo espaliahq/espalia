@@ -524,6 +524,10 @@ Two rules for any complex param:
   `Mcp::OperationToTool` emits an explicit `schema:` verbatim; without it a
   `Hash`/`Array` is a free-form object the client must reverse-engineer. Keep
   the fragment next to the model it describes (`ExternalReference.json_schema`).
+  An open vocabulary is a `pattern` plus `examples`, not an `enum`:
+  `external_reference.system` accepts any lowercase slug, so a new feedback
+  exchange peer (`chip`) needs no code change, and the schema lists the
+  systems we know as examples.
 - **Validate contents without raising.** Never let a value-object constructor,
   AR, or StoreModel raise *through* an operation — those become -32603. Check
   the payload first and raise `Operations::Base::ParameterError` (→ -32602) for

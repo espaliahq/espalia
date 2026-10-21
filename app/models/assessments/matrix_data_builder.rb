@@ -372,6 +372,7 @@ class Assessments::MatrixDataBuilder
       item_links.to_h { |link| [ [ link.capability_stable_id, link.level_ordinal ], link.valence ] }
     end
 
+    EvidenceItem.load_exchange_acks(items_by_id.values)
     comment_stats = load_link_comment_stats(items_by_id.keys)
     # Cell-level totals so the level chip's comment glyph reflects
     # linkage discussions too (scoped to the evidence the viewer sees).

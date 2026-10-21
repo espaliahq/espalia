@@ -185,6 +185,30 @@ class Ai::OpenAiCompatible::AdapterTest < ActiveSupport::TestCase
       assert_raises(Ai::Errors::ConfigurationError) { adapter.ping }
     end
 
+    should "connect to the address the guard accepted, keeping the hostname in the Host header" do
+      server = TCPServer.new("127.0.0.1", 0)
+      seen = nil
+      listener = Thread.new do
+        client = server.accept
+        seen = +""
+        while (line = client.gets) && line != "\r\n"
+          seen << line
+        end
+        body = { choices: [ { finish_reason: "stop", message: { content: "ready" } } ] }.to_json
+        client.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+        client.close
+      end
+      adapter = Ai::OpenAiCompatible::Adapter.new(api_key: "sk-gw", base_url: "http://pinned.example.test:#{server.addr[1]}/v1", model: MODEL)
+
+      reply = Ai::Endpoint.stub(:vet!, "127.0.0.1") { adapter.ping }
+      listener.join(5)
+
+      assert_equal "ready", reply
+      assert_match(/^Host: pinned\.example\.test:#{server.addr[1]}\r$/, seen)
+    ensure
+      server&.close
+    end
+
     should "need a key, an address and a model" do
       assert_raises(ArgumentError) { Ai::OpenAiCompatible::Adapter.new(api_key: "", base_url: BASE, model: MODEL) }
       assert_raises(ArgumentError) { Ai::OpenAiCompatible::Adapter.new(api_key: "k", base_url: "", model: MODEL) }

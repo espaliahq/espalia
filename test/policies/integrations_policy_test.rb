@@ -33,6 +33,11 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
     end
+
+    should "deny the feedback exchange" do
+      assert_not policy.update_feedback_exchange?
+      assert_not policy.test_feedback_exchange?
+    end
   end
 
   context "as a tenant admin" do
@@ -61,6 +66,11 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.update_ai_model?
       assert policy.test_ai_model?
     end
+
+    should "allow the feedback exchange" do
+      assert policy.update_feedback_exchange?
+      assert policy.test_feedback_exchange?
+    end
   end
 
   context "as a global admin" do
@@ -81,6 +91,11 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.sync?
       assert policy.update_role_mappings?
     end
+
+    should "allow the feedback exchange" do
+      assert policy.update_feedback_exchange?
+      assert policy.test_feedback_exchange?
+    end
   end
 
   context "with no tenant membership" do
@@ -96,6 +111,8 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_role_mappings?
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
+      assert_not policy.update_feedback_exchange?
+      assert_not policy.test_feedback_exchange?
     end
   end
 

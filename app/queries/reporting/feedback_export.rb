@@ -75,8 +75,20 @@ class Reporting::FeedbackExport
       applies_to: applies_to(item, recipient_role),
       status: item.link_status.humanize,
       withdrawn_at: timestamp(item.withdrawn_at),
-      reference_link: item.external_reference&.safe_url
+      reference_link: item.external_reference&.safe_url,
+      origin: Reporting::OriginLabels.label(item.external_reference&.system,
+                                            imported: item.external_reference&.imported? || false),
+      origin_request: origin_request(item)
     }
+  end
+
+  # What the item's source system said it answered there. "Requested or
+  # proactive" is only ever about a GrowthOS request, so this is how a reader
+  # sees that a peer's item was asked for.
+  def origin_request(item)
+    metadata = item.external_reference&.metadata
+    context = metadata.is_a?(Hash) ? metadata.with_indifferent_access[:request_context] : nil
+    context.is_a?(String) ? context.presence : nil
   end
 
   def load_lookups(attributed)

@@ -1,6 +1,6 @@
 # Integration Architecture
 
-> Read this when: working on HRIS sync, notification adapters, SSO/SAML, or any external system integration.
+> Read this when: working on HRIS sync, the feedback exchange, notification adapters, SSO/SAML, or any external system integration.
 > For the how-to of configuring HRIS mappings or adding new providers, see [docs/guidelines/hris-integration.md](../guidelines/hris-integration.md).
 
 ---
@@ -200,9 +200,12 @@ Evidence::SuggestPlacementsJob
   the credentials file at request time.
 - **The address is typed by an admin and called by the server**, so it is
   https only outside development, carries no login, query or fragment, and may
-  not be a private-network host (`Ai::HostGuard`: by name when saved, and by
-  name and DNS answer at call time). `FeedbackExchange::HostGuard` solves the
-  same problem for the exchange; the two are copies and want merging.
+  not be a private-network host. The guard is the exchange's
+  `FeedbackExchange::HostGuard`, reached through `Ai::Endpoint.vet!`: a
+  canonical hostname or IP literal, every resolved address public. The
+  Faraday adapter connects to the address the guard accepted; the Anthropic
+  gem cannot be told an address, so it is checked on every request and
+  redirect leg but not pinned.
 - **The key is write-only.** It is never rendered, logged or returned by
   MCP; `AiModelCredentials#inspect` prints only whether one is present. The
   Anthropic adapter passes it to the gem explicitly, so the environment's
@@ -211,6 +214,14 @@ Evidence::SuggestPlacementsJob
   (`IntegrationsPolicy#update_ai_model?` / `#test_ai_model?`). Writes and the
   connection test are web-only; MCP has the read-only
   `integrations_ai_model_status`.
+
+## Feedback exchange
+
+A tenant can exchange named feedback with a peer feedback system (Chip is the first). Each side serves the feedback given in it and pulls the other's; nothing is pushed. `Tenant.feedback_exchange_config` holds the peer and its address, `Tenant.feedback_exchange_credentials` the two shared secrets (encrypted, one per direction). Every request, both ways, is HMAC-signed over its method, path, query and body, with a five-minute window, a replay claim in the cache and a 24-hour overlap when a secret rotates. The client (`FeedbackExchange::Client`) is Faraday with typed errors and no retries; inbound requests are authenticated by `FeedbackExchangeSignedRequest`, which also resolves the tenant from the signature. The signature scheme, the endpoints and how to verify a pair are in [docs/guidelines/feedback-exchange.md](../guidelines/feedback-exchange.md); the contract is [the protocol](../notes/feedback-exchange-protocol.md).
+
+As consumer, `FeedbackExchange::SyncJob` (every 15 minutes, `HrisSyncJob`'s retry policy) pulls the peer's feed page by page; `FeedbackExchange::Importer` turns each record into unplaced evidence written as its real author (`acting_via: feedback_exchange`, dated by `given_at`), and the `feedback_exchange_imports` ledger records every outcome and skip reason. Imports are silent: the peer owns notifications, and imported feedback surfaces on the hub under "Feedback to place".
+
+As a producer, GrowthOS serves `GET /api/feedback_exchange/feedback` (human-written peer and manager feedback, keyset-paged on `(updated_at, id)` with an opaque cursor, minus anything the asking peer sent us), an always-empty `/feedback/deletions` and `POST /feedback/ack`, which records where the peer now also holds an item so the evidence card can say "Also in Chip". Withdrawals ride the feed as `status: "withdrawn"`. The filters, the record mapping and the cost guarantees are in the guideline above.
 
 ## Notifications
 

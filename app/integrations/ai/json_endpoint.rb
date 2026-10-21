@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # The HTTP half the bearer-key JSON adapters share: one Faraday connection to
-# the tenant's address, put through {Ai::HostGuard} first, and every status
-# mapped to {Ai::Errors}. Faraday never follows a redirect, so the guarded
-# address is the only one called.
+# the tenant's address, vetted by {Ai::Endpoint} and pinned to the IP it
+# accepted, and every status mapped to {Ai::Errors}. Faraday never follows a
+# redirect, so the vetted address is the only one called.
 #
 # The including class provides `api_key`, `base_url` (no trailing slash) and
 # may set `@connection` for tests.
@@ -44,11 +44,15 @@ module Ai::JsonEndpoint
 
   def connection
     @connection ||= begin
-      Ai::HostGuard.check!(base_url)
+      address = Ai::Endpoint.vet!(base_url)
       Faraday.new(url: "#{base_url}/") do |f|
         f.options.open_timeout = OPEN_TIMEOUT
         f.options.timeout = READ_TIMEOUT
-        f.adapter Faraday.default_adapter
+        # Connect to the address the guard accepted; the hostname still drives TLS
+        # verification and the Host header.
+        f.adapter :net_http do |http|
+          http.ipaddr = address if address
+        end
         f.headers["Authorization"] = "Bearer #{api_key}"
         f.headers["Content-Type"] = "application/json"
         f.headers["Accept"] = "application/json"

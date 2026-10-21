@@ -10,6 +10,7 @@
 | `app/views/assessments/show_view.rb` | Self-assessment shell — unified sticky header + main column + activity sidebar |
 | `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
+| `app/views/assessment_guides/show_view.rb` | "How assessments work" — the illustrated walk through one cycle (`/assessments/how-it-works`) |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
 | `app/components/kit/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
 | `app/controllers/assessments/carried_ratings_controller.rb` | A category's carried ratings: the review page (GET) and the bulk confirm (POST → `ConfirmCarriedRatings`) |
@@ -131,7 +132,7 @@
 | `app/models/evidence/placement_prompt.rb` | The candidate cells (role cells at the home level ±1, minus linked and dismissed), the cached framework text, the item text and the enum-constrained schema; `VERSION` is recorded on every row |
 | `app/models/evidence/suggestion_model.rb` | The one model call: pseudonymises, asks the tenant's adapter (a chat prompt, or Jev's decision questions), maps `Ai::Errors` to `RateLimited` / `Unavailable` / `Rejected`; a refusal is no suggestions |
 | `app/models/evidence/placement_decision.rb` | What Jev is asked: the state, a choice over the open cells plus `none`, a choice over the valences; ranks the answer by probability above `FLOOR`; its own `VERSION` |
-| `app/integrations/ai/` (`model_client.rb`, `anthropic/adapter.rb`, `open_ai_compatible/adapter.rb`, `typesafe_jev/adapter.rb`, `json_endpoint.rb`, `suggestion_response.rb`, `decision_response.rb`, `errors.rb`, `host_guard.rb`, `name_pseudonymiser.rb`) | The tenant's model: adapter dispatch, the three adapters and their shared HTTP half, the chat and decision responses, the errors, the private-host guard, name hiding |
+| `app/integrations/ai/` (`model_client.rb`, `anthropic/adapter.rb`, `open_ai_compatible/adapter.rb`, `typesafe_jev/adapter.rb`, `json_endpoint.rb`, `suggestion_response.rb`, `decision_response.rb`, `errors.rb`, `endpoint.rb`, `name_pseudonymiser.rb`) | The tenant's model: adapter dispatch, the three adapters and their shared HTTP half, the chat and decision responses, the errors, the private-host guard, name hiding |
 | `app/models/ai_model_config.rb` / `ai_model_credentials.rb` | `Tenant.ai_config` (provider, address, model, effort, switches, presets) and the write-only key wrapper |
 | `app/controllers/tenant/ai_models_controller.rb` / `app/views/integrations/ai_model_view.rb` / `app/javascript/controllers/ai_model_preset_controller.js` | The Integrations → AI model card: settings, key, test connection, preset fill |
 | `app/jobs/evidence/suggest_placements_job.rb` | Generates a set: supersedes the pending one, re-validates every cell, stores the rest; `after_generate` is the notification hook |

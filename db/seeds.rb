@@ -295,6 +295,22 @@ else
   puts "Skipping HiBob HRIS config (no credentials in Rails credentials file)"
 end
 
+# Feedback exchange with a Chip running on the developer's laptop.
+chip_creds = Rails.application.credentials.dig(:feedback, :chip, :meandu)
+if Rails.env.development? && meandu && chip_creds
+  meandu.update_feedback_exchange!(
+    settings: {
+      provider: "exchange",
+      peer_name: "chip",
+      enabled: true,
+      base_url: chip_creds[:base_url].presence || "http://host.docker.internal:3000/chip/api/feedback-exchange"
+    },
+    outbound_secret: chip_creds[:feedback_exchange_growthos_outbound_secret],
+    inbound_secret: chip_creds[:feedback_exchange_growthos_inbound_secret]
+  )
+  puts "Configured the feedback exchange with Chip for me&u at #{meandu.feedback_exchange_config.base_url}"
+end
+
 # Development only: point the me&u tenant's placement suggestions at Jev on
 # Vercel's AI Gateway, with the gateway key from the credentials file, through
 # the same write the AI model card uses. Re-seeding saves the same values

@@ -60,8 +60,8 @@ class AiModelConfigTest < ActiveSupport::TestCase
         "https://10.0.0.5/v1" => "must not be a private network address",
         "https://localhost:11434/v1" => "must not be a private network address",
         "https://[::1]/v1" => "must not be a private network address",
-        "https://127.1/v1" => "must not be a private network address",
-        "https://2130706433/v1" => "must not be a private network address",
+        "https://127.1/v1" => "must use a plain hostname or IP address",
+        "https://2130706433/v1" => "must use a plain hostname or IP address",
         "https://169.254.169.254/" => "must not be a private network address",
         "not a url" => "is not a valid URL"
       }.each do |url, message|

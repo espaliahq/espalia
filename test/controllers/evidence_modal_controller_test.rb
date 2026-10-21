@@ -142,6 +142,19 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       assert_select "textarea[name='evidence[content]']:not([disabled])"
     end
 
+    should "say where an imported item was given, with no reference fields to change it" do
+      ActsAsTenant.with_tenant(@tenant) do
+        EvidenceItem.find(@evidence_id).update_columns(external_reference: {
+          system: "chip", url: "https://chip.example.com/f/1", metadata: { given_at: "2026-10-18T03:12:44Z" }
+        })
+      end
+      sign_in @author_user
+      get evidence_modal_path(mode: "edit", evidence_id: @evidence_id, return_to: "assessment:#{@assignment.id}")
+      assert_select "#evm-origin a[data-origin='chip'][href='https://chip.example.com/f/1']", text: /via Chip/
+      assert_select "#evm-sys", count: 0
+      assert_select "#evm-url", count: 0
+    end
+
     # Edit mode has no top context card — every active link (the origin
     # included) is a uniform "Applies to" row carrying its valence, and the
     # form submits no primary_cell (the server diffs desired vs current).

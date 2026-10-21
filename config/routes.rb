@@ -28,6 +28,15 @@ Rails.application.routes.draw do
   post "/slack/commands", to: "slack/commands#create", as: :slack_commands
   post "/slack/interactions", to: "slack/interactions#create", as: :slack_interactions
 
+  # The feedback exchange's inbound surface. Sessionless; the request signature is
+  # the only credential (see FeedbackExchangeSignedRequest).
+  scope "/api/feedback_exchange", module: :feedback_exchange, as: :feedback_exchange do
+    get "health", to: "health#show", as: :health
+    get "feedback", to: "feed#show", as: :feed
+    get "feedback/deletions", to: "deletions#show", as: :deletions
+    post "feedback/ack", to: "acks#create", as: :acks
+  end
+
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
   namespace :settings do
@@ -104,6 +113,13 @@ Rails.application.routes.draw do
       post :test_connection
     end
 
+    # Feedback exchange: save settings and secrets, and test the connection. The
+    # page itself is integrations#show with id "feedback-exchange".
+    resource :feedback_exchange, only: [ :update ],
+      path: "integrations/feedback-exchange", controller: "feedback_exchanges" do
+      post :test_connection
+    end
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],
@@ -174,6 +190,9 @@ Rails.application.routes.draw do
   # is per-request), and the service worker stays off: nothing needs offline or
   # push yet. Wire app/views/pwa/service-worker.js here when that changes:
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
+
+  # Declared before `resources :assessments` so the path isn't read as an id.
+  get "assessments/how-it-works", to: "assessment_guides#show", as: :assessment_guide
 
   resources :assessments, only: [ :index, :show ] do
     member do
