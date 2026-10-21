@@ -29,6 +29,17 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
     assert_not result[:connected]
     assert_equal({ outbound: false, inbound: false }, result[:secrets])
     assert_equal({ feedback: false, deletions: false }, result[:cursors])
+    assert_equal FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS, result[:export_kinds]
+    assert_empty result[:import_kinds]
+  end
+
+  should "report the chosen types" do
+    @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(export_kinds: %w[impact], import_kinds: %w[feedback peer_feedback]))
+
+    result = call
+
+    assert_equal %w[impact], result[:export_kinds]
+    assert_equal %w[feedback peer_feedback], result[:import_kinds]
   end
 
   should "report a connected exchange without exposing a secret" do

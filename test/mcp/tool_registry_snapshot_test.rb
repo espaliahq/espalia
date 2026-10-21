@@ -2186,8 +2186,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "integrations_feedback_exchange_status",
         "description" => "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
                          "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
-                         "prove the peer answers), the peer and its address, the last sync, and whether the secrets " \
-                         "and sync cursors are present. Never returns a secret.",
+                         "prove the peer answers), the peer and its address, the last sync, the types it sends and imports " \
+                         "(an empty import list means everything), and whether the secrets and sync cursors are present. " \
+                         "Never returns a secret.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
