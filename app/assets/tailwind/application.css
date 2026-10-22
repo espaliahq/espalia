@@ -104,6 +104,11 @@ input[type="week"] {
     outline-offset: 2px;
     border-radius: 2px;
   }
+
+  /* A menu's panel scrolls, which clips an outset ring, so its items draw theirs inside */
+  [role="menu"] [role^="menuitem"]:focus-visible {
+    outline-offset: -2px;
+  }
 }
 
 /* Hero summary middle band — collapses on scroll.
