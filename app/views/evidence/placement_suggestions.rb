@@ -113,7 +113,7 @@ class Views::Evidence::PlacementSuggestions < Views::Base
           end
           input(type: "text", id: "dismiss-reason-#{suggestion.id}", name: "reason", class: INPUT, maxlength: 500)
         end
-        button(type: "submit", class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Dismiss" }
+        button(type: "submit", class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Dismiss" }
       end
     end
   end
