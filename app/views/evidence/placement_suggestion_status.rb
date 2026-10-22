@@ -11,6 +11,6 @@ class Views::Evidence::PlacementSuggestionStatus < Views::Base
   end
 
   def view_template
-    p(class: "text-sm #{@error ? "text-red-700 dark:text-red-400" : "text-emerald-800 dark:text-emerald-300"}") { @message }
+    p(class: "text-sm #{@error ? 'text-danger' : 'text-success'}") { @message }
   end
 end

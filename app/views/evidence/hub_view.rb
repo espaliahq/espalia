@@ -162,17 +162,17 @@ class Views::Evidence::HubView < Views::Base
 
     section(id: "suggested-placements", class: "scroll-mt-20") do
       group_heading("May fit elsewhere too")
-      p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "-mt-2 mb-4 text-sm text-muted") do
         "Feedback already placed, which may also speak to other capabilities."
       end
       div(class: "space-y-4") do
         @with_suggestions.each do |item|
           detail = @cell_details.fetch(item.id, {})
           card(dom_id: EvidenceItem.dom_id(item.id)) do
-            p(class: "text-xs text-gray-600 dark:text-gray-300") do
+            p(class: "text-xs text-muted") do
               to_place_scope_label(item, detail, about_viewer: item.person_id == @viewer_person_id)
             end
-            render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+            render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
             suggestion_area(item)
           end
         end

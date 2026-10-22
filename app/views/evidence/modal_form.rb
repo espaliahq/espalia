@@ -305,7 +305,7 @@ class Views::Evidence::ModalForm < Views::Base
 
   # Where an imported item was given is fixed; say so instead of offering fields.
   def imported_origin
-    div(id: "evm-origin", class: "flex flex-wrap items-center gap-2 text-xs text-gray-700 dark:text-gray-200") do
+    div(id: "evm-origin", class: "flex flex-wrap items-center gap-2 text-xs text-muted") do
       span(class: LABEL.sub("mb-1", "mb-0")) { "Given in" }
       render Views::Evidence::OriginBadge.new(external_reference, size: :sm)
     end
