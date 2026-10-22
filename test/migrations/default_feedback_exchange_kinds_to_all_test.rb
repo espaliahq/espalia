@@ -29,6 +29,16 @@ class DefaultFeedbackExchangeKindsToAllTest < ActiveSupport::TestCase
     assert defaulted.reload.feedback_exchange_config.imports_kind?("feedback")
   end
 
+  should "treat a null or blank-only import list as the empty list it was read as" do
+    null = stored({ "import_kinds" => nil })
+    blanks = stored({ "import_kinds" => [ "" ] })
+
+    migrate(:up)
+
+    assert_equal({ "import_kinds" => %w[all] }, config_of(null))
+    assert_equal({ "import_kinds" => %w[all] }, config_of(blanks))
+  end
+
   should "keep a list an admin chose" do
     chosen = stored({ "import_kinds" => %w[peer_feedback], "export_kinds" => %w[peer_feedback manager_feedback observation] })
     widened = stored({ "export_kinds" => OLD_DEFAULT + %w[code_review] })

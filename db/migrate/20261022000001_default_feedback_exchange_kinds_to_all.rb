@@ -3,8 +3,9 @@
 # The exchange's type lists gained "all" (every type, including ones added
 # later), and it became the default for both. Stored configs keep their meaning:
 #
-# - an empty `import_kinds` meant "import everything", and now means "import
-#   nothing", so it becomes ["all"];
+# - an empty `import_kinds` (or null, or only blanks, which the importer read
+#   the same way) meant "import everything", and now means "import nothing",
+#   so it becomes ["all"];
 # - an `export_kinds` equal to the old code default was never an admin's choice,
 #   so it follows the new default to ["all"]. Any other stored list is kept.
 #
@@ -20,7 +21,7 @@ class DefaultFeedbackExchangeKindsToAll < ActiveRecord::Migration[8.1]
 
   def up
     changed = rewrite_configs do |config|
-      config["import_kinds"] = ALL if config["import_kinds"] == []
+      config["import_kinds"] = ALL if config.key?("import_kinds") && blank_list?(config["import_kinds"])
       config["export_kinds"] = ALL if old_export_default?(config["export_kinds"])
     end
     say "#{changed} feedback exchange #{'config'.pluralize(changed)} changed"
@@ -35,6 +36,10 @@ class DefaultFeedbackExchangeKindsToAll < ActiveRecord::Migration[8.1]
   end
 
   private
+
+  def blank_list?(kinds)
+    kinds.nil? || (kinds.is_a?(Array) && kinds.all?(&:blank?))
+  end
 
   def old_export_default?(kinds)
     kinds.is_a?(Array) && kinds.sort == OLD_EXPORT_DEFAULT.sort
