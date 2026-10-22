@@ -114,7 +114,8 @@
 
 /* The helper in roles.css, on whichever mark the element carries */
 @utility text-on-mark {
-  color: var(--gos-content-default);
+  /* Where neither helper runs: inverse text, because marks are dark in light and light in dark */
+  color: var(--gos-content-inverse);
 
   @supports (color: color(from red srgb-linear r g b)) {
     color: color(from var(--gos-mark) srgb-linear
