@@ -138,7 +138,9 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
   private
 
   # A JS click fires the change event the all-kinds controller listens for,
-  # without the pointer hit-testing that drops clicks on a starved runner.
+  # without the pointer hit-testing that drops clicks on a starved runner. Not
+  # click_selector_with_js_fallback: a late first click plus its fallback would
+  # toggle the box twice.
   def click_checkbox(id)
     assert_selector "##{id}", visible: :all
     page.execute_script("document.getElementById(arguments[0]).click()", id)
