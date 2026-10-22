@@ -18,12 +18,12 @@ Phase 0 is the foundation: config, secrets, signing, the client, the verifier, t
 | `peer_name` | A slug, `chip`. It becomes `origin` and `external_reference.system` |
 | `base_url` | The peer's exchange root **including its path prefix**, e.g. `https://chip.example.com/api/feedback-exchange`. https only, with no login, query or fragment, and not a private network host; development accepts http and local hosts |
 | `enabled` | Off by default. While off, inbound requests get 404 and nothing is pulled |
-| `import_kinds` / `export_kinds` | Which `kind`s cross. `export_kinds` are `EvidenceItem::EVIDENCE_TYPES`. `import_kinds` are matched against the peer's raw `kind`, so they also allow `feedback`, the one kind a conforming peer must send ("Any feedback (generic)" on the form). Both are validated and are checkbox groups on the settings form. Empty `import_kinds` means everything; ticking every box is narrower, since a kind not listed is left out. Empty `export_kinds` sends nothing |
+| `import_kinds` / `export_kinds` | Which `kind`s cross. Both default to `["all"]` (`FeedbackExchangeConfig::ALL_KINDS`): every type, resolved when read, so a type added to `EvidenceItem::EVIDENCE_TYPES` later is sent, and any kind the peer sends is imported, without anyone saving again. Any other list means exactly its types, and an empty list means none: nothing sent, nothing imported. `export_kinds` are `EvidenceItem::EVIDENCE_TYPES`. `import_kinds` are matched against the peer's raw `kind`, so they also allow `feedback`, the one kind a conforming peer must send ("Any feedback (generic)" on the form). Read them through the config's `exports_all_kinds?`, `exported_kinds` and `imports_kind?(kind)`, never the raw arrays |
 | `cursor`, `deletions_cursor`, `last_synced_at` | Consumer state |
 
 `peer_name` and `base_url` are required once `enabled`. One peer per tenant for now. Placement suggestions are not switched here: **Integrations → AI model** holds the one switch, which covers every evidence item whatever surface it came from.
 
-An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrations → Feedback exchange**. Config edits are web-only on purpose: the page holds signing secrets, which must not travel through an MCP client. MCP gets the read `integrations_feedback_exchange_status`, which reports state and whether each secret and cursor is present, never a value. Its `connected` means set up (enabled, a peer, both secrets); only **Test connection** proves the peer answers.
+An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrations → Feedback exchange**. Config edits are web-only on purpose: the page holds signing secrets, which must not travel through an MCP client. MCP gets the read `integrations_feedback_exchange_status`, which reports state and whether each secret and cursor is present, never a value. It returns both kind lists as stored, so `["all"]` reads as all, and `exported_kinds`, what the feed sends today. Its `connected` means set up (enabled, a peer, both secrets); only **Test connection** proves the peer answers.
 
 ## Secrets
 
@@ -102,7 +102,7 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 |---|---|---|
 | `echo` | `origin` is `growthos`, or the record's `external_reference.system` is | no |
 | `audience_too_narrow` | the author did not agree to all of `recipient`, `management_line`, `hr`, who can read feedback here | no |
-| `kind_not_imported` | `import_kinds` is set and leaves this kind out | no |
+| `kind_not_imported` | `import_kinds` is not `all` and does not list this kind (an empty list imports nothing) | no |
 | `author_unmatched` / `recipient_unmatched` | no Person with that HRIS id or email | yes |
 | `author_inactive` / `recipient_inactive` | our Person or the peer says that person is inactive (protocol §4.2) | yes |
 | `self_feedback` | author and recipient are the same person | no |
@@ -169,7 +169,7 @@ What is left out (protocol §2.5, §2.3):
 - Items nobody wrote: `recorded_via` of `feedback_exchange`, `hris` or `system`. A nil `recorded_via` is history and counts as human.
 - What the asking consumer itself sent us: `external_reference.system` equal to its name. Matching is case-insensitive.
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.
-- Kinds outside `export_kinds`.
+- Kinds outside `export_kinds`, unless it is `all`, which filters nothing.
 
 The consumer is the tenant's configured `peer_name`. The signature does not cover the `X-Exchange-Consumer` header, so the signed-request concern refuses a request with 401 unless the header, lower-cased, equals it; a request without one is refused too.
 

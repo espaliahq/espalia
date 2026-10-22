@@ -143,6 +143,17 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
       assert_equal (kept + [ history ]).map(&:id).sort, feed_ids.sort
     end
 
+    should "send every kind by default, including ones the old default left out" do
+      kept = %w[observation code_review customer_feedback other].map do |kind|
+        create_item(author: @author, recipient: @recipient, evidence_type: kind,
+                    custom_type_label: kind == "other" ? "Pairing" : nil)
+      end
+
+      signed_get
+
+      assert_equal kept.map(&:id).sort, feed_ids.sort
+    end
+
     should "send only the kinds the tenant exports" do
       @tenant.update_feedback_exchange!(settings: { export_kinds: %w[observation] })
       kept = create_item(author: @author, recipient: @recipient, evidence_type: "observation")

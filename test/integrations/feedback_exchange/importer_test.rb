@@ -275,6 +275,19 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "kind_not_imported", exchange_record(kind: "feedback")
     end
 
+    should "import every kind by default, even one GrowthOS has no type for" do
+      assert_equal %w[all], @tenant.feedback_exchange_config.import_kinds
+
+      assert_equal :imported, @importer.import(exchange_record(kind: "shout_out")).outcome
+      assert_equal "peer_feedback", EvidenceItem.find(evidence_id).evidence_type
+    end
+
+    should "import nothing when the import list is empty" do
+      connect_feedback_exchange(@tenant, import_kinds: [])
+      @importer = FeedbackExchange::Importer.new(@tenant.reload)
+      assert_skipped "kind_not_imported", exchange_record(kind: "feedback")
+    end
+
     should "skip, and keep for a retry, people it cannot find" do
       assert_skipped "author_unmatched", exchange_record(author: { email: "ghost@example.com" }), keeps_record: true
       assert_skipped "recipient_unmatched", exchange_record(id: "chip-fb-0002", recipient: { email: "ghost@example.com" }),
