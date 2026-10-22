@@ -45,14 +45,19 @@ class DefaultFeedbackExchangeKindsToAll < ActiveRecord::Migration[8.1]
     kinds.is_a?(Array) && kinds.sort == OLD_EXPORT_DEFAULT.sort
   end
 
+  # Locks and rereads each row first, so a sync job saving its cursor meanwhile
+  # is not overwritten.
+  #
   # @return [Integer] how many configs the block changed
   def rewrite_configs
     TenantRow.where("feedback_exchange_config ?| array['import_kinds', 'export_kinds']").find_each.count do |row|
-      config = row.feedback_exchange_config.deep_dup
-      yield config
-      next false if config == row.feedback_exchange_config
+      row.with_lock do
+        config = row.feedback_exchange_config.deep_dup
+        yield config
+        next false if config == row.feedback_exchange_config
 
-      row.update_columns(feedback_exchange_config: config)
+        row.update_columns(feedback_exchange_config: config)
+      end
     end
   end
 end
