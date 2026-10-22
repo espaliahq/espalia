@@ -158,7 +158,8 @@
   --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
   --gos-content-brand: color-mix(in oklab, var(--gos-brand) 55%, black);
   --gos-brand-content-inverse: #ffffff;
-  --gos-nav-content: #ffffff;
+  /* Where contrast-color() can't run, the tenant's own nav text */
+  --gos-nav-content: var(--color-nav-fg);
   --gos-border-brand: var(--gos-brand);
   --gos-content-link: var(--gos-content-brand);
   --gos-content-link-hover: var(--gos-content-brand);
