@@ -68,6 +68,8 @@ It does **not** retry. The sync job owns retries, from the error class:
 | Error | When | Job should |
 |---|---|---|
 | `AuthenticationError` | 401 | discard and tell a human |
+| `PeerDisabled` (an `ApiError`) | 404: the peer has the exchange switched off | log and stop the run, no retry |
+| `Conflict` (an `ApiError`) | 409 to an ack: the peer could not record it | log as the bug it is and carry on, no retry |
 | `RateLimitError` (`retry_after`) | 429 | retry after the stated delay |
 | `ApiError` (`status`, nil if unreachable) | 5xx, other 4xx, no answer, a non-JSON body | retry with backoff |
 
@@ -80,7 +82,7 @@ It does **not** retry. The sync job owns retries, from the error class:
 3. Pages through `GET /feedback/deletions` from `deletions_cursor`, withdrawing each copy.
 4. Stamps `last_synced_at`.
 
-Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. At most 50 pages a run; the next run carries on.
+Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. A 404 means the peer has the exchange off: the run stops, logged, with no retry and no `last_synced_at`. A 409 to an ack is logged and the run carries on, since retrying the same ack cannot succeed. At most 50 pages a run; the next run carries on.
 
 ### One record (`FeedbackExchange::Importer`)
 

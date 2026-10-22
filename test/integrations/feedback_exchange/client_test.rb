@@ -118,6 +118,19 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
       assert_equal 400, assert_raises(FeedbackExchange::Errors::ApiError) { @client.feedback }.status
     end
 
+    should "raise PeerDisabled on 404, still an ApiError for callers that only know that" do
+      @stubs.get("/api/feedback-exchange/feedback") { [ 404, {}, "" ] }
+      error = assert_raises(FeedbackExchange::Errors::PeerDisabled) { @client.feedback }
+      assert_kind_of FeedbackExchange::Errors::ApiError, error
+      assert_equal 404, error.status
+    end
+
+    should "raise Conflict on a 409 to an ack" do
+      @stubs.post("/api/feedback-exchange/feedback/ack") { [ 409, {}, '{"error":"remote-id-conflict"}' ] }
+      error = assert_raises(FeedbackExchange::Errors::Conflict) { @client.ack([ { id: "a", remote_id: "b", remote_url: "https://x.example" } ]) }
+      assert_equal 409, error.status
+    end
+
     should "raise ApiError when the peer is unreachable" do
       @stubs.get("/api/feedback-exchange/health") { raise Faraday::ConnectionFailed, "no route" }
       error = assert_raises(FeedbackExchange::Errors::ApiError) { @client.health }

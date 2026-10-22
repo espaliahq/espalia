@@ -72,6 +72,31 @@ class FeedbackExchange::SyncJobTest < ActiveSupport::TestCase
     assert_equal "c1", config.cursor
   end
 
+  context "when the peer has the exchange switched off" do
+    setup { @feed_status = 404 }
+
+    should "stop the run without a retry, leaving the cursor and the sync time alone" do
+      @tenant.update_feedback_exchange!(settings: { cursor: "c0" })
+
+      assert_no_enqueued_jobs(only: FeedbackExchange::SyncJob) { run_sync }
+
+      assert_equal "c0", config.cursor
+      assert_nil config.last_synced_at
+      assert_empty @acks
+    end
+  end
+
+  should "log a 409 to an ack and carry on without a retry" do
+    @ack_status = 409
+    @feed[nil] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: false }
+
+    assert_no_enqueued_jobs(only: FeedbackExchange::SyncJob) { run_sync }
+
+    assert_equal "c1", config.cursor
+    assert_not_nil config.last_synced_at
+    ActsAsTenant.with_tenant(@tenant) { assert_equal 1, EvidenceItem.count }
+  end
+
   should "add nothing when run again" do
     @feed[nil] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: false }
     @feed["c1"] = { items: [ exchange_record(id: "a") ], next_cursor: "c1", has_more: false }

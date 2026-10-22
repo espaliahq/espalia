@@ -44,4 +44,12 @@ module FeedbackExchange::Errors
       super(message || "Feedback exchange peer error #{status}: #{@body}")
     end
   end
+
+  # Raised on HTTP 404: the peer has the exchange switched off for us. Nothing
+  # will change until someone turns it on, so a sync stops rather than retries.
+  class PeerDisabled < ApiError; end
+
+  # Raised on HTTP 409: the peer refused an ack it cannot record, such as a
+  # remote id it already links to another record. Our bug, so not retried.
+  class Conflict < ApiError; end
 end

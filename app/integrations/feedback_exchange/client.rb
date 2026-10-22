@@ -115,6 +115,8 @@ class FeedbackExchange::Client
     case response.status
     when 200..299 then parse_json(response.body)
     when 401 then raise FeedbackExchange::Errors::AuthenticationError, "The peer rejected our signature"
+    when 404 then raise FeedbackExchange::Errors::PeerDisabled.new(status: 404, message: "The peer has the exchange switched off")
+    when 409 then raise FeedbackExchange::Errors::Conflict.new(status: 409, body: response.body)
     when 429 then raise FeedbackExchange::Errors::RateLimitError.new(retry_after: response.headers["Retry-After"]&.to_i)
     else raise FeedbackExchange::Errors::ApiError.new(status: response.status, body: response.body)
     end
