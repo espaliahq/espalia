@@ -285,8 +285,9 @@
   --gos-compared-content: var(--color-violet-700);
   --gos-compared-subtle: var(--color-violet-50);
 
-  /* A mark for a rater who isn't in the session */
+  /* A mark for a rater who isn't in the session, and the text on it where the contrast helper can't run */
   --gos-rater-outside: var(--color-gray-500);
+  --gos-rater-outside-content: var(--gos-content-inverse);
 
   /* The pulse beside a session that is running */
   --gos-session-live: var(--color-green-600);
