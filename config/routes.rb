@@ -35,6 +35,8 @@ Rails.application.routes.draw do
     get "feedback", to: "feed#show", as: :feed
     get "feedback/deletions", to: "deletions#show", as: :deletions
     post "feedback/ack", to: "acks#create", as: :acks
+    # Unsigned and tenant-free: the pact our consumer tests wrote, for the peer.
+    get "feedback/contract", to: "contracts#show", as: :contract
   end
 
   # User-facing settings — for now just the connected MCP clients page;

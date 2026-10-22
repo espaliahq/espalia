@@ -1,0 +1,14 @@
+{
+  "consumer": {
+    "name": "growthos"
+  },
+  "interactions": [],
+  "metadata": {
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "chip"
+  }
+}

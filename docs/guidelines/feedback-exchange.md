@@ -149,6 +149,8 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
 
 `GET /api/feedback_exchange/health` returns `{ "ok": true, "peer": "<peer_name>" }`.
 
+`GET /api/feedback_exchange/feedback/contract` is the one exchange route outside the signed-request concern (protocol §5.5). It is unsigned, has no tenant, answers whatever any tenant's exchange is set to, and may be cached for five minutes: `{ "protocol": "v1", "build": <release id>, "consumer_pact": <contract/pacts/growthos-chip.json> }`. The peer's provider verification fetches our pact from it (see [Contract tests](#contract-tests-pact)). It is not an MCP tool: it is a static artefact for the peer, not a user surface.
+
 ## Serving the feed (GrowthOS as producer)
 
 Three more signed endpoints, all `ActionController::Base` controllers that include `FeedbackExchangeProducer` (the signed-request concern plus the consumer name and a 400 for a bad cursor, limit or body). Nothing here is an MCP tool: the peer is the only caller and the credential is a shared secret, not a user.
