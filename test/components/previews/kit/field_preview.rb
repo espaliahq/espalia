@@ -53,7 +53,7 @@ class Kit::FieldPreview < Lookbook::Preview
       aria = invalid? ? { invalid: "true", describedby: "capability-error-#{@state}" } : {}
       select(id:, name: id, class: [ Components::Kit::Field::SELECT, (Components::Kit::Field::INVALID if invalid?) ], disabled: disabled?, aria:) do
         option(value: "") { "Choose a capability" }
-        option(value: "delivery", selected: filled?) { "Delivery" }
+        option(value: "delivery", selected: filled? && !invalid?) { "Delivery" }
         option(value: "collaboration") { "Collaboration" }
       end
     end
