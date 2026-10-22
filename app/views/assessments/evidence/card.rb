@@ -37,8 +37,8 @@ class Views::Assessments::Evidence::Card < Views::Base
     "other"             => nil
   }.freeze
 
-  CHIP_CLASSES = "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-                 "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300"
+  CHIP_CLASSES = "inline-flex items-center gap-0.5 rounded bg-neutral-subtle px-1.5 py-0.5 text-[10px] text-muted"
+  CHIP_LINK_CLASSES = "#{CHIP_CLASSES} hover:bg-neutral-muted hover:underline"
 
   # @param item [EvidenceItem]
   # @param assessment_id [String] for routing the actions
@@ -257,13 +257,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     label = ref.system.presence || "link"
     safe_url = ref.safe_url
     if safe_url
-      a(href: safe_url, target: "_blank", rel: "noopener noreferrer",
-        class: "inline-flex items-center gap-0.5 rounded bg-neutral-subtle " \
-               "px-1.5 py-0.5 text-[10px] text-muted hover:bg-neutral-muted " \
-               "hover:underline") { label }
+      a(href: safe_url, target: "_blank", rel: "noopener noreferrer", class: CHIP_LINK_CLASSES) { label }
     else
-      span(class: "inline-flex items-center gap-0.5 rounded bg-neutral-subtle " \
-                 "px-1.5 py-0.5 text-[10px] text-muted") { label }
+      span(class: CHIP_CLASSES) { label }
     end
   end
 
@@ -273,7 +269,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     label = "Also in #{ack.consumer.titleize}"
     url = ack.safe_remote_url
     if url
-      a(href: url, target: "_blank", rel: "noopener noreferrer", class: CHIP_CLASSES + " hover:bg-gray-200 dark:hover:bg-gray-600 hover:underline",
+      a(href: url, target: "_blank", rel: "noopener noreferrer", class: CHIP_LINK_CLASSES,
         data: { exchange_ack: ack.consumer }) do
         plain label
         span(class: "sr-only") { " (opens in a new tab)" }

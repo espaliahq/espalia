@@ -8,26 +8,17 @@
 class Views::Integrations::FeedbackExchangeView < Views::Base
   include Phlex::Rails::Helpers::FormAuthenticityToken
 
-  # state => [label, Kit::Badge variant]
+  # state => [label, Kit::Badge tone]
   STATE_BADGES = {
-    not_configured: [ "Not configured", :default ],
+    not_configured: [ "Not configured", :neutral ],
     missing_secrets: [ "Missing secrets", :warning ],
-    disabled: [ "Disabled", :default ],
+    disabled: [ "Disabled", :neutral ],
     active: [ "Active", :success ]
   }.freeze
 
-  INPUT_CLASSES = "block w-full min-h-11 rounded-md border-gray-300 dark:border-gray-600 " \
-                  "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary " \
-                  "placeholder:text-gray-600 dark:placeholder:text-gray-300"
-  LABEL_CLASSES = "block text-sm font-medium text-gray-900 dark:text-white"
-  HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300 [overflow-wrap:anywhere]"
-  BUTTON_CLASSES = "inline-flex items-center justify-center min-h-11 px-4 rounded-md text-sm font-medium cursor-pointer " \
-                   "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-900 " \
-                   "dark:focus-visible:ring-white"
-  PRIMARY_BUTTON_CLASSES = "#{BUTTON_CLASSES} bg-gray-900 text-white hover:bg-gray-700 " \
-                           "dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
-  SECONDARY_BUTTON_CLASSES = "#{BUTTON_CLASSES} border border-gray-300 dark:border-gray-600 text-gray-700 " \
-                             "dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+  INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
+  LABEL_CLASSES = "block text-sm font-medium text-default"
+  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param config [FeedbackExchangeConfig] what is saved; drives the status
   # @param form_config [FeedbackExchangeConfig, nil] what the form shows; defaults
@@ -57,7 +48,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   end
 
   def view_template
-    render Components::Kit::TenantAdminLayout.new(
+    render Components::Shell::TenantAdminLayout.new(
       active_section: :integrations,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
@@ -80,15 +71,15 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     div(class: "mb-6") do
       a(
         href: tenant_integrations_path,
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:underline"
+        class: "text-sm text-muted hover:text-default transition-colors"
       ) { plain "← Back to Integrations" }
 
       div(class: "mt-2 flex flex-wrap items-center gap-3") do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback exchange" }
-        label, variant = STATE_BADGES.fetch(state)
-        render Components::Kit::Badge.new(label, variant: variant)
+        h1(class: "text-2xl font-bold text-default") { "Feedback exchange" }
+        label, tone = STATE_BADGES.fetch(state)
+        render Components::Kit::Badge.new(label, tone: tone)
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         plain "Share named feedback with another feedback system. Each side pulls the other's feed, " \
               "and every request is signed with a secret the two systems share."
       end
@@ -122,13 +113,14 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   end
 
   def test_connection_form
-    div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
+    div(class: "mt-6 pt-6 border-t border-default") do
       form(action: test_connection_tenant_feedback_exchange_path, method: "post", class: "flex flex-wrap items-center gap-4") do
         input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
-        button(type: "submit", class: SECONDARY_BUTTON_CLASSES, disabled: state == :not_configured || !@secrets_present["outbound_secret"]) do
-          "Test connection"
-        end
-        p(class: "text-xs text-gray-600 dark:text-gray-300 max-w-prose") do
+        render Components::Kit::Button.new(
+          variant: :outline, type: :submit, touch: true,
+          disabled: state == :not_configured || !@secrets_present["outbound_secret"]
+        ) { "Test connection" }
+        p(class: "text-xs text-muted max-w-prose") do
           plain "Sends a signed request to the peer's /health with the outbound secret. " \
                 "It works before the exchange is enabled."
         end
@@ -172,7 +164,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             inbound_address
 
             div(class: "flex justify-end") do
-              button(type: "submit", class: PRIMARY_BUTTON_CLASSES) { "Save settings" }
+              render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save settings" }
             end
           end
         end
@@ -183,9 +175,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   def error_summary
     return if @errors.empty?
 
-    div(role: "alert", class: "mb-6 rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 " \
-                              "px-4 py-3 text-sm text-red-800 dark:text-red-200") do
-      p(class: "font-medium") { "The settings could not be saved." }
+    render Components::Kit::Alert.new(tone: :danger, title: "The settings could not be saved.", class: "mb-6") do
       ul(class: "mt-1 list-disc pl-5") { @errors.each { |message| li { message } } }
     end
   end
@@ -194,7 +184,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     div do
       label(for: field_id(name), class: LABEL_CLASSES) { label_text }
       input(type: type, id: field_id(name), name: field_name(name), value: value.to_s, placeholder: placeholder,
-            autocomplete: "off", class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(name)}-hint" })
+            autocomplete: "off", class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
     end
   end
@@ -204,11 +194,11 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     div do
       label(for: field_id(name), class: LABEL_CLASSES) do
         plain label_text
-        span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { stored ? "Stored" : "Not set" }
+        span(class: "ml-2 text-xs font-normal text-muted") { stored ? "Stored" : "Not set" }
       end
       input(type: "password", id: field_id(name), name: field_name(name), value: "", autocomplete: "new-password",
             placeholder: stored ? "Leave blank to keep the stored value" : "Paste a secret of 32 or more characters",
-            class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(name)}-hint" })
+            class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
     end
   end
@@ -228,9 +218,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   def kind_checkbox(name, kind, checked)
     id = "#{field_id(name)}_#{kind}"
-    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer") do
+    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-default cursor-pointer") do
       input(type: "checkbox", id: id, name: "#{field_name(name)}[]", value: kind, checked: checked,
-            class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600")
+            class: Components::Kit::Field::CHECKBOX)
       plain(kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize)
     end
   end
@@ -238,9 +228,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   def enabled_field
     div do
       input(type: "hidden", name: field_name(:enabled), value: "0")
-      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-gray-900 dark:text-white cursor-pointer") do
+      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-default cursor-pointer") do
         input(type: "checkbox", id: field_id(:enabled), name: field_name(:enabled), value: "1", checked: @form_config.enabled?,
-              class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600", aria: { describedby: "#{field_id(:enabled)}-hint" })
+              class: Components::Kit::Field::CHECKBOX, aria: { describedby: "#{field_id(:enabled)}-hint" })
         plain "Exchange enabled"
       end
       p(id: "#{field_id(:enabled)}-hint", class: HINT_CLASSES) do
@@ -250,11 +240,13 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   end
 
   def inbound_address
-    div(class: "rounded-md bg-gray-50 dark:bg-gray-900 px-4 py-3") do
-      p(class: "text-sm font-medium text-gray-900 dark:text-white") { "Our address for the peer" }
-      p(class: "mt-1 text-sm font-mono break-all text-gray-900 dark:text-white") { @inbound_url }
-      p(class: HINT_CLASSES) do
-        plain "Give this to the peer as its address for us. It can check the pair with a signed GET to #{@inbound_url}/health."
+    render Components::Kit::Card.new(variant: :inset) do |card|
+      card.body do
+        p(class: "text-sm font-medium text-default") { "Our address for the peer" }
+        p(class: "mt-1 text-sm font-mono break-all text-default") { @inbound_url }
+        p(class: HINT_CLASSES) do
+          plain "Give this to the peer as its address for us. It can check the pair with a signed GET to #{@inbound_url}/health."
+        end
       end
     end
   end
@@ -285,7 +277,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             skip_reasons
             unmatched_people
           else
-            p(class: "text-sm text-gray-600 dark:text-gray-300") do
+            p(class: "text-sm text-muted") do
               plain "Imported, updated and skipped counts appear here once feedback starts flowing."
             end
           end
@@ -310,9 +302,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   def skip_reasons
     return if @summary[:skip_reasons].blank?
 
-    div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
-      h3(class: "text-sm font-medium text-gray-900 dark:text-white") { "Why records were skipped" }
-      ul(class: "mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200") do
+    div(class: "mt-6 pt-6 border-t border-default") do
+      h3(class: "text-sm font-medium text-default") { "Why records were skipped" }
+      ul(class: "mt-2 space-y-1 text-sm text-default") do
         @summary[:skip_reasons].each do |reason, count|
           li(class: "flex justify-between gap-4", data: { skip_reason: reason }) do
             span { SKIP_REASON_LABELS.fetch(reason, reason.humanize) }
@@ -326,19 +318,19 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
   def unmatched_people
     return if @unmatched_people.empty?
 
-    div(id: "feedback-exchange-unmatched", class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
-      h3(class: "text-sm font-medium text-gray-900 dark:text-white") { "People not found in GrowthOS" }
+    div(id: "feedback-exchange-unmatched", class: "mt-6 pt-6 border-t border-default") do
+      h3(class: "text-sm font-medium text-default") { "People not found in GrowthOS" }
       p(class: HINT_CLASSES) do
         plain "Their feedback waits here and imports on the next sync once GrowthOS has them, matched by their HRIS id or this email."
       end
-      ul(class: "mt-2 divide-y divide-gray-100 dark:divide-gray-800 text-sm") do
+      ul(class: "mt-2 divide-y divide-default text-sm") do
         @unmatched_people.each do |person|
           li(class: "flex flex-wrap justify-between gap-x-4 py-2") do
-            span(class: "min-w-0 [overflow-wrap:anywhere] text-gray-900 dark:text-white") do
+            span(class: "min-w-0 [overflow-wrap:anywhere] text-default") do
               plain person[:email]
-              span(class: "text-gray-600 dark:text-gray-300") { " · #{person[:display_name]}" } if person[:display_name].present?
+              span(class: "text-muted") { " · #{person[:display_name]}" } if person[:display_name].present?
             end
-            span(class: "text-gray-600 dark:text-gray-300") do
+            span(class: "text-muted") do
               "#{person[:role] == 'author' ? 'Gave' : 'Received'} #{person[:records]} #{'record'.pluralize(person[:records])}"
             end
           end

@@ -15,11 +15,7 @@ class Views::Evidence::PlacementSuggestions < Views::Base
   include Phlex::Rails::Helpers::FormWith
   include Views::Evidence::Valence
 
-  INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-          "text-gray-900 dark:text-gray-100 text-sm focus-visible:ring-primary focus-visible:border-primary"
-  PRIMARY_BTN = "inline-flex items-center justify-center min-h-11 px-3 rounded-md bg-gray-900 text-white " \
-                "dark:bg-white dark:text-gray-900 text-sm font-medium hover:opacity-90 cursor-pointer"
-  LINK_BTN = "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline cursor-pointer"
+  LINK_BTN = Components::Kit::Button.classes(variant: :link, tone: :brand, touch: true)
 
   # @param item_id [String]
   # @return [String]
@@ -58,15 +54,19 @@ class Views::Evidence::PlacementSuggestions < Views::Base
   private
 
   def suggestion_list
-    div(class: "mt-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3 space-y-3") do
-      div(class: "flex flex-wrap items-baseline justify-between gap-2") do
-        h4(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Suggested placements" }
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { "Suggested by an AI model from the feedback. Nothing is placed until you accept." }
-      end
-      ul(class: "space-y-3", role: "list") { @suggestions.each { |suggestion| row(suggestion) } }
-      div(class: "flex flex-wrap items-center gap-x-4 border-t border-gray-200 dark:border-gray-700 pt-2") do
-        button(type: "button", data: adjust_trigger_data, class: LINK_BTN) { "Adjust in the editor" }
-        regenerate_button("Suggest again") if @can_regenerate
+    render Components::Kit::Card.new(variant: :inset, density: :compact, class: "mt-2") do |card|
+      card.body do
+        div(class: "space-y-3") do
+          div(class: "flex flex-wrap items-baseline justify-between gap-2") do
+            h4(class: "text-xs font-semibold uppercase tracking-wide text-muted") { "Suggested placements" }
+            p(class: "text-xs text-muted") { "Suggested by an AI model from the feedback. Nothing is placed until you accept." }
+          end
+          ul(class: "space-y-3", role: "list") { @suggestions.each { |suggestion| row(suggestion) } }
+          div(class: "flex flex-wrap items-center gap-x-4 border-t border-default pt-2") do
+            button(type: "button", data: adjust_trigger_data, class: LINK_BTN) { "Adjust in the editor" }
+            regenerate_button("Suggest again") if @can_regenerate
+          end
+        end
       end
     end
   end
@@ -75,14 +75,14 @@ class Views::Evidence::PlacementSuggestions < Views::Base
     cell = @cells.fetch(suggestion.id, {})
     li(id: "evidence-suggestion-#{suggestion.id}", class: "space-y-1", data: { suggestion_id: suggestion.id }) do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
-        span(class: "text-sm font-medium text-gray-900 dark:text-white") do
+        span(class: "text-sm font-medium text-default") do
           [ cell[:name] || "Capability", cell[:level_code].presence || "L#{suggestion.level_ordinal}" ].join(" · ")
         end
         valence_badge(suggestion.valence)
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { "#{(suggestion.confidence.to_f * 100).round}% confident" }
+        span(class: "text-xs text-muted") { "#{(suggestion.confidence.to_f * 100).round}% confident" }
       end
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
-      p(class: "text-sm text-gray-700 dark:text-gray-200") { suggestion.rationale } if suggestion.rationale.present?
+      p(class: "text-xs text-muted") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
+      p(class: "text-sm text-default") { suggestion.rationale } if suggestion.rationale.present?
       actions(suggestion, cell)
     end
   end
@@ -92,8 +92,8 @@ class Views::Evidence::PlacementSuggestions < Views::Base
     div(class: "flex flex-wrap items-start gap-x-3 gap-y-1") do
       form_with(url: accept_evidence_placement_suggestion_path(suggestion), method: :post,
                 data: { turbo_stream: true }) do
-        button(type: "submit", class: PRIMARY_BTN, aria: { label: "Accept: #{label}" },
-               data: { turbo_submits_with: "Accepting…" }) { "Accept" }
+        render Components::Kit::Button.new(type: :submit, touch: true, aria: { label: "Accept: #{label}" },
+                                           data: { turbo_submits_with: "Accepting…" }) { "Accept" }
       end
       dismiss_disclosure(suggestion, label)
     end
@@ -103,17 +103,19 @@ class Views::Evidence::PlacementSuggestions < Views::Base
   # the row it belongs to stays in view.
   def dismiss_disclosure(suggestion, label)
     details(class: "group") do
-      summary(class: "#{LINK_BTN} list-none [&::-webkit-details-marker]:hidden text-gray-700 dark:text-gray-200",
+      summary(class: "#{Components::Kit::Button.classes(variant: :link, tone: :neutral, touch: true)} " \
+                     "list-none [&::-webkit-details-marker]:hidden",
               aria: { label: "Dismiss: #{label}" }) { "Dismiss…" }
       form_with(url: dismiss_evidence_placement_suggestion_path(suggestion), method: :post,
                 data: { turbo_stream: true }, class: "mt-1 flex flex-wrap items-end gap-2") do
         div(class: "min-w-56 flex-1") do
-          label(for: "dismiss-reason-#{suggestion.id}", class: "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1") do
+          label(for: "dismiss-reason-#{suggestion.id}", class: "block text-xs font-medium text-muted mb-1") do
             "Why not? (optional)"
           end
-          input(type: "text", id: "dismiss-reason-#{suggestion.id}", name: "reason", class: INPUT, maxlength: 500)
+          input(type: "text", id: "dismiss-reason-#{suggestion.id}", name: "reason", class: Components::Kit::Field::INPUT,
+                maxlength: 500)
         end
-        button(type: "submit", class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Dismiss" }
+        button(type: "submit", class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Dismiss" }
       end
     end
   end

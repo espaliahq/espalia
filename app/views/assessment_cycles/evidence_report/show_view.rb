@@ -293,12 +293,11 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
     peers = (metrics[:by_origin] || {}).except(Reporting::OriginLabels::NATIVE).select { |_, count| count.positive? }
     return if peers.empty?
 
-    dl(class: "mt-3 space-y-1 border-t border-gray-200 pt-3 text-sm dark:border-gray-700",
-       data: { origin_split: "" }) do
+    dl(class: "mt-3 space-y-1 border-t border-default pt-3 text-sm", data: { origin_split: "" }) do
       peers.each do |origin, count|
         div(class: "flex items-baseline justify-between gap-3") do
-          dt(class: "text-gray-600 dark:text-gray-300") { "Of which via #{Reporting::OriginLabels.peer_label(origin)}" }
-          dd(class: "font-semibold text-gray-900 dark:text-white", data: { origin: origin }) { count.to_s }
+          dt(class: "text-muted") { "Of which via #{Reporting::OriginLabels.peer_label(origin)}" }
+          dd(class: "font-semibold text-default", data: { origin: origin }) { count.to_s }
         end
       end
     end
