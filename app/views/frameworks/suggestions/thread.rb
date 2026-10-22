@@ -57,7 +57,7 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
     div(class: header_label_classes) do
       span { "Discussion" }
       if visible_count.positive?
-        span(class: "text-subtle") { visible_count.to_s }
+        span(class: "text-muted") { visible_count.to_s }
       end
     end
   end
