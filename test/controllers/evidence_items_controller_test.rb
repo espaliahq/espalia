@@ -159,6 +159,28 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
+    should "keep where an imported item was given when its author edits the text" do
+      imported = SecureRandom.uuid_v7
+      reference = { "system" => "chip", "external_id" => "c-1", "url" => "https://chip.example.com/f/1",
+                    "metadata" => { "given_at" => "2026-10-18T03:12:44Z", "notified" => [ "recipient" ] } }
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(@author.id, @framework_id, imported,
+          capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "self", evidence_type: "observation",
+          content: "From Chip", author_id: @author.id, valence: "demonstrated", external_reference: reference)
+      end
+      sign_in @author_user
+      cell = "#{@cap.stable_id}|2"
+      patch evidence_item_path(imported), params: { return_to: "hub", evidence: {
+        evidence_id: imported, desired_links: [ cell ], evidence_type: "observation", content: "Edited here"
+      } }
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(imported)
+        assert_equal "Edited here", item.content
+        assert_equal reference, item.external_reference.as_json.compact
+      end
+    end
+
     should "deny a non-author" do
       sign_in @other_user
       cell = "#{@cap.stable_id}|2"

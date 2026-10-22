@@ -17,7 +17,9 @@
 #             ALL active links — the origin cell included — render as uniform,
 #             removable "Applies to" rows; there is no top context card. The
 #             trigger's cell (when given) is the entry point: its row sorts
-#             first and is highlighted.
+#             first and is highlighted. With `suggestions=pending` (the hub's
+#             "Adjust"), the item's pending placement suggestions follow as
+#             staged rows, valence preselected.
 #   respond — provide evidence for an incoming request (content editable);
 #             seeded like :new from the request's cell.
 class EvidenceModalController < ApplicationController
@@ -93,8 +95,18 @@ class EvidenceModalController < ApplicationController
       mode: :edit, assignment: assignment, evidence: item, content_editable: policy.update?,
       recipient: (Person.find_by(id: assignment.person_id) if links.empty?),
       linked_coords: links.map { |cap, level, _| [ cap, level ] },
-      link_valences: links.to_h { |cap, level, valence| [ [ cap, level ], valence ] }
+      link_valences: links.to_h { |cap, level, valence| [ [ cap, level ], valence ] },
+      staged_suggestions: staged_suggestions(item, links)
     )
+  end
+
+  # Pending suggestions to stage beside the item's links, for "Adjust". A
+  # suggestion on a cell already linked has nothing to stage.
+  def staged_suggestions(item, links)
+    return [] unless params[:suggestions] == "pending"
+
+    linked = links.map { |cap, level, _| [ cap, level ] }
+    EvidencePlacementSuggestion.pending.for_evidence(item.id).most_confident_first.reject { |s| linked.include?(s.cell) }
   end
 
   def render_respond
@@ -109,8 +121,9 @@ class EvidenceModalController < ApplicationController
   # @param seed_cell [Hash, nil] the fixed origin cell for :new / :respond
   # @param linked_coords [Array<Array(String, Integer)>] ALL active (cap, level) pairs (:edit)
   # @param link_valences [Hash{Array(String, Integer)=>String,nil}] current valence per active link
+  # @param staged_suggestions [Array<EvidencePlacementSuggestion>] staged as new rows (:edit, "Adjust")
   def render_modal(mode:, assignment:, content_editable:, seed_cell: nil, evidence: nil, request: nil,
-                   linked_coords: [], link_valences: {}, recipient: nil, draft: nil)
+                   linked_coords: [], link_valences: {}, recipient: nil, draft: nil, staged_suggestions: [])
     options = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id)
     expectation_map = options.expectation_map
 
@@ -124,6 +137,7 @@ class EvidenceModalController < ApplicationController
         comment_count: comment_counts[[ capability_stable_id, level_ordinal ]].to_i,
         entry_point: entry_cell == [ capability_stable_id, level_ordinal ] }
     end
+    linked_cells += suggestion_rows(staged_suggestions, expectation_map)
 
     render Views::Evidence::ModalForm.new(
       mode: mode, evidence: evidence, request: request, assignment_id: assignment.id,
@@ -134,6 +148,21 @@ class EvidenceModalController < ApplicationController
       linked_cells: linked_cells, expectation_map: expectation_map, return_to: params[:return_to],
       recipient: recipient_block(assignment, recipient), draft: draft
     ), layout: false
+  end
+
+  # A staged suggestion is a new row like one picked by hand, carrying the
+  # suggestion's id so the save can attribute or dismiss it. One the role no
+  # longer reads is left out: there is no row to show for it.
+  def suggestion_rows(suggestions, expectation_map)
+    suggestions.filter_map do |suggestion|
+      info = expectation_map["#{suggestion.capability_stable_id}|#{suggestion.level_ordinal}"]
+      next unless info
+
+      { capability_stable_id: suggestion.capability_stable_id, level_ordinal: suggestion.level_ordinal,
+        capability_name: info[:capability_name], expectation: info[:expectation],
+        illustrations: info[:illustrations] || [], valence: suggestion.valence,
+        suggestion_id: suggestion.id, rationale: suggestion.rationale }
+    end
   end
 
   # Whose assessment the feedback lands on, for the forms that have no cell

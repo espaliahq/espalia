@@ -1,6 +1,6 @@
 # Assessments — Feedback / Evidence
 
-> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, requesting evidence, or comment notifications.
+> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, placement suggestions, requesting evidence, or comment notifications.
 
 ## Evidence-link valence — "what does this say about the behaviour?"
 
@@ -223,12 +223,250 @@ shared by web, MCP and Slack:
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
 
+**From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
+feedback given in a peer such as Chip arrives through the feedback exchange
+([feedback-exchange.md](../feedback-exchange.md)) as unplaced feedback written
+as its real author, dated by when it was given.
+
+- **"via Chip" says where it came from.** `Views::Evidence::OriginBadge`
+  renders on the evidence card, the hub card and the activity entry for an
+  item whose `external_reference.imported?` (the importer is the only writer
+  of `metadata.given_at`), named through `Reporting::OriginLabels` and linking
+  to the original. It replaces the plain reference chip on those items. It is
+  neutral grey on purpose: colour beside feedback already means a rating or a
+  valence.
+- **An import is silent.** The system the feedback was given in owns its
+  notifications, so GrowthOS sends nothing for an imported item: not the
+  arrival, not a request to place it. `FeedbackNotifier` returns early for
+  every `acting_via: feedback_exchange` event, whatever the record's
+  `notified` says (that list stays in `external_reference.metadata` as part
+  of the record).
+- **The hub is where it surfaces.** An imported item is unplaced, so it waits
+  under "Feedback to place" for the recipient and the manager side, and the
+  assessment shows `UnplacedFeedbackNotice`. Placement suggestions
+  ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
+  on the same cards.
+- **Its author edits the text, not where it was given.** The edit modal shows
+  the badge in place of the reference fields, and `EvidenceDiffSubmit` keeps
+  the imported reference on save.
+
 **From Slack** ([#504](https://github.com/mr-yum/growth-os/issues/504)):
 `/growthos feedback` and the "Feedback on this message" shortcut open a
 modal that records through the same Operation, placed at the recipient's
 current level or unplaced; a giver who has never signed in gets a draft link
 that opens the hub's modal prefilled after sign-in. See
 [slack-integration.md](../slack-integration.md).
+
+## Suggested placement and valence
+
+Feedback written by someone who never saw the framework arrives unplaced, or
+placed on one cell when it speaks to three. When a tenant switches it on,
+a model reads each new piece of feedback and suggests where it belongs; a
+person decides ([#536](https://github.com/mr-yum/growth-os/issues/536), plan
+§7 in [feedback-integration-plan.md](../../notes/feedback-integration-plan.md)).
+Rules, all deliberate:
+
+- **Off until the tenant chooses a model and switches it on.**
+  `Tenant.ai_config` → `suggestions_enabled` (`Tenant#evidence_suggestions_enabled?`)
+  gates the handler, the job and "Suggest again"; seeds never set it. Without
+  a complete model config and a stored key (`Evidence::SuggestionModel.configured?(tenant)`)
+  the job is a no-op too, so a tenant with no config runs nothing. Sending
+  feedback text to a model provider is plan decision D2, and it is each
+  tenant's own: the AI model card is where they take it. A tenant switched on
+  under the earlier `Tenant.settings` key (`evidence_suggestions_enabled`,
+  `evidence_suggestions_model`) stays on, on the deployment's Anthropic key,
+  until an admin saves the card; saving drops the old keys. That reader
+  (`Tenant#legacy_evidence_suggestions_enabled?` and the key fallback in
+  `Tenant#ai_api_key`) is for one release: delete it once every tenant has
+  been saved through the card.
+- **Only human feedback about someone else.** The async handler
+  `PlacementSuggester` enqueues `Evidence::SuggestPlacementsJob` on
+  `EvidenceRecorded` and on `EvidenceUpdated`, skipping `source: "self"` and
+  events whose `acting_via` is `hris` or `system`. An edit supersedes the
+  pending set. It is never a projection: replaying it would re-ask the model
+  about every item ever recorded.
+- **The model can only answer with cells that exist.**
+  `Evidence::PlacementPrompt` takes the recipient's role cells from
+  `FrameworkCellOptions#expectation_map` at their level and one either side,
+  and the structured-output schema makes `capability_stable_id` and
+  `level_ordinal` enums of those values. The job still re-checks each pair,
+  and drops cells already linked or ever dismissed for the item, so a
+  dismissed suggestion never comes back. Up to three survive.
+- **The framework text is the cached prefix.** Instructions plus the role's
+  cells are identical for everyone at a role and level and carry the
+  `cache_control` breakpoint; the feedback, who gave it and the cells to
+  leave out are the volatile tail.
+- **The tenant's model answers, through one class.**
+  `Evidence::SuggestionModel#suggest` is the one method the job calls and the
+  one tests stub. It builds the request from the prompt, asks the adapter
+  `Ai::ModelClient.for(tenant)` picks, and turns the answer into at most
+  three `Proposal`s. Three adapters live under `app/integrations/ai/`; the
+  two chat adapters are described here and Jev in the next rule:
+  `Ai::Anthropic::Adapter` (the official gem; the Anthropic API, or any
+  Anthropic-compatible endpoint through `base_url:`; `cache_control` on the
+  system text, `output_config.format` for the schema, the tenant's `effort`,
+  default `low`, adaptive thinking left on) and `Ai::OpenAiCompatible::Adapter`
+  (Faraday, `POST {base_url}/chat/completions`, a strict `json_schema`
+  `response_format`, `Authorization: Bearer`). Both return one
+  `Ai::SuggestionResponse` and raise the shared `Ai::Errors`. The stored
+  config (`AiModelConfig`: `provider`, `base_url`, `model`, `effort`) is
+  generic: "Vercel AI Gateway" is only a preset in the form that fills a
+  provider, `https://ai-gateway.vercel.sh/v1` and a model id (`typesafe_jev`
+  and `typesafe-ai/jev`; a second preset fills `openai_compatible` and a chat
+  model), and no adapter special-cases the gateway. The tenant's key is passed to the gem explicitly, so an
+  `ANTHROPIC_API_KEY` in the environment never answers for a tenant.
+  `Evidence::SuggestionModel` maps the errors to its own: `RateLimited`
+  and `Unavailable` (5xx, no answer, a malformed one) retry with backoff;
+  `Rejected` (a refused key or any other 4xx) is logged and dropped. A
+  refusal, a truncated answer or unparseable JSON is simply no suggestions.
+  No refusal fallback is sent on either adapter: it would route personal
+  feedback to a second model nobody chose. Both adapters share the prompt,
+  the candidate list, the schema and the server-side re-check in the job: a
+  model that answers with an id outside the candidates yields no suggestion
+  for that row. The Ruby gem spells two request keys with a trailing
+  underscore, `system_:` and `output_config: { format_: … }`, because
+  `system` and `format` are Ruby methods; it sends them as `system` and
+  `format`. `anthropic` endpoints take the address without `/v1`, which the
+  gem appends; `openai_compatible` ones take it with whatever prefix serves
+  `/chat/completions`. The Anthropic gem follows redirects and resends the body, so with an
+  address set a middleware (`Ai::Anthropic::Adapter::GUARD_REDIRECTS`) puts every
+  leg through `Ai::Endpoint` (the exchange's `FeedbackExchange::HostGuard`);
+  Faraday never follows one. The OpenAI-compatible
+  adapter sends `max_tokens`, or `max_completion_tokens` for `api.openai.com`
+  and OpenAI's reasoning model families (`o3…`, `gpt-5…`), which reject the
+  old name.
+- **Jev, a decision model (`typesafe_jev`).** TypeSafe AI's Jev answers
+  typed questions about a shared state with probabilities and writes no
+  prose. Placement fits it: the job already limits the answer to candidate
+  cells, so "which cell" is a choice, "which valence" is a choice over four,
+  and the probability is the confidence. `Ai::TypesafeJev::Adapter#decide`
+  posts one request per item; `Evidence::PlacementDecision` builds it and
+  reads the answer. The state is `{ framework:, feedback: }`: the prompt's
+  framework description without the chat instructions, and the item text,
+  pseudonymised exactly as the chat path does (full names only in the
+  framework, the option descriptions too). Two questions: `placement`, a
+  choice whose options are the open cells (`"<capability_stable_id>|<level_ordinal>"`,
+  the evidence form's token, described as "Capability, level N: expectation")
+  plus `none`, so the probability has somewhere to go when nothing fits; and
+  `valence`, a choice over the four valences, read from the feedback as a
+  whole. Jev answers each question independently, so the valence cannot be
+  asked of the chosen cell in the same request; one request is the trade,
+  because a piece of feedback rarely praises one behaviour and faults another
+  and a second call would double the latency and cost of every run. Up to
+  three cells at or above `PlacementDecision::FLOOR` (0.15) are kept, most
+  probable first (ties in the order Jev sent them); `none` never becomes a
+  suggestion, and when Jev chooses it nothing is suggested at all. A valence
+  outside the four falls back to the likeliest of the four, or to nothing. **No rationale:** the
+  column is nullable, the card shows "57% confident" with no sentence, and the
+  editor's staged row says only "Suggested"; the chat providers still write
+  one, and a chat placement without one is dropped. Rows record
+  `PlacementDecision::VERSION` (`jev-1+<PlacementPrompt::VERSION>`, so a
+  prompt bump moves it too) instead of the prompt's.
+  Effort does not apply and the form hides it. Test connection asks one
+  `boolean` ("Is this a connection check?") and shows the answer in words.
+  Jev's context is 32k tokens; the eval's requests measured 2.4k–3.1k input
+  tokens, so a role would need about ten times the eval framework's cells to
+  come near it. **The wire, as verified** against
+  Vercel's [Decision docs](https://vercel.com/docs/ai-gateway/modalities/decision)
+  on 2026-10-21: `POST {base_url}/evaluate`, `Authorization: Bearer`, body
+  `{ "model": "typesafe-ai/jev", "state": <string|object|array>, "questions":
+  { "<name>": { "type": "choice", "instructions": "…", "criteria": { "<option>":
+  "<what it means>" } } } }` (a `boolean` takes optional `criteria: { true:, false: }`,
+  a `score` an array of rungs lowest first); the answer is `{ "model", "answers":
+  { "<name>": { "type": "choice", "choice": "<option>", "probabilities": {
+  "<option>": 0..1 } } }, "usage": { "inputTokens", "outputTokens" },
+  "providerMetadata" }`, a boolean answering `{ "type": "boolean",
+  "probability" }`. A real call on 2026-10-21 matched this, and each choice
+  answer also carried a `confidence` (0..1) the docs do not mention; we read
+  only `choice` and `probabilities`. Errors are `{ "error": { "message", "type" } }` with the
+  usual statuses (an unauthenticated call answers 401), mapped to `Ai::Errors`
+  like the OpenAI-compatible adapter's, whose HTTP half (`Ai::JsonEndpoint`)
+  it shares. **Development key:** seeded, not a fallback. In development,
+  `db/seeds.rb` saves the me&u tenant onto Jev on the gateway with the key at
+  `credentials.dig(:ai, :vercel, :meandu, :ai_gateway_api_key)`, through
+  `Tenant#update_ai_model!` like the card; nothing reads the gateway key from
+  the credentials file at request time. Every other tenant, and every production one, enters its
+  key on the card.
+- **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
+  in the tenant for `Person N` in both texts before they leave, and swaps them
+  back in the rationales that return. Whole words only, longest first, so
+  "Anna" is not found inside "Annabel"; a first name only one person has
+  stands for that person, and one two people share gets a placeholder of its
+  own. The number is the person's rank by id, so a placeholder is the same on
+  every request and the cached framework text stays cacheable. The framework
+  text gets full names only, because a first name can be an ordinary word
+  (Will, Mark, Grace) and would rewrite "will deliver" into "Person 7 deliver";
+  the feedback gets first names too, and only the names whose first word a
+  text contains are compiled into its pattern, so thousands of people cost a
+  lookup per word. The mapping lives in the instance for one request and is
+  not stored. It hides names, not
+  roles, projects or the story; a tenant can turn it off (`pseudonymise_names`).
+  Test connection sends no names; the eval runs the same path as production.
+- **Admin: the AI model card.** Integrations → AI model
+  (`Tenant::AiModelsController`, `IntegrationsPolicy#update_ai_model?` /
+  `#test_ai_model?`, tenant admins). A preset or the generic fields, a
+  write-only key (stored encrypted in `Tenant.ai_credentials`, never rendered;
+  blank keeps it), the two switches, and **Test connection**, which sends the
+  saved model one line and shows its reply or the failure, never the
+  endpoint's body. The address is https only outside development, with no
+  login, query or private-network host: `FeedbackExchange::HostGuard` through
+  `Ai::Endpoint.vet!`, which also refuses `127.1` and `2130706433` (loopback to
+  the system resolver, nothing to Ruby's `IPAddr`) and checks every resolved
+  address at call time. The Faraday adapter then connects to the accepted
+  address; the Anthropic gem cannot pin, so it is checked per request and
+  redirect leg only.
+  `Tenant#update_ai_model!` refuses a save that would send a stored key to a
+  different provider or address without the key entered again, and one that
+  switches suggestions on with no key: both would otherwise fail silently
+  later. Effort "Don't send" is for models that reject the parameter (Claude
+  Haiku 4.5, say). Writes are web-only; the MCP surface is the read-only
+  `integrations_ai_model_status`.
+- **Suggestions are state, decisions are events.** `EvidencePlacementSuggestion`
+  is a plain tenant table, one row per item × cell, recording provider, model,
+  prompt version and confidence. Accepting goes through
+  `Operations::Assessments::AcceptEvidenceSuggestion`, which publishes
+  `EvidenceLinkAdded` — or `EvidenceLinkRevalenced` when someone linked the
+  cell meanwhile — carrying `via_suggestion_id`. The feed's secondary line
+  then says "from a suggestion". Dismissals keep an optional reason and are
+  not feed entries.
+- **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager
+  chain, a rating delegate and the author. Plan decision D5 may narrow it to
+  the manager side.
+- **On the hub, in place.** Each item the viewer may place shows its pending
+  suggestions — capability · level, the valence badge, "82% confident" as
+  text, the expectation and the quoted rationale when the model wrote one — on "Feedback to place",
+  "Feedback you've provided", the responses you asked for, and a "May fit
+  elsewhere too" group for placed items about you or your reports with more
+  cells to go (a different name from the block's own "Suggested placements"
+  heading, so the page doesn't say it twice). Accept and Dismiss answer with a Turbo Stream that replaces
+  `evidence-suggestions-<id>` and writes the outcome into the persistent
+  `role="status"` line beside it; nothing reloads. "Adjust in the editor"
+  opens the evidence modal with every pending suggestion staged as an
+  "Applies to" row (`suggestions=pending`, valence preselected, "Suggested —
+  rationale" note); on save a kept row is accepted and recorded as
+  **edited**, and a removed one dismissed ("Removed while adjusting"). The
+  staged cells are checked against the role before any write, so a cell the
+  framework dropped refuses the whole save rather than half of it. Accept
+  outside the editor records **accepted**, or **edited** when the person
+  chose a different valence. "Suggest again" enqueues at most one run per
+  item a minute: every run is a paid model call.
+- **One run per item at a time.** The job takes a Postgres advisory lock on
+  the item before superseding and storing, and stores nothing if the
+  feedback was edited while the model answered; the edit's own run follows.
+- **Notification hook.** `SuggestPlacementsJob#after_generate(item)` runs
+  after each stored set and is empty; the placement notifier
+  ([#534](https://github.com/mr-yum/growth-os/issues/534)) hooks in there.
+- **Eval before widening.** `bin/rails "evidence:suggestions:eval[<tenant slug>]"`
+  scores the current `PlacementPrompt::VERSION` against thirty invented,
+  hand-placed items in `test/fixtures/files/evidence_suggestions/` (cell match
+  for the top and any suggestion, valence match on hit cells, precision, and
+  feedback the framework doesn't cover left alone), through the model that
+  tenant has configured: its adapter, effort and name hiding, so a gateway
+  model is scored the way it will answer. `MODEL=…` tries another model id on
+  the same endpoint; a `typesafe_jev` tenant is scored through Jev. The
+  tenant is only read. `SUGGESTION_MODEL=baseline`
+  scores a word-overlap baseline with no tenant and no call. Bump `VERSION`
+  whenever the instructions, framework text or schema change, and rerun.
 
 ## Requesting evidence (cell-scoped)
 
@@ -336,6 +574,11 @@ from request workflow:
 - Active feedback is also grouped by immutable provider-to-recipient direction:
   manager → report, peer → peer, or report → manager. Self feedback is separate
   and requested versus proactive remains an orthogonal split.
+- Active feedback is also split by origin: `external_reference.system`, with
+  none meaning GrowthOS. The report shows "Of which via Chip: N" under the
+  provided tile when any item came from another system, and the MCP payload
+  carries `by_origin`. Origin does not change what "requested" means: that is
+  still a GrowthOS evidence request.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
@@ -369,7 +612,7 @@ payload's `available_months` render.
 
 **Hub layout** ([hub_view.rb](../../../app/views/evidence/hub_view.rb)): the
 "Give feedback" entry in the header → "Feedback to place" (see *Proactive
-feedback*) → "Open
+feedback*) → "May fit elsewhere too" (see *Suggested placement and valence*) → "Open
 requests" (subsections *Asked of you* / *Your requests*, stalest first, with
 history + respond/decline or nudge/cancel actions) → "Completed requests"
 (subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
@@ -425,3 +668,7 @@ receives** carries a one-time footer disclosing this model and linking
 post — see [`SlackDeliveryMethod`](../../../app/notifiers/slack_delivery_method.rb));
 the notification bell's dropdown links the same page persistently via a gear
 icon.
+
+## Also in a peer system
+
+When a peer feedback system (Chip) acknowledges that it imported one of our items through the [feedback exchange](../feedback-exchange.md), the evidence card wears an **Also in Chip** chip beside the type label, linking to the peer's own copy in a new tab. It is read from `feedback_exchange_acks` through the transient `EvidenceItem#exchange_acks`, filled by `EvidenceItem.load_exchange_acks` in the matrix builder and in the single-cell evidence controller (one query for the page). An address that is not http(s), or an ack without one, renders as a plain chip with no link. Nothing about the item changes: the ack only says where else it lives.

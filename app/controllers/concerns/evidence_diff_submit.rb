@@ -34,7 +34,8 @@ module EvidenceDiffSubmit
     params.expect(evidence: [ :assignment_id, :evidence_id, :request_id, :primary_cell,
                               :evidence_type, :custom_type_label, :title, :content,
                               { external_reference: [ :system, :url ] }, { desired_links: [] },
-                              { link_valences: {} } ]).to_h.symbolize_keys
+                              { link_valences: {} }, { suggestion_ids: [] }, { staged_suggestion_ids: [] } ])
+      .to_h.symbolize_keys
   end
 
   def evidence_diff_mode(p)
@@ -116,17 +117,23 @@ module EvidenceDiffSubmit
     # partially-applied diff behind.
     new_cells = desired - current_cells
     new_cells.each { |cell| valence_for!(valences, cell) }
+    kept_suggestions = staged_suggestions(item, p[:suggestion_ids])
+    ensure_staged_cells_exist!(item, kept_suggestions)
 
     if content_changed?(item, p)
       Operations::Assessments::UpdateEvidence.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: item.id, **content_params(p)
+        assignment_id: assignment_id, evidence_id: item.id, **content_params(p, item)
       })
     end
     new_cells.each do |cap, level|
-      Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
-        assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
-        valence: valences[[ cap, level ]]
-      })
+      if (suggestion = kept_suggestions[[ cap, level ]])
+        accept_adjusted(suggestion, valences[[ cap, level ]])
+      else
+        Operations::Assessments::AddEvidenceLink.call(context: pundit_user, params: {
+          assignment_id: assignment_id, evidence_id: item.id, capability_stable_id: cap, level_ordinal: level,
+          valence: valences[[ cap, level ]]
+        })
+      end
     end
     (current_cells - desired).each do |cap, level|
       Operations::Assessments::RemoveEvidenceLink.call(context: pundit_user, params: {
@@ -138,6 +145,12 @@ module EvidenceDiffSubmit
     # existing links are never force-reclassified.
     (desired & current_cells).each do |cap, level|
       valence = valences[[ cap, level ]]
+      # A staged suggestion on a cell someone linked meanwhile is still the
+      # person's decision; accepting it reclassifies the link if they changed it.
+      if (suggestion = kept_suggestions[[ cap, level ]])
+        accept_adjusted(suggestion, valence || current_valences[[ cap, level ]])
+        next
+      end
       next if valence.nil? || valence == current_valences[[ cap, level ]]
 
       Operations::Assessments::SetEvidenceLinkValence.call(context: pundit_user, params: {
@@ -145,7 +158,55 @@ module EvidenceDiffSubmit
         valence: valence
       })
     end
+    dismiss_removed_suggestions(item, p[:staged_suggestion_ids], kept_suggestions)
     TouchedCells.new((desired | current_cells).to_a, item.id)
+  end
+
+  # The pending suggestions "Adjust" staged whose rows survived the edit,
+  # keyed by cell.
+  #
+  # @return [Hash{Array(String, Integer) => EvidencePlacementSuggestion}]
+  def staged_suggestions(item, ids)
+    return {} if ids.blank?
+
+    EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: ids).index_by(&:cell)
+  end
+
+  # A suggestion kept through "Adjust" is accepted, attributed, and recorded
+  # as edited: the person reviewed it in the editor, whatever valence they
+  # left on it.
+  def accept_adjusted(suggestion, valence)
+    Operations::Assessments::AcceptEvidenceSuggestion.call(context: pundit_user, params: {
+      suggestion_id: suggestion.id, valence: valence
+    })
+    EvidencePlacementSuggestion.where(id: suggestion.id, status: "accepted").update_all(status: "edited", updated_at: Time.current)
+  end
+
+  # Checked before any write, like the valences: the framework may have
+  # dropped a staged cell since the suggestion was made, and failing on it
+  # halfway would leave the save half-applied.
+  def ensure_staged_cells_exist!(item, kept)
+    return if kept.empty?
+
+    assignment = PersonFrameworkAssignment.find_by!(person_id: item.person_id, framework_id: item.framework_id)
+    map = Evidence::FrameworkCellOptions.new(framework_id: assignment.framework_id, role_id: assignment.role_id).expectation_map
+    gone = kept.keys.reject { |cap, level| map.key?("#{cap}|#{level}") }
+    return if gone.empty?
+
+    raise Operations::Base::ParameterError, "A suggested capability and level are no longer on this person's role; remove that row and save again"
+  end
+
+  # A staged suggestion whose row the person removed before saving was
+  # turned down.
+  def dismiss_removed_suggestions(item, staged_ids, kept)
+    removed = Array(staged_ids) - kept.values.map(&:id)
+    return if removed.empty?
+
+    EvidencePlacementSuggestion.pending.for_evidence(item.id).where(id: removed).find_each do |suggestion|
+      Operations::Assessments::DismissEvidenceSuggestion.call(context: pundit_user, params: {
+        suggestion_id: suggestion.id, reason: "Removed while adjusting"
+      })
+    end
   end
 
   # ── Helpers ──
@@ -179,12 +240,15 @@ module EvidenceDiffSubmit
   end
 
   # Content attrs for the record/update/respond ops; external_reference dropped
-  # when its URL is blank.
-  def content_params(p)
+  # when its URL is blank. An item imported from a peer keeps its reference
+  # (UpdateEvidence enforces that too): the form offers no fields for it.
+  def content_params(p, item = nil)
     attrs = {
       evidence_type: p[:evidence_type], content: p[:content].to_s,
       custom_type_label: p[:custom_type_label].presence, title: p[:title].presence
     }
+    return attrs.merge(external_reference: item.external_reference.as_json) if item&.external_reference&.imported?
+
     ref = p[:external_reference]
     attrs[:external_reference] = ref if ref.present? && ref["url"].present?
     attrs
@@ -195,12 +259,17 @@ module EvidenceDiffSubmit
   def content_changed?(item, p)
     return false if p[:content].nil?
 
-    ref = p[:external_reference] || {}
     p[:evidence_type] != item.evidence_type ||
       p[:custom_type_label].presence != item.custom_type_label.presence ||
       p[:title].presence != item.title.presence ||
       p[:content].to_s != item.content.to_s ||
-      ref["system"].presence != item.external_reference&.system.presence ||
+      reference_changed?(item, p[:external_reference] || {})
+  end
+
+  def reference_changed?(item, ref)
+    return false if item.external_reference&.imported?
+
+    ref["system"].presence != item.external_reference&.system.presence ||
       ref["url"].presence != item.external_reference&.url.presence
   end
 

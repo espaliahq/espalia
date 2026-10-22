@@ -26,6 +26,24 @@ class Person < ApplicationRecord
   scope :inactive, -> { where(status: "inactive") }
   scope :hris_managed, -> { where.not(hris_source: nil) }
 
+  # The one way to find a Person from an identity another system holds: the
+  # HRIS id when the caller has one from the source this tenant syncs from,
+  # else the email, compared lower-cased. Scoped by acts_as_tenant.
+  #
+  # @param email [String, nil]
+  # @param external_id [String, nil] an id from `hris_source`
+  # @param hris_source [String, nil] the system `external_id` comes from
+  # @return [Person, nil]
+  def self.identified_by(email:, external_id: nil, hris_source: nil)
+    if external_id.present? && hris_source.present?
+      person = find_by(hris_source: hris_source, external_id: external_id.to_s)
+      return person if person
+    end
+    return nil if email.blank?
+
+    find_by("LOWER(email) = ?", email.to_s.strip.downcase)
+  end
+
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
   validates :status, inclusion: { in: %w[active inactive] }

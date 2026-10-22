@@ -9,7 +9,8 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   description "Aggregate feedback and evidence-request coverage for an assessment cycle " \
               "across the caller's org subtree (admins see the whole cycle): feedback " \
               "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
-              "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+              "withdrawn feedback, where it was given (by_origin: GrowthOS, or the system it arrived from), " \
+              "request statuses, fulfilment rate, participant coverage, " \
               "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
               "recorded and requests sent in one calendar month of the cycle; the response lists " \
               "the months available."
@@ -135,6 +136,7 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
       provided_unsolicited: metrics.provided_unsolicited,
       feedback_withdrawn: metrics.feedback_withdrawn,
       feedback_directionality: directionality_payload(metrics.directionality),
+      by_origin: metrics.by_origin,
       requests_sent: metrics.requests_sent,
       requests_fulfilled: metrics.requests_fulfilled,
       requests_pending: metrics.requests_pending,

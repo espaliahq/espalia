@@ -23,10 +23,18 @@ class Views::Evidence::HubView < Views::Base
   # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
   # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
   #   to the item's first linkage (absent when the viewer may not see it)
+  # @param with_suggestions [Array<EvidenceItem>] placed items about the viewer
+  #   or their reports with pending placement suggestions, not shown elsewhere
+  # @param suggestions [Hash{String=>Hash}] item id => { suggestions:, cells: }
+  #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
+  # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
+  # @param can_regenerate [Boolean] whether "Suggest again" can do anything here
   def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false, draft: nil,
                  completed_incoming: [], completed_outgoing: [],
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
-                 in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [])
+                 in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [],
+                 with_suggestions: [], suggestions: {}, decidable_ids: Set.new, can_regenerate: false,
+                 viewer_person_id: nil)
     @open_incoming = open_incoming
     @open_outgoing = open_outgoing
     @completed_incoming = completed_incoming
@@ -43,6 +51,11 @@ class Views::Evidence::HubView < Views::Base
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
+    @with_suggestions = with_suggestions
+    @suggestions = suggestions
+    @decidable_ids = decidable_ids
+    @can_regenerate = can_regenerate
+    @viewer_person_id = viewer_person_id
   end
 
   def view_template
@@ -52,6 +65,7 @@ class Views::Evidence::HubView < Views::Base
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
           to_place_group
+          suggested_placements_group
           open_requests_group
           completed_requests_group
         end
@@ -129,6 +143,7 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
       render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
+      suggestion_area(item, offer_when_empty: true)
       div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
                class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") do
@@ -136,6 +151,46 @@ class Views::Evidence::HubView < Views::Base
         end
       end
     end
+  end
+
+  # ── Suggested placements (placed items with more places to go) ──
+
+  # Feedback already placed somewhere, about the viewer or their reports,
+  # where the model sees more cells it speaks to. Items the viewer gave are
+  # left to "Feedback you've provided", which carries the same block.
+  def suggested_placements_group
+    return if @with_suggestions.empty?
+
+    section(id: "suggested-placements", class: "scroll-mt-20") do
+      group_heading("May fit elsewhere too")
+      p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
+        "Feedback already placed, which may also speak to other capabilities."
+      end
+      div(class: "space-y-4") do
+        @with_suggestions.each do |item|
+          detail = @cell_details.fetch(item.id, {})
+          card(dom_id: EvidenceItem.dom_id(item.id)) do
+            p(class: "text-xs text-gray-600 dark:text-gray-300") do
+              to_place_scope_label(item, detail, about_viewer: item.person_id == @viewer_person_id)
+            end
+            render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+            suggestion_area(item)
+          end
+        end
+      end
+    end
+  end
+
+  # The item's suggestion block and the status line its decisions report to.
+  # Nothing for an item the viewer may not place.
+  def suggestion_area(item, offer_when_empty: false)
+    return unless @decidable_ids.include?(item.id)
+
+    render Views::Evidence::PlacementSuggestions.new(
+      item: item, **@suggestions.fetch(item.id, Evidence::PlacementSuggestionRows::NONE),
+      can_regenerate: @can_regenerate, offer_when_empty: offer_when_empty
+    )
+    div(id: Views::Evidence::PlacementSuggestions.status_id_for(item.id), role: "status", aria: { live: "polite" })
   end
 
   # "From Jordan · 3 Oct 2026 · on Alex's assessment" — the assessment named
@@ -276,6 +331,7 @@ class Views::Evidence::HubView < Views::Base
       render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
       applies_to_line(response[:links])
+      suggestion_area(item)
       div(class: "flex items-center gap-4") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
                class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") { "Edit links" }
@@ -322,6 +378,7 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
       render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
+      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?)
       authored_actions(item, detail)
     end
   end
@@ -358,6 +415,8 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def external_link(item)
+    return render(Views::Evidence::OriginBadge.new(item.external_reference, size: :sm)) if item.external_reference&.imported?
+
     url = item.external_reference&.url
     return if url.blank?
 
