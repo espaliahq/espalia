@@ -103,6 +103,8 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 | `echo` | `origin` is `growthos`, or the record's `external_reference.system` is | no |
 | `audience_too_narrow` | the author did not agree to all of `recipient`, `management_line`, `hr`, who can read feedback here | no |
 | `kind_not_imported` | `import_kinds` is not `all` and does not list this kind (an empty list imports nothing) | no |
+
+The import list decides what is taken in, not what is kept. A copy GrowthOS already holds keeps following its source after the list narrows: an edit updates it and a withdrawal withdraws it, so narrowing never leaves a stale copy behind. Only consent is re-checked on every version, because an audience that no longer covers our readers takes the copy back (protocol rule 1).
 | `author_unmatched` / `recipient_unmatched` | no Person with that HRIS id or email | yes |
 | `author_inactive` / `recipient_inactive` | our Person or the peer says that person is inactive (protocol §4.2) | yes |
 | `self_feedback` | author and recipient are the same person | no |
