@@ -162,12 +162,12 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             secret_field(:inbound_secret, "Inbound secret",
                          hint: "Verifies the requests the peer sends, so it must differ from the outbound secret. At least 32 characters. Replacing it keeps the old value working for 24 hours.")
             kinds_field(:export_kinds, "Types to send", @form_config.export_kinds, FeedbackExchangeConfig::EXPORT_KINDS,
-                        hint: "Which types of our feedback the peer may pull. Untick all to send nothing.")
+                        hint: "Which types of our feedback the peer may pull. All types includes any type added later. " \
+                              "With no box ticked, nothing is sent.")
             kinds_field(:import_kinds, "Types to import", @form_config.import_kinds, FeedbackExchangeConfig::IMPORT_KINDS,
                         hint: "Which types of the peer's feedback we take, matched against the type the peer sends. " \
-                              "Leave every box unticked to import everything it sends. Ticking every box is narrower " \
-                              "than ticking none: a type not listed here is left out. \"Any feedback\" matches a peer " \
-                              "that sends no finer type.")
+                              "All types takes whatever it sends. With no box ticked, nothing is imported. " \
+                              "\"Any feedback\" matches a peer that sends no finer type.")
             enabled_field
             inbound_address
 
@@ -213,26 +213,39 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     end
   end
 
+  # "All types" is a box in the same list, so a browser without JavaScript posts
+  # it beside the individual boxes and the controller lets it win. While it is
+  # ticked, every individual box shows ticked; the all-kinds controller greys them.
   def kinds_field(name, legend_text, selected, options, hint:)
-    div do
+    all = selected.include?(FeedbackExchangeConfig::ALL_KINDS)
+    div(data: { controller: "all-kinds" }) do
       input(type: "hidden", name: "#{field_name(name)}[]", value: "")
       fieldset(aria: { describedby: "#{field_id(name)}-hint" }) do
         legend(class: LABEL_CLASSES) { legend_text }
-        div(class: "mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4") do
-          options.each { |kind| kind_checkbox(name, kind, selected.include?(kind)) }
+        kind_checkbox(name, FeedbackExchangeConfig::ALL_KINDS, all, label_text: "All types",
+                      data: { all_kinds_target: "all", action: "all-kinds#sync" })
+        div(class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 pl-8") do
+          options.each do |kind|
+            kind_checkbox(name, kind, all || selected.include?(kind), data: { all_kinds_target: "kind" })
+          end
         end
       end
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
     end
   end
 
-  def kind_checkbox(name, kind, checked)
+  def kind_checkbox(name, kind, checked, data:, label_text: kind_label(kind))
     id = "#{field_id(name)}_#{kind}"
-    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer") do
+    label(for: id, class: "inline-flex items-center gap-3 min-h-11 text-sm text-gray-900 dark:text-white cursor-pointer " \
+                          "has-[:disabled]:opacity-60 has-[:disabled]:cursor-not-allowed") do
       input(type: "checkbox", id: id, name: "#{field_name(name)}[]", value: kind, checked: checked,
-            class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600")
-      plain(kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize)
+            class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600", data: data)
+      plain label_text
     end
+  end
+
+  def kind_label(kind)
+    kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize
   end
 
   def enabled_field

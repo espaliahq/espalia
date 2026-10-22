@@ -18,7 +18,9 @@ class FeedbackExchangeConfig
   GENERIC_KIND = "feedback"
   IMPORT_KINDS = ([ GENERIC_KIND ] + EvidenceItem::EVIDENCE_TYPES).freeze
   EXPORT_KINDS = EvidenceItem::EVIDENCE_TYPES
-  DEFAULT_EXPORT_KINDS = %w[peer_feedback manager_feedback observation impact].freeze
+  # Stored in either list in place of the types, it means every type, including
+  # one added later; it is resolved when read, never expanded on save.
+  ALL_KINDS = "all"
   SLUG_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
   # The labels the settings form uses, so an error names the field the admin sees.
@@ -31,11 +33,18 @@ class FeedbackExchangeConfig
   attribute :peer_name, :string
   attribute :base_url, :string
   attribute :enabled, :boolean, default: false
-  attribute :import_kinds, default: -> { [] }
-  attribute :export_kinds, default: -> { DEFAULT_EXPORT_KINDS.dup }
+  attribute :import_kinds, default: -> { [ ALL_KINDS ] }
+  attribute :export_kinds, default: -> { [ ALL_KINDS ] }
   attribute :cursor, :string
   attribute :deletions_cursor, :string
   attribute :last_synced_at, :datetime
+
+  # {ALL_KINDS} wins over any type listed beside it, so the setting has one stored shape.
+  %i[import_kinds export_kinds].each do |name|
+    define_method(:"#{name}=") do |kinds|
+      super(Array(kinds).map(&:to_s).include?(ALL_KINDS) ? [ ALL_KINDS ] : kinds)
+    end
+  end
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :peer_name, format: { with: SLUG_FORMAT, message: "must be a slug: lowercase letters, numbers and dashes" },
@@ -70,6 +79,27 @@ class FeedbackExchangeConfig
     :active
   end
 
+  # @return [Boolean] whether every one of our types is sent, including one added later
+  def exports_all_kinds?
+    kinds_list(export_kinds).include?(ALL_KINDS)
+  end
+
+  # The types the feed serves, with {ALL_KINDS} resolved to today's types.
+  #
+  # @return [Array<String>]
+  def exported_kinds
+    exports_all_kinds? ? EXPORT_KINDS.dup : kinds_list(export_kinds)
+  end
+
+  # Whether a record of the peer's `kind` is imported. An empty list imports nothing.
+  #
+  # @param kind [String, Symbol, nil] the peer's raw kind
+  # @return [Boolean]
+  def imports_kind?(kind)
+    kinds = kinds_list(import_kinds)
+    kinds.include?(ALL_KINDS) || kinds.include?(kind.to_s)
+  end
+
   # The peer's address with no trailing slash, ready to take a path.
   #
   # @return [String, nil]
@@ -79,11 +109,15 @@ class FeedbackExchangeConfig
 
   private
 
+  def kinds_list(kinds)
+    Array(kinds).map(&:to_s).compact_blank
+  end
+
   # Each kind is one we know: the evidence types, plus the generic `feedback` on the
-  # import side, where it matches a peer that sends nothing finer.
+  # import side, where it matches a peer that sends nothing finer, or {ALL_KINDS}.
   def kinds_are_evidence_types
     { import_kinds: [ import_kinds, IMPORT_KINDS ], export_kinds: [ export_kinds, EXPORT_KINDS ] }.each do |name, (kinds, allowed)|
-      unknown = Array(kinds).map(&:to_s) - allowed
+      unknown = kinds_list(kinds) - allowed - [ ALL_KINDS ]
       errors.add(name, "has unknown types: #{unknown.join(', ')}") if unknown.any?
     end
   end

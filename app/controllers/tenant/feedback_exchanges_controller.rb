@@ -51,7 +51,8 @@ class Tenant::FeedbackExchangesController < ApplicationController
   end
 
   # The checkbox groups submit a leading blank so that unticking every box is
-  # still a value; drop it.
+  # still a value; drop it. A browser without JavaScript posts "all" beside the
+  # ticked types, and the config keeps only "all".
   def settings
     form_params.slice(:base_url, :peer_name, :enabled, :import_kinds, :export_kinds).to_h.symbolize_keys.tap do |attrs|
       %i[import_kinds export_kinds].each { |key| attrs[key] = attrs[key].compact_blank.uniq if attrs.key?(key) }
