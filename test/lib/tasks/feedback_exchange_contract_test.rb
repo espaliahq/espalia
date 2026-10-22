@@ -30,6 +30,15 @@ class FeedbackExchangeContractTasksTest < ActiveSupport::TestCase
     FeedbackExchangeContractTasks::ContractChange.check(committed: committed, url: url, labelled: labelled, fetch: ->(_) { response })
   end
 
+  context ".unprocessed_matchers" do
+    should "name the interactions where a matcher reached the pact as data" do
+      flattened = { "description" => "flattened", "response" => { "body" => { "notified" => [ [ [ "pact:matcher:type", "regex" ], [ "value", "author" ] ] ] } } }
+      clean = { "description" => "clean", "response" => { "body" => { "notified" => [ "author" ] } } }
+
+      assert_equal [ "flattened" ], FeedbackExchangeContractTasks.unprocessed_matchers("interactions" => [ flattened, clean ])
+    end
+  end
+
   context "PeerContract" do
     setup do
       @dir = Pathname(Dir.mktmpdir)

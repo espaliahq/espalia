@@ -39,6 +39,10 @@ class FeedbackExchangePactTest < ActiveSupport::TestCase
     assert_empty hosts.reject { |host| host.end_with?(".example") }, "use chip.example or growthos.example"
   end
 
+  should "carry every matcher as a rule, never as data the peer would read" do
+    assert_not @raw.include?("pact:matcher:type"), "a matcher was mangled before pact-ffi saw it; see bin/rails contract:consumer"
+  end
+
   should "use only the provider states agreed with Chip" do
     states = @pact["interactions"].flat_map { |interaction| interaction["providerStates"].pluck("name") }
 

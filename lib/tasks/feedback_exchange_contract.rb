@@ -28,6 +28,17 @@ module FeedbackExchangeContractTasks
     Response.new(status: nil, body: "#{e.class}: #{e.message}")
   end
 
+  # Interactions in a written pact that still carry a matcher's own key. pact-ffi
+  # turns every matcher it is given into an example and a rule, so the key
+  # survives only when a matcher was mangled before it got there (a Hash
+  # flattened into pairs), which the peer then reads as the example itself.
+  #
+  # @param pact [Hash]
+  # @return [Array<String>] their descriptions
+  def self.unprocessed_matchers(pact)
+    pact.fetch("interactions").select { |interaction| interaction.to_json.include?("pact:matcher:type") }.pluck("description")
+  end
+
   # Chip's consumer pact of us, from its /contract, through a cache: a copy
   # younger than a day is used as it is, a failed fetch falls back to any copy
   # with a warning, and only a failure with no copy at all is an error. Until

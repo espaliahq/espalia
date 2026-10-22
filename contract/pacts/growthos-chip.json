@@ -573,18 +573,7 @@
               "id": "00000000-0000-4000-8000-00000000f003",
               "kind": "feedback",
               "notified": [
-                [
-                  "pact:matcher:type",
-                  "regex"
-                ],
-                [
-                  "regex",
-                  "^(author|recipient|manager)$"
-                ],
-                [
-                  "value",
-                  "author"
-                ]
+                "author"
               ],
               "origin": "chip",
               "period": null,
@@ -625,6 +614,15 @@
                 {
                   "match": "type",
                   "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
                 }
               ]
             },
@@ -714,18 +712,7 @@
               "id": "00000000-0000-4000-8000-00000000f002",
               "kind": "feedback",
               "notified": [
-                [
-                  "pact:matcher:type",
-                  "regex"
-                ],
-                [
-                  "regex",
-                  "^(author|recipient|manager)$"
-                ],
-                [
-                  "value",
-                  "author"
-                ]
+                "author"
               ],
               "origin": "chip",
               "period": null,
@@ -766,6 +753,15 @@
                 {
                   "match": "type",
                   "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
                 }
               ]
             },
@@ -855,18 +851,7 @@
               "id": "00000000-0000-4000-8000-00000000f004",
               "kind": "feedback",
               "notified": [
-                [
-                  "pact:matcher:type",
-                  "regex"
-                ],
-                [
-                  "regex",
-                  "^(author|recipient|manager)$"
-                ],
-                [
-                  "value",
-                  "author"
-                ]
+                "author"
               ],
               "origin": "chip",
               "period": {
@@ -921,6 +906,15 @@
                 {
                   "match": "type",
                   "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
                 }
               ]
             },
@@ -1026,18 +1020,7 @@
               "id": "00000000-0000-4000-8000-00000000f001",
               "kind": "feedback",
               "notified": [
-                [
-                  "pact:matcher:type",
-                  "regex"
-                ],
-                [
-                  "regex",
-                  "^(author|recipient|manager)$"
-                ],
-                [
-                  "value",
-                  "author"
-                ]
+                "author"
               ],
               "origin": "chip",
               "period": null,
@@ -1078,6 +1061,15 @@
                 {
                   "match": "type",
                   "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
                 }
               ]
             },
@@ -1167,18 +1159,7 @@
               "id": "00000000-0000-4000-8000-00000000f001",
               "kind": "feedback",
               "notified": [
-                [
-                  "pact:matcher:type",
-                  "regex"
-                ],
-                [
-                  "regex",
-                  "^(author|recipient|manager)$"
-                ],
-                [
-                  "value",
-                  "author"
-                ]
+                "author"
               ],
               "origin": "chip",
               "period": null,
@@ -1219,6 +1200,15 @@
                 {
                   "match": "type",
                   "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
                 }
               ]
             },

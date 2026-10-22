@@ -25,6 +25,10 @@ namespace :contract do
   task :consumer do
     written = Rails.root.join("tmp/pact/consumer/growthos-chip.json")
     sh({ "PARALLEL_WORKERS" => "1" }, "bin/rails", "test", consumer_test)
+    require_relative "feedback_exchange_contract"
+    mangled = FeedbackExchangeContractTasks.unprocessed_matchers(JSON.parse(File.read(written)))
+    abort "These interactions carry a matcher pact-ffi never saw, so the peer would read it as data: #{mangled.join('; ')}" if mangled.any?
+
     cp written, Rails.root.join("contract/pacts/growthos-chip.json")
   end
 

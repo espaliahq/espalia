@@ -33,8 +33,14 @@ module PactContract
   # @return [Hash] a string the peer may vary within the pattern
   def term(regex, value) = { "pact:matcher:type" => "regex", "regex" => regex, "value" => value }
 
-  # @return [Hash] a non-empty array whose items match the example's type
-  def each_like(value, min: 1) = { "pact:matcher:type" => "type", "min" => min, "value" => Array(value) }
+  # A non-empty array whose items match the example. The example may itself be
+  # a matcher: wrap it, never `Array()` it, which turns a Hash into pairs.
+  #
+  # @param example [Object] one item, or the items, of the array
+  # @return [Hash]
+  def each_like(example, min: 1)
+    { "pact:matcher:type" => "type", "min" => min, "value" => example.is_a?(Array) ? example : [ example ] }
+  end
 
   # Replays every interaction of a pact against a running provider.
   #
