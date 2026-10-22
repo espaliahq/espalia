@@ -284,7 +284,7 @@ class Views::Assessments::LevelChip < Views::Base
   def level_code_label
     if split?
       span(class: "relative z-[1] px-1 rounded text-[11px] font-semibold " \
-                  "bg-overlay/85 text-default") { @level_code }
+                  "bg-overlay text-default") { @level_code }
     else
       span(class: "text-xs font-medium relative z-[1]") { @level_code }
     end
@@ -443,7 +443,7 @@ class Views::Assessments::LevelChip < Views::Base
   def activity_glyphs
     span(
       class: "absolute bottom-0.5 right-0.5 inline-flex items-center gap-0.5 " \
-             "rounded-full bg-overlay/85 px-0.5 " \
+             "rounded-full bg-overlay px-0.5 " \
              "text-muted",
       title: activity_title,
       aria: { hidden: "true" }
