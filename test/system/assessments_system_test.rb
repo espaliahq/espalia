@@ -128,6 +128,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Not started"
       assert_no_text "Manager"
     end
+
+    should "keep a long level title inside its card on a phone" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.update_level_details(
+          @framework_id, @level2_id, title: "Distinguished Fellow of the Extraordinarily Long Level Title"
+        )
+      end
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      assert_text "Distinguished Fellow"
+
+      assert_no_sideways_overflow("a long level title pushes My Assessments sideways")
+    end
   end
 
   context "hero summary" do
