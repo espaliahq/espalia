@@ -128,6 +128,20 @@
 | `app/javascript/controllers/submit_guard_controller.js` | One user action, one request — in-flight lock on the evidence-modal **and request-evidence** submit buttons (see the controllers table) |
 | `app/controllers/evidence_modal_controller.rb` | `GET /evidence_modal` — renders `ModalForm` for `(mode, evidence?, request?, cell?)`; resolves permissions + prefill + link options server-side; edit mode loads ALL active links (origin included, entry-point cell first) |
 | `app/models/evidence/cell_context_resolver.rb` | Shared per-cell context (name, role, level title, expectation, illustrations) — hub + modal |
+| **Placement suggestions** (see [*Suggested placement and valence*](evidence.md)) | |
+| `app/models/evidence_placement_suggestion.rb` | One suggested cell + valence for an item, pending until a person decides; plain state, not a read model |
+| `app/models/evidence/placement_prompt.rb` | The candidate cells (role cells at the home level ±1, minus linked and dismissed), the cached framework text, the item text and the enum-constrained schema; `VERSION` is recorded on every row |
+| `app/models/evidence/suggestion_model.rb` | The one model call: pseudonymises, asks the tenant's adapter (a chat prompt, or Jev's decision questions), maps `Ai::Errors` to `RateLimited` / `Unavailable` / `Rejected`; a refusal is no suggestions |
+| `app/models/evidence/placement_decision.rb` | What Jev is asked: the state, a choice over the open cells plus `none`, a choice over the valences; ranks the answer by probability above `FLOOR`; its own `VERSION` |
+| `app/integrations/ai/` (`model_client.rb`, `anthropic/adapter.rb`, `open_ai_compatible/adapter.rb`, `typesafe_jev/adapter.rb`, `json_endpoint.rb`, `suggestion_response.rb`, `decision_response.rb`, `errors.rb`, `endpoint.rb`, `name_pseudonymiser.rb`) | The tenant's model: adapter dispatch, the three adapters and their shared HTTP half, the chat and decision responses, the errors, the private-host guard, name hiding |
+| `app/models/ai_model_config.rb` / `ai_model_credentials.rb` | `Tenant.ai_config` (provider, address, model, effort, switches, presets) and the write-only key wrapper |
+| `app/controllers/tenant/ai_models_controller.rb` / `app/views/integrations/ai_model_view.rb` / `app/javascript/controllers/ai_model_preset_controller.js` | The Integrations → AI model card: settings, key, test connection, preset fill |
+| `app/jobs/evidence/suggest_placements_job.rb` | Generates a set: supersedes the pending one, re-validates every cell, stores the rest; `after_generate` is the notification hook |
+| `app/contexts/person_development/async_handlers/placement_suggester.rb` | Async handler on `EvidenceRecorded` / `EvidenceUpdated` that enqueues the job for human, non-self feedback when the tenant switch is on |
+| `app/views/evidence/placement_suggestions.rb` / `placement_suggestion_status.rb` | The hub block under an item (rows, Accept, Dismiss…, Adjust, Suggest again) and the status line its responses write into |
+| `app/controllers/evidence_placement_suggestions_controller.rb` | Accept / dismiss / suggest again → Turbo Stream replacing the block |
+| `app/models/evidence/placement_suggestion_rows.rb` | Loads the pending rows and their cell context for a set of hub items |
+| `lib/tasks/evidence_suggestions.rake` / `evidence_suggestions_eval.rb` | `evidence:suggestions:eval[slug]` — cell and valence match rates against `test/fixtures/files/evidence_suggestions/`, through the tenant's configured model |
 | `app/models/evidence/framework_cell_options.rb` | Valid (active + bound + has-expectation) link cells + the per-cell expectation map (incl. role-scoped illustrations) for the "Applies to" rows |
 | `app/controllers/concerns/evidence_diff_submit.rb` | Diff-based save — emits the minimal commands (record / update-if-content-changed / add+remove links / respond); links-only never bumps `edited_at` |
 | `app/controllers/assessments/evidence_controller.rb#save` | Assessment-surface submit → matrix cell Turbo Streams (hub uses `evidence_requests#respond` / `evidence_items#update`) |

@@ -181,9 +181,9 @@ Then:
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |
 | `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius step or elevation role, or Shared or Shell adds a shadow |
 | `test/lib/kit_previews_test.rb` | a Kit or Shared component has no preview |
-| `test/lib/view_colour_roles_test.rb` | a migrated view area uses a palette colour, other than the data-vis hues it lists as waiting for domain tokens |
+| `test/lib/view_colour_roles_test.rb` | a view uses a palette colour, other than a site its `PENDING` list holds while it waits for a domain token |
 
-Views join `view_colour_roles_test.rb` as they migrate ([#544](https://github.com/mr-yum/growth-os/issues/544)–[#547](https://github.com/mr-yum/growth-os/issues/547)); cycles and calibration are in. Until an area joins, a view may still hold palette steps; new code in a view uses roles anyway.
+Every view directory except `pwa/` (the service worker) is in `view_colour_roles_test.rb` ([#544](https://github.com/mr-yum/growth-os/issues/544)–[#547](https://github.com/mr-yum/growth-os/issues/547)), so a new view starts on roles. A new directory under `app/views/` joins its `SOURCES`.
 
 ## Reuse before you build
 

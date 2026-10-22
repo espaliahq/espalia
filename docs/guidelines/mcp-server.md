@@ -235,6 +235,17 @@ or their manager places it later with `assessments_add_evidence_link`.
 (`unplaced: true`). A peer still cannot read the assessment; the directory is
 the whole of what they see ([assessments/evidence.md → Proactive feedback](assessments/evidence.md)).
 
+**Placement suggestions are read and decided, never generated, over MCP.**
+`assessments_evidence_suggestions_list` (`:none`) lists the pending
+suggestions on an assessment or one item, each with its confidence,
+rationale, model and prompt version; `assessments_accept_evidence_suggestion`
+and `assessments_dismiss_evidence_suggestion` (`:mcp_client`, both
+`EvidencePolicy#add_link?`) decide one, exactly as the hub's buttons do.
+Asking for a fresh set is the hub's "Suggest again" only: an agent that
+wants a placement can read the item and add a link itself, and a tool that
+spends a model call on request is a cost nobody asked to expose
+([assessments/evidence.md → Suggested placement and valence](assessments/evidence.md)).
+
 ### 4. Shape parity via shared serializers
 
 Assessment payloads are **strict supersets** of framework payloads —
@@ -513,6 +524,10 @@ Two rules for any complex param:
   `Mcp::OperationToTool` emits an explicit `schema:` verbatim; without it a
   `Hash`/`Array` is a free-form object the client must reverse-engineer. Keep
   the fragment next to the model it describes (`ExternalReference.json_schema`).
+  An open vocabulary is a `pattern` plus `examples`, not an `enum`:
+  `external_reference.system` accepts any lowercase slug, so a new feedback
+  exchange peer (`chip`) needs no code change, and the schema lists the
+  systems we know as examples.
 - **Validate contents without raising.** Never let a value-object constructor,
   AR, or StoreModel raise *through* an operation — those become -32603. Check
   the payload first and raise `Operations::Base::ParameterError` (→ -32602) for
@@ -727,6 +742,8 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
+| `app/operations/operations/integrations/ai_model_status.rb` | `integrations_ai_model_status` (`:none`): provider (`anthropic`, `openai_compatible` or `typesafe_jev`), address host, model, effort (Anthropic only), switches, key present. The settings and key are written on the web only, so no key ever crosses MCP |
+| `app/operations/operations/assessments/{accept,dismiss}_evidence_suggestion.rb` / `evidence_suggestions_list.rb` | Decide and list placement suggestions — web (the hub) and MCP; `evidence_suggestion.rb` holds their shared lookup and payload |
 | `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |

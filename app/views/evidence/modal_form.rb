@@ -38,7 +38,8 @@ class Views::Evidence::ModalForm < Views::Base
   # @param scope_line [String, nil] "on ⟨name⟩'s assessment · ⟨role⟩" for hub-opened :edit
   # @param link_options [Array<Hash>] capability picker options, grouped by category
   # @param level_options [Array<Hash>] [{ ordinal:, label: }] for the level picker + row titles
-  # @param linked_cells [Array<Hash>] ALL active links as rows, entry point first (:edit only)
+  # @param linked_cells [Array<Hash>] ALL active links as rows, entry point first (:edit only),
+  #   then any placement suggestions staged by "Adjust" (rows carrying `suggestion_id:`)
   # @param expectation_map [Hash{String=>Hash}] cell token => { capability_name:, expectation:, illustrations: }
   # @param evidence [EvidenceItem, nil]
   # @param request [EvidenceRequest, nil]
@@ -123,7 +124,16 @@ class Views::Evidence::ModalForm < Views::Base
   # feedback, and the edit of an item still unplaced. Everywhere else an item
   # must keep at least one row.
   def allow_unplaced?
-    volunteered? || (@mode == :edit && @linked_cells.empty?)
+    volunteered? || (@mode == :edit && existing_links.empty?)
+  end
+
+  # The item's own links, without suggestion rows staged beside them.
+  def existing_links
+    @linked_cells.reject { |cell| cell[:suggestion_id] }
+  end
+
+  def staged_suggestion_ids
+    @linked_cells.filter_map { |cell| cell[:suggestion_id] }
   end
 
   # Whose assessment, for a form with no cell card.
@@ -202,6 +212,9 @@ class Views::Evidence::ModalForm < Views::Base
     input(type: "hidden", name: "evidence[request_id]", value: @request&.id) if @request
     input(type: "hidden", name: "return_to", value: @return_to)
     input(type: "hidden", name: "draft_token", value: @draft.token) if @draft
+    # Every suggestion staged by "Adjust": one whose row is gone by the time
+    # the form is saved was turned down (EvidenceDiffSubmit dismisses it).
+    staged_suggestion_ids.each { |id| input(type: "hidden", name: "evidence[staged_suggestion_ids][]", value: id) }
     # The seed cell (:new / :respond only) — the record_evidence origin. Its
     # desired-link entry rides on the fixed seed row. :edit submits no seed;
     # the server diffs the desired set against current links.
@@ -273,6 +286,8 @@ class Views::Evidence::ModalForm < Views::Base
   end
 
   def external_fields
+    return imported_origin if external_reference&.imported?
+
     div(class: "grid grid-cols-2 gap-2") do
       div do
         label(for: "evm-sys", class: LABEL) { "Link to (optional)" }
@@ -285,6 +300,14 @@ class Views::Evidence::ModalForm < Views::Base
         input(id: "evm-url", type: "url", name: "evidence[external_reference][url]", value: external_reference&.url,
               placeholder: "https://", class: INPUT, disabled: !@content_editable)
       end
+    end
+  end
+
+  # Where an imported item was given is fixed; say so instead of offering fields.
+  def imported_origin
+    div(id: "evm-origin", class: "flex flex-wrap items-center gap-2 text-xs text-gray-700 dark:text-gray-200") do
+      span(class: LABEL.sub("mb-1", "mb-0")) { "Given in" }
+      render Views::Evidence::OriginBadge.new(external_reference, size: :sm)
     end
   end
 
@@ -342,6 +365,7 @@ class Views::Evidence::ModalForm < Views::Base
         end
         remove_button if removable
       end
+      suggested_note(cell) if cell[:suggestion_id]
       p(class: "text-xs text-muted") { "↳ #{cell[:expectation]}" } if cell[:expectation].present?
       if cell[:comment_count].to_i.positive?
         # Disclose an active discussion before the user stages this link's
@@ -355,6 +379,17 @@ class Views::Evidence::ModalForm < Views::Base
                      required: required_valence, id: valence_id, css: "#{SELECT} text-xs")
       examples_disclosure(cell[:illustrations], open: entry) if cell[:illustrations].present?
       input(type: "hidden", name: "evidence[desired_links][]", value: token)
+      input(type: "hidden", name: "evidence[suggestion_ids][]", value: cell[:suggestion_id]) if cell[:suggestion_id]
+    end
+  end
+
+  # A row staged from a placement suggestion says so, with the words the
+  # suggestion rested on: the person is checking the model's reading, not
+  # their own.
+  def suggested_note(cell)
+    p(class: "text-xs text-muted", data: { testid: "suggested-row" }) do
+      span(class: "font-semibold") { "Suggested" }
+      plain " — #{cell[:rationale]}" if cell[:rationale].present?
     end
   end
 

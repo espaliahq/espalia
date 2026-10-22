@@ -156,6 +156,141 @@ class TenantTest < ActiveSupport::TestCase
     end
   end
 
+  context "#evidence_suggestions_enabled?" do
+    should "be off unless switched on" do
+      assert_not build(:tenant).evidence_suggestions_enabled?
+    end
+
+    should "follow the AI model card's switch" do
+      assert build(:tenant, :with_ai_model).evidence_suggestions_enabled?
+    end
+
+    should "honour the switch the earlier settings key stored, for one more release" do
+      assert build(:tenant, settings: { "evidence_suggestions_enabled" => "true" }).evidence_suggestions_enabled?
+      assert_not build(:tenant, settings: { "evidence_suggestions_enabled" => "false" }).evidence_suggestions_enabled?
+    end
+  end
+
+  context "the AI model" do
+    should "keep its key out of inspect, to_s and the config" do
+      tenant = build(:tenant, :with_ai_model)
+
+      assert_equal "sk-test-key", tenant.ai_secrets.api_key
+      assert_no_match(/sk-test-key/, tenant.ai_secrets.inspect)
+      assert_no_match(/sk-test-key/, tenant.ai_secrets.to_s)
+      assert_no_match(/sk-test-key/, tenant.ai_config.to_json)
+    end
+
+    should "encrypt the key at rest" do
+      tenant = create(:tenant, :with_ai_model)
+
+      raw = Tenant.connection.select_value("SELECT ai_credentials FROM tenants WHERE id = '#{tenant.id}'")
+      assert_no_match(/sk-test-key/, raw)
+    end
+
+    should "fall back to the deployment's Anthropic key only for a tenant on the legacy switch" do
+      credentials = Rails.application.credentials
+      credentials.stub(:dig, ->(*path) { path == [ :anthropic, :api_key ] ? "sk-deployment" : nil }) do
+        assert_nil build(:tenant).ai_api_key
+        assert_equal "sk-deployment", build(:tenant, settings: { "evidence_suggestions_enabled" => true }).ai_api_key
+        assert_equal "sk-test-key", build(:tenant, :with_ai_model, settings: { "evidence_suggestions_enabled" => true }).ai_api_key
+        custom = build(:tenant, settings: { "evidence_suggestions_enabled" => true }, ai_config: AiModelConfig.new(base_url: "https://proxy.example.com"))
+        assert_nil custom.ai_api_key, "the deployment key never goes to a tenant-chosen address"
+        gateway = build(:tenant, settings: { "evidence_suggestions_enabled" => true },
+                                 ai_config: AiModelConfig.new(provider: "openai_compatible", base_url: "https://gw.example.com/v1", model: "a/b"))
+        assert_nil gateway.ai_api_key
+      end
+    end
+
+    context "#update_ai_model!" do
+      should "save settings and key, and keep the stored key when the new one is blank" do
+        tenant = create(:tenant)
+        tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: "https://gw.example.com/v1", model: "a/b" }, api_key: " sk-one ")
+        tenant.reload
+
+        assert_equal "openai_compatible", tenant.ai_config.provider
+        assert_equal "sk-one", tenant.ai_secrets.api_key
+
+        tenant.update_ai_model!(settings: { suggestions_enabled: true }, api_key: "")
+        tenant.reload
+
+        assert tenant.ai_config.suggestions_enabled?
+        assert_equal "a/b", tenant.ai_config.model
+        assert_equal "sk-one", tenant.ai_secrets.api_key
+      end
+
+      should "drop the legacy settings keys, folding them into the form first" do
+        tenant = create(:tenant, settings: { "evidence_suggestions_enabled" => true, "evidence_suggestions_model" => "claude-haiku-5-5", "font_family" => "Inter" })
+
+        form = tenant.effective_ai_config
+        assert form.suggestions_enabled?
+        assert_equal "claude-haiku-5-5", form.model
+
+        tenant.update_ai_model!(settings: { suggestions_enabled: false, model: "claude-opus-5-5" })
+        tenant.reload
+
+        assert_not tenant.legacy_evidence_suggestions_enabled?
+        assert_not tenant.evidence_suggestions_enabled?
+        assert_equal "Inter", tenant.font_family
+      end
+
+      should "refuse to point a stored key at another provider or address without a new key" do
+        tenant = create(:tenant, :with_ai_model)
+
+        error = assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }) }
+        assert_includes error.message, "Enter the API key again"
+        assert_equal "sk-test-key", tenant.reload.ai_secrets.api_key
+        assert_nil tenant.ai_config.base_url
+
+        tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }, api_key: "sk-moved")
+        assert_equal "sk-moved", tenant.reload.ai_secrets.api_key
+      end
+
+      should "allow changing the model, effort and switches without re-entering the key" do
+        tenant = create(:tenant, :with_ai_model)
+
+        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5", effort: "", suggestions_enabled: false, pseudonymise_names: false })
+
+        assert_equal [ "claude-haiku-5-5", "", false, false ],
+                     [ tenant.reload.ai_config.model, tenant.ai_config.effort, tenant.ai_config.suggestions_enabled?, tenant.ai_config.pseudonymise_names? ]
+      end
+
+      should "refuse suggestions with no key, and not raise on a non-string key" do
+        tenant = create(:tenant)
+
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { suggestions_enabled: true }, api_key: [ "x" ]) }
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { suggestions_enabled: true }) }
+        assert_nothing_raised { tenant.update_ai_model!(settings: { suggestions_enabled: false }, api_key: [ "x" ]) }
+      end
+
+      should "work again on the same instance after a refused save, starting from what is stored" do
+        tenant = create(:tenant, :with_ai_model)
+
+        assert_raises(ActiveRecord::RecordInvalid) { tenant.update_ai_model!(settings: { base_url: "https://proxy.example.com" }) }
+        assert_raises(ActiveRecord::RecordInvalid) do
+          tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: "http://gw.example.com", model: "a/b" }, api_key: "sk-x")
+        end
+
+        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5" })
+        tenant.reload
+
+        assert_equal "claude-haiku-5-5", tenant.ai_config.model
+        assert_equal "anthropic", tenant.ai_config.provider, "the refused attempts left nothing behind"
+        assert_nil tenant.ai_config.base_url
+        assert_equal "sk-test-key", tenant.ai_secrets.api_key
+      end
+
+      should "raise on an invalid config and store nothing" do
+        tenant = create(:tenant)
+
+        assert_raises(ActiveRecord::RecordInvalid) do
+          tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: "http://gw.example.com", model: "a/b" }, api_key: "sk-x")
+        end
+        assert_nil tenant.reload.ai_secrets.api_key
+      end
+    end
+  end
+
   context "slug normalization" do
     should "downcase and replace invalid characters with dashes" do
       tenant = build(:tenant, slug: "ACME Corp!")

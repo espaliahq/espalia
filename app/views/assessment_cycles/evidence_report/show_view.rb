@@ -282,6 +282,24 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
           metric_row("Proactive", metrics[:provided_unsolicited])
           metric_row("Withdrawn", metrics[:feedback_withdrawn])
         end
+        origin_split
+      end
+    end
+  end
+
+  # "Of which via Chip: 4" — only for origins other than GrowthOS, and only
+  # when there are some, so a tenant with no imports never sees the line.
+  def origin_split
+    peers = (metrics[:by_origin] || {}).except(Reporting::OriginLabels::NATIVE).select { |_, count| count.positive? }
+    return if peers.empty?
+
+    dl(class: "mt-3 space-y-1 border-t border-gray-200 pt-3 text-sm dark:border-gray-700",
+       data: { origin_split: "" }) do
+      peers.each do |origin, count|
+        div(class: "flex items-baseline justify-between gap-3") do
+          dt(class: "text-gray-600 dark:text-gray-300") { "Of which via #{Reporting::OriginLabels.peer_label(origin)}" }
+          dd(class: "font-semibold text-gray-900 dark:text-white", data: { origin: origin }) { count.to_s }
+        end
       end
     end
   end

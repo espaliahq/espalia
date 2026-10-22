@@ -14,6 +14,10 @@
 # An unplaced item's copy asks the recipient to place it and links to its card
 # on the hub, where placing happens; a placed item links to its cell.
 #
+# Feedback imported from a peer system (`acting_via: feedback_exchange`) tells
+# nobody: the system it was given in owns its notifications. It surfaces on
+# the hub under "Feedback to place".
+#
 # Runs via SolidQueue (prepended AsyncHandler). NOT a projection — it
 # dispatches side effects and must never be registered in
 # Projections::Registry (replaying it would re-send notifications).
@@ -31,6 +35,8 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
       item = EvidenceItem.find_by(id: event.data[:evidence_id])
       next if item.nil? || item.source == "self"
+
+      next if event.metadata[:acting_via].to_s == "feedback_exchange"
 
       notify_recipients(item, event.data[:request_id])
     end
