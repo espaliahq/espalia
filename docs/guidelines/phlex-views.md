@@ -355,7 +355,7 @@ Headings descend sequentially; never skip a level for styling. `Kit::Card` takes
 
 ### Keyboard focus — 2.4.7
 
-A global `:focus-visible` ring lives in `app/assets/tailwind/application.css` (2px, offset, blue-700/blue-300). **Never reset an outline (`outline-hidden`/`focus:outline-none`) without providing an equivalent visible focus state** — a per-component `focus:ring-2` is fine, a bare reset is not.
+A global `:focus-visible` ring lives in `app/assets/tailwind/application.css` (2px, offset, the neutral `--gos-focus-ring` role; a coloured surface such as the navbar resets it). **Never reset an outline (`outline-hidden`/`focus:outline-none`) without providing an equivalent visible focus state** — a per-component `focus:ring-2` is fine, a bare reset is not.
 
 ### Document structure (layout-level, but views rely on it)
 
