@@ -112,8 +112,8 @@ class Views::Integrations::HrisMappingModal < Views::Base
 
   def actions
     div(class: "flex justify-end gap-2 pt-2") do
-      render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }
-      render Components::Kit::Button.new(tone: :brand, type: :submit, data: { turbo_submits_with: "Saving…" }) do
+      render Components::Kit::Button.new(variant: :outline, touch: true, data: { action: "click->modal#close" }) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true, data: { turbo_submits_with: "Saving…" }) do
         "Save mapping"
       end
     end

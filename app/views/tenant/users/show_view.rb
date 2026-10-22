@@ -93,7 +93,7 @@ class Views::Tenant::Users::ShowView < Views::Base
 
     form_with_url(tenant_user_path(@tenant_user), method: :patch) do
       input(type: "hidden", name: "tenant_user[role]", value: target_role)
-      render Components::Kit::Button.new(variant: :outline, type: :submit, disabled: disabled) { label }
+      render Components::Kit::Button.new(variant: :outline, type: :submit, touch: true, disabled: disabled) { label }
     end
   end
 
