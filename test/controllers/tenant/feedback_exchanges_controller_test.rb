@@ -159,7 +159,31 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         assert_select "input[name='feedback_exchange[import_kinds][]'][value='feedback']"
         assert_select "input[name='feedback_exchange[export_kinds][]'][value='feedback']", count: 0
         assert_select "label", text: "Any feedback (generic)", count: 1
-        assert_equal "feedback", css_select("input[type=checkbox][name='feedback_exchange[import_kinds][]']").first["value"]
+        assert_equal %w[all feedback], css_select("input[type=checkbox][name='feedback_exchange[import_kinds][]']").first(2).pluck("value")
+      end
+
+      should "tick All types, and every type beneath it, by default" do
+        get tenant_integration_path("feedback-exchange")
+
+        %w[export_kinds import_kinds].each do |list|
+          boxes = css_select("input[type=checkbox][name='feedback_exchange[#{list}][]']")
+          assert_equal "all", boxes.first["value"]
+          assert boxes.all? { |box| box["checked"] }, "expected every #{list} box ticked"
+        end
+        assert_select "label", text: "All types", count: 2
+        assert_includes response.body, "All types includes any type added later"
+        assert_includes response.body, "With no box ticked, nothing is imported"
+        assert_not_includes response.body, "narrower"
+      end
+
+      should "leave All types unticked for a chosen list" do
+        @tenant.update_feedback_exchange!(settings: { export_kinds: %w[impact] })
+
+        get tenant_integration_path("feedback-exchange")
+
+        assert_select "input[name='feedback_exchange[export_kinds][]'][checked]", count: 1
+        assert_select "input#feedback_exchange_export_kinds_impact[checked]"
+        assert_select "input#feedback_exchange_export_kinds_all:not([checked])"
       end
 
       should "save the types to send and to import" do
@@ -172,6 +196,18 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         config = @tenant.reload.feedback_exchange_config
         assert_equal %w[impact observation], config.export_kinds
         assert_equal %w[peer_feedback], config.import_kinds
+      end
+
+      should "let All types win over the boxes ticked beside it" do
+        patch tenant_feedback_exchange_path, params: { feedback_exchange: {
+          peer_name: "chip", base_url: PEER, enabled: "1",
+          export_kinds: [ "", "all", "impact", "observation" ], import_kinds: [ "", "peer_feedback", "all" ]
+        } }
+
+        assert_redirected_to tenant_integration_path("feedback-exchange")
+        config = @tenant.reload.feedback_exchange_config
+        assert_equal %w[all], config.export_kinds
+        assert_equal %w[all], config.import_kinds
       end
 
       should "store each type once" do

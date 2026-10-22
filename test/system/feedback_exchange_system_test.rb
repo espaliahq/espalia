@@ -38,20 +38,30 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
         js_fill_in "feedback_exchange_outbound_secret", with: OUTBOUND
         js_fill_in "feedback_exchange_inbound_secret", with: INBOUND
         page.execute_script("document.getElementById('feedback_exchange_enabled').checked = true")
-        page.execute_script("document.getElementById('feedback_exchange_export_kinds_impact').checked = false")
-        page.execute_script("document.getElementById('feedback_exchange_import_kinds_peer_feedback').checked = true")
+
+        wait_for_stimulus "all-kinds"
+        assert_checked "feedback_exchange_export_kinds_all"
+        assert_checked "feedback_exchange_import_kinds_all"
+        assert_selector "#feedback_exchange_export_kinds_impact:checked:disabled"
+        assert_selector "#feedback_exchange_import_kinds_feedback:checked:disabled"
+        screenshot("#{name}_kinds_all")
+
+        click_checkbox "feedback_exchange_export_kinds_all"
+        assert_selector "#feedback_exchange_export_kinds_impact:checked:enabled"
+        click_checkbox "feedback_exchange_export_kinds_impact"
+        assert_selector "#feedback_exchange_import_kinds_feedback:disabled"
         screenshot("#{name}_form_filled")
         click_button_with_js_fallback "Save settings", expect_text: "Feedback exchange settings saved."
 
         assert_text "Active"
         assert_no_text OUTBOUND
         assert_no_text INBOUND
+        assert_no_checked "feedback_exchange_export_kinds_all"
         assert_no_checked "feedback_exchange_export_kinds_impact"
         assert_checked "feedback_exchange_export_kinds_observation"
-        assert_checked "feedback_exchange_import_kinds_peer_feedback"
-        assert_no_checked "feedback_exchange_import_kinds_impact"
-        assert_equal %w[peer_feedback manager_feedback observation], @tenant.reload.feedback_exchange_config.export_kinds
-        assert_equal %w[peer_feedback], @tenant.feedback_exchange_config.import_kinds
+        assert_checked "feedback_exchange_import_kinds_all"
+        assert_equal EvidenceItem::EVIDENCE_TYPES - %w[impact], @tenant.reload.feedback_exchange_config.export_kinds
+        assert_equal %w[all], @tenant.feedback_exchange_config.import_kinds
         assert_equal "", find_by_id("feedback_exchange_outbound_secret").value
         assert_equal "Leave blank to keep the stored value", find_by_id("feedback_exchange_outbound_secret")[:placeholder]
         assert_no_horizontal_overflow
@@ -86,6 +96,35 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
         screenshot("#{name}_connection_rejected")
       end
 
+      should "grey out a chosen list under All types, give it back when All is unticked, and save All" do
+        @tenant.update!(feedback_exchange_config: FeedbackExchangeConfig.new(peer_name: "chip", base_url: PEER,
+                                                                             import_kinds: %w[peer_feedback]))
+        sign_in_as(@admin_user)
+        visit tenant_integration_path("feedback-exchange")
+        assert_text "Stored secrets are never shown"
+        wait_for_stimulus "all-kinds"
+
+        assert_no_checked "feedback_exchange_import_kinds_all"
+        assert_selector "#feedback_exchange_import_kinds_peer_feedback:checked:enabled"
+        assert_selector "#feedback_exchange_import_kinds_impact:not(:checked):enabled"
+
+        click_checkbox "feedback_exchange_import_kinds_all"
+        assert_selector "#feedback_exchange_import_kinds_impact:checked:disabled"
+        assert_no_horizontal_overflow
+        screenshot("#{name}_import_all_over_a_list")
+
+        click_checkbox "feedback_exchange_import_kinds_all"
+        assert_selector "#feedback_exchange_import_kinds_impact:not(:checked):enabled"
+        assert_checked "feedback_exchange_import_kinds_peer_feedback"
+
+        click_checkbox "feedback_exchange_import_kinds_all"
+        assert_selector "#feedback_exchange_import_kinds_impact:checked:disabled"
+        click_button_with_js_fallback "Save settings", expect_text: "Feedback exchange settings saved."
+
+        assert_checked "feedback_exchange_import_kinds_all"
+        assert_equal %w[all], @tenant.reload.feedback_exchange_config.import_kinds
+      end
+
       should "keep the page away from a member" do
         sign_in_as(@member_user)
         visit tenant_integration_path("feedback-exchange")
@@ -97,6 +136,13 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  # A JS click fires the change event the all-kinds controller listens for,
+  # without the pointer hit-testing that drops clicks on a starved runner.
+  def click_checkbox(id)
+    assert_selector "##{id}", visible: :all
+    page.execute_script("document.getElementById(arguments[0]).click()", id)
+  end
 
   def assert_checked(id)
     assert_selector "##{id}:checked"
