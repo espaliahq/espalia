@@ -23,7 +23,7 @@ class StressSeed
       "brand" => { "light" => "#FACC15", "dark" => "#FDE047" },
       "nav-surface" => { "light" => "#DBFC45", "dark" => "#DBFC45" }
     },
-    font_family: "Big Shoulders Stencil Display"
+    font_family: "Roboto"
   }.freeze
 
   # Each at the 24-character limit, the longest a badge has to hold.

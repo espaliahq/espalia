@@ -13,7 +13,7 @@ This guide is the entry point; it loads whenever you open a file under `app/view
 | Read | When you are about to… | Holds |
 |---|---|---|
 | this file | change anything on the assessment screens | Overview, category navigation, capability focus and cards, context-driven rendering (incl. self-assessment privacy), the frequency vocabulary, level chips, activity feed coverage, real-time sync |
-| [scoring.md](assessments/scoring.md) | change the hero, the score's wording or definitions, "How is this calculated?", or which perspective a page scores | Hero Summary, The explanation layer (incl. the glossary's copy rules), Multi-perspective scoring, Performance state machine |
+| [scoring.md](assessments/scoring.md) | change the hero, the score's wording or definitions, "How is this calculated?", or which perspective a page scores | Hero Summary, The explanation layer (incl. the glossary's copy rules and the "How assessments work" guide), Multi-perspective scoring, Performance state machine |
 | [role-lens.md](assessments/role-lens.md) | read or rate against another role or level, or write any query over ratings | Role lens, incl. **Role-scoped reads**, per-role alignment, declared exploration |
 | [lifecycle.md](assessments/lifecycle.md) | change what a status allows, alignment milestones, carry-forward seeding or delegation | Manager-rating delegation, Lifecycle (incl. auto-alignment on start and cross-cycle seeding / carry-forward) |
 | [evidence.md](assessments/evidence.md) | change recording, linking or requesting feedback / evidence, or comment notifications | Evidence-link valence, linkage threads, the "Applies to" block, proactive feedback, requesting evidence, comment notifications |
