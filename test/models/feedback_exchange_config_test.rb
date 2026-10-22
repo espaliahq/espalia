@@ -128,10 +128,15 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       assert_empty FeedbackExchangeConfig.new(export_kinds: []).exported_kinds
     end
 
-    should "let all win over listed types" do
-      config = FeedbackExchangeConfig.new(export_kinds: %w[impact all], import_kinds: %w[impact all])
+    should "keep only all when types are listed beside it, however it is written" do
+      config = FeedbackExchangeConfig.new(export_kinds: %w[impact all], import_kinds: [ "impact", :all ])
+      loaded = FeedbackExchangeConfig.to_type.cast_value({ "export_kinds" => %w[all observation] })
+      tenant = create(:tenant)
+      tenant.update_feedback_exchange!(settings: { import_kinds: %w[peer_feedback all] })
 
-      assert config.exports_all_kinds?
+      assert_equal [ %w[all] ] * 2, [ config.export_kinds, config.import_kinds ]
+      assert_equal %w[all], loaded.export_kinds
+      assert_equal %w[all], tenant.reload.feedback_exchange_config.import_kinds
       assert config.imports_kind?("observation")
     end
 

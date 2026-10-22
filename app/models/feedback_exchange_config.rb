@@ -39,6 +39,13 @@ class FeedbackExchangeConfig
   attribute :deletions_cursor, :string
   attribute :last_synced_at, :datetime
 
+  # {ALL_KINDS} wins over any type listed beside it, so the setting has one stored shape.
+  %i[import_kinds export_kinds].each do |name|
+    define_method(:"#{name}=") do |kinds|
+      super(Array(kinds).map(&:to_s).include?(ALL_KINDS) ? [ ALL_KINDS ] : kinds)
+    end
+  end
+
   validates :provider, inclusion: { in: PROVIDERS }
   validates :peer_name, format: { with: SLUG_FORMAT, message: "must be a slug: lowercase letters, numbers and dashes" },
                         allow_blank: true
