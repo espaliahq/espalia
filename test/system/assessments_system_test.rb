@@ -459,7 +459,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "Clicked category chip should remain active after the scroll settles, " \
         "got #{active_category_id.inspect}"
 
-      # The chip went active in the browser, so its count must follow aria-current, not the server.
+      # The chip went active in the browser, so its score must follow aria-current, not the server.
       assert_operator rendered_contrast("nav#category-tabs a[aria-current='page'] span.font-mono"), :>=, 4.5
     end
 
