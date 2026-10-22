@@ -11,7 +11,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
   include Views::Assessments::Concerns::ScoreScale
 
   # aria-current carries the active chip, so category_nav_controller moves it with the attribute alone.
-  CHIP_CLASSES = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
+  CHIP_CLASSES = "group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium " \
                  "bg-neutral-subtle text-muted not-aria-[current=page]:hover:bg-neutral-muted transition-colors " \
                  "aria-[current=page]:bg-neutral-strong aria-[current=page]:text-inverse"
 
@@ -65,8 +65,8 @@ class Views::Assessments::CategoryChipBar < Views::Base
     a(**attrs) do
       status_dot(result) if unlocked
       plain category.name
-      pct_badge(result, active) if unlocked
-      rated_count_chip(cat_data, active)
+      pct_badge(result) if unlocked
+      rated_count_chip(cat_data)
     end
   end
 
@@ -82,21 +82,23 @@ class Views::Assessments::CategoryChipBar < Views::Base
 
   # The category's score, once enough of its assessed-level cells are rated
   # to mean something (the hero's own unlock rule).
-  def pct_badge(result, active)
-    color = active ? "text-white/80 dark:text-gray-900/80" : tone_text(result[:state])
-    span(class: "text-xs font-mono tabular-nums #{color}") { "#{percent(result[:score])}%" }
+  def pct_badge(result)
+    span(class: "text-xs font-mono tabular-nums #{tone_text(result[:state])} " \
+                "group-aria-[current=page]:text-white/80 dark:group-aria-[current=page]:text-gray-900/80") do
+      "#{percent(result[:score])}%"
+    end
   end
 
   # Tiny "3/24" count tucked inside the chip — desktop only so narrow
   # viewports keep chips compact and horizontally scrollable. Hidden when
-  # the category has no cells. Active variant lifts contrast against the
-  # dark chip fill (text-gray-300 at 10px was barely legible).
-  def rated_count_chip(cat_data, active)
+  # the category has no cells. The active chip lifts contrast against its
+  # dark fill (text-gray-300 at 10px was barely legible).
+  def rated_count_chip(cat_data)
     counts = category_rated_count(cat_data, @context)
     return if counts[:total].zero?
 
-    color = active ? "text-white/70 dark:text-gray-900/70" : "text-gray-600 dark:text-gray-300"
-    span(class: "hidden lg:inline text-[10px] font-mono tabular-nums #{color}") do
+    span(class: "hidden lg:inline text-[10px] font-mono tabular-nums text-gray-600 dark:text-gray-300 " \
+                "group-aria-[current=page]:text-white/70 dark:group-aria-[current=page]:text-gray-900/70") do
       "#{counts[:rated]}/#{counts[:total]}"
     end
   end
