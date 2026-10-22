@@ -8,9 +8,10 @@
 # single request/operation produced.
 #
 # Five provenance fields, all carried in RES *metadata* (never payload):
-#   - `acting_via` — :web | :mcp | :hris | :system (the surface; :system is
-#     a scheduled job acting on its own, e.g. the evidence-request reminder
-#     sweep).
+#   - `acting_via` — :web | :mcp | :hris | :slack | :feedback_exchange |
+#     :system (the surface; :feedback_exchange is feedback imported from a
+#     peer system, written as its real author; :system is a scheduled job
+#     acting on its own, e.g. the evidence-request reminder sweep).
 #   - `actor_id` — the Person uuid who triggered the write, when there is
 #     one (nil for system-driven HRIS syncs). While a tenant admin is
 #     impersonating another user, this is the *impersonated* Person — the
@@ -44,7 +45,7 @@
 # is set, and is a transparent no-op otherwise. This keeps Operations
 # safe to call from tests and rake tasks that never seed metadata.
 module AuditMetadata
-  ACTING_VIA = %i[web mcp hris slack system].freeze
+  ACTING_VIA = %i[web mcp hris slack feedback_exchange system].freeze
 
   STORE_KEY = :audit_metadata
   private_constant :STORE_KEY
@@ -54,7 +55,7 @@ module AuditMetadata
   # Block form. Restores any prior context on exit so nested calls
   # (e.g. an HRIS sync that invokes an Operation) behave predictably.
   #
-  # @param acting_via [Symbol] :web | :mcp | :hris | :slack | :system
+  # @param acting_via [Symbol] one of {ACTING_VIA}
   # @param actor_id [String, nil] uuid of the Person triggering the write
   # @param impersonator_id [String, nil] uuid of the real Person when an
   #   impersonation session is active

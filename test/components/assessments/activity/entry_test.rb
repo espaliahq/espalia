@@ -22,6 +22,27 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
     Views::Assessments::Activity::Entry.new(entry: entry).call
   end
 
+  ImportedItem = Struct.new(:title, :content, :author, :withdrawn_by, :recorded_unplaced, :external_reference,
+                            keyword_init: true)
+
+  context "evidence_recorded from a peer system" do
+    should "say where it was given, linking to the original" do
+      reference = ExternalReference.new(system: "chip", url: "https://chip.example.com/f/1",
+                                        metadata: { "given_at" => "2026-10-18T03:12:44Z" })
+      item = ImportedItem.new(title: "", content: "Calm call.", author: Person.new("Priya"), external_reference: reference)
+      html = Nokogiri::HTML5.fragment(render_entry(kind: "evidence_recorded", payload: item, capability_stable_id: nil,
+                                                   level_ordinal: nil))
+      assert_includes html.text, "Priya gave feedback, not yet placed on a capability"
+      assert_equal "https://chip.example.com/f/1", html.at_css("a[data-origin='chip']")["href"]
+    end
+
+    should "carry no badge for a reference the exchange did not write" do
+      reference = ExternalReference.new(system: "github", url: "https://github.com/o/r/pull/1")
+      item = ImportedItem.new(title: "", content: "PR.", author: Person.new("Ada"), external_reference: reference)
+      assert_not_includes render_entry(kind: "evidence_recorded", payload: item), "data-origin"
+    end
+  end
+
   context "evidence_recorded" do
     should "name the author who recorded it" do
       item = Item.new(title: "Launch", content: "Shipped X.", author: Person.new("Ada"))
@@ -98,6 +119,26 @@ class Views::Assessments::Activity::EntryTest < ActiveSupport::TestCase
       html = render_entry(kind: "evidence_linked",
         payload: { actor_name: nil, evidence_title: "Launch" })
       assert_includes html, "Linked “Launch” to Critical Thinking · L2"
+    end
+  end
+
+  context "a link decision taken from a placement suggestion" do
+    should "say so on a link" do
+      html = render_entry(kind: "evidence_linked",
+        payload: { actor_name: "Ada", valence: "demonstrated", via_suggestion_id: SecureRandom.uuid_v7 })
+      assert_includes html, "Demonstrates · from a suggestion"
+    end
+
+    should "say so on a reclassification" do
+      html = render_entry(kind: "evidence_revalenced",
+        payload: { actor_name: "Ada", valence: "growth_area", previous_valence: "demonstrated",
+                   via_suggestion_id: SecureRandom.uuid_v7 })
+      assert_includes html, "Growth area (was Demonstrates) · from a suggestion"
+    end
+
+    should "say nothing when the person chose the cell themselves" do
+      html = render_entry(kind: "evidence_linked", payload: { actor_name: "Ada", valence: "demonstrated" })
+      refute_includes html, "from a suggestion"
     end
   end
 
