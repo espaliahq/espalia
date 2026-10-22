@@ -22,7 +22,7 @@ class FeedbackExchangeContractTasksTest < ActiveSupport::TestCase
   end
 
   def cache!(fetched_at)
-    @cache.write(contract.merge("fetched_at" => fetched_at.iso8601).to_json)
+    @cache.write(contract.merge("fetched_at" => fetched_at.iso8601, "source_url" => URL).to_json)
   end
 
   def check(committed, deployed: nil, status: 200, labelled: false, url: URL)
@@ -89,10 +89,22 @@ class FeedbackExchangeContractTasksTest < ActiveSupport::TestCase
       assert_raises(FeedbackExchangeContractTasks::PeerContract::Unavailable) { resolve(Response.new(status: nil, body: "SocketError")) }
     end
 
-    should "refuse a contract between other parties or in another protocol" do
-      [ contract(consumer: "growthos", provider: "chip"), contract(protocol: "v2"), { "consumer_pact" => nil } ].each do |body|
-        assert_raises(FeedbackExchangeContractTasks::PeerContract::Unavailable) { resolve(Response.new(status: 200, body: body.to_json)) }
+    should "refuse a contract between other parties, in another protocol or not JSON, even with a copy to fall back on" do
+      cache!(@now - 3.days)
+
+      [ contract(consumer: "growthos", provider: "chip").to_json, contract(protocol: "v2").to_json, "{}", "<html>" ].each do |body|
+        assert_raises(FeedbackExchangeContractTasks::PeerContract::Unavailable) { resolve(Response.new(status: 200, body: body)) }
       end
+    end
+
+    should "ignore a copy fetched from another address, or one that does not say when" do
+      cache!(@now - 1.hour)
+      resolve(Response.new(status: 200, body: contract.to_json), url: "https://chip-staging.example/contract")
+
+      @cache.write(contract.to_json)
+      resolve(Response.new(status: 200, body: contract.to_json))
+
+      assert_equal 2, @calls
     end
   end
 

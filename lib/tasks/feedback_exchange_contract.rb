@@ -53,7 +53,8 @@ module FeedbackExchangeContractTasks
     end
 
     # @return [Result]
-    # @raise [Unavailable] when the fetch failed and there is no copy to fall back on
+    # @raise [Unavailable] when the fetch failed and there is no copy to fall
+    #   back on, or Chip answered with something other than its v1 pact of us
     def resolve
       return Result.new(nil, "No peer contract URL is set (FEEDBACK_EXCHANGE_PEER_CONTRACT_URL); nothing to verify.", []) unless @url
       return cached("the copy is under a day old") if cache && !@fresh && young?
@@ -64,21 +65,21 @@ module FeedbackExchangeContractTasks
       end
       return fall_back("#{@url} answered #{response.status || response.body}") unless response.status == 200
 
+      # An answer that is the wrong contract is a change on Chip's side to
+      # look at, never a reason to keep verifying against an old copy.
       store(parse(response.body))
       Result.new(@cache_file.to_s, "Fetched Chip's contract from #{@url}.", [])
-    rescue JSON::ParserError, Unavailable => e
-      raise if e.is_a?(Unavailable) && cache.nil?
-
-      fall_back(e.message)
     end
 
     private
 
+    # The copy, when it came from this URL and says when; anything else is no copy.
     def cache
       return @cache if defined?(@cache)
 
-      @cache = @cache_file.exist? ? JSON.parse(@cache_file.read) : nil
-    rescue JSON::ParserError
+      copy = @cache_file.exist? ? JSON.parse(@cache_file.read) : nil
+      @cache = copy if copy.is_a?(Hash) && copy["source_url"] == @url && Time.iso8601(copy["fetched_at"].to_s)
+    rescue JSON::ParserError, ArgumentError
       @cache = nil
     end
 
@@ -94,7 +95,11 @@ module FeedbackExchangeContractTasks
     end
 
     def parse(body)
-      contract = JSON.parse(body)
+      contract = begin
+        JSON.parse(body)
+      rescue JSON::ParserError
+        nil
+      end
       raise Unavailable, "#{@url} is not a /contract response" unless contract.is_a?(Hash) && contract["consumer_pact"].is_a?(Hash)
       raise Unavailable, "#{@url} speaks protocol #{contract['protocol'].inspect}, not #{PROTOCOL}" unless contract["protocol"] == PROTOCOL
 
