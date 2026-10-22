@@ -118,7 +118,8 @@ class Components::Shell::Navbar < Components::Base
       aria: { current: ("page" if link[:current]) },
       class: "px-3 py-1.5 rounded-md text-sm font-medium " \
              "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors " \
-             "aria-[current=page]:bg-current/12 aria-[current=page]:font-semibold aria-[current=page]:text-nav"
+             "aria-[current=page]:font-semibold aria-[current=page]:text-nav aria-[current=page]:underline " \
+             "aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-[6px]"
     ) do
       plain link[:label]
     end
