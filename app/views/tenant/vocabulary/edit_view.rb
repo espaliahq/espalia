@@ -93,7 +93,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
 
   def actions(form)
     div(class: "flex justify-end") do
-      form.submit "Save", class: Components::Kit::Button.classes(tone: :brand)
+      form.submit "Save", class: Components::Kit::Button.classes(tone: :brand, touch: true)
     end
   end
 end
