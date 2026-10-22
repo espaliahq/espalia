@@ -13,7 +13,10 @@ class Kit::FieldPreview < Lookbook::Preview
         card.body do
           div(class: "grid max-w-md gap-4") do
             field("Who should give it?", "recipient") { |id| input(**text_attributes(id, Components::Kit::Field::INPUT, "Name or email", value: "Priya Raman")) }
-            field("Capability", "capability") { |id| select_field(id) }
+            field("Capability", "capability") do |id|
+              select_field(id)
+              p(id: "capability-error-#{@state}", class: "text-sm text-danger") { "Choose a capability." } if invalid?
+            end
             field("What should they comment on?", "prompt") { |id| textarea(**text_attributes(id, Components::Kit::Field::TEXTAREA, "A project, a meeting, a piece of work")) { filled? ? "How I ran the Q3 planning offsite" : nil } }
             field("Cycle name (inline editor)", "cycle") { |id| input(**text_attributes(id, Components::Kit::Field::INLINE, "Cycle name", value: "H2 2026 performance review")) }
             choice("Ask anonymously", "anonymous", "checkbox", Components::Kit::Field::CHECKBOX)
@@ -47,7 +50,8 @@ class Kit::FieldPreview < Lookbook::Preview
     end
 
     def select_field(id)
-      select(id:, name: id, class: [ Components::Kit::Field::SELECT, (Components::Kit::Field::INVALID if invalid?) ], disabled: disabled?) do
+      aria = invalid? ? { invalid: "true", describedby: "capability-error-#{@state}" } : {}
+      select(id:, name: id, class: [ Components::Kit::Field::SELECT, (Components::Kit::Field::INVALID if invalid?) ], disabled: disabled?, aria:) do
         option(value: "") { "Choose a capability" }
         option(value: "delivery", selected: filled?) { "Delivery" }
         option(value: "collaboration") { "Collaboration" }
