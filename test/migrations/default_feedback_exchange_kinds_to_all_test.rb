@@ -18,15 +18,24 @@ class DefaultFeedbackExchangeKindsToAllTest < ActiveSupport::TestCase
     ActiveRecord::Migration.suppress_messages { DefaultFeedbackExchangeKindsToAll.new.migrate(direction) }
   end
 
-  should "turn an empty import list and the old export default, in any order, into all" do
+  should "turn an empty import list into all" do
     defaulted = stored({ "peer_name" => "chip", "import_kinds" => [], "export_kinds" => OLD_DEFAULT })
+
+    migrate(:up)
+
+    assert_equal({ "peer_name" => "chip", "import_kinds" => %w[all], "export_kinds" => OLD_DEFAULT }, config_of(defaulted))
+    assert defaulted.reload.feedback_exchange_config.imports_kind?("feedback")
+  end
+
+  should "keep an export list equal to the old default, since an admin may have chosen it" do
+    exact = stored({ "export_kinds" => OLD_DEFAULT })
     shuffled = stored({ "export_kinds" => OLD_DEFAULT.reverse })
 
     migrate(:up)
 
-    assert_equal({ "peer_name" => "chip", "import_kinds" => %w[all], "export_kinds" => %w[all] }, config_of(defaulted))
-    assert_equal({ "export_kinds" => %w[all] }, config_of(shuffled))
-    assert defaulted.reload.feedback_exchange_config.imports_kind?("feedback")
+    assert_equal({ "export_kinds" => OLD_DEFAULT }, config_of(exact))
+    assert_equal({ "export_kinds" => OLD_DEFAULT.reverse }, config_of(shuffled))
+    assert_not exact.reload.feedback_exchange_config.exports_all_kinds?
   end
 
   should "treat a null or blank-only import list as the empty list it was read as" do
@@ -67,7 +76,7 @@ class DefaultFeedbackExchangeKindsToAllTest < ActiveSupport::TestCase
     assert_no_changes -> { DefaultFeedbackExchangeKindsToAll::TenantRow.find(tenant.id).attributes } do
       migrate(:up)
     end
-    assert_equal({ "import_kinds" => %w[all], "export_kinds" => %w[all] }, config_of(tenant))
+    assert_equal({ "import_kinds" => %w[all], "export_kinds" => OLD_DEFAULT }, config_of(tenant))
   end
 
   should "restore the old meaning on the way down" do
@@ -79,5 +88,8 @@ class DefaultFeedbackExchangeKindsToAllTest < ActiveSupport::TestCase
 
     assert_equal({ "import_kinds" => [], "export_kinds" => OLD_DEFAULT }, config_of(tenant))
     assert_equal({ "import_kinds" => %w[impact], "export_kinds" => %w[impact] }, config_of(chosen))
+    all_chosen = stored({ "export_kinds" => %w[all] })
+    migrate(:down)
+    assert_equal({ "export_kinds" => %w[all] }, config_of(all_chosen))
   end
 end
