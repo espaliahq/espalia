@@ -13,8 +13,7 @@ class Views::Evidence::OriginBadge < Views::Base
   }.freeze
 
   # Neutral and opaque: colour beside feedback already means a rating or a valence.
-  BASE = "inline-flex items-center gap-0.5 rounded-full border border-gray-300 bg-white font-medium " \
-         "text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
+  BASE = "inline-flex items-center gap-0.5 rounded-full border border-emphasized bg-default font-medium text-default"
 
   # @param reference [ExternalReference]
   # @param size [Symbol] :xs or :sm
