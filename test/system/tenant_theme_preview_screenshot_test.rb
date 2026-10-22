@@ -30,10 +30,10 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
     wait_for_stimulus "theme-live-preview"
     screenshot("01_initial_state")
 
-    choose "tenant[theme]", option: "bento"
+    choose_theme "bento", rendered: "html[data-theme='bento']"
     screenshot("01b_bento_previewed")
 
-    choose "tenant[theme]", option: "custom"
+    choose_theme "custom", rendered: "html:not([data-theme]) fieldset[data-theme-live-preview-target='custom']:not([hidden])"
 
     # High-contrast magenta — easy to eyeball against the default teal
     set_color_field("tenant[custom_theme][brand][light]", "#ff0080")
@@ -56,6 +56,12 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
   end
 
   private
+
+  # A bare `choose` drops its click on a starved runner, so dispatch it and wait for the preview to follow.
+  def choose_theme(value, rendered:)
+    assert_equal true, dispatch_js_click("input[type=radio][name='tenant[theme]'][value='#{value}']")
+    assert_selector rendered, visible: :all
+  end
 
   def set_color_field(name, hex)
     page.execute_script(<<~JS)
