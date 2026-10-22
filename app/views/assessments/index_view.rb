@@ -72,7 +72,7 @@ class Views::Assessments::IndexView < Views::Base
     if @assignments.empty?
       empty_state
     else
-      div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+      div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
         @assignments.each { |a| assignment_card(a) }
       end
     end
@@ -134,7 +134,7 @@ class Views::Assessments::IndexView < Views::Base
       p(class: "text-sm text-muted mb-4") do
         "Review and rate your direct reports\u2019 assessments."
       end
-      div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+      div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
         @report_assignments.each { |a| report_assignment_card(a) }
       end
     end
@@ -150,7 +150,7 @@ class Views::Assessments::IndexView < Views::Base
       p(class: "text-sm text-muted mb-4") do
         "Assessments across your wider team — people reporting below your direct reports."
       end
-      div(class: "grid gap-4 sm:grid-cols-2 lg:grid-cols-3") do
+      div(class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3") do
         @skip_level_assignments.each { |a| report_assignment_card(a) }
       end
       skip_level_pager if @skip_level_pagy && @skip_level_pagy.last > 1
@@ -193,8 +193,8 @@ class Views::Assessments::IndexView < Views::Base
 
     render Components::Kit::Card.new do |card|
       card.body do
-        div(class: "flex items-start justify-between") do
-          div do
+        div(class: "flex items-start justify-between gap-3") do
+          div(class: "min-w-0") do
             h3(class: "text-lg font-semibold text-default") do
               person&.name || "Team Member"
             end
@@ -225,8 +225,8 @@ class Views::Assessments::IndexView < Views::Base
 
     render Components::Kit::Card.new do |card|
       card.body do
-        div(class: "flex items-start justify-between") do
-          div do
+        div(class: "flex items-start justify-between gap-3") do
+          div(class: "min-w-0") do
             h3(class: "text-lg font-semibold text-default") do
               assignment.framework&.name || "Framework"
             end
@@ -255,7 +255,7 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def assignment_badges(assignment)
-    div(class: "mt-1 flex items-center gap-2") do
+    div(class: "mt-1 flex flex-wrap items-center gap-2") do
       render Components::Kit::Badge.new(assignment.role.name, variant: :info) if assignment.role
       render Components::Kit::Badge.new(assignment.level.title, variant: :default) if assignment.level
     end
