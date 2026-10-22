@@ -9,7 +9,7 @@ The short version: **colour with a role, never a palette step.** Write `text-mut
 | Piece | What it is | Where it lives |
 |---|---|---|
 | **Role** | What a colour is for: `--gos-content-muted`, `--gos-surface-default`. One light and one dark value. | `app/assets/tailwind/theme/roles.css` |
-| **Utility** | The Tailwind class for a role: `text-muted`, `bg-default`, `border-subtle`. | `@theme inline` at the foot of each theme file |
+| **Utility** | The Tailwind class for a role: `text-muted`, `bg-default`, `border-subtle`. | the `@theme inline` blocks in `roles.css`, `domain.css` and `categorical.css`; a preset file sets values only |
 | **Theme** | A set of role values. | Default: `roles.css`. Bento: `theme/bento.css` on `html[data-theme="bento"]`. Custom: a tenant's values, injected by the layout. |
 | **Tone** | A class (`tone-brand`, `tone-danger`…) that points the generic `--gos-tone-*` roles at one role set. | `@utility tone-*` in `roles.css` |
 | **Domain palette** | Colours that carry assessment meaning: rating, score, activity. | `theme/domain.css` |
