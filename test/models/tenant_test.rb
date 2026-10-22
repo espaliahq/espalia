@@ -55,6 +55,8 @@ class TenantTest < ActiveSupport::TestCase
     should_not allow_value({ "brand" => { "light" => "#000000;}body{" } }).for(:custom_theme)
     should_not allow_value({ "brand" => { "sepia" => "#112233" } }).for(:custom_theme)
     should_not allow_value({ "brand" => "#112233" }).for(:custom_theme)
+    should_not allow_value({ "brand" => [ "#112233" ] }).for(:custom_theme)
+    should_not allow_value([ [ "brand", { "light" => "#112233" } ] ]).for(:custom_theme)
 
     should "drop blank values and roles left empty" do
       tenant = build(:tenant, custom_theme: { brand: { light: "#112233", dark: "" }, "nav-surface" => { light: nil } })

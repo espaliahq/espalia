@@ -65,12 +65,12 @@ module Themeable
   # @param value [Hash, nil]
   # @return [Hash, Object] the cleaned hash, or the value untouched when it isn't one
   def self.compact_custom_theme(value)
-    return value unless value.respond_to?(:to_h)
+    return value unless value.is_a?(Hash)
 
-    value.to_h.each_with_object({}) do |(role, schemes), theme|
-      next theme[role.to_s] = schemes unless schemes.respond_to?(:to_h)
+    value.each_with_object({}) do |(role, schemes), theme|
+      next theme[role.to_s] = schemes unless schemes.is_a?(Hash)
 
-      kept = schemes.to_h.transform_keys(&:to_s).reject { |_, hex| hex.blank? }
+      kept = schemes.transform_keys(&:to_s).reject { |_, hex| hex.blank? }
       theme[role.to_s] = kept if kept.any?
     end
   end
