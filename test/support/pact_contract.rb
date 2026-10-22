@@ -42,7 +42,8 @@ module PactContract
   # @param provider [String] the provider's name in the pact
   # @param base_url [String] where the provider listens
   # @param state_change_url [String] where the verifier POSTs `{ state, action }`
-  # @return [Array(Boolean, String)] whether every interaction passed, and the report
+  # @return [Array(Boolean, String)] whether every interaction passed, and the
+  #   report, which the verifier has also printed
   def verify(pact_file:, provider:, base_url:, state_change_url:)
     uri = URI(base_url)
     handle = PactFfi::Verifier.new_for_application("growthos-contract", "1")
