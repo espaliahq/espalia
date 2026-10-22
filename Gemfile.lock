@@ -321,7 +321,7 @@ GEM
       ffi (~> 1.15)
     pact-ffi (0.5.8.1-x86_64-linux-musl)
       ffi (~> 1.15)
-    pagy (43.7.0)
+    pagy (43.8.1)
       json
       uri
       yaml
@@ -600,7 +600,7 @@ DEPENDENCIES
   omniauth-rails_csrf_protection (~> 2.0)
   overmind
   pact-ffi (~> 0.5.8)
-  pagy (~> 43.7)
+  pagy (~> 43.8)
   pg
   phlex (~> 2.4.1)
   phlex-rails (~> 2.4.0)
