@@ -795,7 +795,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       )
       assert_match(/bg-neutral-subtle/, chip_classes,
         "Unrated at-person-level chip should be neutral grey. Classes: #{chip_classes}")
-      assert_no_match(/bg-blue/, chip_classes,
+      assert_no_match(/bg-rating-consistent-assumed/, chip_classes,
         "Unrated at-person-level chip must NOT get the below-level blue tint. Classes: #{chip_classes}")
     end
 

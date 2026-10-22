@@ -23,8 +23,7 @@ class ViewColourRolesTest < ActiveSupport::TestCase
     app/javascript/controllers/person_picker_controller.js
   ].freeze
 
-  # Waiting on a domain token: the evidence valence hues and the vocabulary
-  # preview, which copies the hero's per-state panel (#544). Remove an entry
+  # A site still waiting on a domain token, with the reason. Remove an entry
   # when its site moves; a stale entry fails too.
   PENDING = {}.freeze
 
