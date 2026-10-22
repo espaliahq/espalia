@@ -14,7 +14,7 @@
 class Components::Kit::Tag < Components::Base
   CATEGORY_COUNT = 8
 
-  BASE = "inline-flex shrink-0 items-center gap-1 rounded-full whitespace-nowrap leading-none"
+  BASE = "inline-flex max-w-full shrink-0 items-center gap-1 rounded-full whitespace-nowrap leading-none"
 
   CATEGORIES = {
     1 => "bg-category-1 text-category-1",
@@ -69,7 +69,7 @@ class Components::Kit::Tag < Components::Base
   def view_template
     span(**@attrs, class: [ BASE, @size, @colour, @attrs[:class] ].compact.join(" ")) do
       icon(@leading_icon, class: "#{@icon_size} shrink-0") if @leading_icon
-      plain @label
+      span(class: "truncate") { @label }
       icon(@trailing_icon, class: "#{@icon_size} shrink-0") if @trailing_icon
     end
   end
