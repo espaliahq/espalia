@@ -25,7 +25,7 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
-| `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md), [slack-integration.md](docs/guidelines/slack-integration.md) |
+| `app/integrations/` | [hris-integration.md](docs/guidelines/hris-integration.md), [slack-integration.md](docs/guidelines/slack-integration.md), [feedback-exchange.md](docs/guidelines/feedback-exchange.md) |
 | `app/contexts/` | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | `app/read_models/` | [event-sourcing.md](docs/guidelines/event-sourcing.md), [rails-models.md](docs/guidelines/rails-models.md) |
 | `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
@@ -89,6 +89,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Write a query that reads ratings | [assessments/role-lens.md â†’ Role-scoped reads](docs/guidelines/assessments/role-lens.md) |
 | Change HRIS sync or the role/level mapping | [hris-integration.md](docs/guidelines/hris-integration.md), [integrations.md](docs/architecture/integrations.md) |
 | Change Slack notifications, the feedback modal or an inbound Slack endpoint | [slack-integration.md](docs/guidelines/slack-integration.md) |
+| Change the feedback exchange with a peer system: its settings, secrets, signing, client or signed endpoints | [feedback-exchange.md](docs/guidelines/feedback-exchange.md), [integrations.md](docs/architecture/integrations.md) |
 | Add or change an event, aggregate, projection or read model | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | Bump a projection's `CODE_VERSION`, or rebuild one | [projection-rebuild.md](docs/runbooks/projection-rebuild.md) |
 | Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) |

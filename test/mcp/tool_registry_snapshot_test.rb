@@ -38,6 +38,26 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   def expected_snapshot
     [
       {
+        "name" => "assessments_accept_evidence_suggestion",
+        "description" => "Accept a placement suggestion: link the feedback / evidence to the suggested capability × level. " \
+                         "Pass valence to place it with a different judgement than the one suggested; the decision is then " \
+                         "recorded as edited rather than accepted.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "suggestion_id" => { "type" => "string" },
+            "valence"       => { "type" => "string", "enum" => EvidenceLink::VALENCES }
+          },
+          "required" => %w[suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_add_evidence_link",
         "description" => "Link an existing feedback / evidence item to an additional capability × level.",
         "inputSchema" => {
@@ -284,6 +304,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_dismiss_evidence_suggestion",
+        "description" => "Dismiss a placement suggestion for a piece of feedback / evidence, optionally saying why. " \
+                         "The same capability × level is not suggested for that item again.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "suggestion_id" => { "type" => "string" },
+            "reason"        => { "type" => "string" }
+          },
+          "required" => %w[suggestion_id],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => false,
+          "destructiveHint" => false,
+          "idempotentHint"  => false
+        }
+      },
+      {
         "name" => "assessments_edit_comment",
         "description" => "Edit the body of one of your own comments on an assessment. " \
                          "`body` is Markdown: links, **bold**, _italic_, lists and `code` render, a bare URL becomes a link, typed HTML shows as text and images render as links.",
@@ -335,6 +374,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "status" => { "type" => "string", "enum" => %w[pending responded declined cancelled] }
           },
           "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
+        "name" => "assessments_evidence_suggestions_list",
+        "description" => "List the pending placement suggestions on an assessment, or for one feedback / evidence item: " \
+                         "the suggested capability × level and valence, a confidence from 0 to 1 and a rationale quoting " \
+                         "the feedback (null when the model gives none). Accept or dismiss them with assessments_accept_evidence_suggestion / " \
+                         "assessments_dismiss_evidence_suggestion.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "evidence_id"   => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => %w[assignment_id],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -2183,6 +2243,45 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_ai_model_status",
+        "description" => "Show how this workspace's AI model is set up for feedback placement suggestions: whether it is " \
+                         "ready (a complete provider, address and model with an API key stored; it does not prove the " \
+                         "endpoint answers), the provider, the host of its address, the model id, whether suggestions are " \
+                         "on, whether people's names are hidden from the model, and whether a key is stored. Never " \
+                         "returns the key.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "integrations_feedback_exchange_status",
+        "description" => "Show the state of this workspace's feedback exchange with a peer system: whether it is " \
+                         "set up (connected means enabled with a peer and both signing secrets stored; it does not " \
+                         "prove the peer answers), the peer and its address, the last sync, the types it sends and imports " \
+                         "(an empty import list means everything), whether the secrets and sync cursors are present, and " \
+                         "what the import has done: records imported, updated, withdrawn and skipped, with each skip reason " \
+                         "and the people the peer named that GrowthOS could not find. Never returns a secret.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "integrations_hris_titles",
         "description" => "List the job titles active HRIS people hold, each with the framework role mapping it " \
                          "resolves to (nil = unmapped, so the sync skips those people) and the people the next " \
@@ -2291,7 +2390,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
           "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
-          "withdrawn feedback, request statuses, fulfilment rate, participant coverage, " \
+          "withdrawn feedback, where it was given (by_origin: GrowthOS, or the system it arrived from), " \
+          "request statuses, fulfilment rate, participant coverage, " \
           "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
           "recorded and requests sent in one calendar month of the cycle; the response lists " \
           "the months available.",
@@ -2321,10 +2421,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "reporting_feedback_export",
         "description" => "Export every piece of feedback / evidence in an assessment cycle, one row each, " \
           "for monthly reporting (tenant admins only): recipient and provider with their roles, " \
-          "direction, requested or proactive, type, title, the feedback text, the behaviours it " \
-          "applies to, and status. The rows are exactly the feedback the cycle's coverage report " \
-          "counts. Pass month (YYYY-MM) to narrow to feedback recorded in one calendar month, and " \
-          "include_withdrawn to list withdrawn feedback too. The response carries every row's full text, " \
+          "direction, requested or proactive (a GrowthOS request), where it was given (origin) and the request " \
+          "it answered there, type, title, the feedback text, the behaviours it applies to, and status. " \
+          "The rows match the feedback the cycle's coverage report counts as provided; include_withdrawn " \
+          "adds the withdrawn items it reports separately. Pass month (YYYY-MM) to narrow to feedback " \
+          "recorded in one calendar month. The response carries every row's full text, " \
           "so a month is far smaller than a whole cycle; for counts alone use reporting_evidence_coverage.",
         "inputSchema" => {
           "type" => "object",
@@ -2414,14 +2515,15 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
   # The published JSON Schema for an evidence item's external_reference,
   # shared by every evidence-write tool's snapshot. Mirrors
   # ExternalReference.json_schema (deep-stringified) so clients see the
-  # accepted keys + the `system` enum instead of a bare free-form object.
+  # accepted keys + the known systems instead of a bare free-form object.
   def external_reference_schema
     {
       "type" => "object",
       "description" => "Optional pointer to a supporting source in an external system.",
       "properties" => {
-        "system"      => { "type" => "string", "enum" => ExternalReference::SYSTEMS,
-                           "description" => "Originating system." },
+        "system"      => { "type" => "string", "pattern" => "^[a-z0-9]+(?:[_-][a-z0-9]+)*$",
+                           "examples" => ExternalReference::KNOWN_SYSTEMS,
+                           "description" => "Originating system, as a lowercase slug." },
         "url"         => { "type" => "string", "description" => "An http(s) link to the source." },
         "external_id" => { "type" => "string", "description" => "The item's ID within that system." },
         "metadata"    => { "type" => "object", "description" => "Free-form additional fields." }

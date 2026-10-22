@@ -38,6 +38,9 @@
 #   @option data [String, nil] :request_id the evidence request this item
 #     answers, when recorded as a response; nil otherwise and on events
 #     published before it was carried
+#   @option data [String, nil] :recorded_at ISO 8601 time the feedback was
+#     given, when it arrives after the fact (imported from a peer system);
+#     absent otherwise, and the event's own timestamp dates the item
 #   @option data [String] :valence the origin link's valence — one of
 #     EvidenceLink::VALENCES. Required on new events; absent on events
 #     published before valence existed (consumers must tolerate nil).

@@ -1,0 +1,1390 @@
+{
+  "consumer": {
+    "name": "growthos"
+  },
+  "interactions": [
+    {
+      "description": "GrowthOS's ack after importing marcus.test's feedback to sam.test",
+      "providerStates": [
+        {
+          "name": "marcus.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "body": {
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000f002",
+              "remote_id": "94e869b1-057f-588a-a215-cb2b039afa09",
+              "remote_url": "https://growthos.example/assessments/00000000-0000-7000-8000-00000000e002"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=4ad6f12cf058ed3226326604fc5806a0e5109d2c4bf3cdc39aae162649405817",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "POST",
+        "path": "/chip/api/feedback-exchange/feedback/ack"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "description": "GrowthOS's ack after importing priya.test's answer",
+      "providerStates": [
+        {
+          "name": "priya.test has answered sam.test's request in a period"
+        }
+      ],
+      "request": {
+        "body": {
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000f004",
+              "remote_id": "05103a77-3afa-5317-b39d-b8000cdcbb08",
+              "remote_url": "https://growthos.example/assessments/00000000-0000-7000-8000-00000000e002"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=9f5a9a4ed643adbeff89d15a7e02c1bd0cbe229e12089ce9201c0ee6dd0d4ee9",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "POST",
+        "path": "/chip/api/feedback-exchange/feedback/ack"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "description": "GrowthOS's ack after importing priya.test's feedback to sam.test",
+      "providerStates": [
+        {
+          "name": "priya.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "body": {
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000f001",
+              "remote_id": "e1a6f413-184e-5983-9227-34c7352232f7",
+              "remote_url": "https://growthos.example/assessments/00000000-0000-7000-8000-00000000e002"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=d151f7175f4fd506dad540879e9d35a17ce455bbfe39a17da695f1bf2273e3f3",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "POST",
+        "path": "/chip/api/feedback-exchange/feedback/ack"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "description": "GrowthOS's ack after updating priya.test's edited feedback",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test was edited"
+        }
+      ],
+      "request": {
+        "body": {
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000f001",
+              "remote_id": "e1a6f413-184e-5983-9227-34c7352232f7",
+              "remote_url": "https://growthos.example/assessments/00000000-0000-7000-8000-00000000e002"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=d151f7175f4fd506dad540879e9d35a17ce455bbfe39a17da695f1bf2273e3f3",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "POST",
+        "path": "/chip/api/feedback-exchange/feedback/ack"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "description": "GrowthOS's ack naming where priya.test's feedback to sam.test lives here",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test can be acknowledged"
+        }
+      ],
+      "request": {
+        "body": {
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000f001",
+              "remote_id": "e1a6f413-184e-5983-9227-34c7352232f7",
+              "remote_url": "https://growthos.example/assessments/00000000-0000-7000-8000-00000000e002"
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=d151f7175f4fd506dad540879e9d35a17ce455bbfe39a17da695f1bf2273e3f3",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "POST",
+        "path": "/chip/api/feedback-exchange/feedback/ack"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "description": "a request for Chip's deletions feed after P&C deleted priya.test's feedback",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test was deleted"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "deleted_at": "2026-10-20T23:00:00.000000Z",
+              "id": "00000000-0000-4000-8000-00000000f005"
+            }
+          ],
+          "next_cursor": "ZDF8MjAyNi0xMC0yMFQyMzowMDowMC4wMDAwMDBafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjMwNXwx"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].deleted_at": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's deletions page after priya.test's edit",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test was edited"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's deletions page while lena.test's feedback waits",
+      "providerStates": [
+        {
+          "name": "lena.test has given sam.test feedback without manager consent"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's deletions page while marcus.test's feedback waits",
+      "providerStates": [
+        {
+          "name": "marcus.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's deletions page while priya.test's answer waits",
+      "providerStates": [
+        {
+          "name": "priya.test has answered sam.test's request in a period"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's deletions page while priya.test's feedback waits",
+      "providerStates": [
+        {
+          "name": "priya.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed after priya.test's feedback was deleted",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test was deleted"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed while Chip has the exchange switched off",
+      "providerStates": [
+        {
+          "name": "the exchange is disabled"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "description": "a request for Chip's feed with lena.test's feedback to sam.test, shared without manager consent",
+      "providerStates": [
+        {
+          "name": "lena.test has given sam.test feedback without manager consent"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "audience": [
+                "recipient",
+                "hr"
+              ],
+              "author": {
+                "active": true,
+                "display_name": "Lena Tester",
+                "email": "lena.test@meandu.com",
+                "external_ids": {
+                  "hibob": "1414"
+                }
+              },
+              "external_reference": null,
+              "given_at": "2026-10-20T21:30:00.222222Z",
+              "id": "00000000-0000-4000-8000-00000000f003",
+              "kind": "feedback",
+              "notified": [
+                "author"
+              ],
+              "origin": "chip",
+              "period": null,
+              "recipient": {
+                "active": true,
+                "display_name": "Sam Recipient",
+                "email": "sam.test@meandu.com",
+                "external_ids": {
+                  "hibob": "2718"
+                }
+              },
+              "request": null,
+              "source_url": "https://chip.example/chip/dashboard/feedback/00000000-0000-4000-8000-00000000f003",
+              "status": "active",
+              "text": "Your review of my pull request was thoughtful and quick.",
+              "text_format": "markdown",
+              "updated_at": "2026-10-20T21:30:00.222222Z"
+            }
+          ],
+          "next_cursor": "ZjF8MjAyNi0xMC0yMFQyMTozMDowMC4yMjIyMjJafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMw"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].author.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].notified": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
+                }
+              ]
+            },
+            "$.items[0].recipient.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].source_url": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^https://\\S+/dashboard/feedback/[0-9a-f-]{36}$"
+                }
+              ]
+            },
+            "$.items[0].text": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed with marcus.test's consented feedback to sam.test",
+      "providerStates": [
+        {
+          "name": "marcus.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "audience": [
+                "recipient",
+                "management_line",
+                "hr"
+              ],
+              "author": {
+                "active": true,
+                "display_name": "Marcus Tester",
+                "email": "marcus.test@meandu.com",
+                "external_ids": {
+                  "hibob": "1618"
+                }
+              },
+              "external_reference": null,
+              "given_at": "2026-10-20T21:00:00.111111Z",
+              "id": "00000000-0000-4000-8000-00000000f002",
+              "kind": "feedback",
+              "notified": [
+                "author"
+              ],
+              "origin": "chip",
+              "period": null,
+              "recipient": {
+                "active": true,
+                "display_name": "Sam Recipient",
+                "email": "sam.test@meandu.com",
+                "external_ids": {
+                  "hibob": "2718"
+                }
+              },
+              "request": null,
+              "source_url": "https://chip.example/chip/dashboard/feedback/00000000-0000-4000-8000-00000000f002",
+              "status": "active",
+              "text": "Great job leading the incident review this week.",
+              "text_format": "markdown",
+              "updated_at": "2026-10-20T21:00:00.111111Z"
+            }
+          ],
+          "next_cursor": "ZjF8MjAyNi0xMC0yMFQyMTowMDowMC4xMTExMTFafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMg"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].author.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].notified": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
+                }
+              ]
+            },
+            "$.items[0].recipient.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].source_url": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^https://\\S+/dashboard/feedback/[0-9a-f-]{36}$"
+                }
+              ]
+            },
+            "$.items[0].text": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed with priya.test's answer to sam.test's request",
+      "providerStates": [
+        {
+          "name": "priya.test has answered sam.test's request in a period"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "audience": [
+                "recipient",
+                "management_line",
+                "hr"
+              ],
+              "author": {
+                "active": true,
+                "display_name": "Priya Tester",
+                "email": "priya.test@meandu.com",
+                "external_ids": {
+                  "hibob": "3141"
+                }
+              },
+              "external_reference": null,
+              "given_at": "2026-10-20T20:00:00.333333Z",
+              "id": "00000000-0000-4000-8000-00000000f004",
+              "kind": "feedback",
+              "notified": [
+                "author"
+              ],
+              "origin": "chip",
+              "period": {
+                "id": "00000000-0000-4000-8000-00000000f104",
+                "name": "Q4 2026"
+              },
+              "recipient": {
+                "active": true,
+                "display_name": "Sam Recipient",
+                "email": "sam.test@meandu.com",
+                "external_ids": {
+                  "hibob": "2718"
+                }
+              },
+              "request": {
+                "context": "Could you share how I handled the **database cutover**? A concrete example helps most.",
+                "id": "00000000-0000-4000-8000-00000000f204",
+                "requested_by": {
+                  "active": true,
+                  "display_name": "Sam Recipient",
+                  "email": "sam.test@meandu.com",
+                  "external_ids": {
+                    "hibob": "2718"
+                  }
+                }
+              },
+              "source_url": "https://chip.example/chip/dashboard/feedback/00000000-0000-4000-8000-00000000f004",
+              "status": "active",
+              "text": "During the cutover Sam **wrote the rollback plan** and rehearsed it twice.",
+              "text_format": "markdown",
+              "updated_at": "2026-10-20T20:00:00.333333Z"
+            }
+          ],
+          "next_cursor": "ZjF8MjAyNi0xMC0yMFQyMDowMDowMC4zMzMzMzNafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwNA"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].author.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].notified": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
+                }
+              ]
+            },
+            "$.items[0].recipient.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].request.context": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].request.requested_by.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].source_url": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^https://\\S+/dashboard/feedback/[0-9a-f-]{36}$"
+                }
+              ]
+            },
+            "$.items[0].text": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed with priya.test's consented feedback to sam.test",
+      "providerStates": [
+        {
+          "name": "priya.test has given sam.test consented feedback"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "audience": [
+                "recipient",
+                "management_line",
+                "hr"
+              ],
+              "author": {
+                "active": true,
+                "display_name": "Priya Tester",
+                "email": "priya.test@meandu.com",
+                "external_ids": {
+                  "hibob": "3141"
+                }
+              },
+              "external_reference": null,
+              "given_at": "2026-10-20T22:00:00.123456Z",
+              "id": "00000000-0000-4000-8000-00000000f001",
+              "kind": "feedback",
+              "notified": [
+                "author"
+              ],
+              "origin": "chip",
+              "period": null,
+              "recipient": {
+                "active": true,
+                "display_name": "Sam Recipient",
+                "email": "sam.test@meandu.com",
+                "external_ids": {
+                  "hibob": "2718"
+                }
+              },
+              "request": null,
+              "source_url": "https://chip.example/chip/dashboard/feedback/00000000-0000-4000-8000-00000000f001",
+              "status": "active",
+              "text": "Thanks for running the **database cutover** so calmly.",
+              "text_format": "markdown",
+              "updated_at": "2026-10-20T22:00:00.123456Z"
+            }
+          ],
+          "next_cursor": "ZjF8MjAyNi0xMC0yMFQyMjowMDowMC4xMjM0NTZafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMQ"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].author.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].notified": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
+                }
+              ]
+            },
+            "$.items[0].recipient.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].source_url": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^https://\\S+/dashboard/feedback/[0-9a-f-]{36}$"
+                }
+              ]
+            },
+            "$.items[0].text": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's feed with the edited feedback",
+      "providerStates": [
+        {
+          "name": "priya.test's feedback to sam.test was edited"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [
+            {
+              "audience": [
+                "recipient",
+                "management_line",
+                "hr"
+              ],
+              "author": {
+                "active": true,
+                "display_name": "Priya Tester",
+                "email": "priya.test@meandu.com",
+                "external_ids": {
+                  "hibob": "3141"
+                }
+              },
+              "external_reference": null,
+              "given_at": "2026-10-20T22:00:00.123456Z",
+              "id": "00000000-0000-4000-8000-00000000f001",
+              "kind": "feedback",
+              "notified": [
+                "author"
+              ],
+              "origin": "chip",
+              "period": null,
+              "recipient": {
+                "active": true,
+                "display_name": "Sam Recipient",
+                "email": "sam.test@meandu.com",
+                "external_ids": {
+                  "hibob": "2718"
+                }
+              },
+              "request": null,
+              "source_url": "https://chip.example/chip/dashboard/feedback/00000000-0000-4000-8000-00000000f001",
+              "status": "active",
+              "text": "Thanks for running the **database cutover** so calmly, and for the rollback plan.",
+              "text_format": "markdown",
+              "updated_at": "2026-10-20T23:30:00.654321Z"
+            }
+          ],
+          "next_cursor": "ZjF8MjAyNi0xMC0yMFQyMzozMDowMC42NTQzMjFafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMQ"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "body": {
+            "$.items[0].author.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].notified": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.items[0].notified[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^(author|recipient|manager)$"
+                }
+              ]
+            },
+            "$.items[0].recipient.display_name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.items[0].source_url": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^https://\\S+/dashboard/feedback/[0-9a-f-]{36}$"
+                }
+              ]
+            },
+            "$.items[0].text": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          },
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's first deletions page when nothing is waiting",
+      "providerStates": [
+        {
+          "name": "no feedback is waiting"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=e3e97a770905280c4ac9e1931a1e8f85d654e6625f82ce54bd14dbb111df0a1f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback/deletions",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for Chip's first feed page when nothing is waiting",
+      "providerStates": [
+        {
+          "name": "no feedback is waiting"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "e6bf4220007d6a9a",
+          "X-Exchange-Signature": "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "body": {
+          "has_more": false,
+          "items": [],
+          "next_cursor": null
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8"
+        },
+        "matchingRules": {
+          "header": {
+            "Content-Type": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^application/json(;.*)?$"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request signed with a secret Chip doesn't hold",
+      "providerStates": [
+        {
+          "name": "no feedback is waiting"
+        }
+      ],
+      "request": {
+        "headers": {
+          "X-Exchange-Consumer": "growthos",
+          "X-Exchange-Key-Id": "68d74900498569e1",
+          "X-Exchange-Signature": "v1=0546dd264b274a823606018515110a7896086cf162440bf0ad7905658e0d2c1b",
+          "X-Exchange-Timestamp": "1792540800"
+        },
+        "method": "GET",
+        "path": "/chip/api/feedback-exchange/feedback",
+        "query": {
+          "limit": [
+            "100"
+          ]
+        }
+      },
+      "response": {
+        "status": 401
+      }
+    }
+  ],
+  "metadata": {
+    "pactRust": {
+      "ffi": "0.5.8",
+      "mockserver": "2.2.6",
+      "models": "1.3.16"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "chip"
+  }
+}

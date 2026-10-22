@@ -49,7 +49,7 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
       content: params[:content].to_s,
       evidence_type: params[:evidence_type],
       custom_type_label: params[:custom_type_label].presence,
-      external_reference: params[:external_reference],
+      external_reference: external_reference,
       edited_by_id: context.person.id
     )
 
@@ -79,7 +79,16 @@ class Operations::Assessments::UpdateEvidence < Operations::Base
 
   # Reject a malformed / unsafe external reference upfront — same posture as
   # the web controller — so a `javascript:` URL never lands in the stream.
+  # Where an imported item was given is not the editor's to change: it keeps
+  # the reference the importer wrote, whatever the caller sent.
+  def external_reference
+    stored = evidence_item.external_reference
+    stored&.imported? ? stored.as_json : params[:external_reference]
+  end
+
   def validate_external_reference!
+    return if evidence_item.external_reference&.imported?
+
     reason = ExternalReference.validation_error_for(params[:external_reference])
     return unless reason
 

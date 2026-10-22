@@ -16,6 +16,9 @@ production:
   hris_sync:
     class: HrisSyncAllTenantsJob
     schedule: every 6 hours
+  feedback_exchange_sync:
+    class: FeedbackExchange::SyncAllTenantsJob
+    schedule: every 15 minutes
   mcp_prune_stale_clients:
     class: Mcp::PruneStaleClientsJob
     schedule: at 3am every day

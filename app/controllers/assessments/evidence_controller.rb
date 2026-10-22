@@ -405,6 +405,7 @@ class Assessments::EvidenceController < ApplicationController
     valences = all_links.group_by(&:first).transform_values do |rows|
       rows.to_h { |_, cap, level, valence| [ [ cap, level ], valence ] }
     end
+    EvidenceItem.load_exchange_acks(items)
     items.each do |item|
       item.active_link_count = counts[item.id]
       item.link_valences = valences[item.id]
