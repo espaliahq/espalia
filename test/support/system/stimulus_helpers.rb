@@ -79,7 +79,7 @@ module StimulusHelpers
   #   (e.g. "[data-framework-explorer-target='rolePaneToggle']")
   def wait_for_stimulus(controller_name, scope: nil)
     selector = "[data-controller~='#{controller_name}'][data-connected]"
-    selector = "#{scope} #{selector}" if scope
+    selector = "#{scope}#{selector}, #{scope} #{selector}" if scope
     assert_selector selector, visible: :all
   end
 
