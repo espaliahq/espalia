@@ -148,7 +148,7 @@ gem "rails_event_store", "~> 3.1", require: "rails_event_store/all"
 gem "ruby_event_store-active_record", "~> 3.2"
 
 # HTTP client for HRIS and external API integrations
-gem "faraday", "~> 2.14"
+gem "faraday", "~> 2.15"
 
 # Character/grapheme-level diff for inline suggestion display
 gem "diff-lcs", "~> 2.0"
