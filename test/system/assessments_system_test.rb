@@ -445,6 +445,16 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_equal @cat2_id, active_category_id,
         "Clicked category chip should remain active after the scroll settles, " \
         "got #{active_category_id.inspect}"
+
+      # The chip went active in the browser, so its score and count must follow aria-current, not the server.
+      mismatched = page.evaluate_script(<<~JS)
+        (function() {
+          var rgb = function(el) { return getComputedStyle(el).color.match(/\\d+/g).slice(0, 3).join(","); };
+          var chip = document.querySelector('nav#category-tabs a[aria-current="page"]');
+          return Array.from(chip.querySelectorAll("span.font-mono")).filter(function(s) { return rgb(s) !== rgb(chip); }).length;
+        })()
+      JS
+      assert_equal 0, mismatched, "The active chip's score and count should take its own text colour"
     end
 
     should "scroll the second category section under the sticky header when its chip is clicked" do
