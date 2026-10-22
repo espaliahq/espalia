@@ -91,9 +91,10 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
     end
 
     should "drop a chat placement that came without the rationale it was asked for" do
-      proposals, = run_model(FakeAdapter.new(suggestions: [ raw(rationale: "  "), raw(capability_stable_id: "c2") ]))
+      blank, *kept = [ raw(rationale: "  ") ] + %w[c2 c3 c4].map { |id| raw(capability_stable_id: id) }
+      proposals, = run_model(FakeAdapter.new(suggestions: [ blank, *kept ]))
 
-      assert_equal [ "c2" ], proposals.map(&:capability_stable_id)
+      assert_equal %w[c2 c3 c4], proposals.map(&:capability_stable_id), "a blank one does not use up a place"
     end
 
     should "put the names back in the rationales that come back" do

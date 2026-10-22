@@ -91,7 +91,7 @@ class Evidence::SuggestionModel
       user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
       schema: prompt.schema
     )
-    proposals = response.suggestions.first(MAX_SUGGESTIONS).map { |raw| proposal(raw, names) }.select(&:rationale)
+    proposals = response.suggestions.map { |raw| proposal(raw, names) }.select(&:rationale).first(MAX_SUGGESTIONS)
     log(response, proposals.size, refused: response.refused?)
     proposals
   end
