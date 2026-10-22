@@ -20,6 +20,8 @@ export default class extends BaseController {
   #requests = 0
   #saved
   #savedRequest = 0
+  // One save at a time, so the server can't store an older choice after a newer one
+  #saveQueue = Promise.resolve(true)
 
   connect() {
     super.connect()
@@ -40,7 +42,12 @@ export default class extends BaseController {
 
   // private
 
-  async #save(scheme) {
+  #save(scheme) {
+    this.#saveQueue = this.#saveQueue.then(() => this.#send(scheme))
+    return this.#saveQueue
+  }
+
+  async #send(scheme) {
     try {
       const response = await patch(this.urlValue, {
         body: JSON.stringify({ color_scheme: scheme }),
