@@ -9,7 +9,8 @@
 # whose inbound secret (or its previous one, inside the rotation window) verifies
 # the request; the action then runs inside `ActsAsTenant.with_tenant`.
 #
-# Answers: 401 for a missing, stale, invalid or replayed signature; 404 once the
+# Answers: 401 for a missing, stale, invalid or replayed signature, or an
+# `X-Exchange-Consumer` that does not name the tenant's peer; 404 once the
 # signature verifies against a tenant whose exchange is switched off.
 module FeedbackExchangeSignedRequest
   extend ActiveSupport::Concern
@@ -32,6 +33,7 @@ module FeedbackExchangeSignedRequest
     tenant = signing_tenant
     return head :unauthorized if tenant.nil?
     return head :not_found unless tenant.feedback_exchange_config.enabled?
+    return head :unauthorized unless names_the_peer?(tenant)
     return head :unauthorized unless claim_feedback_exchange_signature!
 
     ActsAsTenant.with_tenant(tenant, &action)
@@ -79,6 +81,13 @@ module FeedbackExchangeSignedRequest
       return tenant if verified
     end
     nil
+  end
+
+  # The signature does not cover `X-Exchange-Consumer`, so the header must name the
+  # one peer this secret belongs to; a request without it is refused (protocol §5).
+  def names_the_peer?(tenant)
+    named = request.headers[FeedbackExchange::Signature::CONSUMER_HEADER].to_s.strip.downcase
+    named.present? && named == tenant.feedback_exchange_config.peer_name.to_s.strip.downcase
   end
 
   # @return [Boolean] false when this signed request was already accepted

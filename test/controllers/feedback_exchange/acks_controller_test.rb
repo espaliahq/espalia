@@ -41,19 +41,22 @@ class FeedbackExchange::AcksControllerTest < ActionDispatch::IntegrationTest
   should "refuse a consumer header that names another system than the tenant's peer" do
     signed_post(PATH, @payload, consumer: "other")
 
-    assert_response :bad_request
+    assert_response :unauthorized
     assert_equal 0, FeedbackExchangeAck.count
   end
 
-  should "take the configured peer when the header is absent or differently cased" do
+  should "refuse an ack that does not name its consumer" do
     signed_post(PATH, @payload, consumer: nil)
+
+    assert_response :unauthorized
+    assert_equal 0, FeedbackExchangeAck.count
+  end
+
+  should "take the configured peer named in any case" do
+    signed_post(PATH, @payload, consumer: "CHIP")
+
     assert_response :no_content
     assert_equal "chip", FeedbackExchangeAck.sole.consumer
-
-    travel 1.second
-    signed_post(PATH, { items: [ { id: @item.id, remote_id: "chip-2" } ] }, consumer: "CHIP")
-    assert_response :no_content
-    assert_equal "chip-2", FeedbackExchangeAck.sole.remote_id
   end
 
   should "accept an empty page and an unknown id without error" do

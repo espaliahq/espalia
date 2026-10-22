@@ -140,7 +140,7 @@ The concern finds the tenant by `X-Exchange-Key-Id` (the `inbound_key_id` or `pr
 
 | Status | When |
 |---|---|
-| 401 | headers missing, signature or timestamp wrong, no tenant matches, or the signature was already used |
+| 401 | headers missing, signature or timestamp wrong, no tenant matches, the signature was already used, or `X-Exchange-Consumer` is missing or names anyone but the tenant's `peer_name` |
 | 404 | the signature verifies but that tenant's exchange is disabled |
 
 Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the underscore: Chip's own prefix is `/api/feedback-exchange`, which is why `base_url` includes the prefix instead of assuming one.
@@ -167,7 +167,7 @@ What is left out (protocol §2.5, §2.3):
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.
 - Kinds outside `export_kinds`.
 
-The consumer is the tenant's configured `peer_name`. The `X-Exchange-Consumer` header, lower-cased, must equal it or the request is a 400, because the signature does not cover the header; a request without one is that peer.
+The consumer is the tenant's configured `peer_name`. The signature does not cover the `X-Exchange-Consumer` header, so the signed-request concern refuses a request with 401 unless the header, lower-cased, equals it; a request without one is refused too.
 
 **The record** (`FeedbackExchange::Record`) is protocol §4 field by field: `kind` is `evidence_type`; `text_format` is `markdown`; `audience` is always `[recipient, management_line, hr]` (who can read it here) and `notified` always `[recipient, manager]`; `status` is `link_status`, so a withdrawn item travels with `status: "withdrawn"` and an empty `text` (the consumer needs only the status, and the author took the words back); `request` is the answered `evidence_requests` row (`context` is the ask's message); `period` is the item's cycle; `source_url` is the assessment deep link with the cell params, or the feedback hub anchor for an unplaced item; `external_reference` is set only for an item that itself came in through the exchange. A title leads the text as a bold line, because the protocol has no field for it. People are `{ email, display_name, active, external_ids: { <hris_source>: <external_id> } }` and no internal id ever leaves. A record whose author or recipient is gone, or has no email, is skipped. `source_url` is null when the app has no host configured, rather than failing the page.
 
@@ -190,10 +190,10 @@ The consumer is the tenant's configured `peer_name`. The `X-Exchange-Consumer` h
    sig = FeedbackExchange::Signature.sign(secret: inbound_secret, method: "GET",
            path_with_query: "/api/feedback_exchange/health", body: "", timestamp: ts)
    # curl -H "X-Exchange-Timestamp: #{ts}" -H "X-Exchange-Signature: #{sig}" \
-   #   https://<growthos>/api/feedback_exchange/health
+   #   -H "X-Exchange-Consumer: <peer_name>" https://<growthos>/api/feedback_exchange/health
    ```
 
-   A 200 means the pair works. The same request sent again within five minutes returns 401. A 404 means the exchange is still disabled.
+   A 200 means the pair works. The same request sent again within five minutes returns 401, as does one without the consumer header. A 404 means the exchange is still disabled.
 4. To read the feed the same way, sign `GET /api/feedback_exchange/feedback?limit=2` (the query string is part of the signed path), then repeat with `since=<next_cursor>` and a fresh timestamp; only newer rows come back.
 
 ## Testing
