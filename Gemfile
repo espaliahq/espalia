@@ -119,7 +119,7 @@ group :test do
   gem "shoulda-callback-matchers", "~> 1.1.4"
 
   # Pact's Rust core, for the feedback exchange contract tests from Minitest
-  # (the pact gem's DSL is RSpec-only). See test/support/pact.rb.
+  # (the pact gem's DSL is RSpec-only). See test/support/pact_contract.rb.
   gem "pact-ffi", "~> 0.5.8", require: false
 end
 

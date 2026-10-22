@@ -9,7 +9,7 @@ module FeedbackExchangeContract
   # 2026-10-21T00:00:00Z
   PACT_TIMESTAMP = "1792540800"
 
-  COMMITTED_PACT = Rails.root.join("contract/pacts/growthos-chip.json")
+  COMMITTED_PACT = FeedbackExchange::ContractsController::PACT
   # The consumer tests merge into this; `bin/rails contract:consumer` copies it
   # over the committed pact once they pass, so running one test never does.
   CONSUMER_PACT_DIR = Rails.root.join("tmp/pact/consumer")
