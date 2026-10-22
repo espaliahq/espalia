@@ -68,6 +68,8 @@ It does **not** retry. The sync job owns retries, from the error class:
 | Error | When | Job should |
 |---|---|---|
 | `AuthenticationError` | 401 | discard and tell a human |
+| `PeerDisabled` (an `ApiError`) | 404: the peer has the exchange switched off | log and stop the run, no retry |
+| `Conflict` (an `ApiError`) | 409 to an ack: the peer could not record it | log as the bug it is and carry on, no retry |
 | `RateLimitError` (`retry_after`) | 429 | retry after the stated delay |
 | `ApiError` (`status`, nil if unreachable) | 5xx, other 4xx, no answer, a non-JSON body | retry with backoff |
 
@@ -80,7 +82,7 @@ It does **not** retry. The sync job owns retries, from the error class:
 3. Pages through `GET /feedback/deletions` from `deletions_cursor`, withdrawing each copy.
 4. Stamps `last_synced_at`.
 
-Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. At most 50 pages a run; the next run carries on.
+Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. A 404 means the peer has the exchange off: the run stops, logged, with no retry and no `last_synced_at`. A `base_url` without the peer's path prefix also gets 404s, so a tenant whose `last_synced_at` stays empty is worth a **Test connection**. A 409 to an ack is logged and the run carries on, since retrying the same ack cannot succeed. At most 50 pages a run; the next run carries on.
 
 ### One record (`FeedbackExchange::Importer`)
 
@@ -140,12 +142,14 @@ The concern finds the tenant by `X-Exchange-Key-Id` (the `inbound_key_id` or `pr
 
 | Status | When |
 |---|---|
-| 401 | headers missing, signature or timestamp wrong, no tenant matches, or the signature was already used |
+| 401 | headers missing, signature or timestamp wrong, no tenant matches, the signature was already used, or `X-Exchange-Consumer` is missing or names anyone but the tenant's `peer_name` |
 | 404 | the signature verifies but that tenant's exchange is disabled |
 
 Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the underscore: Chip's own prefix is `/api/feedback-exchange`, which is why `base_url` includes the prefix instead of assuming one.
 
 `GET /api/feedback_exchange/health` returns `{ "ok": true, "peer": "<peer_name>" }`.
+
+`GET /api/feedback_exchange/feedback/contract` is the one exchange route outside the signed-request concern (protocol §5.5). It is unsigned, has no tenant, answers whatever any tenant's exchange is set to, and may be cached for five minutes: `{ "protocol": "v1", "build": <release id>, "consumer_pact": <contract/pacts/growthos-chip.json> }`. The peer's provider verification fetches our pact from it (see [Contract tests](#contract-tests-pact)). It is not an MCP tool: it is a static artefact for the peer, not a user surface.
 
 ## Serving the feed (GrowthOS as producer)
 
@@ -167,7 +171,7 @@ What is left out (protocol §2.5, §2.3):
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.
 - Kinds outside `export_kinds`.
 
-The consumer is the tenant's configured `peer_name`. The `X-Exchange-Consumer` header, lower-cased, must equal it or the request is a 400, because the signature does not cover the header; a request without one is that peer.
+The consumer is the tenant's configured `peer_name`. The signature does not cover the `X-Exchange-Consumer` header, so the signed-request concern refuses a request with 401 unless the header, lower-cased, equals it; a request without one is refused too.
 
 **The record** (`FeedbackExchange::Record`) is protocol §4 field by field: `kind` is `evidence_type`; `text_format` is `markdown`; `audience` is always `[recipient, management_line, hr]` (who can read it here) and `notified` always `[recipient, manager]`; `status` is `link_status`, so a withdrawn item travels with `status: "withdrawn"` and an empty `text` (the consumer needs only the status, and the author took the words back); `request` is the answered `evidence_requests` row (`context` is the ask's message); `period` is the item's cycle; `source_url` is the assessment deep link with the cell params, or the feedback hub anchor for an unplaced item; `external_reference` is set only for an item that itself came in through the exchange. A title leads the text as a bold line, because the protocol has no field for it. People are `{ email, display_name, active, external_ids: { <hris_source>: <external_id> } }` and no internal id ever leaves. A record whose author or recipient is gone, or has no email, is skipped. `source_url` is null when the app has no host configured, rather than failing the page.
 
@@ -190,17 +194,110 @@ The consumer is the tenant's configured `peer_name`. The `X-Exchange-Consumer` h
    sig = FeedbackExchange::Signature.sign(secret: inbound_secret, method: "GET",
            path_with_query: "/api/feedback_exchange/health", body: "", timestamp: ts)
    # curl -H "X-Exchange-Timestamp: #{ts}" -H "X-Exchange-Signature: #{sig}" \
-   #   https://<growthos>/api/feedback_exchange/health
+   #   -H "X-Exchange-Consumer: <peer_name>" https://<growthos>/api/feedback_exchange/health
    ```
 
-   A 200 means the pair works. The same request sent again within five minutes returns 401. A 404 means the exchange is still disabled.
+   A 200 means the pair works. The same request sent again within five minutes returns 401, as does one without the consumer header. A 404 means the exchange is still disabled.
 4. To read the feed the same way, sign `GET /api/feedback_exchange/feedback?limit=2` (the query string is part of the signed path), then repeat with `since=<next_cursor>` and a fresh timestamp; only newer rows come back.
 
 ## Testing
 
 - Stub the peer with Faraday's test adapter (`Faraday::Adapter::Test::Stubs`) and inject the connection, as the HRIS client test does. `Client#initialize` takes `connection:`.
+- To call a real peer on loopback (the Pact mock), pass `host_guard:` to `Client.new` rather than branching `HostGuard` on the environment; the contract tests' guard admits only `127.0.0.1`.
 - To prove a request is signed over what was sent, verify it with `Signature.verify` using `env.url.request_uri` and `env.request_body`.
 - Signature tests cover the round trip, wrong secret, missing headers, a stale timestamp, a tampered body, a swapped method or path, and the rotation window on both sides of 24 hours.
+
+## Contract tests (Pact)
+
+Consumer-driven contract tests pin the protocol on both sides (decided 22 Oct 2026; the Linear protocol doc's §8). Pact specification **V3**, participants **`growthos`** and **`chip`**, no broker: each app serves its own consumer pact at `/contract`, and the other verifies against it. Chip's `contract/README.md` is the shared reference; this section mirrors it.
+
+| Pact | Written by | Verified by | Lives at |
+|---|---|---|---|
+| `growthos` → `chip` | `test/contract/chip_consumer_contract.rb`: our real `Client`, `SyncJob` and `Importer` against a Pact mock of Chip | Chip's harness, against its built app | `contract/pacts/growthos-chip.json` (21 interactions), served at our `/contract` |
+| `chip` → `growthos` | Chip's consumer tests | `test/contract/chip_provider_contract.rb`, against our app | Chip's `contract/pacts/chip-growthos.json`, served at Chip's `/contract` |
+
+We drive Pact through the `pact-ffi` gem (the Rust core pact-js uses), wrapped thinly in `test/support/pact_contract.rb`; the `pact` gem's DSL is RSpec-only. Both test files sit outside `bin/rails test` (their names do not end in `_test.rb`) because each runs alone, through the rake tasks below.
+
+### Signing, checked across languages
+
+Every request in either pact is signed with the shared secret `pact-test-secret-0123456789abcdef0123456789abcdef` (key id `e6bf4220007d6a9a`) at `1792540800` (2026-10-21T00:00:00Z), so its exact headers are in the pact and the provider's real verifier checks them: no request filter. Because the signature covers the path, query and body:
+
+- request values are literal, never matchers: cursors, limits, ack bodies;
+- query keys go alphabetically (`limit` before `since`), the order a Pact verifier replays them in; Faraday sends them that way;
+- JSON bodies are compact with keys in the recorded order, since a verifier re-serialises them.
+
+`client_test.rb` pins the query order and the compact ack body, and `signature_test.rb` pins two signatures Chip computed in TypeScript.
+
+### People
+
+Synthetic only, and example hosts only (`chip.example`, `growthos.example`): the pacts are public. `test/integration/feedback_exchange_pact_test.rb` fails on any other email or host in ours.
+
+| Person | Email | HiBob id we hold | Manager |
+|---|---|---|---|
+| Priya | priya.test@meandu.com | 3141 | marcus |
+| Sam | sam.test@meandu.com | 2718 | marcus |
+| Marcus | marcus.test@meandu.com | none | none |
+| Lena | lena.test@meandu.com | none | marcus |
+| Jo | jo.test@meandu.com | none | marcus |
+
+Chip sends made-up HiBob ids for Marcus (1618) and Lena (1414); we match them by email.
+
+### Our states (Chip's pact of us)
+
+`chip_provider_contract.rb` seeds these in a Rack wrapper that exists only in the test, never in `config/routes.rb`. Each state rolls the database back to a savepoint and empties the replay store first, because Chip's pact presents one signature in several interactions. Ids are pinned where Chip's acks name them.
+
+| State | What we seed |
+|---|---|
+| `the exchange is disabled` | The tenant, exchange off: the feed answers 404 |
+| `no feedback is waiting` | People only; a wrong secret gets 401 and `since=not-a-growthos-cursor` 400 |
+| `priya.test has given sam.test consented feedback` | `00000000-0000-7000-8000-0000000000b1`, priya → sam |
+| `priya.test's feedback to sam.test was edited` | `…b1` with a later `updated_at` and new text |
+| `priya.test's feedback to sam.test was withdrawn` | `…b1` withdrawn: served with `text: ""` |
+| `lena.test has recorded an observation for jo.test` | `…c1`, `kind: observation` |
+| `priya.test has answered sam.test's request in a period` | `…d1`, answering request `…d2` from sam, in cycle `…d3` "Q4 2026" |
+| `more feedback is waiting than fits one page` | `…a1`, `…a2`, `…a3` updated at 2026-10-20T23:00, 23:01 and 23:02; with `limit=2`, page 1 is a1 and a2 with `next_cursor` `WyIyMDI2LTEwLTIwVDIzOjAxOjAwLjAwMDAwMFoiLCIwMDAwMDAwMC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwYTIiXQ`, page 2 is a3 |
+| `priya.test's feedback to sam.test can be acknowledged` | As the consented state; the ack answers 204 |
+
+### Chip's states (our pact of Chip)
+
+Chip's paths are `/chip/api/feedback-exchange/feedback`, `…/feedback/deletions` and `…/feedback/ack`. Each test asserts what the puller does as well, since those decisions are the contract too.
+
+| State | Chip serves | We |
+|---|---|---|
+| `the exchange is disabled` | 404 | stop the run, no retry |
+| `no feedback is waiting` | empty feeds, `next_cursor: null` (a wrong secret gets 401) | import nothing (stop on the 401) |
+| `priya.test has given sam.test consented feedback` | `…f001`, cursor `ZjF8MjAyNi0xMC0yMFQyMjowMDowMC4xMjM0NTZafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMQ` | import unplaced peer feedback, ack, move the cursor |
+| `marcus.test has given sam.test consented feedback` | `…f002`, cursor `ZjF8MjAyNi0xMC0yMFQyMTowMDowMC4xMTExMTFafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMg` | import manager feedback, ack |
+| `lena.test has given sam.test feedback without manager consent` | `…f003`, audience `[recipient, hr]`, cursor `ZjF8MjAyNi0xMC0yMFQyMTozMDowMC4yMjIyMjJafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMw` | skip `audience_too_narrow`, no ack |
+| `priya.test's feedback to sam.test was edited` | `…f001` updated 23:30:00.654321, cursor `ZjF8MjAyNi0xMC0yMFQyMzozMDowMC42NTQzMjFafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwMQ` | update the copy, ack again |
+| `priya.test has answered sam.test's request in a period` | `…f004` with request `…f204` and period `…f104`, cursor `ZjF8MjAyNi0xMC0yMFQyMDowMDowMC4zMzMzMzNafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjAwNA` | carry the question, the asker and the period, ack |
+| `priya.test's feedback to sam.test was deleted` | deletions feed `{ id: …f005 }`, cursor `ZDF8MjAyNi0xMC0yMFQyMzowMDowMC4wMDAwMDBafDAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwZjMwNXwx` | withdraw the copy, store the deletions cursor |
+| `priya.test's feedback to sam.test can be acknowledged` | 204 to the ack | send the ack exactly as the sync job builds it |
+
+Chip's ids are `00000000-0000-4000-8000-00000000f00N`. Our acks name `remote_id` (UUIDv5 over a fixed test tenant id) and `remote_url` `https://growthos.example/assessments/<fixed assignment id>`.
+
+### Running it
+
+```bash
+bin/rails contract:consumer                     # our consumer tests; rewrites contract/pacts/growthos-chip.json
+bin/rails contract:provider PACT_FILE=<path>    # our app against a pact, or a whole /contract response
+bin/rails contract:provider                     # ... against Chip's deployed pact (FEEDBACK_EXCHANGE_PEER_CONTRACT_URL)
+FRESH=1 bin/rails contract:fetch_peer           # fetch Chip's /contract into tmp/contract now
+bin/rails contract:check_change                 # our pact against our deployed one (FEEDBACK_EXCHANGE_OWN_CONTRACT_URL)
+```
+
+Chip's pact is cached in `tmp/contract/chip.json` and refetched after a day. A failed fetch falls back to the cached copy with a warning and fails only with no copy; a 404 with no copy (Chip has not published) or an unset URL passes with a warning. The verifier prints its own per-interaction report. Run one consumer test with `bin/rails test test/contract/chip_consumer_contract.rb -n /…/`: it writes to `tmp/pact/consumer`, never the committed file.
+
+CI: `ci.yml`'s `contract` job runs the consumer tests, fails if the committed pact differs from what they wrote, then verifies the branch against Chip's deployed pact. `contract.yml` re-verifies nightly with a fresh fetch and holds the `contract-change` gate. See [.github/AGENTS.md](../../.github/AGENTS.md).
+
+### Changing a pact
+
+1. Change the consumer test (and the code), run `bin/rails contract:consumer`, and commit `contract/pacts/growthos-chip.json` with the change.
+   A `pact-ffi` upgrade rewrites the pact's metadata versions, so its PR fails the `contract` job until someone runs `bin/rails contract:consumer` and commits the result; Dependabot cannot.
+2. A changed pact changes what Chip must honour. Run Chip's harness against it (`npm run contract:provider -- --pact-file <path>` in Chip's repo), link the passing run in the PR and add the `contract-change` label; without it the `contract-change` check fails. A Pact upgrade that only moves metadata versions is not a change.
+3. A new state is agreed with Chip first, then gets a row here and in Chip's README, and a seeder in `chip_provider_contract.rb` (ours) or a test using it (theirs). `feedback_exchange_pact_test.rb` lists the states we may use.
+4. Chip's pact changing ours to honour arrives the other way round: its PR links a run of `bin/rails contract:provider PACT_FILE=<its file>`.
+5. A breaking protocol change is `v2`, not a pact edit.
 
 ## Gotchas
 

@@ -45,6 +45,17 @@ class CiWorkflowTest < ActiveSupport::TestCase
     end
   end
 
+  context "the feedback exchange contract checks" do
+    should "take Chip's and our deployed /contract from repository variables, never a hard-coded address" do
+      contract_yml = YAML.load_file(Rails.root.join(".github/workflows/contract.yml")).fetch("jobs")
+      envs = (ci_jobs.dig("contract", "steps") + contract_yml.values.flat_map { |job| job["steps"] }).filter_map { |step| step["env"] }
+
+      urls = envs.flat_map { |env| env.select { |name, _| name.end_with?("_CONTRACT_URL") }.to_a }
+      assert_equal %w[FEEDBACK_EXCHANGE_OWN_CONTRACT_URL FEEDBACK_EXCHANGE_PEER_CONTRACT_URL], urls.map(&:first).uniq.sort
+      urls.each { |name, value| assert_equal "${{ vars.#{name} }}", value }
+    end
+  end
+
   context "every workflow" do
     should "keep expressions out of shell scripts" do
       offenders = WORKFLOWS.flat_map do |path|

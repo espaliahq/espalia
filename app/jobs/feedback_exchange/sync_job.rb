@@ -8,7 +8,9 @@
 # through a page redoes that page next time; the ledger makes that safe.
 #
 # Retries follow HrisSyncJob: a rate limit or a peer error is retried with
-# backoff; a rejected signature is discarded, since a human has to fix it.
+# backoff; a rejected signature is discarded, since a human has to fix it. A 404
+# means the peer has the exchange off, so the run stops without a retry, and a
+# 409 to an ack is logged as the bug it is while the run carries on.
 #
 # @example
 #   FeedbackExchange::SyncJob.perform_later(tenant)
@@ -27,6 +29,12 @@ class FeedbackExchange::SyncJob < ApplicationJob
 
   discard_on FeedbackExchange::Errors::AuthenticationError do |job, error|
     Rails.logger.error("[FeedbackExchange::SyncJob] The peer rejected our signature for tenant #{job.arguments.first.id}: #{error.message}")
+  end
+
+  # Declared after the ApiError retry so it wins for this subclass.
+  discard_on FeedbackExchange::Errors::PeerDisabled do |job, _error|
+    Rails.logger.warn("[FeedbackExchange::SyncJob] The peer answered 404 for tenant #{job.arguments.first.id}: its exchange is " \
+                      "switched off, or base_url misses its path prefix. Stopping this run.")
   end
 
   # @param tenant [Tenant]
@@ -90,6 +98,8 @@ class FeedbackExchange::SyncJob < ApplicationJob
       { id: external_id, remote_id: result.evidence_id, remote_url: absolute_url("/assessments/#{result.assignment_id}") }
     end
     @client.ack(acks) if acks.any?
+  rescue FeedbackExchange::Errors::Conflict => e
+    Rails.logger.error("[FeedbackExchange::SyncJob] The peer refused our ack for tenant #{@tenant.id}: #{e.message}")
   end
 
   def external_ids_for(results)

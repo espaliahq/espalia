@@ -22,19 +22,12 @@ module FeedbackExchangeProducer
 
   private
 
-  # The system asking, from `X-Exchange-Consumer` (protocol §5). The signature
-  # does not cover the header, so it must name the tenant's one configured peer;
-  # a request that omits it is that peer.
+  # The system asking. {FeedbackExchangeSignedRequest} has already refused a
+  # request whose `X-Exchange-Consumer` is not the tenant's peer.
   #
   # @return [String]
-  # @raise [ActionController::BadRequest] when the header names another system
   def exchange_consumer
-    configured = exchange_config.peer_name.to_s.strip.downcase
-    named = request.headers["X-Exchange-Consumer"].to_s.strip.downcase
-    return configured if named.blank?
-    raise ActionController::BadRequest, "X-Exchange-Consumer does not match the tenant's peer" unless named == configured
-
-    named
+    exchange_config.peer_name.to_s.strip.downcase
   end
 
   # @return [FeedbackExchangeConfig]

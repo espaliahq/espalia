@@ -122,11 +122,8 @@ GEM
       rack-test (>= 0.6.3)
       regexp_parser (>= 1.5, < 3.0)
       xpath (~> 3.2)
-    commonmarker (2.10.0)
-      rb_sys (~> 0.9)
     commonmarker (2.10.0-aarch64-linux)
     commonmarker (2.10.0-aarch64-linux-musl)
-    commonmarker (2.10.0-arm-linux-gnu)
     commonmarker (2.10.0-arm64-darwin)
     commonmarker (2.10.0-x86_64-linux)
     commonmarker (2.10.0-x86_64-linux-musl)
@@ -172,6 +169,11 @@ GEM
       logger
     faraday-net_http (3.4.4)
       net-http (~> 0.5)
+    ffi (1.17.4-aarch64-linux-gnu)
+    ffi (1.17.4-aarch64-linux-musl)
+    ffi (1.17.4-arm64-darwin)
+    ffi (1.17.4-x86_64-linux-gnu)
+    ffi (1.17.4-x86_64-linux-musl)
     fugit (1.13.0)
       et-orbi (~> 1.4)
       raabro (~> 1.4)
@@ -268,10 +270,6 @@ GEM
       racc (~> 1.4)
     nokogiri (1.19.4-aarch64-linux-musl)
       racc (~> 1.4)
-    nokogiri (1.19.4-arm-linux-gnu)
-      racc (~> 1.4)
-    nokogiri (1.19.4-arm-linux-musl)
-      racc (~> 1.4)
     nokogiri (1.19.4-arm64-darwin)
       racc (~> 1.4)
     nokogiri (1.19.4-x86_64-linux-gnu)
@@ -312,8 +310,17 @@ GEM
     ostruct (0.6.3)
     overmind (2.5.1)
     overmind (2.5.1-aarch64-linux)
-    overmind (2.5.1-arm-linux)
     overmind (2.5.1-arm64-darwin)
+    pact-ffi (0.5.8.1-aarch64-linux)
+      ffi (~> 1.15)
+    pact-ffi (0.5.8.1-aarch64-linux-musl)
+      ffi (~> 1.15)
+    pact-ffi (0.5.8.1-arm64-darwin)
+      ffi (~> 1.15)
+    pact-ffi (0.5.8.1-x86_64-linux)
+      ffi (~> 1.15)
+    pact-ffi (0.5.8.1-x86_64-linux-musl)
+      ffi (~> 1.15)
     pagy (43.7.0)
       json
       uri
@@ -405,9 +412,6 @@ GEM
       zeitwerk (~> 2.6)
     rainbow (3.1.1)
     rake (13.4.2)
-    rake-compiler-dock (1.12.0)
-    rb_sys (0.9.130)
-      rake-compiler-dock (= 1.12.0)
     rbs (4.2.0)
       logger
       prism (>= 1.6.0)
@@ -560,8 +564,6 @@ PLATFORMS
   aarch64-linux
   aarch64-linux-gnu
   aarch64-linux-musl
-  arm-linux-gnu
-  arm-linux-musl
   arm64-darwin-24
   x86_64-linux
   x86_64-linux-gnu
@@ -597,6 +599,7 @@ DEPENDENCIES
   omniauth-google-oauth2 (~> 1.2)
   omniauth-rails_csrf_protection (~> 2.0)
   overmind
+  pact-ffi (~> 0.5.8)
   pagy (~> 43.7)
   pg
   phlex (~> 2.4.1)

@@ -117,6 +117,10 @@ group :test do
   gem "shoulda-context", "~> 3.0.0.rc1"
   gem "shoulda-matchers", "~> 8.0.1"
   gem "shoulda-callback-matchers", "~> 1.1.4"
+
+  # Pact's Rust core, for the feedback exchange contract tests from Minitest
+  # (the pact gem's DSL is RSpec-only). See test/support/pact_contract.rb.
+  gem "pact-ffi", "~> 0.5.8", require: false
 end
 
 # Use Redis adapter to run Action Cable in production

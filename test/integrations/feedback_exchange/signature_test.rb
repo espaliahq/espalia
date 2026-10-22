@@ -37,6 +37,20 @@ class FeedbackExchange::SignatureTest < ActiveSupport::TestCase
     end
   end
 
+  # Chip computed these in TypeScript for the contract tests (its pacts record
+  # them), so matching them proves the two implementations sign alike.
+  context "with the contract tests' shared secret and clock" do
+    should "sign as Chip does" do
+      secret = "pact-test-secret-0123456789abcdef0123456789abcdef"
+
+      assert_equal "e6bf4220007d6a9a", FeedbackExchange::Signature.key_id(secret)
+      assert_equal "v1=af80da59ae8bcce16233ef19a0ae43a48e532cd2274e2fb8b2b9a7593a18876f",
+                   sign(secret: secret, path: "/chip/api/feedback-exchange/feedback?limit=100", timestamp: "1792540800")
+      assert_equal "v1=f8680e0b6174b24374be1d8d7140d626ca048991f81b8aafef33979dfc650789",
+                   sign(secret: secret, path: "/api/feedback_exchange/feedback?limit=100", timestamp: "1792540800")
+    end
+  end
+
   context ".key_id" do
     should "be the first 16 hex characters of the secret's SHA-256" do
       assert_equal Digest::SHA256.hexdigest(SECRET)[0, 16], FeedbackExchange::Signature.key_id(SECRET)

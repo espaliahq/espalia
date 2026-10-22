@@ -219,12 +219,72 @@ jobs:
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
+  # The feedback exchange's Pact contract with Chip (docs/guidelines/feedback-exchange.md
+  # → Contract tests). Our consumer pact must be what the consumer tests write; then
+  # our branch is verified as provider against the pact Chip has deployed. Chip's
+  # /contract URL is the FEEDBACK_EXCHANGE_PEER_CONTRACT_URL repository variable;
+  # while it is unset, or Chip has never published, that step passes with a warning.
+  contract:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: localhost
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare the database
+        run: bin/rails db:test:prepare
+
+      - name: Consumer contract tests (GrowthOS as Chip's consumer)
+        run: bin/rails contract:consumer
+
+      - name: Committed pact is what the tests wrote
+        run: |
+          if ! git diff --exit-code -- contract/pacts; then
+            echo "::error::contract/pacts/growthos-chip.json is not what the consumer contract tests write. Run bin/rails contract:consumer and commit the result."
+            exit 1
+          fi
+
+      - name: Today's date, for the contract cache
+        id: date
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chip's contract
+        uses: actions/cache@v6
+        with:
+          path: tmp/contract
+          key: feedback-exchange-peer-contract-${{ steps.date.outputs.date }}
+          restore-keys: feedback-exchange-peer-contract-
+
+      - name: Provider verification against Chip's deployed pact
+        env:
+          FEEDBACK_EXCHANGE_PEER_CONTRACT_URL: ${{ vars.FEEDBACK_EXCHANGE_PEER_CONTRACT_URL }}
+        run: bin/rails contract:provider
+
   # Merges Dependabot's PRs once every job above has passed on the same head.
   # Every guard reads the PR, never github.actor: the actor can be made
   # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
   # read-only token whatever this job asks for. See .github/AGENTS.md before editing.
   dependabot-auto-merge:
-    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test]
+    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test, contract]
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&

@@ -15,14 +15,14 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
     @tenant.update_feedback_exchange!(outbound_secret: "outbound-secret-outbound-secret-xx", inbound_secret: INBOUND)
   end
 
-  def signed_headers(secret: INBOUND, method: "GET", path: PATH, body: "", timestamp: Time.now.to_i.to_s)
+  def signed_headers(secret: INBOUND, method: "GET", path: PATH, body: "", timestamp: Time.now.to_i.to_s, consumer: "chip")
     {
       "X-Exchange-Timestamp" => timestamp,
       "X-Exchange-Signature" => FeedbackExchange::Signature.sign(
         secret: secret, method: method, path_with_query: path, body: body, timestamp: timestamp
       ),
-      "X-Exchange-Consumer" => "chip"
-    }
+      "X-Exchange-Consumer" => consumer
+    }.compact
   end
 
   def get_health(headers: signed_headers, path: PATH)
@@ -108,9 +108,19 @@ class FeedbackExchange::HealthControllerTest < ActionDispatch::IntegrationTest
     other.update!(feedback_exchange_config: FeedbackExchangeConfig.new(enabled: true, peer_name: "acme", base_url: "https://acme.example.com"))
     other.update_feedback_exchange!(inbound_secret: "someone-elses-secret-0123456789abcdef0123456789")
 
-    get_health(headers: signed_headers(secret: "someone-elses-secret-0123456789abcdef0123456789"))
+    get_health(headers: signed_headers(secret: "someone-elses-secret-0123456789abcdef0123456789", consumer: "acme"))
 
     assert_equal "acme", response.parsed_body["peer"]
+  end
+
+  should "refuse a request that does not name its consumer with 401" do
+    get_health(headers: signed_headers(consumer: nil))
+    assert_response :unauthorized
+  end
+
+  should "refuse a consumer other than the tenant's peer with 401" do
+    get_health(headers: signed_headers(consumer: "acme"))
+    assert_response :unauthorized
   end
 
   should "refuse an unsigned request with 401" do
