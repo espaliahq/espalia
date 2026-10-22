@@ -32,13 +32,16 @@ class FeedbackExchange::Client
   # @param base_url [String] the peer's exchange root
   # @param outbound_secret [String] signs our requests
   # @param connection [Faraday::Connection, nil] injectable for tests
-  def initialize(base_url:, outbound_secret:, connection: nil)
+  # @param host_guard [#check!] vets the peer's address before connecting; the
+  #   contract tests pass one that lets their loopback mock of the peer through
+  def initialize(base_url:, outbound_secret:, connection: nil, host_guard: FeedbackExchange::HostGuard)
     raise ArgumentError, "base_url is required" if base_url.blank?
     raise ArgumentError, "outbound_secret is required" if outbound_secret.blank?
 
     @base_url = base_url.chomp("/")
     @outbound_secret = outbound_secret
     @connection = connection
+    @host_guard = host_guard
   end
 
   # GET /feedback
@@ -77,7 +80,7 @@ class FeedbackExchange::Client
 
   private
 
-  attr_reader :base_url, :outbound_secret
+  attr_reader :base_url, :outbound_secret, :host_guard
 
   def get(path, **params)
     request(:get, path, params: params.compact)
@@ -138,7 +141,7 @@ class FeedbackExchange::Client
   end
 
   def build_connection
-    address = FeedbackExchange::HostGuard.check!(base_url)
+    address = host_guard.check!(base_url)
     Faraday.new(url: "#{base_url}/") do |f|
       f.options.open_timeout = OPEN_TIMEOUT
       f.options.timeout = READ_TIMEOUT

@@ -47,6 +47,17 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
       assert_equal({ "since" => "c1/+=", "limit" => "50" }, Rack::Utils.parse_query(seen.url.query))
     end
 
+    # A Pact verifier replays a recorded query with its keys sorted, and the
+    # signature covers the query as sent, so the client must send them sorted too.
+    should "send the query keys in alphabetical order, limit before since" do
+      seen = nil
+      @stubs.get("/api/feedback-exchange/feedback") { |env| seen = env; json(items: []) }
+
+      @client.feedback(since: "c1", limit: 2)
+
+      assert_equal "/api/feedback-exchange/feedback?limit=2&since=c1", seen.url.request_uri
+    end
+
     should "omit params it was not given" do
       seen = nil
       @stubs.get("/api/feedback-exchange/feedback") { |env| seen = env; json(items: []) }
@@ -69,6 +80,17 @@ class FeedbackExchange::ClientTest < ActiveSupport::TestCase
   end
 
   context "#ack" do
+    # The body is signed as sent, and a Pact verifier re-serialises it
+    # compactly in the recorded key order, so ours must already be that.
+    should "send a compact body with the item keys in alphabetical order" do
+      seen = nil
+      @stubs.post("/api/feedback-exchange/feedback/ack") { |env| seen = env; [ 204, {}, "" ] }
+
+      @client.ack([ { id: "a", remote_id: "b", remote_url: "https://growthos.example/x" } ])
+
+      assert_equal '{"items":[{"id":"a","remote_id":"b","remote_url":"https://growthos.example/x"}]}', seen.request_body
+    end
+
     should "POST the items with the body signed" do
       seen = nil
       @stubs.post("/api/feedback-exchange/feedback/ack") { |env| seen = env; [ 204, {}, "" ] }
