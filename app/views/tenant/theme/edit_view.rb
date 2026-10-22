@@ -164,7 +164,7 @@ class Views::Tenant::Theme::EditView < Views::Base
         name: "tenant[custom_theme][#{role[:role]}][#{scheme}]",
         value: current,
         aria: { label: "#{role[:label]}, #{scheme}", describedby: readout_id },
-        class: "h-9 w-12 shrink-0 cursor-pointer rounded-md border border-field bg-field p-0.5",
+        class: "h-11 w-12 shrink-0 cursor-pointer rounded-md border border-field bg-field p-0.5",
         data: {
           theme_live_preview_target: "field",
           variable: scheme == "dark" ? "--tenant-#{role[:role]}-dark" : "--tenant-#{role[:role]}",
