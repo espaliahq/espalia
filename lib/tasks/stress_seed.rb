@@ -152,7 +152,10 @@ class StressSeed
   end
 
   # @return [Tenant]
+  # @raise [RuntimeError] outside development and test, so a direct call can't create its fixed-password logins
   def call
+    raise "StressSeed runs only in development and test." unless Rails.env.development? || Rails.env.test?
+
     @tenant = upsert_tenant
     ActsAsTenant.with_tenant(@tenant) do
       upsert_people
