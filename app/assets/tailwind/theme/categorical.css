@@ -110,12 +110,12 @@
 @utility mark-category-6 { --gos-mark: var(--gos-category-6-strong); }
 @utility mark-category-7 { --gos-mark: var(--gos-category-7-strong); }
 @utility mark-category-8 { --gos-mark: var(--gos-category-8-strong); }
-@utility mark-rater-outside { --gos-mark: var(--gos-rater-outside); }
+@utility mark-rater-outside { --gos-mark: var(--gos-rater-outside); --gos-mark-content: var(--gos-rater-outside-content); }
 
 /* The helper in roles.css, on whichever mark the element carries */
 @utility text-on-mark {
-  /* Where neither helper runs: inverse text, because marks are dark in light and light in dark */
-  color: var(--gos-content-inverse);
+  /* Where neither helper runs: the mark's own text, else inverse text, because marks are dark in light and light in dark */
+  color: var(--gos-mark-content, var(--gos-content-inverse));
 
   @supports (color: color(from red srgb-linear r g b)) {
     color: color(from var(--gos-mark) srgb-linear

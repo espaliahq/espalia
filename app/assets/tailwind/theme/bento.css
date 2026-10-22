@@ -351,6 +351,7 @@ html[data-theme="bento"] {
   --gos-compared-subtle: #f0f2fd;
 
   --gos-rater-outside: #7b808a;
+  --gos-rater-outside-content: #0a0d12;
   --gos-session-live: #00884d;
 
   /* Six categories on Bento's ramps; 6 (cyan) and 7 (pink) keep Default's */
@@ -383,6 +384,7 @@ html[data-theme="bento"] {
     --gos-compared-subtle: #372e73;
 
     --gos-rater-outside: #9b9ea5;
+    --gos-rater-outside-content: #0a0d12;
     --gos-session-live: #2ab876;
 
     --gos-category-1-strong: #44a3ee;
