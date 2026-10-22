@@ -17,7 +17,7 @@
 # ({Views::Integrations::HrisMappingModal}), prefilled from its trigger.
 #
 class Views::Integrations::HrisView < Views::Base
-  SECONDARY_BUTTON_CLASSES = Components::Kit::Button.classes(variant: :outline, size: :sm)
+  SECONDARY_BUTTON_CLASSES = Components::Kit::Button.classes(variant: :outline, size: :sm, touch: true)
 
   CHIP_CLASSES = "inline-flex items-center rounded-sm text-xs " \
                  "bg-neutral-subtle text-muted"
@@ -125,7 +125,7 @@ class Views::Integrations::HrisView < Views::Base
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
 
-        render Components::Kit::Button.new(tone: :brand, type: :submit, disabled: !sync_ready?) { "Sync now" }
+        render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true, disabled: !sync_ready?) { "Sync now" }
 
         unless sync_ready?
           p(class: "text-xs text-muted") do

@@ -99,7 +99,7 @@ class Views::Tenant::Users::IndexView < Views::Base
     form(action: impersonation_path, method: "post") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "tenant_user_id", value: tenant_user.id)
-      render Components::Kit::Button.new(variant: :outline, size: :xs, type: :submit,
+      render Components::Kit::Button.new(variant: :outline, size: :xs, touch: true, type: :submit,
                                          aria: { label: "View as #{display_name(tenant_user)}" }) { "View as" }
     end
   end

@@ -52,7 +52,7 @@ class Views::Assessments::Activity::Feed < Views::Base
           "#{@entries.size} #{@entries.size == 1 ? 'event' : 'events'}"
         end
       end
-      render Components::Kit::Button.new(variant: :ghost, size: :xs, icon: true, aria_label: "Close activity",
+      render Components::Kit::Button.new(variant: :ghost, size: :xs, icon: true, touch: true, aria_label: "Close activity",
                                          data: { action: "click->activity-pane#close" }) { plain "×" }
     end
   end

@@ -212,7 +212,7 @@ class Views::Assessments::IndexView < Views::Base
         exploration_chips(assignment)
 
         div(class: "mt-4") do
-          render Components::Kit::Button.new(variant: :outline, size: :sm, href: assessment_path(assignment)) do
+          render Components::Kit::Button.new(variant: :outline, size: :sm, touch: true, href: assessment_path(assignment)) do
             "Review assessment"
           end
         end
@@ -241,11 +241,11 @@ class Views::Assessments::IndexView < Views::Base
 
         div(class: "mt-4") do
           if cycle
-            render Components::Kit::Button.new(tone: :brand, size: :sm, href: assessment_path(assignment)) do
+            render Components::Kit::Button.new(tone: :brand, size: :sm, touch: true, href: assessment_path(assignment)) do
               "#{self_cta_verb(assignment)} self-assessment"
             end
           else
-            render Components::Kit::Button.new(variant: :outline, size: :sm, href: assessment_path(assignment)) do
+            render Components::Kit::Button.new(variant: :outline, size: :sm, touch: true, href: assessment_path(assignment)) do
               "View self-assessment"
             end
           end

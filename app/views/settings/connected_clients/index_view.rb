@@ -243,7 +243,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       render Components::Kit::Button.new(
-        variant: :outline, tone: :danger, size: :sm, type: :submit,
+        variant: :outline, tone: :danger, size: :sm, touch: true, type: :submit,
         data: { turbo_confirm: "Revoke access for #{token.application.name}? They'll have to re-authorise." }
       ) { "Revoke" }
     end
