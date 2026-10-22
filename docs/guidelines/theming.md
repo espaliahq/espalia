@@ -40,6 +40,8 @@ One rule, in `@custom-variant dark` (`app/assets/tailwind/application.css`): dar
 
 Text on a fill the tenant picks is computed, never chosen. `--gos-brand-content-inverse` and `--gos-nav-content` come from `contrast-color()`, with a relative-colour fallback that does the WCAG maths: black and white tie at relative luminance 0.17913, and the better of the two always reaches at least 4.58:1. It returns black or white only, one text colour per fill.
 
+Where a browser supports neither (Safari before 16.4, Firefox before 128), both fall back to `#0a0d12`, which reads on Default's teal. A tenant that picks a dark brand or navbar gets dark text on it there; picking the text on the server would close that gap.
+
 It runs only where a tenant picks the fill: brand, nav and Custom's surfaces. A brand button is filled with the brand itself (`--gos-brand-strong` is `var(--gos-brand)`), so a light brand gets black text rather than a darker fill. Presets set their designed text colours instead; Bento's lime carries near-black (`--gos-brand-content-inverse: #0a0d12` in `theme/bento.css`).
 
 The helper can't see through a translucent fill, so fills under text are opaque mixes: `--gos-brand-subtle` is `color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default))`, never `bg-primary/10`.
