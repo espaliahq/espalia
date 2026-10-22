@@ -80,7 +80,7 @@ class Ai::TypesafeJev::Adapter
     end
   end
 
-  def probabilities?(raw) = raw.is_a?(Hash) && raw.values.all?(Numeric)
+  def probabilities?(raw) = raw.is_a?(Hash) && raw.any? && raw.values.all?(Numeric)
 
   # The gateway's HTTP API reports camelCase usage; TypeSafe's own API snake_case.
   def usage_of(body)

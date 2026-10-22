@@ -68,8 +68,9 @@ class Ai::TypesafeJev::AdapterTest < ActiveSupport::TestCase
     wrong_type = answered.deep_dup.tap { |a| a[:answers][:valence] = { type: "boolean", probability: 0.4 } }
     no_choice = answered.deep_dup.tap { |a| a[:answers][:placement].delete(:choice) }
     odd_probabilities = answered.deep_dup.tap { |a| a[:answers][:placement][:probabilities] = { "a|3" => "high" } }
+    no_probabilities = answered.deep_dup.tap { |a| a[:answers][:placement][:probabilities] = {} }
 
-    [ wrong_type, no_choice, odd_probabilities ].each do |body|
+    [ wrong_type, no_choice, odd_probabilities, no_probabilities ].each do |body|
       stubs = Faraday::Adapter::Test::Stubs.new { |s| s.post("/v1/evaluate") { json(body) } }
       adapter = Ai::TypesafeJev::Adapter.new(api_key: "k", base_url: BASE, model: MODEL,
                                              connection: Faraday.new(url: "#{BASE}/") { |f| f.adapter :test, stubs })
