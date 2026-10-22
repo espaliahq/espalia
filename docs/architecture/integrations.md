@@ -177,18 +177,27 @@ Evidence::SuggestPlacementsJob
        ├─ Ai::NamePseudonymiser
        └─ Ai::ModelClient.for(tenant)
             ├─ Ai::Anthropic::Adapter          (anthropic gem; base_url: optional)
-            └─ Ai::OpenAiCompatible::Adapter   (Faraday → POST {base_url}/chat/completions)
+            ├─ Ai::OpenAiCompatible::Adapter   (Faraday → POST {base_url}/chat/completions)
+            └─ Ai::TypesafeJev::Adapter        (Faraday → POST {base_url}/evaluate)
 ```
 
-- **Two adapters, one response, one error set.** Both return
-  `Ai::SuggestionResponse` (suggestions, model, usage, refused) and raise
-  `Ai::Errors::{AuthenticationError, RateLimitError, ApiError, RefusalError}`.
-  Neither retries: the job owns retries.
+- **Three adapters, one error set.** The two chat adapters return
+  `Ai::SuggestionResponse` (suggestions, model, usage, refused); Jev, a
+  decision model, returns `Ai::DecisionResponse` (answers with probabilities,
+  model, usage) and `Evidence::PlacementDecision` turns it into suggestions.
+  All raise `Ai::Errors::{AuthenticationError, RateLimitError, ApiError, RefusalError}`.
+  None retries: the job owns retries.
 - **The stored config is generic.** `provider` is `anthropic` (the Anthropic
-  API, or any Anthropic-compatible endpoint) or `openai_compatible` (any
-  `/chat/completions` endpoint). Vercel's AI Gateway is an
-  `openai_compatible` endpoint; the form's preset fills its address and nothing
-  more, and no adapter special-cases it.
+  API, or any Anthropic-compatible endpoint), `openai_compatible` (any
+  `/chat/completions` endpoint) or `typesafe_jev` (TypeSafe AI's Jev at
+  `/evaluate`). Vercel's AI Gateway serves both of the last two; the form's
+  presets fill its address, a provider and a model id (Jev by default, or a
+  chat model), and no adapter special-cases it. Jev writes no rationale, so
+  its suggestions show a confidence alone; the wire shape and the trade-off
+  are in [evidence.md](../guidelines/assessments/evidence.md). In development
+  the seeds save the me&u tenant onto Jev with the credentials file's
+  `ai.vercel.meandu.ai_gateway_api_key`; the gateway key is never read from
+  the credentials file at request time.
 - **The address is typed by an admin and called by the server**, so it is
   https only outside development, carries no login, query or fragment, and may
   not be a private-network host. The guard is the exchange's

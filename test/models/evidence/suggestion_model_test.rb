@@ -30,6 +30,25 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
     end
   end
 
+  class FakeDecider
+    attr_reader :calls
+
+    def initialize(error: nil)
+      @error = error
+      @calls = []
+    end
+
+    def model = "typesafe-ai/jev"
+    def provider = "typesafe_jev"
+
+    def decide(state:, questions:)
+      @calls << { state: state, questions: questions }
+      raise @error if @error
+
+      Ai::DecisionResponse.new(answers: {}, model: model, usage: Ai::SuggestionResponse::Usage.new(input_tokens: 1, output_tokens: 1))
+    end
+  end
+
   setup do
     @tenant = create(:tenant, :with_ai_model)
     ActsAsTenant.with_tenant(@tenant) do
@@ -69,6 +88,13 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
 
       assert_match(/\APerson \d+ will review; will deliver\.\z/, call[:system])
       assert_match(/\APerson \d+ Person \d+ present\.\z/, call[:user], "the feedback itself gets first names too")
+    end
+
+    should "drop a chat placement that came without the rationale it was asked for" do
+      blank, *kept = [ raw(rationale: "  ") ] + %w[c2 c3 c4].map { |id| raw(capability_stable_id: id) }
+      proposals, = run_model(FakeAdapter.new(suggestions: [ blank, *kept ]))
+
+      assert_equal %w[c2 c3 c4], proposals.map(&:capability_stable_id), "a blank one does not use up a place"
     end
 
     should "put the names back in the rationales that come back" do
@@ -129,6 +155,25 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
     should "follow the tenant's own model and key" do
       assert Evidence::SuggestionModel.configured?(@tenant)
       assert_not Evidence::SuggestionModel.configured?(create(:tenant))
+    end
+  end
+
+  context "with a decision model" do
+    should "ask the decision questions instead of the chat prompt" do
+      decision = Struct.new(:state, :questions) { def proposals(_response, limit:) = [ limit ] }.new({ feedback: "x" }, { q: 1 })
+      adapter = FakeDecider.new
+      Evidence::PlacementDecision.stub(:new, decision) do
+        assert_equal [ Evidence::SuggestionModel::MAX_SUGGESTIONS ], Evidence::SuggestionModel.new(tenant: @tenant, adapter: adapter).suggest(Object.new)
+      end
+      assert_equal [ { state: { feedback: "x" }, questions: { q: 1 } } ], adapter.calls
+    end
+
+    should "map its errors like any other adapter's" do
+      decision = Struct.new(:state, :questions).new("s", {})
+      Evidence::PlacementDecision.stub(:new, decision) do
+        model = Evidence::SuggestionModel.new(tenant: @tenant, adapter: FakeDecider.new(error: Ai::Errors::RateLimitError.new))
+        assert_raises(Evidence::SuggestionModel::RateLimited) { model.suggest(Object.new) }
+      end
     end
   end
 end

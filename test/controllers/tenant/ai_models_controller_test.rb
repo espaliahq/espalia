@@ -78,7 +78,7 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "input[type=password][name='ai_model[api_key]']"
         assert_select "input[type=checkbox][name='ai_model[suggestions_enabled]']"
         assert_select "input[type=checkbox][name='ai_model[pseudonymise_names]'][checked]"
-        assert_select "option", text: "Vercel AI Gateway"
+        assert_select "option", text: "Vercel AI Gateway: Jev (TypeSafe AI)"
       end
 
       should "never echo a stored key" do
@@ -89,7 +89,7 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_not_includes response.body, KEY
         assert_select "input[type=password][name='ai_model[api_key]'][value='']"
         assert_includes response.body, "Stored"
-        assert_select "select#ai_model_preset option[selected]", text: "Vercel AI Gateway"
+        assert_select "select#ai_model_preset option[selected]", text: "Vercel AI Gateway: a chat model"
       end
 
       should "not offer to keep a key the form never stored, while the status card still reports the deployment's" do
@@ -124,6 +124,25 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_equal "anthropic/claude-opus-5-5", config.model
         assert config.suggestions_enabled?
         assert_equal KEY, @tenant.ai_secrets.api_key
+      end
+
+      should "save Jev on the gateway, with the gateway preset selected and no effort on offer" do
+        patch tenant_ai_model_path, params: settings(provider: "typesafe_jev", model: "typesafe-ai/jev")
+
+        config = @tenant.reload.ai_config
+        assert_equal [ "typesafe_jev", GATEWAY, "typesafe-ai/jev" ], [ config.provider, config.base_url, config.model ]
+
+        get tenant_integration_path("ai-model")
+        assert_select "select#ai_model_preset option[selected]", text: "Vercel AI Gateway: Jev (TypeSafe AI)"
+        assert_select "select#ai_model_provider option[selected]", text: "Jev (TypeSafe AI)"
+        assert_select "[data-ai-model-preset-target='effortRow'][hidden]"
+      end
+
+      should "show Jev off the gateway as the other Jev endpoint" do
+        patch tenant_ai_model_path, params: settings(provider: "typesafe_jev", base_url: "https://jev.example.com/v1", model: "typesafe-ai/jev")
+
+        get tenant_integration_path("ai-model")
+        assert_select "select#ai_model_preset option[selected]", text: "Other Jev endpoint"
       end
 
       should "keep the stored key when the field is left blank, and turn switches off" do
@@ -246,6 +265,24 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
 
         assert_redirected_to tenant_integration_path("ai-model")
         assert_equal "Connected. anthropic/claude-opus-5-5 replied: “ready”", flash[:notice]
+      end
+
+      should "ping Jev with a boolean question and show its answer" do
+        @tenant.update_ai_model!(settings: { provider: "typesafe_jev", base_url: GATEWAY, model: "typesafe-ai/jev" }, api_key: KEY)
+        sent = nil
+        stubs = Faraday::Adapter::Test::Stubs.new
+        stubs.post("/v1/evaluate") do |env|
+          sent = JSON.parse(env.body)
+          [ 200, { "Content-Type" => "application/json" },
+            { model: "typesafe-ai/jev", answers: { reachable: { type: "boolean", probability: 0.98 } } }.to_json ]
+        end
+        adapter = Ai::TypesafeJev::Adapter.new(api_key: KEY, base_url: GATEWAY, model: "typesafe-ai/jev",
+                                               connection: Faraday.new(url: "#{GATEWAY}/") { |f| f.adapter :test, stubs })
+
+        Ai::ModelClient.stub(:for, adapter) { post test_connection_tenant_ai_model_path }
+
+        assert_equal "boolean", sent.dig("questions", "reachable", "type")
+        assert_equal "Connected. typesafe-ai/jev replied: “yes, 98% sure this is a connection check”", flash[:notice]
       end
 
       should "name each failure without echoing the endpoint's body or the key" do

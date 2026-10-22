@@ -310,3 +310,19 @@ if Rails.env.development? && meandu && chip_creds
   )
   puts "Configured the feedback exchange with Chip for me&u at #{meandu.feedback_exchange_config.base_url}"
 end
+
+# Development only: point the me&u tenant's placement suggestions at Jev on
+# Vercel's AI Gateway, with the gateway key from the credentials file, through
+# the same write the AI model card uses. Re-seeding saves the same values
+# again. Production tenants enter their own key on the Integrations page.
+gateway_key = Rails.application.credentials.dig(:ai, :vercel, :meandu, :ai_gateway_api_key) if Rails.env.development?
+if meandu && gateway_key.present?
+  meandu.update_ai_model!(
+    settings: { provider: "typesafe_jev", base_url: AiModelConfig::VERCEL_AI_GATEWAY_URL, model: AiModelConfig::JEV_MODEL,
+                suggestions_enabled: true },
+    api_key: gateway_key
+  )
+  puts "Configured the AI model for me&u: #{AiModelConfig::JEV_MODEL} on the Vercel AI Gateway"
+else
+  puts "Skipping the AI model (development only, and needs ai.vercel.meandu.ai_gateway_api_key in the credentials file)"
+end

@@ -22,14 +22,18 @@ class Evidence::PlacementPrompt
     "peer_to_peer" => "a peer"
   }.freeze
 
+  VALENCE_MEANINGS = {
+    "strongly_demonstrated" => "the feedback shows the behaviour clearly and well beyond doubt.",
+    "demonstrated" => "the feedback shows the behaviour.",
+    "growth_area" => "the feedback shows the behaviour is missing or inconsistent.",
+    "significant_growth_area" => "the feedback shows a serious or repeated gap."
+  }.freeze
+
   INSTRUCTIONS = <<~TEXT
     You help people place a piece of workplace feedback on their career framework. A framework lists capabilities, and for each capability a behavioural expectation per level. Placing feedback means linking it to the capability and level whose expectation it speaks to, with a valence: what the feedback says about that behaviour.
 
     Valences:
-    - strongly_demonstrated: the feedback shows the behaviour clearly and well beyond doubt.
-    - demonstrated: the feedback shows the behaviour.
-    - growth_area: the feedback shows the behaviour is missing or inconsistent.
-    - significant_growth_area: the feedback shows a serious or repeated gap.
+    #{VALENCE_MEANINGS.map { |valence, meaning| "- #{valence}: #{meaning}" }.join("\n")}
 
     Suggest up to three placements, best first. Only suggest a cell when the feedback itself is evidence about that expectation; one well-supported placement beats three weak ones, and an empty list is the right answer when the feedback says nothing the framework covers. Prefer the person's own level unless the feedback clearly describes behaviour expected at the level above or below.
 
@@ -92,8 +96,16 @@ class Evidence::PlacementPrompt
   #
   # @return [String]
   def framework_text
-    lines = [ INSTRUCTIONS, "Framework: the #{role&.name} role, levels #{window.to_a.join(', ')} " \
-                            "(this person is at level #{home_level.ordinal})." ]
+    "#{INSTRUCTIONS}\n#{framework_description}"
+  end
+
+  # The framework as this role reads it, without the chat instructions: every
+  # capability in the window, with its expectation and examples per level.
+  #
+  # @return [String]
+  def framework_description
+    lines = [ "Framework: the #{role&.name} role, levels #{window.to_a.join(', ')} " \
+              "(this person is at level #{home_level.ordinal})." ]
     cells.values.group_by { |c| c[:capability_stable_id] }.each_value do |capability_cells|
       first = capability_cells.first
       lines << ""

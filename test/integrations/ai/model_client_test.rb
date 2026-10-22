@@ -28,6 +28,16 @@ class Ai::ModelClientTest < ActiveSupport::TestCase
     assert_equal "anthropic/claude-opus-5-5", adapter.model
   end
 
+  should "build the Jev adapter for a tenant on Jev" do
+    tenant = build(:tenant, ai_config: AiModelConfig.new(provider: "typesafe_jev", base_url: "https://ai-gateway.vercel.sh/v1/",
+                                                         model: "typesafe-ai/jev"),
+                            ai_credentials: { "api_key" => "sk-gw" })
+    adapter = Ai::ModelClient.for(tenant)
+
+    assert_kind_of Ai::TypesafeJev::Adapter, adapter
+    assert_equal [ "typesafe_jev", "typesafe-ai/jev" ], [ adapter.provider, adapter.model ]
+  end
+
   should "pass an Anthropic-compatible address to the Anthropic adapter" do
     tenant = build(:tenant, ai_config: AiModelConfig.new(base_url: "https://proxy.example.com"), ai_credentials: { "api_key" => "sk-a" })
     adapter = Ai::ModelClient.for(tenant)

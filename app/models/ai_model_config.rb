@@ -4,8 +4,8 @@
 # JSONB. Today that is placement suggestions for feedback.
 #
 # The stored shape is generic: a provider kind, an optional address, a model
-# id. "Vercel AI Gateway" is a form preset that fills `openai_compatible` and
-# the gateway's address, nothing more; no adapter special-cases it.
+# id. "Vercel AI Gateway" is a form preset that fills a provider kind, the
+# gateway's address and a model id, nothing more; no adapter special-cases it.
 #
 # Holds nothing secret: the API key lives in the encrypted `ai_credentials`
 # column (see {Tenant#ai_secrets}).
@@ -18,16 +18,22 @@ class AiModelConfig
 
   # anthropic: the Anthropic API, or any Anthropic-compatible endpoint.
   # openai_compatible: anything that serves POST {base_url}/chat/completions.
-  PROVIDERS = %w[anthropic openai_compatible].freeze
+  # typesafe_jev: TypeSafe AI's Jev decision model at POST {base_url}/evaluate.
+  PROVIDERS = %w[anthropic openai_compatible typesafe_jev].freeze
   EFFORTS = %w[low medium high xhigh max].freeze
   DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5"
+  VERCEL_AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1"
+  JEV_MODEL = "typesafe-ai/jev"
   MODEL_FORMAT = /\A[A-Za-z0-9][A-Za-z0-9._:\/@+-]*\z/
 
   # Form presets. Choosing one fills the fields; nothing about it is stored.
   PRESETS = {
     "anthropic" => { label: "Anthropic API", provider: "anthropic", base_url: nil, model: DEFAULT_ANTHROPIC_MODEL },
-    "vercel_ai_gateway" => { label: "Vercel AI Gateway", provider: "openai_compatible",
-                             base_url: "https://ai-gateway.vercel.sh/v1", model: "anthropic/claude-opus-5-5" },
+    "vercel_ai_gateway" => { label: "Vercel AI Gateway: Jev (TypeSafe AI)", provider: "typesafe_jev",
+                             base_url: VERCEL_AI_GATEWAY_URL, model: JEV_MODEL },
+    "vercel_ai_gateway_chat" => { label: "Vercel AI Gateway: a chat model", provider: "openai_compatible",
+                                  base_url: VERCEL_AI_GATEWAY_URL, model: "anthropic/claude-opus-5-5" },
+    "typesafe_jev" => { label: "Other Jev endpoint", provider: "typesafe_jev", base_url: nil, model: JEV_MODEL },
     "openai_compatible" => { label: "Other OpenAI-compatible endpoint", provider: "openai_compatible", base_url: nil, model: nil },
     "anthropic_compatible" => { label: "Other Anthropic-compatible endpoint", provider: "anthropic", base_url: nil, model: nil }
   }.freeze
@@ -41,7 +47,7 @@ class AiModelConfig
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :effort, inclusion: { in: EFFORTS }, allow_blank: true
-  validates :base_url, :model, presence: true, if: :openai_compatible?
+  validates :base_url, :model, presence: true, unless: :anthropic?
   validates :model, format: { with: MODEL_FORMAT, message: "may only contain letters, numbers and . _ : / @ + -" },
                     length: { maximum: 200 }, allow_blank: true
   validate :base_url_is_secure
@@ -59,6 +65,10 @@ class AiModelConfig
 
   # @return [Boolean]
   def anthropic? = provider == "anthropic"
+
+  # @return [Boolean] a decision model, which answers typed questions with
+  #   probabilities and writes no prose
+  def typesafe_jev? = provider == "typesafe_jev"
 
   # The address with no trailing slash, ready to take a path.
   #

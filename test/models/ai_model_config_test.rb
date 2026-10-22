@@ -33,6 +33,17 @@ class AiModelConfigTest < ActiveSupport::TestCase
       assert AiModelConfig.new(provider: "openai_compatible", base_url: "https://gw.example.com/v1", model: "anthropic/claude-opus-5-5").valid?
     end
 
+    should "need an address and a model for Jev, and point the gateway preset at it" do
+      config = AiModelConfig.new(provider: "typesafe_jev")
+
+      assert_not config.valid?
+      assert_includes config.errors.full_messages, "Address can't be blank"
+      preset = AiModelConfig::PRESETS.fetch("vercel_ai_gateway")
+      assert AiModelConfig.new(preset.slice(:provider, :base_url, :model)).tap { |c| assert c.typesafe_jev? }.valid?
+      assert_equal [ "typesafe_jev", "https://ai-gateway.vercel.sh/v1", "typesafe-ai/jev" ], preset.values_at(:provider, :base_url, :model)
+      assert_equal "openai_compatible", AiModelConfig::PRESETS.dig("vercel_ai_gateway_chat", :provider)
+    end
+
     should "accept provider-prefixed model ids and refuse anything with spaces or quotes" do
       %w[claude-opus-5-5 anthropic/claude-opus-5-5 openai/gpt-5:free meta-llama/Llama-3.3-70B@v1].each do |id|
         assert AiModelConfig.new(model: id).valid?, id
@@ -94,13 +105,14 @@ class AiModelConfigTest < ActiveSupport::TestCase
     end
   end
 
-  context "the Vercel AI Gateway preset" do
+  context "the Vercel AI Gateway presets" do
     should "only fill the generic fields" do
-      preset = AiModelConfig::PRESETS.fetch("vercel_ai_gateway")
+      %w[vercel_ai_gateway vercel_ai_gateway_chat].each do |key|
+        preset = AiModelConfig::PRESETS.fetch(key)
 
-      assert_equal "openai_compatible", preset[:provider]
-      assert_equal "https://ai-gateway.vercel.sh/v1", preset[:base_url]
-      assert AiModelConfig.new(provider: preset[:provider], base_url: preset[:base_url], model: preset[:model]).valid?
+        assert_equal "https://ai-gateway.vercel.sh/v1", preset[:base_url]
+        assert AiModelConfig.new(preset.slice(:provider, :base_url, :model)).valid?, key
+      end
     end
   end
 end

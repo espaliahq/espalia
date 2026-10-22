@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -286,7 +286,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.integer "level_ordinal", null: false
     t.string "valence", null: false
     t.decimal "confidence", precision: 3, scale: 2, null: false
-    t.text "rationale", null: false
+    t.text "rationale"
     t.string "status", default: "pending", null: false
     t.uuid "decided_by_id"
     t.datetime "decided_at"
