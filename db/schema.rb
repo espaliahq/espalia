@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -244,11 +244,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
     t.datetime "withdrawn_at"
     t.uuid "withdrawn_by_id"
     t.boolean "recorded_unplaced", default: false, null: false
+    t.string "recorded_via"
     t.index ["author_id"], name: "index_evidence_items_on_author_id"
     t.index ["edited_by_id"], name: "idx_evidence_items_edited_by_id", where: "(edited_by_id IS NOT NULL)"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_items_anchor"
     t.index ["tenant_id", "cycle_id", "person_id"], name: "idx_evidence_items_tenant_cycle_person"
     t.index ["tenant_id", "person_id", "link_status"], name: "idx_evidence_items_tenant_person_status"
+    t.index ["tenant_id", "updated_at", "id"], name: "idx_evidence_items_feed"
     t.index ["tenant_id"], name: "index_evidence_items_on_tenant_id"
     t.index ["withdrawn_by_id"], name: "idx_evidence_items_withdrawn_by_id", where: "(withdrawn_by_id IS NOT NULL)"
   end
@@ -273,6 +275,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
     t.index ["evidence_id"], name: "index_evidence_links_on_evidence_id"
     t.index ["person_id", "framework_id", "capability_stable_id", "level_ordinal", "link_status"], name: "idx_evidence_links_anchor"
     t.index ["tenant_id"], name: "index_evidence_links_on_tenant_id"
+  end
+
+  create_table "evidence_placement_suggestions", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "evidence_id", null: false
+    t.uuid "person_id", null: false
+    t.uuid "framework_id", null: false
+    t.uuid "capability_stable_id", null: false
+    t.integer "level_ordinal", null: false
+    t.string "valence", null: false
+    t.decimal "confidence", precision: 3, scale: 2, null: false
+    t.text "rationale"
+    t.string "status", default: "pending", null: false
+    t.uuid "decided_by_id"
+    t.datetime "decided_at"
+    t.text "dismiss_reason"
+    t.string "model", null: false
+    t.string "prompt_version", null: false
+    t.datetime "generated_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "provider", null: false
+    t.index ["evidence_id", "capability_stable_id", "level_ordinal"], name: "idx_evidence_placement_suggestions_cell", unique: true
+    t.index ["person_id", "framework_id", "status"], name: "idx_evidence_placement_suggestions_person"
+    t.index ["tenant_id"], name: "index_evidence_placement_suggestions_on_tenant_id"
   end
 
   create_table "evidence_requests", id: :uuid, default: nil, force: :cascade do |t|
@@ -324,6 +351,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
     t.datetime "updated_at", null: false
     t.index ["tenant_id"], name: "index_feedback_drafts_on_tenant_id"
     t.index ["token"], name: "index_feedback_drafts_on_token", unique: true
+  end
+
+  create_table "feedback_exchange_acks", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "evidence_id", null: false
+    t.string "consumer", null: false
+    t.string "remote_id", null: false
+    t.string "remote_url"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "evidence_id", "consumer"], name: "idx_feedback_exchange_acks_item_consumer", unique: true
+  end
+
+  create_table "feedback_exchange_imports", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "origin", null: false
+    t.string "external_id", null: false
+    t.uuid "evidence_id"
+    t.uuid "recipient_id"
+    t.string "status", null: false
+    t.string "skip_reason"
+    t.jsonb "record"
+    t.datetime "peer_updated_at"
+    t.datetime "synced_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "origin", "external_id"], name: "index_feedback_exchange_imports_on_origin_key", unique: true
+    t.index ["tenant_id", "recipient_id"], name: "index_feedback_exchange_imports_on_skipped_recipient", where: "((status)::text = 'skipped'::text)"
+    t.index ["tenant_id", "status", "skip_reason"], name: "index_feedback_exchange_imports_on_status"
   end
 
   create_table "framework_behavioural_expectations", id: :uuid, default: nil, force: :cascade do |t|
@@ -795,6 +851,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
     t.string "slug", null: false
     t.jsonb "underperforming_label_translations", default: {}, null: false
     t.datetime "updated_at", null: false
+    t.jsonb "feedback_exchange_config", default: {}, null: false
+    t.string "feedback_exchange_credentials"
+    t.string "inbound_key_id"
+    t.string "previous_inbound_key_id"
+    t.jsonb "ai_config", default: {}, null: false
+    t.string "ai_credentials"
+    t.index ["inbound_key_id"], name: "index_tenants_on_inbound_key_id", where: "(inbound_key_id IS NOT NULL)"
+    t.index ["previous_inbound_key_id"], name: "index_tenants_on_previous_inbound_key_id", where: "(previous_inbound_key_id IS NOT NULL)"
     t.index ["slack_team_id"], name: "index_tenants_on_slack_team_id", unique: true, where: "(slack_team_id IS NOT NULL)"
     t.index ["slug"], name: "index_tenants_on_slug", unique: true
   end
@@ -836,10 +900,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120521) do
   add_foreign_key "evidence_links", "people", column: "linked_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "people", column: "removed_by_id", on_delete: :nullify
   add_foreign_key "evidence_links", "tenants"
+  add_foreign_key "evidence_placement_suggestions", "tenants"
   add_foreign_key "evidence_requests", "people", column: "requested_by_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "people", column: "requestee_person_id", on_delete: :cascade
   add_foreign_key "evidence_requests", "tenants"
   add_foreign_key "feedback_drafts", "tenants"
+  add_foreign_key "feedback_exchange_acks", "tenants"
+  add_foreign_key "feedback_exchange_imports", "tenants"
   add_foreign_key "framework_behavioural_expectations", "tenants"
   add_foreign_key "framework_capabilities", "tenants"
   add_foreign_key "framework_capability_categories", "tenants"

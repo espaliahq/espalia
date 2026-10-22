@@ -38,7 +38,8 @@ begin
     end
 
     desc "Validation before commit."
-    task precommit: [ :erblint, :rubocop, :brakeman, :bundler_audit, :importmap_audit, "db:test:prepare", "zeitwerk:check", :test, "test:system" ]
+    task precommit: [ :erblint, :rubocop, :brakeman, :bundler_audit, :importmap_audit, "db:test:prepare", "zeitwerk:check", :test, "test:system",
+                      "contract:consumer", "contract:provider" ]
   end
 rescue LoadError => e
   Rails.error.handle(e) do |error|

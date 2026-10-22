@@ -28,6 +28,17 @@ Rails.application.routes.draw do
   post "/slack/commands", to: "slack/commands#create", as: :slack_commands
   post "/slack/interactions", to: "slack/interactions#create", as: :slack_interactions
 
+  # The feedback exchange's inbound surface. Sessionless; the request signature is
+  # the only credential (see FeedbackExchangeSignedRequest).
+  scope "/api/feedback_exchange", module: :feedback_exchange, as: :feedback_exchange do
+    get "health", to: "health#show", as: :health
+    get "feedback", to: "feed#show", as: :feed
+    get "feedback/deletions", to: "deletions#show", as: :deletions
+    post "feedback/ack", to: "acks#create", as: :acks
+    # Unsigned and tenant-free: the pact our consumer tests wrote, for the peer.
+    get "feedback/contract", to: "contracts#show", as: :contract
+  end
+
   # User-facing settings — for now just the connected MCP clients page;
   # other settings live elsewhere historically.
   namespace :settings do
@@ -97,6 +108,20 @@ Rails.application.routes.draw do
       end
     end
 
+    # AI model: save settings and key, and test the connection. The page itself
+    # is integrations#show with id "ai-model".
+    resource :ai_model, only: [ :update ],
+      path: "integrations/ai-model", controller: "ai_models" do
+      post :test_connection
+    end
+
+    # Feedback exchange: save settings and secrets, and test the connection. The
+    # page itself is integrations#show with id "feedback-exchange".
+    resource :feedback_exchange, only: [ :update ],
+      path: "integrations/feedback-exchange", controller: "feedback_exchanges" do
+      post :test_connection
+    end
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],
@@ -147,7 +172,17 @@ Rails.application.routes.draw do
       post :nudge
     end
   end
-  resources :evidence_items, only: [ :create, :update, :destroy ]
+  resources :evidence_items, only: [ :create, :update, :destroy ] do
+    # "Suggest again": ask the model for a fresh set of placement suggestions.
+    resources :placement_suggestions, only: [ :create ], controller: "evidence_placement_suggestions"
+  end
+  # Decide one placement suggestion from the hub, in place (Turbo Stream).
+  resources :evidence_placement_suggestions, only: [] do
+    member do
+      post :accept
+      post :dismiss
+    end
+  end
 
   # Unified evidence modal body (server-rendered into the #evidence-modal frame),
   # and the "who is it for?" step's typeahead when feedback is volunteered.

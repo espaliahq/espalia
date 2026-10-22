@@ -10,7 +10,7 @@
 #
 # `source` is derived from the relationship between the caller and the
 # assessee (self / manager / peer) — never trusted from the input —
-# matching `infer_source` on the controller.
+# through {EvidenceItem.source_for}.
 #
 # Write — :mcp_client approval. Evidence is additive (it adds context to
 # the assessment, doesn't grant permissions or change other people's
@@ -196,13 +196,7 @@ class Operations::Assessments::RecordEvidence < Operations::Base
       "level_ordinal #{ordinal} does not exist for the assignment's role"
   end
 
-  # Same logic as EvidenceController#infer_source — derived from the
-  # actor↔assessee relationship, never trusted from input.
   def derive_source
-    assessee = Person.find_by(id: assignment.person_id)
-    return "self" if assessee&.id == context.person.id
-    return "manager" if assessee&.managed_by?(context.person)
-
-    "peer"
+    EvidenceItem.source_for(author: context.person, recipient: Person.find_by(id: assignment.person_id))
   end
 end

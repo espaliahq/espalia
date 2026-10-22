@@ -29,12 +29,22 @@ class EvidenceHubController < ApplicationController
     to_place = EvidenceItem.unplaced.where.not(author_id: current_person.id).includes(:author).order(:recorded_at)
     to_place_about_me = to_place.for_person(current_person.id).to_a
     to_place_for_team = to_place.exists? ? placeable_for_team(to_place) : []
+    responses = responses_for(completed_outgoing)
+    shown = authored + to_place_about_me + to_place_for_team
+    responded_items = responses.values.map { |r| r[:item] }
+    # A suggestion block's id is the item's, so an item listed elsewhere on
+    # the page must not be listed again under "May fit elsewhere too".
+    # Suggestion work only when something could show: a pending row somewhere,
+    # or a tenant that can ask for one. Off is the default.
+    can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
+    suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
+    with_suggestions = suggestions_live ? placed_with_suggestions(exclude: (shown + responded_items).map(&:id)) : []
+    decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
     # One combined context lookup for every cell on the page — request ids and
     # evidence ids are all distinct UUIDs, so a single id-keyed hash serves both.
-    details = Evidence::CellContextResolver.new(all_requests + authored + to_place_about_me + to_place_for_team).by_id
-    responses = responses_for(completed_outgoing)
+    details = Evidence::CellContextResolver.new(all_requests + shown + with_suggestions).by_id
 
     render Views::Evidence::HubView.new(
       open_incoming: open_incoming,
@@ -50,6 +60,11 @@ class EvidenceHubController < ApplicationController
       authored_details: details,
       responses: responses,
       in_situ_paths: in_situ_paths_for(authored + responses.values.map { |r| r[:item] }),
+      with_suggestions: with_suggestions,
+      suggestions: Evidence::PlacementSuggestionRows.for(decidable),
+      decidable_ids: decidable.to_set(&:id),
+      can_regenerate: can_regenerate,
+      viewer_person_id: current_person.id,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: current_user_tenants
@@ -79,6 +94,30 @@ class EvidenceHubController < ApplicationController
     delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id)
       .pluck(:person_id, :framework_id).to_set
     scope.to_a.select { |item| report_ids.include?(item.person_id) || delegated.include?([ item.person_id, item.framework_id ]) }
+  end
+
+  # Placed items about the viewer or the people they may place feedback for
+  # (their subtree, a delegation's person on that framework) with pending
+  # placement suggestions — the extra cells the model sees.
+  def placed_with_suggestions(exclude:)
+    pending = EvidencePlacementSuggestion.pending
+
+    report_ids = current_person.all_reports.pluck(:id)
+    delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id, :framework_id)
+    scope = pending.where(person_id: [ current_person.id, *report_ids ])
+    delegated.each { |person_id, framework_id| scope = scope.or(pending.where(person_id: person_id, framework_id: framework_id)) }
+
+    EvidenceItem.active.where(id: scope.select(:evidence_id)).where.not(id: exclude)
+      .where.not(author_id: current_person.id).where.not(capability_stable_id: nil)
+      .includes(:author).order(recorded_at: :desc).to_a
+  end
+
+  # Items whose suggestions the viewer may decide. Everything the hub already
+  # lists for placing qualifies by construction; a response the viewer asked
+  # for depends on who they are to the assessee, so the policy decides. A
+  # withdrawn response can no longer be linked anywhere.
+  def decidable_items(placeable, responded)
+    placeable + responded.select { |item| !item.withdrawn? && EvidencePolicy.new(pundit_user, item).add_link? }
   end
 
   # For responded outgoing requests, load the evidence the requestee provided

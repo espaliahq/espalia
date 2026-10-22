@@ -37,6 +37,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     "other"             => nil
   }.freeze
 
+  CHIP_CLASSES = "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
+                 "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300"
+
   # @param item [EvidenceItem]
   # @param assessment_id [String] for routing the actions
   # @param current_capability_stable_id [String] the cell this card renders in
@@ -201,7 +204,12 @@ class Views::Assessments::Evidence::Card < Views::Base
       # "Demonstrates" in one cell and "Growth area" in another). No badge
       # for pre-valence links — unclassified stays visually quiet.
       valence_badge(cell_valence)
-      external_chip if @item.external_reference&.present?
+      if @item.external_reference&.imported?
+        render Views::Evidence::OriginBadge.new(@item.external_reference)
+      elsif @item.external_reference&.present?
+        external_chip
+      end
+      @item.exchange_acks&.each { |ack| also_in_chip(ack) }
     end
   end
 
@@ -257,6 +265,22 @@ class Views::Assessments::Evidence::Card < Views::Base
     else
       span(class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
                  "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300") { label }
+    end
+  end
+
+  # Where a peer feedback system says it also holds this item ("Also in Chip").
+  # The link is the peer's own address, so it is opened in a new tab.
+  def also_in_chip(ack)
+    label = "Also in #{ack.consumer.titleize}"
+    url = ack.safe_remote_url
+    if url
+      a(href: url, target: "_blank", rel: "noopener noreferrer", class: CHIP_CLASSES + " hover:bg-gray-200 dark:hover:bg-gray-600 hover:underline",
+        data: { exchange_ack: ack.consumer }) do
+        plain label
+        span(class: "sr-only") { " (opens in a new tab)" }
+      end
+    else
+      span(class: CHIP_CLASSES, data: { exchange_ack: ack.consumer }) { label }
     end
   end
 
