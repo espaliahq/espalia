@@ -33,7 +33,8 @@ class FeedbackExchange::SyncJob < ApplicationJob
 
   # Declared after the ApiError retry so it wins for this subclass.
   discard_on FeedbackExchange::Errors::PeerDisabled do |job, _error|
-    Rails.logger.warn("[FeedbackExchange::SyncJob] The peer has the exchange switched off for tenant #{job.arguments.first.id}; stopping this run")
+    Rails.logger.warn("[FeedbackExchange::SyncJob] The peer answered 404 for tenant #{job.arguments.first.id}: its exchange is " \
+                      "switched off, or base_url misses its path prefix. Stopping this run.")
   end
 
   # @param tenant [Tenant]

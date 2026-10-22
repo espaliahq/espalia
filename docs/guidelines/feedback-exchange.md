@@ -82,7 +82,7 @@ It does **not** retry. The sync job owns retries, from the error class:
 3. Pages through `GET /feedback/deletions` from `deletions_cursor`, withdrawing each copy.
 4. Stamps `last_synced_at`.
 
-Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. A 404 means the peer has the exchange off: the run stops, logged, with no retry and no `last_synced_at`. A 409 to an ack is logged and the run carries on, since retrying the same ack cannot succeed. At most 50 pages a run; the next run carries on.
+Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchange!`, never by saving a config read earlier. `limits_concurrency` keeps one run per tenant. Errors follow `HrisSyncJob`: a 429 or a peer error retries with backoff, a 401 is discarded and logged, since a human has to fix the secret. A 404 means the peer has the exchange off: the run stops, logged, with no retry and no `last_synced_at`. A `base_url` without the peer's path prefix also gets 404s, so a tenant whose `last_synced_at` stays empty is worth a **Test connection**. A 409 to an ack is logged and the run carries on, since retrying the same ack cannot succeed. At most 50 pages a run; the next run carries on.
 
 ### One record (`FeedbackExchange::Importer`)
 
@@ -293,6 +293,7 @@ CI: `ci.yml`'s `contract` job runs the consumer tests, fails if the committed pa
 ### Changing a pact
 
 1. Change the consumer test (and the code), run `bin/rails contract:consumer`, and commit `contract/pacts/growthos-chip.json` with the change.
+   A `pact-ffi` upgrade rewrites the pact's metadata versions, so its PR fails the `contract` job until someone runs `bin/rails contract:consumer` and commits the result; Dependabot cannot.
 2. A changed pact changes what Chip must honour. Run Chip's harness against it (`npm run contract:provider -- --pact-file <path>` in Chip's repo), link the passing run in the PR and add the `contract-change` label; without it the `contract-change` check fails. A Pact upgrade that only moves metadata versions is not a change.
 3. A new state is agreed with Chip first, then gets a row here and in Chip's README, and a seeder in `chip_provider_contract.rb` (ours) or a test using it (theirs). `feedback_exchange_pact_test.rb` lists the states we may use.
 4. Chip's pact changing ours to honour arrives the other way round: its PR links a run of `bin/rails contract:provider PACT_FILE=<its file>`.
