@@ -27,6 +27,15 @@ class Views::Assessments::HeroSummary < Views::Base
   # met we show a neutral coverage-progress hero instead.
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
+  # How many of `total` current-level capabilities must be rated before the
+  # score shows.
+  #
+  # @param total [Integer]
+  # @return [Integer]
+  def self.unlock_target_for(total)
+    (total * COVERAGE_UNLOCK_THRESHOLD).ceil
+  end
+
   # Rows a gap list shows before it points at the rest. The band collapses
   # on scroll, so it stays short; the "+N more" line says it is not whole.
   GAP_ROWS = 3
@@ -412,7 +421,7 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # Number of rated current-level capabilities needed to reveal the score.
   def unlock_target
-    (current_level_total * COVERAGE_UNLOCK_THRESHOLD).ceil
+    self.class.unlock_target_for(current_level_total)
   end
 
   # Whether the score + verdict are trustworthy enough to show. Alignment

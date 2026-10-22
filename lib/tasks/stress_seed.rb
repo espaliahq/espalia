@@ -22,7 +22,7 @@ class StressSeed
     nav_bg_color: "#DBFC45", nav_fg_color: "#1A2E05",
     primary_color_dark: "#FDE047", secondary_color_dark: "#FACC15",
     nav_bg_color_dark: "#DBFC45", nav_fg_color_dark: "#1A2E05",
-    font_family: "Big Shoulders Stencil Display"
+    font_family: "Roboto"
   }.freeze
 
   # Each at the 24-character limit, the longest a badge has to hold.

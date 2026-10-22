@@ -4,7 +4,11 @@ require "test_helper"
 
 class DevThemeOverrideTest < ActionDispatch::IntegrationTest
   context "in development" do
-    setup { @env = ActiveSupport::EnvironmentInquirer.new("development") }
+    setup do
+      # Loads the lazy routes before the stub: under "development" they mount Lookbook, which test doesn't load
+      new_user_session_path
+      @env = ActiveSupport::EnvironmentInquirer.new("development")
+    end
 
     should "apply ?scheme to <html> and remember it" do
       Rails.stub(:env, @env) do
