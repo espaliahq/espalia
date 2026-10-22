@@ -39,4 +39,11 @@ class StressSeedTest < ActiveSupport::TestCase
     end
     assert_not Tenant.exists?(slug: StressSeed::SLUG)
   end
+
+  should "refuse a direct call in production" do
+    Rails.stub(:env, ActiveSupport::EnvironmentInquirer.new("production")) do
+      assert_raises(RuntimeError) { StressSeed.new(io: StringIO.new).call }
+    end
+    assert_not Tenant.exists?(slug: StressSeed::SLUG)
+  end
 end
