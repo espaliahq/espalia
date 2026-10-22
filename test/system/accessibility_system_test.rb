@@ -171,6 +171,18 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       assert_selector "nav a[aria-current='page']", text: "Frameworks", count: 1
       assert_no_selector "nav a[aria-current='page']", text: "Home"
     end
+
+    should "mark the drawer link for the section, from a page inside it" do
+      ActsAsTenant.with_tenant(@tenant) { TenantUser.find_by!(user: @user).update!(role: "admin") }
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit tenant_users_path
+      toggle_sidebar
+
+      within("aside[data-sidebar-target='drawer']") do
+        assert_selector "a[aria-current='page']", text: "Admin", count: 1
+        assert_no_selector "a[aria-current='page']", text: "Home"
+      end
+    end
   end
 
   context "pointer cursor" do
