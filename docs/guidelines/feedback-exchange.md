@@ -103,13 +103,13 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 | `echo` | `origin` is `growthos`, or the record's `external_reference.system` is | no |
 | `audience_too_narrow` | the author did not agree to all of `recipient`, `management_line`, `hr`, who can read feedback here | no |
 | `kind_not_imported` | `import_kinds` is not `all` and does not list this kind (an empty list imports nothing) | no |
-
-The import list decides what is taken in, not what is kept. A copy GrowthOS already holds keeps following its source after the list narrows: an edit updates it and a withdrawal withdraws it, so narrowing never leaves a stale copy behind. Only consent is re-checked on every version, because an audience that no longer covers our readers takes the copy back (protocol rule 1).
 | `author_unmatched` / `recipient_unmatched` | no Person with that HRIS id or email | yes |
 | `author_inactive` / `recipient_inactive` | our Person or the peer says that person is inactive (protocol §4.2) | yes |
 | `self_feedback` | author and recipient are the same person | no |
 | `no_assignment` | the recipient has no framework assignment | yes, and at once on `PersonAssignedToFramework` |
 | `invalid_record` | no `id`, no usable `given_at`, an `origin` that is not the configured peer, a malformed nested part, or the domain refused it | no |
+
+The import list decides what is taken in, not what is kept. A copy GrowthOS already holds keeps following its source after the list narrows: an edit updates it and a withdrawal withdraws it, so narrowing never leaves a stale copy behind. Only consent is re-checked on every version, because an audience that no longer covers our readers takes the copy back (protocol rule 1).
 
 A retriable skip keeps the record in the ledger's `record` column so a retry needs no pull; nothing else does. `FeedbackExchange::AssignmentRetry` (a sync handler subscribed in the RES initializer, never a projection) enqueues a sync when a newly assigned person has a `no_assignment` record waiting. A record skipped for a reason that is not retried is evaluated again if the peer sends a newer version.
 
@@ -171,7 +171,7 @@ What is left out (protocol §2.5, §2.3):
 - Items nobody wrote: `recorded_via` of `feedback_exchange`, `hris` or `system`. A nil `recorded_via` is history and counts as human.
 - What the asking consumer itself sent us: `external_reference.system` equal to its name. Matching is case-insensitive.
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.
-- Kinds outside `export_kinds`, unless it is `all`, which filters nothing.
+- Kinds outside `export_kinds`. With `all`, that is every type in `EvidenceItem::EVIDENCE_TYPES` at the time of the request, so a type added later is sent and a row holding a type GrowthOS no longer knows is not.
 
 **Widening `export_kinds` does not backfill.** The peer's cursor has already passed the older items of a newly sent kind, so only new and edited ones reach it. For the history, the peer resets its cursor; records are idempotent, so the rest come back as no-ops.
 
