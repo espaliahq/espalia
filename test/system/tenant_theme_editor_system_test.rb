@@ -89,11 +89,9 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     set_color_field(BRAND_LIGHT, "#facc15")
     within("#theme-brand-light-readout") { assert_text "#facc15 · button text black" }
     assert_equal [ 250, 204, 21 ], rgb(frame_button_background("light"))
-    assert_no_selector "#theme-brand-light-readout [data-theme-shade]"
 
     set_color_field(BRAND_LIGHT, "#1e3a8a")
     within("#theme-brand-light-readout") { assert_text "#1e3a8a · button text white" }
-    assert_no_selector "#theme-brand-light-readout [data-theme-shade]"
   end
 
   should "drop a stored value from Custom's frames when its field is cleared" do

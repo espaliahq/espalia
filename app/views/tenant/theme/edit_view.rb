@@ -15,12 +15,10 @@ class Views::Tenant::Theme::EditView < Views::Base
   ].freeze
 
   # How the page names each role in Tenant::CUSTOM_ROLES. The element is where Custom's
-  # preview shows the contrast helper's text for the role, and `text` names it. `shade`
-  # names the element's fill when CSS darkens the colour for it.
+  # preview shows the contrast helper's text for the role, and `text` names it.
   ROLE_COPY = {
     "brand" => {
       label: "Brand", element: "[data-theme-preview-button]", text: "button text",
-      shade: "Buttons use a darker shade",
       hint: "The main button and highlights."
     },
     "nav-surface" => {
@@ -179,7 +177,7 @@ class Views::Tenant::Theme::EditView < Views::Base
           id: readout_id, class: "block max-w-48 text-muted",
           data: {
             theme_live_preview_target: "readout",
-            role: role[:role], scheme: scheme, element: role[:element], text: role[:text], shade: role[:shade]
+            role: role[:role], scheme: scheme, element: role[:element], text: role[:text]
           }
         ) { span(class: "font-mono") { current } }
       end
