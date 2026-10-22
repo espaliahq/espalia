@@ -233,6 +233,21 @@ class UserMenuSystemTest < ApplicationSystemTestCase
       assert_checked_scheme "Dark"
       assert_equal "dark", html_scheme
     end
+
+    should "send overlapping saves one at a time, so the server keeps the latest choice" do
+      visit root_path
+      assert_text "Home"
+      hold_scheme_requests
+
+      choose_scheme "Light"
+      choose_scheme "Dark"
+      assert_equal 1, evaluate_script("window.heldSchemeRequests.length"), "the second save waits for the first"
+
+      settle_scheme_request 0, :saved
+      settle_scheme_request 1, :saved
+
+      assert_saved_scheme "dark"
+    end
   end
 
   private
