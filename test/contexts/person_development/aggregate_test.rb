@@ -1155,6 +1155,25 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_nil event.data[:cycle_id]
     end
 
+    should "carry when the feedback was given only when the caller says, as UTC ISO 8601" do
+      @aggregate.record_evidence(@evidence_id,
+        source: "peer", evidence_type: "peer_feedback", content: "Imported", author_id: @author_id,
+        recorded_at: "2026-10-18T13:12:44+10:00")
+      assert_equal "2026-10-18T03:12:44.000000Z", @aggregate.unpublished_events.to_a.last.data[:recorded_at]
+
+      @aggregate.record_evidence(SecureRandom.uuid_v7,
+        source: "peer", evidence_type: "peer_feedback", content: "Native", author_id: @author_id)
+      assert_not @aggregate.unpublished_events.to_a.last.data.key?(:recorded_at)
+    end
+
+    should "refuse a recorded_at that is not a time" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          source: "peer", evidence_type: "peer_feedback", content: "x", author_id: @author_id, recorded_at: "yesterday")
+      end
+      assert_match(/recorded_at/, err.message)
+    end
+
     should "record an unplaced item when no cell is given, and place it through add_evidence_link" do
       @aggregate.record_evidence(@evidence_id,
         source: "peer", evidence_type: "peer_feedback", content: "Great incident call",
@@ -1393,6 +1412,19 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal @author_id, event.data[:changed_by_id]
     end
 
+    should "carry the accepted suggestion's id, and omit the key otherwise" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "growth_area", changed_by_id: @author_id, via_suggestion_id: suggestion_id)
+      assert_equal suggestion_id, @aggregate.unpublished_events.to_a.last.data[:via_suggestion_id]
+
+      @aggregate.set_evidence_link_valence(@evidence_id,
+        capability_stable_id: @cap_sid, level_ordinal: 3,
+        valence: "demonstrated", changed_by_id: @author_id)
+      assert_not @aggregate.unpublished_events.to_a.last.data.key?(:via_suggestion_id)
+    end
+
     should "be a no-op when the link already carries that valence" do
       before = @aggregate.unpublished_events.to_a.size
       @aggregate.set_evidence_link_valence(@evidence_id,
@@ -1518,6 +1550,16 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_equal 4, event.data[:level_ordinal]
       assert_equal "Also applies", event.data[:rationale]
       assert_equal "demonstrated", event.data[:valence]
+      assert_not event.data.key?(:via_suggestion_id)
+    end
+
+    should "carry the accepted suggestion's id on the link" do
+      suggestion_id = SecureRandom.uuid_v7
+      @aggregate.add_evidence_link(@evidence_id,
+        capability_stable_id: @new_cap_sid, level_ordinal: 4,
+        linked_by_id: @author_id, valence: "demonstrated", via_suggestion_id: suggestion_id)
+
+      assert_equal suggestion_id, @aggregate.unpublished_events.to_a.last.data[:via_suggestion_id]
     end
 
     should "raise when adding a link without a valid valence" do

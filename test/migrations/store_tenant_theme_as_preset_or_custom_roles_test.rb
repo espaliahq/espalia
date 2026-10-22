@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261021000001_store_tenant_theme_as_preset_or_custom_roles")
+require Rails.root.join("db/migrate/20261021010000_store_tenant_theme_as_preset_or_custom_roles")
 
 # Runs the migration against tenants shaped as they were before it: the
 # columns are dropped inside the test's transaction (Postgres DDL is

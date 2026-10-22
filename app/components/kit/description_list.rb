@@ -36,11 +36,11 @@ class Components::Kit::DescriptionList < Components::Base
   private
 
   def description_item(item)
-    div(class: "px-4 py-3 bg-subtle rounded-lg") do
+    div(class: "min-w-0 px-4 py-3 bg-subtle rounded-lg") do
       dt(class: "text-xs font-medium text-muted uppercase tracking-wide") do
         item[:term]
       end
-      dd(class: "mt-1 text-xl font-semibold text-default") do
+      dd(class: "mt-1 text-xl font-semibold text-default [overflow-wrap:anywhere]") do
         item[:detail]
       end
     end

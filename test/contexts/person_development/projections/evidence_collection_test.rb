@@ -66,6 +66,22 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
       end
     end
 
+    should "record the surface it came through, and leave it nil on history" do
+      slack_id = SecureRandom.uuid_v7
+      history_id = SecureRandom.uuid_v7
+      attrs = { capability_stable_id: nil, level_ordinal: nil, valence: nil, source: "peer",
+                feedback_direction: "peer_to_peer", evidence_type: "peer_feedback", custom_type_label: nil,
+                title: nil, content: "Thanks", external_reference: nil, author_id: @author.id }
+
+      emit(PersonDevelopment::Events::EvidenceRecorded, evidence_id: slack_id, acting_via: "slack", **attrs)
+      emit(PersonDevelopment::Events::EvidenceRecorded, evidence_id: history_id, **attrs)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal "slack", EvidenceItem.find(slack_id).recorded_via
+        assert_nil EvidenceItem.find(history_id).recorded_via
+      end
+    end
+
     should "create an unplaced item with no link row when the event carries no cell" do
       evidence_id = SecureRandom.uuid_v7
       emit(PersonDevelopment::Events::EvidenceRecorded,
@@ -84,6 +100,8 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert item.unplaced?
       end
 
+      ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: evidence_id).update_all(updated_at: 1.day.ago) }
+
       # The first placement becomes the origin, so origin-anchored readers see it.
       emit(PersonDevelopment::Events::EvidenceLinkAdded,
         evidence_id: evidence_id, capability_stable_id: "0190f4b2-0000-7000-8000-000000000001",
@@ -95,6 +113,10 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert item.recorded_unplaced, "the fact that someone else chose the cell survives placement"
         assert_not item.unplaced?
         assert_not_includes EvidenceItem.unplaced, item
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_operator EvidenceItem.find(evidence_id).updated_at, :>, 1.minute.ago
       end
 
       # Re-applying the origin-less EvidenceRecorded (an at-least-once replay)
@@ -130,6 +152,25 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         assert_nil EvidenceItem.find(pre_valence).cycle_id
         assert_nil EvidenceItem.find(pre_valence).feedback_direction
         assert_nil EvidenceLink.find_by(evidence_id: pre_valence).valence
+      end
+    end
+
+    should "date an imported item by when it was given, and any other by its event" do
+      given = SecureRandom.uuid_v7
+      native = SecureRandom.uuid_v7
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: given, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil, title: nil,
+        content: "Imported", external_reference: { system: "chip" }, author_id: @author.id,
+        recorded_at: "2026-03-04T05:06:07.000000Z")
+      emit(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: native, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil, title: nil,
+        content: "Native", external_reference: nil, author_id: @author.id)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Time.utc(2026, 3, 4, 5, 6, 7), EvidenceItem.find(given).recorded_at
+        assert_in_delta Time.current, EvidenceItem.find(native).recorded_at, 5.seconds
       end
     end
 
@@ -400,6 +441,17 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         author_id: @author.id)
     end
 
+    should "move the item's feed position when a mapping re-keys its cell" do
+      ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: @ev_id).update_all(updated_at: 1.day.ago) }
+
+      emit(PersonDevelopment::Events::FrameworkVersionMigrated,
+        framework_id: @framework_id, old_version: 1, new_version: 2,
+        mappings: [ { from_stable_id: @from_stable_id, to_stable_id: @to_stable_id,
+                      mapping_type: "evolved", requires_reassessment: false } ])
+
+      ActsAsTenant.with_tenant(@tenant) { assert_operator EvidenceItem.find(@ev_id).updated_at, :>, 1.hour.ago }
+    end
+
     should "re-key evidence rows and links for a same mapping" do
       emit(PersonDevelopment::Events::FrameworkVersionMigrated,
         framework_id: @framework_id, old_version: 1, new_version: 2,
@@ -557,7 +609,7 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
         source: "self", evidence_type: "project_outcome", custom_type_label: nil,
         title: "Initial", content: "first", external_reference: nil,
-        author_id: @author.id, valence: "demonstrated", feedback_direction: "self")
+        author_id: @author.id, valence: "demonstrated", feedback_direction: "self", acting_via: "web")
 
       append_and_project(PersonDevelopment::Events::EvidenceLinkRevalenced,
         evidence_id: ev1_id, capability_stable_id: cap_sid, level_ordinal: 2,
@@ -599,8 +651,17 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
         evidence_id: ev3_id, capability_stable_id: cap_sid, level_ordinal: 2,
         linked_by_id: @author.id, valence: "demonstrated")
 
+      # ev4 was imported, dated when it was given rather than when it arrived.
+      ev4_id = SecureRandom.uuid_v7
+      append_and_project(PersonDevelopment::Events::EvidenceRecorded,
+        evidence_id: ev4_id, capability_stable_id: nil, level_ordinal: nil, valence: nil,
+        source: "peer", evidence_type: "peer_feedback", custom_type_label: nil,
+        title: nil, content: "imported", external_reference: { system: "chip", external_id: "c-1" },
+        author_id: @author.id, feedback_direction: "peer_to_peer", cycle_id: nil,
+        recorded_at: "2025-11-02T09:30:00.000000Z")
+
       before_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
-      assert_equal 3, before_snapshot[:evidence_items].size
+      assert_equal 4, before_snapshot[:evidence_items].size
 
       PersonDevelopment::Projections::EvidenceCollection.reset!(tenant: @tenant)
       ActsAsTenant.with_tenant(@tenant) { assert_equal 0, EvidenceItem.count }
@@ -612,19 +673,23 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
 
       after_snapshot = snapshot_read_models(PersonDevelopment::Projections::EvidenceCollection, @tenant)
       assert_equal before_snapshot, after_snapshot
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal Time.utc(2025, 11, 2, 9, 30), EvidenceItem.find(ev4_id).recorded_at
+      end
     end
   end
 
   private
 
-  def emit(event_class, **data)
+  def emit(event_class, acting_via: nil, **data)
     event = event_class.new(
       data: data,
       metadata: {
         tenant_id: @tenant.id,
         person_id: @person_id,
-        framework_id: @framework_id
-      }
+        framework_id: @framework_id,
+        acting_via: acting_via
+      }.compact
     )
     @projection.call(event)
   end
@@ -635,14 +700,15 @@ class PersonDevelopment::Projections::EvidenceCollectionTest < ActiveSupport::Te
   # cascading state we didn't ask for. The projection-under-test still
   # sees the event live via the direct call. Replay later reads the
   # appended events back via `event_store.read.of_type(...)`.
-  def append_and_project(event_class, **data)
+  def append_and_project(event_class, acting_via: nil, **data)
     event = event_class.new(
       data: data,
       metadata: {
         tenant_id: @tenant.id,
         person_id: @person_id,
-        framework_id: @framework_id
-      }
+        framework_id: @framework_id,
+        acting_via: acting_via
+      }.compact
     )
     stream = EventStreamNaming.person_development_stream(@person_id, @framework_id, tenant: @tenant)
     Rails.configuration.event_store.append(event, stream_name: stream)

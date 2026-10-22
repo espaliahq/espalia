@@ -167,10 +167,19 @@ class Views::Assessments::Activity::Entry < Views::Base
   end
 
   def footer
-    div(class: "mt-1 text-[10px] text-muted") do
+    div(class: "mt-1 flex flex-wrap items-center gap-x-1.5 text-[10px] text-muted") do
       time_ago = @entry.occurred_at ? "#{time_ago_in_words(@entry.occurred_at)} ago" : "—"
       span { time_ago }
+      render Views::Evidence::OriginBadge.new(imported_reference) if imported_reference
     end
+  end
+
+  # The item's reference when the feedback was given in a peer system.
+  def imported_reference
+    return unless @entry.kind == "evidence_recorded" && @entry.payload.respond_to?(:external_reference)
+
+    reference = @entry.payload.external_reference
+    reference if reference&.imported?
   end
 
   # The summary line is the first thing the eye lands on, so it carries
@@ -457,12 +466,12 @@ class Views::Assessments::Activity::Entry < Views::Base
       content = @entry.payload.respond_to?(:content) ? @entry.payload.content : nil
       Prose.to_plain(content).presence
     when "evidence_relinked", "evidence_linked"
-      [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence ].compact
+      [ valence_label_or_nil, Prose.to_plain(payload_value(:rationale)).presence, from_suggestion_note ].compact
         .join(" · ").presence
     when "evidence_unlinked"
       Prose.to_plain(payload_value(:reason)).presence
     when "evidence_revalenced"
-      revalence_secondary
+      [ revalence_secondary, from_suggestion_note ].compact.join(" · ").presence
     when "evidence_withdrawn"
       reason = @entry.payload.respond_to?(:withdrawal_reason) ? @entry.payload.withdrawal_reason : nil
       Prose.to_plain(reason).presence
@@ -483,6 +492,12 @@ class Views::Assessments::Activity::Entry < Views::Base
   # pre-valence events.
   def valence_label_or_nil
     Views::Evidence::Valence::LABELS[payload_value(:valence)]
+  end
+
+  # Said when a person accepted a placement suggestion rather than choosing
+  # the cell themselves; the event carries the suggestion's id.
+  def from_suggestion_note
+    "from a suggestion" if payload_value(:via_suggestion_id).present?
   end
 
   # "Growth area (was Demonstrates)" — or just the new label when the link
