@@ -63,7 +63,8 @@ export default class extends BaseController {
     this.drawerOpen = true
     this.drawerTarget.classList.remove("hidden")
     this.#setExpanded(true)
-    this.drawerTarget.querySelector("nav a")?.focus()
+    const first = this.drawerTarget.querySelector("nav a") ?? this.drawerTarget.querySelector("button")
+    first?.focus()
   }
 
   #close({ returnFocus = false } = {}) {

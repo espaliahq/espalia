@@ -122,6 +122,11 @@ input[type="week"] {
   [aria-disabled="true"] {
     cursor: not-allowed;
   }
+
+  /* A menu's panel scrolls, which clips an outset ring, so its items draw theirs inside */
+  [role="menu"] [role^="menuitem"]:focus-visible {
+    outline-offset: -2px;
+  }
 }
 
 /* Hero summary middle band — collapses on scroll.

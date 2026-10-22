@@ -430,6 +430,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "mark the clicked category chip as active after the scroll settles" do
+      # A rating gives the second category a score, so the contrast check below has one to measure
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap3_stable, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
@@ -460,6 +466,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
         "got #{active_category_id.inspect}"
 
       # The chip went active in the browser, so its score must follow aria-current, not the server.
+      assert_selector "nav#category-tabs a[aria-current='page'] span.font-mono", text: "%"
       assert_operator rendered_contrast("nav#category-tabs a[aria-current='page'] span.font-mono"), :>=, 4.5
     end
 
