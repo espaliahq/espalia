@@ -58,6 +58,25 @@ class Operations::Assessments::UpdateEvidenceTest < ActiveSupport::TestCase
     assert_equal @person.id, reloaded.edited_by_id
   end
 
+  should "refuse a reference that poses as an import" do
+    err = assert_raises(Operations::Base::ParameterError) do
+      call_op(base_params(external_reference: { "system" => "chip", "metadata" => { "given_at" => "2026-10-18T03:12:44Z" } }))
+    end
+    assert_match(/given_at is set only by the feedback exchange/, err.message)
+  end
+
+  should "keep an imported item's reference whatever the editor sends" do
+    imported = { "system" => "chip", "external_id" => "c-1", "url" => "https://chip.example.com/f/1",
+                 "metadata" => { "given_at" => "2026-10-18T03:12:44Z" } }
+    ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@evidence_id).update_columns(external_reference: imported) }
+
+    call_op(base_params(external_reference: { "system" => "github", "url" => "https://github.com/o/r/pull/1" }))
+
+    reloaded = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@evidence_id) }
+    assert_equal "New body", reloaded.content
+    assert_equal imported, reloaded.external_reference.as_json.compact
+  end
+
   should "require custom_type_label when evidence_type is other" do
     err = assert_raises(Operations::Base::ParameterError) do
       call_op(base_params(evidence_type: "other"))

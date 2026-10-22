@@ -1,0 +1,94 @@
+name: Contract
+
+# The feedback exchange's Pact contract with Chip, beyond the `contract` job in
+# ci.yml (docs/guidelines/feedback-exchange.md → Contract tests):
+# - contract-change (PRs): a PR that changes our consumer pact compared with the
+#   one our deployment serves needs the contract-change label, which says Chip's
+#   harness passed against the new file and the PR links that run. It lives here
+#   because it must re-run when the label changes.
+# - nightly: our main branch verified against the pact Chip has deployed, fetched
+#   fresh, so a change on Chip's side shows up within a day.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  schedule:
+    # About 3am Melbourne, twenty minutes after Chip's own nightly run.
+    - cron: "57 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-change:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Consumer pact unchanged, or labelled contract-change
+        env:
+          RAILS_ENV: test
+          FEEDBACK_EXCHANGE_OWN_CONTRACT_URL: ${{ vars.FEEDBACK_EXCHANGE_OWN_CONTRACT_URL }}
+          CONTRACT_CHANGE_LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'contract-change') }}
+        run: bin/rails contract:check_change
+
+  nightly:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: localhost
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare the database
+        run: bin/rails db:test:prepare
+
+      - name: Today's date, for the contract cache
+        id: date
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # Restores yesterday's copy, so an unreachable Chip falls back to it with a warning.
+      - name: Cache Chip's contract
+        uses: actions/cache@v6
+        with:
+          path: tmp/contract
+          key: feedback-exchange-peer-contract-${{ steps.date.outputs.date }}
+          restore-keys: feedback-exchange-peer-contract-
+
+      - name: Provider verification against Chip's deployed pact, fetched fresh
+        env:
+          FRESH: "1"
+          FEEDBACK_EXCHANGE_PEER_CONTRACT_URL: ${{ vars.FEEDBACK_EXCHANGE_PEER_CONTRACT_URL }}
+        run: bin/rails contract:provider

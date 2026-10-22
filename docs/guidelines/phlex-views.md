@@ -109,9 +109,9 @@ end
 ## Slots Pattern
 
 ```ruby
-Card(title: "User") do |card|
+render Components::Kit::Card.new(title: "User") do |card|
   card.body { render_user_info }
-  card.actions { Button("Edit") }
+  card.actions { render Components::Kit::Button.new(variant: :outline) { "Edit" } }
 end
 ```
 
@@ -252,7 +252,7 @@ def show
 end
 
 # View — receives flag, renders conditionally
-class Views::Frameworks::ShowView < ApplicationView
+class Views::Frameworks::ShowView < Views::Base
   def initialize(framework:, is_admin:)
     @framework = framework
     @is_admin = is_admin
@@ -261,7 +261,7 @@ class Views::Frameworks::ShowView < ApplicationView
   def view_template
     # Admin-only UI gated by the flag
     if @is_admin
-      Button("Settings", href: framework_settings_path(@framework))
+      render Components::Kit::Button.new(variant: :outline, href: framework_settings_path(@framework)) { "Settings" }
     end
   end
 end

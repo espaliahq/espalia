@@ -88,6 +88,8 @@ export default class extends BaseController {
   // doesn't render its card, the click switches to that role's lens instead
   // of scrolling to nothing.
   focusEntry(event) {
+    // A link inside the entry (the "via <peer>" badge) opens elsewhere; it is not a focus change.
+    if (event.target.closest("a")) return
     const el = event.currentTarget
     const capabilityStableId = el.dataset.capabilityStableId
     const levelOrdinal = parseInt(el.dataset.levelOrdinal, 10)

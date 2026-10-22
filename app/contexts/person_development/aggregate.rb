@@ -901,13 +901,15 @@ class PersonDevelopment::Aggregate
   # @param request_id [String, nil] the evidence request this item answers,
   #   when it is recorded as a response — carried on the event so a reader
   #   of EvidenceRecorded knows without waiting for the request's own event
+  # @param recorded_at [Time, String, nil] when the feedback was given, for an
+  #   item that arrives after the fact (an import); the event's own time otherwise
   # @raise [CommandError] if not assigned, evidence_id already exists, or args are invalid
   def record_evidence(evidence_id, source:, evidence_type:, content:, author_id:,
                       capability_stable_id: nil, level_ordinal: nil, valence: nil,
                       feedback_direction: default_feedback_direction(source),
                       custom_type_label: nil, title: nil,
                       external_reference: nil, additional_links: [], cycle_id: @current_cycle_id,
-                      request_id: nil)
+                      request_id: nil, recorded_at: nil)
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
@@ -922,7 +924,7 @@ class PersonDevelopment::Aggregate
       evidence_type != "other" && !custom_type_label.nil? && !custom_type_label.to_s.strip.empty?
     raise CommandError, "Evidence content cannot be blank" if content.to_s.strip.empty?
 
-    apply(PersonDevelopment::Events::EvidenceRecorded.new(data: {
+    data = {
       evidence_id: evidence_id,
       capability_stable_id: capability_stable_id,
       level_ordinal: level_ordinal,
@@ -937,7 +939,9 @@ class PersonDevelopment::Aggregate
       valence: valence,
       cycle_id: cycle_id,
       request_id: request_id
-    }))
+    }
+    data[:recorded_at] = recorded_at_iso8601(recorded_at) if recorded_at
+    apply(PersonDevelopment::Events::EvidenceRecorded.new(data: data))
 
     Array(additional_links).each do |link|
       add_evidence_link(evidence_id,
@@ -958,9 +962,12 @@ class PersonDevelopment::Aggregate
   # @param valence [String] the linker's judgment — one of
   #   EVIDENCE_VALENCES. Required on every new link.
   # @param rationale [String, nil] optional explanation of the link
+  # @param via_suggestion_id [String, nil] the placement suggestion the
+  #   linker accepted, when the link came from one
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
   #   already linked to that coordinate, or the valence is invalid
-  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil)
+  def add_evidence_link(evidence_id, capability_stable_id:, level_ordinal:, linked_by_id:, valence:, rationale: nil,
+                        via_suggestion_id: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
@@ -977,7 +984,7 @@ class PersonDevelopment::Aggregate
       linked_by_id: linked_by_id,
       valence: valence,
       rationale: rationale
-    }))
+    }.merge(suggestion_attribution(via_suggestion_id))))
   end
 
   # Removes one of an evidence item's (capability, level) links. The item
@@ -1030,9 +1037,12 @@ class PersonDevelopment::Aggregate
   # @param level_ordinal [Integer] the link's level
   # @param valence [String] one of EVIDENCE_VALENCES
   # @param changed_by_id [String] UUID of the Person reclassifying
+  # @param via_suggestion_id [String, nil] the placement suggestion the
+  #   reclassifier accepted, when the new valence came from one
   # @raise [CommandError] if not assigned, evidence not found, withdrawn,
   #   not linked to that coordinate, or the valence is invalid
-  def set_evidence_link_valence(evidence_id, capability_stable_id:, level_ordinal:, valence:, changed_by_id:)
+  def set_evidence_link_valence(evidence_id, capability_stable_id:, level_ordinal:, valence:, changed_by_id:,
+                                via_suggestion_id: nil)
     ensure_assigned!
     state = @evidence[evidence_id]
     raise CommandError, "No evidence with id #{evidence_id}" unless state
@@ -1052,7 +1062,7 @@ class PersonDevelopment::Aggregate
       previous_valence: previous,
       valence: valence,
       changed_by_id: changed_by_id
-    }))
+    }.merge(suggestion_attribution(via_suggestion_id))))
   end
 
   # Edits the user-correctable fields of an existing evidence item.
@@ -1371,6 +1381,19 @@ class PersonDevelopment::Aggregate
   end
 
   private
+
+  def recorded_at_iso8601(value)
+    time = value.is_a?(String) ? Time.iso8601(value) : value
+    time.utc.iso8601(6)
+  rescue ArgumentError
+    raise CommandError, "Invalid recorded_at: #{value}"
+  end
+
+  # Present only when a link decision came from a placement suggestion, so
+  # every event published without one keeps its exact historical shape.
+  def suggestion_attribution(via_suggestion_id)
+    via_suggestion_id.present? ? { via_suggestion_id: via_suggestion_id } : {}
+  end
 
   # Direct aggregate callers cannot inspect the org chart. The command handler
   # supplies the exact value; this source-based default keeps lower-level

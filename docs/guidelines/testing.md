@@ -15,7 +15,7 @@
 | Controllers | `test/controllers/` | `ActionDispatch::IntegrationTest` |
 | Policies | `test/policies/` | `ActiveSupport::TestCase` |
 | System | `test/system/` | `ApplicationSystemTestCase` |
-| Components | `test/components/` | `ComponentTestCase` |
+| Components | `test/components/` | `ActiveSupport::TestCase` |
 
 ## New Test Pattern (Shoulda + FactoryBot)
 
