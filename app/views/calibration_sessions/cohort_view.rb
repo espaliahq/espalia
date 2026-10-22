@@ -214,7 +214,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
       span(
         class: "inline-flex items-center justify-center rounded-full " \
                "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-               "font-semibold text-inverse border-2 " \
+               "font-semibold text-on-mark border-2 " \
                "#{dot[:carried_majority] ? 'border-dashed border-strong' : 'border-(--gos-surface-default)'} " \
                "#{dot_fill(dot)}"
       ) { initials(name) }
