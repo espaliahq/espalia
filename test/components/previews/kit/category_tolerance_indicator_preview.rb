@@ -2,7 +2,7 @@
 
 # @label Category tolerance indicator
 class Kit::CategoryToleranceIndicatorPreview < Lookbook::Preview
-  # @param threshold number
+  # @param threshold [Float] number { step: 0.5 }
   def playground(threshold: 1.5)
     render Components::Kit::CategoryToleranceIndicator.new(threshold: threshold)
   end
