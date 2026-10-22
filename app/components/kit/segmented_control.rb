@@ -28,7 +28,8 @@ class Components::Kit::SegmentedControl < Components::Base
     md: "px-3 text-[13px]"
   }.freeze
 
-  HEIGHTS = { sm: "min-h-6", md: "min-h-8" }.freeze
+  # Compact under a mouse; a full 44px target on a touch screen
+  HEIGHTS = { sm: "min-h-6 pointer-coarse:min-h-11", md: "min-h-8 pointer-coarse:min-h-11" }.freeze
   TOUCH = "min-h-11"
 
   # @param label [String, nil] the group's accessible name; pass `aria: { labelledby: }` for a visible label
