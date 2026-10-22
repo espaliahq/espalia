@@ -47,7 +47,7 @@ class Components::Kit::Badge < Components::Base
     warning: :warning
   }.freeze
 
-  BASE = "inline-flex shrink-0 items-center gap-1 rounded-sm border font-medium leading-none " \
+  BASE = "inline-flex max-w-full shrink-0 items-center gap-1 rounded-sm border font-medium leading-none " \
          "whitespace-nowrap tabular-nums"
 
   # The full class list, for a control that has to look like a badge without being one
@@ -87,7 +87,7 @@ class Components::Kit::Badge < Components::Base
   def view_template
     span(**mix({ class: self.class.classes(@variant, tone: @tone, size: @size) }, @attributes)) do
       badge_icon(@leading_icon) if @leading_icon
-      plain @label
+      span(class: "truncate") { @label }
       badge_icon(@trailing_icon) if @trailing_icon
     end
   end
