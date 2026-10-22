@@ -164,8 +164,9 @@
   --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
   --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
   --gos-content-brand: color-mix(in oklab, var(--gos-brand) 55%, black);
-  --gos-brand-content-inverse: #ffffff;
-  --gos-nav-content: #ffffff;
+  /* Where the contrast helper below can't run: Default's teal brand and bar need dark text */
+  --gos-brand-content-inverse: #0a0d12;
+  --gos-nav-content: #0a0d12;
   --gos-border-brand: var(--gos-brand);
   --gos-content-link: var(--gos-content-brand);
   --gos-content-link-hover: var(--gos-content-brand);
