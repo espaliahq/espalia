@@ -45,7 +45,7 @@ class Kit::AlertPreview < Lookbook::Preview
 
   # The calibration "Ratings updated" note: neutral, dismissible, gone after 8 seconds
   def dismissible
-    render Components::Kit::Alert.new(dismissible: true) { "Ratings updated. Readiness 76% → 78%." }
+    render Components::Kit::Alert.new(dismissible: true, dismiss_after: 8000) { "Ratings updated. Readiness 76% → 78%." }
   end
 
   def solid_dismissible
