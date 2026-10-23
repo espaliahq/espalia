@@ -20,9 +20,9 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   # The dashed carried vocabulary as a bar segment: amber stripes, so a
   # carried share never reads as a confirmed one in greyscale either.
   CARRIED_SEGMENT = "bg-[repeating-linear-gradient(135deg,var(--color-amber-500)_0_3px,transparent_3px_6px)]"
-  CONFIRMED_SEGMENT = "bg-primary"
-  EVIDENCE_SEGMENT = "bg-gray-600 dark:bg-gray-300"
-  TRACK = "relative flex overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"
+  CONFIRMED_SEGMENT = "bg-readiness-confirmed"
+  EVIDENCE_SEGMENT = "bg-readiness-evidence"
+  TRACK = "relative flex overflow-hidden rounded-full bg-neutral-subtle"
 
   # @param readiness [Hash, nil] OverviewStats `readiness` (nil: nobody to measure)
   # @param raters [Array<Hash>] OverviewStats rater rows
@@ -45,7 +45,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   def view_template
     section(
       id: "calibration-readiness",
-      class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 px-4 py-3",
+      class: "mt-4 rounded-md border border-default px-4 py-3",
       aria: { labelledby: "calibration-readiness-heading" },
       # Read by calibration_freshness_controller for the "Readiness 76% → 78%"
       # line of the update toast.
@@ -65,33 +65,33 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   def summary_line
     div(class: "flex flex-wrap items-center gap-x-4 gap-y-1 text-sm") do
       h2(id: "calibration-readiness-heading",
-         class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Readiness" }
+         class: "text-sm font-semibold uppercase tracking-wide text-muted") { "Readiness" }
 
       if @readiness.nil? || @readiness[:cell_total].zero?
-        span(class: "text-gray-600 dark:text-gray-300") { "No at-level cells to rate yet." }
+        span(class: "text-muted") { "No at-level cells to rate yet." }
       else
         rated = percent(@readiness[:coverage_pct])
-        span(class: "text-gray-900 dark:text-white") do
+        span(class: "text-default") do
           defined_term(:rating_coverage, label: "#{rated}% rated", suffix: "summary")
-          span(class: "text-gray-600 dark:text-gray-300") do
+          span(class: "text-muted") do
             plain " · "
             span(class: "whitespace-nowrap") { "#{percent(@readiness[:carried_pct])}% carried" }
             plain " · "
             span(class: "whitespace-nowrap") { "#{100 - rated}% unrated" }
           end
         end
-        span(class: "text-gray-600 dark:text-gray-300") do
+        span(class: "text-muted") do
           defined_term(:evidence_coverage,
                        label: "Evidence on #{percent(@readiness[:evidence_coverage_pct])}%",
                        suffix: "summary")
         end
       end
 
-      span(class: "text-gray-600 dark:text-gray-300") do
+      span(class: "text-muted") do
         defined_term(:fully_rated, label: "#{@fully_rated_count} of #{@people_total} people fully rated")
       end
       if @unenrolled_count.positive?
-        span(class: "text-amber-700 dark:text-amber-300") { "#{@unenrolled_count} not enrolled in the cycle" }
+        span(class: "text-warning") { "#{@unenrolled_count} not enrolled in the cycle" }
       end
     end
   end
@@ -101,10 +101,10 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   end
 
   def legend
-    div(class: "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted") do
       legend_swatch(CONFIRMED_SEGMENT, "Confirmed this cycle")
-      legend_swatch("#{CARRIED_SEGMENT} border border-dashed border-amber-500", "Carried from last cycle, not yet confirmed")
-      legend_swatch("bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600", "Unrated")
+      legend_swatch("#{CARRIED_SEGMENT} border border-dashed border-warning-strong", "Carried from last cycle, not yet confirmed")
+      legend_swatch("bg-neutral-subtle border border-emphasized", "Unrated")
       span { "All shares of the same thing: the population's at-level cells." }
     end
   end
@@ -123,14 +123,14 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
       data: { readiness_raters: "true" }
     ) do
       summary(class: "inline-flex min-h-11 cursor-pointer items-center gap-1 text-sm font-medium " \
-                     "text-primary-ink hover:underline") do
+                     "text-link hover:text-link-hover hover:underline") do
         span(class: "group-open:hidden") { "Show raters (#{rater_row_count})" }
         span(class: "hidden group-open:inline") { "Hide raters" }
       end
       div(class: "mt-2 overflow-x-auto") do
         table(class: "w-full text-sm") do
           thead do
-            tr(class: "text-left text-xs text-gray-600 dark:text-gray-300") do
+            tr(class: "text-left text-xs text-muted") do
               th(class: "py-1.5 pr-3 font-medium") { "Rater" }
               th(class: "py-1.5 pr-3 font-medium") { defined_term(:reports) }
               th(class: "py-1.5 pr-3 font-medium min-w-48") do
@@ -156,8 +156,8 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   end
 
   def rater_row(rater, index)
-    tr(class: "border-t border-gray-100 dark:border-gray-800", data: { readiness_rater: rater[:participant_id] }) do
-      td(class: "py-2 pr-3 whitespace-nowrap font-medium text-gray-900 dark:text-white") do
+    tr(class: "border-t border-subtle", data: { readiness_rater: rater[:participant_id] }) do
+      td(class: "py-2 pr-3 whitespace-nowrap font-medium text-default") do
         span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle #{rater_dot_class(index)}",
              aria: { hidden: "true" })
         plain person_name(rater[:participant_id])
@@ -171,9 +171,9 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
   # Population members whose rater isn't in the room: their numbers count in
   # the totals above, but nobody here can act on them.
   def reference_row(row)
-    tr(class: "border-t border-gray-100 dark:border-gray-800", data: { readiness_reference: "true" }) do
-      td(class: "py-2 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300") do
-        span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle bg-gray-400 dark:bg-gray-500",
+    tr(class: "border-t border-subtle", data: { readiness_reference: "true" }) do
+      td(class: "py-2 pr-3 whitespace-nowrap text-muted") do
+        span(class: "mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle #{NOT_IN_SESSION_FILL}",
              aria: { hidden: "true" })
         plain "Not in session "
         span(class: "text-xs") do
@@ -183,28 +183,28 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
       end
       reports_cell(row[:person_count], row[:cell_total])
       coverage_cells(row)
-      td(class: "py-2 whitespace-nowrap text-right text-xs text-gray-600 dark:text-gray-300") { "reference only" }
+      td(class: "py-2 whitespace-nowrap text-right text-xs text-muted") { "reference only" }
     end
   end
 
   def reports_cell(count, cells)
-    td(class: "py-2 pr-3 whitespace-nowrap text-gray-900 dark:text-white") do
+    td(class: "py-2 pr-3 whitespace-nowrap text-default") do
       plain count.to_s
-      span(class: "text-gray-600 dark:text-gray-300") { " · #{cells} #{cells == 1 ? 'cell' : 'cells'}" }
+      span(class: "text-muted") { " · #{cells} #{cells == 1 ? 'cell' : 'cells'}" }
     end
   end
 
   def coverage_cells(row)
     if row[:cell_total].zero?
-      td(class: "py-2 pr-3 text-gray-600 dark:text-gray-300", colspan: 2) { "No at-level cells" }
+      td(class: "py-2 pr-3 text-muted", colspan: 2) { "No at-level cells" }
       return
     end
 
     td(class: "py-2 pr-3") do
       div(class: "flex items-center gap-2") do
         span(class: "w-36 shrink-0 whitespace-nowrap") do
-          span(class: "font-medium text-gray-900 dark:text-white") { "#{percent(row[:coverage_pct])}%" }
-          span(class: "text-gray-600 dark:text-gray-300") { " · #{percent(row[:carried_pct])}% carried" }
+          span(class: "font-medium text-default") { "#{percent(row[:coverage_pct])}%" }
+          span(class: "text-muted") { " · #{percent(row[:carried_pct])}% carried" }
         end
         stacked_bar(row, height: "h-1.5", label: "Rating coverage", extra: "min-w-16 flex-1")
       end
@@ -212,7 +212,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
     td(class: "py-2 pr-3") do
       div(class: "flex items-center gap-2") do
         evidence = percent(row[:evidence_coverage_pct])
-        span(class: "w-10 shrink-0 font-medium text-gray-900 dark:text-white") { "#{evidence}%" }
+        span(class: "w-10 shrink-0 font-medium text-default") { "#{evidence}%" }
         div(class: "#{TRACK} h-1.5 min-w-16 flex-1", role: "img",
             aria: { label: "Evidence coverage: #{evidence}% of #{row[:cell_total]} cells" }) do
           div(class: EVIDENCE_SEGMENT, style: "width: #{width(row[:evidence_cell_count], row[:cell_total])}%")
@@ -249,7 +249,7 @@ class Views::CalibrationSessions::ReadinessCard < Views::Base
     when "unrated"
       render Components::Kit::Badge.new("#{row[:unrated_count]} unrated", variant: :default)
     else
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Nothing to rate" }
+      span(class: "text-xs text-muted") { "Nothing to rate" }
     end
   end
 

@@ -19,10 +19,6 @@ class Views::Assessments::LensBanner < Views::Base
   ID = "assessment-lens-banner"
   ALIGNMENT_ID = "assessment-lens-alignment"
   EXPLORATION_ID = "assessment-lens-exploration"
-  BUTTON = "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
-           "text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 " \
-           "dark:hover:bg-gray-700 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 " \
-           "focus-visible:ring-primary"
 
   # @param lens [Assessments::Lens]
   # @param assessment_id [String]
@@ -51,13 +47,13 @@ class Views::Assessments::LensBanner < Views::Base
   end
 
   def view_template
-    p(id: ID, class: "mt-1 text-sm text-gray-700 dark:text-gray-200") do
+    p(id: ID, class: "mt-1 text-sm text-muted") do
       plain "Viewing #{whose} ratings against "
-      strong(class: "font-semibold text-gray-900 dark:text-white") { @lens.label }
+      strong(class: "font-semibold text-default") { @lens.label }
       plain ". #{whose.capitalize} #{@lens.home_code} assessment is unchanged. "
       a(href: assessment_path(@assessment_id),
-        class: "font-medium text-primary-ink hover:underline whitespace-nowrap rounded-sm " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary") do
+        class: "font-medium text-brand hover:underline whitespace-nowrap rounded-sm " \
+               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus") do
         "← Back to #{@lens.home_code}"
       end
     end
@@ -72,7 +68,7 @@ class Views::Assessments::LensBanner < Views::Base
     return unless @exploration || @can_explore
 
     div(id: EXPLORATION_ID, class: "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm " \
-                                   "text-gray-600 dark:text-gray-300") do
+                                   "text-muted") do
       if @exploration
         open_exploration
       else
@@ -86,11 +82,11 @@ class Views::Assessments::LensBanner < Views::Base
   def open_exploration
     span(data: { exploration: @exploration.code }) do
       plain "Exploring "
-      strong(class: "font-semibold text-gray-900 dark:text-white") { @exploration.code }
+      strong(class: "font-semibold text-default") { @exploration.code }
       plain " since #{@exploration.started_at.strftime("%-d %b")} · started by #{starter}"
     end
     if @exploration.start_note.present?
-      span(class: "italic text-gray-500 dark:text-gray-400 line-clamp-2") { "“#{@exploration.start_note}”" }
+      span(class: "italic text-muted line-clamp-2") { "“#{@exploration.start_note}”" }
     end
     modal_trigger(Views::Assessments::StopExplorationModal::ID, "Stop exploring") if @can_explore
   end
@@ -102,7 +98,8 @@ class Views::Assessments::LensBanner < Views::Base
   end
 
   def modal_trigger(modal_id, text)
-    button(type: "button", data: { action: "click->modal#open", modal_target_id: modal_id }, class: BUTTON) { text }
+    render Components::Kit::Button.new(variant: :outline, size: :sm,
+                                       data: { action: "click->modal#open", modal_target_id: modal_id }) { text }
   end
 
   def alignment_line
@@ -111,7 +108,7 @@ class Views::Assessments::LensBanner < Views::Base
     return unless text
 
     div(id: ALIGNMENT_ID, class: "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm " \
-                                 "text-gray-600 dark:text-gray-300") do
+                                 "text-muted") do
       span { text }
       start_trigger if @can_start_alignment && @alignment.nil?
     end

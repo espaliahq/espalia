@@ -42,10 +42,10 @@ class Views::Home::DashboardView < Views::Base
   # The way to give feedback unasked sits here, not on a card: the requests
   # card renders only when someone has asked, and feedback can't wait for that.
   def greeting
-    h1(class: "mb-1 text-2xl font-semibold text-gray-900 dark:text-white") { "Home" }
-    p(class: "mb-6 text-sm text-gray-600 dark:text-gray-300") do
+    h1(class: "mb-1 text-2xl font-semibold text-default") { "Home" }
+    p(class: "mb-6 text-sm text-muted") do
       plain "Your next actions across GrowthOS. "
-      a(href: evidence_hub_path(give: 1), class: "font-medium text-primary-ink hover:underline",
+      a(href: evidence_hub_path(give: 1), class: "font-medium text-brand hover:underline",
         data: { testid: "home-give-feedback" }) { "Give someone feedback →" }
     end
   end
@@ -60,7 +60,7 @@ class Views::Home::DashboardView < Views::Base
     ) do
       render Components::Kit::Card.new do |card|
         card.body do
-          div(class: "h-20 animate-pulse rounded bg-gray-100 dark:bg-gray-700/40")
+          div(class: "h-20 animate-pulse rounded bg-neutral-subtle")
         end
       end
     end
@@ -69,7 +69,7 @@ class Views::Home::DashboardView < Views::Base
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "text-sm text-muted") do
           "Nothing needs your attention right now."
         end
       end

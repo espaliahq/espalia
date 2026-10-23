@@ -30,8 +30,7 @@ class Views::Assessments::Delegations::Frame < Views::Base
   private
 
   def error_banner
-    div(class: "mb-3 rounded-md bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm " \
-               "text-red-700 dark:text-red-300") { @error }
+    render Components::Kit::Alert.new(tone: :danger, class: "mb-3") { @error }
   end
 
   def add_form
@@ -42,10 +41,7 @@ class Views::Assessments::Delegations::Frame < Views::Base
       expiry_field
       reason_field
       div(class: "mt-3 flex justify-end") do
-        button(type: "submit",
-               class: "px-3 py-1.5 text-sm rounded-md bg-primary text-white hover:bg-primary/90 cursor-pointer") do
-          "Add delegate"
-        end
+        render Components::Kit::Button.new(tone: :brand, size: :sm, type: :submit) { "Add delegate" }
       end
     end
   end
@@ -54,7 +50,7 @@ class Views::Assessments::Delegations::Frame < Views::Base
     div(class: "mb-3") do
       label(for: "delegation_delegate_person_id", class: label_classes) { "Delegate to" }
       select(id: "delegation_delegate_person_id", name: "delegation[delegate_person_id]",
-             required: true, class: input_classes) do
+             required: true, class: Components::Kit::Field::SELECT) do
         option(value: "") { "— Pick a person —" }
         @candidate_delegates.each do |person|
           option(value: person.id) { person.name.presence || person.email }
@@ -67,7 +63,7 @@ class Views::Assessments::Delegations::Frame < Views::Base
     div(class: "mb-3") do
       label(for: "delegation_expires_at", class: label_classes) { "Expires (optional)" }
       input(id: "delegation_expires_at", type: "date", name: "delegation[expires_at]",
-            class: input_classes)
+            class: Components::Kit::Field::INPUT)
     end
   end
 
@@ -75,17 +71,18 @@ class Views::Assessments::Delegations::Frame < Views::Base
     div(class: "mb-1") do
       label(for: "delegation_reason", class: label_classes) { "Reason (optional)" }
       input(id: "delegation_reason", type: "text", name: "delegation[reason]",
-            maxlength: 200, placeholder: "e.g. seconded to Payments team", class: input_classes)
+            maxlength: 200, placeholder: "e.g. seconded to Payments team",
+            class: Components::Kit::Field::INPUT)
     end
   end
 
   def active_list
-    div(class: "border-t border-gray-200 dark:border-gray-700 pt-3") do
-      h3(class: "text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2") do
+    div(class: "border-t border-default pt-3") do
+      h3(class: "text-xs font-medium uppercase tracking-wide text-muted mb-2") do
         "Active delegates"
       end
       if @active_delegations.empty?
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "No active delegates." }
+        p(class: "text-sm text-muted") { "No active delegates." }
       else
         ul(class: "space-y-1") { @active_delegations.each { |d| delegation_row(d) } }
       end
@@ -93,11 +90,11 @@ class Views::Assessments::Delegations::Frame < Views::Base
   end
 
   def delegation_row(delegation)
-    li(class: "flex items-center justify-between gap-2 text-sm text-gray-800 dark:text-gray-200") do
+    li(class: "flex items-center justify-between gap-2 text-sm text-default") do
       span do
         plain(delegation.delegate&.name.presence || delegation.delegate&.email || "Unknown")
         if delegation.expires_at.present?
-          span(class: "text-gray-500 dark:text-gray-400") { " · until #{delegation.expires_at.to_date.strftime('%-d %b %Y')}" }
+          span(class: "text-muted") { " · until #{delegation.expires_at.to_date.strftime('%-d %b %Y')}" }
         end
       end
       revoke_button(delegation)
@@ -109,20 +106,14 @@ class Views::Assessments::Delegations::Frame < Views::Base
          data: { turbo_confirm: "Revoke this delegation? Existing ratings are kept." }, class: "inline") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "_method", value: "delete")
-      button(type: "submit", aria: { label: "Revoke delegation" },
-             class: "text-gray-400 hover:text-red-600 dark:hover:text-red-400 text-lg leading-none cursor-pointer") do
-        "×"
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :xs, icon: true, type: :submit,
+                                         aria_label: "Revoke delegation") do
+        span(class: "text-lg leading-none", aria: { hidden: "true" }) { "×" }
       end
     end
   end
 
   def label_classes
-    "block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-  end
-
-  def input_classes
-    "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-2.5 py-1.5 text-sm text-gray-900 dark:text-white " \
-      "focus:outline-none focus:ring-2 focus:ring-primary"
+    "block text-xs font-medium text-muted mb-1"
   end
 end

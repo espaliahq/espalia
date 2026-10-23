@@ -77,8 +77,8 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
   def add_capability_row
     tr(id: self.class.add_capability_row_id(@category.category_id)) do
       td(
-        class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 #{STICKY_EDGE_CLASSES} " \
-               "px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 min-w-[200px]"
+        class: "sticky left-0 z-[2] bg-overlay #{STICKY_EDGE_CLASSES} " \
+               "px-4 py-1.5 border-b border-subtle min-w-[200px]"
       ) do
         render_add_affordance(
           "Add capability",
@@ -107,7 +107,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
     ) do
       td(
         colspan: col_count,
-        class: "px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+        class: "px-4 py-2 bg-overlay-muted border-b border-default"
       ) do
         # Edit mode only — view mode has no hover controls to reveal.
         div(class: "flex items-start gap-2",
@@ -116,7 +116,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
           button(
             type: "button",
             class: "flex items-center justify-center w-4 h-4 mt-0.5 cursor-pointer rounded " \
-                   "hover:bg-gray-200 dark:hover:bg-gray-700",
+                   "hover:bg-emphasized",
             data: {
               action: "click->matrix#toggleCategory",
               category_id: @category.category_id
@@ -124,7 +124,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
             aria_label: "Toggle category"
           ) do
             icon("chevron-right",
-                 class: "w-3 h-3 text-gray-400 rotate-90 transition-transform",
+                 class: "w-3 h-3 text-subtle rotate-90 transition-transform",
                  data: { matrix_target: "categoryChevron" })
           end
 
@@ -161,7 +161,7 @@ class Views::Frameworks::Explorer::MatrixCategoryGroup < Views::Base
                   search_query: @search_query
                 )
 
-                span(class: "text-xs text-gray-600 dark:text-gray-300") do
+                span(class: "text-xs text-muted") do
                   "#{@capabilities.size} #{'capability'.pluralize(@capabilities.size)}"
                 end
               end

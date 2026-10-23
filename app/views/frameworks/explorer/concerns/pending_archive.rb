@@ -9,7 +9,7 @@ module Views::Frameworks::Explorer::Concerns::PendingArchive
   # Red line-through across a whole row. Applied to each cell (`[&>td]`)
   # rather than the <tr>, because text-decoration doesn't reliably propagate
   # from a table-row to its cells.
-  STRIKETHROUGH_CLASSES = "[&>td]:line-through [&>td]:decoration-red-400 [&>td]:decoration-2"
+  STRIKETHROUGH_CLASSES = "[&>td]:line-through [&>td]:decoration-suggestion-delete [&>td]:decoration-2"
 
   # @param capability [FrameworkState::Capability, Frameworks::ExplorerGraph::Capability]
   # @return [Boolean]

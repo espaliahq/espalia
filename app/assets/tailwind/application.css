@@ -104,6 +104,25 @@ input[type="week"] {
     border-radius: 2px;
   }
 
+  /* Tailwind v4 gives buttons the arrow; anything clickable shows the pointer unless a utility says otherwise */
+  button,
+  summary,
+  select,
+  label:has(> input:is([type="checkbox"], [type="radio"])),
+  input:is([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="range"], [type="submit"], [type="button"], [type="reset"]),
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="switch"],
+  [role^="menuitem"] {
+    cursor: pointer;
+  }
+
+  :is(button, select, input):disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* A menu's panel scrolls, which clips an outset ring, so its items draw theirs inside */
   [role="menu"] [role^="menuitem"]:focus-visible {
     outline-offset: -2px;
@@ -234,18 +253,18 @@ input[type="week"] {
 @media (prefers-reduced-motion: reduce) {
   .suggestion-nav-highlight {
     animation: none;
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-amber-400) 70%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--gos-suggestion-edit) 70%, transparent);
   }
 }
 
 @keyframes suggestion-nav-pulse {
   0% {
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-amber-400) 90%, transparent);
-    background-color: color-mix(in oklab, var(--color-amber-300) 35%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--gos-suggestion-edit) 90%, transparent);
+    background-color: color-mix(in oklab, var(--gos-suggestion-edit) 25%, transparent);
   }
   60% {
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-amber-400) 60%, transparent);
-    background-color: color-mix(in oklab, var(--color-amber-300) 20%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--gos-suggestion-edit) 60%, transparent);
+    background-color: color-mix(in oklab, var(--gos-suggestion-edit) 14%, transparent);
   }
   100% {
     box-shadow: 0 0 0 3px transparent;
@@ -445,14 +464,7 @@ input[type="week"] {
  * of it, and only while something is actually shown there. */
 [data-hover-cluster="tree"]:hover .tree-actions,
 [data-hover-cluster="tree"]:focus-within .tree-actions {
-  background-color: var(--color-gray-100);
-}
-
-[data-hover-cluster="tree"]:hover .tree-actions,
-[data-hover-cluster="tree"]:focus-within .tree-actions {
-  @variant dark {
-    background-color: var(--color-gray-800);
-  }
+  background-color: var(--gos-surface-overlay-muted);
 }
 
 /* Touch has no hover, and the coarse-pointer rule above keeps the kebab and the
@@ -460,15 +472,7 @@ input[type="week"] {
  * background there, not the row's hover tint. */
 @media (pointer: coarse) {
   .tree-actions {
-    background-color: var(--color-white);
-  }
-}
-
-@media (pointer: coarse) {
-  .tree-actions {
-    @variant dark {
-      background-color: var(--color-gray-900);
-    }
+    background-color: var(--gos-surface-overlay);
   }
 }
 
@@ -524,7 +528,7 @@ input[type="week"] {
   height: 2px;
   z-index: 30;
   overflow: hidden;
-  background-color: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  background-color: color-mix(in oklab, var(--gos-border-brand) 18%, transparent);
   pointer-events: none;
 }
 
@@ -533,7 +537,7 @@ input[type="week"] {
   position: absolute;
   inset-block: 0;
   width: 35%;
-  background-color: var(--color-primary);
+  background-color: var(--gos-border-brand);
   animation: mx-busy-slide 1.1s ease-in-out infinite;
 }
 
@@ -601,14 +605,14 @@ input[type="week"] {
 .mx-cell {
   padding: 0.625rem 0.75rem;
   vertical-align: top;
-  border-bottom: 1px solid var(--color-gray-100);
-  border-right: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--gos-border-subtle);
+  border-right: 1px solid var(--gos-border-subtle);
 }
 
 /* A level the capability does not reach — the em-dash cell. */
 .mx-cell-empty {
   text-align: center;
-  background-color: color-mix(in oklab, var(--color-gray-50) 50%, transparent);
+  background-color: var(--gos-surface-empty);
 }
 
 /* The sticky capability cell. Its background (and hover background) stay
@@ -617,8 +621,8 @@ input[type="week"] {
   padding: 0.625rem 1rem;
   vertical-align: top;
   min-width: 200px;
-  border-bottom: 1px solid var(--color-gray-100);
-  border-right: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--gos-border-subtle);
+  border-right: 1px solid var(--gos-border-subtle);
 }
 
 /* The sticky column's right edge: "content passes beneath this". Applied to
@@ -649,7 +653,7 @@ input[type="week"] {
 }
 
 .mx-row:hover {
-  background-color: var(--color-gray-50);
+  background-color: var(--gos-surface-overlay-hover);
 }
 
 /* The category band, sticking immediately beneath the matrix header. `top`
@@ -673,7 +677,7 @@ input[type="week"] {
  * rings would draw a vertical line between every column.
  */
 :root {
-  --mx-focus-ring: color-mix(in oklab, var(--color-primary) 60%, transparent);
+  --mx-focus-ring: color-mix(in oklab, var(--gos-focus-ring) 60%, transparent);
 }
 
 .mx-row[data-focused="true"] > td {
@@ -705,7 +709,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 .mx-expectation {
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: var(--color-gray-700);
+  color: var(--gos-content-muted);
 }
 
 /* "N examples" under a compact cell's expectation. */
@@ -720,12 +724,12 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   width: 0.375rem;
   height: 0.375rem;
   border-radius: 9999px;
-  background-color: var(--color-primary);
+  background-color: var(--gos-border-brand);
 }
 
 .mx-count {
   font-size: 10px;
-  color: var(--color-gray-600);
+  color: var(--gos-content-muted);
 }
 
 /* Compact role/level code badge in the matrix header (e.g. "E1"). */
@@ -736,8 +740,8 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   padding: 0.125rem 0.5rem;
   font-size: 10px;
   font-weight: 500;
-  background-color: var(--color-gray-200);
-  color: var(--color-gray-600);
+  background-color: var(--gos-neutral-subtle);
+  color: var(--gos-content-muted);
 }
 
 /* Expanded-row cells. The blue wash is a tint over an OPAQUE neighbour, not a
@@ -746,9 +750,9 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 .mx-exp-cell {
   padding: 0.5rem 0.75rem;
   vertical-align: top;
-  border-bottom: 1px solid var(--color-gray-100);
-  border-right: 1px solid var(--color-gray-100);
-  background-color: color-mix(in oklab, var(--color-blue-50) 30%, transparent);
+  border-bottom: 1px solid var(--gos-border-subtle);
+  border-right: 1px solid var(--gos-border-subtle);
+  background-color: var(--gos-surface-expanded);
 }
 
 .mx-exp-cell--focusable {
@@ -757,7 +761,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 }
 
 .mx-exp-cell--focusable:hover {
-  background-color: color-mix(in oklab, var(--color-blue-100) 50%, transparent);
+  background-color: var(--gos-surface-expanded-hover);
 }
 
 /* The placeholder row's one spanning cell, before the fetch lands. */
@@ -766,14 +770,14 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   vertical-align: top;
   font-size: 0.75rem;
   line-height: 1rem;
-  border-bottom: 1px solid var(--color-gray-100);
-  background-color: color-mix(in oklab, var(--color-blue-50) 30%, transparent);
+  border-bottom: 1px solid var(--gos-border-subtle);
+  background-color: var(--gos-surface-expanded);
 }
 
 /* Borders only — the gutter's opaque background and stickiness are utilities. */
 .mx-exp-gutter {
-  border-bottom: 1px solid var(--color-gray-100);
-  border-right: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--gos-border-subtle);
+  border-right: 1px solid var(--gos-border-subtle);
 }
 
 /* The cluster's Discuss bubble: the shared control chrome above plus its own
@@ -822,28 +826,6 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   @apply rounded-md border tone-danger bg-tone-subtle border-tone text-tone-content-strong px-3 py-2 text-xs;
 }
 
-.mx-cell,
-.mx-cap-cell,
-.mx-exp-cell,
-.mx-exp-gutter {
-  @variant dark {
-    border-bottom-color: var(--color-gray-800);
-    border-right-color: var(--color-gray-800);
-  }
-}
-
-.mx-exp-placeholder {
-  @variant dark {
-    border-bottom-color: var(--color-gray-800);
-  }
-}
-
-.mx-cell-empty {
-  @variant dark {
-    background-color: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
-  }
-}
-
 .mx-sticky-edge {
   @variant dark {
     box-shadow: 6px 0 8px -6px rgba(0, 0, 0, 0.65);
@@ -856,45 +838,6 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
     6px 0 8px -6px rgba(0, 0, 0, 0.65);
   }
 }
-
-.mx-row:hover {
-  @variant dark {
-    background-color: color-mix(in oklab, var(--color-gray-800) 50%, transparent);
-  }
-}
-
-.mx-expectation {
-  @variant dark {
-    color: var(--color-gray-300);
-  }
-}
-
-.mx-count,
-.mx-badge {
-  @variant dark {
-    color: var(--color-gray-300);
-  }
-}
-
-.mx-badge {
-  @variant dark {
-    background-color: var(--color-gray-700);
-  }
-}
-
-.mx-exp-cell,
-.mx-exp-placeholder {
-  @variant dark {
-    background-color: color-mix(in oklab, var(--color-blue-900) 10%, transparent);
-  }
-}
-
-.mx-exp-cell--focusable:hover {
-  @variant dark {
-    background-color: color-mix(in oklab, var(--color-blue-900) 20%, transparent);
-  }
-}
-
 
 /* Text people write — feedback, comments, notes — rendered from Markdown by
  * Components::Kit::Prose (#482). Inherits size and colour from the slot it
@@ -953,7 +896,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 .md-prose code,
 .md-prose pre {
   @variant dark {
-    background-color: var(--color-gray-800);
+    background-color: var(--gos-surface-default);
   }
 }
 

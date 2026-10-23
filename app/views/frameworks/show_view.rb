@@ -7,6 +7,9 @@
 # Right pane: placeholder for future contextual feed.
 #
 class Views::Frameworks::ShowView < Views::Base
+  # framework_explorer_controller sets aria-expanded on the pane toggles; the fill follows it
+  PANE_TOGGLE_OPEN = "aria-expanded:bg-neutral-muted"
+
   # @param framework [FrameworkState::Framework, Frameworks::ExplorerGraph::Framework]
   # @param role_families [Array] role families with roles + levels
   # @param selected_role_ids [Array<String>]
@@ -244,7 +247,7 @@ class Views::Frameworks::ShowView < Views::Base
       div(class: "flex flex-wrap items-center justify-between gap-x-4 gap-y-2") do
         div(class: "min-w-0 max-sm:w-full") do
           a(href: frameworks_path,
-            class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink mb-2 inline-block") do
+            class: "text-sm text-muted hover:text-brand mb-2 inline-block") do
             plain "\u2190 Frameworks"
           end
           # The badges wrap under the title on a narrow viewport instead of
@@ -288,18 +291,10 @@ class Views::Frameworks::ShowView < Views::Base
   def edit_suggest_toggle
     return locked_suggesting_badge unless @approval_authority.any?
 
-    div(
-      class: "inline-flex items-stretch rounded-md border border-gray-200 dark:border-gray-700 " \
-             "bg-gray-50 dark:bg-gray-800 p-0.5 text-sm",
-      data: {
-        controller: "edit-mode-toggle",
-        edit_mode_toggle_active_class: "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs",
-        edit_mode_toggle_inactive_class: "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      }
-    ) do
-      edit_suggest_segment("editing", "Editing",
+    render Components::Kit::SegmentedControl.new(label: "Edit mode", data: { controller: "edit-mode-toggle" }) do |control|
+      edit_suggest_segment(control, "editing", "Editing",
                            "Changes you make apply immediately (when you have approval authority).")
-      edit_suggest_segment("suggesting", "Suggesting",
+      edit_suggest_segment(control, "suggesting", "Suggesting",
                            "Changes land as pending suggestions for review.")
     end
   end
@@ -309,28 +304,20 @@ class Views::Frameworks::ShowView < Views::Base
   # label rather than offering a choice that does nothing.
   def locked_suggesting_badge
     span(
-      class: "inline-flex items-center rounded-md border border-gray-200 dark:border-gray-700 " \
-             "bg-gray-50 dark:bg-gray-800 px-3 py-1 text-sm font-medium " \
-             "text-gray-600 dark:text-gray-300",
+      class: "inline-flex items-center rounded-md border border-default " \
+             "bg-subtle px-3 py-1 text-sm font-medium " \
+             "text-muted",
       title: "Your changes land as suggestions for a reviewer to approve."
     ) { "Suggesting" }
   end
 
-  def edit_suggest_segment(value, label, tooltip)
-    button(
-      type: "button",
-      # Tighter gutters below `sm`: at 375 px the toggle and "Exit edit mode"
-      # miss sharing a wrapped row by 2 px, which costs a whole 48 px band of
-      # an already tall mobile header (#384).
-      class: "inline-flex items-center rounded px-2 sm:px-3 py-1 font-medium transition-colors",
-      data: {
-        action: "edit-mode-toggle#select",
-        edit_mode_toggle_target: "#{value}Button",
-        edit_mode_value: value
-      },
-      title: tooltip,
-      aria_pressed: "false"
-    ) { label }
+  # The controller marks the current mode from its cookie on connect
+  def edit_suggest_segment(control, value, label, tooltip)
+    control.segment(label, title: tooltip, data: {
+      action: "edit-mode-toggle#select",
+      edit_mode_toggle_target: "#{value}Button",
+      edit_mode_value: value
+    })
   end
 
   # Shown only while rendering /edit to make the mode visible even when
@@ -347,12 +334,9 @@ class Views::Frameworks::ShowView < Views::Base
     target_path = @mode == :edit ? framework_path(@framework.framework_id) : edit_framework_path(@framework.framework_id)
     target_label = @mode == :edit ? "Exit edit mode" : "Edit mode"
 
-    a(
-      href: target_path,
-      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm " \
-             "#{mode_switcher_style_classes} " \
-             "transition-colors",
-      title: target_label
+    render Components::Kit::Button.new(
+      variant: @mode == :edit ? :subtle : :ghost, tone: @mode == :edit ? :warning : :neutral, size: :sm,
+      href: target_path, title: target_label
     ) do
       svg(
         xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
@@ -369,23 +353,9 @@ class Views::Frameworks::ShowView < Views::Base
     end
   end
 
-  def mode_switcher_style_classes
-    if @mode == :edit
-      "bg-amber-100 text-amber-800 hover:bg-amber-200 " \
-        "dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
-    else
-      "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 " \
-        "hover:bg-gray-100 dark:hover:bg-gray-800"
-    end
-  end
-
   def settings_link
-    a(
-      href: framework_settings_path(@framework.framework_id),
-      class: "inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm " \
-             "text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
-      title: "Framework settings"
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :sm, href: framework_settings_path(@framework.framework_id), title: "Framework settings"
     ) do
       svg(
         xmlns: "http://www.w3.org/2000/svg", fill: "none", viewbox: "0 0 24 24",
@@ -413,13 +383,10 @@ class Views::Frameworks::ShowView < Views::Base
     cap_count = @matrix_data[:in_scope_capability_count] ||
                 @matrix_data[:categories].sum { |c| c[:capabilities].size }
 
-    div(class: "mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-300") do
+    div(class: "mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted") do
       # Roles stat doubles as the toggle button for the role pane
-      button(
-        type: "button",
-        class: "flex items-center gap-1.5 px-2.5 py-1 -ml-2.5 rounded-md " \
-               "bg-gray-100 dark:bg-gray-800 " \
-               "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+      render Components::Kit::Button.new(
+        variant: :subtle, size: :sm, class: "-ml-2.5 #{PANE_TOGGLE_OPEN}",
         data: {
           action: "framework-explorer#toggleRolePane",
           framework_explorer_target: "rolePaneToggle"
@@ -427,13 +394,13 @@ class Views::Frameworks::ShowView < Views::Base
       ) do
         # Toggle chevron — rotates when pane is open/closed
         svg(
-          class: "w-3.5 h-3.5 text-gray-400 transition-transform",
+          class: "w-3.5 h-3.5 text-subtle transition-transform",
           data: { framework_explorer_target: "toggleChevron" },
           fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2"
         ) do |s|
           s.path(d: "M19 9l-7 7-7-7")
         end
-        span(class: "font-semibold text-gray-900 dark:text-white",
+        span(class: "font-semibold text-default",
              data: { framework_explorer_target: "roleCount" }) { role_count.to_s }
         span(data: { framework_explorer_target: "roleLabel" }) do
           " #{'Role'.pluralize(role_count)}"
@@ -450,10 +417,8 @@ class Views::Frameworks::ShowView < Views::Base
   # "+ Add category" — opens the shared add-category modal. Edit mode +
   # edit-rights only (same bar as the row kebab).
   def add_category_button
-    button(
-      type: "button",
-      class: "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium " \
-             "text-primary-ink hover:bg-primary/10 transition-colors",
+    render Components::Kit::Button.new(
+      variant: :ghost, tone: :brand, size: :sm,
       data: { action: "click->modal#open", modal_target_id: "add-category-modal" }
     ) do
       span(class: "text-base leading-none") { "+" }
@@ -473,7 +438,7 @@ class Views::Frameworks::ShowView < Views::Base
     ) do
       div(class: "pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5") do
         svg(
-          class: "w-4 h-4 text-gray-400", fill: "none", viewBox: "0 0 24 24",
+          class: "w-4 h-4 text-subtle", fill: "none", viewBox: "0 0 24 24",
           stroke: "currentColor", stroke_width: "2"
         ) do |s|
           s.path(stroke_linecap: "round", stroke_linejoin: "round",
@@ -486,10 +451,9 @@ class Views::Frameworks::ShowView < Views::Base
         placeholder: "Filter capabilities…",
         autocomplete: "off",
         aria_label: "Filter capabilities by text",
-        class: "w-full rounded-md border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-800 py-1.5 pl-8 pr-8 text-sm " \
-               "text-gray-900 dark:text-white placeholder:text-gray-400 " \
-               "focus:border-primary focus:ring-1 focus:ring-primary focus:outline-hidden " \
+        class: "w-full rounded-md border border-field bg-field py-1.5 pl-8 pr-8 text-sm " \
+               "text-default placeholder:text-muted " \
+               "focus:border-strong focus:ring-1 focus:ring-inset focus:ring-focus focus:outline-hidden " \
                "[&::-webkit-search-cancel-button]:appearance-none",
         data: {
           framework_search_target: "input",
@@ -498,8 +462,8 @@ class Views::Frameworks::ShowView < Views::Base
       )
       button(
         type: "button",
-        class: "absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 " \
-               "hover:text-gray-600 dark:hover:text-gray-200 #{'hidden' if @search_query.blank?}",
+        class: "absolute inset-y-0 right-0 flex items-center pr-2.5 text-subtle " \
+               "hover:text-muted #{'hidden' if @search_query.blank?}",
         aria_label: "Clear filter",
         data: {
           framework_search_target: "clear",
@@ -521,25 +485,22 @@ class Views::Frameworks::ShowView < Views::Base
   # surfaces the pending-suggestion count (the actionable subset) without
   # claiming to be the whole feed.
   def activity_toggle
-    button(
-      type: "button",
-      class: "flex items-center gap-1.5 px-2.5 py-1 rounded-md " \
-             "bg-gray-100 dark:bg-gray-800 " \
-             "hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer",
+    render Components::Kit::Button.new(
+      variant: :subtle, size: :sm, class: PANE_TOGGLE_OPEN,
       data: {
         action: "framework-explorer#toggleContextPane",
         framework_explorer_target: "contextPaneToggle"
       },
       title: "Toggle activity feed"
     ) do
-      span(class: "font-semibold text-gray-900 dark:text-white") { "Activity" }
+      span(class: "font-semibold text-default") { "Activity" }
       render Views::Frameworks::Explorer::PendingCountBadge.new(count: @pending_suggestion_count)
     end
   end
 
   def stat_item(label, count)
     span do
-      span(class: "font-semibold text-gray-900 dark:text-white") { count.to_s }
+      span(class: "font-semibold text-default") { count.to_s }
       plain " #{label}"
     end
   end
@@ -566,7 +527,7 @@ class Views::Frameworks::ShowView < Views::Base
   def explorer_layout
     div(
       class: "relative flex -mx-6 -mb-6 h-[calc(100dvh_-_var(--explorer-offset,12rem))] " \
-             "min-h-48 border-t border-gray-200 dark:border-gray-700",
+             "min-h-48 border-t border-default",
       data: {
         controller: "matrix",
         framework_explorer_target: "layout",
@@ -619,8 +580,8 @@ class Views::Frameworks::ShowView < Views::Base
   # ~20 px clear. The matrix pays 16 px of 1,112 at 1400 wide (#384 follow-up).
   def left_pane
     aside(
-      class: "w-76 shrink-0 border-r border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
+      class: "w-76 shrink-0 border-r border-default " \
+             "bg-overlay flex flex-col overflow-hidden " \
              "max-lg:hidden",
       data: {
         controller: "tree",
@@ -645,7 +606,7 @@ class Views::Frameworks::ShowView < Views::Base
   # than the viewport (#384).
   def main_pane
     div(
-      class: "flex-1 min-w-0 overflow-auto bg-white dark:bg-gray-900",
+      class: "flex-1 min-w-0 overflow-auto bg-overlay",
       data: { matrix_target: "scrollContainer" }
     ) do
       turbo_frame_tag("framework-matrix", data: { matrix_target: "frame" }) do
@@ -673,8 +634,8 @@ class Views::Frameworks::ShowView < Views::Base
     # Closing it is the same vocabulary as the role tree — tap outside, Esc,
     # or the pane's own × (narrow only; desktop closes with the toggle).
     aside(
-      class: "w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-900 flex flex-col overflow-hidden " \
+      class: "w-80 shrink-0 border-l border-default " \
+             "bg-overlay flex flex-col overflow-hidden " \
              "max-lg:hidden",
       aria_label: "Framework activity",
       data: {
@@ -710,7 +671,7 @@ class Views::Frameworks::ShowView < Views::Base
         class: "block h-full",
         data: { context_pane_target: "frame" }
       ) do
-        div(class: "p-6 text-center text-gray-600 dark:text-gray-300 text-sm") do
+        div(class: "p-6 text-center text-muted text-sm") do
           p { "Loading activity\u2026" }
         end
       end
@@ -723,14 +684,10 @@ class Views::Frameworks::ShowView < Views::Base
   # covers the grid (an outside tap is discoverable only once you know it).
   def context_pane_mobile_bar
     div(class: "lg:hidden flex items-center justify-between gap-2 border-b " \
-               "border-gray-200 dark:border-gray-700 px-3 py-2") do
-      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Activity" }
-      button(
-        type: "button",
-        class: "inline-flex h-11 w-11 items-center justify-center rounded-md " \
-               "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 " \
-               "cursor-pointer",
-        aria_label: "Close activity feed",
+               "border-default px-3 py-2") do
+      span(class: "text-sm font-semibold text-default") { "Activity" }
+      render Components::Kit::Button.new(
+        variant: :ghost, icon: true, touch: true, aria_label: "Close activity feed",
         data: { action: "framework-explorer#toggleContextPane" }
       ) do
         svg(class: "w-5 h-5", fill: "none", viewBox: "0 0 24 24",

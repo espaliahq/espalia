@@ -41,7 +41,7 @@ class Views::Frameworks::Activity::SuggestionActions < Views::Base
       # renders the canonical resolution entry. Text set by the controller
       # ("✓ Approved" / "✓ Rejected").
       p(
-        class: "hidden text-[11px] font-medium text-green-700 dark:text-green-400",
+        class: "hidden text-[11px] font-medium text-success",
         data: { suggestion_action_target: "resolved" }
       )
     end
@@ -50,21 +50,13 @@ class Views::Frameworks::Activity::SuggestionActions < Views::Base
   private
 
   def approve_button
-    button(
-      type: "button",
-      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "bg-green-600 text-white hover:bg-green-700 transition-colors " \
-             "disabled:opacity-50 disabled:cursor-not-allowed",
-      data: { action: "suggestion-action#approve" }
-    ) { "Approve" }
+    render Components::Kit::Button.new(tone: :success, size: :xs, compact: true,
+                                       data: { action: "suggestion-action#approve" }) { "Approve" }
   end
 
   def reject_button
-    button(
-      type: "button",
-      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
+    render Components::Kit::Button.new(
+      variant: :outline, size: :xs, compact: true,
       data: {
         action: "click->modal#open",
         modal_target_id: "reject-suggestion-modal",

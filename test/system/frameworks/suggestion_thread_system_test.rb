@@ -104,6 +104,15 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_no_selector "[data-clipboard-target='copied']", visible: true
   end
 
+  # Comment sits 4px under the discussion box, so its hit area took clicks on
+  # the box's bottom edge and posted.
+  should "give the discussion box's edge to the discussion box" do
+    open_suggestion_card
+    assert_selector "textarea[name='comment[body]']", visible: true
+
+    assert_no_stolen_taps
+  end
+
   should "post and reply from the pane's suggestion card with one-indent display" do
     open_suggestion_card
 

@@ -30,33 +30,26 @@ class Views::Assessments::LensRoleModal < Views::Base
   def form_body
     form(action: assessment_path(@assessment_id), method: "get", class: "space-y-4",
          data: { controller: "lens-picker", lens_picker_levels_value: levels_by_role.to_json }) do
-      p(class: "text-sm text-gray-600 dark:text-gray-300") { intro }
+      p(class: "text-sm text-muted") { intro }
       field("lens-role-select", "Role") { role_select }
       field("lens-level-select", "Level") { level_select }
       div(class: "flex justify-end gap-2 pt-1") do
-        button(type: "button", data: { action: "click->modal#close" },
-               class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
-                      "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer") do
-          "Cancel"
-        end
-        button(type: "submit",
-               class: "text-sm font-semibold px-3 py-1.5 rounded-md bg-gray-900 dark:bg-white text-white " \
-                      "dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 cursor-pointer") do
-          "View"
-        end
+        render Components::Kit::Button.new(variant: :outline, size: :sm,
+                                           data: { action: "click->modal#close" }) { "Cancel" }
+        render Components::Kit::Button.new(size: :sm, type: :submit) { "View" }
       end
     end
   end
 
   def field(id, label_text, &)
     div do
-      label(for: id, class: "block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1") { label_text }
+      label(for: id, class: "block text-sm font-medium text-muted mb-1") { label_text }
       yield
     end
   end
 
   def role_select
-    select(id: "lens-role-select", name: "as_role", class: select_classes,
+    select(id: "lens-role-select", name: "as_role", class: Components::Kit::Field::SELECT,
            data: { lens_picker_target: "role", action: "change->lens-picker#roleChanged" }) do
       @lens.ladders.each do |family, roles|
         optgroup(label: family) do
@@ -86,7 +79,7 @@ class Views::Assessments::LensRoleModal < Views::Base
   end
 
   def level_select
-    select(id: "lens-level-select", name: "as_level", class: select_classes,
+    select(id: "lens-level-select", name: "as_level", class: Components::Kit::Field::SELECT,
            data: { lens_picker_target: "level" }) do
       @lens.role.levels.sort_by(&:ordinal).each do |level|
         option(value: level.ordinal, selected: level.ordinal == @lens.level.ordinal) { level_label(@lens.role, level) }
@@ -104,11 +97,5 @@ class Views::Assessments::LensRoleModal < Views::Base
 
   def level_label(role, level)
     "#{role.code}#{level.ordinal} · #{level.title}"
-  end
-
-  def select_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
-      "px-3 py-2 text-sm text-gray-900 dark:text-white focus-visible:outline-hidden " \
-      "focus-visible:ring-2 focus-visible:ring-primary"
   end
 end

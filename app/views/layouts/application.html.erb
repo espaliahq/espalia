@@ -62,32 +62,14 @@
 
     <%# Devise pages handle flash inline — skip the toast to avoid duplication %>
     <% if !devise_controller? && (flash[:notice] || flash[:alert]) %>
-      <div class="fixed top-4 right-4 z-50 flex flex-col gap-2">
+      <%= render Components::Kit::Toast::Stack.new do %>
         <% if flash[:notice] %>
-          <div class="flex items-start gap-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 shadow-sm"
-               role="status"
-               data-controller="flash"
-               data-flash-delay-value="5000">
-            <span class="flex-1"><%= flash[:notice] %></span>
-            <button type="button"
-                    class="text-green-700 hover:text-green-900 focus:outline-hidden focus:ring-2 focus:ring-green-400 rounded cursor-pointer"
-                    aria-label="Dismiss notification"
-                    data-action="flash#dismiss">×</button>
-          </div>
+          <%= render Components::Kit::Toast.new(tone: :success) do %><span><%= flash[:notice] %></span><% end %>
         <% end %>
         <% if flash[:alert] %>
-          <div class="flex items-start gap-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 shadow-sm"
-               role="alert"
-               data-controller="flash"
-               data-flash-delay-value="7000">
-            <span class="flex-1"><%= flash[:alert] %></span>
-            <button type="button"
-                    class="text-red-700 hover:text-red-900 focus:outline-hidden focus:ring-2 focus:ring-red-400 rounded cursor-pointer"
-                    aria-label="Dismiss notification"
-                    data-action="flash#dismiss">×</button>
-          </div>
+          <%= render Components::Kit::Toast.new(tone: :danger) do %><span><%= flash[:alert] %></span><% end %>
         <% end %>
-      </div>
+      <% end %>
     <% end %>
     <%= yield %>
   </body>

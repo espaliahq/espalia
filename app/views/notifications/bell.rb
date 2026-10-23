@@ -29,8 +29,8 @@ class Views::Notifications::Bell < Views::Base
       data: { action: "dropdown#toggle", dropdown_target: "trigger" },
       aria: { haspopup: "true", expanded: "false", label: aria_label },
       class: "relative inline-flex items-center justify-center h-11 w-11 rounded-md " \
-             "text-nav-fg/80 hover:text-nav-fg hover:bg-white/10 " \
-             "focus:outline-hidden focus:ring-2 focus:ring-white cursor-pointer"
+             "text-nav/80 hover:text-nav hover:bg-current/10 " \
+             "focus:outline-hidden focus:ring-2 focus:ring-focus cursor-pointer"
     ) do
       bell_icon
       unread_badge if @unread_count.positive?
@@ -42,9 +42,10 @@ class Views::Notifications::Bell < Views::Base
     # narrow screen a 20rem panel would spill off-screen left, so below `sm`
     # it goes fixed and spans the viewport (minus gutters) instead.
     div(
-      class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-lg " \
+      class: "absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-md shadow-overlay " \
              "max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:mt-0 max-sm:w-auto max-sm:max-w-none " \
-             "bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50 hidden overflow-hidden",
+             "border border-default bg-overlay z-50 hidden overflow-hidden " \
+             "[--gos-focus-ring:var(--gos-content-default)]",
       data: { dropdown_target: "menu" },
       role: "menu",
       aria: { orientation: "vertical", label: "Notifications" }
@@ -56,14 +57,14 @@ class Views::Notifications::Bell < Views::Base
   end
 
   def panel_header
-    div(class: "flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700") do
-      span(class: "text-sm font-semibold text-gray-900 dark:text-white") { "Notifications" }
+    div(class: "flex items-center justify-between px-4 py-2.5 border-b border-subtle") do
+      span(class: "text-sm font-semibold text-default") { "Notifications" }
       div(class: "flex items-center gap-1") do
         if @unread_count.positive?
           a(
             href: read_all_notifications_path,
             data: { turbo_method: :post, turbo_frame: "_top" },
-            class: "text-xs font-medium text-blue-600 hover:underline"
+            class: "text-xs font-medium text-link hover:underline"
           ) { "Mark all read" }
         end
         preferences_link
@@ -79,29 +80,28 @@ class Views::Notifications::Bell < Views::Base
       data: { turbo_frame: "_top" },
       aria: { label: "Notification preferences" },
       class: "inline-flex items-center justify-center h-11 w-11 -my-3 -mr-2 rounded-md " \
-             "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+             "text-muted hover:text-default hover:bg-hover"
     ) { gear_icon }
   end
 
   def panel_list
-    div(class: "max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700") do
+    div(class: "max-h-96 overflow-y-auto divide-y divide-subtle") do
       @notifications.each { |n| render Views::Notifications::Row.new(notification: n) }
     end
   end
 
   def panel_empty
     div(class: "px-4 py-8 text-center") do
-      p(class: "text-sm text-gray-600 dark:text-gray-300") { "You're all caught up." }
+      p(class: "text-sm text-muted") { "You're all caught up." }
     end
   end
 
   def panel_footer
-    div(class: "border-t border-gray-100 dark:border-gray-700") do
+    div(class: "border-t border-subtle") do
       a(
         href: notifications_path,
         data: { turbo_frame: "_top" },
-        class: "block px-4 py-2.5 text-center text-sm font-medium text-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+        class: "block px-4 py-2.5 text-center text-sm font-medium text-link hover:bg-hover"
       ) { "View all notifications" }
     end
   end
@@ -141,7 +141,8 @@ class Views::Notifications::Bell < Views::Base
   def unread_badge
     span(
       class: "absolute -top-0.5 -right-0.5 inline-flex items-center justify-center " \
-             "min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold leading-none"
+             "min-w-4 h-4 px-1 rounded-full tone-danger bg-tone-strong text-tone-content-inverse " \
+             "text-[10px] font-semibold leading-none"
     ) { @unread_count > 99 ? "99+" : @unread_count.to_s }
   end
 end

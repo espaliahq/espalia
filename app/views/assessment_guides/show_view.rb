@@ -30,11 +30,11 @@ class Views::AssessmentGuides::ShowView < Views::Base
   }.freeze
 
   ACTORS = {
-    you: { label: "You", icon: :user, bg: "bg-teal-600 dark:bg-teal-500" },
-    manager: { label: "Your manager", icon: :shield, bg: "bg-blue-600 dark:bg-blue-500" },
-    colleagues: { label: "Colleagues", icon: :users, bg: "bg-amber-600 dark:bg-amber-500" },
-    admin: { label: "Admin / HR", icon: :grid, bg: "bg-violet-600 dark:bg-violet-500" },
-    growthos: { label: "GrowthOS", icon: :spark, bg: "bg-slate-500" }
+    you: { label: "You", icon: :user, mark: "mark-category-6" },
+    manager: { label: "Your manager", icon: :shield, mark: "mark-category-1" },
+    colleagues: { label: "Colleagues", icon: :users, mark: "mark-category-5" },
+    admin: { label: "Admin / HR", icon: :grid, mark: "mark-category-4" },
+    growthos: { label: "GrowthOS", icon: :spark, mark: nil }
   }.freeze
 
   STATIONS = [
@@ -68,12 +68,12 @@ class Views::AssessmentGuides::ShowView < Views::Base
   # The example score's state: 132% is meeting E3 and a third of E4.
   EXAMPLE_STATE = :performing
 
-  CARD = "rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6"
-  MUTED = "text-gray-600 dark:text-gray-300"
-  EYEBROW = "text-xs font-bold uppercase tracking-widest text-primary-ink"
-  CARD_TITLE = "text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-4"
-  HERE_CELL = "border-teal-500 bg-teal-50 dark:border-teal-400 dark:bg-teal-900"
-  PLAIN_CELL = "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+  CARD = "rounded-2xl border border-default bg-overlay shadow-raised p-5 sm:p-6"
+  MUTED = "text-muted"
+  EYEBROW = "text-xs font-bold uppercase tracking-widest text-brand"
+  CARD_TITLE = "text-xs font-semibold uppercase tracking-wider text-muted mb-4"
+  HERE_CELL = "border-brand bg-brand-subtle"
+  PLAIN_CELL = "border-default bg-subtle"
 
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
@@ -107,18 +107,17 @@ class Views::AssessmentGuides::ShowView < Views::Base
   # ---- Page frame ----------------------------------------------------------
 
   def hero
-    header(class: "relative overflow-hidden rounded-3xl border border-gray-200 dark:border-gray-800 " \
-                  "bg-white dark:bg-gray-900 px-6 pt-10 pb-20 sm:px-10") do
-      div(class: "pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl",
+    header(class: "relative overflow-hidden rounded-3xl border border-default bg-overlay px-6 pt-10 pb-20 sm:px-10") do
+      div(class: "pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-brand-muted blur-3xl",
         aria: { hidden: "true" })
-      div(class: "pointer-events-none absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-primary/10 blur-3xl",
+      div(class: "pointer-events-none absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-brand-subtle blur-3xl",
         aria: { hidden: "true" })
       div(class: "relative") do
         p(class: EYEBROW) { "How assessments work" }
-        h1(class: "mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight text-gray-900 dark:text-white") do
+        h1(class: "mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight text-default") do
           plain "One cycle. Four steps."
           br
-          span(class: "text-primary-ink") { "One honest picture" }
+          span(class: "text-brand") { "One honest picture" }
           plain " of how you're growing."
         end
         p(class: "mt-4 max-w-2xl text-base sm:text-lg #{MUTED}") do
@@ -127,8 +126,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
         end
         ul(class: "mt-6 flex flex-wrap gap-2", aria: { label: "Who takes part" }) do
           ACTORS.each_key do |key|
-            li(class: "inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 " \
-                      "bg-gray-50 dark:bg-gray-800 py-1 pl-1 pr-3 text-sm text-gray-800 dark:text-gray-100") do
+            li(class: "inline-flex items-center gap-2 rounded-full border border-default bg-subtle " \
+                      "py-1 pl-1 pr-3 text-sm text-default") do
               avatar(key)
               plain ACTORS[key][:label]
             end
@@ -142,7 +141,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     nav(aria: { label: "The four steps" },
       class: "relative -mt-12 mx-2 sm:mx-6 #{CARD}") do
       div(class: "hidden lg:block absolute left-[calc(12.5%+1rem)] right-[calc(12.5%+1rem)] top-16 " \
-                 "border-t-2 border-dashed border-gray-300 dark:border-gray-700", aria: { hidden: "true" })
+                 "border-t-2 border-dashed border-emphasized", aria: { hidden: "true" })
       ol(class: "relative grid gap-6 sm:grid-cols-2 lg:grid-cols-4") do
         STATIONS.each_with_index { |station, index| station(station, index + 1) }
       end
@@ -154,18 +153,19 @@ class Views::AssessmentGuides::ShowView < Views::Base
       # A native jump, so the browser sets :target and honours scroll-margin.
       a(href: "##{station[:anchor]}", data: { turbo: "false" },
         class: "group flex lg:flex-col items-center gap-4 lg:gap-3 rounded-xl p-2 lg:text-center " \
-               "hover:bg-gray-50 dark:hover:bg-gray-800") do
-        span(class: "relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-white dark:bg-gray-900 " \
-                    "text-primary-ink ring-4 ring-white dark:ring-gray-900 border-2 border-primary") do
+               "hover:bg-overlay-hover") do
+        # The ring punches the dashed line out behind the station
+        span(class: "relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-overlay " \
+                    "text-brand ring-4 ring-(--gos-surface-overlay) border-2 border-brand") do
           glyph(station[:icon], "h-7 w-7")
-          span(class: "absolute -top-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-gray-900 " \
-                      "dark:bg-white text-xs font-bold text-white dark:text-gray-900") { number.to_s }
+          span(class: "absolute -top-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-inverse " \
+                      "text-xs font-bold text-inverse") { number.to_s }
         end
         span(class: "min-w-0") do
-          span(class: "block font-semibold text-gray-900 dark:text-white group-hover:underline") { station[:title] }
+          span(class: "block font-semibold text-default group-hover:underline") { station[:title] }
           span(class: "block text-sm #{MUTED}") { station[:blurb] }
-          code(class: "mt-2 inline-block rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 " \
-                      "dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-200") { station[:status] }
+          code(class: "mt-2 inline-block rounded-md border border-default bg-subtle " \
+                      "px-2 py-0.5 text-xs text-muted") { station[:status] }
         end
       end
     end
@@ -179,14 +179,14 @@ class Views::AssessmentGuides::ShowView < Views::Base
         div do
           p(class: EYEBROW) { "Step #{number}" }
           h2(id: "#{anchor}-heading",
-            class: "mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white") { title }
+            class: "mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-default") { title }
           p(class: "mt-3 text-base sm:text-lg #{MUTED}") { lead }
           ul(class: "mt-6 space-y-4") do
             steps.each do |actor, heading, detail|
               li(class: "flex gap-3") do
                 avatar(actor)
                 div do
-                  p(class: "font-semibold text-gray-900 dark:text-white") { heading }
+                  p(class: "font-semibold text-default") { heading }
                   p(class: "text-sm #{MUTED}") { detail }
                 end
               end
@@ -229,14 +229,14 @@ class Views::AssessmentGuides::ShowView < Views::Base
         role: "img", aria: { label: "Four capabilities across levels E1 to E5, with E3 highlighted as your level" }) do
         div
         levels.each do |code|
-          div(class: "pb-1 text-center font-bold #{code == 'E3' ? 'text-teal-700 dark:text-teal-300' : MUTED}",
+          div(class: "pb-1 text-center font-bold #{code == 'E3' ? 'text-brand' : MUTED}",
             data: { guide_level_header: true }) do
             plain code
             span(class: "hidden sm:inline") { " · you" } if code == "E3"
           end
         end
         capabilities.each do |name|
-          div(class: "truncate self-center font-semibold text-gray-800 dark:text-gray-100") { name }
+          div(class: "truncate self-center font-semibold text-default") { name }
           levels.each do |code|
             div(class: "h-7 rounded-md border #{code == 'E3' ? HERE_CELL : PLAIN_CELL}")
           end
@@ -300,11 +300,11 @@ class Views::AssessmentGuides::ShowView < Views::Base
         chip("E2", fill: Views::Assessments::LevelChip::ASSUMED_CONSISTENT_BG)
         chip("E3", fill: most[:chip_bg], tag: "YOU", focused: true)
         chip("E4", fill: some[:chip_bg])
-        chip("E5", fill: "bg-gray-100 dark:bg-gray-700")
+        chip("E5", fill: "bg-neutral-subtle")
       end
       div(class: "mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs #{MUTED}") do
         legend_swatch(Views::Assessments::LevelChip::ASSUMED_CONSISTENT_BG, "Below your level: assumed met")
-        legend_swatch("bg-gray-100 dark:bg-gray-700", "Grey: not rated yet")
+        legend_swatch("bg-neutral-subtle", "Grey: not rated yet")
       end
     end
   end
@@ -318,17 +318,17 @@ class Views::AssessmentGuides::ShowView < Views::Base
       svg(viewBox: "0 0 100 100", class: "h-24 w-24 shrink-0", role: "img",
         aria: { label: "#{unlock_at} of #{EXAMPLE_LEVEL_SIZE} capabilities rated" }) do |s|
         s.circle(cx: "50", cy: "50", r: "40", fill: "none", stroke_width: "10",
-          class: "stroke-gray-100 dark:stroke-gray-800")
+          class: "stroke-(--gos-neutral-subtle)")
         s.circle(cx: "50", cy: "50", r: "40", fill: "none", stroke_width: "10", stroke_linecap: "round",
           stroke_dasharray: circumference.round(1).to_s, stroke_dashoffset: (circumference - filled).round(1).to_s,
-          transform: "rotate(-90 50 50)", class: "stroke-primary")
+          transform: "rotate(-90 50 50)", class: "stroke-(--gos-border-brand)")
         s.text(x: "50", y: "53", text_anchor: "middle",
-          class: "fill-gray-900 dark:fill-white text-[20px] font-extrabold") { "#{unlock_at}/#{EXAMPLE_LEVEL_SIZE}" }
+          class: "fill-current text-default text-[20px] font-extrabold") { "#{unlock_at}/#{EXAMPLE_LEVEL_SIZE}" }
         s.text(x: "50", y: "67", text_anchor: "middle",
-          class: "fill-gray-600 dark:fill-gray-300 text-[10px] font-semibold") { "RATED" }
+          class: "fill-current text-muted text-[10px] font-semibold") { "RATED" }
       end
       div do
-        p(class: "font-semibold text-gray-900 dark:text-white") { "Score unlocks at #{unlock_at}" }
+        p(class: "font-semibold text-default") { "Score unlocks at #{unlock_at}" }
         p(class: "text-sm #{MUTED}") do
           "While you're rating, the score waits until enough of your level is rated. There isn't enough to judge yet."
         end
@@ -349,10 +349,10 @@ class Views::AssessmentGuides::ShowView < Views::Base
   end
 
   def feedback_card(quote, valence, cell)
-    li(class: "flex gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3") do
+    li(class: "flex gap-3 rounded-xl border border-default bg-subtle p-3") do
       avatar(:colleagues)
       div(class: "text-sm") do
-        p(class: "text-gray-900 dark:text-gray-100") { "“#{quote}”" }
+        p(class: "text-default") { "“#{quote}”" }
         p(class: "mt-1.5 flex flex-wrap items-center gap-2") do
           valence_badge(valence)
           span(class: "text-xs #{MUTED}") { cell }
@@ -407,15 +407,16 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def completion_gate
     div(class: CARD) do
       h3(class: CARD_TITLE) { "Ready to complete?" }
-      ul(class: "space-y-2 text-sm text-gray-800 dark:text-gray-100") do
+      ul(class: "space-y-2 text-sm text-default") do
         gate_item("9 cells agreed automatically", done: true)
         gate_item("2 cells agreed in conversation", done: true)
         gate_item("1 cell still to align", done: false)
       end
-      div(class: "mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-200 dark:bg-gray-700 px-3 py-2 " \
-                 "text-sm font-semibold text-gray-600 dark:text-gray-300", aria: { hidden: "true" }) do
-        glyph(:lock, "h-4 w-4")
-        plain "Mark alignment complete"
+      div(class: "mt-4", aria: { hidden: "true" }) do
+        render Components::Kit::Button.new(tone: :success, size: :sm, disabled: true) do
+          glyph(:lock, "h-4 w-4")
+          plain "Mark alignment complete"
+        end
       end
       p(class: "mt-2 text-xs #{MUTED}") { "The button stays off until the last cell is agreed." }
     end
@@ -424,11 +425,11 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def gate_item(text, done:)
     li(class: "flex items-center gap-2.5") do
       if done
-        span(class: "grid h-5 w-5 place-items-center rounded-full bg-primary/15 text-primary-ink") do
+        span(class: "grid h-5 w-5 place-items-center rounded-full bg-brand-muted text-brand") do
           glyph(:check, "h-3 w-3", stroke_width: 3)
         end
       else
-        span(class: "h-5 w-5 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600",
+        span(class: "h-5 w-5 rounded-full border-2 border-dashed border-emphasized",
           aria: { hidden: "true" })
       end
       plain text
@@ -452,10 +453,9 @@ class Views::AssessmentGuides::ShowView < Views::Base
       ]
     ) do
       score_card
-      div(class: "flex items-center gap-4 rounded-2xl border border-gray-200 dark:border-gray-800 " \
-                 "bg-primary/10 p-4") do
-        span(class: "text-primary-ink") { glyph(:cycle, "h-8 w-8") }
-        p(class: "text-sm text-gray-800 dark:text-gray-100") do
+      div(class: "flex items-center gap-4 rounded-2xl border border-default bg-brand-subtle p-4") do
+        span(class: "text-brand") { glyph(:cycle, "h-8 w-8") }
+        p(class: "text-sm text-default") do
           strong { "And round again. " }
           plain "The next cycle opens with this one's agreed record already in place."
         end
@@ -468,15 +468,15 @@ class Views::AssessmentGuides::ShowView < Views::Base
       h3(class: CARD_TITLE) { "Your score" }
       p(class: "flex flex-wrap items-baseline gap-x-3") do
         span(class: "text-4xl font-extrabold tracking-tight #{tone_text(EXAMPLE_STATE)}") { "132%" }
-        span(class: "font-semibold text-gray-900 dark:text-white") { "#{state_label(EXAMPLE_STATE)} at E3" }
+        span(class: "font-semibold text-default") { "#{state_label(EXAMPLE_STATE)} at E3" }
       end
       p(class: "mt-1 text-sm #{MUTED}") { "Meeting E3 in full, and 32% of the way to E4." }
       div(class: "relative mt-5 grid grid-cols-2 gap-1", aria: { hidden: "true" }) do
         span(class: "h-3.5 rounded-full #{tone_bar(EXAMPLE_STATE)}")
-        span(class: "h-3.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800") do
+        span(class: "h-3.5 overflow-hidden rounded-full bg-neutral-subtle") do
           span(class: "block h-full w-[32%] #{tone_bar(EXAMPLE_STATE)}")
         end
-        span(class: "absolute -top-1.5 left-[66%] h-6 w-1 -translate-x-1/2 rounded bg-gray-900 dark:bg-white")
+        span(class: "absolute -top-1.5 left-[66%] h-6 w-1 -translate-x-1/2 rounded bg-inverse")
       end
       div(class: "mt-2 flex justify-between text-xs #{MUTED}") do
         span { "0%" }
@@ -491,7 +491,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def status_band
     section(class: "mt-20 #{CARD}", aria: { labelledby: "status-heading" }) do
       p(class: EYEBROW) { "Behind the scenes" }
-      h2(id: "status-heading", class: "mt-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white") do
+      h2(id: "status-heading", class: "mt-2 text-2xl font-bold tracking-tight text-default") do
         "Your status at every step"
       end
       p(class: "mt-2 #{MUTED}") do
@@ -502,13 +502,13 @@ class Views::AssessmentGuides::ShowView < Views::Base
         STATUSES.each_with_index do |(name, meaning), index|
           li(class: "flex flex-col sm:flex-row items-center gap-2") do
             if index.positive?
-              span(class: "text-gray-600 dark:text-gray-300", aria: { hidden: "true" }) do
+              span(class: "text-muted", aria: { hidden: "true" }) do
                 span(class: "sm:hidden") { "↓" }
                 span(class: "hidden sm:inline") { "→" }
               end
             end
             div(class: status_pill_classes(name)) do
-              span(class: "block font-semibold text-gray-900 dark:text-white") { name }
+              span(class: "block font-semibold text-default") { name }
               span(class: "block text-xs #{MUTED}") { meaning }
             end
           end
@@ -524,15 +524,15 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def status_pill_classes(name)
     base = "w-full sm:w-auto rounded-xl border-2 px-4 py-2 text-center sm:min-w-28"
     case name
-    when "aligning", "aligned" then "#{base} border-primary bg-primary/10"
-    when "concluded" then "#{base} border-dashed border-gray-300 dark:border-gray-600"
-    else "#{base} border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+    when "aligning", "aligned" then "#{base} border-brand bg-brand-subtle"
+    when "concluded" then "#{base} border-dashed border-emphasized"
+    else "#{base} border-default bg-subtle"
     end
   end
 
   def note_chip(term, meaning)
-    span(class: "rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1") do
-      strong(class: "text-gray-900 dark:text-white") { term }
+    span(class: "rounded-full border border-default bg-subtle px-3 py-1") do
+      strong(class: "text-default") { term }
       plain " #{meaning}"
     end
   end
@@ -540,16 +540,16 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def rules
     section(class: "mt-16", aria: { labelledby: "rules-heading" }) do
       p(class: EYEBROW) { "Good to know" }
-      h2(id: "rules-heading", class: "mt-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white") do
+      h2(id: "rules-heading", class: "mt-2 text-2xl font-bold tracking-tight text-default") do
         "Four rules that keep it fair"
       end
       ul(class: "mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4") do
         RULES.each do |rule|
           li(class: CARD) do
-            span(class: "mb-3 grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary-ink") do
+            span(class: "mb-3 grid h-10 w-10 place-items-center rounded-xl bg-brand-subtle text-brand") do
               glyph(rule[:icon], "h-5 w-5")
             end
-            h3(class: "font-semibold text-gray-900 dark:text-white") { rule[:title] }
+            h3(class: "font-semibold text-default") { rule[:title] }
             p(class: "mt-1 text-sm #{MUTED}") { rule[:body] }
           end
         end
@@ -561,7 +561,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
 
   def avatar(key)
     actor = ACTORS.fetch(key)
-    span(class: "grid h-7 w-7 shrink-0 place-items-center rounded-full text-white #{actor[:bg]}",
+    span(class: "grid h-7 w-7 shrink-0 place-items-center rounded-full bg-mark text-on-mark #{actor[:mark]}",
       title: actor[:label]) do
       glyph(actor[:icon], "h-4 w-4")
       span(class: "sr-only") { actor[:label] }
@@ -572,15 +572,15 @@ class Views::AssessmentGuides::ShowView < Views::Base
   # top-left half, which is how a split rating reads there.
   def chip(code, fill:, top: nil, tag: nil, focused: false, size: :md)
     dimensions = size == :lg ? "h-24 w-24 mx-auto rounded-2xl text-base" : "h-12 w-12 rounded-xl text-sm"
-    ring = focused ? "ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-900" : ""
+    ring = focused ? "ring-2 ring-offset-2 ring-(--gos-border-strong) ring-offset-(--gos-surface-overlay)" : ""
 
-    span(class: "relative grid shrink-0 place-items-center overflow-hidden font-bold text-gray-900 " \
+    span(class: "relative grid shrink-0 place-items-center overflow-hidden font-bold text-default " \
                 "#{dimensions} #{fill} #{ring}") do
       span(class: "absolute inset-0 #{top}", style: "clip-path: polygon(0 0, 100% 0, 0 100%);") if top
-      span(class: "relative rounded bg-white/80 dark:bg-gray-900/80 dark:text-white px-1.5") { code }
+      span(class: "relative rounded bg-overlay/85 text-default px-1.5") { code }
       if tag
-        span(class: "absolute bottom-0 left-1/2 -translate-x-1/2 rounded-t bg-gray-900 dark:bg-white px-1 " \
-                    "text-[10px] font-bold tracking-wider text-white dark:text-gray-900") { tag }
+        span(class: "absolute bottom-0 left-1/2 -translate-x-1/2 rounded-t bg-inverse px-1 " \
+                    "text-[10px] font-bold tracking-wider text-inverse") { tag }
       end
     end
   end
@@ -593,9 +593,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
   end
 
   def callout(icon, text)
-    div(class: "mt-4 flex items-center gap-3 rounded-xl bg-primary/10 px-3 py-2.5 text-sm text-gray-800 " \
-               "dark:text-gray-100") do
-      span(class: "text-primary-ink") { glyph(icon, "h-5 w-5") }
+    div(class: "mt-4 flex items-center gap-3 rounded-xl bg-brand-subtle px-3 py-2.5 text-sm text-default") do
+      span(class: "text-brand") { glyph(icon, "h-5 w-5") }
       plain text
     end
   end

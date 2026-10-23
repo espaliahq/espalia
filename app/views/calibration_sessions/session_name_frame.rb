@@ -41,7 +41,7 @@ class Views::CalibrationSessions::SessionNameFrame < Views::Base
   private
 
   def heading
-    h1(class: "min-w-0 max-w-full break-words text-2xl font-bold text-gray-900 dark:text-white") do
+    h1(class: "min-w-0 max-w-full break-words text-2xl font-bold text-default") do
       @session.name
     end
   end

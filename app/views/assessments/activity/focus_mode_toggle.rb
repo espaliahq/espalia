@@ -17,32 +17,14 @@ class Views::Assessments::Activity::FocusModeToggle < Views::Base
   ].freeze
 
   def view_template
-    div(
-      class: "inline-flex items-center gap-px rounded-md border border-gray-200 " \
-             "dark:border-gray-700 p-0.5 text-[11px] font-medium",
-      role: "group",
-      aria_label: "Activity feed focus mode"
-    ) do
-      MODES.each { |mode| render_segment(mode) }
+    render Components::Kit::SegmentedControl.new(label: "Activity feed focus mode", size: :sm) do |control|
+      MODES.each do |mode|
+        control.segment(mode[:label], selected: mode[:value] == "filter", data: {
+          activity_feed_target: "modeSegment",
+          activity_feed_mode_param: mode[:value],
+          action: "click->activity-feed#setMode"
+        })
+      end
     end
-  end
-
-  private
-
-  def render_segment(mode)
-    button(
-      type: "button",
-      class: "min-h-6 px-2 py-0.5 rounded transition-colors " \
-             "aria-pressed:bg-gray-900 aria-pressed:text-white " \
-             "dark:aria-pressed:bg-white dark:aria-pressed:text-gray-900 " \
-             "aria-[pressed=false]:text-gray-600 dark:aria-[pressed=false]:text-gray-300 " \
-             "aria-[pressed=false]:hover:bg-gray-100 dark:aria-[pressed=false]:hover:bg-gray-700",
-      data: {
-        activity_feed_target: "modeSegment",
-        activity_feed_mode_param: mode[:value],
-        action: "click->activity-feed#setMode"
-      },
-      aria: { pressed: mode[:value] == "filter" ? "true" : "false" }
-    ) { mode[:label] }
   end
 end

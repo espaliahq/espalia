@@ -82,7 +82,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       html = name_row(score: SCORE.merge(weight: 2.0, required: true))
       chip = html[/<button[^>]*aria-describedby="assessment-term-weight-cap-a"[^>]*>/]
       assert chip, "expected the weight chip trigger"
-      assert_includes chip, "text-muted"
+      assert_includes chip, "tone-neutral"
       assert_not_includes chip, "text-score-performing"
     end
 
@@ -165,7 +165,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       assert_includes html, "100%"
       assert_not_includes html, "Self:"
       # No annotation at all — the amber divergence dot is the row's marker.
-      assert_not_includes html, "bg-amber-400"
+      assert_not_includes html, "bg-warning-strong"
     end
 
     should "read as meeting at the top of the ladder" do

@@ -9,10 +9,10 @@
 # entry is a plain link, so a lens is a URL that survives refresh, Back and
 # sharing.
 class Views::Assessments::LensControl < Views::Base
-  HOME_CHIP = "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-  LENS_CHIP = "bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200 ring-1 ring-sky-300 dark:ring-sky-700"
-  ITEM = "flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 " \
-         "hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:bg-gray-100 dark:focus-visible:bg-gray-700 " \
+  HOME_CHIP = "bg-neutral-subtle text-muted"
+  LENS_CHIP = "bg-lens-muted text-lens ring-1 ring-lens-strong"
+  ITEM = "flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-muted " \
+         "hover:bg-default-hover focus-visible:bg-default-hover " \
          "focus-visible:outline-hidden"
 
   # @param lens [Assessments::Lens]
@@ -47,7 +47,7 @@ class Views::Assessments::LensControl < Views::Base
       end
       dropdown.menu(width: "w-80 max-w-[calc(100vw-2rem)]") do
         ladder
-        div(class: "my-1 border-t border-gray-100 dark:border-gray-700", role: "none")
+        div(class: "my-1 border-t border-subtle", role: "none")
         back_home_item unless @lens.home?
         another_role_item
       end
@@ -56,7 +56,7 @@ class Views::Assessments::LensControl < Views::Base
 
   def ladder
     div(class: "px-4 py-1.5", role: "none") do
-      p(class: "text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider") do
+      p(class: "text-xs font-semibold text-muted uppercase tracking-wider") do
         @lens.role.name
       end
     end
@@ -71,7 +71,7 @@ class Views::Assessments::LensControl < Views::Base
       class: "#{ITEM} #{current ? 'font-semibold' : ''}",
       aria: { current: (current ? "page" : nil) }.compact
     ) do
-      span(class: "w-4 shrink-0 text-gray-500", aria_hidden: "true") { current ? "✓" : "" }
+      span(class: "w-4 shrink-0 text-muted", aria_hidden: "true") { current ? "✓" : "" }
       span(class: "font-mono text-xs w-10 shrink-0") { "#{@lens.role.code}#{level.ordinal}" }
       whitespace
       span(class: "min-w-0") { level.title }
@@ -83,7 +83,7 @@ class Views::Assessments::LensControl < Views::Base
   end
 
   def home_note
-    span(class: "ml-auto shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-gray-400") do
+    span(class: "ml-auto shrink-0 whitespace-nowrap text-[11px] text-muted") do
       @whose == "your" ? "your level" : "#{@whose} level"
     end
   end

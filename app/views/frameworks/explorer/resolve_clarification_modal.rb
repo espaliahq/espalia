@@ -44,12 +44,12 @@ class Views::Frameworks::Explorer::ResolveClarificationModal < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "inline", value: "1")
 
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "Declare this question settled — say what answered it."
       end
 
-      p(class: "hidden rounded-md bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm " \
-               "text-gray-700 dark:text-gray-200 line-clamp-3 italic",
+      p(class: "hidden rounded-md bg-subtle px-3 py-2 text-sm " \
+               "text-muted line-clamp-3 italic",
         data: { resolve_clarification_form_target: "question" })
 
       note_field
@@ -60,34 +60,21 @@ class Views::Frameworks::Explorer::ResolveClarificationModal < Views::Base
   def note_field
     div do
       label(for: "resolve_note",
-            class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Resolution" }
+            class: "block text-sm font-medium text-default mb-1") { "Resolution" }
       textarea(
         id: "resolve_note", aria: { describedby: "resolve_note-hint" }, name: "note", rows: "2", required: true,
-        class: field_classes,
+        class: Components::Kit::Field::TEXTAREA,
         placeholder: "e.g. Reworded the L4 expectation, or: the wording stands — here's the reading",
         data: { resolve_clarification_form_target: "note" }
       )
-      p(id: "resolve_note-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
+      p(id: "resolve_note-hint", class: "mt-1 text-xs text-muted") { Prose::COMPOSER_HINT }
     end
   end
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-primary/80 transition-colors"
-      ) { "Resolve clarification" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Resolve clarification" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
-  end
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
   end
 end

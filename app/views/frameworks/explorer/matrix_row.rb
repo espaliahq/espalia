@@ -96,14 +96,12 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
       # Every background here is OPAQUE, hover included — a sticky cell with a
       # translucent background lets horizontally-scrolled content render
       # straight through it (see framework-explorer.md, Hard-Won Lesson 24).
-      # #172131 is gray-800/50 composited over gray-900, so the hovered sticky
-      # cell matches the rest of the hovered row exactly.
-      td(class: "sticky left-0 z-[2] bg-white dark:bg-gray-900 #{STICKY_EDGE_CLASSES} mx-cap-cell " \
-                "group-hover:bg-gray-50 dark:group-hover:bg-[#172131]") do
+      td(class: "sticky left-0 z-[2] bg-overlay #{STICKY_EDGE_CLASSES} mx-cap-cell " \
+                "group-hover:bg-overlay-hover") do
         div(class: "flex items-start gap-2") do
           # Expand indicator
           icon("chevron-right",
-               class: "w-3 h-3 mt-1 text-gray-400 transition-transform shrink-0",
+               class: "w-3 h-3 mt-1 text-subtle transition-transform shrink-0",
                data: { matrix_target: "rowChevron" })
 
           div do
@@ -165,9 +163,7 @@ class Views::Frameworks::Explorer::MatrixRow < Views::Base
   def draft_state_badge
     return unless pending_archive?(@capability)
 
-    span(class: "ml-2 inline-flex items-center rounded-full px-2 py-0.5 " \
-                "text-[10px] font-semibold bg-amber-100 text-amber-700 " \
-                "dark:bg-amber-900/30 dark:text-amber-300") { "Pending archive" }
+    render Components::Kit::Badge.new("Pending archive", tone: :warning, class: "ml-2")
   end
 
   # The expanded row ships as a hidden PLACEHOLDER — the matrix controller

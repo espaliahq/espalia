@@ -23,7 +23,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   # horizontally. Sticky cells need an opaque background (matching their row
   # over the card) so scrolled content doesn't bleed through; the right border
   # marks the frozen edge.
-  FROZEN_COLUMN_CLASSES = "sticky left-0 z-[1] border-r border-gray-200 dark:border-gray-700"
+  FROZEN_COLUMN_CLASSES = "sticky left-0 z-[1] border-r border-default"
 
   # @param result [Reporting::CapabilityAttainment::Result]
   # @param perspective [String] active perspective param key
@@ -66,14 +66,14 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def header
     div do
       a(href: assessment_cycle_path(cycle),
-        class: "inline-flex min-h-11 items-center text-sm text-gray-600 hover:underline dark:text-gray-300") { "← #{cycle.name}" }
+        class: "inline-flex min-h-11 items-center text-sm text-muted hover:underline") { "← #{cycle.name}" }
       div(class: "mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
-        h1(class: "text-2xl font-semibold text-gray-900 dark:text-white") { "#{cycle.name} — capability attainment" }
-        span(class: "text-sm text-gray-600 dark:text-gray-300") do
+        h1(class: "text-2xl font-semibold text-default") { "#{cycle.name} — capability attainment" }
+        span(class: "text-sm text-muted") do
           "#{@result.total_people} #{@result.total_people == 1 ? "person" : "people"}"
         end
       end
-      p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
+      p(class: "mt-2 text-xs text-muted") do
         "Share of people at or above their assessed level per capability, under the " \
           "#{PERSPECTIVES.fetch(@perspective).downcase} rating perspective. " \
           "Unassessed capabilities count as below — read the % together with its assessed coverage."
@@ -92,11 +92,11 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
     nav(class: "mt-1 flex flex-wrap gap-x-4 gap-y-1", aria: { label: "Assessment cycle reports" }) do
       a(
         href: cohort_assessment_cycle_path(cycle),
-        class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline"
+        class: "inline-flex min-h-11 items-center text-sm text-link hover:text-link-hover hover:underline"
       ) { "Cohort progress" }
       a(
         href: evidence_assessment_cycle_path(cycle),
-        class: "inline-flex min-h-11 items-center text-sm text-primary-ink hover:underline"
+        class: "inline-flex min-h-11 items-center text-sm text-link hover:text-link-hover hover:underline"
       ) { "Feedback & evidence" }
     end
   end
@@ -104,24 +104,24 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def suppression_note
     return unless @result.suppression_floor
 
-    p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 text-xs text-muted") do
       "Groups smaller than #{@result.suppression_floor} people show coverage only, to avoid " \
         "exposing individual assessments."
     end
   end
 
   def perspective_tabs
-    nav(class: "inline-flex gap-1 rounded-md bg-gray-100 p-0.5 dark:bg-gray-800", aria: { label: "Rating perspective" }) do
+    render Components::Kit::SegmentedControl.new(label: "Rating perspective") do |control|
       PERSPECTIVES.each do |key, label|
-        segment_link(label, attainment_path(perspective: key), active: key == @perspective)
+        control.segment(label, href: attainment_path(perspective: key), selected: key == @perspective)
       end
     end
   end
 
   def by_tabs
-    nav(class: "inline-flex gap-1 rounded-md bg-gray-100 p-0.5 dark:bg-gray-800", aria: { label: "Column axis" }) do
+    render Components::Kit::SegmentedControl.new(label: "Column axis") do |control|
       BY_TABS.each do |key, label|
-        segment_link(label, attainment_path(by: key), active: key == @by)
+        control.segment(label, href: attainment_path(by: key), selected: key == @by)
       end
     end
   end
@@ -131,21 +131,10 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   def scope_toggle
     return unless @can_scope_to_self
 
-    nav(class: "inline-flex gap-1 rounded-md bg-gray-100 p-0.5 dark:bg-gray-800", aria: { label: "Scope" }) do
-      segment_link("Whole cycle", attainment_path(scope: nil), active: @scope == "all")
-      segment_link("My org", attainment_path(scope: "mine"), active: @scope == "mine")
+    render Components::Kit::SegmentedControl.new(label: "Scope") do |control|
+      control.segment("Whole cycle", href: attainment_path(scope: nil), selected: @scope == "all")
+      control.segment("My org", href: attainment_path(scope: "mine"), selected: @scope == "mine")
     end
-  end
-
-  def segment_link(label, href, active:)
-    a(
-      href: href,
-      aria: { current: active ? "true" : nil },
-      class: [
-        "rounded px-3 py-1 text-sm font-medium",
-        active ? "bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-      ].join(" ")
-    ) { label }
   end
 
   # Builds the report path preserving the other axes.
@@ -173,15 +162,15 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
   def heatmap_head
     thead do
-      tr(class: "border-b border-gray-200 dark:border-gray-700") do
-        th(class: "#{FROZEN_COLUMN_CLASSES} bg-white px-4 py-3 text-left font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400", scope: "col") { "Capability" }
+      tr(class: "border-b border-default") do
+        th(class: "#{FROZEN_COLUMN_CLASSES} bg-default px-4 py-3 text-left font-medium text-muted", scope: "col") { "Capability" }
         groups.each do |group|
           th(class: "px-3 py-3 text-center align-bottom", scope: "col") do
-            div(class: "text-sm font-semibold text-gray-900 dark:text-white") { group.label }
+            div(class: "text-sm font-semibold text-default") { group.label }
             if @by == "role"
-              div(class: "text-xs font-normal text-gray-500 dark:text-gray-400") { family_name(group.family_key) }
+              div(class: "text-xs font-normal text-muted") { family_name(group.family_key) }
             end
-            div(class: "text-xs font-normal text-gray-500 dark:text-gray-400") do
+            div(class: "text-xs font-normal text-muted") do
               "#{group.n_people} #{group.n_people == 1 ? "person" : "people"}"
             end
           end
@@ -203,8 +192,8 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   end
 
   def category_row(category)
-    tr(class: "border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/60") do
-      th(class: "#{FROZEN_COLUMN_CLASSES} bg-gray-50 px-4 py-2 text-left text-xs font-semibold tracking-wide text-gray-700 uppercase dark:bg-gray-800 dark:text-gray-200", scope: "row") do
+    tr(class: "border-b border-default bg-subtle") do
+      th(class: "#{FROZEN_COLUMN_CLASSES} bg-subtle px-4 py-2 text-left text-xs font-semibold tracking-wide text-muted uppercase", scope: "row") do
         category.name
       end
       groups.each do |group|
@@ -221,13 +210,13 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
     if cell.suppressed
       suppressed_marker(cell.n_in_group)
     else
-      span(class: "text-xs font-medium text-gray-700 dark:text-gray-200") { "#{cell.pass_pct}% pass" }
+      span(class: "text-xs font-medium text-muted") { "#{cell.pass_pct}% pass" }
     end
   end
 
   def capability_row(capability)
-    tr(class: "border-b border-gray-100 dark:border-gray-700/60") do
-      th(class: "#{FROZEN_COLUMN_CLASSES} max-w-56 bg-white px-4 py-2 text-left font-normal text-gray-900 dark:bg-gray-800 dark:text-white", scope: "row") do
+    tr(class: "border-b border-subtle") do
+      th(class: "#{FROZEN_COLUMN_CLASSES} max-w-56 bg-default px-4 py-2 text-left font-normal text-default", scope: "row") do
         capability.name
       end
       groups.each do |group|
@@ -255,7 +244,7 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
   end
 
   def coverage_line(cell)
-    div(class: "mt-0.5 text-xs text-gray-500 dark:text-gray-400") do
+    div(class: "mt-0.5 text-xs text-muted") do
       "#{cell.n_assessed}/#{cell.n_in_group} assessed"
     end
   end
@@ -267,38 +256,38 @@ class Views::AssessmentCycles::Attainment::ShowView < Views::Base
 
   # Not applicable — the capability isn't bound to any role in this column.
   def em_dash
-    span(class: "text-gray-300 dark:text-gray-600") { "—" }
+    span(class: "text-subtle") { "—" }
   end
 
   def suppressed_marker(n_in_group)
-    span(
-      class: "inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300",
+    render Components::Kit::Badge.new(
+      "n = #{n_in_group}",
       title: "Fewer than #{@result.suppression_floor} people — values hidden to avoid exposing individual assessments"
-    ) { "n = #{n_in_group}" }
+    )
   end
 
   # Heatmap tint tiers for the at-or-above share. A cell nobody has been
   # assessed on yet stays neutral — "not yet assessed" must not read as
   # "failing" (the 0% only reflects the below-by-default rule).
   def pct_classes(cell)
-    return "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300" if cell.n_assessed.zero?
+    return "bg-neutral-subtle text-muted" if cell.n_assessed.zero?
 
     pct = cell.at_or_above_pct
     if pct >= 80
-      "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+      "bg-attainment-high text-attainment-high"
     elsif pct >= 60
-      "bg-lime-100 text-lime-800 dark:bg-lime-900/40 dark:text-lime-300"
+      "bg-attainment-good text-attainment-good"
     elsif pct >= 40
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      "bg-attainment-fair text-attainment-fair"
     else
-      "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+      "bg-attainment-low text-attainment-low"
     end
   end
 
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300") { "No participants in your scope for this cycle yet." }
+        p(class: "text-sm text-muted") { "No participants in your scope for this cycle yet." }
       end
     end
   end

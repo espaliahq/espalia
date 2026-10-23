@@ -192,7 +192,7 @@ class EvidenceModalControllerTest < ActionDispatch::IntegrationTest
       rows = css_select("[data-link-row]")
       assert_equal 2, rows.size
       assert_match "Collaboration", rows.first.text
-      assert_includes rows.first["class"], "ring-primary/40"
+      assert_includes rows.first["class"], "ring-1"
       assert_equal "You opened this feedback from here", rows.first["title"]
       # With two rows, both are removable.
       assert_select "button[aria-label='Remove link'][disabled]", count: 0

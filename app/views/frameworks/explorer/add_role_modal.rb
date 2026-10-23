@@ -83,9 +83,9 @@ class Views::Frameworks::Explorer::AddRoleModal < Views::Base
   # "In <family>" — the placement-implied parent, named so the user always
   # knows where the role will land.
   def family_context_line
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "text-sm text-muted") do
       plain "In "
-      span(class: "font-medium text-gray-900 dark:text-white", data: { add_role_form_target: "familyName" })
+      span(class: "font-medium text-default", data: { add_role_form_target: "familyName" })
     end
   end
 
@@ -94,7 +94,7 @@ class Views::Frameworks::Explorer::AddRoleModal < Views::Base
       label(for: field_id("name"), class: label_classes) { "Name" }
       input(
         type: "text", id: field_id("name"), name: "role[name]", required: true,
-        placeholder: "e.g. Engineering Manager", class: field_classes,
+        placeholder: "e.g. Engineering Manager", class: Components::Kit::Field::INPUT,
         data: { add_role_form_target: "name" }
       )
     end
@@ -106,14 +106,14 @@ class Views::Frameworks::Explorer::AddRoleModal < Views::Base
         label(for: field_id("code"), class: label_classes) { "Code" }
         input(
           type: "text", id: field_id("code"), name: "role[code]", required: true,
-          placeholder: "e.g. EM", class: field_classes,
+          placeholder: "e.g. EM", class: Components::Kit::Field::INPUT,
           data: { add_role_form_target: "code" }
         )
       end
       div do
         label(for: field_id("track"), class: label_classes) { "Track" }
         select(
-          id: field_id("track"), name: "role[track]", class: field_classes,
+          id: field_id("track"), name: "role[track]", class: Components::Kit::Field::SELECT,
           data: { add_role_form_target: "track" }
         ) do
           option(value: "ic") { "IC" }
@@ -125,23 +125,10 @@ class Views::Frameworks::Explorer::AddRoleModal < Views::Base
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-primary/90 transition-colors"
-      ) { edit_mode? ? "Save" : "Add role" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { edit_mode? ? "Save" : "Add role" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
   end
 
-  def label_classes = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-  end
+  def label_classes = "block text-sm font-medium text-default mb-1"
 end

@@ -51,13 +51,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
     ) do |heading|
       heading.action do
         if @can_define_new
-          a(
-            href: new_assessment_cycle_path,
-            class: "inline-flex items-center rounded-md bg-primary px-3 py-2 " \
-                   "text-sm font-semibold text-white shadow-xs hover:bg-primary/90 " \
-                   "focus-visible:outline focus-visible:outline-2 " \
-                   "focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
-          ) { "Define new cycle" }
+          render Components::Kit::Button.new(tone: :brand, href: new_assessment_cycle_path) { "Define new cycle" }
         end
       end
     end
@@ -65,7 +59,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
 
   def open_section
     div(class: "mt-6") do
-      h3(class: "text-lg font-semibold text-gray-900 dark:text-white mb-4") do
+      h3(class: "text-lg font-semibold text-default mb-4") do
         plain "Open (#{@open_cycles.size})"
       end
 
@@ -74,7 +68,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
           @open_cycles.each { |cycle| cycle_card(cycle, dimmed: false) }
         end
       else
-        empty_state("No open cycles.")
+        render Components::Kit::EmptyState.new(title: "No open cycles")
       end
     end
   end
@@ -83,7 +77,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
     return if @closed_cycles.empty?
 
     div(class: "mt-10") do
-      h3(class: "text-lg font-semibold text-gray-900 dark:text-white mb-4") do
+      h3(class: "text-lg font-semibold text-default mb-4") do
         plain "Closed (#{@closed_cycles.size})"
       end
       div(class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6") do
@@ -102,10 +96,10 @@ class Views::AssessmentCycles::IndexView < Views::Base
           div(class: "flex items-start justify-between gap-3") do
             div do
               h3(
-                class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                       "group-hover:text-primary-ink transition-colors"
+                class: "text-lg font-semibold text-default " \
+                       "group-hover:text-brand transition-colors"
               ) { cycle.name }
-              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+              p(class: "mt-1 text-sm text-muted") do
                 plain framework_label(cycle)
               end
             end
@@ -125,7 +119,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
             )
           end
 
-          div(class: "mt-3 text-xs text-gray-600 dark:text-gray-300") do
+          div(class: "mt-3 text-xs text-muted") do
             plain "Opened "
             local_time(cycle.opened_at)
           end
@@ -159,11 +153,5 @@ class Views::AssessmentCycles::IndexView < Views::Base
       .select { |(cid, status), _| cid == cycle.cycle_id && status != "withdrawn" }
       .values
       .sum
-  end
-
-  def empty_state(message)
-    div(class: "text-center py-12") do
-      p(class: "text-gray-600 dark:text-gray-300") { message }
-    end
   end
 end

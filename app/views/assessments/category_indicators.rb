@@ -94,7 +94,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
     return unless count.positive?
 
     a(href: @confirm_href, data: { turbo_frame: "_top" },
-      class: "#{Components::Shared::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
+      class: "#{Components::Shared::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-warning-subtle") do
       plain "Confirm #{count} carried"
       span(aria: { hidden: "true" }) { "→" }
     end
@@ -135,14 +135,14 @@ class Views::Assessments::CategoryIndicators < Views::Base
 
     defined_term(
       :rated_count, label: "#{counts[:rated]}/#{counts[:total]} rated", suffix: @category_id,
-      trigger_class: "text-[11px] text-gray-600 dark:text-gray-300 tabular-nums whitespace-nowrap"
+      trigger_class: "text-[11px] text-muted tabular-nums whitespace-nowrap"
     )
   end
 
   def unlock_hint
     return unless @category_score && counts[:total].positive?
 
-    span(class: "text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap") do
+    span(class: "text-[11px] text-muted whitespace-nowrap") do
       "score unlocks at #{unlock_target}"
     end
   end
@@ -150,7 +150,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
   def score_summary
     state = @category_score[:state]
     if (split = split_text(@category_score))
-      span(class: "hidden sm:inline text-[11px] text-gray-600 dark:text-gray-300 tabular-nums whitespace-nowrap") do
+      span(class: "hidden sm:inline text-[11px] text-muted tabular-nums whitespace-nowrap") do
         split
       end
     end
@@ -184,8 +184,8 @@ class Views::Assessments::CategoryIndicators < Views::Base
       next unless alt && unlocked_for?(entry[:context], alt) && divergent?(alt)
 
       span(class: "flex items-center gap-1") do
-        span(class: "w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0") { }
-        span(class: "text-[10px] text-gray-600 dark:text-gray-300") { "#{entry[:label]}:" }
+        span(class: "w-1.5 h-1.5 rounded-full bg-warning-strong shrink-0") { }
+        span(class: "text-[10px] text-muted") { "#{entry[:label]}:" }
         span(class: "text-[10px] font-mono tabular-nums #{tone_text(alt[:state])}",
              title: state_label(alt[:state])) { "#{percent(alt[:score])}%" }
       end

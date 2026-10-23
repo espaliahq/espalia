@@ -28,33 +28,17 @@ class Views::CalibrationSessions::FreshnessStatus < Views::Base
 
   private
 
-  # Not a toast: it stays until the held reload lands and replaces it.
+  # Not a toast: it stays until the held reload lands and replaces it. Both
+  # messages land inside the status region, so they don't carry a role of their own.
   def waiting_notice
-    div(
-      class: "flex max-w-2xl items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-700 " \
-             "bg-amber-50 dark:bg-amber-950 px-4 py-3 text-sm text-amber-900 dark:text-amber-100",
-      data: { freshness_waiting: "" }
-    ) do
-      span(class: "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500", aria: { hidden: "true" })
-      span(class: "flex-1") { "Newer ratings are waiting — they load when the comparison drawer or dialog closes." }
+    render Components::Kit::Alert.new(tone: :warning, role: :none, class: "max-w-2xl", data: { freshness_waiting: "" }) do
+      "Newer ratings are waiting — they load when the comparison drawer or dialog closes."
     end
   end
 
   def toast
-    div(
-      class: "flex max-w-2xl items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-700 " \
-             "bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm",
-      data: { controller: "flash", flash_delay_value: 12_000 }
-    ) do
-      span(class: "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-green-500", aria: { hidden: "true" })
-      span(class: "flex-1", data: { message: "" })
-      button(
-        type: "button",
-        class: "-my-3 -mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-gray-600 " \
-               "dark:text-gray-300 hover:text-gray-900 dark:hover:text-white cursor-pointer",
-        aria_label: "Dismiss update",
-        data: { action: "flash#dismiss" }
-      ) { span(aria: { hidden: "true" }) { "×" } }
+    render Components::Kit::Alert.new(dismissible: true, dismiss_after: 12_000, role: :none, class: "max-w-2xl") do
+      span(data: { message: "" })
     end
   end
 end

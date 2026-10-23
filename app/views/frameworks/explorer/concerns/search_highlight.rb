@@ -9,10 +9,7 @@
 # Safe by construction: builds Phlex text nodes (`plain`) and `mark` elements,
 # never raw/unescaped HTML, so a query string can't inject markup.
 module Views::Frameworks::Explorer::Concerns::SearchHighlight
-  # Amber to match the search banner / affordance. text-inherit-ish so the
-  # mark sits on the surrounding type colour.
-  HIGHLIGHT_CLASSES = "rounded-[2px] bg-amber-200 text-amber-950 " \
-                      "dark:bg-amber-400/40 dark:text-amber-50"
+  HIGHLIGHT_CLASSES = "rounded-[2px] bg-search-hit text-search-hit"
 
   # Emits `text`, wrapping each (case-insensitive) query-token match in a
   # `<mark>`. No-ops to plain text when `query` is blank or nothing matches,

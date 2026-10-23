@@ -48,8 +48,8 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
     total = @matrix_data[:in_scope_capability_count]
 
     div(class: "flex items-center gap-1.5 px-4 py-2 " \
-               "bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 " \
-               "text-xs text-amber-800 dark:text-amber-200") do
+               "bg-warning-subtle border-b border-warning " \
+               "text-xs text-warning") do
       span(class: "font-semibold") { "Showing #{matched} of #{total}" }
       plain " capabilities matching "
       span(class: "font-semibold") { "“#{@matrix_data[:search_query]}”" }
@@ -108,7 +108,7 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   def empty_state
     div(class: "flex items-center justify-center h-64") do
       div(class: "text-center") do
-        p(class: "text-gray-600 dark:text-gray-300 text-sm") do
+        p(class: "text-muted text-sm") do
           "Select roles from the tree to view the capability matrix."
         end
       end
@@ -122,16 +122,16 @@ class Views::Frameworks::Explorer::Matrix < Views::Base
   def no_matches_state
     div(class: "flex items-center justify-center h-64") do
       div(class: "text-center max-w-sm px-6") do
-        p(class: "text-gray-900 dark:text-white text-sm font-medium") do
+        p(class: "text-default text-sm font-medium") do
           plain "No capabilities match "
           span(class: "font-semibold") { "“#{@matrix_data[:search_query]}”" }
           plain " for the selected roles."
         end
         div(class: "mt-3 flex items-center justify-center gap-4 text-sm") do
           a(href: reset_path(@selected_role_ids), data: { turbo_frame: "_top" },
-            class: "text-primary-ink hover:underline font-medium") { "Clear search" }
+            class: "text-link hover:text-link-hover hover:underline font-medium") { "Clear search" }
           a(href: reset_path([]), data: { turbo_frame: "_top" },
-            class: "text-gray-600 dark:text-gray-300 hover:underline") { "Show all roles" }
+            class: "text-muted hover:underline") { "Show all roles" }
         end
       end
     end

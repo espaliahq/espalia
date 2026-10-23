@@ -37,6 +37,7 @@
 | `app/contexts/person_development/async_handlers/exploration_notifier.rb` | Tells the other party when an exploration starts or closes |
 | **Hero summary** | |
 | `app/views/assessments/hero_summary.rb` | Three-band hero card with state-driven middle band; renders inside the unified sticky header |
+| `app/views/assessments/verdict_panel.rb` | The middle band's state panel: a `Kit::Card` inset with the verdict's edge and heading. The vocabulary settings preview renders it too |
 | `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |
 | `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard); `weight_chip` / `required_chip` — the ONE drawing of the binding chips the card, the hero gap list and the explainer share |
 | `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count |

@@ -15,9 +15,8 @@
 # text label, NOT by a single-axis colour gradient — so blue marking
 # the top "Consistently" tier reads as a distinct band rather than
 # "even greener than green". Blue is only safe as a rating colour
-# because the keyboard-focus ring + selected-state were moved off
-# blue onto the brand teal (`ring-primary`); see LevelChip /
-# FrequencyPill.
+# because the keyboard-focus ring + selected-state are neutral
+# (`ring-focus`), never blue; see LevelChip / FrequencyPill.
 #
 # Each entry carries the rating's display phrase ("Most of the
 # time") plus class names for three intensities. The bottom of the

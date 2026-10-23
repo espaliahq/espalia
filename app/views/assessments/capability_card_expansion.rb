@@ -61,7 +61,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     # in-a-box look.
     div(
       id: "expansion-#{@capability_stable_id}",
-      class: "mt-3 pt-3 border-t border-gray-200 dark:border-gray-700"
+      class: "mt-3 pt-3 border-t border-default"
     ) do
       expansion_header
       expectation_sentence
@@ -75,7 +75,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
 
   def expansion_header
     div(class: "flex items-center gap-2 mb-3") do
-      span(class: "text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide") do
+      span(class: "text-xs font-medium text-muted uppercase tracking-wide") do
         "#{@level[:level_code]} · #{@level[:level_title]}"
       end
     end
@@ -91,7 +91,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   def expectation_sentence
     return unless @cell_data[:expectation]
 
-    div(class: "mb-3 text-sm text-gray-700 dark:text-gray-300") do
+    div(class: "mb-3 text-sm text-muted") do
       span { @cell_data[:expectation].description.to_s.strip }
       # `mr-3` is a sentence-pause's worth of gap — enough to set the
       # pill apart from the secondary without feeling disconnected.
@@ -100,7 +100,7 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       # when the secondary wraps below on mobile, so the secondary
       # starts flush against the new line's left edge.
       span(class: "inline-flex flex-wrap items-baseline gap-x-1 ml-2 mr-3") do
-        span(class: "text-gray-600 dark:text-gray-300") { "Demonstrates:" }
+        span(class: "text-muted") { "Demonstrates:" }
         # Rating controllers replace `#rating-<stable>-<ord>` after every
         # POST — the id has to live on the element
         # `Assessments::TurboStreamHelpers#rating_wrapper_html` writes.
@@ -152,12 +152,12 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
     return if illustrations.empty?
 
     div(class: "mb-3") do
-      h4(class: "text-[10px] font-semibold text-gray-600 dark:text-gray-300 " \
+      h4(class: "text-[10px] font-semibold text-muted " \
                 "uppercase tracking-wide mb-1") { "Examples" }
       ul(class: "space-y-1") do
         illustrations.each do |ill|
-          li(class: "flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-400") do
-            span(class: "mt-1 w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500 shrink-0") { }
+          li(class: "flex items-start gap-1.5 text-xs text-muted") do
+            span(class: "mt-1 w-1 h-1 rounded-full bg-current text-subtle shrink-0") { }
             span { ill.description }
           end
         end

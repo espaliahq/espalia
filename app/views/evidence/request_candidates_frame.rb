@@ -7,8 +7,8 @@
 # renders a bordered panel only when there's a query (results or "no matches"),
 # and nothing at all before the user types.
 class Views::Evidence::RequestCandidatesFrame < Views::Base
-  PANEL = "rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 " \
-          "shadow-lg max-h-64 overflow-y-auto"
+  PANEL = "rounded-md border border-default bg-overlay " \
+          "shadow-overlay max-h-64 overflow-y-auto"
 
   # @param candidates [Array<Assessments::RequestCandidates::Candidate>]
   # @param query [String, nil] the current search term
@@ -30,7 +30,7 @@ class Views::Evidence::RequestCandidatesFrame < Views::Base
       if @candidates.empty?
         empty("No matches for “#{@query}”.")
       else
-        div(class: "divide-y divide-gray-100 dark:divide-gray-800") do
+        div(class: "divide-y divide-subtle") do
           @candidates.each { |candidate| render Views::Evidence::RequestCandidate.new(candidate:) }
         end
       end
@@ -38,6 +38,6 @@ class Views::Evidence::RequestCandidatesFrame < Views::Base
   end
 
   def empty(text)
-    p(class: "px-3 py-3 text-xs text-gray-500 dark:text-gray-400") { text }
+    p(class: "px-3 py-3 text-xs text-muted") { text }
   end
 end

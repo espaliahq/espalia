@@ -5,8 +5,8 @@
 # only when there's a query, mirroring the evidence-request candidates
 # frame it was generalised from.
 class Views::Shared::PersonPickerCandidatesFrame < Views::Base
-  PANEL = "rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 " \
-          "shadow-lg max-h-64 overflow-y-auto"
+  PANEL = "rounded-md border border-default bg-overlay " \
+          "shadow-overlay max-h-64 overflow-y-auto"
 
   # @param frame_id [String]
   # @param entries [Array<Hash>] { person:, subtitle: nil }
@@ -28,9 +28,9 @@ class Views::Shared::PersonPickerCandidatesFrame < Views::Base
   def panel
     div(class: PANEL) do
       if @entries.empty?
-        p(class: "px-3 py-3 text-xs text-gray-600 dark:text-gray-300") { "No matches for “#{@query}”." }
+        p(class: "px-3 py-3 text-xs text-muted") { "No matches for “#{@query}”." }
       else
-        div(class: "divide-y divide-gray-100 dark:divide-gray-800") do
+        div(class: "divide-y divide-subtle") do
           @entries.each do |entry|
             render Views::Shared::PersonPickerCandidate.new(person: entry[:person], subtitle: entry[:subtitle])
           end

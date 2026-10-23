@@ -50,13 +50,13 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   def header
     div do
       a(href: edit_framework_path(@framework.framework_id),
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200") do
+        class: "text-sm text-muted hover:text-default") do
         plain "← Back to #{@framework.name}"
       end
-      h1(class: "mt-2 text-2xl font-bold text-gray-900 dark:text-white") do
+      h1(class: "mt-2 text-2xl font-bold text-default") do
         plain "Publish v#{@framework.draft_version}"
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         plain "Review what this version changes, then publish. Publishing makes the draft " \
               "live and changes in-flight assessments — it cannot be undone."
       end
@@ -70,9 +70,7 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     return unless publishing? || @publication&.failed?
 
     if publishing?
-      div(role: "status",
-          class: "rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 " \
-                 "px-4 py-3 text-sm text-gray-800 dark:text-gray-100") do
+      render Components::Kit::Alert.new do
         strong { "Publishing v#{@framework.draft_version}… " }
         plain "Requested "
         local_time_ago(@publication.created_at)
@@ -80,9 +78,7 @@ class Views::Frameworks::PublicationReviewView < Views::Base
               "Ratings, evidence and comments are being migrated; you'll be notified when it's live."
       end
     else
-      div(role: "alert",
-          class: "rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3 " \
-                 "text-sm text-red-800 dark:text-red-100") do
+      render Components::Kit::Alert.new(tone: :danger) do
         strong { "The last publish attempt failed: " }
         plain @publication.error_message.to_s
         plain " Fix the mappings below and publish again."
@@ -105,19 +101,19 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     groups = CHANGE_HEADINGS.keys.filter_map { |kind| [ kind, @changes[kind] ] if @changes[kind].present? }
 
     section(class: "space-y-3", aria_labelledby: "draft-changes-heading") do
-      h2(id: "draft-changes-heading", class: "text-lg font-semibold text-gray-900 dark:text-white") do
+      h2(id: "draft-changes-heading", class: "text-lg font-semibold text-default") do
         plain "What changes in v#{@framework.draft_version}"
       end
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         plain "These wait for you to publish. Renames, rewordings and examples are already live."
       end
 
       if groups.empty?
-        p(class: "rounded-md bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "rounded-md bg-subtle px-4 py-3 text-sm text-muted") do
           plain "Nothing in this draft is waiting to be published."
         end
       else
-        div(class: "rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700") do
+        div(class: "rounded-md border border-default divide-y divide-default") do
           groups.each { |kind, items| change_group(kind, items) }
         end
       end
@@ -126,14 +122,14 @@ class Views::Frameworks::PublicationReviewView < Views::Base
 
   def change_group(kind, items)
     div(class: "px-4 py-3", data: { draft_change: kind.to_s }) do
-      h3(class: "text-sm font-semibold text-gray-900 dark:text-white") do
+      h3(class: "text-sm font-semibold text-default") do
         plain "#{CHANGE_HEADINGS.fetch(kind)} (#{items.size})"
       end
-      ul(class: "mt-2 space-y-1.5 text-sm text-gray-700 dark:text-gray-200") do
+      ul(class: "mt-2 space-y-1.5 text-sm text-muted") do
         items.each { |item| li { change_line(kind, item) } }
       end
       if kind == :roles_removed
-        p(class: "mt-2 text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "mt-2 text-xs text-muted") do
           plain "Ratings already made on these are kept, but stop counting for that role."
         end
       end
@@ -175,7 +171,7 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   def reach(people, held)
     return if people.zero?
 
-    span(class: "text-gray-600 dark:text-gray-300") do
+    span(class: "text-muted") do
       plain " — #{people} #{people == 1 ? 'person' : 'people'} in the open cycle " \
             "#{people == 1 ? 'holds' : 'hold'} #{held}"
     end
@@ -206,45 +202,45 @@ class Views::Frameworks::PublicationReviewView < Views::Base
       @retiring.each_with_index { |entry, index| mapping_row(entry[:capability], entry[:mapping], index) }
 
       div(class: "flex items-center justify-end") do
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-gray-900 dark:bg-gray-100 px-3 py-2 " \
-                 "text-sm font-semibold text-white dark:text-gray-900 hover:opacity-90 transition " \
-                 "disabled:opacity-60",
-          data: { turbo_submits_with: "Saving…" }
-        ) { "Save #{'mapping'.pluralize(@retiring.size)}" }
+        render Components::Kit::Button.new(type: :submit, data: { turbo_submits_with: "Saving…" }) do
+          "Save #{'mapping'.pluralize(@retiring.size)}"
+        end
       end
     end
   end
 
   def mapping_row(capability, mapping, index)
     prefix = "migration_mappings[#{index}]"
-    div(
-      class: "rounded-md border #{mapping ? 'border-gray-200 dark:border-gray-700' : 'border-amber-300 dark:border-amber-700'} p-4",
+    render Components::Kit::Card.new(
+      variant: :inset, density: :compact, edge: ("border-warning" unless mapping),
       data: { controller: "mapping-form",
               mapping_form_survivor_types_value: Operations::Frameworks::DefineMigrationMapping::SURVIVOR_TYPES.to_json }
-    ) do
-      div(class: "flex items-center justify-between") do
-        span(class: "font-medium text-gray-900 dark:text-white") { capability.name }
-        unless mapping
-          span(class: "text-xs font-semibold text-amber-700 dark:text-amber-300") { "Needs a mapping" }
-        end
+    ) do |card|
+      card.body { mapping_fields(capability, mapping, prefix) }
+    end
+  end
+
+  def mapping_fields(capability, mapping, prefix)
+    div(class: "flex items-center justify-between") do
+      span(class: "font-medium text-default") { capability.name }
+      unless mapping
+        span(class: "text-xs font-semibold text-warning") { "Needs a mapping" }
       end
-      input(type: "hidden", name: "#{prefix}[from_stable_id]", value: capability.stable_id)
-      input(type: "hidden", name: "#{prefix}[mapping_id]", value: mapping&.mapping_id)
-      div(class: "mt-3 flex flex-wrap items-end gap-3") do
-        type_select(mapping, prefix, capability)
-        survivor_select(mapping, prefix, capability)
-      end
+    end
+    input(type: "hidden", name: "#{prefix}[from_stable_id]", value: capability.stable_id)
+    input(type: "hidden", name: "#{prefix}[mapping_id]", value: mapping&.mapping_id)
+    div(class: "mt-3 flex flex-wrap items-end gap-3") do
+      type_select(mapping, prefix, capability)
+      survivor_select(mapping, prefix, capability)
     end
   end
 
   def type_select(mapping, prefix, capability)
     id = "mapping-type-#{capability.stable_id}"
     div do
-      label(for: id, class: "block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1") { "Mapping" }
+      label(for: id, class: "block text-xs font-medium text-muted mb-1") { "Mapping" }
       select(
-        id: id, name: "#{prefix}[mapping_type]", class: field_classes,
+        id: id, name: "#{prefix}[mapping_type]", class: Components::Kit::Field::SELECT,
         data: { mapping_form_target: "type", action: "change->mapping-form#typeChanged" }
       ) do
         # An undecided row submits blank and is left alone by the save — it must
@@ -260,8 +256,8 @@ class Views::Frameworks::PublicationReviewView < Views::Base
   def survivor_select(mapping, prefix, capability)
     id = "mapping-survivor-#{capability.stable_id}"
     div(data: { mapping_form_target: "survivor" }) do
-      label(for: id, class: "block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1") { "Survivor" }
-      select(id: id, name: "#{prefix}[to_stable_id]", class: field_classes) do
+      label(for: id, class: "block text-xs font-medium text-muted mb-1") { "Survivor" }
+      select(id: id, name: "#{prefix}[to_stable_id]", class: Components::Kit::Field::SELECT) do
         option(value: "") { "— select —" }
         @survivors.each do |s|
           option(value: s[:stable_id], selected: mapping&.to_stable_id == s[:stable_id]) { s[:name] }
@@ -278,31 +274,19 @@ class Views::Frameworks::PublicationReviewView < Views::Base
     form(
       action: framework_publication_path(@framework.framework_id),
       method: "post",
-      class: "border-t border-gray-200 dark:border-gray-700 pt-6 flex items-center gap-3"
+      class: "border-t border-default pt-6 flex items-center gap-3"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       if publishing?
-        button(
-          type: "button", disabled: true, aria_disabled: "true",
-          class: "inline-flex items-center rounded-md px-4 py-2 text-sm font-semibold cursor-not-allowed " \
-                 "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
-        ) { "Publishing v#{@framework.draft_version}…" }
+        render Components::Kit::Button.new(tone: :brand, disabled: true, aria: { disabled: "true" }) do
+          "Publishing v#{@framework.draft_version}…"
+        end
       else
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-                 "text-white hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
-          data: { turbo_submits_with: "Publishing v#{@framework.draft_version}…" }
+        render Components::Kit::Button.new(
+          tone: :brand, type: :submit, data: { turbo_submits_with: "Publishing v#{@framework.draft_version}…" }
         ) { "Confirm & publish v#{@framework.draft_version}" }
       end
-      a(href: edit_framework_path(@framework.framework_id),
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200") { "Cancel" }
+      render Components::Kit::Button.new(variant: :ghost, href: edit_framework_path(@framework.framework_id)) { "Cancel" }
     end
-  end
-
-  def field_classes
-    "rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " \
-      "px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
   end
 end

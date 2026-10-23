@@ -335,7 +335,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     end
 
     should "mark a perspective that lands in a different state" do
-      assert_includes render_with_diverging_self, "bg-amber-400"
+      assert_includes render_with_diverging_self, "bg-warning-strong"
     end
 
     should "leave an agreeing perspective unmarked" do
@@ -343,7 +343,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
                          components: { prior: 1.0, current: 1.0, next: 0.0, score: 1.0 })
 
       assert_includes html, "Self: 100%"
-      assert_not_includes html, "bg-amber-400"
+      assert_not_includes html, "bg-warning-strong"
     end
   end
 

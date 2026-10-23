@@ -6,9 +6,6 @@
 class Views::Evidence::DeclineRequestModal < Views::Base
   include Phlex::Rails::Helpers::FormWith
 
-  INPUT = "w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 " \
-          "text-gray-900 dark:text-gray-100 text-sm focus-visible:ring-primary focus-visible:border-primary"
-
   # @param request [EvidenceRequest]
   def initialize(request:)
     @request = request
@@ -33,15 +30,13 @@ class Views::Evidence::DeclineRequestModal < Views::Base
     form_with(url: decline_evidence_request_path(@request), method: :post, scope: :evidence_request, class: "space-y-4") do |f|
       div do
         f.label(:reason, "Reason for declining (optional)", for: reason_id,
-                class: "block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1")
-        f.text_area(:reason, id: reason_id, rows: 4, class: INPUT)
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { "#{@request.requester&.name || "The requester"} will see your reason." }
+                class: "block text-xs font-medium text-muted mb-1")
+        f.text_area(:reason, id: reason_id, rows: 4, class: Components::Kit::Field::TEXTAREA)
+        p(class: "mt-1 text-xs text-muted") { "#{@request.requester&.name || "The requester"} will see your reason." }
       end
       div(class: "flex items-center justify-end gap-2") do
-        button(type: "button", data: { action: "modal#close" }, class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Cancel" }
-        f.submit("Decline request",
-                 class: "inline-flex items-center justify-center min-h-11 px-4 rounded-md bg-primary text-white " \
-                        "text-sm font-medium hover:opacity-90 cursor-pointer")
+        render Components::Kit::Button.new(variant: :outline, touch: true, data: { action: "modal#close" }) { "Cancel" }
+        f.submit("Decline request", class: Components::Kit::Button.classes(tone: :brand, touch: true))
       end
     end
   end

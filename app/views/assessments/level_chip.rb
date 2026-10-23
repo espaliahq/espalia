@@ -26,7 +26,7 @@ class Views::Assessments::LevelChip < Views::Base
   # default. Clearly blue ("Consistently" is blue in the palette), but a
   # shade lighter than the solid blue-500 of an explicit "Consistently"
   # so an assumed value stays distinguishable from a rated one.
-  ASSUMED_CONSISTENT_BG = "bg-blue-300 dark:bg-blue-700"
+  ASSUMED_CONSISTENT_BG = "bg-rating-consistent-assumed"
 
   # Sentinel marking a split slice whose value is the assumed-consistent
   # default (an unrated perspective on a below-level cell) rather than an
@@ -104,12 +104,12 @@ class Views::Assessments::LevelChip < Views::Base
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-16 rounded-lg cursor-pointer " \
            "transition-all border-2 " \
-           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 "
+           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 "
     base += "#{muted_split_classes} " if muted_split?
     if @focused
-      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-lifted"
     else
-      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-lifted"
     end
   end
 
@@ -132,10 +132,10 @@ class Views::Assessments::LevelChip < Views::Base
   def chip_text
     freq = primary_frequency
     if freq.nil?
-      assumed? ? "text-blue-900 dark:text-blue-100" : "text-gray-700 dark:text-gray-200"
+      assumed? ? "text-rating-consistent-assumed" : "text-muted"
     else
       config = Views::Assessments::FrequencyPalette.config_for(freq)
-      config ? config[:chip_txt] : "text-gray-700 dark:text-gray-200"
+      config ? config[:chip_txt] : "text-muted"
     end
   end
 
@@ -144,7 +144,7 @@ class Views::Assessments::LevelChip < Views::Base
     # render it DASHED — the displayed (person-level) chip is focused on
     # every card, so without this the carried signal would never reach the
     # chips it matters most on.
-    solid_carried? ? "border-dashed border-gray-900 dark:border-white" : "border-gray-900 dark:border-white"
+    solid_carried? ? "border-dashed border-strong" : "border-strong"
   end
 
   # Unrated idle chips need a quiet but discernible edge so the strip
@@ -158,7 +158,7 @@ class Views::Assessments::LevelChip < Views::Base
     return carried_border if solid_carried?
     return "border-transparent" if rated? || split?
 
-    "border-gray-200 dark:border-gray-700"
+    "border-default"
   end
 
   def carried_border
@@ -225,7 +225,7 @@ class Views::Assessments::LevelChip < Views::Base
     when :split
       palette_bg(fill_state[2])
     else
-      assumed? ? ASSUMED_CONSISTENT_BG : "bg-gray-100 dark:bg-gray-700"
+      assumed? ? ASSUMED_CONSISTENT_BG : "bg-neutral-subtle"
     end
   end
 
@@ -254,14 +254,14 @@ class Views::Assessments::LevelChip < Views::Base
     return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
 
     config = Views::Assessments::FrequencyPalette.config_for(frequency)
-    config ? config[:chip_bg] : "bg-gray-100 dark:bg-gray-700"
+    config ? config[:chip_bg] : "bg-neutral-subtle"
   end
 
   def palette_carried_bg(frequency)
     return ASSUMED_CONSISTENT_BG if frequency == ASSUMED
 
     config = Views::Assessments::FrequencyPalette.config_for(frequency)
-    config ? config[:chip_carried] : "bg-gray-100 dark:bg-gray-700"
+    config ? config[:chip_carried] : "bg-neutral-subtle"
   end
 
   # The top-left triangle, painted over the base (bottom-right) fill via a
@@ -284,7 +284,7 @@ class Views::Assessments::LevelChip < Views::Base
   def level_code_label
     if split?
       span(class: "relative z-[1] px-1 rounded text-[11px] font-semibold " \
-                  "bg-white/85 dark:bg-gray-900/85 text-gray-900 dark:text-gray-50") { @level_code }
+                  "bg-overlay text-default") { @level_code }
     else
       span(class: "text-xs font-medium relative z-[1]") { @level_code }
     end
@@ -420,7 +420,7 @@ class Views::Assessments::LevelChip < Views::Base
   def current_level_badge
     span(class: "absolute -bottom-0.5 left-1/2 -translate-x-1/2 " \
                 "text-[10px] font-bold uppercase " \
-                "bg-gray-800 dark:bg-white text-white dark:text-gray-900 " \
+                "bg-neutral-strong text-inverse " \
                 "px-1 py-px rounded-sm") { current_level_label }
   end
 
@@ -443,8 +443,8 @@ class Views::Assessments::LevelChip < Views::Base
   def activity_glyphs
     span(
       class: "absolute bottom-0.5 right-0.5 inline-flex items-center gap-0.5 " \
-             "rounded-full bg-white/85 dark:bg-gray-900/85 px-0.5 " \
-             "text-gray-600 dark:text-gray-300",
+             "rounded-full bg-overlay px-0.5 " \
+             "text-muted",
       title: activity_title,
       aria: { hidden: "true" }
     ) do

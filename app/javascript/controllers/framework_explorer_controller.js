@@ -356,12 +356,8 @@ export default class extends BaseController {
       this.toggleChevronTarget.classList.toggle("rotate-180", this.rolePaneOpen)
     }
 
-    // Update toggle button active state
+    // The toggle's open fill keys off aria-expanded
     if (this.hasRolePaneToggleTarget) {
-      this.rolePaneToggleTarget.classList.toggle("bg-primary/10", this.rolePaneOpen)
-      this.rolePaneToggleTarget.classList.toggle("text-primary-ink", this.rolePaneOpen)
-      this.rolePaneToggleTarget.classList.toggle("bg-gray-100", !this.rolePaneOpen)
-      this.rolePaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.rolePaneOpen)
       this.rolePaneToggleTarget.setAttribute("aria-expanded", String(this.rolePaneOpen))
     }
   }
@@ -369,10 +365,6 @@ export default class extends BaseController {
   #updateContextToggleAffordance() {
     if (!this.hasContextPaneToggleTarget) return
 
-    this.contextPaneToggleTarget.classList.toggle("bg-primary/10", this.contextPaneOpen)
-    this.contextPaneToggleTarget.classList.toggle("text-primary-ink", this.contextPaneOpen)
-    this.contextPaneToggleTarget.classList.toggle("bg-gray-100", !this.contextPaneOpen)
-    this.contextPaneToggleTarget.classList.toggle("dark:bg-gray-800", !this.contextPaneOpen)
     this.contextPaneToggleTarget.setAttribute("aria-expanded", String(this.contextPaneOpen))
   }
 }

@@ -21,9 +21,9 @@ class Views::Notifications::Row < Views::Base
       button(type: "submit", class: "#{row_classes} w-full text-left cursor-pointer") do
         unread_dot
         div(class: "min-w-0 flex-1") do
-          p(class: "text-sm font-medium text-gray-900 dark:text-white break-words") { title }
-          p(class: "mt-0.5 text-sm text-gray-600 dark:text-gray-300 break-words whitespace-pre-line") { body } if body.present?
-          p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { local_time_ago(@notification.created_at) }
+          p(class: "text-sm font-medium text-default break-words") { title }
+          p(class: "mt-0.5 text-sm text-muted break-words whitespace-pre-line") { body } if body.present?
+          p(class: "mt-1 text-xs text-muted") { local_time_ago(@notification.created_at) }
         end
       end
     end
@@ -41,15 +41,15 @@ class Views::Notifications::Row < Views::Base
 
   def row_classes
     base = "flex items-start gap-3 px-4 py-3 min-h-11 transition-colors " \
-           "hover:bg-gray-50 dark:hover:bg-gray-800/60 focus:outline-hidden focus:ring-2 focus:ring-blue-600"
-    base += " bg-blue-50/60 dark:bg-blue-900/10" if @notification.unread?
+           "hover:bg-hover focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-focus"
+    base += " bg-info-subtle" if @notification.unread?
     base
   end
 
   def unread_dot
     div(class: "shrink-0 pt-1.5") do
       if @notification.unread?
-        span(class: "block h-2 w-2 rounded-full bg-blue-600", aria: { hidden: "true" })
+        span(class: "block h-2 w-2 rounded-full bg-info-strong", aria: { hidden: "true" })
       else
         span(class: "block h-2 w-2", aria: { hidden: "true" })
       end

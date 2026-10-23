@@ -30,7 +30,7 @@ class Views::Assessments::Evidence::List < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700"
+      class: "mt-4 pt-3 border-t border-default"
     ) do
       header
       ul(class: "space-y-0.5") do
@@ -66,7 +66,7 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def header_label_classes
-    "flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-600 dark:text-gray-300"
+    "flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted"
   end
 
   def header_label_content
@@ -76,21 +76,19 @@ class Views::Assessments::Evidence::List < Views::Base
 
   def actions_menu
     render Components::Kit::Dropdown.new do |dropdown|
-      render Components::Kit::Button.new(
-        variant: :ghost, size: :xs, icon: true, aria_label: "Feedback / evidence actions",
-        data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-        aria: { haspopup: "menu", expanded: "false" }
-      ) { icon("kebab", class: "size-4") }
+      dropdown.trigger(label: "Feedback / evidence actions", button: { variant: :ghost, size: :xs, icon: true }) do
+        icon("kebab", class: "size-4")
+      end
       dropdown.menu(width: "w-48") do
-        add_menu_item if @can_create
-        request_menu_item if @can_request
+        add_menu_item(dropdown) if @can_create
+        request_menu_item(dropdown) if @can_request
       end
     end
   end
 
-  def add_menu_item
-    button(
-      type: "button", class: menu_item_classes, role: "menuitem",
+  def add_menu_item(dropdown)
+    dropdown.item(
+      size: :xs,
       data: {
         action: "click->dropdown#close evidence-modal#load click->modal#open",
         modal_target_id: "evidence-modal-overlay",
@@ -103,9 +101,9 @@ class Views::Assessments::Evidence::List < Views::Base
     ) { "Add feedback / evidence" }
   end
 
-  def request_menu_item
-    button(
-      type: "button", class: menu_item_classes, role: "menuitem",
+  def request_menu_item(dropdown)
+    dropdown.item(
+      size: :xs,
       data: {
         action: "click->dropdown#close request-evidence#load click->modal#open",
         modal_target_id: "evidence-request-modal-overlay",
@@ -114,10 +112,6 @@ class Views::Assessments::Evidence::List < Views::Base
         request_evidence_level_ordinal_param: @level_ordinal
       }
     ) { "Request feedback / evidence" }
-  end
-
-  def menu_item_classes
-    "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover"
   end
 
   def can_withdraw?(item)

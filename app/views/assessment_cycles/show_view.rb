@@ -64,8 +64,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
   def back_link
     a(
       href: assessment_cycles_path,
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
-             "dark:hover:text-gray-200 transition-colors"
+      class: "text-sm text-muted hover:text-default transition-colors"
     ) do
       plain "\u2190 Back to cycles"
     end
@@ -93,33 +92,24 @@ class Views::AssessmentCycles::ShowView < Views::Base
   # (admins, or managers with participants in their subtree) — see
   # AssessmentCyclePolicy#cohort?.
   def cohort_link
-    a(
-      href: cohort_assessment_cycle_path(@cycle),
-      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
-             "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
-             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-    ) { "Cohort progress →" }
+    render Components::Kit::Button.new(variant: :subtle, touch: true, href: cohort_assessment_cycle_path(@cycle)) do
+      "Cohort progress →"
+    end
   end
 
   # Link to the capability attainment heatmap. Same audience as the cohort
   # roll-up — see AssessmentCyclePolicy#attainment?.
   def attainment_link
-    a(
-      href: attainment_assessment_cycle_path(@cycle),
-      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
-             "text-gray-800 shadow-xs hover:bg-gray-200 transition-colors " \
-             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-    ) { "Capability attainment →" }
+    render Components::Kit::Button.new(variant: :subtle, touch: true, href: attainment_assessment_cycle_path(@cycle)) do
+      "Capability attainment →"
+    end
   end
 
   # Link to aggregate feedback provision and request coverage.
   def evidence_report_link
-    a(
-      href: evidence_assessment_cycle_path(@cycle),
-      class: "inline-flex min-h-11 items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-semibold " \
-             "text-gray-800 shadow-xs transition-colors hover:bg-gray-200 " \
-             "dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-    ) { "Feedback & evidence →" }
+    render Components::Kit::Button.new(variant: :subtle, touch: true, href: evidence_assessment_cycle_path(@cycle)) do
+      "Feedback & evidence →"
+    end
   end
 
   def close_button
@@ -130,12 +120,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
       data: { turbo_confirm: "Close this cycle? All enrolled participants' assessments will conclude as they stand." }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-red-700 " \
-               "transition-colors"
-      ) { "Close cycle" }
+      render Components::Kit::Button.new(tone: :danger, type: :submit) { "Close cycle" }
     end
   end
 
@@ -148,15 +133,15 @@ class Views::AssessmentCycles::ShowView < Views::Base
           cycle_type_row
           planned_end_row
           div do
-            dt(class: "text-gray-600 dark:text-gray-300") { "Opened at" }
-            dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+            dt(class: "text-muted") { "Opened at" }
+            dd(class: "mt-0.5 font-medium text-default") do
               local_time(@cycle.opened_at)
             end
           end
           if @cycle.closed_at
             div do
-              dt(class: "text-gray-600 dark:text-gray-300") { "Closed at" }
-              dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") do
+              dt(class: "text-muted") { "Closed at" }
+              dd(class: "mt-0.5 font-medium text-default") do
                 local_time(@cycle.closed_at)
               end
             end
@@ -168,14 +153,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def meta_row(label, value)
     div do
-      dt(class: "text-gray-600 dark:text-gray-300") { label }
-      dd(class: "mt-0.5 font-medium text-gray-900 dark:text-white") { value }
+      dt(class: "text-muted") { label }
+      dd(class: "mt-0.5 font-medium text-default") { value }
     end
   end
 
   def cycle_type_row
     div do
-      dt(class: "text-gray-600 dark:text-gray-300") { "Cycle type" }
+      dt(class: "text-muted") { "Cycle type" }
       dd(class: "mt-0.5") do
         render Views::AssessmentCycles::CycleTypeFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
@@ -184,7 +169,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def planned_end_row
     div do
-      dt(class: "text-gray-600 dark:text-gray-300") { "Target completion" }
+      dt(class: "text-muted") { "Target completion" }
       dd(class: "mt-0.5") do
         render Views::AssessmentCycles::CyclePlannedEndFrame.new(cycle: @cycle, is_admin: @is_admin)
       end
@@ -223,7 +208,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
           if @cycle.participations.any?
             participants_table
           else
-            p(class: "text-sm text-gray-600 dark:text-gray-300") do
+            p(class: "text-sm text-muted") do
               "No participants enrolled yet."
             end
           end
@@ -234,18 +219,18 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def participants_table
     div(class: "overflow-x-auto") do
-      table(class: "min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm") do
+      table(class: "min-w-full divide-y divide-default text-sm") do
         thead do
           tr do
-            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Name" }
-            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Email" }
-            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Status" }
-            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Enrolled" }
-            th(class: "py-2 text-left font-semibold text-gray-600 dark:text-gray-300") { "Aligned" }
+            th(class: "py-2 text-left font-semibold text-muted") { "Name" }
+            th(class: "py-2 text-left font-semibold text-muted") { "Email" }
+            th(class: "py-2 text-left font-semibold text-muted") { "Status" }
+            th(class: "py-2 text-left font-semibold text-muted") { "Enrolled" }
+            th(class: "py-2 text-left font-semibold text-muted") { "Aligned" }
             th(class: "py-2") { "" } if @is_admin && @cycle.open?
           end
         end
-        tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+        tbody(class: "divide-y divide-default") do
           @cycle.participations.each { |participant| participant_row(participant) }
         end
       end
@@ -254,10 +239,10 @@ class Views::AssessmentCycles::ShowView < Views::Base
 
   def participant_row(participant)
     tr do
-      td(class: "py-2 text-gray-900 dark:text-white") do
+      td(class: "py-2 text-default") do
         participant_name(participant)
       end
-      td(class: "py-2 text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 text-muted") do
         plain participant.person&.email || "—"
       end
       td(class: "py-2") do
@@ -266,14 +251,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
           variant: STATUS_VARIANTS.fetch(participant.status, :default)
         )
       end
-      td(class: "py-2 text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 text-muted") do
         if participant.enrolled_at
           local_time(participant.enrolled_at)
         else
           plain "—"
         end
       end
-      td(class: "py-2 text-gray-600 dark:text-gray-300") do
+      td(class: "py-2 text-muted") do
         if participant.aligned_at
           local_time(participant.aligned_at)
         else
@@ -295,7 +280,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
     name = participant.person&.name || "(unknown)"
     assignment = @viewable_assignments[participant.person_id]
     if assignment
-      a(href: assessment_path(assignment), class: "font-medium text-primary-ink hover:underline") { name }
+      a(href: assessment_path(assignment), class: "font-medium text-link hover:text-link-hover hover:underline") { name }
     else
       plain name
     end
@@ -310,10 +295,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-xs text-red-700 hover:text-red-700 transition-colors"
-      ) { "Unenroll" }
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :xs, compact: true, type: :submit) { "Unenroll" }
     end
   end
 
@@ -327,7 +309,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
               bulk_enroll_form
             end
           else
-            p(class: "text-sm text-gray-600 dark:text-gray-300") do
+            p(class: "text-sm text-muted") do
               "No eligible people — everyone assigned to this framework is already enrolled."
             end
           end
@@ -340,18 +322,14 @@ class Views::AssessmentCycles::ShowView < Views::Base
     form(
       action: bulk_assessment_cycle_enrollments_path(@cycle),
       method: "post",
-      class: "flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700",
+      class: "flex items-center justify-between pt-4 border-t border-default",
       data: { turbo_confirm: "Enroll all #{@eligible_people.size} eligible #{'person'.pluralize(@eligible_people.size)}?" }
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "Enroll everyone assigned to this framework in one go."
       end
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-gray-800 hover:bg-gray-900 " \
-               "px-3 py-2 text-sm font-semibold text-white shadow-xs transition-colors"
-      ) { "Enroll all #{@eligible_people.size}" }
+      render Components::Kit::Button.new(type: :submit) { "Enroll all #{@eligible_people.size}" }
     end
   end
 
@@ -365,24 +343,19 @@ class Views::AssessmentCycles::ShowView < Views::Base
       div(class: "flex-1") do
         label(
           for: "enrollment_person_id",
-          class: "block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+          class: "block text-xs font-medium text-muted mb-1"
         ) { "Person" }
         select(
           id: "enrollment_person_id",
           name: "enrollment[person_id]",
-          class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+          class: Components::Kit::Field::SELECT
         ) do
           @eligible_people.each do |person|
             option(value: person.id) { person.name }
           end
         end
       end
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-3 py-2 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-primary/90 transition-colors"
-      ) { "Enroll" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Enroll" }
     end
   end
 end

@@ -33,7 +33,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   def view_template
     div(
       id: dom_id,
-      class: "mt-4 pt-3 border-t border-gray-200 dark:border-gray-700",
+      class: "mt-4 pt-3 border-t border-default",
       data: { controller: "comments-thread" }
     ) do
       header
@@ -74,8 +74,7 @@ class Views::Assessments::Comments::Thread < Views::Base
     button(
       type: "button",
       class: "#{header_label_classes} w-full min-h-6 text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
-             "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
-             "dark:hover:text-gray-200 transition-colors",
+             "hover:bg-default-hover hover:text-default transition-colors",
       aria: { label: "Add a comment" },
       data: { action: "click->comments-thread#toggleComposer" }
     ) do
@@ -86,7 +85,7 @@ class Views::Assessments::Comments::Thread < Views::Base
 
   def header_label_classes
     "flex items-center gap-1 text-[10px] uppercase tracking-wide " \
-      "text-gray-600 dark:text-gray-300 mb-2"
+      "text-muted mb-2"
   end
 
   # When the thread is empty AND the viewer can comment, lean the label
@@ -195,9 +194,7 @@ class Views::Assessments::Comments::Thread < Views::Base
         required: true,
         placeholder: "Add a comment…",
         aria: { label: "Add a comment", describedby: composer_hint_id },
-        class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary",
+        class: Components::Kit::Field::INLINE,
         data: {
           comments_thread_target: "composerBody",
           action: "keydown->comments-thread#submitOnModEnter"
@@ -209,13 +206,10 @@ class Views::Assessments::Comments::Thread < Views::Base
         # and ctrlKey as the submit modifier so we don't need to detect
         # the platform server-side. Mac users read this as "⌘+Enter",
         # PC/Linux users read it as "Ctrl+Enter".
-        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") do
+        span(id: composer_hint_id, class: "text-[10px] text-muted") do
           plain "#{Prose::COMPOSER_HINT} · ⌘/Ctrl+Enter to post"
         end
-        button(
-          type: "submit",
-          class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"
-        ) { "Post" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Post" }
       end
     end
   end

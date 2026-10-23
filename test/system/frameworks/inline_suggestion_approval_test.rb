@@ -138,6 +138,13 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
       end
     end
 
+    should "keep Approve and Reject from taking the discussion link's taps" do
+      visit edit_framework_path(@framework_id)
+      assert_selector "#suggestion-panel button", text: "Approve"
+
+      assert_no_stolen_taps
+    end
+
     should "approve a suggestion in one click and persist it" do
       visit edit_framework_path(@framework_id)
       toggle_context_pane

@@ -8,10 +8,10 @@
 class Views::Integrations::AiModelView < Views::Base
   include Phlex::Rails::Helpers::FormAuthenticityToken
 
-  # state => [label, Kit::Badge variant]
+  # state => [label, Kit::Badge tone]
   STATE_BADGES = {
-    not_configured: [ "Not configured", :default ],
-    disabled: [ "Suggestions off", :default ],
+    not_configured: [ "Not configured", :neutral ],
+    disabled: [ "Suggestions off", :neutral ],
     active: [ "Active", :success ]
   }.freeze
 
@@ -21,18 +21,10 @@ class Views::Integrations::AiModelView < Views::Base
     "typesafe_jev" => "Jev (TypeSafe AI)"
   }.freeze
 
-  INPUT_CLASSES = "block w-full min-h-11 rounded-md border-gray-300 dark:border-gray-600 " \
-                  "dark:bg-gray-700 dark:text-white shadow-xs focus:border-primary focus:ring-primary " \
-                  "placeholder:text-gray-600 dark:placeholder:text-gray-300"
-  LABEL_CLASSES = "block text-sm font-medium text-gray-900 dark:text-white"
-  HINT_CLASSES = "mt-1 text-xs text-gray-600 dark:text-gray-300 [overflow-wrap:anywhere]"
-  BUTTON_CLASSES = "inline-flex items-center justify-center min-h-11 px-4 rounded-md text-sm font-medium cursor-pointer " \
-                   "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-900 " \
-                   "dark:focus-visible:ring-white"
-  PRIMARY_BUTTON_CLASSES = "#{BUTTON_CLASSES} bg-gray-900 text-white hover:bg-gray-700 " \
-                           "dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
-  SECONDARY_BUTTON_CLASSES = "#{BUTTON_CLASSES} border border-gray-300 dark:border-gray-600 text-gray-700 " \
-                             "dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+  INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
+  SELECT_CLASSES = "#{Components::Kit::Field::SELECT} min-h-11 mt-1"
+  LABEL_CLASSES = "block text-sm font-medium text-default"
+  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param config [AiModelConfig] what is saved; drives the status
   # @param form_config [AiModelConfig, nil] what the form shows; defaults to
@@ -80,15 +72,15 @@ class Views::Integrations::AiModelView < Views::Base
     div(class: "mb-6") do
       a(
         href: tenant_integrations_path,
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:underline"
+        class: "text-sm text-muted hover:text-default transition-colors"
       ) { plain "← Back to Integrations" }
 
       div(class: "mt-2 flex flex-wrap items-center gap-3") do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "AI model" }
-        label, variant = STATE_BADGES.fetch(@state)
-        render Components::Kit::Badge.new(label, variant: variant)
+        h1(class: "text-2xl font-bold text-default") { "AI model" }
+        label, tone = STATE_BADGES.fetch(@state)
+        render Components::Kit::Badge.new(label, tone: tone)
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         plain "The model that suggests where recorded feedback belongs. Choose the provider, address and model, " \
               "and give it a key. Nothing is sent until suggestions are switched on."
       end
@@ -121,11 +113,12 @@ class Views::Integrations::AiModelView < Views::Base
   end
 
   def test_connection_form
-    div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
+    div(class: "mt-6 pt-6 border-t border-default") do
       form(action: test_connection_tenant_ai_model_path, method: "post", class: "flex flex-wrap items-center gap-4") do
         input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
-        button(type: "submit", class: SECONDARY_BUTTON_CLASSES, disabled: @state == :not_configured) { "Test connection" }
-        p(class: "text-xs text-gray-600 dark:text-gray-300 max-w-prose") do
+        render Components::Kit::Button.new(variant: :outline, type: :submit, touch: true,
+                                           disabled: @state == :not_configured) { "Test connection" }
+        p(class: "text-xs text-muted max-w-prose") do
           plain "Sends the saved model one short request and shows what it answers. It works before suggestions are switched on."
         end
       end
@@ -167,7 +160,7 @@ class Views::Integrations::AiModelView < Views::Base
                                "workspace is sent as written, and so are roles and the story itself.")
 
             div(class: "flex justify-end") do
-              button(type: "submit", class: PRIMARY_BUTTON_CLASSES) { "Save settings" }
+              render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save settings" }
             end
           end
         end
@@ -178,9 +171,7 @@ class Views::Integrations::AiModelView < Views::Base
   def error_summary
     return if @errors.empty?
 
-    div(role: "alert", class: "mb-6 rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 " \
-                              "px-4 py-3 text-sm text-red-800 dark:text-red-200") do
-      p(class: "font-medium") { "The settings could not be saved." }
+    render Components::Kit::Alert.new(tone: :danger, title: "The settings could not be saved.", class: "mb-6") do
       ul(class: "mt-1 list-disc pl-5") { @errors.each { |message| li { message } } }
     end
   end
@@ -202,7 +193,7 @@ class Views::Integrations::AiModelView < Views::Base
   def preset_field
     div do
       label(for: "ai_model_preset", class: LABEL_CLASSES) { "Preset" }
-      select(id: "ai_model_preset", class: "#{INPUT_CLASSES} mt-1", autocomplete: "off",
+      select(id: "ai_model_preset", class: SELECT_CLASSES, autocomplete: "off",
              data: { ai_model_preset_target: "preset", action: "change->ai-model-preset#apply" },
              aria: { describedby: "ai_model_preset-hint" }) do
         AiModelConfig::PRESETS.each do |key, preset|
@@ -219,7 +210,7 @@ class Views::Integrations::AiModelView < Views::Base
   def provider_field
     div do
       label(for: field_id(:provider), class: LABEL_CLASSES) { "Provider" }
-      select(id: field_id(:provider), name: field_name(:provider), class: "#{INPUT_CLASSES} mt-1", autocomplete: "off",
+      select(id: field_id(:provider), name: field_name(:provider), class: SELECT_CLASSES, autocomplete: "off",
              data: { ai_model_preset_target: "provider", action: "change->ai-model-preset#providerChanged" }) do
         PROVIDER_LABELS.each do |value, label_text|
           option(value: value, selected: value == @form_config.provider) { label_text }
@@ -232,7 +223,7 @@ class Views::Integrations::AiModelView < Views::Base
     div do
       label(for: field_id(name), class: LABEL_CLASSES) { label_text }
       input(type: type, id: field_id(name), name: field_name(name), value: value.to_s, placeholder: placeholder,
-            autocomplete: "off", class: "#{INPUT_CLASSES} mt-1", data: { ai_model_preset_target: target },
+            autocomplete: "off", class: INPUT_CLASSES, data: { ai_model_preset_target: target },
             aria: { describedby: "#{field_id(name)}-hint" })
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
     end
@@ -242,11 +233,11 @@ class Views::Integrations::AiModelView < Views::Base
     div do
       label(for: field_id(:api_key), class: LABEL_CLASSES) do
         plain "API key"
-        span(class: "ml-2 text-xs font-normal text-gray-600 dark:text-gray-300") { @key_field_stored ? "Stored" : "Not set" }
+        span(class: "ml-2 text-xs font-normal text-muted") { @key_field_stored ? "Stored" : "Not set" }
       end
       input(type: "password", id: field_id(:api_key), name: field_name(:api_key), value: "", autocomplete: "new-password",
             placeholder: @key_field_stored ? "Leave blank to keep it" : "Paste the provider's or gateway's key",
-            class: "#{INPUT_CLASSES} mt-1", aria: { describedby: "#{field_id(:api_key)}-hint" })
+            class: INPUT_CLASSES, aria: { describedby: "#{field_id(:api_key)}-hint" })
       p(id: "#{field_id(:api_key)}-hint", class: HINT_CLASSES) do
         plain "Stored encrypted and only ever sent to the address above. It is never shown again."
       end
@@ -256,7 +247,7 @@ class Views::Integrations::AiModelView < Views::Base
   def effort_field
     div(data: { ai_model_preset_target: "effortRow" }, hidden: !@form_config.anthropic?) do
       label(for: field_id(:effort), class: LABEL_CLASSES) { "Effort" }
-      select(id: field_id(:effort), name: field_name(:effort), class: "#{INPUT_CLASSES} mt-1", autocomplete: "off",
+      select(id: field_id(:effort), name: field_name(:effort), class: SELECT_CLASSES, autocomplete: "off",
              aria: { describedby: "#{field_id(:effort)}-hint" }) do
         AiModelConfig::EFFORTS.each { |value| option(value: value, selected: value == @form_config.effort) { value.capitalize } }
         option(value: "", selected: @form_config.effort.blank?) { "Don't send" }
@@ -271,9 +262,9 @@ class Views::Integrations::AiModelView < Views::Base
   def switch_field(name, label_text, checked, hint:)
     div do
       input(type: "hidden", name: field_name(name), value: "0")
-      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-gray-900 dark:text-white cursor-pointer") do
+      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-default cursor-pointer") do
         input(type: "checkbox", id: field_id(name), name: field_name(name), value: "1", checked: checked,
-              class: "h-5 w-5 rounded border-gray-300 dark:border-gray-600", aria: { describedby: "#{field_id(name)}-hint" })
+              class: Components::Kit::Field::CHECKBOX, aria: { describedby: "#{field_id(name)}-hint" })
         plain label_text
       end
       p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }

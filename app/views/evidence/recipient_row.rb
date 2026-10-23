@@ -21,12 +21,12 @@ class Views::Evidence::RecipientRow < Views::Base
                                 draft_token: @draft_token),
       data: { turbo_frame: "evidence-modal", recipient_row: "", person_id: @recipient.person.id },
       class: "flex w-full items-center justify-between gap-3 min-h-11 px-3 py-2 rounded-md " \
-             "hover:bg-gray-50 dark:hover:bg-gray-800") do
+             "hover:bg-hover") do
       div(class: "min-w-0 text-left") do
-        p(class: "truncate text-sm font-medium text-gray-900 dark:text-gray-100") { @recipient.person.name }
-        p(class: "truncate text-xs text-gray-600 dark:text-gray-300") { secondary }
+        p(class: "truncate text-sm font-medium text-default") { @recipient.person.name }
+        p(class: "truncate text-xs text-muted") { secondary }
       end
-      span(class: "shrink-0 text-xs font-medium text-primary-ink") { "Give feedback" }
+      span(class: "shrink-0 text-xs font-medium text-brand") { "Give feedback" }
     end
   end
 

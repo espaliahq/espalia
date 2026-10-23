@@ -673,7 +673,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     within("#calibration-readiness") { assert_text "50% rated" }
     # A reload keeps the rater table as the reader left it.
     assert_selector "details[data-readiness-raters][open]"
-    page.execute_script("document.querySelector(\"#calibration-freshness-status button[aria-label='Dismiss update']\").click()")
+    page.execute_script("document.querySelector(\"#calibration-freshness-status button[aria-label='Dismiss']\").click()")
     assert_no_text "Updated just now"
 
     # With a comparison card open, the poll holds the reload…

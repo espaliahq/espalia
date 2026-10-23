@@ -24,8 +24,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   # The dashed carried vocabulary, kept as the term's own trigger styling.
   CARRIED_BADGE_TRIGGER = "inline-flex min-h-11 items-center rounded-full px-2.5 text-xs " \
-                          "font-medium border border-dashed border-amber-500 " \
-                          "dark:border-amber-400 text-amber-800 dark:text-amber-300"
+                          "font-medium border border-dashed border-warning-strong text-warning"
 
   STATUS_VARIANTS = { "draft" => :warning, "started" => :success, "closed" => :default }.freeze
   STATUS_LABELS = { "draft" => "Draft", "started" => "Live", "closed" => "Closed" }.freeze
@@ -145,8 +144,9 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   def header_row
     div(class: "flex flex-wrap items-center gap-3") do
-      div(class: "flex-1 min-w-0") do
-        a(href: calibration_sessions_path, class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") do
+      # A real basis, so the buttons wrap below the title on a phone rather than crushing it
+      div(class: "min-w-0 grow basis-80") do
+        a(href: calibration_sessions_path, class: "text-sm text-muted hover:underline") do
           "← Calibration"
         end
         div(class: "mt-1 flex flex-wrap items-center gap-3") do
@@ -157,7 +157,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
           )
           render Components::Kit::Badge.new("Archived", variant: :default) if @session.archived?
         end
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "mt-1 text-sm text-muted") do
           plain @cycle&.name || "Cycle unavailable"
           plain " · facilitated by #{person_name(@session.facilitator_id)}"
         end
@@ -196,20 +196,20 @@ class Views::CalibrationSessions::ShowView < Views::Base
         form(action: start_calibration_session_path(@session), method: "post",
              data: { turbo_confirm: "Starting freezes the participants and population for the whole session. Start now?" }) do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-          button(type: "submit", class: primary_button_classes) { "Start session" }
+          render Components::Kit::Button.new(tone: :brand, touch: true, type: :submit) { "Start session" }
         end
       end
       if @can_restore
         form(action: unarchive_calibration_session_path(@session), method: "post") do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-          button(type: "submit", class: secondary_button_classes) { "Restore" }
+          render Components::Kit::Button.new(variant: :outline, touch: true, type: :submit) { "Restore" }
         end
       end
       if @can_close
         form(action: close_calibration_session_path(@session), method: "post",
              data: { turbo_confirm: "Closing is permanent — the session becomes its follow-through record. Close?" }) do
           input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-          button(type: "submit", class: secondary_button_classes) do
+          render Components::Kit::Button.new(variant: :outline, tone: :danger, touch: true, type: :submit) do
             @session.draft? ? "Discard session" : "Close session"
           end
         end
@@ -222,9 +222,9 @@ class Views::CalibrationSessions::ShowView < Views::Base
   # — so it says when the numbers were last known current, which is what
   # "frozen?" is really asking.
   def freshness_line
-    p(class: "mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 flex items-center gap-2 text-xs text-muted") do
       if @session.started?
-        span(class: "h-2 w-2 rounded-full bg-green-500 motion-safe:animate-pulse", aria: { hidden: "true" })
+        span(class: "h-2 w-2 rounded-full bg-session-live motion-safe:animate-pulse", aria: { hidden: "true" })
       end
       plain "#{STATUS_LABELS.fetch(@session.status, @session.status)} · ratings as of "
       time(datetime: @rendered_at.utc.iso8601, data: { calibration_freshness_target: "asOf" }) do
@@ -234,9 +234,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def refresh_button
-    button(
-      type: "button",
-      class: "#{secondary_button_classes} min-h-11 gap-1.5",
+    render Components::Kit::Button.new(
+      variant: :outline, touch: true,
       data: { action: "calibration-freshness#refresh", calibration_freshness_target: "refresh" }
     ) do
       span(aria: { hidden: "true" }) { "↻" }
@@ -278,10 +277,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
   def participants_card
     render Components::Kit::Card.new do |card|
       card.body do
-        h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
           plain "Participants (#{@participant_ids.size})"
         end
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "mt-1 text-xs text-muted") do
           plain "Raters in the room — excluded from the population."
         end
         ul(class: "mt-3 space-y-1") do
@@ -293,8 +292,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def participant_row(person_id)
-    li(class: "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800") do
-      span(class: "text-sm text-gray-900 dark:text-white") { person_name(person_id) }
+    li(class: "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-hover") do
+      span(class: "text-sm text-default") { person_name(person_id) }
       if @can_curate
         remove_button(
           calibration_session_participant_path(@session, person_id),
@@ -307,10 +306,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
   def population_card
     render Components::Kit::Card.new do |card|
       card.body do
-        h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
           plain "Population (#{@calibrant_ids.size})"
         end
-        p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "mt-1 text-xs text-muted") do
           plain "The people whose ratings this session calibrates."
         end
 
@@ -326,7 +325,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
     return if member_ids.empty?
 
     div(class: "mt-4") do
-      h3(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+      h3(class: "text-xs font-medium text-muted") do
         if participant_id
           plain "#{person_name(participant_id)}'s reports (#{member_ids.size})"
         else
@@ -340,9 +339,9 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def calibrant_row(person_id)
-    li(class: "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800") do
+    li(class: "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-hover") do
       div(class: "flex flex-wrap items-center gap-2") do
-        span(class: "text-sm text-gray-900 dark:text-white") { person_name(person_id) }
+        span(class: "text-sm text-default") { person_name(person_id) }
         readiness_badges(person_id)
       end
       if @can_curate
@@ -374,14 +373,14 @@ class Views::CalibrationSessions::ShowView < Views::Base
   end
 
   def suggestions_section
-    div(class: "mt-5 rounded-md border border-dashed border-gray-300 dark:border-gray-600 px-3 py-2") do
-      p(class: "text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "mt-5 rounded-md border border-dashed border-emphasized px-3 py-2") do
+      p(class: "text-xs text-muted") do
         plain "Reporting to participants but not in the population:"
       end
       ul(class: "mt-1 space-y-1") do
         @suggestions.each do |person|
           li(class: "flex items-center justify-between gap-2") do
-            span(class: "text-sm text-gray-900 dark:text-white") { person.name }
+            span(class: "text-sm text-default") { person.name }
             add_person_button(person.id, label: "Add #{person.name} to the population")
           end
         end
@@ -393,14 +392,14 @@ class Views::CalibrationSessions::ShowView < Views::Base
     form(action: calibration_session_calibrants_path(@session), method: "post", class: "mt-5 flex items-end gap-2") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       div(class: "flex-1") do
-        label(for: "add-calibrant", class: "block text-xs font-medium text-gray-600 dark:text-gray-300") do
+        label(for: "add-calibrant", class: "block text-xs font-medium text-muted") do
           "Add person from your org"
         end
-        select(id: "add-calibrant", name: "person_id", class: select_classes) do
+        select(id: "add-calibrant", name: "person_id", class: "mt-1 #{Components::Kit::Field::SELECT}") do
           @add_calibrant_candidates.each { |person| option(value: person.id) { person.name } }
         end
       end
-      button(type: "submit", class: secondary_button_classes) { "Add" }
+      render Components::Kit::Button.new(variant: :outline, type: :submit) { "Add" }
     end
   end
 
@@ -417,7 +416,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
         placeholder: "Search managers by name or email…",
         empty_text: "No one queued to add."
       )
-      button(type: "submit", class: secondary_button_classes) { "Add selected" }
+      render Components::Kit::Button.new(variant: :outline, type: :submit) { "Add selected" }
     end
   end
 
@@ -425,7 +424,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
     form(action: calibration_session_calibrants_path(@session), method: "post", class: "inline") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "person_id", value: person_id)
-      button(type: "submit", class: "text-sm text-primary-ink hover:underline min-h-11 px-2", aria: { label: label }) { "Add" }
+      render Components::Kit::Button.new(variant: :link, tone: :brand, touch: true, type: :submit, aria_label: label) { "Add" }
     end
   end
 
@@ -433,12 +432,7 @@ class Views::CalibrationSessions::ShowView < Views::Base
     form(action: path, method: "post", class: "inline shrink-0") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "_method", value: "delete")
-      button(
-        type: "submit",
-        class: "inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-600 " \
-               "dark:text-gray-300 hover:text-red-700 dark:hover:text-red-300",
-        aria: { label: label }
-      ) do
+      render Components::Kit::Button.new(variant: :ghost, icon: true, touch: true, type: :submit, aria_label: label) do
         span(aria: { hidden: "true" }) { "✕" }
       end
     end
@@ -513,8 +507,8 @@ class Views::CalibrationSessions::ShowView < Views::Base
           role: "tab",
           class: "inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-semibold " \
                  "#{active ?
-                     'border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900' :
-                     'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}",
+                     'border-strong bg-neutral-strong text-inverse' :
+                     'border-default bg-default text-muted hover:bg-default-hover'}",
           aria: { selected: active.to_s }
         ) { label }
       end
@@ -529,17 +523,17 @@ class Views::CalibrationSessions::ShowView < Views::Base
     div(class: "mt-6") do
       render Components::Kit::Card.new do |card|
         card.body do
-          h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+          h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
             "Suggested agenda"
           end
-          p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+          p(class: "mt-1 text-xs text-muted") do
             plain "Where the session's time is best spent, from the ratings so far."
           end
           ol(class: "mt-3 space-y-1.5 list-decimal list-inside") do
             @stats[:capabilities].first(5).each do |capability|
-              li(class: "text-sm text-gray-900 dark:text-white") do
+              li(class: "text-sm text-default") do
                 plain capability[:name]
-                span(class: "ml-2 text-xs #{capability[:flagged] ? 'text-amber-700 dark:text-amber-300' : 'text-gray-600 dark:text-gray-300'}") do
+                span(class: "ml-2 text-xs #{capability[:flagged] ? 'text-warning' : 'text-muted'}") do
                   if capability[:flagged]
                     plain "⚠ raters disagree (#{sprintf('%.1f', capability[:divergence_score])} bands unexplained by tendency)"
                   else
@@ -556,27 +550,10 @@ class Views::CalibrationSessions::ShowView < Views::Base
 
   # The live state needs no note: the header's freshness line carries it.
   def closed_note
-    div(class: "mt-6 rounded-md border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-600 dark:text-gray-300") do
+    div(class: "mt-6 rounded-md border border-default px-4 py-3 text-sm text-muted") do
       plain "Session closed"
       plain " (#{@session.close_reason == 'cycle_closed' ? 'cycle closed' : 'by facilitator'})"
       plain ". This page is the session's follow-through record."
     end
-  end
-
-  def primary_button_classes
-    "inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold " \
-      "text-white shadow-xs hover:bg-primary/90 focus-visible:outline " \
-      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-  end
-
-  def secondary_button_classes
-    "inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 " \
-      "px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white " \
-      "hover:bg-gray-50 dark:hover:bg-gray-800"
-  end
-
-  def select_classes
-    "mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white"
   end
 end

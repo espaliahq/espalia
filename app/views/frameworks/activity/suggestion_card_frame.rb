@@ -68,23 +68,18 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # Submission errors redirected back into this frame (no layout, so no
   # global flash) — e.g. replying to a just-deleted comment.
   def alert_banner
-    div(
-      class: "mb-3 rounded-md border border-red-200 dark:border-red-900/50 " \
-             "bg-red-50 dark:bg-red-900/20 px-3 py-2 text-[11px] " \
-             "text-red-800 dark:text-red-300",
-      role: "alert"
-    ) { @alert }
+    render Components::Kit::Alert.new(tone: :danger, size: :sm, class: "mb-3") { @alert }
   end
 
   def header
-    div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700") do
+    div(class: "px-4 py-3 border-b border-default") do
       # Copy link rides the back-link row, which is otherwise empty — putting it
       # beside the title stole enough width to truncate the card's own identity
       # ("Clarify · Expect…"), and a utility control shouldn't cost the heading.
       div(class: "flex items-center justify-between gap-2") do
         a(
           href: @clear_path,
-          class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink inline-block",
+          class: "text-xs text-muted hover:text-brand inline-block",
           data: {
             turbo_frame: "suggestion-panel",
             action: "click->context-pane#clearFocus"
@@ -93,7 +88,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         copy_link_control
       end
       div(class: "mt-1 flex items-center justify-between gap-2") do
-        h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate") do
+        h2(class: "text-sm font-semibold text-default truncate") do
           "#{kind_label} · #{entity_label}"
         end
         status_pill
@@ -109,9 +104,9 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # discussion is; the feed alone is recency-capped.
   def siblings_block
     div(id: "discussion-siblings",
-        class: "mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3") do
+        class: "mt-4 rounded-md border border-default p-3") do
       h3(class: "text-[11px] font-semibold uppercase tracking-wide " \
-                "text-gray-600 dark:text-gray-300 mb-2") do
+                "text-muted mb-2") do
         "#{@siblings.size} other #{'discussion'.pluralize(@siblings.size)} here"
       end
       ul(class: "space-y-1") { @siblings.each { |sibling| sibling_row(sibling) } }
@@ -122,8 +117,8 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     li do
       button(
         type: "button",
-        class: "w-full text-left rounded px-1.5 py-1 text-xs text-gray-700 dark:text-gray-200 " \
-               "hover:bg-primary/10 hover:text-primary-ink transition-colors cursor-pointer",
+        class: "w-full text-left rounded px-1.5 py-1 text-xs text-muted " \
+               "hover:bg-brand-subtle hover:text-brand transition-colors cursor-pointer",
         # No aria-label: a fixed one would override the visible question and
         # announce every row identically, so the rationale below IS the
         # accessible name (the glyph is aria-hidden).
@@ -176,7 +171,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
         # p-3/-m-3 around a 20px glyph gives a 44px hit target (WCAG 2.5.5)
         # without the button claiming 44px of header height.
         class: "inline-flex items-center justify-center p-3 -m-3 rounded " \
-               "text-gray-600 dark:text-gray-300 hover:text-primary-ink " \
+               "text-muted hover:text-brand " \
                "transition-colors cursor-pointer",
         title: "Copy a link to this discussion",
         aria: { label: "Copy a link to this discussion" },
@@ -205,7 +200,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   # Swapped in for two seconds on copy — the icon form of the "Copied!" flash.
   def copied_glyph
     svg(
-      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5 hidden text-green-700 dark:text-green-400",
+      xmlns: "http://www.w3.org/2000/svg", class: "w-5 h-5 hidden text-success",
       fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", stroke_width: "2",
       aria: { hidden: "true" }, data: { clipboard_target: "copied" }
     ) do |s|
@@ -233,13 +228,13 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def proposal_block
-    div(class: "rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-xs") do
+    div(class: "rounded-lg border border-default p-3 text-xs") do
       if @suggestion.field.present?
-        p(class: "text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400") do
+        p(class: "text-[10px] font-semibold uppercase tracking-wide text-muted") do
           "#{entity_label} #{@suggestion.field}"
         end
       elsif @suggestion.clarification? && clarification_level.present?
-        p(class: "text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400") do
+        p(class: "text-[10px] font-semibold uppercase tracking-wide text-muted") do
           "#{entity_label} · L#{clarification_level}"
         end
       end
@@ -247,8 +242,8 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       if @suggestion.rationale.present?
         # A left rule marks the author's words; italics would swallow their _emphasis_.
         render Components::Kit::Prose.new(@suggestion.rationale,
-                                          class: "mt-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700 " \
-                                                 "text-[11px] text-gray-600 dark:text-gray-300")
+                                          class: "mt-2 pl-2 border-l-2 border-default " \
+                                                 "text-[11px] text-muted")
       end
       footer_line
     end
@@ -259,19 +254,19 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
       # Nothing is proposed — the question (rationale, rendered below) is the
       # content; the anchored text shows plain, never struck through.
       if @suggestion.current_value.present?
-        p(class: "mt-1 text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words") do
+        p(class: "mt-1 text-muted whitespace-pre-wrap break-words") do
           @suggestion.current_value
         end
       end
     elsif @suggestion.kind == "delete"
-      p(class: "mt-1 text-gray-700 dark:text-gray-300 line-through") do
+      p(class: "mt-1 text-muted line-through") do
         @suggestion.current_value.presence || "(this #{entity_label.downcase})"
       end
     else
       if @suggestion.current_value.present?
-        p(class: "mt-1 text-gray-500 dark:text-gray-400 line-through") { @suggestion.current_value }
+        p(class: "mt-1 text-muted line-through") { @suggestion.current_value }
       end
-      p(class: "mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words") do
+      p(class: "mt-1 text-default whitespace-pre-wrap break-words") do
         proposed_text
       end
     end
@@ -290,7 +285,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def footer_line
-    div(class: "mt-2 text-[10px] text-gray-500 dark:text-gray-400") do
+    div(class: "mt-2 text-[10px] text-muted") do
       bits = [ @author_name.presence,
                (@suggestion.created_at && "#{time_ago_in_words(@suggestion.created_at)} ago") ].compact
       span { bits.join(" · ") }
@@ -337,8 +332,8 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
   end
 
   def resolution_block
-    div(class: "mt-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 p-3 text-[11px] " \
-               "text-gray-600 dark:text-gray-300") do
+    div(class: "mt-3 rounded-lg bg-subtle p-3 text-[11px] " \
+               "text-muted") do
       plain resolution_sentence
       if @suggestion.reviewer_comment.present?
         p(class: "mt-1 italic") { "“#{@suggestion.reviewer_comment}”" }
@@ -353,7 +348,7 @@ class Views::Frameworks::Activity::SuggestionCardFrame < Views::Base
     p(class: "mt-1") do
       a(
         href: framework_suggestion_path(@framework.framework_id, @suggestion.resulting_suggestion_id),
-        class: "text-primary-ink hover:underline",
+        class: "text-link hover:text-link-hover hover:underline",
         data: { turbo_frame: "_top" }
       ) { "View the resulting suggestion →" }
     end

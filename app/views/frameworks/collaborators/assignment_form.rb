@@ -68,7 +68,7 @@ class Views::Frameworks::Collaborators::AssignmentForm < Components::Base
         id: "person_id",
         name: "collaborator[person_id]",
         required: true,
-        class: select_classes
+        class: Components::Kit::Field::SELECT
       ) do
         option(value: "") { "— Pick a person —" }
         @people.each do |person|
@@ -89,7 +89,7 @@ class Views::Frameworks::Collaborators::AssignmentForm < Components::Base
           id: "framework_id",
           name: "collaborator[framework_id]",
           required: true,
-          class: select_classes,
+          class: Components::Kit::Field::SELECT,
           data: {
             collaborator_form_target: "frameworkSelect",
             action: "change->collaborator-form#refresh"
@@ -111,7 +111,7 @@ class Views::Frameworks::Collaborators::AssignmentForm < Components::Base
         id: "role",
         name: "collaborator[role]",
         required: true,
-        class: select_classes,
+        class: Components::Kit::Field::SELECT,
         data: {
           collaborator_form_target: "roleSelect",
           action: "change->collaborator-form#refresh"
@@ -136,23 +136,12 @@ class Views::Frameworks::Collaborators::AssignmentForm < Components::Base
 
   def submit_button
     div(class: "pt-2") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 " \
-               "text-sm font-medium text-white hover:bg-primary/90 " \
-               "focus:outline-hidden focus:ring-2 focus:ring-primary/50"
-      ) { "Add assignment" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Add assignment" }
     end
   end
 
   def label_for(text, field)
     label(for: field,
-          class: "block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1") { text }
-  end
-
-  def select_classes
-    "block w-full rounded-md border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 " \
-      "shadow-xs focus:border-primary focus:ring-primary"
+          class: "block text-xs font-medium text-muted mb-1") { text }
   end
 end

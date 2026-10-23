@@ -98,7 +98,7 @@ class Views::Assessments::CategorySection < Views::Base
     # cleanly. z-10 keeps it under the z-20 unified header.
     div(
       class: "md:sticky md:z-10 -mx-6 px-6 py-3 mb-3 " \
-             "bg-gray-50/95 dark:bg-gray-950/95 md:backdrop-blur-sm " \
+             "bg-page/95 md:backdrop-blur-sm " \
              "flex flex-col gap-0.5",
       # Stable hook for matrix_controller#scrollCardUnderHeader — the
       # sticky flavour now varies by viewport (`md:sticky`), so a
@@ -113,7 +113,7 @@ class Views::Assessments::CategorySection < Views::Base
       # Wrapping is allowed so a narrow viewport drops the score below the
       # name rather than crushing it.
       div(class: "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1") do
-        h2(class: "text-lg font-bold text-gray-900 dark:text-white min-w-0") do
+        h2(class: "text-lg font-bold text-default min-w-0") do
           @category.name
         end
         render Views::Assessments::CategoryIndicators.new(
@@ -130,7 +130,7 @@ class Views::Assessments::CategorySection < Views::Base
         )
       end
       if @category.description.present?
-        p(class: "text-sm text-gray-600 dark:text-gray-300 max-w-3xl") do
+        p(class: "text-sm text-muted max-w-3xl") do
           @category.description
         end
       end

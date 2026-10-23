@@ -105,7 +105,7 @@ class Components::Kit::Modal < Components::Base
       # panel is now capped at the viewport with the header pinned and the
       # body scrolling under it, so the way out is always visible.
       div(
-        class: [ "w-full max-h-[90dvh] flex flex-col rounded-lg border border-default bg-overlay shadow-2xl outline-hidden",
+        class: [ "w-full max-h-[90dvh] flex flex-col rounded-lg border border-default bg-overlay shadow-modal outline-hidden",
                  SIZES.fetch(@size), ("p-5" if @header) ],
         tabindex: "-1",
         data: { **@panel_data, modal_target: "panel" }

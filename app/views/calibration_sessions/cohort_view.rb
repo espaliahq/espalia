@@ -55,10 +55,10 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def view_template
     render Components::Kit::Card.new do |card|
       card.body do
-        h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+        h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
           "Score by level"
         end
-        div(class: "mt-1 flex flex-wrap items-center gap-x-1 text-xs text-gray-600 dark:text-gray-300") do
+        div(class: "mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted") do
           defined_term(:pct_of_expected)
           plain "per person, grouped by assessed level — a signal to discuss, not a ranking."
         end
@@ -76,7 +76,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   private
 
   def empty_state
-    p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-4 text-sm text-muted") do
       "Nobody in the population is enrolled at a level yet — levels fill in from the cycle's enrollments."
     end
   end
@@ -94,33 +94,33 @@ class Views::CalibrationSessions::CohortView < Views::Base
         @raters.each_with_index do |rater, index|
           next unless plotted_rater_ids.include?(rater[:participant_id])
 
-          div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+          div(class: "flex items-center gap-1.5 text-xs text-muted") do
             span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(index)}", aria: { hidden: "true" })
             plain person_name(rater[:participant_id])
           end
         end
         if plotted_rater_ids.include?(nil)
-          div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
-            span(class: "inline-block h-3 w-3 rounded-full bg-gray-500 dark:bg-gray-400", aria: { hidden: "true" })
+          div(class: "flex items-center gap-1.5 text-xs text-muted") do
+            span(class: "inline-block h-3 w-3 rounded-full #{NOT_IN_SESSION_FILL}", aria: { hidden: "true" })
             plain "rated outside this session"
           end
         end
       else
-        p(class: "text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "text-xs text-muted") do
           "#{@raters.size} raters — more than the palette's #{RATER_DOT_CLASSES.size} colours, " \
             "so colours repeat; hover a dot for who rated whom."
         end
       end
-      div(class: "flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300") do
+      div(class: "flex items-center gap-1.5 text-xs text-muted") do
         span(class: "inline-block h-2.5 w-2.5 rounded-full border-2 border-dashed " \
-                    "border-gray-900 dark:border-white", aria: { hidden: "true" })
+                    "border-strong", aria: { hidden: "true" })
         plain "mostly carried"
       end
     end
   end
 
   def cohort_block(cohort)
-    div(class: "mt-5 border-t border-gray-100 dark:border-gray-800 pt-4") do
+    div(class: "mt-5 border-t border-subtle pt-4") do
       cohort_header(cohort)
       plotted = cohort[:people].select { |dot| dot[:unlocked] }
       axis(cohort, plotted) if plotted.any?
@@ -130,11 +130,8 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
   def cohort_header(cohort)
     div(class: "flex flex-wrap items-baseline gap-x-3 gap-y-1") do
-      span(class: "text-xs font-bold rounded-md border border-gray-200 dark:border-gray-700 " \
-                  "bg-gray-50 dark:bg-gray-900 px-2 py-0.5 text-gray-900 dark:text-white") do
-        "L#{cohort[:ordinal]}"
-      end
-      span(class: "text-xs text-gray-600 dark:text-gray-300") do
+      render Components::Kit::Badge.new("L#{cohort[:ordinal]}", variant: :outline)
+      span(class: "text-xs text-muted") do
         plain "#{cohort[:people].size} #{'person'.pluralize(cohort[:people].size)}"
         if cohort[:median_pct]
           plain " · "
@@ -159,7 +156,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
 
     div(class: "overflow-x-auto") do
       div(class: "relative mt-6 min-w-[480px]", style: "height: #{height}px") do
-        span(class: "absolute left-0 right-0 top-[30px] h-1.5 rounded-full bg-gray-100 dark:bg-gray-700")
+        span(class: "absolute left-0 right-0 top-[30px] h-1.5 rounded-full bg-neutral-subtle")
         reference_line(100, "100% — meets expectations")
         reference_line(200, "200% — next level")
         median_tick(cohort[:median_pct]) if cohort[:median_pct]
@@ -172,9 +169,9 @@ class Views::CalibrationSessions::CohortView < Views::Base
   # overhang the track and force a sideways scrollbar under every chart.
   def reference_line(pct, label)
     at_end = pct >= AXIS_MAX_PCT
-    span(class: "absolute top-2 bottom-1 w-px bg-gray-300 dark:bg-gray-600",
+    span(class: "absolute top-2 bottom-1 w-px bg-(--gos-border-emphasized)",
          style: "left: #{position_pct(pct)}%") do
-      span(class: "absolute -top-4 whitespace-nowrap text-[10px] text-gray-600 dark:text-gray-300 " \
+      span(class: "absolute -top-4 whitespace-nowrap text-[10px] text-muted " \
                   "#{at_end ? 'right-0' : 'left-1/2 -translate-x-1/2'}") do
         label
       end
@@ -182,7 +179,7 @@ class Views::CalibrationSessions::CohortView < Views::Base
   end
 
   def median_tick(median_pct)
-    span(class: "absolute top-[24px] h-[18px] w-0.5 rounded bg-gray-900 dark:bg-white opacity-60",
+    span(class: "absolute top-[24px] h-[18px] w-0.5 rounded bg-neutral-strong opacity-60",
          style: "left: #{position_pct(median_pct)}%",
          title: "Level median: #{median_pct}%")
   end
@@ -217,8 +214,8 @@ class Views::CalibrationSessions::CohortView < Views::Base
       span(
         class: "inline-flex items-center justify-center rounded-full " \
                "#{selected || pinned ? 'h-[42px] w-[42px] text-xs' : 'h-7 w-7 text-[10px]'} " \
-               "font-semibold text-white dark:text-gray-900 border-2 " \
-               "#{dot[:carried_majority] ? 'border-dashed border-gray-900 dark:border-white' : 'border-white dark:border-gray-800'} " \
+               "font-semibold text-on-mark border-2 " \
+               "#{dot[:carried_majority] ? 'border-dashed border-strong' : 'border-(--gos-surface-default)'} " \
                "#{dot_fill(dot)}"
       ) { initials(name) }
     end
@@ -241,14 +238,14 @@ class Views::CalibrationSessions::CohortView < Views::Base
   def gated_row(gated)
     return if gated.empty?
 
-    div(class: "mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "mt-2 flex flex-wrap items-center gap-2 text-xs text-muted") do
       gated.each do |dot|
         # A gated person still opens in the drawer — the card shows the
         # gate's copy instead of a number. The glossary tip renders OUTSIDE
         # the link: a <button> inside an <a> is invalid HTML and the click
         # would navigate instead of defining the term.
         span(class: "inline-flex items-center gap-1.5 rounded-full border border-dashed " \
-                    "border-gray-300 dark:border-gray-600 px-2.5 py-1 min-h-11") do
+                    "border-emphasized px-2.5 py-1 min-h-11") do
           a(href: cohort_path(person: dot[:person_id]),
             class: "hover:underline",
             aria: { label: "Open #{person_name(dot[:person_id])} in the comparison drawer" }) do

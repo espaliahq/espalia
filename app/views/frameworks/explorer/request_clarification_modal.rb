@@ -44,7 +44,7 @@ class Views::Frameworks::Explorer::RequestClarificationModal < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       anchor_fields
 
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "Ask a question or flag something for review. This opens a discussion others can join — " \
           "it proposes no change."
       end
@@ -67,8 +67,8 @@ class Views::Frameworks::Explorer::RequestClarificationModal < Views::Base
   # Where in the framework the question is anchored, e.g.
   # "Strategic Thinking · L5" or "… · L5 · Software Engineer example".
   def context_line
-    p(class: "hidden rounded-md bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm " \
-             "font-medium text-gray-700 dark:text-gray-200",
+    p(class: "hidden rounded-md bg-subtle px-3 py-2 text-sm " \
+             "font-medium text-muted",
       data: { request_clarification_form_target: "context" })
   end
 
@@ -78,10 +78,10 @@ class Views::Frameworks::Explorer::RequestClarificationModal < Views::Base
   def level_field
     div(class: "hidden", data: { request_clarification_form_target: "levelField" }) do
       label(for: "clarification_level_ordinal",
-            class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Level" }
+            class: "block text-sm font-medium text-default mb-1") { "Level" }
       select(
         id: "clarification_level_ordinal", name: "clarification[level_ordinal]",
-        class: field_classes,
+        class: Components::Kit::Field::SELECT,
         data: { request_clarification_form_target: "levelSelect" }
       )
     end
@@ -90,34 +90,21 @@ class Views::Frameworks::Explorer::RequestClarificationModal < Views::Base
   def question_field
     div do
       label(for: "clarification_rationale",
-            class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Your question" }
+            class: "block text-sm font-medium text-default mb-1") { "Your question" }
       textarea(
         id: "clarification_rationale", aria: { describedby: "clarification_rationale-hint" }, name: "clarification[rationale]", rows: "3", required: true,
-        class: field_classes,
+        class: Components::Kit::Field::TEXTAREA,
         placeholder: "e.g. Is third-party integration the right example at this level?",
         data: { request_clarification_form_target: "question" }
       )
-      p(id: "clarification_rationale-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
+      p(id: "clarification_rationale-hint", class: "mt-1 text-xs text-muted") { Prose::COMPOSER_HINT }
     end
   end
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-primary/80 transition-colors"
-      ) { "Start discussion" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Start discussion" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
-  end
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
   end
 end

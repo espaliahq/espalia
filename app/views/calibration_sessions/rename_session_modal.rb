@@ -27,31 +27,19 @@ class Views::CalibrationSessions::RenameSessionModal < Views::Base
       input(type: "hidden", name: "_method", value: "patch")
       div do
         label(for: "rename-session-name",
-              class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") { "Name" }
+              class: "block text-sm font-medium text-default mb-1") { "Name" }
         input(
           id: "rename-session-name", type: "text", name: "calibration_session[name]",
           # Whitespace-only is refused here too, so the server's refusal —
           # a redirect that closes the dialog — is left for a real race.
           required: true, pattern: ".*\\S.*", title: "The name can’t be blank", autocomplete: "off",
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-700 " \
-                 "dark:focus-visible:ring-blue-300",
+          class: Components::Kit::Field::INPUT,
           data: { rename_session_form_target: "name" }
         )
       end
       div(class: "flex items-center gap-3") do
-        button(
-          type: "submit",
-          # The neutral pairing, not white on bg-primary (phlex-views.md, #447).
-          class: "inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold " \
-                 "text-white hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 " \
-                 "transition-colors"
-        ) { "Save" }
-        button(
-          type: "button", data: { action: "click->modal#close" },
-          class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-        ) { "Cancel" }
+        render Components::Kit::Button.new(tone: :brand, type: :submit) { "Save" }
+        render Components::Kit::Button.new(variant: :outline, data: { action: "click->modal#close" }) { "Cancel" }
       end
     end
   end

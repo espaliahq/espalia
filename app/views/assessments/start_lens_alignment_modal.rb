@@ -31,22 +31,15 @@ class Views::Assessments::StartLensAlignmentModal < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "as_role", value: @lens.role.role_id)
       input(type: "hidden", name: "as_level", value: @lens.level.ordinal)
-      ul(class: "list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-200") do
+      ul(class: "list-disc pl-5 space-y-1 text-sm text-muted") do
         li { "#{@first_name} sees your ratings on the #{@lens.label} capabilities." }
         li { "Both of your ratings on those capabilities lock, including the ones #{@lens.home_code} shares." }
         li { "Capabilities you already agree on are agreed automatically." }
       end
       div(class: "flex justify-end gap-2 pt-1") do
-        button(type: "button", data: { action: "click->modal#close" },
-               class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 " \
-                      "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer") do
-          "Cancel"
-        end
-        button(type: "submit",
-               class: "text-sm font-semibold px-3 py-1.5 rounded-md bg-gray-900 dark:bg-white text-white " \
-                      "dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 cursor-pointer") do
-          "Start alignment"
-        end
+        render Components::Kit::Button.new(variant: :outline, size: :sm,
+                                           data: { action: "click->modal#close" }) { "Cancel" }
+        render Components::Kit::Button.new(size: :sm, type: :submit) { "Start alignment" }
       end
     end
   end

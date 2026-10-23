@@ -53,7 +53,7 @@ class Views::Frameworks::Explorer::CapabilityNameFrame < Views::Base
   private
 
   def plain_name
-    base = "text-sm font-medium text-gray-900 dark:text-white"
+    base = "text-sm font-medium text-default"
     if @pending_edit
       span(class: base) do
         render_inline_diff(original: @capability.name, pending_edit: @pending_edit)

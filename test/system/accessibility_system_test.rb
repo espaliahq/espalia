@@ -162,6 +162,50 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "current page (WCAG 2.4.8)" do
+    should "mark the navbar link for the section the page is in, and only that one" do
+      visit root_path
+      assert_selector "nav a[aria-current='page']", text: "Home", count: 1
+
+      visit frameworks_path
+      assert_selector "nav a[aria-current='page']", text: "Frameworks", count: 1
+      assert_no_selector "nav a[aria-current='page']", text: "Home"
+    end
+
+    should "mark the drawer link for the section, from a page inside it" do
+      ActsAsTenant.with_tenant(@tenant) { TenantUser.find_by!(user: @user).update!(role: "admin") }
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit tenant_users_path
+      toggle_sidebar
+
+      within("aside[data-sidebar-target='drawer']") do
+        assert_selector "a[aria-current='page']", text: "Admin", count: 1
+        assert_no_selector "a[aria-current='page']", text: "Home"
+      end
+    end
+  end
+
+  context "pointer cursor" do
+    should "show the pointer on a plain button and not-allowed once it is disabled" do
+      visit root_path
+      assert_text "Home"
+
+      cursors = page.evaluate_script(<<~JS)
+        (() => {
+          const button = document.querySelector("#user-menu button");
+          const before = getComputedStyle(button).cursor;
+          button.disabled = true;
+          const disabled = getComputedStyle(button).cursor;
+          button.disabled = false;
+          return { before, disabled };
+        })()
+      JS
+
+      assert_equal "pointer", cursors["before"], "the avatar trigger carries no cursor utility, so the base rule must supply it"
+      assert_equal "not-allowed", cursors["disabled"]
+    end
+  end
+
   private
 
   # Smaller of the rendered width/height for the first element matching the

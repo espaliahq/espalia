@@ -53,7 +53,7 @@ class Views::Frameworks::Explorer::RoleNameFrame < Views::Base
   def plain_name
     ghost = ghost_role?(@role)
     span(
-      class: "text-sm text-gray-600 dark:text-gray-400 break-words " \
+      class: "text-sm text-muted break-words " \
              "#{suggestion_text_classes(added_in_draft: ghost)}",
       title: (ghost ? role_ghost_title : @role.name)
     ) { @role.name }

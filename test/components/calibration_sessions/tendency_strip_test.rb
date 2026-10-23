@@ -103,9 +103,9 @@ class Views::CalibrationSessions::TendencyStripTest < ActiveSupport::TestCase
       fresh = render_strip(rater(carried_count: 0, org_delta: 0.9))
       carried = render_strip(rater(carried_count: 10, org_delta: 0.9))
 
-      assert_includes fresh, "text-amber-700"
-      # Both the org-delta cell AND the carried note are amber.
-      assert_equal 2, carried.scan("text-amber-700").size,
+      assert_includes fresh, "text-warning"
+      # Both the org-delta cell AND the carried note are warning-toned.
+      assert_equal 2, carried.scan("text-warning").size,
         "a tendency built from values the rater declined to revisit is still theirs"
       assert_includes carried, "+0.9"
     end

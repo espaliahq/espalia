@@ -71,7 +71,7 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
 
       should "offer a secondary Decline request button that opens a hidden reason dialog" do
-        trigger = css_select("button.kit-btn-secondary[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline request" }
+        trigger = css_select("button.border-tone[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline request" }
         assert trigger, "expected a secondary Decline request button"
         assert_select "[role='dialog'].hidden##{trigger["data-modal-target-id"]}" do
           assert_select "textarea[name='evidence_request[reason]']"

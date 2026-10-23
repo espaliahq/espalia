@@ -11,7 +11,7 @@
 #
 class Components::Kit::Toast < Components::Base
   # Overlays share Kit::Dropdown's shadow step
-  FLOAT = "pointer-events-auto w-full shadow-lg"
+  FLOAT = "pointer-events-auto w-full shadow-overlay"
 
   # @param tone [Symbol] see {Components::Kit::Alert::TONES}
   # @param emphasis [Symbol] :subtle or :solid
@@ -19,7 +19,7 @@ class Components::Kit::Toast < Components::Base
   # @param icon [String, nil] a {Components::Kit::IconSprite} glyph to lead with
   # @param dismiss_after [Integer] milliseconds on screen; 0 keeps it until dismissed.
   #   Defaults to 7 seconds for danger, which takes longer to act on, and 5 otherwise.
-  # @param role [Symbol, nil] :status or :alert; defaults to :alert for danger
+  # @param role [Symbol, nil] :status, :alert, or :none inside a live region; defaults to :alert for danger
   def initialize(tone: :neutral, emphasis: :subtle, title: nil, icon: nil, dismiss_after: nil, role: nil)
     @tone = tone
     @emphasis = emphasis

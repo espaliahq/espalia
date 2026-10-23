@@ -49,12 +49,12 @@ class Views::Assessments::ScoreBar < Views::Base
     end
 
     div(id: @id, class: @size[:wrap], data: { score_bar: "true" }) do
-      div(class: "relative #{@size[:track]} rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden",
+      div(class: "relative #{@size[:track]} rounded-full bg-neutral-muted overflow-hidden",
           role: "progressbar",
           aria: { valuenow: [ pct, max ].min, valuemin: 0, valuemax: max, label: label }) do
         div(class: "h-full rounded-full #{tone_bar(@state)}", style: "width: #{fill}%") { }
         (1..bands).each do |i|
-          span(class: "absolute inset-y-0 #{@size[:divider]} bg-white dark:bg-gray-900",
+          span(class: "absolute inset-y-0 #{@size[:divider]} bg-overlay",
                style: "left: #{(100.0 * i / (bands + 1)).round(2)}%", aria: { hidden: "true" }) { }
         end
       end
@@ -65,7 +65,7 @@ class Views::Assessments::ScoreBar < Views::Base
   private
 
   def tick_labels(bands)
-    div(class: "mt-1 flex justify-between text-[10px] text-gray-600 dark:text-gray-300 tabular-nums",
+    div(class: "mt-1 flex justify-between text-[10px] text-muted tabular-nums",
         aria: { hidden: "true" }) do
       span { "0" }
       span { "100% · #{current_code}" }
