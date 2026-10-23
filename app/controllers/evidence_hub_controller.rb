@@ -29,13 +29,17 @@ class EvidenceHubController < ApplicationController
     responses = responses_for(completed_outgoing)
     shown = authored + to_place_about_me + to_place_for_team
     responded_items = responses.values.map { |r| r[:item] }
-    # A suggestion block's id is the item's, so an item listed elsewhere on
-    # the page must not be listed again under "May fit elsewhere too".
+    # A suggestion block's id is the item's, so an item whose block shows
+    # elsewhere on the page must not be listed again under "May fit elsewhere
+    # too". The viewer's own self feedback is the exception: its suggestions
+    # show there, and its card under "Feedback you've provided" leaves them out.
     # Suggestion work only when something could show: a pending row somewhere,
     # or a tenant that can ask for one. Off is the default.
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
     suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
-    with_suggestions = suggestions_live ? placed_with_suggestions(exclude: (shown + responded_items).map(&:id)) : []
+    listed_elsewhere = shown.reject { |item| item.source == "self" && item.author_id == current_person.id } + responded_items
+    all_with_suggestions = suggestions_live ? placed_with_suggestions(exclude: listed_elsewhere.map(&:id)) : []
+    with_suggestions = elsewhere_all? ? all_with_suggestions : all_with_suggestions.first(Views::Evidence::HubView::ELSEWHERE_LIMIT)
     decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
@@ -60,6 +64,9 @@ class EvidenceHubController < ApplicationController
       responses: responses,
       in_situ_paths: in_situ_paths_for(authored + responses.values.map { |r| r[:item] }),
       with_suggestions: with_suggestions,
+      elsewhere_ids: all_with_suggestions.to_set(&:id),
+      elsewhere_all: elsewhere_all?,
+      hub_params: hub_params,
       suggestions: Evidence::PlacementSuggestionRows.for(decidable),
       decidable_ids: decidable.to_set(&:id),
       can_regenerate: can_regenerate,
@@ -84,6 +91,17 @@ class EvidenceHubController < ApplicationController
     @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
   end
 
+  def elsewhere_all? = params[:elsewhere] == "all"
+
+  # The hub's view state, for links that change one part of it. Only the two
+  # view keys travel: anything else would reach the URL helper, where a
+  # reserved option such as script_name rewrites the link's host.
+  HUB_VIEW_PARAMS = %w[place elsewhere].freeze
+
+  def hub_params
+    request.query_parameters.slice(*HUB_VIEW_PARAMS).symbolize_keys
+  end
+
   # "My team" unless the URL asks for the whole org.
   def place_param
     params[:place] == "org" ? "org" : ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
@@ -98,13 +116,17 @@ class EvidenceHubController < ApplicationController
 
   # Placed items about the viewer, or about the assessments in the chosen
   # view, with pending placement suggestions — the extra cells the model sees.
+  # Feedback the viewer gave someone else stays under "Feedback you've
+  # provided"; their self feedback is about them, so it is listed here.
   def placed_with_suggestions(exclude:)
     keys = ::Assessments::FeedbackToPlace.new(current_person).assignments(place_param).keys.to_set
     person_ids = [ current_person.id, *keys.map(&:first) ].uniq
     pending = EvidencePlacementSuggestion.pending.where(person_id: person_ids)
+    items = EvidenceItem.arel_table
 
     EvidenceItem.active.where(id: pending.select(:evidence_id)).where.not(id: exclude)
-      .where.not(author_id: current_person.id).where.not(capability_stable_id: nil)
+      .where(items[:author_id].not_eq(current_person.id).or(items[:source].eq("self")))
+      .where.not(capability_stable_id: nil)
       .includes(:author).order(recorded_at: :desc).to_a
       .select { |item| item.person_id == current_person.id || keys.include?([ item.person_id, item.framework_id ]) }
   end

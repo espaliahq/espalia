@@ -2,6 +2,34 @@
 
 namespace :evidence do
   namespace :suggestions do
+    desc "Ask for placement suggestions on self feedback that has none. A dry run by default; CONFIRM=1 enqueues " \
+         "one suggestion run per item (one model call, more only on retries), PER_MINUTE (default 20) a minute. " \
+         "TENANT=<slug> narrows it to one workspace."
+    task backfill_self: :environment do
+      backfill =
+        begin
+          Evidence::SelfFeedbackBackfill.new(
+            tenant_slug: ENV["TENANT"],
+            per_minute: ENV.fetch("PER_MINUTE", Evidence::SelfFeedbackBackfill::DEFAULT_PER_MINUTE)
+          )
+        rescue ArgumentError => e
+          abort e.message
+        end
+      backfill.candidates.each { |tenant, ids| puts "  #{tenant.slug}: #{ids.size}" }
+      skipped = backfill.skipped_tenants.map(&:slug)
+      puts "  Skipped, suggestions off or no model: #{skipped.join(', ')}" if skipped.any?
+
+      if ENV["CONFIRM"] == "1"
+        enqueued = backfill.enqueue!
+        puts "Enqueued #{enqueued} suggestion runs for self feedback, #{backfill.per_minute} a minute, " \
+             "one model call each unless the provider rate-limits or fails and the job retries. " \
+             "The last is due in about #{backfill.minutes(enqueued)} minutes."
+      else
+        puts "Dry run: #{backfill.count} self feedback items would get suggestions, one model call each " \
+             "(more only on retries), #{backfill.per_minute} a minute, the last due in about #{backfill.minutes} minutes. Run again with CONFIRM=1 to enqueue."
+      end
+    end
+
     desc "Score placement suggestions against the hand-placed fixtures, through a tenant's configured model " \
          "(evidence:suggestions:eval[slug], MODEL=… to try another id; SUGGESTION_MODEL=baseline needs no tenant). Not run in CI."
     task :eval, [ :tenant ] => :environment do |_task, args|

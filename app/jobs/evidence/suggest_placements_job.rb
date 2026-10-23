@@ -5,12 +5,20 @@
 #
 # Enqueued by {PersonDevelopment::AsyncHandlers::PlacementSuggester} when
 # feedback is recorded or edited, and by the hub's "Suggest again". A no-op
-# unless the tenant switched suggestions on and has a model and key configured, and
-# for self feedback. Each run supersedes the pending set it replaces. Nothing
+# unless the tenant switched suggestions on and has a model and key configured.
+# Each run supersedes the pending set it replaces. Nothing
 # here can fail the write that triggered it: it runs after that write
 # committed, and every failure ends in "no suggestions".
 class Evidence::SuggestPlacementsJob < ApplicationJob
   queue_as :default
+
+  # Every run is a paid model call, so a run is asked for at most once per
+  # item in this window, however it is asked for.
+  REQUEST_INTERVAL = 1.minute
+
+  # How long a model's answer about an item, empty or not, keeps the
+  # self feedback backfill from asking again.
+  ANSWER_REMEMBERED = 90.days
 
   GIVE_UP = ->(job, error) { Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: gave up, #{error.message}") }
 
@@ -20,6 +28,34 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   discard_on Evidence::SuggestionModel::Rejected do |job, error|
     Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: request rejected, #{error.message}")
   end
+
+  # Enqueues a run unless one was asked for inside the window (a double
+  # "Suggest again", a backfill run twice). A run scheduled for later holds
+  # its claim until it is due; an enqueue that fails, or raises, gives the
+  # claim back.
+  #
+  # @param evidence_id [String]
+  # @param wait [ActiveSupport::Duration] how long until the run is due
+  # @return [Symbol] :enqueued, :already_requested, or :failed
+  def self.request_run(evidence_id, wait: 0.seconds)
+    key = "evidence-suggestions:requested:#{evidence_id}"
+    return :already_requested unless Rails.cache.write(key, true, expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
+
+    begin
+      job = set(wait: wait).perform_later(evidence_id)
+    rescue StandardError
+      Rails.cache.delete(key)
+      raise
+    end
+    return :enqueued if job && job.successfully_enqueued?
+
+    Rails.cache.delete(key)
+    :failed
+  end
+
+  # @param evidence_id [String]
+  # @return [String] the cache key set once the model answered about the item
+  def self.answered_key(evidence_id) = "evidence-suggestions:answered:#{evidence_id}"
 
   # @param evidence_id [String]
   def perform(evidence_id)
@@ -47,12 +83,18 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     asked_about = item.content
     model = Evidence::SuggestionModel.new(tenant: item.tenant)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
-    after_generate(item) if store(item, proposals, model: model, asked_about: asked_about)
+    return unless store(item, proposals, model: model, asked_about: asked_about)
+
+    Rails.cache.write(self.class.answered_key(item.id), true, expires_in: ANSWER_REMEMBERED)
+    after_generate(item)
   end
 
+  # Feedback an HRIS sync or a system job wrote carries no one's judgement to
+  # place, however the run was asked for.
   def suggestable?(item)
     item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
-      item.link_status == "active" && item.source != "self"
+      item.link_status == "active" &&
+      !PersonDevelopment::AsyncHandlers::PlacementSuggester::NON_HUMAN_SURFACES.include?(item.recorded_via.to_s)
   end
 
   # The schema keeps each field to known values; only the framework can say

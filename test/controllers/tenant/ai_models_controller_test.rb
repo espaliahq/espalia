@@ -82,6 +82,13 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "option", text: "Vercel AI Gateway: Jev (TypeSafe AI)"
       end
 
+      should "say self feedback goes to the model too" do
+        get tenant_integration_path("ai-model")
+
+        assert_includes response.body, "when it is recorded or edited, self feedback included"
+        assert_not_includes response.body, "Self feedback never does"
+      end
+
       should "never echo a stored key" do
         configure_gateway
         get tenant_integration_path("ai-model")

@@ -94,13 +94,17 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
           level_ordinal: 3, valence: "demonstrated", confidence: 0.9, rationale: "x") ]
     end
 
-    Evidence::SuggestionModel.stub(:configured?, true) do
-      Evidence::SuggestionModel.stub(:new, ->(**) { editing_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        Evidence::SuggestionModel.stub(:new, ->(**) { editing_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+      end
+      assert_not Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(item.id)),
+                 "an answer about text that changed is not remembered, so the backfill asks again"
     end
     assert_empty suggestions_for(item)
   end
 
-  should "do nothing when the tenant has suggestions off, without a key, or for self feedback" do
+  should "do nothing when the tenant has suggestions off or without a key" do
     item = record_peer_feedback
     switch_suggestions(@tenant, false)
     fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
@@ -112,9 +116,67 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
         Evidence::SuggestPlacementsJob.perform_now(item.id)
       end
     end
+    assert_empty suggestions_for(item)
+  end
 
-    ActsAsTenant.with_tenant(@tenant) { item.update_columns(source: "self") }
-    fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+  should "suggest other cells for self feedback, never the one it was recorded on" do
+    item = record_self_feedback
+    fake = with_fake_suggestion_model(proposals: [ proposal(@ownership), proposal(@collaboration) ]) do
+      Evidence::SuggestPlacementsJob.perform_now(item.id)
+    end
+
+    assert_equal [ [ @ownership.stable_id, 3 ] ], suggestions_for(item).map(&:cell)
+    assert_equal %w[pending], suggestions_for(item).map(&:status)
+    assert_includes fake.prompts.last.item_text, "Feedback from the person themselves"
+    assert_not fake.prompts.last.open_cell?(@collaboration.stable_id, 3), "the cell it was recorded on is closed"
+  end
+
+  should "remember that the model answered, but not a run that failed" do
+    answered = record_peer_feedback
+    failed = record_peer_feedback(content: "Another one.")
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      with_fake_suggestion_model(proposals: []) { Evidence::SuggestPlacementsJob.perform_now(answered.id) }
+      with_fake_suggestion_model(error: Evidence::SuggestionModel::Rejected.new("401")) do
+        Evidence::SuggestPlacementsJob.perform_now(failed.id)
+      end
+
+      assert Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(answered.id))
+      assert_not Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(failed.id))
+    end
+  end
+
+  should "request one run per item a minute, and give the claim back when the enqueue fails" do
+    item = record_peer_feedback
+    clear_enqueued_jobs
+    failing = Struct.new(:id) { def perform_later(*) = false }.new(1)
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestPlacementsJob.stub(:set, ->(**) { failing }) do
+        assert_equal :failed, Evidence::SuggestPlacementsJob.request_run(item.id)
+      end
+      assert_equal :enqueued, Evidence::SuggestPlacementsJob.request_run(item.id)
+      assert_equal :already_requested, Evidence::SuggestPlacementsJob.request_run(item.id)
+    end
+    assert_enqueued_jobs 1, only: Evidence::SuggestPlacementsJob
+  end
+
+  should "give the claim back when the enqueue raises, and let the error through" do
+    item = record_peer_feedback
+    clear_enqueued_jobs
+    raising = Struct.new(:id) { def perform_later(*) = raise(ActiveJob::EnqueueError, "queue down") }.new(1)
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestPlacementsJob.stub(:set, ->(**) { raising }) do
+        assert_raises(ActiveJob::EnqueueError) { Evidence::SuggestPlacementsJob.request_run(item.id) }
+      end
+      assert_equal :enqueued, Evidence::SuggestPlacementsJob.request_run(item.id)
+    end
+  end
+
+  should "ask nothing about feedback an HRIS sync or a system job wrote, however the run was asked for" do
+    item = record_peer_feedback
+    ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: item.id).update_all(recorded_via: "hris") }
+
+    fake = with_fake_suggestion_model(proposals: []) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+
     assert_empty fake.prompts
     assert_empty suggestions_for(item)
   end

@@ -12,14 +12,15 @@
 class Evidence::PlacementPrompt
   # Recorded on every row, so the eval and the hub can tell prompts apart.
   # Bump it whenever the instructions, the framework text or the schema change.
-  VERSION = "2026-10-20.1"
+  VERSION = "2026-10-23.1"
   ILLUSTRATIONS_PER_CELL = 3
   LEVEL_WINDOW = 1
 
   RELATIONSHIPS = {
     "manager_to_report" => "their manager",
     "report_to_manager" => "someone who reports to them",
-    "peer_to_peer" => "a peer"
+    "peer_to_peer" => "a peer",
+    "self" => "the person themselves"
   }.freeze
 
   VALENCE_MEANINGS = {
@@ -202,9 +203,15 @@ class Evidence::PlacementPrompt
     end.join("; ")
   end
 
+  # Items recorded before feedback_direction existed carry none; their source
+  # still says who gave it.
   def relationship
     RELATIONSHIPS.fetch(item.feedback_direction.to_s) do
-      item.source == "manager" ? "their manager" : "a colleague"
+      case item.source
+      when "self" then RELATIONSHIPS["self"]
+      when "manager" then RELATIONSHIPS["manager_to_report"]
+      else "a colleague"
+      end
     end
   end
 

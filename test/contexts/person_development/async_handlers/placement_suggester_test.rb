@@ -33,14 +33,17 @@ class PersonDevelopment::AsyncHandlers::PlacementSuggesterTest < ActiveJob::Test
     end
   end
 
-  should "leave self feedback and tenants with suggestions off alone" do
-    item = record_peer_feedback
-    ActsAsTenant.with_tenant(@tenant) { item.update_columns(source: "self") }
-    assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { handle(event_for(item)) }
-
-    ActsAsTenant.with_tenant(@tenant) do
-      item.update_columns(source: "peer")
+  should "enqueue suggestions for self feedback, recorded or edited" do
+    item = record_self_feedback
+    assert_enqueued_with(job: Evidence::SuggestPlacementsJob, args: [ item.id ]) { handle(event_for(item)) }
+    assert_enqueued_with(job: Evidence::SuggestPlacementsJob, args: [ item.id ]) do
+      handle(event_for(item, klass: PersonDevelopment::Events::EvidenceUpdated))
     end
+  end
+
+  should "leave tenants with suggestions off alone" do
+    item = record_peer_feedback
+    clear_enqueued_jobs
     switch_suggestions(@tenant, false)
     assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { handle(event_for(item)) }
   end

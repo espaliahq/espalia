@@ -296,12 +296,36 @@ Rules, all deliberate:
   (`Tenant#legacy_evidence_suggestions_enabled?` and the key fallback in
   `Tenant#ai_api_key`) is for one release: delete it once every tenant has
   been saved through the card.
-- **Only human feedback about someone else.** The async handler
+- **Only human feedback, self feedback included.** The async handler
   `PlacementSuggester` enqueues `Evidence::SuggestPlacementsJob` on
-  `EvidenceRecorded` and on `EvidenceUpdated`, skipping `source: "self"` and
-  events whose `acting_via` is `hris` or `system`. An edit supersedes the
-  pending set. It is never a projection: replaying it would re-ask the model
-  about every item ever recorded.
+  `EvidenceRecorded` and on `EvidenceUpdated`, skipping events whose
+  `acting_via` is `hris` or `system`. An edit supersedes the pending set. It
+  is never a projection: replaying it would re-ask the model about every
+  item ever recorded. Self feedback was left out at first, as "the person
+  placing their own words". That holds for unplaced feedback, but self
+  feedback is always recorded from a cell, so it is never unplaced; what it
+  gets is "May fit elsewhere too". It is two thirds of all feedback in
+  production, and one example often speaks to several capabilities, so it
+  is where those suggestions help most
+  ([#622](https://github.com/mr-yum/growth-os/issues/622)). The prompt
+  names its giver as "the person themselves".
+- **No automatic backfill.** Self feedback recorded before that gets
+  suggestions when it is next edited. `bin/rails
+  evidence:suggestions:backfill_self` (`Evidence::SelfFeedbackBackfill`)
+  covers the rest when an admin chooses to: active, placed self feedback
+  that no HRIS sync or system job wrote, with no pending or decided
+  suggestion, in workspaces with suggestions on
+  and a model configured. Without `CONFIRM=1` it only prints the count per
+  workspace. With it, it schedules one job per item, `PER_MINUTE` (default
+  20) a minute, and each claims the item's run through
+  `SuggestPlacementsJob.request_run`, the guard "Suggest again" uses, which
+  gives the claim back if the enqueue fails. An answer that suggests nothing
+  leaves no row, so the job remembers for 90 days, in the cache, every item
+  the model answered about (`SuggestPlacementsJob.answered_key`), and the
+  backfill skips those. A run that gave up after its retries leaves the item
+  for the next backfill. `TENANT=<slug>` narrows it. Each item is one run:
+  one model call, more only when the provider rate-limits or fails and the
+  job retries.
 - **The model can only answer with cells that exist.**
   `Evidence::PlacementPrompt` takes the recipient's role cells from
   `FrameworkCellOptions#expectation_map` at their level and one either side,
@@ -453,7 +477,8 @@ Rules, all deliberate:
   then says "from a suggestion". Dismissals keep an optional reason and are
   not feed entries.
 - **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager
-  chain, a rating delegate and the author. Plan decision D5 may narrow it to
+  chain, a rating delegate and the author. For self feedback the author is
+  the recipient, so the person decides on their own words. Plan decision D5 may narrow it to
   the manager side.
 - **On the hub, in place.** Each item the viewer may place shows its pending
   suggestions — capability · level, the valence badge, "82% confident" as
@@ -461,7 +486,29 @@ Rules, all deliberate:
   "Feedback you've provided", the responses you asked for, and a "May fit
   elsewhere too" group for placed items about you or your reports with more
   cells to go (a different name from the block's own "Suggested placements"
-  heading, so the page doesn't say it twice). Accept and Dismiss answer with a Turbo Stream that replaces
+  heading, so the page doesn't say it twice). Your own self feedback is
+  listed there too, "From you", and its card under "Feedback you've
+  provided" then leaves out the block and the anchor, which must be unique
+  on the page. A manager sees a report's self feedback there like any other
+  item; a peer never does, as they see no one else's self feedback.
+  The hub runs from what someone is owed to what is optional to history:
+  "Feedback to place" (placement work the viewer owes), "Open requests"
+  (someone is waiting), then "May fit elsewhere too" (optional tidy-ups),
+  then the completed requests and "Feedback you've provided". Above the
+  requests, even five suggestion cards pushed them about 1.5 screens down
+  on a desktop and 4 on a phone. Once self feedback carries suggestions the
+  group can hold dozens of items, so it also shows the five most recent
+  (`HubView::ELSEWHERE_LIMIT`) with "Showing 5 of N" and a plain "Show all
+  (N)" link to `?elsewhere=all`, which works without JavaScript; "Show
+  fewer" goes back. Both links carry only the hub's two view keys, `place`
+  and `elsewhere` (`EvidenceHubController::HUB_VIEW_PARAMS`): any other key
+  would reach the URL helper, where a reserved option such as `script_name`
+  rewrites the link's host, and `give` or `draft` would reopen the modal. An item past the
+  cap waits for "Show all": its card under "Feedback you've provided" still
+  leaves its suggestions out, but keeps the anchor while the item is not
+  listed above. A decided row leaves its card, and the last one leaves the
+  card with its status line until the next load: the card stays put, only
+  what is below it rises by the row's height, and no capped item slides in. Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an

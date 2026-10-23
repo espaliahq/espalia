@@ -147,6 +147,18 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
         assert_select "nav a[aria-current='page']", text: "My whole org · 2"
       end
 
+      should "keep the rest of the hub's view on the toggle" do
+        get evidence_hub_path(elsewhere: "all", give: "1")
+        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", anchor: "feedback-to-place")}']", text: "My team · 1"
+        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", place: "org", anchor: "feedback-to-place")}']"
+      end
+
+      should "carry only the view keys into its links, never a reserved URL option" do
+        get "/evidence?elsewhere=all&script_name=%2F%2Fattacker.example&host=attacker.example&give=1"
+        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", place: "org", anchor: "feedback-to-place")}']"
+        assert_select "a[href*='attacker']", count: 0
+      end
+
       should "treat an unknown view as the team" do
         get evidence_hub_path(place: "tenant")
         assert_select "##{EvidenceItem.dom_id(@deep_item)}", count: 0

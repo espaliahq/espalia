@@ -27,6 +27,8 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
     post path, params: params, headers: { "Accept" => "text/vnd.turbo-stream.html, text/html" }
   end
 
+  def listed_ids = css_select("#suggested-placements [id^='evidence-item-']").map { |card| card["id"] }
+
   def links
     ActsAsTenant.with_tenant(@tenant) { EvidenceLink.active.where(evidence_id: @item.id).pluck(:capability_stable_id, :level_ordinal) }
   end
@@ -75,6 +77,119 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       sign_in @morgan_user
       get evidence_hub_path
       assert_select "#suggested-placements ##{EvidenceItem.dom_id(placed.id)} li[data-suggestion-id]", count: 1
+    end
+
+    context "on self feedback" do
+      setup do
+        @self_item = record_self_feedback
+        ActsAsTenant.with_tenant(@tenant) do
+          @self_suggestion = create(:evidence_placement_suggestion, tenant: @tenant, item: @self_item,
+            capability_stable_id: @ownership.stable_id, level_ordinal: 3)
+        end
+      end
+
+      should "list it for the person it is about under May fit elsewhere too, once" do
+        sign_in @alex_user
+        get evidence_hub_path
+
+        assert_select "#suggested-placements ##{EvidenceItem.dom_id(@self_item.id)}" do
+          assert_select "p", text: /\AFrom you · /
+          assert_select "li[data-suggestion-id='#{@self_suggestion.id}']", 1
+        end
+        assert_select "##{EvidenceItem.dom_id(@self_item.id)}", 1
+        assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(@self_item.id)}", 1
+        assert_select "##{Views::Evidence::PlacementSuggestions.status_id_for(@self_item.id)}", 1
+        assert_select "div", text: /\AI wrote the migration plan/, minimum: 2
+      end
+
+      should "put owed placements first, then the open requests, then May fit elsewhere too, then history" do
+        sign_in @alex_user
+        get evidence_hub_path
+
+        headings = css_select("h2").map { |h| h.text.strip }
+        expected = [ "Feedback to place", "Open requests", "May fit elsewhere too", "Completed requests" ]
+        assert_equal expected, headings & expected
+        assert_operator headings.index("Open requests"), :<, headings.index("May fit elsewhere too")
+      end
+
+      should "list it for their manager, and never for a peer" do
+        sign_in @morgan_user
+        get evidence_hub_path
+        assert_select "#suggested-placements li[data-suggestion-id='#{@self_suggestion.id}']", 1
+        sign_out @morgan_user
+
+        sign_in @jordan_user
+        get evidence_hub_path
+        assert_select "li[data-suggestion-id='#{@self_suggestion.id}']", count: 0
+        assert_not_includes response.body, "I wrote the migration plan"
+      end
+
+      should "let the person it is about accept it, and refuse a peer" do
+        sign_in @jordan_user
+        stream_post accept_evidence_placement_suggestion_path(@self_suggestion)
+        assert_redirected_to root_path
+        sign_out @jordan_user
+
+        sign_in @alex_user
+        stream_post accept_evidence_placement_suggestion_path(@self_suggestion)
+        assert_response :success
+        assert_includes response.body, "Placed on Ownership · E3 as Demonstrates."
+        ActsAsTenant.with_tenant(@tenant) do
+          assert_equal [ [ @collaboration.stable_id, 3 ], [ @ownership.stable_id, 3 ] ],
+            EvidenceLink.active.where(evidence_id: @self_item.id).order(:linked_at).pluck(:capability_stable_id, :level_ordinal)
+          assert_equal [ "accepted", @alex.id ], [ @self_suggestion.reload.status, @self_suggestion.decided_by_id ]
+        end
+      end
+    end
+
+    context "with more than five placed items" do
+      setup do
+        @many = (1..7).map do |n|
+          item = travel_to(n.hours.ago) { record_self_feedback(content: "Self example #{n}.") }
+          ActsAsTenant.with_tenant(@tenant) do
+            create(:evidence_placement_suggestion, tenant: @tenant, item: item, capability_stable_id: @ownership.stable_id)
+          end
+          item
+        end
+      end
+
+      should "show the five most recent, with a link to all of them that keeps the view" do
+        sign_in @alex_user
+        get evidence_hub_path(place: "org")
+
+        assert_equal @many.first(5).map { |item| EvidenceItem.dom_id(item.id) }, listed_ids
+        assert_select "#suggested-placements", text: /Showing 5 of 7/
+        assert_select "#suggested-placements a[data-testid='elsewhere-toggle']" \
+                      "[href='#{evidence_hub_path(place: "org", elsewhere: "all", anchor: "suggested-placements")}']",
+                      text: "Show all (7)"
+        @many.last(2).each do |hidden|
+          assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(hidden.id)}", 0,
+            "a capped item's suggestions wait for Show all rather than moving to its authored card"
+          assert_select "##{EvidenceItem.dom_id(hidden.id)}", 1, "its authored card keeps the anchor while it is capped"
+        end
+      end
+
+      should "show every item for ?elsewhere=all, with a way back" do
+        sign_in @alex_user
+        get evidence_hub_path(place: "org", elsewhere: "all", give: "1")
+
+        assert_equal @many.map { |item| EvidenceItem.dom_id(item.id) }, listed_ids
+        assert_select "#suggested-placements", text: /Showing/, count: 0
+        assert_select "#suggested-placements a[data-testid='elsewhere-toggle']" \
+                      "[href='#{evidence_hub_path(place: "org", anchor: "suggested-placements")}']", text: "Show fewer"
+      end
+
+      should "let the person decide a suggestion only Show all reveals" do
+        hidden = @many.last
+        suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find_by!(evidence_id: hidden.id) }
+        sign_in @alex_user
+        get evidence_hub_path(elsewhere: "all")
+        assert_select "#suggested-placements li[data-suggestion-id='#{suggestion.id}']", 1
+
+        stream_post accept_evidence_placement_suggestion_path(suggestion)
+        assert_response :success
+        ActsAsTenant.with_tenant(@tenant) { assert_equal "accepted", suggestion.reload.status }
+      end
     end
 
     should "show a requested response's suggestions once, on its response card" do
@@ -171,8 +286,37 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_response :success
     end
 
-    should "refuse self feedback" do
-      ActsAsTenant.with_tenant(@tenant) { @item.update_columns(source: "self") }
+    should "ask again for self feedback, for the person who wrote it" do
+      item = record_self_feedback
+      sign_in @alex_user
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        assert_enqueued_with(job: Evidence::SuggestPlacementsJob, args: [ item.id ]) do
+          stream_post evidence_item_placement_suggestions_path(item)
+        end
+      end
+      assert_response :success
+    end
+
+    should "say so when the run could not be enqueued, and keep the usual answer when one is already asked for" do
+      sign_in @alex_user
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        Evidence::SuggestPlacementsJob.stub(:request_run, :failed) do
+          stream_post evidence_item_placement_suggestions_path(@item)
+          assert_response :unprocessable_content
+          assert_includes response.body, "ask for new suggestions just now"
+        end
+        Evidence::SuggestPlacementsJob.stub(:request_run, :already_requested) do
+          stream_post evidence_item_placement_suggestions_path(@item)
+          assert_response :success
+          assert_includes response.body, "Asking for new suggestions"
+        end
+      end
+    end
+
+    should "refuse withdrawn feedback" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.withdraw_evidence(@alex.id, @framework_id, @item.id, withdrawn_by_id: @jordan.id)
+      end
       sign_in @alex_user
       Evidence::SuggestionModel.stub(:configured?, true) do
         assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { stream_post evidence_item_placement_suggestions_path(@item) }

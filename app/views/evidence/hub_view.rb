@@ -10,6 +10,11 @@ class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
   include Views::Evidence::Valence
 
+  # Once self feedback carries suggestions, "May fit elsewhere too" can hold
+  # dozens of items, so it shows the most recent few unless the URL asks for
+  # all (?elsewhere=all).
+  ELSEWHERE_LIMIT = 5
+
   STATUS_VARIANT = {
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
   }.freeze
@@ -24,7 +29,15 @@ class Views::Evidence::HubView < Views::Base
   # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
   #   to the item's first linkage (absent when the viewer may not see it)
   # @param with_suggestions [Array<EvidenceItem>] placed items about the viewer
-  #   or their reports with pending placement suggestions, not shown elsewhere
+  #   or their reports with pending placement suggestions. The viewer's own
+  #   self feedback may also be listed under "Feedback you've provided", whose
+  #   card then leaves the suggestions to this list. At most the controller's
+  #   limit unless `elsewhere_all`.
+  # @param elsewhere_ids [Set<String>] every item "May fit elsewhere too" has,
+  #   shown or not; its count goes on "Show all"
+  # @param elsewhere_all [Boolean] whether the URL asked for every item
+  # @param hub_params [Hash] the hub's query params, for links that change one
+  #   part of the view and keep the rest
   # @param suggestions [Hash{String=>Hash}] item id => { suggestions:, cells: }
   #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
   # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
@@ -38,7 +51,7 @@ class Views::Evidence::HubView < Views::Base
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
                  in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [],
                  with_suggestions: [], suggestions: {}, decidable_ids: Set.new, can_regenerate: false,
-                 viewer_person_id: nil)
+                 elsewhere_ids: nil, elsewhere_all: false, hub_params: {}, viewer_person_id: nil)
     @open_incoming = open_incoming
     @open_outgoing = open_outgoing
     @completed_incoming = completed_incoming
@@ -58,12 +71,19 @@ class Views::Evidence::HubView < Views::Base
     @current_tenant = current_tenant
     @tenants = tenants
     @with_suggestions = with_suggestions
+    @with_suggestion_ids = elsewhere_ids || with_suggestions.to_set(&:id)
+    @listed_elsewhere_ids = with_suggestions.to_set(&:id)
+    @elsewhere_all = elsewhere_all
+    @hub_params = hub_params
     @suggestions = suggestions
     @decidable_ids = decidable_ids
     @can_regenerate = can_regenerate
     @viewer_person_id = viewer_person_id
   end
 
+  # Owed before waiting before optional before history: placement work the
+  # viewer owes, requests someone is waiting on, then suggestions, then what
+  # is done.
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
       div(data: { controller: "modal evidence-modal evidence-hub", evidence_hub_auto_open_value: @open_give_step.to_s,
@@ -71,8 +91,8 @@ class Views::Evidence::HubView < Views::Base
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
           to_place_group
-          suggested_placements_group
           open_requests_group
+          suggested_placements_group
           completed_requests_group
         end
         render Views::Evidence::ModalShell.new
@@ -164,8 +184,9 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def place_segment(control, label, count, place:)
-    control.segment("#{label} · #{count}", href: evidence_hub_path(place: place, anchor: "feedback-to-place"),
-                                           selected: (@place_scope == "org") == (place == "org"))
+    control.segment("#{label} · #{count}",
+                    href: evidence_hub_path(**@hub_params.except(:place), place: place, anchor: "feedback-to-place"),
+                    selected: (@place_scope == "org") == (place == "org"))
   end
 
   def to_place_card(item, about_viewer:)
@@ -188,8 +209,9 @@ class Views::Evidence::HubView < Views::Base
   # ── Suggested placements (placed items with more places to go) ──
 
   # Feedback already placed somewhere, about the viewer or their reports,
-  # where the model sees more cells it speaks to. Items the viewer gave are
-  # left to "Feedback you've provided", which carries the same block.
+  # where the model sees more cells it speaks to. Items the viewer gave
+  # someone else are left to "Feedback you've provided", which carries the
+  # same block; their own self feedback is about them, so it is listed here.
   def suggested_placements_group
     return if @with_suggestions.empty?
 
@@ -210,6 +232,23 @@ class Views::Evidence::HubView < Views::Base
           end
         end
       end
+      elsewhere_toggle
+    end
+  end
+
+  # A plain link, so it works without JavaScript and the view stays in the URL.
+  def elsewhere_toggle
+    total = @with_suggestion_ids.size
+    return if total <= ELSEWHERE_LIMIT
+
+    showing_all = @elsewhere_all
+    params = showing_all ? @hub_params.except(:elsewhere) : @hub_params.merge(elsewhere: "all")
+    div(class: "mt-4 flex flex-wrap items-center gap-x-3 text-sm text-muted") do
+      span { "Showing #{@with_suggestions.size} of #{total}" } unless showing_all
+      a(href: evidence_hub_path(**params, anchor: "suggested-placements"), data: { testid: "elsewhere-toggle" },
+        class: "inline-flex items-center min-h-11 font-medium text-brand hover:underline") do
+        showing_all ? "Show fewer" : "Show all (#{total})"
+      end
     end
   end
 
@@ -229,7 +268,8 @@ class Views::Evidence::HubView < Views::Base
   # only for a report's item; the "About you" subsection already says whose.
   def to_place_scope_label(item, detail, about_viewer:)
     whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && !about_viewer)
-    [ "From #{item.author&.name || 'a colleague'}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
+    from = item.author_id == @viewer_person_id ? "you" : item.author&.name || "a colleague"
+    [ "From #{from}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
   end
 
   # ── Open / completed request groups ──
@@ -405,10 +445,14 @@ class Views::Evidence::HubView < Views::Base
   # ── Authored evidence (edit / withdraw) — a Completed subsection ──
 
   # Anchored like the to-place cards: an item the viewer gave unplaced is
-  # listed only here, and its notification link lands on it.
+  # listed only here, and its notification link lands on it. Self feedback
+  # with suggestions keeps them under "May fit elsewhere too", even past its
+  # cap; the anchor moves there only while the card is listed, since ids
+  # must be unique on the page.
   def authored_card(item)
     detail = @authored_details.fetch(item.id, {})
-    card(dom_id: EvidenceItem.dom_id(item.id)) do
+    suggested_above = @with_suggestion_ids.include?(item.id)
+    card(dom_id: (EvidenceItem.dom_id(item.id) unless @listed_elsewhere_ids.include?(item.id))) do
       div do
         p(class: "text-sm font-medium text-default") { authored_cell_label(item, detail) }
         p(class: "text-xs text-muted") { authored_scope_label(item, detail) }
@@ -416,7 +460,7 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-xs font-semibold uppercase tracking-wide text-muted") { authored_type_label(item) }
       render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
       external_link(item)
-      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?)
+      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?) unless suggested_above
       authored_actions(item, detail)
     end
   end
