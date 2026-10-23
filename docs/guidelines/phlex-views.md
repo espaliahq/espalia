@@ -55,7 +55,8 @@ Examples of each are in [`app/components/README.md`](../../app/components/README
 |---|---|
 | The main action on a view | `:solid` · `:brand` |
 | An alternative beside it | `:outline` · `:neutral` |
-| A quiet toolbar or row action | `:ghost` · `:neutral` |
+| A quiet toolbar or icon action | `:ghost` · `:neutral` |
+| A text action in a row of metadata ("Send a nudge") | `:link` · `:brand`; `:danger` to start a destructive one ("Cancel request") |
 | Confirm a destructive action | `:solid` · `:danger` |
 | Start a destructive action | `:ghost` or `:outline` · `:danger` |
 | Navigation that reads as text | `:link` · `:brand` |
