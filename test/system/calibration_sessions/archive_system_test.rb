@@ -62,6 +62,19 @@ class CalibrationSessions::ArchiveSystemTest < ApplicationSystemTestCase
       end
       assert_no_sideways_overflow
 
+      # Restore sits on a card whose stretched link opens the session, so a
+      # tap just beside it must open the session, not restore it.
+      beside_restore = page.evaluate_script(<<~JS)
+        (() => {
+          const restore = document.querySelector("#{card(@closed_id)} > form[action$='/unarchive'] button");
+          restore.scrollIntoView({ block: "center" });
+          const r = restore.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top - 6);
+          return restore.contains(hit) ? "Restore" : hit?.closest("a")?.getAttribute("href");
+        })()
+      JS
+      assert_equal calibration_session_path(@closed_id), beside_restore
+
       click_selector_with_js_fallback "#{card(@closed_id)} > form[action$='/unarchive'] button",
                                       expect_text: "restored"
       assert_no_selector "section[aria-labelledby='archived-sessions']"
