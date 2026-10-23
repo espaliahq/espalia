@@ -50,13 +50,13 @@ class Views::Frameworks::Activity::SuggestionActions < Views::Base
   private
 
   def approve_button
-    render Components::Kit::Button.new(tone: :success, size: :xs,
+    render Components::Kit::Button.new(tone: :success, size: :xs, compact: true,
                                        data: { action: "suggestion-action#approve" }) { "Approve" }
   end
 
   def reject_button
     render Components::Kit::Button.new(
-      variant: :outline, size: :xs,
+      variant: :outline, size: :xs, compact: true,
       data: {
         action: "click->modal#open",
         modal_target_id: "reject-suggestion-modal",

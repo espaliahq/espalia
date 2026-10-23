@@ -16,7 +16,7 @@ class Views::Assessments::Activity::PaneToggle < Views::Base
 
   def view_template
     render Components::Kit::Button.new(
-      variant: :subtle, size: :sm,
+      variant: :subtle, size: :sm, compact: true,
       data: { action: "click->activity-pane#toggle", activity_pane_target: "toggle" },
       aria: { expanded: "false", controls: "assessment-activity-pane" }
     ) do
