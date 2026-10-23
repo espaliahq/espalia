@@ -1,6 +1,6 @@
 # Components
 
-Build screens from these before writing markup of your own. If something close exists, add a variant, tone or slot to it rather than copying it.
+Build screens from these before writing markup of your own. To find the one for a job, start at [phlex-views.md → Which Kit component](../../docs/guidelines/phlex-views.md#which-kit-component). If something close exists, add a variant, tone or slot to it rather than copying it.
 
 | Layer | Holds | Examples |
 |---|---|---|
@@ -24,16 +24,7 @@ Tones: `:neutral`, `:brand`, `:info`, `:success`, `:warning`, `:danger`. There i
 
 ### Actions
 
-**`Kit::Button`**: a button, or a link that looks like one (`href:`). Pick by job:
-
-| Job | `variant:` · `tone:` |
-|---|---|
-| The main action on a view | `:solid` · `:brand` |
-| An alternative beside it | `:outline` · `:neutral` |
-| A quiet toolbar or row action | `:ghost` · `:neutral` |
-| Confirm a destructive action | `:solid` · `:danger` |
-| Start a destructive action | `:ghost` or `:outline` · `:danger` |
-| Navigation that reads as text | `:link` · `:brand` |
+**`Kit::Button`**: a button, or a link that looks like one (`href:`). Which variant and tone for which job: [phlex-views.md → Which Kit component](../../docs/guidelines/phlex-views.md#which-kit-component).
 
 ```ruby
 render Components::Kit::Button.new(tone: :brand, type: :submit) { "Save ratings" }

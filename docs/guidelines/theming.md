@@ -121,16 +121,7 @@ and the caller passes a meaning: `tone: :danger`. The tones are `neutral`, `bran
 
 ### Which form and tone for which job
 
-Variants are named for their **form** (`solid`, `subtle`, `outline`, `ghost`, `link`), never their job; meaning comes from `tone:`. There is no `primary` or `secondary` in the API. Pick by job:
-
-| Job | `Kit::Button` |
-|---|---|
-| The main action on a view | `solid` · `brand` |
-| An alternative beside it | `outline` · `neutral` |
-| A quiet toolbar or row action | `ghost` · `neutral` |
-| Confirm a destructive action | `solid` · `danger` |
-| Start a destructive action | `ghost` or `outline` · `danger` |
-| Navigation that reads as text | `link` · `brand` |
+Variants are named for their **form** (`solid`, `subtle`, `outline`, `ghost`, `link`), never their job; meaning comes from `tone:`. There is no `primary` or `secondary` in the API. Which pair suits which job is in [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component).
 
 Labels follow the same rule:
 

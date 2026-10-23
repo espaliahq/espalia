@@ -49,6 +49,17 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | Nothing to show yet | `Kit::EmptyState` |
 | A dialog | `Kit::Modal` |
 
+Examples of each are in [`app/components/README.md`](../../app/components/README.md). A button's variant is its form and its tone its meaning, so pick both by the job:
+
+| Job | `Kit::Button` `variant:` · `tone:` |
+|---|---|
+| The main action on a view | `:solid` · `:brand` |
+| An alternative beside it | `:outline` · `:neutral` |
+| A quiet toolbar or row action | `:ghost` · `:neutral` |
+| Confirm a destructive action | `:solid` · `:danger` |
+| Start a destructive action | `:ghost` or `:outline` · `:danger` |
+| Navigation that reads as text | `:link` · `:brand` |
+
 **No option fits?** Add the option to the Kit component, with its preview, and use it. Copying the markup instead is how a fix ends up landing in five places.
 
 ### Options before copies
@@ -399,4 +410,4 @@ A minor fix to an ERB view renders the Phlex component, or uses its `.classes` o
 <%= f.submit "Save", class: Components::Kit::Button.classes(tone: :brand) %>
 ```
 
-Variants are named for their form and take a `tone:`; which pair suits which job is in [theming.md → Which form and tone for which job](theming.md#which-form-and-tone-for-which-job).
+Variants are named for their form and take a `tone:`; which pair suits which job is in [Which Kit component](#which-kit-component).
