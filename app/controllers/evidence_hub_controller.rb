@@ -93,10 +93,13 @@ class EvidenceHubController < ApplicationController
 
   def elsewhere_all? = params[:elsewhere] == "all"
 
-  # The hub's view state, for links that change one part of it. The Slack
-  # draft and ?give=1 open the modal on arrival, so they are left behind.
+  # The hub's view state, for links that change one part of it. Only the two
+  # view keys travel: anything else would reach the URL helper, where a
+  # reserved option such as script_name rewrites the link's host.
+  HUB_VIEW_PARAMS = %w[place elsewhere].freeze
+
   def hub_params
-    request.query_parameters.except("give", "draft").symbolize_keys
+    request.query_parameters.slice(*HUB_VIEW_PARAMS).symbolize_keys
   end
 
   # "My team" unless the URL asks for the whole org.

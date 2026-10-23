@@ -500,8 +500,10 @@ Rules, all deliberate:
   group can hold dozens of items, so it also shows the five most recent
   (`HubView::ELSEWHERE_LIMIT`) with "Showing 5 of N" and a plain "Show all
   (N)" link to `?elsewhere=all`, which works without JavaScript; "Show
-  fewer" goes back. Both links keep the rest of the URL (`?place=org`) but
-  drop `give` and `draft`, which would reopen the modal. An item past the
+  fewer" goes back. Both links carry only the hub's two view keys, `place`
+  and `elsewhere` (`EvidenceHubController::HUB_VIEW_PARAMS`): any other key
+  would reach the URL helper, where a reserved option such as `script_name`
+  rewrites the link's host, and `give` or `draft` would reopen the modal. An item past the
   cap waits for "Show all": its card under "Feedback you've provided" still
   leaves its suggestions out, but keeps the anchor while the item is not
   listed above. A decided row leaves its card, and the last one leaves the
