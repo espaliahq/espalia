@@ -163,8 +163,8 @@ class Views::Integrations::AiModelView < Views::Base
             switch_field(:suggestions_enabled, "Suggest where feedback belongs", @form_config.suggestions_enabled?,
                          hint: "While on, recorded feedback goes to this model so it can suggest capabilities and levels. " \
                                "Self feedback never does. The names of people in this workspace are always swapped for " \
-                               "placeholders first and restored in the answer; a nickname, or someone outside the " \
-                               "workspace, is sent as written, and so are roles and the story itself.")
+                               "placeholders first and restored in the answer. A nickname or someone outside the " \
+                               "workspace is sent as written, and so are roles and the story itself.")
 
             div(class: "flex justify-end") do
               button(type: "submit", class: PRIMARY_BUTTON_CLASSES) { "Save settings" }

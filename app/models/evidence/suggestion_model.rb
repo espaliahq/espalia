@@ -18,10 +18,10 @@
 # and writes no rationale.
 #
 # Every name of a person the workspace knows is swapped for a placeholder on
-# the way out and swapped back in the rationales that come in; placement never
-# needs to know who said what about whom. See {Ai::NamePseudonymiser}. The framework text gets full names
-# only: it is about the framework, not a person, and a first name that is an
-# ordinary word (Will, Mark) would only damage it.
+# the way out and swapped back in the rationales that come in. See
+# {Ai::NamePseudonymiser}. The framework text gets full names only: it is
+# about the framework, not a person, and a first name that is an ordinary word
+# (Will, Mark) would only damage it.
 class Evidence::SuggestionModel
   MAX_SUGGESTIONS = 3
 

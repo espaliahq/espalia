@@ -419,7 +419,8 @@ Rules, all deliberate:
   not stored. There is no switch: placement never needs to know who said
   what about whom, so the per-tenant `pseudonymise_names` setting was removed
   ([#620](https://github.com/mr-yum/growth-os/issues/620)). A config stored
-  with it still loads, the key is ignored and the next save drops it. It
+  with it still loads and the key is ignored; the next save of the AI model
+  card drops it. It
   covers the names of people GrowthOS knows, nothing more: a nickname, someone
   outside the directory, a role, a project or the story itself goes as
   written.
