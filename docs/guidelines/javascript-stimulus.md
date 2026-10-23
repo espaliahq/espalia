@@ -89,13 +89,14 @@ Common behaviors:
 - `useHover` — hover interactions
 
 ```javascript
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
 
-export default class extends Controller {
+export default class extends BaseController {
   static targets = ["menu"]
 
   connect() {
+    super.connect()
     useClickOutside(this)
     useTransition(this, { element: this.menuTarget })
   }
@@ -113,7 +114,7 @@ export default class extends Controller {
 ## Anti-patterns
 
 ```javascript
-// Bad - var, anonymous functions, no disconnect cleanup, manual CSRF
+// Bad - extends Controller, var, anonymous functions, no disconnect cleanup, manual CSRF
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
