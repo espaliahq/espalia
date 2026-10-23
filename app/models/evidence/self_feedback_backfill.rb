@@ -21,10 +21,13 @@ class Evidence::SelfFeedbackBackfill
   attr_reader :per_minute
 
   # @param tenant_slug [String, nil] one workspace, or every eligible one
-  # @param per_minute [Integer] runs to schedule per minute
+  # @param per_minute [Integer, String] runs to schedule per minute
+  # @raise [ArgumentError] for a slug no workspace has, or a rate below 1
   def initialize(tenant_slug: nil, per_minute: DEFAULT_PER_MINUTE)
     @tenant_slug = tenant_slug.presence
-    @per_minute = [ per_minute.to_i, 1 ].max
+    @per_minute = Integer(per_minute, exception: false)
+    raise ArgumentError, "PER_MINUTE must be a whole number of at least 1, not #{per_minute.inspect}" unless @per_minute&.positive?
+    raise ArgumentError, "No workspace has the slug #{@tenant_slug.inspect}" if @tenant_slug && tenants.empty?
   end
 
   # @return [Hash{Tenant => Array<String>}] candidate item ids per eligible
@@ -48,9 +51,10 @@ class Evidence::SelfFeedbackBackfill
     candidates.values.sum(&:size)
   end
 
-  # @return [Integer] minutes until the last run is due
-  def minutes
-    (count.to_f / per_minute).ceil
+  # @param runs [Integer]
+  # @return [Integer] minutes until the last of `runs` is due
+  def minutes(runs = count)
+    runs.zero? ? 0 : (runs - 1) / per_minute
   end
 
   # Schedules one run per candidate, `per_minute` to a minute.
@@ -79,9 +83,7 @@ class Evidence::SelfFeedbackBackfill
 
   def remembered_key(id) = "evidence-suggestions:self-backfill:#{id}"
 
-  def eligible?(tenant)
-    tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(tenant)
-  end
+  def eligible?(tenant) = Evidence::PlacementSuggestionRows.regenerable?(tenant)
 
   def scope
     EvidenceItem.active.where(source: "self").where.not(capability_stable_id: nil)

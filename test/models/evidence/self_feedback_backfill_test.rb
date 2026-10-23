@@ -50,8 +50,20 @@ class Evidence::SelfFeedbackBackfillTest < ActiveJob::TestCase
   should "narrow to one workspace by slug" do
     configured do
       assert_equal [ @tenant ], Evidence::SelfFeedbackBackfill.new(tenant_slug: @tenant.slug).candidates.keys
-      assert_empty Evidence::SelfFeedbackBackfill.new(tenant_slug: "nowhere").candidates
     end
+  end
+
+  should "refuse a slug no workspace has and a rate below one a minute" do
+    assert_raises(ArgumentError) { Evidence::SelfFeedbackBackfill.new(tenant_slug: "nowhere") }
+    [ "abc", "0", 0 ].each do |rate|
+      assert_raises(ArgumentError) { Evidence::SelfFeedbackBackfill.new(per_minute: rate) }
+    end
+    assert_equal 30, Evidence::SelfFeedbackBackfill.new(per_minute: "30").per_minute
+  end
+
+  should "say when the last run is due" do
+    backfill = Evidence::SelfFeedbackBackfill.new(per_minute: 20)
+    assert_equal [ 0, 0, 0, 1, 80 ], [ 0, 1, 20, 21, 1619 ].map { |runs| backfill.minutes(runs) }
   end
 
   should "spread the runs per minute and enqueue nothing new when run again" do

@@ -6,10 +6,15 @@ namespace :evidence do
          "one model call per item, PER_MINUTE (default 20) a minute. " \
          "TENANT=<slug> narrows it to one workspace."
     task backfill_self: :environment do
-      backfill = Evidence::SelfFeedbackBackfill.new(
-        tenant_slug: ENV["TENANT"],
-        per_minute: ENV.fetch("PER_MINUTE", Evidence::SelfFeedbackBackfill::DEFAULT_PER_MINUTE)
-      )
+      backfill =
+        begin
+          Evidence::SelfFeedbackBackfill.new(
+            tenant_slug: ENV["TENANT"],
+            per_minute: ENV.fetch("PER_MINUTE", Evidence::SelfFeedbackBackfill::DEFAULT_PER_MINUTE)
+          )
+        rescue ArgumentError => e
+          abort e.message
+        end
       backfill.candidates.each { |tenant, ids| puts "  #{tenant.slug}: #{ids.size}" }
       skipped = backfill.skipped_tenants.map(&:slug)
       puts "  Skipped, suggestions off or no model: #{skipped.join(', ')}" if skipped.any?
@@ -17,10 +22,10 @@ namespace :evidence do
       if ENV["CONFIRM"] == "1"
         enqueued = backfill.enqueue!
         puts "Enqueued #{enqueued} suggestion runs for self feedback, #{backfill.per_minute} a minute, " \
-             "one model call each. The last is due in about #{(enqueued.to_f / backfill.per_minute).ceil} minutes."
+             "one model call each. The last is due in about #{backfill.minutes(enqueued)} minutes."
       else
         puts "Dry run: #{backfill.count} self feedback items would get suggestions, one model call each, " \
-             "#{backfill.per_minute} a minute over about #{backfill.minutes} minutes. Run again with CONFIRM=1 to enqueue."
+             "#{backfill.per_minute} a minute, the last due in about #{backfill.minutes} minutes. Run again with CONFIRM=1 to enqueue."
       end
     end
 
