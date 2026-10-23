@@ -144,6 +144,16 @@ class EvidenceItemsControllerTest < ActionDispatch::IntegrationTest
   end
 
   context "PATCH /evidence_items/:id" do
+    should "return to the hub's whole-org view when the edit came from it" do
+      sign_in @author_user
+      cell = "#{@cap.stable_id}|2"
+      patch evidence_item_path(@evidence_id),
+        params: { return_to: "hub", evidence: { evidence_id: @evidence_id, primary_cell: cell, desired_links: [ cell ],
+                                                evidence_type: "project_outcome", content: "Revised content" } },
+        headers: { "Referer" => "http://www.example.com#{evidence_hub_path(place: "org")}" }
+      assert_redirected_to evidence_hub_path(place: "org")
+    end
+
     should "let the author edit their evidence" do
       sign_in @author_user
       cell = "#{@cap.stable_id}|2"
