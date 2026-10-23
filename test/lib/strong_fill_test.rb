@@ -22,7 +22,9 @@ class StrongFillTest < ActiveSupport::TestCase
     # A Shell surface: tone-warning pairs its text, and the focus ring follows it
     "app/components/shell/impersonation_banner.rb" => %w[bg-tone-strong],
     # Text on the fill
-    "app/views/assessments/category_chip_bar.rb" => %w[aria-[current=page]:bg-neutral-strong]
+    "app/views/assessments/category_chip_bar.rb" => %w[aria-[current=page]:bg-neutral-strong],
+    # The sign-in page's 44px Log in keeps its own size and radius, which Kit::Button lacks
+    "app/views/users/sessions/new_view.rb" => %w[bg-tone-strong hover:bg-tone-strong-hover]
   }.freeze
 
   should "keep strong fills inside Kit components" do

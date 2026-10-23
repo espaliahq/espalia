@@ -192,6 +192,8 @@ module Impersonatable
   def impersonation_exempt_controller?
     devise_controller? ||
       controller_path == "impersonations" ||
-      controller_path == "users/tenant_switches"
+      controller_path == "users/tenant_switches" ||
+      # current_user stays the real admin, so this writes the admin's own preference
+      controller_path == "settings/color_schemes"
   end
 end

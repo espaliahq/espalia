@@ -838,6 +838,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_000001) do
 
   create_table "tenants", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.jsonb "custom_theme", default: {}, null: false
     t.jsonb "eligible_label_translations", default: {}, null: false
     t.jsonb "hris_config", default: {}, null: false
     t.string "hris_credentials"
@@ -849,6 +850,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_000001) do
     t.string "slack_credentials"
     t.string "slack_team_id"
     t.string "slug", null: false
+    t.string "theme", default: "default", null: false
     t.jsonb "underperforming_label_translations", default: {}, null: false
     t.datetime "updated_at", null: false
     t.jsonb "feedback_exchange_config", default: {}, null: false
@@ -864,6 +866,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_000001) do
   end
 
   create_table "users", id: :uuid, default: nil, force: :cascade do |t|
+    t.string "color_scheme", default: "auto", null: false
     t.datetime "created_at", null: false
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false

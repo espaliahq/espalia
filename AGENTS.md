@@ -21,7 +21,8 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/views/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
 | `app/views/frameworks/` | [framework-explorer.md](docs/guidelines/framework-explorer.md) |
 | `app/views/assessments/` | [assessments.md](docs/guidelines/assessments.md) |
-| `app/components/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
+| `app/components/` | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md), [theming.md](docs/guidelines/theming.md) |
+| `app/assets/` | [tailwindcss.md](docs/guidelines/tailwindcss.md), [theming.md](docs/guidelines/theming.md) |
 | `app/javascript/` | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | `app/services/` | [service-objects.md](docs/guidelines/service-objects.md) |
 | `app/policies/` | [authorization.md](docs/guidelines/authorization.md) |
@@ -31,6 +32,7 @@ This project uses a layered guidance system. Standards are loaded contextually â
 | `app/operations/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `app/services/mcp/`, `app/controllers/mcp/`, `app/controllers/oauth/`, `app/models/mcp/`, `app/jobs/mcp/`, `app/views/mcp/`, `app/views/oauth/` | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | `test/` | [testing.md](docs/guidelines/testing.md) |
+| `test/components/previews/` | [theming.md](docs/guidelines/theming.md) (its Lookbook section) |
 | `lib/` | [lib/AGENTS.md](lib/AGENTS.md) (production eager-loading; held in the file itself) |
 | `.github/` | [.github/AGENTS.md](.github/AGENTS.md) (CI workflows; held in the file itself) |
 
@@ -76,7 +78,8 @@ Before designing or planning any feature, **read the relevant guideline files** 
 |---|---|
 | Plan or change a controller or route | [rails-controllers.md](docs/guidelines/rails-controllers.md) |
 | Plan or change a model, migration or JSONB column | [rails-models.md](docs/guidelines/rails-models.md) |
-| Plan or change a view, component or any UI | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md) |
+| Plan or change a view, component or any UI | [phlex-views.md](docs/guidelines/phlex-views.md), [tailwindcss.md](docs/guidelines/tailwindcss.md), [theming.md](docs/guidelines/theming.md) |
+| Colour anything, or change a role, token, preset, the Theme page or a Lookbook preview | [theming.md](docs/guidelines/theming.md) |
 | Write or change a Stimulus controller | [javascript-stimulus.md](docs/guidelines/javascript-stimulus.md) |
 | Reach for a service object | [service-objects.md](docs/guidelines/service-objects.md) |
 | Add or change a permission, policy or `authorize` call | [authorization.md](docs/guidelines/authorization.md) |

@@ -22,6 +22,12 @@ class User < ApplicationRecord
   # (in which case it simply doesn't surface in the inbox).
   has_many :notifications, as: :recipient, class_name: "Noticed::Notification", dependent: :destroy
 
+  COLOR_SCHEMES = { auto: "auto", light: "light", dark: "dark" }.freeze
+
+  # Auto follows the operating system. Personal and cross-tenant: a tenant
+  # can't lock it.
+  enum :color_scheme, COLOR_SCHEMES, default: :auto, prefix: true, validate: true
+
   # Include default devise modules. :validatable is included because email
   # uniqueness is now global (no tenant scope on User).
   devise :database_authenticatable, :registerable,
@@ -31,6 +37,14 @@ class User < ApplicationRecord
   # @return [Boolean] whether this user has global admin privileges
   def global_admin?
     global_admin
+  end
+
+  # The value for `<html data-scheme>`: the explicit choice, or nil for Auto
+  # so the page follows the operating system.
+  #
+  # @return [String, nil] "light", "dark" or nil
+  def data_scheme
+    color_scheme unless color_scheme_auto?
   end
 
   # Whether this user wants notifications of the given type delivered over the

@@ -80,7 +80,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       visit new_user_session_path
       assert_text "Sign in to your account"
       log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
-      assert_equal "rgb(12, 16, 20)", log_in_fill, "the light theme didn't apply"
+      assert_equal "rgb(48, 54, 67)", log_in_fill, "the light theme didn't apply"
 
       assert_contrast_clears_aa
     end
@@ -90,11 +90,37 @@ class AuthSystemTest < ApplicationSystemTestCase
       visit new_user_session_path
       assert_text "Sign in to your account"
       log_in_fill = page.evaluate_script("getComputedStyle(document.querySelector(#{log_in_css.to_json})).backgroundColor")
-      assert_equal "rgb(251, 251, 255)", log_in_fill, "the dark theme didn't apply"
+      assert_equal "rgb(193, 193, 194)", log_in_fill, "the dark theme didn't apply"
 
       assert_contrast_clears_aa
     ensure
       emulate_color_scheme("light")
+    end
+  end
+
+  context "sign in page theme" do
+    # Bento's surface-default and content-default, from theme/bento.css
+    {
+      "light" => { surface: "rgb(255, 255, 255)", text: "rgb(10, 13, 18)" },
+      "dark" => { surface: "rgb(10, 13, 18)", text: "rgb(250, 250, 250)" }
+    }.each do |scheme, expected|
+      should "draw its surface and text from the Bento preset in #{scheme} mode" do
+        emulate_color_scheme(scheme)
+        visit new_user_session_path
+        assert_selector "html[data-theme='bento'] .auth-page"
+
+        colours = page.evaluate_script(<<~JS)
+          (() => {
+            const style = getComputedStyle(document.querySelector(".auth-page"))
+            return { surface: style.backgroundColor, text: style.color, font: style.fontFamily }
+          })()
+        JS
+        assert_equal expected[:surface], colours["surface"]
+        assert_equal expected[:text], colours["text"]
+        assert_match(/\A"Plus Jakarta Sans"/, colours["font"])
+      ensure
+        emulate_color_scheme("light")
+      end
     end
   end
 

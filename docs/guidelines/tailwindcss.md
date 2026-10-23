@@ -34,7 +34,7 @@
 ## UI Requirements
 
 - Make all views responsive with breakpoints: `sm:`, `md:`, `lg:`, `xl:`, `2xl:`
-- Colour with role utilities (`text-muted`, `bg-default`…, see [ADR-23](../architecture/adrs.md)); they cover light and dark. Reach for `dark:` only for something no role covers
+- Colour with role utilities (`text-muted`, `bg-default`…), never palette steps or `dark:` for anything a role covers: [theming.md](theming.md)
 - Implement proper ARIA attributes for accessibility
 - Use `dom_id` for HTML element IDs
 
@@ -62,12 +62,8 @@ the order of hundreds of elements, define a plain CSS class in
 .mx-cell {
   padding: 0.625rem 0.75rem;
   vertical-align: top;
-  border-bottom: 1px solid var(--color-gray-100);
-  border-right: 1px solid var(--color-gray-100);
-
-  @variant dark {
-    border-color: var(--color-gray-800);
-  }
+  border-bottom: 1px solid var(--gos-border-subtle);
+  border-right: 1px solid var(--gos-border-subtle);
 }
 ```
 
@@ -77,12 +73,12 @@ td(id: cell_id, class: "mx-cell")   # was 74 characters of utilities, x282
 
 Rules:
 
-- **Use the theme's CSS variables** (`var(--color-gray-100)`, `var(--color-primary)`)
-  rather than hex literals, so a component class still tracks `@theme`.
-- **Write the dark values with `@variant dark` inside the rule**, never a
-  `@media (prefers-color-scheme: dark)` block: the variant also honours a
-  `data-scheme` override on `<html>` (see *Light and dark* below). The class
-  carries its own variants; the call site carries none.
+- **Colour with role variables** (`var(--gos-border-subtle)`, `var(--gos-content-muted)`),
+  never hex or palette steps: a role already switches scheme and theme, so the
+  rule needs no dark block ([theming.md](theming.md)).
+- **Anything a role doesn't cover goes in `@variant dark` inside the rule**, never a
+  `@media (prefers-color-scheme: dark)` block, which ignores `<html data-scheme>`.
+  The class carries its own variants; the call site carries none.
 - **These rules sit outside Tailwind's layers, so they BEAT a utility for the
   same property.** Never pair a component class with a utility that sets a
   property it declares. Put the variant in the class, or leave the whole thing
@@ -100,11 +96,7 @@ Existing examples: `.explorer-kebab` / `.explorer-cluster-btn` / `.explorer-add`
 
 ## Light and dark
 
-Dark follows the OS unless `<html data-scheme>` overrides it: `light` opts out,
-`dark` opts in. `@custom-variant dark` in `application.css` holds the rule, so
-`dark:` utilities and `@variant dark` blocks both follow it. Anything outside
-Tailwind that switches on the scheme (the tenant theme block in the layout,
-`matchMedia` in a Stimulus controller) must check `data-scheme` first.
+The scheme rule, and what has to follow it, is in [theming.md → Light and dark](theming.md#light-and-dark).
 
 ## Container Queries (built-in, no plugin needed)
 

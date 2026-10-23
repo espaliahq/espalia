@@ -1,7 +1,4 @@
-<% if scoped_css %>
-  <style><%= scoped_css.html_safe %></style>
-<% end %>
-<section class="<%= scope_class %> max-w-4xl" data-token-swatches>
+<section class="max-w-4xl" data-token-swatches>
   <h2 class="text-lg font-semibold text-default"><%= title %></h2>
   <p class="mt-1 text-sm text-muted">
     Read from <code>app/assets/tailwind/application.css</code>. Values follow the preview's colour scheme.

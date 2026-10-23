@@ -135,7 +135,7 @@ Also `TEXTAREA`, `INLINE` (the compact in-place editors), `CHECKBOX` and `RADIO`
 
 ## Colour outside Kit
 
-When a view needs colour of its own, use a **role**, never a palette step: `text-muted`, not `text-gray-600 dark:text-gray-300`. A role carries light and dark, so it needs no `dark:` partner.
+When a view needs colour of its own, use a **role**, never a palette step: `text-muted`, not `text-gray-600 dark:text-gray-300`. A role carries light, dark and every theme, so it needs no `dark:` partner and a theme can restyle it.
 
 | Job | Utility |
 |---|---|
@@ -156,4 +156,19 @@ Three rules:
 - **Kit owns radius and shadow.** Don't set either on a Kit surface.
 - **Selected means neutral, not brand.** Flip `aria-pressed` and let the component's classes follow.
 
-[`docs/guidelines/phlex-views.md`](../../docs/guidelines/phlex-views.md) covers how to write a component.
+## Themes
+
+A tenant admin picks one under **Tenant admin → Theme**:
+
+- **Default**, the standard GrowthOS look.
+- **Bento**, a preset that sets every role, in both schemes, and its own font.
+- **Custom**, Default with the tenant's brand colour, navbar colour and font, each in light and dark.
+
+Components don't know which theme is on. They read roles, and the theme sets the roles. Text on a colour the tenant picks (a brand button, the navbar) comes from a contrast helper, which chooses black or white, whichever reads better. Each person picks Auto, Light or Dark under **Appearance** in the user menu.
+
+To check a component under every theme, use Lookbook's **Theme** and **Scheme** switches (the gear above any preview). In the running app, add `?theme=bento` or `?scheme=dark` to any page (development only; `?scheme=auto` hands back to the OS). For long text, big counts and hard brand colours, seed the stress-test tenant with `bin/rails dev:seed:stress`.
+
+## Further reading
+
+- [`docs/guidelines/theming.md`](../../docs/guidelines/theming.md): every role, building a themed component, adding a role or a preset, and the checks.
+- [`docs/guidelines/phlex-views.md`](../../docs/guidelines/phlex-views.md): how to write a component.

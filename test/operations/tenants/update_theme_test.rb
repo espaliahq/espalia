@@ -20,75 +20,88 @@ class Operations::Tenants::UpdateThemeTest < ActiveSupport::TestCase
       end
       ctx = AuthorizationContext.new(user: member, tenant_user: member_tu, person: nil)
 
-      assert_raises(Pundit::NotAuthorizedError) do
-        ActsAsTenant.with_tenant(@tenant) do
-          Operations::Tenants::UpdateTheme.call(
-            context: ctx,
-            params: { primary_color: "#123456" }
-          )
-        end
-      end
+      assert_raises(Pundit::NotAuthorizedError) { update_theme(ctx, theme: "bento") }
+      assert_equal "default", @tenant.reload.theme
     end
 
     should "permit global admins with no tenant_user" do
       gadmin = create(:user, global_admin: true)
       ctx = AuthorizationContext.new(user: gadmin, tenant_user: nil, person: nil)
 
-      ActsAsTenant.with_tenant(@tenant) do
-        result = Operations::Tenants::UpdateTheme.call(
-          context: ctx,
-          params: { primary_color: "#abcdef" }
-        )
-        assert_equal @tenant.id, result[:tenant_id]
-      end
+      assert_equal @tenant.id, update_theme(ctx, theme: "bento")[:tenant_id]
     end
   end
 
   context "#perform" do
-    should "persist supplied color and font fields on tenant.settings" do
-      ActsAsTenant.with_tenant(@tenant) do
-        result = Operations::Tenants::UpdateTheme.call(
-          context: @admin_ctx,
-          params: {
-            primary_color: "#112233",
-            secondary_color_dark: "#445566",
-            font_family: "Inter"
-          }
-        )
+    should "persist the theme, role values and font, and return the theme as it now stands" do
+      result = update_theme(@admin_ctx,
+        theme: "custom",
+        custom_theme: { "brand" => { "light" => "#112233", "dark" => "#445566" } },
+        font_family: "Inter")
 
-        @tenant.reload
-        assert_equal "#112233", @tenant.primary_color
-        assert_equal "#445566", @tenant.secondary_color_dark
-        assert_equal "Inter", @tenant.font_family
-        assert_equal [ :primary_color, :secondary_color_dark, :font_family ], result[:updated]
-        assert_equal @tenant.id, result[:tenant_id]
-      end
+      @tenant.reload
+      assert_equal "custom", @tenant.theme
+      assert_equal({ "brand" => { "light" => "#112233", "dark" => "#445566" } }, @tenant.custom_theme)
+      assert_equal "Inter", @tenant.font_family
+      assert_equal [ :theme, :custom_theme, :font_family ], result[:updated]
+      assert_equal({ theme: "custom", custom_theme: @tenant.custom_theme, font_family: "Inter" }, result[:theme])
     end
 
-    should "drop nil params so blank fields don't clobber existing values" do
-      ActsAsTenant.with_tenant(@tenant) do
-        @tenant.update!(primary_color: "#aaaaaa")
+    should "merge custom_theme per role and scheme, and clear a value sent blank" do
+      @tenant.update!(theme: "custom", custom_theme: {
+        "brand" => { "light" => "#111111", "dark" => "#222222" },
+        "nav-surface" => { "light" => "#333333" }
+      })
 
-        Operations::Tenants::UpdateTheme.call(
-          context: @admin_ctx,
-          params: { primary_color: nil, secondary_color: "#bbbbbb" }
-        )
+      update_theme(@admin_ctx, custom_theme: { brand: { light: "#aaaaaa", dark: "" } })
 
-        @tenant.reload
-        assert_equal "#aaaaaa", @tenant.primary_color
-        assert_equal "#bbbbbb", @tenant.secondary_color
-      end
+      assert_equal({ "brand" => { "light" => "#aaaaaa" }, "nav-surface" => { "light" => "#333333" } },
+        @tenant.reload.custom_theme)
     end
 
-    should "raise RecordInvalid on a malformed hex color" do
+    should "leave everything alone when a field is nil" do
+      @tenant.update!(theme: "custom", font_family: "Inter")
+
+      update_theme(@admin_ctx, theme: nil, font_family: nil)
+
+      assert_equal "custom", @tenant.reload.theme
+      assert_equal "Inter", @tenant.font_family
+    end
+
+    should "reject an unknown theme as invalid input" do
+      error = assert_raises(Operations::Base::ParameterError) { update_theme(@admin_ctx, theme: "neon") }
+      assert_match(/theme/, error.message)
+    end
+
+    should "reject an unknown role or a malformed colour as invalid input, saving nothing" do
+      assert_raises(Operations::Base::ParameterError) do
+        update_theme(@admin_ctx, custom_theme: { "secondary" => { "light" => "#112233" } })
+      end
+      error = assert_raises(Operations::Base::ParameterError) do
+        update_theme(@admin_ctx, theme: "custom", custom_theme: { "brand" => { "light" => "not-a-hex" } })
+      end
+      assert_match(/brand light must be a hex colour/, error.message)
+      assert_equal "default", @tenant.reload.theme
+    end
+
+    should "leave the request's tenant as it was when the call is rejected" do
       ActsAsTenant.with_tenant(@tenant) do
-        assert_raises(ActiveRecord::RecordInvalid) do
-          Operations::Tenants::UpdateTheme.call(
-            context: @admin_ctx,
-            params: { primary_color: "not-a-hex" }
-          )
+        assert_raises(Operations::Base::ParameterError) do
+          Operations::Tenants::UpdateTheme.call(context: @admin_ctx,
+            params: { theme: "custom", custom_theme: { "brand" => { "light" => "not-a-hex" } } })
         end
+
+        assert_not ActsAsTenant.current_tenant.changed?
+        assert_equal "default", ActsAsTenant.current_tenant.theme
       end
+    end
+  end
+
+  private
+
+  def update_theme(context, **params)
+    ActsAsTenant.with_tenant(@tenant) do
+      Operations::Tenants::UpdateTheme.call(context: context, params: params)
     end
   end
 end

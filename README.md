@@ -23,6 +23,18 @@ Things you may want to cover:
 
 * ...
 
+## Theming
+
+An organisation's admin picks a theme under **Tenant admin → Theme**:
+
+* **Default**, the standard GrowthOS look.
+* **Bento**, a complete preset with its own colours and font.
+* **Custom**, Default with the organisation's own brand colour, navbar colour and font. Each colour has a light and a dark value, and GrowthOS picks the text that goes on it, so it always stays readable.
+
+Each person chooses Auto, Light or Dark under **Appearance** in the user menu. Auto follows their device.
+
+To build a screen, start with [the component catalogue](app/components/README.md). To build or change anything with colour, read [the theming guide](docs/guidelines/theming.md).
+
 ## Claude Code
 
 Working with Mac OS X Claude Code credentials within a devcontainer is a little finicky. 

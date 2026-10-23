@@ -3,8 +3,6 @@
 # @label Colours
 class DesignTokens::ColoursPreview < Lookbook::Preview
   STYLESHEET = Rails.root.join("app/assets/tailwind/application.css")
-  COLOUR_VALUE = /\A(#|rgb|hsl|oklch|oklab|color-mix|var\(--)/
-  SIGN_IN_SELECTOR = "html:has(.auth-page) {"
 
   # Literal class names so Tailwind's scanner emits them.
   PALETTE = {
@@ -20,21 +18,7 @@ class DesignTokens::ColoursPreview < Lookbook::Preview
   def brand
     render_with_template(
       template: "design_tokens/colours_preview/swatches",
-      locals: { title: "Brand tokens", tokens: brand_tokens, scope_class: nil, scoped_css: nil }
-    )
-  end
-
-  # The sign-in page's Bento tokens, re-declared on a wrapper so they resolve outside `.auth-page`.
-  def sign_in
-    light, dark = sign_in_declarations
-    render_with_template(
-      template: "design_tokens/colours_preview/swatches",
-      locals: {
-        title: "Sign-in page (Bento, page-scoped)",
-        tokens: colour_names(light),
-        scope_class: "tokens-sign-in",
-        scoped_css: scoped_css(".tokens-sign-in", light, dark)
-      }
+      locals: { title: "Brand tokens", tokens: brand_tokens }
     )
   end
 
@@ -57,44 +41,10 @@ class DesignTokens::ColoursPreview < Lookbook::Preview
     declarations(region).map(&:first).uniq.reject { |name| name.start_with?("--font-") }
   end
 
-  # The block's own declarations are light; those inside its `@variant dark` are dark.
-  def sign_in_declarations
-    light = []
-    dark = []
-    depth = 0
-    dark_depth = nil
-    stylesheet_lines.each do |line|
-      if depth.zero?
-        depth = 1 if line.strip == SIGN_IN_SELECTOR
-        next
-      end
-      if line.strip == "@variant dark {"
-        dark_depth = depth
-      else
-        (dark_depth ? dark : light).concat(declarations([ line ]).select { |name, _| name.start_with?("--auth-") })
-      end
-      depth += line.count("{") - line.count("}")
-      dark_depth = nil if dark_depth && depth <= dark_depth
-    end
-    [ light, dark ]
-  end
-
   def declarations(lines)
     lines.filter_map do |line|
       match = line.match(/\A\s*(--[\w-]+):\s*(.+?);\s*\z/)
       [ match[1], match[2] ] if match
     end
-  end
-
-  def colour_names(declarations)
-    declarations.select { |_, value| value.match?(COLOUR_VALUE) }.map(&:first)
-  end
-
-  # Dark under the same rule as the dark variant: the OS decides unless <html data-scheme> overrides it.
-  def scoped_css(selector, light, dark)
-    body = ->(decls) { decls.map { |name, value| "#{name}: #{value};" }.join(" ") }
-    "#{selector} { #{body.call(light)} } " \
-      "@media (prefers-color-scheme: dark) { :root:not([data-scheme=\"light\"]) #{selector} { #{body.call(dark)} } } " \
-      ":root[data-scheme=\"dark\"] #{selector} { #{body.call(dark)} }"
   end
 end

@@ -44,6 +44,7 @@ Rails.application.routes.draw do
   namespace :settings do
     resources :connected_clients, only: [ :index, :destroy ]
     resource :notifications, only: [ :show, :update ], controller: "notifications"
+    resource :color_scheme, only: :update
   end
 
   # In-app approval surface for high-stakes MCP tools. The MCP server
@@ -86,7 +87,10 @@ Rails.application.routes.draw do
   namespace :tenant do
     root to: "dashboard#show", as: :root
 
-    resource :theme, only: [ :show, :update ], controller: "themes"
+    resource :theme, only: [ :show, :update ], controller: "themes" do
+      # One theme in one scheme, framed by the Theme page's preset choice
+      get :preview
+    end
     resource :vocabulary, only: [ :show, :update ], controller: "vocabularies"
 
     # Feedback export for monthly reporting (#458): `new` is the picker,

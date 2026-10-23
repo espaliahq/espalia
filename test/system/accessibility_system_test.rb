@@ -103,7 +103,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
 
     should "keep a pale tenant brand at AA as text" do
-      @tenant.update!(primary_color: "#ffd400")
+      @tenant.update!(theme: "custom", custom_theme: { "brand" => { "light" => "#ffd400" } })
       visit root_path
       assert_text "Home"
 
@@ -111,7 +111,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
     end
 
     should "lighten a dark tenant brand to AA in dark mode" do
-      @tenant.update!(primary_color_dark: "#1e3a8a")
+      @tenant.update!(theme: "custom", custom_theme: { "brand" => { "dark" => "#1e3a8a" } })
       page.driver.browser.execute_cdp(
         "Emulation.setEmulatedMedia", features: [ { name: "prefers-color-scheme", value: "dark" } ]
       )

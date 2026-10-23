@@ -32,6 +32,7 @@ The `<head>` in [`app/views/layouts/application.html.erb`](../../app/views/layou
 links the ICO, the SVG, the Apple touch icon and the manifest, and declares a
 `theme-color` per colour scheme — the tenant's navbar colour when one is set,
 else `Tenant::DEFAULT_NAV_BG_COLOR` / `_DARK` (`Tenant.browser_theme_color`).
+A person who chose Light or Dark gets one tag, for that scheme, with no `media`.
 A view can replace both with `content_for(:theme_color, …)`; the sign-in page
 does, with Bento's sloe (`#6b58da`) in both schemes, since it has no navbar.
 The manifest is a static [`public/manifest.json`](../../public/manifest.json)
@@ -50,10 +51,10 @@ cannot reach: a browser's own unsolicited `GET /favicon.ico`, and the icon
 URLs inside the manifest (installed home-screen tiles refresh on the
 platform's own schedule regardless).
 
-**Three places must agree on the brand teal**: the `--color-primary` /
-`--color-nav-bg` tokens in `application.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
-and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins the
-last two to each other and to the manifest.
+**Three places must agree on the brand teal**: Default's `--gos-brand` /
+`--gos-nav-surface` in `theme/roles.css`, `Tenant::DEFAULT_NAV_BG_COLOR`,
+and `COLOR` in `bin/build-icons`. `test/integration/app_icons_test.rb` pins all
+three to each other and to the manifest.
 
 ## Regenerating
 

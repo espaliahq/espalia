@@ -30,19 +30,24 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
     wait_for_stimulus "theme-live-preview"
     screenshot("01_initial_state")
 
+    choose_theme "bento", rendered: "html[data-theme='bento']"
+    screenshot("01b_bento_previewed")
+
+    choose_theme "custom", rendered: "html:not([data-theme]) fieldset[data-theme-live-preview-target='custom']:not([hidden])"
+
     # High-contrast magenta — easy to eyeball against the default teal
-    set_color_field("tenant[primary_color]", "#ff0080")
+    set_color_field("tenant[custom_theme][brand][light]", "#ff0080")
     screenshot("02_primary_changed_to_magenta")
 
     # Dark navy nav for contrast against magenta primary
-    set_color_field("tenant[nav_bg_color]", "#101820")
+    set_color_field("tenant[custom_theme][nav-surface][light]", "#101820")
     screenshot("03_nav_bg_changed_to_navy")
 
     click_cancel
     screenshot("04_after_cancel_restored")
 
-    set_color_field("tenant[primary_color]", "#7c3aed")
-    click_button_with_js_fallback "Save", expect_text: "#7c3aed"
+    set_color_field("tenant[custom_theme][brand][light]", "#7c3aed")
+    click_button_with_js_fallback "Save", expect_text: "Theme saved."
     assert_current_path tenant_theme_path
     screenshot("05_after_save")
 
@@ -51,6 +56,12 @@ class TenantThemePreviewScreenshotTest < ApplicationSystemTestCase
   end
 
   private
+
+  # A bare `choose` drops its click on a starved runner, so dispatch it and wait for the preview to follow.
+  def choose_theme(value, rendered:)
+    assert_equal true, dispatch_js_click("input[type=radio][name='tenant[theme]'][value='#{value}']")
+    assert_selector rendered, visible: :all
+  end
 
   def set_color_field(name, hex)
     page.execute_script(<<~JS)

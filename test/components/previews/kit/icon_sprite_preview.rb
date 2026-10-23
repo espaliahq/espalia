@@ -9,7 +9,7 @@ class Kit::IconSpritePreview < Lookbook::Preview
 
   # Every glyph in each colour the app draws icons in.
   def colours
-    render Gallery.new(sizes: %w[w-6\ h-6], colours: [ "text-gray-600 dark:text-gray-300", "text-primary-ink", "text-red-700" ])
+    render Gallery.new(sizes: %w[w-6\ h-6], colours: [ "text-muted", "text-brand", "text-danger" ])
   end
 
   class Gallery < Components::Base
@@ -27,13 +27,13 @@ class Kit::IconSpritePreview < Lookbook::Preview
     private
 
     def tile(name)
-      li(class: "flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4") do
+      li(class: "flex flex-col items-center gap-2 rounded-lg border border-default bg-default p-4") do
         div(class: "flex items-end gap-3") do
           @colours.each do |colour|
             @sizes.each { |size| icon(name, class: [ size, colour ].compact.join(" ")) }
           end
         end
-        code(class: "text-xs text-gray-600 dark:text-gray-300") { name }
+        code(class: "text-xs text-muted") { name }
       end
     end
   end

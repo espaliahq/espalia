@@ -18,10 +18,11 @@ class StressSeed
   MEMBER_EMAIL = "member@#{SLUG}.example.com".freeze
 
   THEME = {
-    primary_color: "#FACC15", secondary_color: "#EAB308",
-    nav_bg_color: "#DBFC45", nav_fg_color: "#1A2E05",
-    primary_color_dark: "#FDE047", secondary_color_dark: "#FACC15",
-    nav_bg_color_dark: "#DBFC45", nav_fg_color_dark: "#1A2E05",
+    theme: "custom",
+    custom_theme: {
+      "brand" => { "light" => "#FACC15", "dark" => "#FDE047" },
+      "nav-surface" => { "light" => "#DBFC45", "dark" => "#DBFC45" }
+    },
     font_family: "Roboto"
   }.freeze
 

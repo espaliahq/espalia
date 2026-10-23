@@ -17,119 +17,142 @@ class TenantTest < ActiveSupport::TestCase
     should validate_uniqueness_of(:slug).ignoring_case_sensitivity
   end
 
-  context "theme colour validations" do
-    should allow_value("#ff0000").for(:primary_color)
-    should allow_value("#FF00AA").for(:primary_color)
-    should allow_value("").for(:primary_color)
-    should allow_value(nil).for(:primary_color)
-    should_not allow_value("red").for(:primary_color)
-    should_not allow_value("#fff").for(:primary_color)
-    should_not allow_value("#gggggg").for(:primary_color)
-    should_not allow_value("inject;malicious").for(:primary_color)
-
-    should allow_value("#00ff00").for(:secondary_color)
-    should_not allow_value("blue").for(:secondary_color)
-
-    should allow_value("#112233").for(:nav_bg_color)
-    should allow_value("").for(:nav_bg_color)
-    should_not allow_value("not-hex").for(:nav_bg_color)
-
-    should allow_value("#ffffff").for(:nav_fg_color)
-    should_not allow_value("white").for(:nav_fg_color)
-
-    should allow_value("#ff0000").for(:primary_color_dark)
-    should allow_value("").for(:primary_color_dark)
-    should allow_value(nil).for(:primary_color_dark)
-    should_not allow_value("red").for(:primary_color_dark)
-
-    should allow_value("#00ff00").for(:secondary_color_dark)
-    should_not allow_value("blue").for(:secondary_color_dark)
-
-    should allow_value("#112233").for(:nav_bg_color_dark)
-    should allow_value("").for(:nav_bg_color_dark)
-    should_not allow_value("not-hex").for(:nav_bg_color_dark)
-
-    should allow_value("#ffffff").for(:nav_fg_color_dark)
-    should_not allow_value("white").for(:nav_fg_color_dark)
-
-    should allow_value("Poppins").for(:font_family)
-    should allow_value("Space Grotesk").for(:font_family)
-    should allow_value("").for(:font_family)
-    should allow_value(nil).for(:font_family)
-    should_not allow_value("font;inject").for(:font_family)
-    should_not allow_value("url(evil)").for(:font_family)
-  end
-
-  context "#theme_css_variables_light" do
-    should "return empty hash when no colours set" do
-      tenant = build(:tenant)
-      assert_equal({}, tenant.theme_css_variables_light)
+  context "theme" do
+    should "default to the Default theme" do
+      assert_equal "default", Tenant.new.theme
     end
 
-    should "return primary variable when set" do
-      tenant = build(:tenant, primary_color: "#ff0000")
-      assert_equal({ "--color-primary" => "#ff0000" }, tenant.theme_css_variables_light)
-    end
+    should allow_value("default", "bento", "custom").for(:theme)
+    should_not allow_value("neon", "", nil).for(:theme)
 
-    should "return both variables when both set" do
-      tenant = build(:tenant, primary_color: "#ff0000", secondary_color: "#00ff00")
-      expected = { "--color-primary" => "#ff0000", "--color-secondary" => "#00ff00" }
-      assert_equal expected, tenant.theme_css_variables_light
-    end
-
-    should "include nav colours when set" do
-      tenant = build(:tenant, nav_bg_color: "#1e1b4b", nav_fg_color: "#e0e7ff")
-      vars = tenant.theme_css_variables_light
-      assert_equal "#1e1b4b", vars["--color-nav-bg"]
-      assert_equal "#e0e7ff", vars["--color-nav-fg"]
-    end
-
-    should "include font-sans override when font_family set" do
-      tenant = build(:tenant, font_family: "Poppins")
-      vars = tenant.theme_css_variables_light
-      assert_equal '"Poppins", ui-sans-serif, system-ui, sans-serif', vars["--font-sans"]
+    should "set data-theme only for a preset" do
+      assert_equal "bento", build(:tenant, theme: "bento").theme_preset
+      assert_nil build(:tenant, theme: "default").theme_preset
+      assert_nil build(:tenant, theme: "custom").theme_preset
     end
   end
 
-  context "#theme_css_variables_dark" do
-    should "return empty hash when no dark colours set" do
-      tenant = build(:tenant)
-      assert_equal({}, tenant.theme_css_variables_dark)
+  context "custom_theme validations" do
+    should "read the roles a Custom theme can set from the hooks in roles.css" do
+      assert_equal %w[brand nav-surface], Tenant::CUSTOM_ROLES
     end
 
-    should "return dark primary variable when set" do
-      tenant = build(:tenant, primary_color_dark: "#ff6666")
-      assert_equal({ "--color-primary" => "#ff6666" }, tenant.theme_css_variables_dark)
+    should "read each role's Default value per scheme from its hook's fallback" do
+      assert_equal({ "light" => "#32c8c8", "dark" => "#5ee0e0" }, Tenant::CUSTOM_ROLE_DEFAULTS["brand"])
+      assert_equal(
+        { "light" => Tenant::DEFAULT_NAV_BG_COLOR, "dark" => Tenant::DEFAULT_NAV_BG_COLOR_DARK },
+        Tenant::CUSTOM_ROLE_DEFAULTS["nav-surface"]
+      )
     end
 
-    should "return all dark variables when set" do
-      tenant = build(:tenant,
-        primary_color_dark: "#ff6666", secondary_color_dark: "#66ff66",
-        nav_bg_color_dark: "#111111", nav_fg_color_dark: "#eeeeee")
-      vars = tenant.theme_css_variables_dark
-      assert_equal "#ff6666", vars["--color-primary"]
-      assert_equal "#66ff66", vars["--color-secondary"]
-      assert_equal "#111111", vars["--color-nav-bg"]
-      assert_equal "#eeeeee", vars["--color-nav-fg"]
+    should allow_value({ "brand" => { "light" => "#FF00aa", "dark" => "#112233" } }).for(:custom_theme)
+    should allow_value({ "nav-surface" => { "light" => "#112233" } }).for(:custom_theme)
+    should allow_value({}).for(:custom_theme)
+
+    should_not allow_value({ "secondary" => { "light" => "#112233" } }).for(:custom_theme)
+    should_not allow_value({ "brand" => { "light" => "#fff" } }).for(:custom_theme)
+    should_not allow_value({ "brand" => { "light" => "red" } }).for(:custom_theme)
+    should_not allow_value({ "brand" => { "light" => "#000000;}body{" } }).for(:custom_theme)
+    should_not allow_value({ "brand" => { "sepia" => "#112233" } }).for(:custom_theme)
+    should_not allow_value({ "brand" => "#112233" }).for(:custom_theme)
+    should_not allow_value({ "brand" => [ "#112233" ] }).for(:custom_theme)
+    should_not allow_value([ [ "brand", { "light" => "#112233" } ] ]).for(:custom_theme)
+
+    should "drop blank values and roles left empty" do
+      tenant = build(:tenant, custom_theme: { brand: { light: "#112233", dark: "" }, "nav-surface" => { light: nil } })
+      assert_equal({ "brand" => { "light" => "#112233" } }, tenant.custom_theme)
+    end
+  end
+
+  context "font_family validations" do
+    should allow_value("Poppins", "Space Grotesk", "", nil).for(:font_family)
+    should_not allow_value("font;inject", "url(evil)").for(:font_family)
+  end
+
+  context "#custom_role" do
+    should "return the tenant's value for a Custom theme, and nil where Default's applies" do
+      tenant = build(:tenant, theme: "custom", custom_theme: { "brand" => { "light" => "#112233" } })
+      assert_equal "#112233", tenant.custom_role("brand", :light)
+      assert_nil tenant.custom_role("brand", :dark)
+      assert_nil tenant.custom_role("nav-surface", :light)
     end
 
-    should "include font-sans override when font_family set" do
-      tenant = build(:tenant, font_family: "Poppins")
-      vars = tenant.theme_css_variables_dark
-      assert_equal '"Poppins", ui-sans-serif, system-ui, sans-serif', vars["--font-sans"]
+    should "ignore stored values when the theme is not Custom" do
+      tenant = build(:tenant, theme: "default", custom_theme: { "brand" => { "light" => "#112233" } })
+      assert_nil tenant.custom_role("brand", :light)
+    end
+  end
+
+  context "#theme_css_variables" do
+    should "emit nothing for Default or a preset, whatever is stored" do
+      stored = { custom_theme: { "brand" => { "light" => "#112233" } }, font_family: "Poppins" }
+      assert_equal({}, build(:tenant, theme: "default", **stored).theme_css_variables)
+      assert_equal({}, build(:tenant, theme: "bento", **stored).theme_css_variables)
+    end
+
+    should "emit scheme-suffixed variables for each value a Custom theme sets, and its font" do
+      tenant = build(:tenant, theme: "custom", font_family: "Poppins", custom_theme: {
+        "brand" => { "light" => "#112233", "dark" => "#445566" },
+        "nav-surface" => { "light" => "#778899" }
+      })
+
+      assert_equal({
+        "--tenant-brand" => "#112233",
+        "--tenant-brand-dark" => "#445566",
+        "--tenant-nav-surface" => "#778899",
+        "--font-sans" => '"Poppins", ui-sans-serif, system-ui, sans-serif'
+      }, tenant.theme_css_variables)
+    end
+
+    should "name only variables roles.css reads" do
+      css = Tenant::ROLES_STYLESHEET.read
+      Tenant::CUSTOM_ROLES.each do |role|
+        assert_includes css, "var(--tenant-#{role},"
+        assert_includes css, "var(--tenant-#{role}-dark,"
+      end
+    end
+  end
+
+  context ".browser_theme_color" do
+    should "use Default's navbar with no tenant and on Default" do
+      [ nil, build(:tenant) ].each do |tenant|
+        assert_equal Tenant::DEFAULT_NAV_BG_COLOR, Tenant.browser_theme_color(tenant, :light)
+        assert_equal Tenant::DEFAULT_NAV_BG_COLOR_DARK, Tenant.browser_theme_color(tenant, :dark)
+      end
+    end
+
+    should "use a preset's own navbar" do
+      tenant = build(:tenant, theme: "bento")
+      assert_equal "#ffffff", Tenant.browser_theme_color(tenant, :light)
+      assert_equal "#0a0d12", Tenant.browser_theme_color(tenant, :dark)
+    end
+
+    should "hold a navbar in both schemes for every preset" do
+      Tenant::PRESETS.each do |preset|
+        assert_equal %w[dark light], Tenant::NAV_SURFACES.fetch(preset).keys.sort, preset
+      end
+    end
+
+    should "use a Custom theme's nav surface, and Default's for a blank scheme" do
+      tenant = build(:tenant, theme: "custom", custom_theme: { "nav-surface" => { "light" => "#123456" } })
+      assert_equal "#123456", Tenant.browser_theme_color(tenant, :light)
+      assert_equal Tenant::DEFAULT_NAV_BG_COLOR_DARK, Tenant.browser_theme_color(tenant, :dark)
     end
   end
 
   context "#google_font_url" do
     should "return nil when no font set" do
-      tenant = build(:tenant)
-      assert_nil tenant.google_font_url
+      assert_nil build(:tenant, theme: "custom").google_font_url
     end
 
-    should "return Google Fonts URL when font set" do
-      tenant = build(:tenant, font_family: "Space Grotesk")
+    should "return the Google Fonts URL for a Custom theme's font" do
+      tenant = build(:tenant, theme: "custom", font_family: "Space Grotesk")
       assert_equal "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap",
         tenant.google_font_url
+    end
+
+    should "return nil on a theme that carries its own font" do
+      assert_nil build(:tenant, theme: "bento", font_family: "Space Grotesk").google_font_url
     end
   end
 

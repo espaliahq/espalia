@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Tenant theme editor — brand colors and typography.
+# Tenant theme editor — the theme, its colour roles and typography.
 #
-# `show` renders the live-preview form; `update` persists via
+# `show` renders the live-preview form; `preview` renders one theme in one
+# scheme for that form's preset choice; `update` persists via
 # Operations::Tenants::UpdateTheme. The controller authorizes against
 # TenantPolicy in addition to the Operation's own policy check
 # (defense in depth per docs/guidelines/authorization.md).
@@ -19,6 +20,16 @@ class Tenant::ThemesController < ApplicationController
     )
   end
 
+  # GET /tenant/theme/preview?theme_name=bento&colour_scheme=dark
+  #
+  # Not `theme` and `scheme`: those are the development-only overrides, which stick in a cookie.
+  def preview
+    authorize ActsAsTenant.current_tenant, :update_theme?, policy_class: TenantPolicy
+    @preview_theme = params[:theme_name].presence_in(Tenant::THEMES) || "default"
+    @preview_scheme = params[:colour_scheme].presence_in(Tenant::SCHEMES) || "light"
+    render Views::Tenant::Theme::PreviewView.new(tenant: ActsAsTenant.current_tenant), layout: "theme_preview"
+  end
+
   # PATCH /tenant/theme
   def update
     authorize ActsAsTenant.current_tenant, :update_theme?, policy_class: TenantPolicy
@@ -28,21 +39,16 @@ class Tenant::ThemesController < ApplicationController
       params: theme_params.to_h.symbolize_keys
     )
     redirect_to tenant_theme_path, notice: "Theme saved."
-  rescue ActiveRecord::RecordInvalid => e
-    redirect_to tenant_theme_path,
-                alert: "Theme could not be saved: #{e.record.errors.full_messages.to_sentence}",
-                status: :see_other
+  rescue Operations::Base::ParameterError => e
+    redirect_to tenant_theme_path, alert: "Theme could not be saved: #{e.message}", status: :see_other
   end
 
   private
 
   def theme_params
     params.expect(tenant: [
-      :primary_color, :primary_color_dark,
-      :secondary_color, :secondary_color_dark,
-      :nav_bg_color, :nav_bg_color_dark,
-      :nav_fg_color, :nav_fg_color_dark,
-      :font_family
+      :theme, :font_family,
+      { custom_theme: Tenant::CUSTOM_ROLES.index_with { Tenant::SCHEMES } }
     ])
   end
 

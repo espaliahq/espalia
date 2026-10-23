@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-# Development only: `?scheme=dark` (or `light`), and `?theme=<preset>` once a
-# preset exists, preview the app in any colour scheme and theme before tenants
-# and people can choose one. The choice sticks in a cookie until
-# `?theme=default` or `?scheme=auto`.
+# Development only: `?scheme=dark` (or `light`) and `?theme=<preset>` preview
+# the app in any colour scheme and theme before tenants and people can choose
+# one. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`.
 module DevThemeOverride
   extend ActiveSupport::Concern
 
-  # Presets with a [data-theme] block in app/assets/tailwind/theme/; Bento joins with #548.
-  THEMES = %w[].freeze
+  THEMES = Themeable::PRESETS
   SCHEMES = %w[light dark].freeze
 
   included do
@@ -26,6 +24,13 @@ module DevThemeOverride
   # @return [String, nil] the scheme to apply as <html data-scheme>
   def dev_scheme_override
     cookies[:dev_scheme].presence_in(SCHEMES) if Rails.env.development?
+  end
+
+  # A scheme the person picks in the user menu replaces a `?scheme=` preview, or the menu and page disagree
+  #
+  # @return [void]
+  def forget_dev_scheme_override
+    cookies.delete(:dev_scheme) if Rails.env.development?
   end
 
   # @return [void]

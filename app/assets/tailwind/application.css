@@ -2,6 +2,7 @@
 @import "./theme/roles.css";
 @import "./theme/domain.css";
 @import "./theme/categorical.css";
+@import "./theme/bento.css";
 
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
@@ -24,10 +25,11 @@
   /* https://rsms.me/inter/lab */
   --font-sans--font-feature-settings: 'liga', 'cv02', 'cv03', 'cv04', 'cv11';
 
-  --color-primary: #32c8c8;
+  /* The legacy brand and nav tokens follow the theme's roles until no view uses them (#539) */
+  --color-primary: var(--gos-brand);
   --color-secondary: #079191;
-  --color-nav-bg: #32c8c8;
-  --color-nav-fg: #ffffff;
+  --color-nav-bg: var(--gos-nav-surface);
+  --color-nav-fg: var(--gos-nav-content);
 
   /* The brand colour as readable text. A tenant can set any primary, so
      clamp its lightness rather than pick a hex: >= 4.5:1 for every hue
@@ -38,10 +40,7 @@
 
 :root {
   @variant dark {
-    --color-primary: #5ee0e0;
     --color-secondary: #0ababa;
-    --color-nav-bg: #1a1a2e;
-    --color-nav-fg: #e2e8f0;
     --color-primary-ink: color-mix(in oklab, var(--color-primary) 45%, white);
   }
 }
@@ -964,54 +963,13 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   }
 }
 
-/* The sign-in page (#514): Bento's tokens and type, scoped to the page
- * that renders `.auth-page` so nothing else picks them up. The tokens sit
- * on the root so overscroll and first paint take the page's colours too.
- * The view reads them through `bg-(--auth-…)` utilities. */
+/* The sign-in page (#514) renders with the Bento preset (data-theme="bento").
+ * The root takes the page's surface so overscroll and first paint match it. */
 html:has(.auth-page) {
-  --auth-surface: #ffffff;
-  --auth-content: #0c1014;
-  --auth-content-muted: #4c5056;
-  --auth-control-edge: #7d8288;
-  --auth-border-default: #cfd1d4;
-  --auth-border-subtle: #f4f5f6;
-  --auth-neutral-subtle: #f4f5f6;
-  --auth-neutral-muted: #cfd1d4;
-  --auth-neutral-strong: #0c1014;
-  --auth-neutral-strong-hover: #292d31;
-  --auth-neutral-inverse: #ffffff;
-  --auth-focus-ring: #202328;
-  --auth-danger: #d02115;
-  --auth-danger-subtle: #fbf0ef;
-  --auth-danger-muted: #f6c8c5;
-  --auth-blob-opacity: 0.12;
-  --auth-or-line: var(--auth-border-default);
-  --auth-check-mark: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23ffffff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
-  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background-color: var(--auth-surface);
+  background-color: var(--gos-surface-default);
   color-scheme: light;
-}
 
-html:has(.auth-page) {
   @variant dark {
-    --auth-surface: #0a0917;
-    --auth-content: #fbfbff;
-    --auth-content-muted: #a5a5b3;
-    --auth-control-edge: #6c6d7f;
-    --auth-border-default: #56566c;
-    --auth-border-subtle: #424257;
-    --auth-neutral-subtle: #201f32;
-    --auth-neutral-muted: #56566c;
-    --auth-neutral-strong: #fbfbff;
-    --auth-neutral-strong-hover: #d1d1d8;
-    --auth-neutral-inverse: #0a0917;
-    --auth-focus-ring: #e5e6ed;
-    --auth-danger: #f1a39d;
-    --auth-danger-subtle: #6b1e12;
-    --auth-danger-muted: #8d1c14;
-    --auth-blob-opacity: 0.15;
-    --auth-or-line: var(--auth-border-subtle);
-    --auth-check-mark: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%230a0917' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
     color-scheme: dark;
   }
 }
@@ -1022,31 +980,40 @@ html:has(.auth-page) {
   border-radius: 50%;
   transform: translate(-50%, -50%);
   filter: blur(140px);
-  opacity: var(--auth-blob-opacity);
+  opacity: 0.12;
   background-color: #6b58da;
   pointer-events: none;
+
+  @variant dark {
+    opacity: 0.15;
+  }
 }
 
 /* The forms plugin styles a checked box with a white tick on currentColor,
- * which vanishes on the dark theme's near-white fill. */
+ * which vanishes on the dark theme's near-white fill. The tick's fill is
+ * --gos-neutral-content-inverse; a data URI can't read a variable. */
 .auth-check {
   width: 1rem;
   height: 1rem;
   flex: none;
-  border: 1px solid var(--auth-control-edge);
+  border: 1px solid var(--gos-border-field);
   border-radius: 0.25rem;
-  background-color: var(--auth-surface);
-  color: var(--auth-neutral-strong);
+  background-color: var(--gos-surface-field);
+  color: var(--gos-neutral-strong);
 }
 
 .auth-check:checked {
   border-color: transparent;
   background-color: currentColor;
-  background-image: var(--auth-check-mark);
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23ffffff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+
+  @variant dark {
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%230a0d12' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  }
 }
 
 .auth-page :focus-visible {
-  outline: 2px solid var(--auth-focus-ring);
+  outline: 2px solid var(--gos-focus-ring);
   outline-offset: 2px;
 }
 

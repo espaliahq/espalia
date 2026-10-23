@@ -32,27 +32,25 @@ $stdout.sync = true
   end
 
   [
-    { slug: "meandu", name: "me&u", primary_color: "#00362F", secondary_color: "#001814",
-      nav_bg_color: "#DBFC45", nav_fg_color: "#001814", font_family: "Zalando Sans Regular",
-      primary_color_dark: "#5ee0a0", secondary_color_dark: "#3a9a6a",
-      nav_bg_color_dark: "#0a1f1a", nav_fg_color_dark: "#DBFC45" },
-    { slug: "testco", name: "Testco", primary_color: "#6366f1", secondary_color: "#4f46e5",
-      nav_bg_color: "#1e1b4b", nav_fg_color: "#e0e7ff", font_family: "Poppins",
-      primary_color_dark: "#818cf8", secondary_color_dark: "#6366f1",
-      nav_bg_color_dark: "#0f0d2e", nav_fg_color_dark: "#c7d2fe" }
+    { slug: "meandu", name: "me&u", theme: "custom", font_family: "Zalando Sans Regular",
+      custom_theme: { "brand" => { "light" => "#00362F", "dark" => "#5ee0a0" },
+                      "nav-surface" => { "light" => "#DBFC45", "dark" => "#0a1f1a" } } },
+    { slug: "testco", name: "Testco", theme: "custom", font_family: "Poppins",
+      custom_theme: { "brand" => { "light" => "#6366f1", "dark" => "#818cf8" },
+                      "nav-surface" => { "light" => "#1e1b4b", "dark" => "#0f0d2e" } } }
   ].each do |tenant_attrs|
-    theme_keys = %i[primary_color secondary_color nav_bg_color nav_fg_color font_family
-                    primary_color_dark secondary_color_dark nav_bg_color_dark nav_fg_color_dark]
+    theme_attrs = tenant_attrs.slice(:theme, :custom_theme, :font_family)
 
     tenant = Tenant.find_or_create_by!(slug: tenant_attrs[:slug]) do |t|
       t.name = tenant_attrs[:name]
-      theme_keys.each { |k| t.public_send(:"#{k}=", tenant_attrs[k]) }
+      t.assign_attributes(theme_attrs)
       puts "Creating tenant: #{tenant_attrs[:name]}"
     end
 
     # Update theme on existing tenants
-    if theme_keys.any? { |k| tenant.public_send(k) != tenant_attrs[k] }
-      tenant.update!(tenant_attrs.slice(*theme_keys))
+    tenant.assign_attributes(theme_attrs)
+    if tenant.changed?
+      tenant.save!
       puts "Updated theme for #{tenant_attrs[:name]}"
     end
 

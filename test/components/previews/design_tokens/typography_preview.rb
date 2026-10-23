@@ -9,8 +9,8 @@ class DesignTokens::TypographyPreview < Lookbook::Preview
   SIZES = %w[text-xs text-sm text-base text-lg text-xl text-2xl text-3xl].freeze
   WEIGHTS = %w[font-normal font-medium font-semibold font-bold].freeze
   COPY_COLOURS = {
-    "text-gray-900 dark:text-white" => "Body copy and headings.",
-    "text-gray-600 dark:text-gray-300" => "Muted copy: the AA pairing for secondary text."
+    "text-default" => "Body copy and headings.",
+    "text-muted" => "Muted copy: the AA pairing for secondary text."
   }.freeze
 
   def font_family
