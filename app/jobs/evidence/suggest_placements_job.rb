@@ -25,16 +25,21 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: request rejected, #{error.message}")
   end
 
-  # Claims the item's run, so a second request inside the window (a double
-  # "Suggest again", a backfill run twice) enqueues nothing. A run scheduled
-  # for later holds its claim until it is due.
+  # Enqueues a run unless one was asked for inside the window (a double
+  # "Suggest again", a backfill run twice). A run scheduled for later holds
+  # its claim until it is due; an enqueue that fails gives the claim back.
   #
   # @param evidence_id [String]
-  # @param wait [ActiveSupport::Duration] how long until the claimed run is due
-  # @return [Boolean] whether the caller may enqueue the run
-  def self.claim_run(evidence_id, wait: 0.seconds)
-    Rails.cache.write("evidence-suggestions:requested:#{evidence_id}", true,
-                      expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
+  # @param wait [ActiveSupport::Duration] how long until the run is due
+  # @return [Boolean] whether a run was enqueued
+  def self.request_run(evidence_id, wait: 0.seconds)
+    key = "evidence-suggestions:requested:#{evidence_id}"
+    return false unless Rails.cache.write(key, true, expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
+    job = set(wait: wait).perform_later(evidence_id)
+    return true if job && job.successfully_enqueued?
+
+    Rails.cache.delete(key)
+    false
   end
 
   # @param evidence_id [String]

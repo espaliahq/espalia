@@ -65,10 +65,7 @@ class Evidence::SelfFeedbackBackfill
     candidates.each_value do |ids|
       ids.each do |id|
         wait = (scheduled / per_minute).minutes
-        next unless Evidence::SuggestPlacementsJob.claim_run(id, wait: wait)
-
-        job = Evidence::SuggestPlacementsJob.set(wait: wait).perform_later(id)
-        next unless job&.successfully_enqueued?
+        next unless Evidence::SuggestPlacementsJob.request_run(id, wait: wait)
 
         Rails.cache.write(remembered_key(id), true, expires_in: REMEMBER)
         scheduled += 1

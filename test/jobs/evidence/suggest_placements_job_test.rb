@@ -127,6 +127,20 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_not fake.prompts.last.open_cell?(@collaboration.stable_id, 3), "the cell it was recorded on is closed"
   end
 
+  should "request one run per item a minute, and give the claim back when the enqueue fails" do
+    item = record_peer_feedback
+    clear_enqueued_jobs
+    failing = Struct.new(:id) { def perform_later(*) = false }.new(1)
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestPlacementsJob.stub(:set, ->(**) { failing }) do
+        assert_not Evidence::SuggestPlacementsJob.request_run(item.id)
+      end
+      assert Evidence::SuggestPlacementsJob.request_run(item.id)
+      assert_not Evidence::SuggestPlacementsJob.request_run(item.id)
+    end
+    assert_enqueued_jobs 1, only: Evidence::SuggestPlacementsJob
+  end
+
   should "retry a rate limit and an outage, and give up quietly on a rejected request" do
     item = record_peer_feedback
 
