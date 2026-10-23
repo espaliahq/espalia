@@ -1091,6 +1091,24 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # A Kit::Button's 44px hit area must not reach a neighbour's face. The
+    # sticky header's buttons reached the card chips scrolling up beneath it,
+    # which needs the narrower main column the open activity pane leaves.
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "give every tap to the control under it at #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        visit assessment_path(@assignment)
+        assert_text "Synthesises information from multiple sources"
+        assert_selector "button[data-activity-pane-target='toggle']"
+
+        toggle_activity_pane if label == "desktop"
+        [ 0, 150, 300, 450, 600, 900 ].each do |y|
+          page.execute_script("window.scrollTo(0, #{y})")
+          assert_no_stolen_taps("scrolled to #{y} at #{label}")
+        end
+      end
+    end
+
     should "contain capability cards within the viewport on narrow screens with many levels" do
       # Frameworks with many levels (E1-E8) produce a chip strip far
       # wider than mobile viewports — the card must contain that strip
