@@ -109,7 +109,10 @@ class Components::Kit::Modal < Components::Base
         data: { modal_target: "panel" }
       ) do
         header
-        div(class: "min-h-0 overflow-y-auto") do
+        # A Kit::Button's hit area reaches past the last line, which gave every
+        # modal a scrollbar: the bottom padding holds it inside the scroll box
+        # and the negative margin keeps the layout where it was.
+        div(class: "min-h-0 overflow-y-auto overflow-x-hidden -mb-2.5 pb-2.5") do
           # Call (don't instance_exec) so the block keeps its caller's `self` —
           # the body usually calls methods/ivars on the view that rendered the
           # modal. Phlex shares the output buffer, so it still emits in position.
