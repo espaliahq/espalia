@@ -74,10 +74,14 @@ time — errors the UI never surfaces are findings.
 
 ### Pass 5 — Visual craft
 
-Load `references/visual.md`. Screenshot the viewport matrix (320 / 375 /
-768 / desktop) per key state. Judge overall composition from screenshots; verify
-anything numeric (alignment, token conformance, target sizes) with
-measurements. Compare component usage against the host's design system.
+Load `references/visual.md`. Run the host's conformance checks over the
+scope's source first: each new offence is a finding (Minor unless it
+meets a higher trigger), cited by the check's name. Screenshot the
+viewport matrix (320 / 375 / 768 / desktop) per key state, in each theme
+and scheme of the host's matrix. Judge overall composition from
+screenshots; verify anything numeric (alignment, token conformance,
+target sizes) with measurements. Compare component usage against the
+host's design system.
 
 ## 2. Driving discipline
 

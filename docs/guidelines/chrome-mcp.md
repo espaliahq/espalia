@@ -322,7 +322,7 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
 
 Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
 improvements (last synced: `4aa21f8` — connect#137, which upstreamed all of this
-repo's fixes, so the two trees are identical as of that merge). Generic fixes
+repo's fixes, so the two trees are identical as of that merge). Since then this repo is ahead: discovery also resolves the component catalogue, conformance checks, theme matrix and stricter house rules, and build mode picks from the catalogue, skips code marked as debt, and runs the checks first. Upstream those to connect. Generic fixes
 made here must be contributed upstream in the same round-trip; never edit the
 vendored files with GrowthOS-specific facts — put those in this guide or
 another under `docs/guidelines/`.

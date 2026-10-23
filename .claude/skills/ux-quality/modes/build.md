@@ -9,6 +9,13 @@ than fixing it.
 - Run discovery (per SKILL.md). Use the host's design system components —
   reuse over reinvention; a lookalike with different padding is a review
   finding.
+- Pick each control from the host's catalogue before writing markup.
+  When no option fits, add the option to the component (with its
+  catalogue entry) and use it; a copy of its markup drifts the next time
+  the component changes.
+- Code nearby that the host marks as debt (a lint todo, a baseline
+  entry) is not a pattern. Build the new thing the current way, and move
+  the marked line onto it when you're already changing it.
 - Identify the five states for every screen you're about to build
   (`references/states.md`). If the spec doesn't define one, get it
   defined or flag the invention you're making — don't silently guess.
@@ -68,6 +75,9 @@ than fixing it.
 
 The two-minute version of the assess mode; run it on your own work:
 
+0. The host's conformance checks on every file you changed — zero new
+   offences. These are the only part of this list that run without a
+   browser.
 1. Keyboard-only through the whole flow — reachable, visible focus, no
    traps, Escape closes what it should.
 2. Force empty and error states once each — designed, with a way
@@ -78,6 +88,12 @@ The two-minute version of the assess mode; run it on your own work:
 6. Console clean across the whole flow — zero errors, no new warnings?
 7. axe run on the finished screens (`references/tooling.md`) — zero
    violations, `incomplete` triaged.
+8. Every theme and scheme in the host's matrix, plus its stress fixture —
+   same layout, every text and focus ring still legible.
+
+No browser in this session? Run step 0, then hand off with steps 1–8
+listed as owed and the screens, themes and viewports they need. A change
+checked only by lint and tests is not verified.
 
 Anything you deviated from deliberately: record it where your team
 records decisions, labeled as UX debt — the assess mode will find it
