@@ -103,12 +103,14 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
       assert_equal "“Alex Chen led the review” shows ownership.", proposals.first.rationale
     end
 
-    should "send names as written when the tenant turned it off" do
-      @tenant.update!(ai_config: AiModelConfig.new(@tenant.ai_config.attributes.merge("pseudonymise_names" => false)))
-      proposals, call = run_model(FakeAdapter.new(suggestions: [ raw(rationale: "Person 1 is left alone.") ]))
+    should "replace names even when a stored config still says the tenant turned it off" do
+      stored = @tenant.read_attribute_before_type_cast(:ai_config)
+      stored = stored.is_a?(String) ? JSON.parse(stored) : stored
+      Tenant.where(id: @tenant.id).update_all(ai_config: stored.merge("pseudonymise_names" => false))
+      proposals, call = run_model(FakeAdapter.new(suggestions: [ raw ]), tenant: @tenant.reload)
 
-      assert_equal "Alex Chen led the review; Anna wrote it up.", call[:user]
-      assert_equal "Person 1 is left alone.", proposals.first.rationale
+      assert_equal "Person 1 led the review; Person 2 wrote it up.", call[:user]
+      assert_equal "“Alex Chen led the review” shows ownership.", proposals.first.rationale
     end
 
     should "keep another tenant's people out of the mapping" do

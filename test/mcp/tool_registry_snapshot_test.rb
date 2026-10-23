@@ -2269,8 +2269,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Show how this workspace's AI model is set up for feedback placement suggestions: whether it is " \
                          "ready (a complete provider, address and model with an API key stored; it does not prove the " \
                          "endpoint answers), the provider, the host of its address, the model id, whether suggestions are " \
-                         "on, whether people's names are hidden from the model, and whether a key is stored. Never " \
-                         "returns the key.",
+                         "on, and whether a key is stored. Never returns the key. Names of people in the workspace are " \
+                         "always replaced with placeholders before feedback reaches the model.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},

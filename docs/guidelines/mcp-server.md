@@ -747,7 +747,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/registry.rb` | Self-registration + lazy eager-load |
 | `app/operations/operations/<domain>/<noun>.rb` | Concrete Operations (one per MCP tool) |
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
-| `app/operations/operations/integrations/ai_model_status.rb` | `integrations_ai_model_status` (`:none`): provider (`anthropic`, `openai_compatible` or `typesafe_jev`), address host, model, effort (Anthropic only), switches, key present. The settings and key are written on the web only, so no key ever crosses MCP |
+| `app/operations/operations/integrations/ai_model_status.rb` | `integrations_ai_model_status` (`:none`): provider (`anthropic`, `openai_compatible` or `typesafe_jev`), address host, model, effort (Anthropic only), whether suggestions are on, key present. Names are always replaced before the model, so there is no name switch to report. The settings and key are written on the web only, so no key ever crosses MCP |
 | `app/operations/operations/assessments/{accept,dismiss}_evidence_suggestion.rb` / `evidence_suggestions_list.rb` | Decide and list placement suggestions — web (the hub) and MCP; `evidence_suggestion.rb` holds their shared lookup and payload |
 | `app/operations/operations/assessments/feedback_to_place.rb` | The hub's "Feedback to place" list (`assessments_feedback_to_place`), team or whole-org view over `Assessments::FeedbackToPlace`; the hub controller renders from it |
 | `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |

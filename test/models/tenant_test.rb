@@ -223,13 +223,29 @@ class TenantTest < ActiveSupport::TestCase
         assert_equal "sk-moved", tenant.reload.ai_secrets.api_key
       end
 
-      should "allow changing the model, effort and switches without re-entering the key" do
+      should "allow changing the model, effort and switch without re-entering the key" do
         tenant = create(:tenant, :with_ai_model)
 
-        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5", effort: "", suggestions_enabled: false, pseudonymise_names: false })
+        tenant.update_ai_model!(settings: { model: "claude-haiku-5-5", effort: "", suggestions_enabled: false })
 
-        assert_equal [ "claude-haiku-5-5", "", false, false ],
-                     [ tenant.reload.ai_config.model, tenant.ai_config.effort, tenant.ai_config.suggestions_enabled?, tenant.ai_config.pseudonymise_names? ]
+        assert_equal [ "claude-haiku-5-5", "", false ],
+                     [ tenant.reload.ai_config.model, tenant.ai_config.effort, tenant.ai_config.suggestions_enabled? ]
+      end
+
+      should "load and save a stored config that still carries the retired name switch" do
+        tenant = create(:tenant, :with_ai_model)
+        stored = tenant.read_attribute_before_type_cast(:ai_config)
+        stored = stored.is_a?(String) ? JSON.parse(stored) : stored
+        [ true, false ].each do |value|
+          Tenant.where(id: tenant.id).update_all(ai_config: stored.merge("pseudonymise_names" => value))
+          tenant.reload
+
+          assert tenant.ai_config.valid?
+          tenant.update!(name: "Renamed #{value}")
+          tenant.update_ai_model!(settings: { model: "claude-haiku-5-5" })
+          assert_equal "claude-haiku-5-5", tenant.reload.ai_config.model
+          assert_not_includes tenant.read_attribute_before_type_cast(:ai_config).to_s, "pseudonymise_names"
+        end
       end
 
       should "refuse suggestions with no key, and not raise on a non-string key" do
