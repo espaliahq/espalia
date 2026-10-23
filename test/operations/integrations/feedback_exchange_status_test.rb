@@ -29,8 +29,9 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
     assert_not result[:connected]
     assert_equal({ outbound: false, inbound: false }, result[:secrets])
     assert_equal({ feedback: false, deletions: false }, result[:cursors])
-    assert_equal FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS, result[:export_kinds]
-    assert_empty result[:import_kinds]
+    assert_equal %w[all], result[:export_kinds]
+    assert_equal EvidenceItem::EVIDENCE_TYPES, result[:exported_kinds]
+    assert_equal %w[all], result[:import_kinds]
   end
 
   should "report the chosen types" do
@@ -39,6 +40,7 @@ class Operations::Integrations::FeedbackExchangeStatusTest < ActiveSupport::Test
     result = call
 
     assert_equal %w[impact], result[:export_kinds]
+    assert_equal %w[impact], result[:exported_kinds]
     assert_equal %w[feedback peer_feedback], result[:import_kinds]
   end
 

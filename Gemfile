@@ -48,7 +48,7 @@ gem "omniauth-rails_csrf_protection", "~> 2.0"
 gem "invisible_captcha", "~> 2.0"
 gem "local_time", "~> 3.0"
 gem "noticed", "~> 3.1"
-gem "pagy", "~> 43.7"
+gem "pagy", "~> 43.8"
 gem "pundit", "~> 2.4"
 gem "typeid", "~> 0.2"
 gem "tailwindcss-rails", "~> 4.6"
@@ -151,7 +151,7 @@ gem "rails_event_store", "~> 3.1", require: "rails_event_store/all"
 gem "ruby_event_store-active_record", "~> 3.2"
 
 # HTTP client for HRIS and external API integrations
-gem "faraday", "~> 2.14"
+gem "faraday", "~> 2.15"
 
 # Character/grapheme-level diff for inline suggestion display
 gem "diff-lcs", "~> 2.0"

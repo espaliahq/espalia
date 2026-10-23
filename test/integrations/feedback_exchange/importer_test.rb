@@ -171,6 +171,16 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal Time.utc(2026, 10, 19), ledger.peer_updated_at
     end
 
+    should "keep a copy it already holds up to date after the import list narrows" do
+      connect_feedback_exchange(@tenant, import_kinds: [])
+      @importer = FeedbackExchange::Importer.new(@tenant.reload)
+
+      result = @importer.import(exchange_record(text: "Even *better* now.", updated_at: "2026-10-19T00:00:00Z"))
+
+      assert_equal :updated, result.outcome
+      assert_equal "Even **better** now.", EvidenceItem.find(evidence_id).content
+    end
+
     should "ignore an older or equal version" do
       assert_equal :unchanged, @importer.import(exchange_record(text: "Stale", updated_at: "2026-10-18T03:12:45Z")).outcome
       assert_equal "**Great** work on the incident call, *calm and clear*.", EvidenceItem.find(evidence_id).content
@@ -271,6 +281,19 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
 
     should "skip a kind the tenant does not import" do
       connect_feedback_exchange(@tenant, import_kinds: %w[observation])
+      @importer = FeedbackExchange::Importer.new(@tenant.reload)
+      assert_skipped "kind_not_imported", exchange_record(kind: "feedback")
+    end
+
+    should "import every kind by default, even one GrowthOS has no type for" do
+      assert_equal %w[all], @tenant.feedback_exchange_config.import_kinds
+
+      assert_equal :imported, @importer.import(exchange_record(kind: "shout_out")).outcome
+      assert_equal "peer_feedback", EvidenceItem.find(evidence_id).evidence_type
+    end
+
+    should "import nothing when the import list is empty" do
+      connect_feedback_exchange(@tenant, import_kinds: [])
       @importer = FeedbackExchange::Importer.new(@tenant.reload)
       assert_skipped "kind_not_imported", exchange_record(kind: "feedback")
     end
