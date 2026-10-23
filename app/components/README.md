@@ -133,7 +133,7 @@ Also `TEXTAREA`, `INLINE` (the compact in-place editors), `CHECKBOX` and `RADIO`
 
 ### Icons
 
-`icon(:pencil, class: "size-4")` draws a glyph from `Kit::IconSprite`, which the page layout renders once. Lookbook's icon gallery lists every name. Size and colour come from the classes you pass.
+`icon(:pencil, class: "size-4")` draws a glyph from `Kit::IconSprite`, which the page layout renders once. Lookbook's icon gallery lists every name. To add one, or to add an option, slot or component, see [phlex-views.md → Extending Kit](../../docs/guidelines/phlex-views.md#extending-kit). Size and colour come from the classes you pass.
 
 ## Colour outside Kit
 

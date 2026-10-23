@@ -156,11 +156,7 @@ What makes it themeable:
 - **A strong fill resets the focus ring** to its own text colour, which already reads on it: `[--gos-focus-ring:var(--gos-tone-content-inverse)]` in `Kit::Alert`'s solid emphasis.
 - **Icons use `currentColor`**, so they take the text role.
 
-Then:
-
-1. A preview in `test/components/previews/kit/<name>_preview.rb` (see [Lookbook](#lookbook)), checked under every theme and scheme.
-2. A component test in `test/components/kit/<name>_test.rb`.
-3. Its radius and shadow step in `test/lib/radius_shadow_steps_test.rb`.
+The preview, test and table row a new component needs are in [phlex-views.md → Extending Kit](phlex-views.md#extending-kit).
 
 ### The guard tests
 
@@ -179,7 +175,7 @@ Every view directory except `pwa/` (the service worker) is in `view_colour_roles
 
 ## Reuse before you build
 
-Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot. A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
+Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot ([phlex-views.md → Extending Kit](phlex-views.md#extending-kit)). A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
 
 The same goes for previews: render the real component, never a copy of its markup.
 

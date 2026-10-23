@@ -77,6 +77,37 @@ Each component owns its radius and shadow ([theming.md → Radius and shadow](th
 - **A wide modal, or one whose body draws its own heading and ×:** `Kit::Modal` `size: :xl`, `:"2xl"` or `:"3xl"` (the evidence modals, 768px), and `header: false`. The title still names the dialog.
 - **A controller that must wrap the whole modal body** (a lazy frame's `frame-error`, `submit-fallback`): pass it as `Kit::Modal` `panel_data:`. The evidence shells do.
 
+### Extending Kit
+
+Work down this list and stop at the first step that fits:
+
+1. **Use the component as it is.** Check its options in Lookbook first.
+2. **Add an option** (a keyword such as `type:`, `size:` or `compact:`) when the component does the same job with one difference.
+3. **Add a slot** when callers need to put their own markup somewhere the component draws, as `Kit::SectionHeading`'s `action` does.
+4. **Add a component** when an option would give an existing one a second job. A piece one view uses stays with that view; move it into Kit or Shared when a second view needs it.
+
+**Adding an option:**
+
+- the keyword, with a default that leaves every existing call site rendering as before, and a YARD `@param`;
+- a scenario for it in the component's preview, and a `# @param` in its `playground`;
+- a case in `test/components/kit/<name>_test.rb`;
+- the component's row in [Which Kit component](#which-kit-component) and its example in `app/components/README.md`, if the option changes which jobs it fits.
+
+**Adding a slot:** store the block in the slot method and call it from `view_template`, so callers can pass slots in any order; `Kit::EmptyState#action` is the model. Call it with `@block.call`, never `instance_exec` ([Slots Pattern](#slots-pattern)). Give it a preview scenario and a test, as for an option.
+
+**Adding a component:**
+
+- the layer ([Component layers](#component-layers)) and its file, `app/components/<layer>/<name>.rb`;
+- colour, fill and focus from [theming.md → Building a themed component](theming.md#building-a-themed-component);
+- a preview, `test/components/previews/<layer>/<name>_preview.rb`, checked under every theme and scheme;
+- a component test, `test/components/<layer>/<name>_test.rb`;
+- its radius and shadow step in `test/lib/radius_shadow_steps_test.rb`;
+- for Kit, a row in [Which Kit component](#which-kit-component) and an example in `app/components/README.md`.
+
+The guards fail if you forget a step: `kit_previews_test.rb` (no preview), `kit_component_table_test.rb` (no row), `radius_shadow_steps_test.rb` (an unlisted radius or shadow) and `kit_colour_roles_test.rb` (a palette colour). Nothing checks for the component test; add it anyway.
+
+**Adding an icon:** add its path to `Kit::IconSprite`: `STROKE_ICONS` for an outline on the 24×24 grid, `FILL_ICONS` for a solid glyph on 20×20. A glyph with several parts joins them as subpaths in one `d`, as `pencil` does. Check it in Lookbook's icon gallery. `icon(:name)` refuses a name the sprite doesn't define.
+
 ## Page View Pattern
 
 ```ruby
