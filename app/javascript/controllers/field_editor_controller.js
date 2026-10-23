@@ -355,10 +355,7 @@ export default class extends BaseController {
       hint.textContent = propose ? "Lands as a suggestion for review" : "Applies immediately"
     }
     const input = form.querySelector("[data-editor-input]")
-    if (input) {
-      input.classList.toggle("border-amber-400", propose)
-      input.classList.toggle("border-primary", !propose)
-    }
+    if (input) input.dataset.outcome = propose ? "propose" : "apply"
   }
 
   #outcomeFor(host) {

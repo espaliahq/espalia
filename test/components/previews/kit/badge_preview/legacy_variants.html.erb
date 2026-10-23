@@ -1,0 +1,5 @@
+<div class="flex flex-wrap items-center gap-2">
+  <% variants.each do |variant| %>
+    <%= render Components::Kit::Badge.new("variant: :#{variant}", variant: variant) %>
+  <% end %>
+</div>

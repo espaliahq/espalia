@@ -159,15 +159,8 @@ export default class extends Controller {
 
     this.trackValue = track
 
-    // Update button styles
     this.trackButtonTargets.forEach(btn => {
-      const isActive = btn.dataset.track === track
-      btn.classList.toggle("bg-primary", isActive)
-      btn.classList.toggle("text-white", isActive)
-      btn.classList.toggle("bg-gray-100", !isActive)
-      btn.classList.toggle("dark:bg-gray-800", !isActive)
-      btn.classList.toggle("text-gray-600", !isActive)
-      btn.classList.toggle("dark:text-gray-400", !isActive)
+      btn.setAttribute("aria-pressed", String(btn.dataset.track === track))
     })
 
     // Show/hide roles by track

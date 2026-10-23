@@ -18,11 +18,10 @@
 #     id: "evidence-modal-error", subject: "the form", closeable: true
 #   )
 class Components::Shared::FrameLoadError < Components::Base
-  # The neutral secondary-button treatment. Canonical: the evidence forms'
-  # SECONDARY_BTN point here, so the three copies can't drift apart.
-  # A component class (app/assets/tailwind/application.css), not a utility
-  # string: every expanded-row placeholder in the explorer's matrix ships one of
-  # these, so the utilities were ~6 KB of repeated text per frame (#383).
+  # Kit::Button's outline neutral look as one CSS class (application.css): every
+  # expanded-row placeholder in the explorer's matrix ships one, and the
+  # component's utility string would repeat per row (#383). The evidence forms'
+  # SECONDARY_BTN point here too.
   BUTTON_CLASSES = "kit-btn-secondary"
 
   # What the reader was trying to open, when the caller doesn't name it.

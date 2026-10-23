@@ -128,6 +128,19 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_text "Not started"
       assert_no_text "Manager"
     end
+
+    should "keep a long level title inside its card on a phone" do
+      ActsAsTenant.with_tenant(@tenant) do
+        Frameworks::CommandHandler.new.update_level_details(
+          @framework_id, @level2_id, title: "Distinguished Fellow of the Extraordinarily Long Level Title"
+        )
+      end
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessments_path
+      assert_text "Distinguished Fellow"
+
+      assert_no_sideways_overflow("a long level title pushes My Assessments sideways")
+    end
   end
 
   context "hero summary" do
@@ -417,6 +430,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
 
     should "mark the clicked category chip as active after the scroll settles" do
+      # A rating gives the second category a score, so the contrast check below has one to measure
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_self(
+          @person.id, @framework_id, @cap3_stable, level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id
+        )
+      end
       visit assessment_path(@assignment)
       assert_selector "#scoring-panel"
 
@@ -445,6 +464,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_equal @cat2_id, active_category_id,
         "Clicked category chip should remain active after the scroll settles, " \
         "got #{active_category_id.inspect}"
+
+      # The chip went active in the browser, so its score must follow aria-current, not the server.
+      assert_selector "nav#category-tabs a[aria-current='page'] span.font-mono", text: "%"
+      assert_operator rendered_contrast("nav#category-tabs a[aria-current='page'] span.font-mono"), :>=, 4.5
     end
 
     should "scroll the second category section under the sticky header when its chip is clicked" do

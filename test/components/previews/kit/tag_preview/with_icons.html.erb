@@ -1,0 +1,9 @@
+<div class="space-y-3 rounded-2xl border border-default bg-default p-4">
+  <% sizes.each do |size| %>
+    <div class="flex flex-wrap items-center gap-2">
+      <%= render Components::Kit::Tag.new("Draft", category: 5, size: size, leading_icon: "pencil") %>
+      <%= render Components::Kit::Tag.new("Engineering", category: 1, size: size, trailing_icon: "chevron-down") %>
+      <%= render Components::Kit::Tag.new("Archived", size: size, leading_icon: "archive") %>
+    </div>
+  <% end %>
+</div>

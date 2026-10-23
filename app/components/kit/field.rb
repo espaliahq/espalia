@@ -33,11 +33,16 @@ module Components::Kit::Field
            "disabled:cursor-not-allowed disabled:border-disabled disabled:bg-subtle disabled:text-disabled"
 
   # The forms plugin hides the outline on these, so keyboard focus is a ring; the checked edge stays for dark cards.
+  # Its white SVG tick vanishes on a pale brand, and an SVG can't read a variable, so two gradient strokes draw the tick in the contrast helper's ink.
   CHECKBOX = "size-4 rounded-sm border border-strong bg-field checked:border-strong checked:bg-brand-strong " \
+             "checked:bg-[linear-gradient(45deg,transparent_calc(50%-1px),var(--gos-brand-content-inverse)_calc(50%-1px)_calc(50%+1px),transparent_calc(50%+1px)),linear-gradient(135deg,transparent_calc(50%-1px),var(--gos-brand-content-inverse)_calc(50%-1px)_calc(50%+1px),transparent_calc(50%+1px))] " \
+             "checked:bg-size-[4px_4px,7.5px_7.5px] checked:bg-position-[2px_6.5px,4.5px_3.5px] checked:bg-no-repeat " \
              "focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-focus " \
              "disabled:cursor-not-allowed disabled:opacity-50"
 
+  # The forms plugin's dot is a white SVG, which vanishes on a pale brand; this one takes the contrast helper's ink
   RADIO = "size-4 rounded-full border border-strong bg-field checked:border-strong checked:bg-brand-strong " \
+          "checked:bg-[radial-gradient(circle_closest-side,var(--gos-brand-content-inverse)_37.5%,transparent_40%)] " \
           "focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-focus " \
           "disabled:cursor-not-allowed disabled:opacity-50"
 

@@ -18,10 +18,9 @@
 #   )
 class Components::Kit::DefinitionTip < Components::Base
   DEFAULT_TRIGGER = "inline-flex min-h-11 items-center text-left underline decoration-dotted " \
-                    "decoration-gray-400 dark:decoration-gray-500 underline-offset-4 " \
-                    "hover:decoration-gray-900 dark:hover:decoration-white"
+                    "decoration-(--gos-content-subtle) underline-offset-4 hover:decoration-(--gos-content-default)"
 
-  FOCUS = "rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+  FOCUS = "rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
 
   # @param term [String] the word as it reads in the UI
   # @param definition [String] one or two sentences, plain language
@@ -95,9 +94,9 @@ class Components::Kit::DefinitionTip < Components::Base
       popover: "manual",
       data: { definition_tip_target: "panel" },
       class: "pointer-events-none absolute top-full z-30 mt-1 hidden w-64 rounded-md " \
-             "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 " \
+             "border border-default bg-overlay " \
              "px-3 py-2 text-xs font-normal normal-case tracking-normal " \
-             "text-gray-700 dark:text-gray-200 shadow-lg [&:popover-open]:block " \
+             "text-muted shadow-lg [&:popover-open]:block " \
              "group-hover/deftip:block group-focus-within/deftip:block #{alignment}"
     ) { @definition }
   end

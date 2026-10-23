@@ -260,55 +260,31 @@ class Views::Assessments::Comments::Card < Views::Base
   def actions_menu
     # Kebab stays visible at all times — the opacity-0/hover pattern
     # hid Reply on touch devices entirely and was hard to discover on
-    # desktop. On mobile a muted-by-default trigger is more discoverable
-    # than no trigger; the kebab subdues itself with text-gray-400 so
-    # it stays decorative rather than fighting the comment body.
-    div(
-      class: "absolute top-1 right-1",
-      data: { controller: "dropdown",
-              action: "keydown.esc@window->dropdown#close" }
-    ) do
-      kebab_trigger
-      kebab_menu
+    # desktop.
+    div(class: "absolute top-1 right-1") do
+      render Components::Kit::Dropdown.new do |dropdown|
+        kebab_trigger
+        dropdown.menu(width: "w-32") do
+          reply_menu_item if @can_reply
+          edit_menu_item if @can_edit
+          delete_menu_item if @can_delete
+        end
+      end
     end
   end
 
   def kebab_trigger
-    button(
-      type: "button",
-      class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
-             "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
-             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :xs, icon: true, aria_label: "Comment actions",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { label: "Comment actions", haspopup: "menu", expanded: "false" }
-    ) do
-      span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" }
-    end
-  end
-
-  def kebab_menu
-    # z-30 puts the menu above the next category section's sticky
-    # heading (z-10) AND the unified sticky header (z-20) — when the
-    # menu opens near a section boundary it would otherwise be clipped
-    # by the following section's sticky chrome stacking context.
-    div(
-      class: "hidden absolute right-0 mt-1 w-32 rounded-md border border-gray-200 " \
-             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-30 " \
-             "py-1 text-xs",
-      role: "menu",
-      data: { dropdown_target: "menu" }
-    ) do
-      reply_menu_item if @can_reply
-      edit_menu_item if @can_edit
-      delete_menu_item if @can_delete
-    end
+      aria: { haspopup: "menu", expanded: "false" }
+    ) { icon("kebab", class: "size-4") }
   end
 
   def reply_menu_item
     button(
       type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
       role: "menuitem",
       data: {
         action: "click->dropdown#close click->comments-thread#startReply",
@@ -320,8 +296,7 @@ class Views::Assessments::Comments::Card < Views::Base
   def edit_menu_item
     button(
       type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
       role: "menuitem",
       data: {
         action: "click->dropdown#close click->comments-thread#startEdit",
@@ -339,8 +314,7 @@ class Views::Assessments::Comments::Card < Views::Base
     button_to(
       assessment_comment_path(@assessment_id, @comment.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-red-700 dark:text-red-300 " \
-             "hover:bg-red-50 dark:hover:bg-red-900/30",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
       role: "menuitem",
       data: { turbo_confirm: "Delete this comment? Replies will stay visible." }
     ) { "Delete" }

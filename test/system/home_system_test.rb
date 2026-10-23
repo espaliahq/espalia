@@ -114,6 +114,54 @@ class HomeSystemTest < ApplicationSystemTestCase
         "sidebar drawer should close when clicking outside"
     end
 
+    should "move focus into the mobile drawer, close it on Escape and hand focus back to the toggle" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit frameworks_path
+      wait_for_stimulus "sidebar"
+      assert_selector "[data-sidebar-target='toggle'][aria-expanded='false'][aria-controls='mobile-navigation']"
+
+      page.execute_script("document.querySelector(\"[data-sidebar-target='toggle']\").focus()")
+      find("[data-sidebar-target='toggle']").send_keys(:enter)
+
+      assert_selector "#mobile-navigation", visible: true
+      assert_selector "[data-sidebar-target='toggle'][aria-expanded='true']"
+      assert page.evaluate_script("document.activeElement.matches('#mobile-navigation nav a')"),
+        "focus should land on the drawer's first link"
+
+      press_escape
+
+      assert_no_selector "#mobile-navigation", visible: true
+      assert_selector "[data-sidebar-target='toggle'][aria-expanded='false']"
+      assert page.evaluate_script("document.activeElement.matches(\"[data-sidebar-target='toggle']\")"),
+        "focus should return to the toggle"
+    end
+
+    should "close the mobile drawer from its close button and hand focus back to the toggle" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit frameworks_path
+
+      toggle_sidebar
+      assert_selector "#mobile-navigation button[aria-label='Close menu']", visible: true
+
+      page.execute_script("document.querySelector(\"#mobile-navigation button[aria-label='Close menu']\").click()")
+
+      assert_no_selector "#mobile-navigation", visible: true
+      assert_selector "[data-sidebar-target='toggle'][aria-expanded='false']"
+      assert page.evaluate_script("document.activeElement.matches(\"[data-sidebar-target='toggle']\")"),
+        "focus should return to the toggle"
+    end
+
+    should "close the mobile drawer when focus moves out of it" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit frameworks_path
+
+      toggle_sidebar
+      page.execute_script("document.getElementById('main-content').focus()")
+
+      assert_no_selector "#mobile-navigation", visible: true
+      assert_selector "[data-sidebar-target='toggle'][aria-expanded='false']"
+    end
+
     should "hide hamburger button on desktop" do
       visit frameworks_path
 

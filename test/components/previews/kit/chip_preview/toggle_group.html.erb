@@ -1,0 +1,5 @@
+<div role="group" aria-label="Period" class="flex flex-wrap items-center gap-2 rounded-2xl border border-default bg-default p-4">
+  <% periods.each do |period| %>
+    <%= render Components::Kit::Chip.new(period, pressed: period == selected) %>
+  <% end %>
+</div>

@@ -13,9 +13,10 @@
 # `w-80 sm:w-96`, which widened the table when opened in a level column and
 # pushed later levels off-screen.
 class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
-  INPUT_CLASSES = "w-full min-w-0 text-sm rounded px-2 py-1 border border-primary " \
-                  "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-                  "resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+  # field_editor_controller stamps data-outcome; a proposal's edge turns amber.
+  INPUT_CLASSES = "w-full min-w-0 text-sm rounded px-2 py-1 border border-strong " \
+                  "data-[outcome=propose]:border-warning-strong bg-field text-default " \
+                  "resize-y focus:outline-none focus:ring-1 focus:ring-focus"
 
   SUBMIT_CLASSES = "text-xs px-2 py-0.5 rounded bg-primary text-white hover:bg-primary/90"
 

@@ -1,0 +1,14 @@
+<div class="space-y-4">
+  <% [ [ "On a card", "bg-default border border-default rounded-2xl p-4" ], [ "On the page", "py-4" ] ].each do |title, surface| %>
+    <div class="<%= surface %>">
+      <p class="mb-3 text-xs font-medium text-muted"><%= title %></p>
+      <% sizes.each do |size| %>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <% categories.each do |category| %>
+            <%= render Components::Kit::Tag.new("Category #{category}", category: category, size: size) %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

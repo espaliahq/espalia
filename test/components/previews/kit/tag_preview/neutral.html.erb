@@ -1,0 +1,8 @@
+<div class="flex flex-wrap items-center gap-2 rounded-2xl border border-default bg-default p-4">
+  <% sizes.each do |size| %>
+    <%= render Components::Kit::Tag.new("Archived", size: size) %>
+  <% end %>
+  <% %w[E1 E2 E3 E4].each do |level| %>
+    <%= render Components::Kit::Tag.new(level, size: :xs) %>
+  <% end %>
+</div>

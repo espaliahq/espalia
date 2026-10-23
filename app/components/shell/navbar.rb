@@ -28,7 +28,8 @@ class Components::Shell::Navbar < Components::Base
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-12 px-4 bg-nav-bg text-nav-fg shadow-xs shrink-0") do
+    nav(class: "flex items-center justify-between h-12 px-4 bg-nav text-nav shadow-xs shrink-0 " \
+                "[--gos-focus-ring:var(--gos-nav-content)]") do
       left_section
       right_section
     end
@@ -52,8 +53,8 @@ class Components::Shell::Navbar < Components::Base
         type: "button",
         aria: { describedby: "brand-tagline" },
         class: "text-sm font-bold tracking-tight px-2 py-1 -mx-2 rounded-md cursor-pointer " \
-               "transition-colors hover:bg-white/20 focus:outline-hidden " \
-               "focus-visible:bg-white/20 focus-visible:ring-2 focus-visible:ring-white",
+               "transition-colors hover:bg-current/20 focus:outline-hidden " \
+               "focus-visible:bg-current/20 focus-visible:ring-2 focus-visible:ring-focus",
         data: {
           brand_confetti_target: "brand",
           action: "mouseenter->brand-confetti#enter focus->brand-confetti#focus " \
@@ -67,11 +68,10 @@ class Components::Shell::Navbar < Components::Base
         id: "brand-tagline",
         role: "tooltip",
         style: "font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', 'Comic Neue', cursive",
-        class: "fixed top-0 left-0 z-50 whitespace-nowrap rounded-lg border border-gray-200 bg-white " \
-               "px-3 py-2 text-[13px] font-normal text-gray-900 shadow-sm pointer-events-none " \
+        class: "fixed top-0 left-0 z-50 whitespace-nowrap rounded-md border border-default bg-overlay " \
+               "px-3 py-2 text-[13px] font-normal text-default shadow-lg pointer-events-none " \
                "opacity-0 scale-95 transition-[opacity,scale] duration-200 " \
-               "data-open:opacity-100 data-open:scale-100 " \
-               "dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100",
+               "data-open:opacity-100 data-open:scale-100",
         data: { brand_confetti_target: "tagline" }
       ) { "not just a tool, but a way of life 🫶" }
     end
@@ -80,10 +80,10 @@ class Components::Shell::Navbar < Components::Base
   def hamburger_button
     button(
       type: "button",
-      aria: { label: "Toggle navigation", expanded: "false" },
+      aria: { label: "Toggle navigation", expanded: "false", controls: Components::Shell::Sidebar::DRAWER_ID },
       class: "md:hidden inline-flex items-center justify-center h-11 w-11 -ml-1.5 rounded-md " \
-             "hover:bg-white/10 focus:outline-hidden focus:ring-2 focus:ring-white",
-      data: { action: "sidebar#toggle" }
+             "hover:bg-current/10 focus:outline-hidden focus:ring-2 focus:ring-focus",
+      data: { sidebar_target: "toggle", action: "sidebar#toggle" }
     ) do
       svg(
         xmlns: "http://www.w3.org/2000/svg",
@@ -116,7 +116,7 @@ class Components::Shell::Navbar < Components::Base
     a(
       href: link[:href],
       class: "px-3 py-1.5 rounded-md text-sm font-medium " \
-             "text-nav-fg/70 hover:text-nav-fg hover:bg-white/10 transition-colors"
+             "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors"
     ) do
       plain link[:label]
     end
@@ -146,7 +146,7 @@ class Components::Shell::Navbar < Components::Base
           tenants: @tenants
         )
       else
-        div(class: "h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-medium") do
+        div(class: "h-8 w-8 rounded-full bg-current/20 flex items-center justify-center text-sm font-medium") do
           plain "U"
         end
       end

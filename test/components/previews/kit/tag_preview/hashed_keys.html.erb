@@ -1,0 +1,5 @@
+<div class="flex flex-wrap items-center gap-2 rounded-2xl border border-default bg-default p-4">
+  <% names.each do |name| %>
+    <%= render Components::Kit::Tag.new(name, category: name) %>
+  <% end %>
+</div>

@@ -286,56 +286,34 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   # Hover-revealed kebab menu that hosts Edit, link management
   # (Link to another capability / Unlink from this capability), and Withdraw.
-  # Uses the shared `dropdown`
-  # Stimulus controller — same one the user menu and framework explorer
-  # use — so behaviour (click-outside close, transition, aria) is
-  # consistent across the app.
   #
-  # The wrapper goes opacity-100 when the dropdown is open (driven by
-  # the `aria-expanded` Stimulus controller toggles on the trigger)
-  # via `has-[]` so the menu doesn't fade-out the moment the user
-  # clicks the kebab and the cursor leaves the hover area.
+  # The wrapper stays opacity-100 while the menu is open (`aria-expanded` on
+  # the trigger) so it doesn't fade out when the cursor leaves the card.
   def actions_menu
     div(
-      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 " \
-             "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity",
-      data: { controller: "dropdown",
-              action: "keydown.esc@window->dropdown#close" }
+      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 " \
+             "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
-      kebab_trigger
-      kebab_menu
+      render Components::Kit::Dropdown.new do |dropdown|
+        kebab_trigger
+        dropdown.menu(width: "w-44") do
+          edit_menu_item if @can_update
+          # The author's Edit already manages links (the unified modal). Offer a
+          # link-only entry only to non-author link-holders (content disabled there).
+          link_menu_item if @can_manage_links && !@can_update
+          remove_link_menu_item if @can_manage_links
+          withdraw_menu_item if @can_withdraw
+        end
+      end
     end
   end
 
   def kebab_trigger
-    button(
-      type: "button",
-      class: "inline-flex min-h-6 min-w-6 items-center justify-center rounded p-1 " \
-             "text-gray-600 dark:text-gray-300 hover:text-gray-700 hover:bg-gray-100 " \
-             "dark:hover:bg-gray-700 dark:hover:text-gray-200",
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :xs, icon: true, aria_label: "Feedback / evidence actions",
       data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { label: "Feedback / evidence actions", haspopup: "menu", expanded: "false" }
-    ) do
-      # Vertical 3-dot kebab — kept inline so we don't depend on an icon set.
-      span(class: "block leading-none text-base", aria_hidden: "true") { "⋮" }
-    end
-  end
-
-  def kebab_menu
-    div(
-      class: "hidden absolute right-0 mt-1 w-44 rounded-md border border-gray-200 " \
-             "dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg z-10 " \
-             "py-1 text-xs",
-      role: "menu",
-      data: { dropdown_target: "menu" }
-    ) do
-      edit_menu_item if @can_update
-      # The author's Edit already manages links (the unified modal). Offer a
-      # link-only entry only to non-author link-holders (content disabled there).
-      link_menu_item if @can_manage_links && !@can_update
-      remove_link_menu_item if @can_manage_links
-      withdraw_menu_item if @can_withdraw
-    end
+      aria: { haspopup: "menu", expanded: "false" }
+    ) { icon("kebab", class: "size-4") }
   end
 
   def edit_menu_item
@@ -352,8 +330,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   def modal_menu_button(label)
     button(
       type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
       role: "menuitem",
       data: {
         action: "click->dropdown#close evidence-modal#load click->modal#open",
@@ -381,14 +358,13 @@ class Views::Assessments::Evidence::Card < Views::Base
         params: { evidence: { capability_stable_id: @current_capability_stable_id,
                               level_ordinal: @current_level_ordinal } },
         method: :post,
-        class: "block w-full text-left px-3 py-1.5 text-gray-700 dark:text-gray-200 " \
-               "hover:bg-gray-100 dark:hover:bg-gray-700",
+        class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
         role: "menuitem",
         form: { data: { turbo_confirm: unlink_confirm_message } }
       ) { "Unlink from this capability" }
     else
       span(
-        class: "block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-600 cursor-not-allowed",
+        class: "block w-full text-left px-3 py-1.5 text-xs text-disabled cursor-not-allowed",
         role: "menuitem",
         aria: { disabled: "true" },
         title: "This is the only place this feedback is linked — withdraw it instead."
@@ -411,8 +387,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     button_to(
       assessment_evidence_path(@assessment_id, @item.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-red-700 dark:text-red-300 " \
-             "hover:bg-red-50 dark:hover:bg-red-900/30",
+      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
       role: "menuitem",
       form: { data: { turbo_confirm: "Withdraw this feedback?" } }
     ) { "Withdraw" }

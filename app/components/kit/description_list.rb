@@ -9,19 +9,26 @@
 #   ])
 #
 class Components::Kit::DescriptionList < Components::Base
-  # Literal class names: Tailwind's JIT cannot see an interpolated one, so
-  # `sm:grid-cols-#{n}` was never generated and the grid stayed one column wide.
-  COLUMN_CLASSES = { 1 => "sm:grid-cols-1", 2 => "sm:grid-cols-2", 3 => "sm:grid-cols-3", 4 => "sm:grid-cols-4" }.freeze
+  # Whole class names: Tailwind builds only classes it finds spelled out in the source.
+  COLUMNS = {
+    1 => "sm:grid-cols-1",
+    2 => "sm:grid-cols-2",
+    3 => "sm:grid-cols-3",
+    4 => "sm:grid-cols-4"
+  }.freeze
 
   # @param items [Array<Hash>] list of { term:, detail: } pairs
-  # @param columns [Integer] number of grid columns (default 3)
+  # @param columns [Integer] number of grid columns from `sm` up, 1–4 (default 3)
+  # @raise [ArgumentError] for any other column count
   def initialize(items:, columns: 3)
+    raise ArgumentError, "columns must be 1–#{COLUMNS.size}, got #{columns.inspect}" unless COLUMNS.key?(columns)
+
     @items = items
     @columns = columns
   end
 
   def view_template
-    dl(class: "grid grid-cols-1 #{COLUMN_CLASSES.fetch(@columns)} gap-4") do
+    dl(class: "grid grid-cols-1 #{COLUMNS.fetch(@columns)} gap-4") do
       @items.each { |item| description_item(item) }
     end
   end
@@ -29,11 +36,11 @@ class Components::Kit::DescriptionList < Components::Base
   private
 
   def description_item(item)
-    div(class: "min-w-0 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg") do
-      dt(class: "text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide") do
+    div(class: "min-w-0 px-4 py-3 bg-subtle rounded-lg") do
+      dt(class: "text-xs font-medium text-muted uppercase tracking-wide") do
         item[:term]
       end
-      dd(class: "mt-1 text-xl font-semibold text-gray-900 dark:text-white [overflow-wrap:anywhere]") do
+      dd(class: "mt-1 text-xl font-semibold text-default [overflow-wrap:anywhere]") do
         item[:detail]
       end
     end

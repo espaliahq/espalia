@@ -80,7 +80,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
           button.focus();
           const nav = paint([[getComputedStyle(button.closest("nav")).backgroundColor, 1]]);
           const bands = [...getComputedStyle(button).boxShadow.matchAll(/((?:rgba?|oklch|oklab|lab|lch|color)\\([^)]*\\)) 0px 0px 0px ([1-9][0-9.]*)px/g)]
-            .map(m => m[1]).filter(c => !/, 0\\)$/.test(c));
+            .map(m => m[1]).filter(c => !/^rgba\\(.*, 0\\)$/.test(c));
           return { focusVisible: button.matches(":focus-visible"), bands: bands,
                    best: Math.max(0, ...bands.map(c => ratio(paint([[c, 1]]), nav))) };
         })()
@@ -157,7 +157,7 @@ class AccessibilitySystemTest < ApplicationSystemTestCase
       JS
 
       assert outlines["button"]["focusVisible"], "a script focus with no prior pointer input should read as keyboard focus"
-      assert_equal "rgb(147, 197, 253)", outlines["button"]["colour"], "buttons take the dark focus colour"
+      assert_equal "rgb(255, 255, 255)", outlines["button"]["colour"], "buttons take the dark focus role"
       assert_equal "rgba(0, 0, 0, 0)", outlines["field"]["colour"], "fields keep the forms plugin's transparent outline"
     end
   end

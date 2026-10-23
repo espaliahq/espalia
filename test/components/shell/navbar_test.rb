@@ -25,4 +25,17 @@ class Components::Shell::NavbarTest < ActiveSupport::TestCase
       assert_includes @html, "Comic Sans MS"
     end
   end
+
+  context "the mobile toggle" do
+    setup do
+      @toggle = Nokogiri::HTML.fragment(Components::Shell::Navbar.new(app_name: "GrowthOS").call)
+        .at_css("button[aria-label='Toggle navigation']")
+    end
+
+    should "be the sidebar controller's toggle and point at the drawer it controls" do
+      assert_equal "toggle", @toggle["data-sidebar-target"]
+      assert_equal Components::Shell::Sidebar::DRAWER_ID, @toggle["aria-controls"]
+      assert_equal "false", @toggle["aria-expanded"]
+    end
+  end
 end

@@ -18,7 +18,8 @@ class Components::Shell::ImpersonationBanner < Components::Base
   def view_template
     div(
       class: "sticky top-0 z-[70] flex items-center justify-center gap-x-3 gap-y-1 flex-wrap " \
-             "bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 shadow-sm",
+             "tone-warning bg-tone-strong px-4 py-2 text-sm font-medium text-tone-content-inverse shadow-sm " \
+             "[--gos-focus-ring:var(--gos-tone-content-inverse)]",
       role: "status"
     ) do
       eye_icon
@@ -39,8 +40,8 @@ class Components::Shell::ImpersonationBanner < Components::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       button(
         type: "submit",
-        class: "rounded-md bg-amber-950/10 px-2.5 py-0.5 text-xs font-semibold text-amber-950 " \
-               "hover:bg-amber-950/20 focus:outline-hidden focus:ring-2 focus:ring-amber-950/40 cursor-pointer"
+        class: "rounded-md bg-current/10 px-2.5 py-0.5 text-xs font-semibold " \
+               "hover:bg-current/20 focus:outline-hidden focus:ring-2 focus:ring-focus cursor-pointer"
       ) { "Stop impersonating" }
     end
   end

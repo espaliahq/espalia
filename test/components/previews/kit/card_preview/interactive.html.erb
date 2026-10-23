@@ -1,0 +1,7 @@
+<div class="grid max-w-3xl gap-4 sm:grid-cols-2">
+  <% [["Delivery", "false"], ["Craft", "true"]].each do |title, focused| %>
+    <%= render Components::Kit::Card.new(title: title, interactive: true, tabindex: 0, data: { focused: focused }) do |card| %>
+      <% card.body do %><p class="text-sm text-muted">4 of 6 expectations consistent at E3.</p><% end %>
+    <% end %>
+  <% end %>
+</div>

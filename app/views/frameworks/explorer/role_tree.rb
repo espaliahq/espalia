@@ -27,6 +27,12 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
     { value: "management", label: "Mgmt" }
   ].freeze
 
+  # aria-pressed carries the active track, so tree_controller moves it with the attribute alone.
+  TRACK_BUTTON_CLASSES = "flex-1 px-3 py-1.5 text-xs font-medium rounded-md border border-transparent " \
+                         "bg-neutral-subtle text-muted not-aria-pressed:hover:bg-neutral-muted transition-colors " \
+                         "aria-pressed:border-strong aria-pressed:bg-neutral-muted aria-pressed:text-default " \
+                         "aria-pressed:font-semibold"
+
   # @param role_families [Array<FrameworkState::RoleFamily>] eager-loaded with roles
   # @param selected_role_ids [Array<String>] currently selected role UUIDs
   # @param track_filter [String] "ic", "management", or "both"
@@ -143,20 +149,11 @@ class Views::Frameworks::Explorer::RoleTree < Views::Base
         active = @track_filter == opt[:value]
         button(
           type: "button",
-          class: track_button_classes(active),
+          class: TRACK_BUTTON_CLASSES,
+          aria: { pressed: active.to_s },
           data: { action: "tree#filterTrack", track: opt[:value], tree_target: "trackButton" }
         ) { opt[:label] }
       end
-    end
-  end
-
-  def track_button_classes(active)
-    base = "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
-    if active
-      "#{base} bg-primary text-white"
-    else
-      "#{base} bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 " \
-      "hover:bg-gray-200 dark:hover:bg-gray-700"
     end
   end
 

@@ -1,0 +1,10 @@
+<%= render Components::Kit::Card.new(title: "Publish v4") do |card| %>
+  <% card.body do %>
+    <p class="mb-3 text-sm text-muted">Three changes go live for everyone when you publish.</p>
+    <%= render Components::Kit::Card.new(variant: :inset) do |inset| %>
+      <% inset.body do %>
+        <p class="text-sm text-default">Systems thinking is archived; its ratings move to Technical judgement.</p>
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>

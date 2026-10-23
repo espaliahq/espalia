@@ -1,0 +1,13 @@
+<div class="space-y-4">
+  <% [ [ "On a card", "bg-default border border-default rounded-2xl p-4" ], [ "On the page", "py-4" ] ].each do |title, surface| %>
+    <div class="<%= surface %>">
+      <p class="mb-3 text-xs font-medium text-muted"><%= title %></p>
+      <div class="flex flex-wrap items-center gap-3">
+        <% people.each do |name| %>
+          <%= render Components::Kit::Chip.new(name, remove: {}) %>
+        <% end %>
+        <%= render Components::Kit::Chip.new("Disabled", remove: {}, disabled: true) %>
+      </div>
+    </div>
+  <% end %>
+</div>
