@@ -31,6 +31,8 @@ class Assessments::FeedbackToPlace
   # @param scope [String] "team" or "org"
   # @return [Array<EvidenceItem>] oldest first, never about the viewer
   def items(scope)
+    return [] unless others_waiting?
+
     keys = assignments(scope).keys.to_set
     org_items.select { |item| keys.include?(key_for(item)) }
   end
@@ -43,11 +45,12 @@ class Assessments::FeedbackToPlace
   end
 
   # Whether the org view reaches anyone the team view doesn't — the toggle
-  # has nothing to switch otherwise.
+  # has nothing to switch otherwise. False while nothing about anyone else
+  # is waiting, without walking the subtree.
   #
   # @return [Boolean]
   def beyond_team?
-    org_assignments.size > team_assignments.size
+    others_waiting? && org_assignments.size > team_assignments.size
   end
 
   # The scope whose list holds feedback about this person's assessment, so a
@@ -76,6 +79,12 @@ class Assessments::FeedbackToPlace
 
   def unplaced
     EvidenceItem.unplaced.where.not(author_id: @viewer.id).includes(:author).order(:recorded_at, :id)
+  end
+
+  def others_waiting?
+    return @others_waiting if defined?(@others_waiting)
+
+    @others_waiting = unplaced.where.not(person_id: @viewer.id).exists?
   end
 
   def org_items

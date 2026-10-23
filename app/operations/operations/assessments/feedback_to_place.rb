@@ -29,7 +29,7 @@ class Operations::Assessments::FeedbackToPlace < Operations::Base
 
   # @return [Hash] `{ scope:, beyond_team:, counts: { team:, org: }, about_you: [...], items: [...] }`.
   #   `beyond_team` is false when the org view would list no one the team
-  #   view doesn't. `items` holds the chosen scope's items; each item, in
+  #   view doesn't, and while nothing about anyone else is waiting. `items` holds the chosen scope's items; each item, in
   #   either list, is `{ evidence_id, assignment_id, person{id,name},
   #   framework{id,name}, kind, custom_type_label, origin{system,label,url},
   #   author{id,name}, recorded_at, excerpt }`, oldest first. `origin.system`
@@ -56,7 +56,7 @@ class Operations::Assessments::FeedbackToPlace < Operations::Base
   private
 
   def scope
-    params[:scope].presence || ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
+    params[:scope] || ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
   end
 
   def own_assignments

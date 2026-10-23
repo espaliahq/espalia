@@ -95,6 +95,15 @@ class Operations::Assessments::FeedbackToPlaceTest < ActiveSupport::TestCase
     assert_equal result[:counts][:team], result[:counts][:org]
   end
 
+  should "skip the org walk while nothing about anyone else is waiting" do
+    ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where.not(id: @about_me).delete_all }
+    result = call_op(scope: "org")
+
+    assert_not result[:beyond_team]
+    assert_equal({ team: 0, org: 0 }, result[:counts])
+    assert_equal [ @about_me ], ids(result[:about_you])
+  end
+
   should "describe each item: who and which assignment it is about, kind, origin, date and an excerpt" do
     row = call_op[:items].first
     assignment = ActsAsTenant.with_tenant(@tenant) { PersonFrameworkAssignment.find_by(person_id: @direct.id) }
