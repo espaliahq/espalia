@@ -70,23 +70,30 @@ class Components::Kit::Button < Components::Base
 
   TOUCH = "min-h-11 min-w-11"
 
+  # An invisible box, centred and at least 44px square, takes the tap so the visual can stay small.
+  HIT_AREA = "relative after:absolute after:top-1/2 after:left-1/2 after:size-full after:min-h-11 after:min-w-11 " \
+             "after:-translate-x-1/2 after:-translate-y-1/2"
+
   # The class string for a variant, tone and size, for a `button_to`, `f.submit` or `link_to`
   # that can't render the component.
   # @param variant [Symbol] :solid, :subtle, :outline, :ghost or :link
   # @param tone [Symbol] :neutral, :brand, :danger, :success, :warning or :info
   # @param size [Symbol] :xs, :sm or :md
-  # @param touch [Boolean] at least 44px square, for a touch target
+  # @param touch [Boolean] at least 44px square to the eye, for a touch target
+  # @param compact [Boolean] the hit area is only the visual, for a dense group or a larger target around it
   # @param icon [Boolean] square, for an icon on its own
   # @return [String]
-  def self.classes(variant: :solid, tone: :neutral, size: :md, touch: false, icon: false)
+  def self.classes(variant: :solid, tone: :neutral, size: :md, touch: false, compact: false, icon: false)
     sizes = if variant == :link then LINK_SIZES elsif icon then ICON_SIZES else SIZES end
-    [ BASE, TONES.fetch(tone), VARIANTS.fetch(variant), sizes.fetch(size), (TOUCH if touch) ].compact.join(" ")
+    hit_area = HIT_AREA unless touch || compact || variant == :link
+    [ BASE, TONES.fetch(tone), VARIANTS.fetch(variant), sizes.fetch(size), (TOUCH if touch), hit_area ].compact.join(" ")
   end
 
   # @param variant [Symbol] the form: :solid, :subtle, :outline, :ghost or :link
   # @param tone [Symbol] the meaning: :neutral, :brand, :danger, :success, :warning or :info
   # @param size [Symbol] :xs, :sm or :md
-  # @param touch [Boolean] at least 44px square, for a touch target
+  # @param touch [Boolean] at least 44px square to the eye, for a touch target
+  # @param compact [Boolean] the hit area is only the visual, for a dense group or a larger target around it
   # @param icon [Boolean] square, for an icon on its own; needs `aria_label:`
   # @param href [String, nil] renders an `a` instead of a `button`
   # @param type [Symbol] the button's type; ignored with `href:`
@@ -94,11 +101,11 @@ class Components::Kit::Button < Components::Base
   # @param aria_label [String, nil] the accessible name, required with `icon:`
   # @param attrs [Hash] passed through to the element; `class:` is appended
   # @raise [ArgumentError] for `icon: true` without `aria_label:`
-  def initialize(variant: :solid, tone: :neutral, size: :md, touch: false, icon: false, href: nil,
+  def initialize(variant: :solid, tone: :neutral, size: :md, touch: false, compact: false, icon: false, href: nil,
                  type: :button, disabled: false, aria_label: nil, **attrs)
     raise ArgumentError, "an icon-only Kit::Button needs aria_label:" if icon && aria_label.blank?
 
-    @classes = self.class.classes(variant: variant, tone: tone, size: size, touch: touch, icon: icon)
+    @classes = self.class.classes(variant: variant, tone: tone, size: size, touch: touch, compact: compact, icon: icon)
     @href = href
     @type = type
     @disabled = disabled

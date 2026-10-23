@@ -60,6 +60,24 @@ class Components::Kit::ButtonTest < ActiveSupport::TestCase
       assert_equal "false", button["aria-expanded"]
     end
 
+    should "give a button a 44px hit area at any size" do
+      Button::SIZES.each_key do |size|
+        [ false, true ].each do |icon|
+          classes = render_button(size: size, icon: icon, aria_label: "Save")["class"].split
+
+          assert_empty Button::HIT_AREA.split - classes, "#{size} (icon: #{icon}) is missing its hit area"
+        end
+      end
+    end
+
+    should "leave the hit area to the visual when compact, touch-sized or a link" do
+      [ { compact: true }, { touch: true }, { variant: :link } ].each do |options|
+        classes = render_button(**options)["class"].split
+
+        assert_not_includes classes, "after:min-h-11", "#{options} still adds a hit area"
+      end
+    end
+
     should "match .classes to the rendered button" do
       options = { variant: :outline, tone: :brand, size: :sm, touch: true }
 
