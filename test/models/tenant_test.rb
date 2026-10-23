@@ -123,8 +123,8 @@ class TenantTest < ActiveSupport::TestCase
 
     should "use a preset's own navbar" do
       tenant = build(:tenant, theme: "bento")
-      assert_equal "#ffffff", Tenant.browser_theme_color(tenant, :light)
-      assert_equal "#0a0d12", Tenant.browser_theme_color(tenant, :dark)
+      assert_equal "#c6f226", Tenant.browser_theme_color(tenant, :light)
+      assert_equal "#c6f226", Tenant.browser_theme_color(tenant, :dark)
     end
 
     should "hold a navbar in both schemes for every preset" do

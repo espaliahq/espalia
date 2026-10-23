@@ -8,9 +8,9 @@ require "test_helper"
 class ThemeRolesTest < ActiveSupport::TestCase
   THEME_DIR = Rails.root.join("app/assets/tailwind/theme")
   APPLICATION_CSS = Rails.root.join("app/assets/tailwind/application.css")
-  # Unstepped colours and the font-size scale: text-white, text-lg and the like already exist.
-  TAILWIND_NAMES = (%w[black white transparent current inherit xs sm base lg xl] + (2..9).map { |n| "#{n}xl" }).to_set
-  UTILITY = /^\s*--(?:text|background|border|ring|outline)-color-([\w-]+):\s*var\((--gos-[\w-]+)\)/
+  # Unstepped colours, the font-size scale and the shadow steps: text-white, text-lg and shadow-md already exist.
+  TAILWIND_NAMES = (%w[black white transparent current inherit 2xs xs sm md base lg xl inner none] + (2..9).map { |n| "#{n}xl" }).to_set
+  UTILITY = /^\s*--(?:(?:text|background|border|ring|outline)-color|shadow)-([\w-]+):\s*var\((--gos-[\w-]+)\)/
 
   def theme_css
     Dir[THEME_DIR.join("*.css")].map { |path| File.read(path) }.join("\n")
@@ -31,7 +31,7 @@ class ThemeRolesTest < ActiveSupport::TestCase
       when "}" then stack.pop
       else
         role = text[/\A\s*(--gos-[\w-]+)\s*:/, 1]
-        next if role.nil? || role.start_with?("--gos-tone-") || stack.any? { |header| header.start_with?("@utility", "@theme") }
+        next if role.nil? || role.start_with?("--gos-tone-", "--gos-shadow-") || stack.any? { |header| header.start_with?("@utility", "@theme") }
         if stack.include?("@variant dark")
           roles[:dark] << role
         else
@@ -60,6 +60,14 @@ class ThemeRolesTest < ActiveSupport::TestCase
       default.each do |scheme, roles|
         assert_empty (roles - set[scheme]).sort, "#{preset}.css leaves these #{scheme} roles on Default's values"
       end
+    end
+  end
+
+  # A preset is colours and a font; elevation is shared, so cards look the same under every theme
+  should "leave elevation to roles.css in every preset" do
+    Themeable::PRESETS.each do |preset|
+      set = File.read(THEME_DIR.join("#{preset}.css")).scan(/^\s*(--gos-shadow-[\w-]+):/).flatten
+      assert_empty set, "#{preset}.css sets elevation, which every theme shares"
     end
   end
 

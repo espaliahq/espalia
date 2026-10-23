@@ -263,7 +263,7 @@ class Views::Assessments::ShowView < Views::Base
       class: "hidden bg-subtle overflow-auto overscroll-contain " \
              "border border-default " \
              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
-             "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \
+             "max-lg:w-80 max-lg:shadow-drawer max-lg:border-l max-lg:rounded-none " \
              "lg:shrink-0 lg:w-80 lg:rounded-xl lg:sticky lg:self-start " \
              "lg:top-[calc(var(--sticky-header-h,0px)+1rem)] " \
              "lg:max-h-[calc(100dvh-var(--sticky-header-h,0px)-2rem)]",

@@ -1,0 +1,37 @@
+<section class="max-w-6xl space-y-6">
+  <div>
+    <h2 class="text-lg font-semibold text-default">Elevation</h2>
+    <p class="mt-1 text-sm text-muted">
+      One shadow role per job, lowest first, read from <code>app/assets/tailwind/theme/roles.css</code>. Every theme shares
+      them, in both schemes: a preset sets colours and a font only.
+    </p>
+  </div>
+
+  <ol class="divide-y divide-subtle border-y border-subtle">
+    <% levels.each.with_index(1) do |level, rank| %>
+      <li class="grid items-start gap-6 py-6 md:grid-cols-[14rem_1fr_1fr_18rem]" data-role="<%= level[:role] %>">
+        <div class="min-w-0">
+          <p class="text-xs text-muted">Level <%= rank %></p>
+          <p class="font-mono text-sm text-default"><%= level[:utility] %></p>
+          <p class="text-sm text-muted"><%= level[:job] %></p>
+        </div>
+        <div class="min-w-0 rounded-md bg-page p-6">
+          <p class="mb-2 text-xs text-muted">On the page</p>
+          <div class="h-16 rounded-md border border-default bg-overlay <%= level[:utility] %>"></div>
+        </div>
+        <div class="min-w-0 rounded-md border border-default bg-default p-6">
+          <p class="mb-2 text-xs text-muted">On a card</p>
+          <div class="h-16 rounded-md border border-default bg-overlay <%= level[:utility] %>"></div>
+        </div>
+        <dl class="min-w-0 space-y-1 font-mono text-xs">
+          <dt class="text-muted">Value</dt>
+          <dd class="break-words text-default"><%= level[:declared] %></dd>
+          <dt class="text-muted">Used by</dt>
+          <% level[:used_by].each do |path| %>
+            <dd class="break-all text-default"><%= path %></dd>
+          <% end %>
+        </dl>
+      </li>
+    <% end %>
+  </ol>
+</section>

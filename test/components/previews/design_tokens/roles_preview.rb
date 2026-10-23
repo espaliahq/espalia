@@ -16,7 +16,7 @@ class DesignTokens::RolesPreview < Lookbook::Preview
     [ "Tie mid-tone", "#c2541e" ], [ "Grey below the tie", "#757575" ], [ "Grey above the tie", "#767676" ]
   ].freeze
 
-  # Every --gos-* role in roles.css, with its utilities, value and contrast checks.
+  # Every colour role in roles.css, with its utilities, value and contrast checks. Shadows have their own page.
   def roles
     render_with_template(locals: { groups: grouped_roles })
   end
@@ -39,7 +39,7 @@ class DesignTokens::RolesPreview < Lookbook::Preview
   end
 
   def grouped_roles
-    names = stylesheet.scan(/^\s*(--gos-[\w-]+):/).flatten.uniq.reject { |name| name.start_with?("--gos-tone-") }
+    names = stylesheet.scan(/^\s*(--gos-[\w-]+):/).flatten.uniq.reject { |name| name.start_with?("--gos-tone-", "--gos-shadow-") }
     names.map { |name| { name: name, utilities: utilities[name] || [], checks: checks(name) } }
          .group_by { |role| group(role[:name]) }
          .sort_by { |group, _| GROUPS.index(group) || GROUPS.size }

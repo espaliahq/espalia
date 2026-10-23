@@ -11,7 +11,7 @@
 #
 class Components::Kit::Toast < Components::Base
   # Overlays share Kit::Dropdown's shadow step
-  FLOAT = "pointer-events-auto w-full shadow-lg"
+  FLOAT = "pointer-events-auto w-full shadow-overlay"
 
   # @param tone [Symbol] see {Components::Kit::Alert::TONES}
   # @param emphasis [Symbol] :subtle or :solid

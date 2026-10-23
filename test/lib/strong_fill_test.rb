@@ -24,7 +24,6 @@ class StrongFillTest < ActiveSupport::TestCase
     # Text on the fill
     "app/views/calibration_sessions/show_view.rb" => %w[bg-neutral-strong],
     "app/views/assessments/category_chip_bar.rb" => %w[aria-[current=page]:bg-neutral-strong],
-    "app/views/assessments/activity/focus_mode_toggle.rb" => %w[aria-pressed:bg-neutral-strong],
     "app/views/assessments/activity/filter_chips.rb" => %w[aria-pressed:bg-neutral-strong],
     "app/views/assessments/level_chip.rb" => %w[bg-neutral-strong],
     "app/views/notifications/bell.rb" => %w[bg-tone-strong],

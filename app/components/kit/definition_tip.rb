@@ -96,7 +96,7 @@ class Components::Kit::DefinitionTip < Components::Base
       class: "pointer-events-none absolute top-full z-30 mt-1 hidden w-64 rounded-md " \
              "border border-default bg-overlay " \
              "px-3 py-2 text-xs font-normal normal-case tracking-normal " \
-             "text-muted shadow-lg [&:popover-open]:block " \
+             "text-muted shadow-overlay [&:popover-open]:block " \
              "group-hover/deftip:block group-focus-within/deftip:block #{alignment}"
     ) { @definition }
   end

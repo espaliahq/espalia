@@ -5,7 +5,7 @@
  *
  * The dark pill fill was 30% alpha; it is now an opaque srgb mix, which is
  * how the alpha composited. It mixes into the overlay surface because the
- * assessment card it sits on is white / gray-900, the overlay pair.
+ * assessment card it sits on is the overlay surface.
  */
 :root {
   /* Rating frequency: the hue (chip fill, dot, outline), the ink on a chip,

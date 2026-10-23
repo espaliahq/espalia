@@ -107,9 +107,9 @@ class Views::Assessments::LevelChip < Views::Base
            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 "
     base += "#{muted_split_classes} " if muted_split?
     if @focused
-      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{focus_border} shadow-lifted"
     else
-      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-sm"
+      base + "#{chip_bg} #{chip_text} #{idle_border} hover:shadow-lifted"
     end
   end
 

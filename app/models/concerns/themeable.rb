@@ -30,10 +30,10 @@ module Themeable
   # web-app manifest's `theme_color` (static, so never per-tenant; see
   # docs/guidelines/app-icons.md) and the nav-surface defaults in roles.css.
   DEFAULT_NAV_BG_COLOR = "#32c8c8"
-  DEFAULT_NAV_BG_COLOR_DARK = "#1a1a2e"
+  DEFAULT_NAV_BG_COLOR_DARK = "#32c8c8"
   NAV_SURFACES = {
     "default" => { "light" => DEFAULT_NAV_BG_COLOR, "dark" => DEFAULT_NAV_BG_COLOR_DARK },
-    "bento" => { "light" => "#ffffff", "dark" => "#0a0d12" }
+    "bento" => { "light" => "#c6f226", "dark" => "#c6f226" }
   }.freeze
 
   included do

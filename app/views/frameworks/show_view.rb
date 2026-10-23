@@ -291,18 +291,10 @@ class Views::Frameworks::ShowView < Views::Base
   def edit_suggest_toggle
     return locked_suggesting_badge unless @approval_authority.any?
 
-    div(
-      class: "inline-flex items-stretch rounded-md border border-default " \
-             "bg-subtle p-0.5 text-sm",
-      data: {
-        controller: "edit-mode-toggle",
-        edit_mode_toggle_active_class: "bg-overlay text-default shadow-xs",
-        edit_mode_toggle_inactive_class: "text-muted hover:text-default"
-      }
-    ) do
-      edit_suggest_segment("editing", "Editing",
+    render Components::Kit::SegmentedControl.new(label: "Edit mode", data: { controller: "edit-mode-toggle" }) do |control|
+      edit_suggest_segment(control, "editing", "Editing",
                            "Changes you make apply immediately (when you have approval authority).")
-      edit_suggest_segment("suggesting", "Suggesting",
+      edit_suggest_segment(control, "suggesting", "Suggesting",
                            "Changes land as pending suggestions for review.")
     end
   end
@@ -319,21 +311,13 @@ class Views::Frameworks::ShowView < Views::Base
     ) { "Suggesting" }
   end
 
-  def edit_suggest_segment(value, label, tooltip)
-    button(
-      type: "button",
-      # Tighter gutters below `sm`: at 375 px the toggle and "Exit edit mode"
-      # miss sharing a wrapped row by 2 px, which costs a whole 48 px band of
-      # an already tall mobile header (#384).
-      class: "inline-flex items-center rounded px-2 sm:px-3 py-1 font-medium transition-colors",
-      data: {
-        action: "edit-mode-toggle#select",
-        edit_mode_toggle_target: "#{value}Button",
-        edit_mode_value: value
-      },
-      title: tooltip,
-      aria_pressed: "false"
-    ) { label }
+  # The controller marks the current mode from its cookie on connect
+  def edit_suggest_segment(control, value, label, tooltip)
+    control.segment(label, title: tooltip, data: {
+      action: "edit-mode-toggle#select",
+      edit_mode_toggle_target: "#{value}Button",
+      edit_mode_value: value
+    })
   end
 
   # Shown only while rendering /edit to make the mode visible even when

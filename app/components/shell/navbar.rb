@@ -28,7 +28,7 @@ class Components::Shell::Navbar < Components::Base
   end
 
   def view_template
-    nav(class: "flex items-center justify-between h-12 px-4 bg-nav text-nav shadow-xs shrink-0 " \
+    nav(class: "flex items-center justify-between h-12 px-4 bg-nav text-nav shadow-raised shrink-0 " \
                 "[--gos-focus-ring:var(--gos-nav-content)]") do
       left_section
       right_section
@@ -69,7 +69,7 @@ class Components::Shell::Navbar < Components::Base
         role: "tooltip",
         style: "font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', 'Comic Neue', cursive",
         class: "fixed top-0 left-0 z-50 whitespace-nowrap rounded-md border border-default bg-overlay " \
-               "px-3 py-2 text-[13px] font-normal text-default shadow-lg pointer-events-none " \
+               "px-3 py-2 text-[13px] font-normal text-default shadow-overlay pointer-events-none " \
                "opacity-0 scale-95 transition-[opacity,scale] duration-200 " \
                "data-open:opacity-100 data-open:scale-100",
         data: { brand_confetti_target: "tagline" }
@@ -115,8 +115,11 @@ class Components::Shell::Navbar < Components::Base
   def nav_link(link)
     a(
       href: link[:href],
+      aria: { current: ("page" if link[:current]) },
       class: "px-3 py-1.5 rounded-md text-sm font-medium " \
-             "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors"
+             "text-nav/70 hover:text-nav hover:bg-current/10 transition-colors " \
+             "aria-[current=page]:font-semibold aria-[current=page]:text-nav aria-[current=page]:underline " \
+             "aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-[6px]"
     ) do
       plain link[:label]
     end

@@ -20,6 +20,7 @@ class Components::Shell::PageLayout < Components::Base
   # not their own admin links. The user menu still shows the real admin
   # (`@user`), who owns the session, tenant switcher, and sign-out.
   register_value_helper :current_tenant_user
+  register_value_helper :request
 
   # @param user [User, nil] the currently signed-in user
   # @param current_tenant [Tenant, nil] the active tenant
@@ -46,7 +47,7 @@ class Components::Shell::PageLayout < Components::Base
         class: "sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 " \
                "focus:rounded-md focus:bg-overlay focus:px-4 focus:py-2 " \
                "focus:text-sm focus:font-medium focus:text-default " \
-               "focus:shadow-lg focus:ring-2 focus:ring-focus"
+               "focus:shadow-overlay focus:ring-2 focus:ring-focus"
       ) { "Skip to main content" }
 
       render Components::Shell::Navbar.new(
@@ -83,8 +84,17 @@ class Components::Shell::PageLayout < Components::Base
       links << { label: "Calibration", href: "/calibration_sessions" } if show_calibration_link?
       links << { label: "Cycles", href: "/assessment_cycles" } if show_cycles_link?
       links << { label: "Admin", href: "/tenant" } if show_admin_link?
-      links
+      mark_current(links)
     end
+  end
+
+  # A link is current when the path is in its section, so /assessments marks an Assessment link to /assessments/:id
+  #
+  # @param links [Array<Hash>]
+  # @return [Array<Hash>]
+  def mark_current(links)
+    section = ->(path) { path.split("/").reject(&:empty?).first }
+    links.map { |link| link.merge(current: section.call(link[:href]) == section.call(request.path)) }
   end
 
   # Whether to show the evidence-request hub link — anyone linked to a Person

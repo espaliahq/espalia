@@ -93,7 +93,7 @@
 
   @variant dark {
     --gos-brand: var(--tenant-brand-dark, #5ee0e0);
-    --gos-nav-surface: var(--tenant-nav-surface-dark, #1a1a2e);
+    --gos-nav-surface: var(--tenant-nav-surface-dark, #32c8c8);
 
     --gos-content-default: #ffffff;
     --gos-content-muted: var(--color-gray-300);
@@ -101,25 +101,26 @@
     --gos-content-disabled: var(--color-gray-600);
     --gos-content-inverse: var(--color-gray-900);
 
-    --gos-surface-page: var(--color-gray-950);
-    --gos-surface-default: var(--color-gray-800);
-    --gos-surface-overlay: var(--color-gray-900);
-    --gos-surface-subtle: var(--color-gray-800);
-    --gos-surface-muted: var(--color-gray-900);
-    --gos-surface-emphasized: var(--color-gray-700);
+    /* Soft slate: a lighter blue-grey than Tailwind's gray-950, with small steps so a border, not the fill, separates a card */
+    --gos-surface-page: #181c23;
+    --gos-surface-default: #20252e;
+    --gos-surface-overlay: #1c2028;
+    --gos-surface-subtle: #20252e;
+    --gos-surface-muted: #1c2028;
+    --gos-surface-emphasized: #323945;
     --gos-surface-inverse: #ffffff;
-    --gos-surface-hover: var(--color-gray-800);
-    --gos-surface-default-hover: var(--color-gray-700);
-    --gos-surface-field: var(--color-gray-900);
+    --gos-surface-hover: #20252e;
+    --gos-surface-default-hover: #2a303a;
+    --gos-surface-field: #1c2028;
 
-    --gos-border-default: var(--color-gray-700);
-    --gos-border-subtle: var(--color-gray-800);
-    --gos-border-emphasized: var(--color-gray-600);
+    --gos-border-default: #323945;
+    --gos-border-subtle: #2a303a;
+    --gos-border-emphasized: #4a5260;
     --gos-border-strong: #ffffff;
-    --gos-border-disabled: var(--color-gray-700);
+    --gos-border-disabled: #323945;
 
-    --gos-neutral-subtle: var(--color-gray-700);
-    --gos-neutral-muted: var(--color-gray-600);
+    --gos-neutral-subtle: #323945;
+    --gos-neutral-muted: #4a5260;
     --gos-neutral-strong: #ffffff;
     --gos-neutral-strong-hover: var(--color-gray-200);
     --gos-neutral-content-inverse: var(--color-gray-900);
@@ -157,14 +158,15 @@
  */
 :root,
 [data-theme-scope] {
-  /* A deeper fill that carries text (#447), and the brand as readable text on surfaces */
-  --gos-brand-strong: color-mix(in oklab, var(--gos-brand) 55%, black);
+  /* The brand itself is the strong fill, and the contrast helper picks its text; brand as text stays clamped */
+  --gos-brand-strong: var(--gos-brand);
   --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 88%, black);
   --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
   --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
   --gos-content-brand: color-mix(in oklab, var(--gos-brand) 55%, black);
-  --gos-brand-content-inverse: #ffffff;
-  --gos-nav-content: #ffffff;
+  /* Where the contrast helper below can't run: Default's teal brand and bar need dark text */
+  --gos-brand-content-inverse: #0a0d12;
+  --gos-nav-content: #0a0d12;
   --gos-border-brand: var(--gos-brand);
   --gos-content-link: var(--gos-content-brand);
   --gos-content-link-hover: var(--gos-content-brand);
@@ -184,7 +186,6 @@
 
   /* The exact clamps where relative colours work; the mixes above are the fallback */
   @supports (color: oklch(from red min(l, 0.5) c h)) {
-    --gos-brand-strong: oklch(from var(--gos-brand) min(l, 0.5) c h);
     --gos-brand-strong-hover: oklch(from var(--gos-brand-strong) calc(l - 0.06) c h);
     --gos-content-brand: oklch(from var(--gos-brand) min(l, 0.5) c h);
 
@@ -390,10 +391,10 @@
   --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-100) 50%, var(--gos-surface-overlay));
 
   @variant dark {
-    --gos-surface-overlay-subtle: var(--color-gray-900);
-    --gos-surface-overlay-muted: var(--color-gray-800);
-    --gos-surface-overlay-hover: color-mix(in srgb, var(--color-gray-800) 50%, var(--gos-surface-overlay));
-    --gos-surface-empty: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
+    --gos-surface-overlay-subtle: var(--gos-surface-overlay);
+    --gos-surface-overlay-muted: var(--gos-surface-default);
+    --gos-surface-overlay-hover: color-mix(in srgb, var(--gos-surface-default) 50%, var(--gos-surface-overlay));
+    --gos-surface-empty: color-mix(in oklab, var(--gos-surface-default) 20%, transparent);
     --gos-surface-expanded: color-mix(in srgb, var(--color-blue-900) 10%, var(--gos-surface-overlay));
     --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-900) 20%, var(--gos-surface-overlay));
   }
@@ -406,4 +407,28 @@
   --background-color-empty: var(--gos-surface-empty);
   --background-color-expanded: var(--gos-surface-expanded);
   --background-color-expanded-hover: var(--gos-surface-expanded-hover);
+}
+
+/*
+ * Elevation (#597): one shadow per job, lowest first, on Tailwind's steps. Every theme shares it: a
+ * preset sets colours and a font, nothing else. Shadows read the same in dark.
+ */
+:root {
+  /* A card or bar that sits on the page */
+  --gos-shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  /* A card or chip under the pointer or focus */
+  --gos-shadow-lifted: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  /* Menus, popovers, tooltips and toasts */
+  --gos-shadow-overlay: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  /* A side pane that slides over the page */
+  --gos-shadow-drawer: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --gos-shadow-modal: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+
+@theme inline {
+  --shadow-raised: var(--gos-shadow-raised);
+  --shadow-lifted: var(--gos-shadow-lifted);
+  --shadow-overlay: var(--gos-shadow-overlay);
+  --shadow-drawer: var(--gos-shadow-drawer);
+  --shadow-modal: var(--gos-shadow-modal);
 }

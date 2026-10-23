@@ -8,7 +8,7 @@
 # and nothing at all before the user types.
 class Views::Evidence::RequestCandidatesFrame < Views::Base
   PANEL = "rounded-md border border-default bg-overlay " \
-          "shadow-lg max-h-64 overflow-y-auto"
+          "shadow-overlay max-h-64 overflow-y-auto"
 
   # @param candidates [Array<Assessments::RequestCandidates::Candidate>]
   # @param query [String, nil] the current search term

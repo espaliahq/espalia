@@ -104,6 +104,25 @@ input[type="week"] {
     border-radius: 2px;
   }
 
+  /* Tailwind v4 gives buttons the arrow; anything clickable shows the pointer unless a utility says otherwise */
+  button,
+  summary,
+  select,
+  label:has(> input:is([type="checkbox"], [type="radio"])),
+  input:is([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="range"], [type="submit"], [type="button"], [type="reset"]),
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="switch"],
+  [role^="menuitem"] {
+    cursor: pointer;
+  }
+
+  :is(button, select, input):disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* A menu's panel scrolls, which clips an outset ring, so its items draw theirs inside */
   [role="menu"] [role^="menuitem"]:focus-visible {
     outline-offset: -2px;
@@ -877,7 +896,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 .md-prose code,
 .md-prose pre {
   @variant dark {
-    background-color: var(--color-gray-800);
+    background-color: var(--gos-surface-default);
   }
 }
 

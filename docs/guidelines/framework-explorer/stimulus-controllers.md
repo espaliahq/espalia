@@ -176,7 +176,7 @@ row with it — to change the order of two rows. A 422 answers its own stream
 user. See §11b.
 
 ### edit_mode_toggle_controller.js (edit mode only)
-Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Takes caller-supplied `activeClass` / `inactiveClass` values so styling stays in the view, and flips `aria-pressed` on each segment.
+Segmented Editing / Suggesting toggle in the header. Reads and writes the `framework_edit_mode` cookie (values `editing` | `suggesting`, 1-year max-age, SameSite=Lax). No server round-trip on select — the cookie is picked up on the next inline-edit form submission by the `FrameworkEditMode` controller concern. Flips `aria-pressed` on each segment and nothing else; `Kit::SegmentedControl` styles the pressed one from the attribute.
 
 ### binding_editor_form_controller.js (edit mode only)
 Companion to the `modal` controller for the shared binding-editor modal. On the

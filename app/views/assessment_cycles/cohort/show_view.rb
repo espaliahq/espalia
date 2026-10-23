@@ -84,24 +84,16 @@ class Views::AssessmentCycles::Cohort::ShowView < Views::Base
   def scope_toggle
     return unless @can_scope_to_self
 
-    nav(class: "mt-3 inline-flex gap-1 rounded-md bg-muted p-0.5", aria: { label: "Scope" }) do
-      scope_link("Whole cycle", "all")
-      scope_link("My org", "mine")
+    render Components::Kit::SegmentedControl.new(label: "Scope", class: "mt-3") do |control|
+      scope_link(control, "Whole cycle", "all")
+      scope_link(control, "My org", "mine")
     end
   end
 
-  def scope_link(label, value)
-    active = @scope == value
+  def scope_link(control, label, value)
     params = { pivot: @pivot }
     params[:scope] = value if value == "mine"
-    a(
-      href: cohort_assessment_cycle_path(cycle, **params),
-      aria: { current: active ? "true" : nil },
-      class: [
-        "rounded px-3 py-1 text-sm font-medium",
-        active ? "bg-default text-default shadow-xs" : "text-muted hover:text-default"
-      ].join(" ")
-    ) { label }
+    control.segment(label, href: cohort_assessment_cycle_path(cycle, **params), selected: @scope == value)
   end
 
   def deadline_badge

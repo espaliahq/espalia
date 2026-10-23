@@ -6,7 +6,7 @@
 # frame it was generalised from.
 class Views::Shared::PersonPickerCandidatesFrame < Views::Base
   PANEL = "rounded-md border border-default bg-overlay " \
-          "shadow-lg max-h-64 overflow-y-auto"
+          "shadow-overlay max-h-64 overflow-y-auto"
 
   # @param frame_id [String]
   # @param entries [Array<Hash>] { person:, subtitle: nil }

@@ -27,7 +27,7 @@ class Components::Kit::ToastTest < ActiveSupport::TestCase
 
       assert_equal "alert", render_toast(tone: :danger)["role"]
       assert_includes classes, "tone-danger"
-      assert_includes classes, "shadow-lg"
+      assert_includes classes, "shadow-overlay"
     end
   end
 

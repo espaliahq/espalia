@@ -5,7 +5,7 @@
 # carries the query). Empty until there is a query.
 class Views::Evidence::RecipientCandidatesFrame < Views::Base
   PANEL = "rounded-md border border-default bg-overlay " \
-          "shadow-lg max-h-64 overflow-y-auto"
+          "shadow-overlay max-h-64 overflow-y-auto"
 
   # @param entries [Array<Assessments::FeedbackRecipients::Recipient>]
   # @param query [String, nil]

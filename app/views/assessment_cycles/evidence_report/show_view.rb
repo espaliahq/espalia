@@ -155,12 +155,9 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   end
 
   def group_tabs
-    nav(
-      class: "flex flex-wrap gap-1 rounded-md bg-muted p-0.5",
-      aria: { label: "Group feedback coverage" }
-    ) do
+    render Components::Kit::SegmentedControl.new(label: "Group feedback coverage", touch: true, class: "flex-wrap") do |control|
       GROUPS.each do |key, label|
-        segment_link(label, report_path(group: key), active: key == @group_by)
+        control.segment(label, href: report_path(group: key), selected: key == @group_by)
       end
     end
   end
@@ -168,25 +165,10 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   def scope_toggle
     return unless @can_scope_to_self
 
-    nav(
-      class: "inline-flex gap-1 rounded-md bg-muted p-0.5",
-      aria: { label: "Scope" }
-    ) do
-      segment_link("Whole cycle", report_path(scope: nil), active: @scope == "all")
-      segment_link("My org", report_path(scope: "mine"), active: @scope == "mine")
+    render Components::Kit::SegmentedControl.new(label: "Scope", touch: true) do |control|
+      control.segment("Whole cycle", href: report_path(scope: nil), selected: @scope == "all")
+      control.segment("My org", href: report_path(scope: "mine"), selected: @scope == "mine")
     end
-  end
-
-  def segment_link(label, href, active:)
-    a(
-      href: href,
-      aria: { current: active ? "page" : nil },
-      class: [
-        "inline-flex min-h-11 items-center rounded px-3 py-1 text-sm font-medium",
-        active ? "bg-default text-default shadow-xs" :
-          "text-muted hover:text-default"
-      ].join(" ")
-    ) { label }
   end
 
   def report_path(group: @group_by, scope: @scope)

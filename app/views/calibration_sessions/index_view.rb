@@ -136,7 +136,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
     div(
       id: "calibration-session-card-#{session.id}",
       class: "relative rounded-lg border border-default " \
-             "shadow-xs p-5 transition-colors hover:border-emphasized " \
+             "shadow-raised p-5 transition-colors hover:border-emphasized " \
              "#{session.archived? ? 'bg-muted' : 'bg-default'}"
     ) do
       div(class: "flex items-start justify-between gap-3") do

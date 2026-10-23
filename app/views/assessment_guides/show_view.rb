@@ -68,7 +68,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
   # The example score's state: 132% is meeting E3 and a third of E4.
   EXAMPLE_STATE = :performing
 
-  CARD = "rounded-2xl border border-default bg-overlay shadow-sm p-5 sm:p-6"
+  CARD = "rounded-2xl border border-default bg-overlay shadow-raised p-5 sm:p-6"
   MUTED = "text-muted"
   EYEBROW = "text-xs font-bold uppercase tracking-widest text-brand"
   CARD_TITLE = "text-xs font-semibold uppercase tracking-wider text-muted mb-4"
