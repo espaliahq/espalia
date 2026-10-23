@@ -19,7 +19,7 @@ class Views::Frameworks::Activity::ClarificationActions < Views::Base
   def view_template
     div(class: "mt-1.5 flex items-center gap-2") do
       render Components::Kit::Button.new(
-        tone: :brand, size: :xs,
+        tone: :brand, size: :xs, compact: true,
         data: {
           action: "click->modal#open",
           modal_target_id: "resolve-clarification-modal",

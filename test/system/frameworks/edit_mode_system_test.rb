@@ -1437,6 +1437,27 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_text question
     end
 
+    # Resolve… sits over the entry's Discuss link, and the modal's footer
+    # buttons sit at the bottom of its scroll box: an unchecked hit area takes
+    # the link's taps in one and gives the other a scrollbar.
+    should "keep Resolve… and the modal's buttons to their own space" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Asked for clarification"
+      assert_no_stolen_taps
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      assert_selector "#resolve-clarification-modal", visible: true
+      scrolls = page.evaluate_script(<<~JS)
+        (() => {
+          const body = document.querySelector("#resolve-clarification-modal [data-modal-target='panel'] > .overflow-y-auto");
+          return body.scrollHeight > body.clientHeight || body.scrollWidth > body.clientWidth;
+        })()
+      JS
+      assert_not scrolls, "the resolve modal's body scrolls with nothing to scroll to"
+    end
+
     should "resolve a clarification from the feed via the modal" do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       sign_in_as(@admin_user)
