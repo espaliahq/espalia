@@ -37,7 +37,7 @@ class EvidenceHubController < ApplicationController
     # or a tenant that can ask for one. Off is the default.
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
     suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
-    listed_elsewhere = shown.reject { |item| item.source == "self" } + responded_items
+    listed_elsewhere = shown.reject { |item| item.source == "self" && item.author_id == current_person.id } + responded_items
     with_suggestions = suggestions_live ? placed_with_suggestions(exclude: listed_elsewhere.map(&:id)) : []
     decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
 
