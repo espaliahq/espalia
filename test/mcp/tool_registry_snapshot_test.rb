@@ -444,6 +444,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_feedback_to_place",
+        "description" => "List feedback waiting for you to place on a capability: items about you, and items about the people " \
+                         "you place feedback for. scope \"team\" (the default) covers your direct reports and the assessments " \
+                         "you hold a rating delegation for; \"org\" adds everyone deeper in your org. counts gives both sizes, " \
+                         "so you can tell when more waits beyond your team. Each item carries its assignment_id; place one " \
+                         "with assessments_add_evidence_link, or read its pending suggestions with " \
+                         "assessments_evidence_suggestions_list.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "scope" => { "type" => "string", "enum" => [ "team", "org" ] }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint"    => true,
+          "destructiveHint" => false,
+          "idempotentHint"  => true
+        }
+      },
+      {
         "name" => "assessments_get",
         "description" => "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds for lack of coverage reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it. Carried-forward ratings count as rated but are not this cycle's until confirmed: scoring.coverage.to_confirm_at_assessed_level says how many wait, and assessments_confirm_carried_ratings confirms them.",
         "inputSchema" => {

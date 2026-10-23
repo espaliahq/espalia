@@ -234,6 +234,11 @@ or their manager places it later with `assessments_add_evidence_link`.
 `assessments_evidence_list` with no capability lists the unplaced items
 (`unplaced: true`). A peer still cannot read the assessment; the directory is
 the whole of what they see ([assessments/evidence.md → Proactive feedback](assessments/evidence.md)).
+`assessments_feedback_to_place` (`:none`) answers "what is waiting for me to
+place?" across assessments, the hub's own list: items about the caller, and
+about their team (`scope: "team"`, the default) or whole org (`"org"`), with
+both counts so an agent knows when more waits beyond the team. The scope is a
+view, never authority: an ancestor may still place anything in their subtree.
 
 **Placement suggestions are read and decided, never generated, over MCP.**
 `assessments_evidence_suggestions_list` (`:none`) lists the pending
@@ -744,6 +749,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/reporting/evidence_coverage.rb` | Cycle feedback/evidence coverage shared by web and MCP |
 | `app/operations/operations/integrations/ai_model_status.rb` | `integrations_ai_model_status` (`:none`): provider (`anthropic`, `openai_compatible` or `typesafe_jev`), address host, model, effort (Anthropic only), switches, key present. The settings and key are written on the web only, so no key ever crosses MCP |
 | `app/operations/operations/assessments/{accept,dismiss}_evidence_suggestion.rb` / `evidence_suggestions_list.rb` | Decide and list placement suggestions — web (the hub) and MCP; `evidence_suggestion.rb` holds their shared lookup and payload |
+| `app/operations/operations/assessments/feedback_to_place.rb` | The hub's "Feedback to place" list (`assessments_feedback_to_place`), team or whole-org view over `Assessments::FeedbackToPlace`; the hub controller renders from it |
 | `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
