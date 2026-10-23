@@ -18,13 +18,15 @@ class Views::Assessments::UnplacedFeedbackNotice < Views::Base
   def view_template
     # Static content, not a live region: the page's rating announcements own
     # that role, and a region present at load is never announced anyway.
-    section(aria: { label: "Feedback waiting to be placed" }, data: { testid: "unplaced-feedback-notice" },
-        class: "mb-4 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 " \
-               "px-4 py-3 flex flex-wrap items-center justify-between gap-2") do
-      p(class: "text-sm text-amber-800 dark:text-amber-200") { sentence }
-      a(href: evidence_hub_path(place: @place, anchor: "feedback-to-place"),
-        class: "inline-flex items-center min-h-11 text-sm font-medium text-amber-900 dark:text-amber-100 hover:underline") do
-        @count == 1 ? "Place it →" : "Place them →"
+    render Components::Kit::Alert.new(tone: :warning, role: :region, class: "mb-4",
+                                      aria: { label: "Feedback waiting to be placed" },
+                                      data: { testid: "unplaced-feedback-notice" }) do
+      div(class: "flex flex-wrap items-center justify-between gap-2") do
+        p { sentence }
+        a(href: evidence_hub_path(place: @place, anchor: "feedback-to-place"),
+          class: "inline-flex items-center min-h-11 font-medium hover:underline") do
+          @count == 1 ? "Place it →" : "Place them →"
+        end
       end
     end
   end

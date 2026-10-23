@@ -81,24 +81,22 @@ class Views::Assessments::CategoryChipBar < Views::Base
   end
 
   # The category's score, once enough of its assessed-level cells are rated
-  # to mean something (the hero's own unlock rule).
+  # to mean something (the hero's own unlock rule). The dot carries the state:
+  # no score tone reaches 4.5:1 on the chip's fill in every theme and scheme.
   def pct_badge(result)
-    span(class: "text-xs font-mono tabular-nums #{tone_text(result[:state])} " \
-                "group-aria-[current=page]:text-white/80 dark:group-aria-[current=page]:text-gray-900/80") do
+    span(class: "text-xs font-mono tabular-nums group-aria-[current=page]:text-inverse/80") do
       "#{percent(result[:score])}%"
     end
   end
 
   # Tiny "3/24" count tucked inside the chip — desktop only so narrow
   # viewports keep chips compact and horizontally scrollable. Hidden when
-  # the category has no cells. The active chip lifts contrast against its
-  # dark fill (text-gray-300 at 10px was barely legible).
+  # the category has no cells.
   def rated_count_chip(cat_data)
     counts = category_rated_count(cat_data, @context)
     return if counts[:total].zero?
 
-    span(class: "hidden lg:inline text-[10px] font-mono tabular-nums text-gray-600 dark:text-gray-300 " \
-                "group-aria-[current=page]:text-white/70 dark:group-aria-[current=page]:text-gray-900/70") do
+    span(class: "hidden lg:inline text-[10px] font-mono tabular-nums text-muted group-aria-[current=page]:text-inverse/70") do
       "#{counts[:rated]}/#{counts[:total]}"
     end
   end

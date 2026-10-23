@@ -18,8 +18,8 @@ module Views::Assessments::HeaderChrome
   def render_shortcode_chip(role:, level:)
     span(
       class: "inline-flex items-center px-1.5 py-0.5 rounded font-mono text-xs " \
-             "font-semibold tracking-wide bg-gray-100 dark:bg-gray-800 " \
-             "text-gray-600 dark:text-gray-300"
+             "font-semibold tracking-wide bg-neutral-subtle " \
+             "text-muted"
     ) { "#{role.code}#{level.ordinal}" }
   end
 

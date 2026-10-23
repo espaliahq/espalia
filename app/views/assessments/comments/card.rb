@@ -38,7 +38,7 @@ class Views::Assessments::Comments::Card < Views::Base
     li(
       id: "comment-#{@comment.id}",
       class: [ "group relative flex gap-2 py-1.5 text-xs",
-               "text-gray-700 dark:text-gray-200",
+               "text-muted",
                @indent ? "pl-5" : "" ].join(" ")
     ) do
       avatar_dot
@@ -64,8 +64,7 @@ class Views::Assessments::Comments::Card < Views::Base
   def reply_context_chip
     a(
       href: "#comment-#{@reply_to.id}",
-      class: "inline-flex items-center gap-1 text-[10px] text-gray-600 dark:text-gray-300 " \
-             "hover:text-gray-600 dark:hover:text-gray-300",
+      class: "inline-flex items-center gap-1 text-[10px] text-muted",
       title: "Replying to #{reply_to_author_name}",
       data: {
         action: "click->comments-thread#scrollToComment",
@@ -91,7 +90,7 @@ class Views::Assessments::Comments::Card < Views::Base
 
   def header_line
     div(class: "flex flex-wrap items-center gap-x-2 text-[11px]") do
-      span(class: "font-medium text-gray-900 dark:text-gray-100") do
+      span(class: "font-medium text-default") do
         @comment.author&.name || "Unknown"
       end
       # Timestamp doubles as the comment's permalink — comments are
@@ -105,10 +104,9 @@ class Views::Assessments::Comments::Card < Views::Base
       if @comment.posted_at
         a(
           href: comment_path(@comment),
-          class: "inline-flex items-center gap-1 text-gray-600 dark:text-gray-300 " \
-                 "underline decoration-dotted decoration-gray-300 dark:decoration-gray-600 " \
-                 "underline-offset-2 hover:decoration-solid hover:text-gray-600 " \
-                 "dark:hover:text-gray-300",
+          class: "inline-flex items-center gap-1 text-muted " \
+                 "underline decoration-dotted decoration-(--gos-border-emphasized) " \
+                 "underline-offset-2 hover:decoration-solid",
           title: "Link to this comment · posted #{@comment.posted_at.utc.iso8601}",
           # The card can render inside the evidence-linkage thread frame;
           # the permalink is a full-page navigation and must escape it.
@@ -118,11 +116,11 @@ class Views::Assessments::Comments::Card < Views::Base
           plain "#{time_ago_in_words(@comment.posted_at)} ago"
         end
       else
-        span(class: "text-gray-600 dark:text-gray-300") { "—" }
+        span(class: "text-muted") { "—" }
       end
       if @comment.edited_at.present?
         span(
-          class: "text-gray-600 dark:text-gray-300 italic",
+          class: "text-muted italic",
           title: "Last edited #{@comment.edited_at.utc.iso8601}"
         ) { "(edited)" }
       end
@@ -152,7 +150,7 @@ class Views::Assessments::Comments::Card < Views::Base
   def body_line
     # The card only renders inside the focused expanded cell — render the
     # full body.
-    render Components::Kit::Prose.new(@comment.body, class: "mt-0.5 text-gray-700 dark:text-gray-300",
+    render Components::Kit::Prose.new(@comment.body, class: "mt-0.5 text-muted",
                                                      data: { comments_thread_target: "displayBody" })
     edit_form if @can_edit
   end
@@ -190,24 +188,16 @@ class Views::Assessments::Comments::Card < Views::Base
         required: true,
         placeholder: "Reply…",
         aria: { label: "Reply to comment" },
-        class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary",
+        class: Components::Kit::Field::INLINE,
         data: {
           comments_thread_target: "replyBody",
           action: "keydown->comments-thread#submitOnModEnter"
         }
       ) { "" }
       div(class: "mt-1 flex items-center gap-2") do
-        button(
-          type: "submit",
-          class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"
-        ) { "Reply" }
-        button(
-          type: "button",
-          class: "px-2 py-1 text-[11px] rounded-md text-gray-600 dark:text-gray-300 hover:underline",
-          data: { action: "click->comments-thread#cancelReply" }
-        ) { "Cancel" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Reply" }
+        render Components::Kit::Button.new(variant: :ghost, size: :xs, compact: true,
+                                           data: { action: "click->comments-thread#cancelReply" }) { "Cancel" }
       end
     end
   end
@@ -229,27 +219,19 @@ class Views::Assessments::Comments::Card < Views::Base
         rows: 3,
         required: true,
         aria: { label: "Edit comment" },
-        class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary",
+        class: Components::Kit::Field::INLINE,
         data: { action: "keydown->comments-thread#submitOnModEnter" }
       ) { @comment.body }
       div(class: "mt-1 flex items-center gap-2") do
-        button(
-          type: "submit",
-          class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "px-2 py-1 text-[11px] rounded-md text-gray-600 dark:text-gray-300 hover:underline",
-          data: { action: "click->comments-thread#cancelEdit" }
-        ) { "Cancel" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Save" }
+        render Components::Kit::Button.new(variant: :ghost, size: :xs, compact: true,
+                                           data: { action: "click->comments-thread#cancelEdit" }) { "Cancel" }
       end
     end
   end
 
   def deleted_body
-    div(class: "italic text-gray-600 dark:text-gray-300") do
+    div(class: "italic text-muted") do
       plain "[deleted]"
       if @comment.deletion_reason.present?
         plain " — #{@comment.deletion_reason}"
@@ -263,46 +245,30 @@ class Views::Assessments::Comments::Card < Views::Base
     # desktop.
     div(class: "absolute top-1 right-1") do
       render Components::Kit::Dropdown.new do |dropdown|
-        kebab_trigger
+        dropdown.trigger(label: "Comment actions", button: { variant: :ghost, size: :xs, icon: true }) do
+          icon("kebab", class: "size-4")
+        end
         dropdown.menu(width: "w-32") do
-          reply_menu_item if @can_reply
-          edit_menu_item if @can_edit
+          reply_menu_item(dropdown) if @can_reply
+          edit_menu_item(dropdown) if @can_edit
           delete_menu_item if @can_delete
         end
       end
     end
   end
 
-  def kebab_trigger
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :xs, icon: true, aria_label: "Comment actions",
-      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { haspopup: "menu", expanded: "false" }
-    ) { icon("kebab", class: "size-4") }
+  def reply_menu_item(dropdown)
+    dropdown.item(size: :xs, data: {
+      action: "click->dropdown#close click->comments-thread#startReply",
+      comments_thread_comment_id_param: @comment.id
+    }) { "Reply" }
   end
 
-  def reply_menu_item
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
-      data: {
-        action: "click->dropdown#close click->comments-thread#startReply",
-        comments_thread_comment_id_param: @comment.id
-      }
-    ) { "Reply" }
-  end
-
-  def edit_menu_item
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
-      data: {
-        action: "click->dropdown#close click->comments-thread#startEdit",
-        comments_thread_comment_id_param: @comment.id
-      }
-    ) { "Edit" }
+  def edit_menu_item(dropdown)
+    dropdown.item(size: :xs, data: {
+      action: "click->dropdown#close click->comments-thread#startEdit",
+      comments_thread_comment_id_param: @comment.id
+    }) { "Edit" }
   end
 
   def delete_menu_item
@@ -314,7 +280,7 @@ class Views::Assessments::Comments::Card < Views::Base
     button_to(
       assessment_comment_path(@assessment_id, @comment.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
+      class: Components::Kit::Dropdown.item_classes(tone: :danger, size: :xs),
       role: "menuitem",
       data: { turbo_confirm: "Delete this comment? Replies will stay visible." }
     ) { "Delete" }

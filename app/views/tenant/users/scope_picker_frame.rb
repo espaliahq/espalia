@@ -97,14 +97,12 @@ class Views::Tenant::Users::ScopePickerFrame < Views::Base
   end
 
   def label_for_select(text)
-    label(class: "block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1") do
+    label(class: "block text-xs font-medium text-muted mb-1") do
       "Scope (#{text.downcase})"
     end
   end
 
   def select_classes
-    "block w-full rounded-md border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 " \
-      "shadow-xs focus:border-primary focus:ring-primary"
+    Components::Kit::Field::SELECT
   end
 end

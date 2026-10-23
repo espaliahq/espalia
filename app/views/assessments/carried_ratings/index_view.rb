@@ -40,11 +40,11 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
   private
 
   def header
-    a(href: back_path, class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← Back to the assessment" }
-    h1(class: "mt-2 text-2xl font-bold text-gray-900 dark:text-white") do
+    a(href: back_path, class: "text-sm text-muted hover:underline") { "← Back to the assessment" }
+    h1(class: "mt-2 text-2xl font-bold text-default") do
       "Confirm carried ratings · #{@category[:category].name}"
     end
-    p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 text-sm text-muted") do
       plain "#{subject_phrase} carried from the last cycle. Untick any you want to rethink, "
       plain "then confirm the rest for this cycle. To change one, open it on the assessment instead."
     end
@@ -57,17 +57,16 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
       input(type: "hidden", name: "category_id", value: @category[:category].category_id)
       fieldset do
         legend(class: "sr-only") { "Ratings to confirm" }
-        ul(class: "divide-y divide-gray-200 dark:divide-gray-800 rounded-lg border border-gray-200 " \
-                  "dark:border-gray-800 bg-white dark:bg-gray-900") do
-          rows.each { |row| row_item(row) }
+        render Components::Kit::Card.new(variant: :flush) do |card|
+          card.body do
+            ul(class: "divide-y divide-default") { rows.each { |row| row_item(row) } }
+          end
         end
       end
       div(class: "mt-4 flex flex-wrap items-center gap-3") do
-        button(type: "submit",
-               class: "inline-flex min-h-11 items-center rounded-md bg-gray-900 dark:bg-white px-4 text-sm " \
-                      "font-semibold text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100",
-               data: { turbo_submits_with: "Confirming…" }) { "Confirm ticked ratings" }
-        a(href: back_path, class: "text-sm text-gray-600 dark:text-gray-300 hover:underline") { "Cancel" }
+        render Components::Kit::Button.new(touch: true, type: :submit,
+                                           data: { turbo_submits_with: "Confirming…" }) { "Confirm ticked ratings" }
+        a(href: back_path, class: "text-sm text-muted hover:underline") { "Cancel" }
       end
     end
   end
@@ -76,15 +75,15 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
     id = "carried-#{row[:stable_id]}-#{row[:ordinal]}"
     li(class: "flex gap-3 p-4") do
       input(type: "checkbox", id: id, name: "cells[]", value: "#{row[:stable_id]}|#{row[:ordinal]}", checked: true,
-            class: "mt-1 h-5 w-5 shrink-0 rounded border-gray-300 dark:border-gray-600",
+            class: "mt-1 shrink-0 #{Components::Kit::Field::CHECKBOX}",
             aria: { describedby: "#{id}-detail" })
       div(class: "min-w-0 flex-1") do
-        label(for: id, class: "flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-gray-900 dark:text-white") do
+        label(for: id, class: "flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-default") do
           span { row[:name] }
-          span(class: "text-xs font-normal text-gray-600 dark:text-gray-300") { row[:level_code] }
-          span(class: "text-xs font-medium text-gray-900 dark:text-white") { "· #{row[:phrase]}" }
+          span(class: "text-xs font-normal text-muted") { row[:level_code] }
+          span(class: "text-xs font-medium text-default") { "· #{row[:phrase]}" }
         end
-        div(id: "#{id}-detail", class: "mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-300") do
+        div(id: "#{id}-detail", class: "mt-1 space-y-1 text-xs text-muted") do
           p { row[:expectation] } if row[:expectation].present?
           new_feedback(row[:new_feedback])
           a(href: assessment_path(@assignment, capability: row[:stable_id], level_ordinal: row[:ordinal]),
@@ -102,8 +101,8 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
       return
     end
 
-    p(class: "font-medium text-gray-900 dark:text-white") { "#{items.size} new feedback this cycle" }
-    ul(class: "space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2") do
+    p(class: "font-medium text-default") { "#{items.size} new feedback this cycle" }
+    ul(class: "space-y-1 border-l-2 border-default pl-2") do
       items.first(NEW_FEEDBACK_SHOWN).each do |item|
         li do
           span(class: "font-medium") { item.title.presence || type_label(item) }
@@ -122,8 +121,9 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
   end
 
   def empty_state
-    p(class: "mt-6 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-6 text-sm " \
-             "text-gray-600 dark:text-gray-300") { "Nothing in this category is waiting to be confirmed." }
+    div(class: "mt-6") do
+      render Components::Kit::EmptyState.new(title: "Nothing in this category is waiting to be confirmed.", size: :panel)
+    end
   end
 
   # The category's cells at the person's level still asking to be confirmed

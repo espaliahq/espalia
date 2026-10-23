@@ -17,13 +17,10 @@
 # ({Views::Integrations::HrisMappingModal}), prefilled from its trigger.
 #
 class Views::Integrations::HrisView < Views::Base
-  SECONDARY_BUTTON_CLASSES = "inline-flex items-center whitespace-nowrap rounded-md border border-gray-300 " \
-                             "dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 " \
-                             "dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer " \
-                             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+  SECONDARY_BUTTON_CLASSES = Components::Kit::Button.classes(variant: :outline, size: :sm, touch: true)
 
   CHIP_CLASSES = "inline-flex items-center rounded-sm text-xs " \
-                 "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                 "bg-neutral-subtle text-muted"
 
   # @param hris_config [HrisConfig]
   # @param hris_credentials_present [Boolean]
@@ -77,15 +74,14 @@ class Views::Integrations::HrisView < Views::Base
     div(class: "mb-6") do
       a(
         href: tenant_integrations_path,
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
-               "dark:hover:text-gray-200 transition-colors"
+        class: "text-sm text-muted hover:text-default transition-colors"
       ) { plain "\u2190 Back to Integrations" }
 
       div(class: "mt-2 flex items-center gap-3") do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "HRIS Integration" }
+        h1(class: "text-2xl font-bold text-default") { "HRIS Integration" }
         render Components::Kit::Badge.new(provider_label, variant: :info)
       end
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-sm text-muted") do
         plain "Sync employee data from your HRIS to keep people, roles, and levels up to date."
       end
     end
@@ -121,7 +117,7 @@ class Views::Integrations::HrisView < Views::Base
   end
 
   def sync_form
-    div(class: "mt-6 pt-6 border-t border-gray-200 dark:border-gray-700") do
+    div(class: "mt-6 pt-6 border-t border-default") do
       form(
         action: sync_tenant_integration_path("hris"),
         method: "post",
@@ -129,17 +125,10 @@ class Views::Integrations::HrisView < Views::Base
       ) do
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
 
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-sm bg-primary px-4 py-2 text-sm " \
-                 "font-semibold text-white shadow-xs hover:bg-primary/90 " \
-                 "focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2 " \
-                 "transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-          disabled: !sync_ready?
-        ) { "Sync now" }
+        render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true, disabled: !sync_ready?) { "Sync now" }
 
         unless sync_ready?
-          p(class: "text-xs text-gray-600 dark:text-gray-300") do
+          p(class: "text-xs text-muted") do
             plain "Configure provider, credentials, and enable sync to trigger an on-demand sync."
           end
         end
@@ -163,7 +152,7 @@ class Views::Integrations::HrisView < Views::Base
         card.body do
           div(class: "overflow-x-auto") do
             table(class: "min-w-full text-sm") do
-              thead(class: "bg-gray-50 dark:bg-gray-800/50") do
+              thead(class: "bg-subtle") do
                 tr do
                   th_cell("HRIS title")
                   th_cell("People")
@@ -172,7 +161,7 @@ class Views::Integrations::HrisView < Views::Base
                   th_cell("Action", sr_only: true, hide_below_sm: true) if @can_edit_mappings
                 end
               end
-              tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+              tbody(class: "divide-y divide-default") do
                 @unmapped_titles.each { |entry| unmapped_title_row(entry) }
               end
             end
@@ -212,13 +201,13 @@ class Views::Integrations::HrisView < Views::Base
   def stale_note(entry, placeholder: true)
     stale = entry.rows.select(&:stale_assignment?)
     if stale.empty?
-      span(class: "text-gray-400") { "\u2014" } if placeholder
+      span(class: "text-subtle") { "\u2014" } if placeholder
       return
     end
 
     ul(class: "space-y-0.5") do
       stale.each do |row|
-        li(class: "text-amber-700 dark:text-amber-300") do
+        li(class: "text-warning") do
           plain "#{row.person.name} is still on #{row.assigned_label} from an earlier title"
         end
       end
@@ -257,7 +246,7 @@ class Views::Integrations::HrisView < Views::Base
   def role_mappings_table
     div(class: "overflow-x-auto") do
       table(class: "min-w-full text-sm") do
-        thead(class: "bg-gray-50 dark:bg-gray-800/50") do
+        thead(class: "bg-subtle") do
           tr do
             th_cell("HRIS titles")
             th_cell("Framework role")
@@ -265,7 +254,7 @@ class Views::Integrations::HrisView < Views::Base
             th_cell("Status")
           end
         end
-        tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+        tbody(class: "divide-y divide-default") do
           @role_mapping_rows.each { |row| role_mapping_row(row) }
         end
       end
@@ -298,8 +287,8 @@ class Views::Integrations::HrisView < Views::Base
     span(class: CHIP_CLASSES, data: { mapped_title: title }) do
       mapping_trigger(title, title: title, role: mapping.framework_role_code, level: mapping.level_ordinal,
         aria_label: "Edit mapping for #{title}",
-        classes: "px-2 py-0.5 rounded-l-sm hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer " \
-               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary")
+        classes: "px-2 py-0.5 rounded-l-sm hover:bg-neutral-muted cursor-pointer " \
+               "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus")
       form(action: tenant_hris_title_mapping_path, method: "post", class: "contents") do
         input(type: "hidden", name: "_method", value: "delete")
         input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
@@ -307,9 +296,8 @@ class Views::Integrations::HrisView < Views::Base
         button(
           type: "submit",
           aria: { label: "Remove mapping for #{title}" },
-          class: "px-1.5 py-0.5 rounded-r-sm text-gray-500 hover:text-red-700 hover:bg-gray-200 " \
-                 "dark:hover:bg-gray-700 dark:hover:text-red-300 cursor-pointer " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+          class: "px-1.5 py-0.5 rounded-r-sm text-muted hover:text-danger hover:bg-neutral-muted cursor-pointer " \
+                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
         ) { "\u00D7" }
       end
     end
@@ -335,10 +323,10 @@ class Views::Integrations::HrisView < Views::Base
 
   def framework_role_cell(row)
     if row[:role]
-      span(class: "font-mono text-gray-900 dark:text-white") { row[:mapping].framework_role_code }
-      span(class: "ml-2 text-gray-600 dark:text-gray-300") { row[:role].name }
+      span(class: "font-mono text-default") { row[:mapping].framework_role_code }
+      span(class: "ml-2 text-muted") { row[:role].name }
     else
-      span(class: "font-mono text-gray-900 dark:text-white") { row[:mapping].framework_role_code }
+      span(class: "font-mono text-default") { row[:mapping].framework_role_code }
     end
   end
 
@@ -346,7 +334,7 @@ class Views::Integrations::HrisView < Views::Base
     if mapping.level_ordinal
       span(class: "font-mono") { "L#{mapping.level_ordinal}" }
     else
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "from custom column" }
+      span(class: "text-xs text-muted") { "from custom column" }
     end
   end
 
@@ -374,7 +362,7 @@ class Views::Integrations::HrisView < Views::Base
   def people_table
     div(class: "overflow-x-auto") do
       table(class: "min-w-full text-sm") do
-        thead(class: "bg-gray-50 dark:bg-gray-800/50") do
+        thead(class: "bg-subtle") do
           tr do
             th_cell("Person")
             th_cell("Department")
@@ -385,7 +373,7 @@ class Views::Integrations::HrisView < Views::Base
             th_cell("Status")
           end
         end
-        tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+        tbody(class: "divide-y divide-default") do
           @person_rows.each { |row| person_row(row) }
         end
       end
@@ -406,8 +394,8 @@ class Views::Integrations::HrisView < Views::Base
 
   def person_identity(person)
     div do
-      div(class: "font-medium text-gray-900 dark:text-white") { person.name }
-      div(class: "text-xs text-gray-600 dark:text-gray-300") { person.email }
+      div(class: "font-medium text-default") { person.name }
+      div(class: "text-xs text-muted") { person.email }
     end
   end
 
@@ -415,14 +403,14 @@ class Views::Integrations::HrisView < Views::Base
     if row.mapping
       span(class: "font-mono") { row.mapped_role_code }
     else
-      span(class: "text-gray-400") { "\u2014" }
+      span(class: "text-subtle") { "\u2014" }
     end
   end
 
   # ── Helpers ──
 
   def empty_state(text)
-    div(class: "px-6 py-10 text-center text-sm text-gray-600 dark:text-gray-300") { text }
+    div(class: "px-6 py-10 text-center text-sm text-muted") { text }
   end
 
   # `sr_only:` hides the label but keeps it for screen readers. The cell is
@@ -432,13 +420,13 @@ class Views::Integrations::HrisView < Views::Base
   def th_cell(label, sr_only: false, hide_below_sm: false)
     th(
       scope: "col",
-      class: [ "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300",
+      class: [ "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted",
                ("relative" if sr_only), ("max-sm:hidden" if hide_below_sm) ].compact.join(" ")
     ) { sr_only ? span(class: "sr-only") { label } : label }
   end
 
   def td_cell(hide_below_sm: false, &block)
-    td(class: [ "px-4 py-3 align-top text-gray-900 dark:text-gray-100", ("max-sm:hidden" if hide_below_sm) ].compact.join(" "),
+    td(class: [ "px-4 py-3 align-top text-default", ("max-sm:hidden" if hide_below_sm) ].compact.join(" "),
        &block)
   end
 

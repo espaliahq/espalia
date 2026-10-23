@@ -135,7 +135,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     # chrome past 80% of the viewport, leaving almost no room to read
     # the cards. Mobile users scroll to switch categories.
     div(id: "assessment-sticky-header",
-        class: "md:sticky md:top-0 md:z-20 bg-gray-50 dark:bg-gray-950 -mx-6 px-6 pb-2",
+        class: "md:sticky md:top-0 md:z-20 bg-page -mx-6 px-6 pb-2",
         data: { controller: "category-nav" }) do
       assessment_header
       hero_frame
@@ -146,16 +146,16 @@ class Views::Assessments::ManagerShowView < Views::Base
   def assessment_header
     div(class: "pt-4 pb-2") do
       a(href: assessments_path,
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-primary-ink mb-1 inline-flex min-h-6 items-center") do
+        class: "text-sm text-muted hover:text-brand mb-1 inline-flex min-h-6 items-center") do
         plain "← Assessments"
       end
 
       div(class: "flex flex-wrap items-start justify-between gap-2") do
         div(class: "min-w-0 flex flex-wrap items-baseline gap-x-3 gap-y-1") do
-          h1(class: "text-2xl font-bold text-gray-900 dark:text-white") do
+          h1(class: "text-2xl font-bold text-default") do
             @assessee.name
           end
-          span(class: "text-base text-gray-600 dark:text-gray-400") do
+          span(class: "text-base text-muted") do
             @matrix_data[:level].title
           end
           render_lens_control(assessee_name: @assessee.name)
@@ -193,13 +193,7 @@ class Views::Assessments::ManagerShowView < Views::Base
       class: "inline"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 " \
-               "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
-               "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 " \
-               "cursor-pointer"
-      ) { "Start alignment" }
+      render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Start alignment" }
     end
   end
 
@@ -228,13 +222,7 @@ class Views::Assessments::ManagerShowView < Views::Base
       class: "hidden md:inline-block"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm font-medium px-3 py-1.5 rounded-md border border-gray-300 " \
-               "dark:border-gray-600 text-gray-700 dark:text-gray-300 " \
-               "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 " \
-               "cursor-pointer"
-      ) { "Re-open alignment#{against_lens}" }
+      render Components::Kit::Button.new(variant: :outline, size: :sm, type: :submit) { "Re-open alignment#{against_lens}" }
     end
   end
 
@@ -250,7 +238,7 @@ class Views::Assessments::ManagerShowView < Views::Base
     render Components::Kit::Modal.new(id: "delegate-modal", title: "Manage delegates") do |modal|
       modal.trigger { label }
       modal.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-400 mb-3") do
+        p(class: "text-sm text-muted mb-3") do
           "Delegates can record manager ratings for #{@assessee.name} but cannot start or " \
             "complete alignment."
         end
@@ -339,8 +327,8 @@ class Views::Assessments::ManagerShowView < Views::Base
       # The height cap subtracts the sticky header the pane sits under, or its
       # bottom (and the feed's last entries) lands below the viewport. Both
       # offsets are lg-only so the overlay below lg keeps its full height.
-      class: "hidden bg-gray-50 dark:bg-gray-800 overflow-auto overscroll-contain " \
-             "border border-gray-200 dark:border-gray-700 " \
+      class: "hidden bg-subtle overflow-auto overscroll-contain " \
+             "border border-default " \
              "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 " \
              "max-lg:w-80 max-lg:shadow-xl max-lg:border-l max-lg:rounded-none " \
              "lg:shrink-0 lg:w-80 lg:rounded-xl lg:sticky lg:self-start " \

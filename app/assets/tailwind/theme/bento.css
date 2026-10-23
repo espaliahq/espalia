@@ -291,3 +291,39 @@ html[data-theme="bento"] {
     --gos-category-8-content: #edfed4;
   }
 }
+
+/* Assessment views, pass 2 (#544): the hero's verdict panel and the assumed
+   rating on Bento's ramps. The lens (sky) and valence (emerald, rose) have no
+   Bento counterpart and keep Default's. */
+html[data-theme="bento"] {
+  --gos-verdict-below: #f1a39d;
+  --gos-verdict-below-content: #b01f14;
+  --gos-verdict-progressing: #fec84b;
+  --gos-verdict-progressing-content: #b54708;
+  --gos-verdict-performing: #81c3f4;
+  --gos-verdict-performing-content: #1344a5;
+  --gos-verdict-eligible: #69d49b;
+  --gos-verdict-eligible-content: #007345;
+  --gos-verdict-mastering: #b0b5f1;
+  --gos-verdict-mastering-content: #5b46c3;
+
+  --gos-rating-consistent-assumed: #81c3f4;
+  --gos-rating-consistent-assumed-content: #0b2551;
+
+  @variant dark {
+    --gos-verdict-below: #8d1c14;
+    --gos-verdict-below-content: #f1a39d;
+    --gos-verdict-progressing: #93370d;
+    --gos-verdict-progressing-content: #fec84b;
+    --gos-verdict-performing: #1344a5;
+    --gos-verdict-performing-content: #81c3f4;
+    --gos-verdict-eligible: #065c3a;
+    --gos-verdict-eligible-content: #69d49b;
+    --gos-verdict-mastering: #47389f;
+    --gos-verdict-mastering-content: #b0b5f1;
+
+    --gos-rating-consistent-assumed: #1344a5;
+    --gos-rating-consistent-assumed-content: #d7ebfd;
+  }
+}
+

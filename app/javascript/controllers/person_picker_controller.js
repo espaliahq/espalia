@@ -112,14 +112,14 @@ export default class extends BaseController {
 
   chip(personId, name) {
     const chip = document.createElement("span")
-    chip.className = "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-primary/10 text-primary-ink text-xs font-medium"
+    chip.className = "inline-flex items-center gap-1 min-h-9 px-2.5 rounded-full bg-neutral-subtle text-default text-xs font-medium"
     chip.dataset.personId = personId
     chip.append(name || "")
 
     const remove = document.createElement("button")
     remove.type = "button"
     remove.setAttribute("aria-label", `Remove ${name || "person"}`)
-    remove.className = "leading-none rounded-full text-primary-ink hover:bg-primary/20 cursor-pointer"
+    remove.className = "leading-none rounded-full text-muted hover:text-default hover:bg-neutral-muted cursor-pointer"
     remove.dataset.action = `${this.identifier}#remove`
     remove.dataset[`${this.paramPrefix}PersonIdParam`] = personId
     remove.textContent = "×"

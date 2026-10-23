@@ -32,7 +32,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
   end
 
   def view_template
-    div(class: "min-h-screen bg-primary flex items-center justify-center p-4") do
+    div(class: "min-h-screen bg-page flex items-center justify-center p-4") do
       div(class: "w-full max-w-md") do
         branding
         consent_card
@@ -44,42 +44,38 @@ class Views::Oauth::AuthorizationsView < Views::Base
 
   def branding
     div(class: "text-center mb-8") do
-      h1(class: "text-3xl font-bold text-white tracking-tight") { "GrowthOS" }
-      p(class: "text-white/70 mt-1 text-sm") { "Authorise an external client" }
+      h1(class: "text-3xl font-bold text-default tracking-tight") { "GrowthOS" }
+      p(class: "text-muted mt-1 text-sm") { "Authorise an external client" }
     end
   end
 
   def consent_card
-    div(class: "bg-white rounded-2xl shadow-xl p-8") do
-      h2(class: "text-lg font-semibold text-gray-900 mb-1") { @application.name }
-      p(class: "text-sm text-gray-600 mb-6") { "is requesting access to your GrowthOS account." }
+    render Components::Kit::Card.new do |card|
+      card.body do
+        h2(class: "text-lg font-semibold text-default mb-1") { @application.name }
+        p(class: "text-sm text-muted mb-6") { "is requesting access to your GrowthOS account." }
 
-      error_alert
-      requested_scopes
-      authorize_form
-      deny_form
+        error_alert
+        requested_scopes
+        authorize_form
+        deny_form
+      end
     end
   end
 
   def error_alert
     return unless @error
 
-    div(
-      class: "mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700",
-      role: "alert"
-    ) do
-      span(class: "mt-0.5 shrink-0", aria: { hidden: "true" }) { "⚠" }
-      span { @error }
-    end
+    render Components::Kit::Alert.new(tone: :danger, class: "mb-5") { @error }
   end
 
   def requested_scopes
     div(class: "mb-6") do
-      h3(class: "text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2") { "Permissions requested" }
-      ul(class: "space-y-1 text-sm text-gray-700") do
+      h3(class: "text-xs font-semibold uppercase tracking-wider text-muted mb-2") { "Permissions requested" }
+      ul(class: "space-y-1 text-sm text-muted") do
         @pre_auth.scopes.each do |scope|
           li(class: "flex items-start gap-2") do
-            span(class: "text-primary-ink mt-0.5", aria: { hidden: "true" }) { "•" }
+            span(class: "text-brand mt-0.5", aria: { hidden: "true" }) { "•" }
             span { scope_label(scope) }
           end
         end
@@ -123,16 +119,16 @@ class Views::Oauth::AuthorizationsView < Views::Base
     div do
       label(
         for: "oauth_tenant_id",
-        class: "block text-sm font-medium text-gray-700 mb-1"
+        class: "block text-sm font-medium text-default mb-1"
       ) { "Workspace" }
-      p(class: "text-xs text-gray-500 mb-2") do
+      p(class: "text-xs text-muted mb-2") do
         "The access token will only work in the workspace you choose. Re-authorise to switch."
       end
       select(
         id: "oauth_tenant_id",
         name: "tenant_id",
         required: true,
-        class: "block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        class: Components::Kit::Field::SELECT
       ) do
         option(value: "", disabled: true, selected: @selected_tenant_id.blank?) { "Select a workspace…" }
         @tenants.each do |tenant|
@@ -146,10 +142,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
   end
 
   def authorize_button
-    button(
-      type: "submit",
-      class: "w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 transition-colors"
-    ) { "Authorise" }
+    render Components::Kit::Button.new(tone: :brand, touch: true, type: :submit, class: "w-full") { "Authorise" }
   end
 
   def deny_form
@@ -163,10 +156,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
       input(type: "hidden", name: "client_id", value: @application.uid)
       passthrough_fields
-      button(
-        type: "submit",
-        class: "w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
-      ) { "Deny" }
+      render Components::Kit::Button.new(variant: :outline, touch: true, type: :submit, class: "w-full") { "Deny" }
     end
   end
 end

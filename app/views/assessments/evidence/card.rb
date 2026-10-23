@@ -37,8 +37,8 @@ class Views::Assessments::Evidence::Card < Views::Base
     "other"             => nil
   }.freeze
 
-  CHIP_CLASSES = "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-                 "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300"
+  CHIP_CLASSES = "inline-flex items-center gap-0.5 rounded bg-neutral-subtle px-1.5 py-0.5 text-[10px] text-muted"
+  CHIP_LINK_CLASSES = "#{CHIP_CLASSES} hover:bg-neutral-muted hover:underline"
 
   # @param item [EvidenceItem]
   # @param assessment_id [String] for routing the actions
@@ -61,7 +61,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   def view_template
     li(
       id: "evidence-#{@item.id}",
-      class: "group relative flex gap-2 py-1.5 text-xs text-gray-700 dark:text-gray-200"
+      class: "group relative flex gap-2 py-1.5 text-xs text-muted"
     ) do
       source_dot
       div(class: "min-w-0 flex-1") do
@@ -94,7 +94,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def also_linked_line
-    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400 italic") do
+    div(class: "mt-1 text-[10px] text-muted italic") do
       n = other_link_count
       plain "Also linked to #{n} other #{n == 1 ? 'place' : 'places'}"
     end
@@ -116,9 +116,8 @@ class Views::Assessments::Evidence::Card < Views::Base
       summary(
         class: "cursor-pointer list-none [&::-webkit-details-marker]:hidden " \
                "inline-flex max-w-full min-h-6 items-center gap-1 rounded px-1 -mx-1 py-0.5 " \
-               "text-[10px] text-gray-600 dark:text-gray-300 " \
-               "hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700/60 " \
-               "dark:hover:text-gray-200 transition-colors"
+               "text-[10px] text-muted " \
+               "hover:bg-default-hover hover:text-default transition-colors"
       ) do
         discussion_glyph
         if discussion_count.positive?
@@ -134,7 +133,7 @@ class Views::Assessments::Evidence::Card < Views::Base
       end
       turbo_frame_tag(thread_frame_id, src: thread_frame_src, loading: "lazy",
                       data: { frame_error_target: "frame" }) do
-        div(class: "py-1 text-[10px] italic text-gray-600 dark:text-gray-300") do
+        div(class: "py-1 text-[10px] italic text-muted") do
           "Loading discussion…"
         end
       end
@@ -197,7 +196,7 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   def header_line
     div(class: "flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]") do
-      span(class: "font-medium text-gray-600 dark:text-gray-300") do
+      span(class: "font-medium text-muted") do
         type_label
       end
       # THIS cell's link valence (per-link, so the same item can read
@@ -218,7 +217,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def title_line
-    p(class: "font-medium text-gray-900 dark:text-gray-100 mt-0.5") { @item.title }
+    p(class: "font-medium text-default mt-0.5") { @item.title }
   end
 
   # The card only renders inside the focused expanded cell (the capability
@@ -228,11 +227,11 @@ class Views::Assessments::Evidence::Card < Views::Base
   # user has explicitly focused this cell, so render the full content —
   # clamping to two lines hides the very text they came to read.
   def content_line
-    render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-gray-700 dark:text-gray-300")
+    render Components::Kit::Prose.new(@item.content, class: "mt-0.5 text-muted")
   end
 
   def footer_line
-    div(class: "mt-1 text-[10px] text-gray-600 dark:text-gray-300") do
+    div(class: "mt-1 text-[10px] text-muted") do
       span { @item.author&.name || "Unknown" }
       plain " · "
       span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
@@ -258,13 +257,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     label = ref.system.presence || "link"
     safe_url = ref.safe_url
     if safe_url
-      a(href: safe_url, target: "_blank", rel: "noopener noreferrer",
-        class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-               "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300 hover:bg-gray-200 " \
-               "dark:hover:bg-gray-600 hover:underline") { label }
+      a(href: safe_url, target: "_blank", rel: "noopener noreferrer", class: CHIP_LINK_CLASSES) { label }
     else
-      span(class: "inline-flex items-center gap-0.5 rounded bg-gray-100 dark:bg-gray-700 " \
-                 "px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300") { label }
+      span(class: CHIP_CLASSES) { label }
     end
   end
 
@@ -274,7 +269,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     label = "Also in #{ack.consumer.titleize}"
     url = ack.safe_remote_url
     if url
-      a(href: url, target: "_blank", rel: "noopener noreferrer", class: CHIP_CLASSES + " hover:bg-gray-200 dark:hover:bg-gray-600 hover:underline",
+      a(href: url, target: "_blank", rel: "noopener noreferrer", class: CHIP_LINK_CLASSES,
         data: { exchange_ack: ack.consumer }) do
         plain label
         span(class: "sr-only") { " (opens in a new tab)" }
@@ -295,12 +290,14 @@ class Views::Assessments::Evidence::Card < Views::Base
              "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
       render Components::Kit::Dropdown.new do |dropdown|
-        kebab_trigger
+        dropdown.trigger(label: "Feedback / evidence actions", button: { variant: :ghost, size: :xs, icon: true }) do
+          icon("kebab", class: "size-4")
+        end
         dropdown.menu(width: "w-44") do
-          edit_menu_item if @can_update
+          edit_menu_item(dropdown) if @can_update
           # The author's Edit already manages links (the unified modal). Offer a
           # link-only entry only to non-author link-holders (content disabled there).
-          link_menu_item if @can_manage_links && !@can_update
+          link_menu_item(dropdown) if @can_manage_links && !@can_update
           remove_link_menu_item if @can_manage_links
           withdraw_menu_item if @can_withdraw
         end
@@ -308,30 +305,20 @@ class Views::Assessments::Evidence::Card < Views::Base
     end
   end
 
-  def kebab_trigger
-    render Components::Kit::Button.new(
-      variant: :ghost, size: :xs, icon: true, aria_label: "Feedback / evidence actions",
-      data: { dropdown_target: "trigger", action: "dropdown#toggle" },
-      aria: { haspopup: "menu", expanded: "false" }
-    ) { icon("kebab", class: "size-4") }
-  end
-
-  def edit_menu_item
-    modal_menu_button("Edit")
+  def edit_menu_item(dropdown)
+    modal_menu_button(dropdown, "Edit")
   end
 
   # Opens the unified modal in edit mode for a non-author who may manage links
   # but not edit content — the server disables the content fields, leaving the
   # "Applies to" block active.
-  def link_menu_item
-    modal_menu_button("Link to another capability")
+  def link_menu_item(dropdown)
+    modal_menu_button(dropdown, "Link to another capability")
   end
 
-  def modal_menu_button(label)
-    button(
-      type: "button",
-      class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
-      role: "menuitem",
+  def modal_menu_button(dropdown, label)
+    dropdown.item(
+      size: :xs,
       data: {
         action: "click->dropdown#close evidence-modal#load click->modal#open",
         modal_target_id: "evidence-modal-overlay",
@@ -358,7 +345,7 @@ class Views::Assessments::Evidence::Card < Views::Base
         params: { evidence: { capability_stable_id: @current_capability_stable_id,
                               level_ordinal: @current_level_ordinal } },
         method: :post,
-        class: "block w-full text-left px-3 py-1.5 text-xs text-default hover:bg-default-hover",
+        class: Components::Kit::Dropdown.item_classes(size: :xs),
         role: "menuitem",
         form: { data: { turbo_confirm: unlink_confirm_message } }
       ) { "Unlink from this capability" }
@@ -387,7 +374,7 @@ class Views::Assessments::Evidence::Card < Views::Base
     button_to(
       assessment_evidence_path(@assessment_id, @item.id),
       method: :delete,
-      class: "block w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-subtle",
+      class: Components::Kit::Dropdown.item_classes(tone: :danger, size: :xs),
       role: "menuitem",
       form: { data: { turbo_confirm: "Withdraw this feedback?" } }
     ) { "Withdraw" }

@@ -72,12 +72,12 @@ class Views::Integrations::IndexView < Views::Base
         card.body do
           div(class: "flex items-start justify-between") do
             div do
-              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                        "group-hover:text-primary-ink transition-colors") { "AI model" }
-              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { ai_model_subtitle }
+              h3(class: "text-lg font-semibold text-default " \
+                        "group-hover:text-brand transition-colors") { "AI model" }
+              p(class: "mt-1 text-sm text-muted") { ai_model_subtitle }
             end
-            label, variant = Views::Integrations::AiModelView::STATE_BADGES.fetch(@ai_state)
-            render Components::Kit::Badge.new(label, variant: variant)
+            label, tone = Views::Integrations::AiModelView::STATE_BADGES.fetch(@ai_state)
+            render Components::Kit::Badge.new(label, tone: tone)
           end
         end
       end
@@ -96,8 +96,8 @@ class Views::Integrations::IndexView < Views::Base
       card.body do
         div(class: "flex items-start justify-between") do
           div do
-            h3(class: "text-lg font-semibold text-gray-900 dark:text-white") { "Slack" }
-            p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { slack_subtitle }
+            h3(class: "text-lg font-semibold text-default") { "Slack" }
+            p(class: "mt-1 text-sm text-muted") { slack_subtitle }
           end
           render Components::Kit::Badge.new(
             @slack_connected ? "Connected" : "Not connected",
@@ -122,16 +122,16 @@ class Views::Integrations::IndexView < Views::Base
       a(
         href: tenant_slack_connection_path,
         data: { turbo_method: :delete, turbo_confirm: "Disconnect Slack from this workspace?" },
-        class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline"
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline"
       ) { "Disconnect" }
     elsif @slack_available
       a(
         href: tenant_slack_install_path,
         data: { turbo_frame: "_top" },
-        class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90"
+        class: Components::Kit::Button.classes(tone: :brand, touch: true)
       ) { "Connect Slack" }
     else
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Slack is not configured for this deployment." }
+      span(class: "text-xs text-muted") { "Slack is not configured for this deployment." }
     end
   end
 
@@ -141,13 +141,14 @@ class Views::Integrations::IndexView < Views::Base
         card.body do
           div(class: "flex items-start justify-between") do
             div do
-              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                        "group-hover:text-primary-ink transition-colors") { "Feedback exchange" }
-              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { feedback_exchange_subtitle }
+              h3(class: "text-lg font-semibold text-default " \
+                        "group-hover:text-brand transition-colors") { "Feedback exchange" }
+              p(class: "mt-1 text-sm text-muted") { feedback_exchange_subtitle }
             end
-            render Components::Kit::Badge.new(feedback_exchange_status.first, variant: feedback_exchange_status.last)
+            label, tone = feedback_exchange_status
+            render Components::Kit::Badge.new(label, tone: tone)
           end
-          div(class: "mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+          div(class: "mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted") do
             span { "Last synced: #{@feedback_exchange_config.last_synced_at&.to_fs(:long) || 'Never'}" }
             span(id: "feedback-exchange-card-counts") { feedback_exchange_counts } if feedback_exchange_counts
           end
@@ -172,7 +173,7 @@ class Views::Integrations::IndexView < Views::Base
     peer ? "Feedback shared with #{peer}" : "Share named feedback with another feedback system"
   end
 
-  # @return [Array(String, Symbol)] label and Kit::Badge variant
+  # @return [Array(String, Symbol)] label and Kit::Badge tone
   def feedback_exchange_status
     state = @feedback_exchange_config.state(secrets_complete: @feedback_exchange_secrets_present)
     Views::Integrations::FeedbackExchangeView::STATE_BADGES.fetch(state)
@@ -184,16 +185,16 @@ class Views::Integrations::IndexView < Views::Base
         card.body do
           div(class: "flex items-start justify-between") do
             div do
-              h3(class: "text-lg font-semibold text-gray-900 dark:text-white " \
-                        "group-hover:text-primary-ink transition-colors") { "HRIS" }
-              p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+              h3(class: "text-lg font-semibold text-default " \
+                        "group-hover:text-brand transition-colors") { "HRIS" }
+              p(class: "mt-1 text-sm text-muted") do
                 plain provider_label
               end
             end
             render Components::Kit::Badge.new(status_label, variant: status_variant)
           end
 
-          div(class: "mt-4 text-xs text-gray-600 dark:text-gray-300") do
+          div(class: "mt-4 text-xs text-muted") do
             plain "Last synced: #{last_synced_label}"
           end
         end

@@ -239,7 +239,7 @@ class Views::Assessments::FrequencyPill < Views::Base
 
   def pill_bg_classes
     config = Views::Assessments::FrequencyPalette.config_for(@current_frequency)
-    return "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" unless config
+    return "bg-neutral-subtle text-muted" unless config
 
     @carried ? config[:pill_carried] : config[:pill_bg]
   end

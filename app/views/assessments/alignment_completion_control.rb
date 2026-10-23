@@ -55,24 +55,15 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
       class: "inline"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm font-medium px-3 py-1.5 rounded-md " \
-               "bg-green-600 dark:bg-green-700 text-white " \
-               "hover:bg-green-700 dark:hover:bg-green-600 cursor-pointer"
-      ) { "Mark alignment complete" }
+      render Components::Kit::Button.new(tone: :success, size: :sm, type: :submit) { "Mark alignment complete" }
     end
   end
 
   def disabled_button
-    button(
-      type: "button",
-      disabled: true,
+    render Components::Kit::Button.new(
+      tone: :success, size: :sm, disabled: true,
       title: "Every current-level capability needs an agreed rating before " \
-             "alignment can be marked complete.",
-      class: "text-sm font-medium px-3 py-1.5 rounded-md " \
-             "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 " \
-             "cursor-not-allowed"
+             "alignment can be marked complete."
     ) { "Mark alignment complete" }
   end
 
@@ -85,9 +76,9 @@ class Views::Assessments::AlignmentCompletionControl < Views::Base
       level_ordinal: person_level,
       label: "#{unaligned_capabilities.size} to align",
       classes: "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md " \
-               "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 " \
-               "border border-amber-200 dark:border-amber-800 " \
-               "hover:bg-amber-100 dark:hover:bg-amber-900/40"
+               "bg-warning-subtle text-warning " \
+               "border border-warning " \
+               "hover:bg-warning-muted"
     )
   end
 

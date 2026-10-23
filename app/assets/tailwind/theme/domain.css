@@ -151,3 +151,111 @@
   --background-color-activity-updated: var(--gos-activity-updated);
   --background-color-activity-peer: var(--gos-activity-peer);
 }
+
+/*
+ * Assessment and evidence views, pass 2 (#544, #547): the lens a page is read
+ * through, the hero's verdict panel, the assumed rating below the person's
+ * level, and evidence-link valence. Default values are the steps the views used.
+ */
+:root {
+  /* Lens: a role and level read other than the person's own, and the
+     explorations that open one */
+  --gos-lens-subtle: var(--color-sky-50);
+  --gos-lens-muted: var(--color-sky-100);
+  --gos-lens-content: var(--color-sky-800);
+  --gos-lens-border: var(--color-sky-200);
+  --gos-lens-border-strong: var(--color-sky-400);
+
+  /* Verdict: the edge and heading of the hero's state panel. Performing and
+     top of the ladder share blue; the score tokens colour numbers, not this. */
+  --gos-verdict-below: var(--color-red-300);
+  --gos-verdict-below-content: var(--color-red-700);
+  --gos-verdict-progressing: var(--color-amber-300);
+  --gos-verdict-progressing-content: var(--color-amber-700);
+  --gos-verdict-performing: var(--color-blue-300);
+  --gos-verdict-performing-content: var(--color-blue-700);
+  --gos-verdict-eligible: var(--color-green-300);
+  --gos-verdict-eligible-content: var(--color-green-700);
+  --gos-verdict-mastering: var(--color-purple-300);
+  --gos-verdict-mastering-content: var(--color-purple-700);
+
+  /* An unrated level below the person's own, assumed consistent: a lighter
+     consistent blue, so it reads apart from one actually rated */
+  --gos-rating-consistent-assumed: var(--color-blue-300);
+  --gos-rating-consistent-assumed-content: var(--color-blue-900);
+
+  /* Evidence-link valence: never the rating hues, and always with its label */
+  --gos-valence-strongly-demonstrated: var(--color-emerald-100);
+  --gos-valence-strongly-demonstrated-content: var(--color-emerald-800);
+  --gos-valence-demonstrated: var(--color-emerald-50);
+  --gos-valence-demonstrated-content: var(--color-emerald-700);
+  --gos-valence-growth-area: var(--color-amber-50);
+  --gos-valence-growth-area-content: var(--color-amber-800);
+  --gos-valence-significant-growth-area: var(--color-rose-50);
+  --gos-valence-significant-growth-area-content: var(--color-rose-800);
+
+  @variant dark {
+    --gos-lens-subtle: color-mix(in srgb, var(--color-sky-900) 30%, var(--gos-surface-overlay));
+    --gos-lens-muted: color-mix(in srgb, var(--color-sky-900) 40%, var(--gos-surface-overlay));
+    --gos-lens-content: var(--color-sky-200);
+    --gos-lens-border: var(--color-sky-800);
+    --gos-lens-border-strong: var(--color-sky-600);
+
+    --gos-verdict-below: var(--color-red-700);
+    --gos-verdict-below-content: var(--color-red-300);
+    --gos-verdict-progressing: var(--color-amber-700);
+    --gos-verdict-progressing-content: var(--color-amber-300);
+    --gos-verdict-performing: var(--color-blue-700);
+    --gos-verdict-performing-content: var(--color-blue-300);
+    --gos-verdict-eligible: var(--color-green-700);
+    --gos-verdict-eligible-content: var(--color-green-300);
+    --gos-verdict-mastering: var(--color-purple-700);
+    --gos-verdict-mastering-content: var(--color-purple-300);
+
+    --gos-rating-consistent-assumed: var(--color-blue-700);
+    --gos-rating-consistent-assumed-content: var(--color-blue-100);
+
+    --gos-valence-strongly-demonstrated: color-mix(in srgb, var(--color-emerald-900) 40%, var(--gos-surface-default));
+    --gos-valence-strongly-demonstrated-content: var(--color-emerald-200);
+    --gos-valence-demonstrated: color-mix(in srgb, var(--color-emerald-900) 20%, var(--gos-surface-default));
+    --gos-valence-demonstrated-content: var(--color-emerald-300);
+    --gos-valence-growth-area: color-mix(in srgb, var(--color-amber-900) 30%, var(--gos-surface-default));
+    --gos-valence-growth-area-content: var(--color-amber-300);
+    --gos-valence-significant-growth-area: color-mix(in srgb, var(--color-rose-900) 30%, var(--gos-surface-default));
+    --gos-valence-significant-growth-area-content: var(--color-rose-300);
+  }
+}
+
+@theme inline {
+  --background-color-lens-subtle: var(--gos-lens-subtle);
+  --background-color-lens-muted: var(--gos-lens-muted);
+  --text-color-lens: var(--gos-lens-content);
+  --border-color-lens: var(--gos-lens-border);
+  --border-color-lens-strong: var(--gos-lens-border-strong);
+  --ring-color-lens: var(--gos-lens-border);
+  --ring-color-lens-strong: var(--gos-lens-border-strong);
+
+  --border-color-verdict-below: var(--gos-verdict-below);
+  --border-color-verdict-progressing: var(--gos-verdict-progressing);
+  --border-color-verdict-performing: var(--gos-verdict-performing);
+  --border-color-verdict-eligible: var(--gos-verdict-eligible);
+  --border-color-verdict-mastering: var(--gos-verdict-mastering);
+  --text-color-verdict-below: var(--gos-verdict-below-content);
+  --text-color-verdict-progressing: var(--gos-verdict-progressing-content);
+  --text-color-verdict-performing: var(--gos-verdict-performing-content);
+  --text-color-verdict-eligible: var(--gos-verdict-eligible-content);
+  --text-color-verdict-mastering: var(--gos-verdict-mastering-content);
+
+  --background-color-rating-consistent-assumed: var(--gos-rating-consistent-assumed);
+  --text-color-rating-consistent-assumed: var(--gos-rating-consistent-assumed-content);
+
+  --background-color-valence-strongly-demonstrated: var(--gos-valence-strongly-demonstrated);
+  --background-color-valence-demonstrated: var(--gos-valence-demonstrated);
+  --background-color-valence-growth-area: var(--gos-valence-growth-area);
+  --background-color-valence-significant-growth-area: var(--gos-valence-significant-growth-area);
+  --text-color-valence-strongly-demonstrated: var(--gos-valence-strongly-demonstrated-content);
+  --text-color-valence-demonstrated: var(--gos-valence-demonstrated-content);
+  --text-color-valence-growth-area: var(--gos-valence-growth-area-content);
+  --text-color-valence-significant-growth-area: var(--gos-valence-significant-growth-area-content);
+}
+

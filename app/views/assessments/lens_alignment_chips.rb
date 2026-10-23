@@ -7,6 +7,7 @@
 # parties without either opening the lens.
 class Views::Assessments::LensAlignmentChips < Views::Base
   STATUS_TEXT = { "aligning" => "Aligning", "aligned" => "Aligned" }.freeze
+  TONES = { "aligning" => :warning, "aligned" => :success }.freeze
 
   # @param alignments [Array<#role_id, #code, #label, #level_ordinal, #status>]
   # @param assessment_id [String]
@@ -30,17 +31,7 @@ class Views::Assessments::LensAlignmentChips < Views::Base
       href: assessment_path(@assessment_id, as_role: alignment.role_id, as_level: alignment.level_ordinal),
       title: "#{STATUS_TEXT.fetch(alignment.status)} against #{alignment.label}",
       data: { turbo_frame: "_top", lens_alignment: alignment.code },
-      class: "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium " \
-             "ring-1 ring-inset hover:underline focus-visible:outline-hidden focus-visible:ring-2 " \
-             "focus-visible:ring-primary #{tone(alignment.status)}"
+      class: "#{Components::Kit::Badge.classes(tone: TONES.fetch(alignment.status))} hover:underline"
     ) { "#{STATUS_TEXT.fetch(alignment.status)} · #{alignment.code}" }
-  end
-
-  def tone(status)
-    if status == "aligned"
-      "bg-green-50 text-green-800 ring-green-200 dark:bg-green-900/30 dark:text-green-200 dark:ring-green-800"
-    else
-      "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
-    end
   end
 end

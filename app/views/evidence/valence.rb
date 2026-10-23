@@ -18,10 +18,10 @@ module Views::Evidence::Valence
   }.freeze
 
   BADGE_CLASSES = {
-    "strongly_demonstrated" => "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-    "demonstrated" => "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300",
-    "growth_area" => "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    "significant_growth_area" => "bg-rose-50 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300"
+    "strongly_demonstrated" => "bg-valence-strongly-demonstrated text-valence-strongly-demonstrated",
+    "demonstrated" => "bg-valence-demonstrated text-valence-demonstrated",
+    "growth_area" => "bg-valence-growth-area text-valence-growth-area",
+    "significant_growth_area" => "bg-valence-significant-growth-area text-valence-significant-growth-area"
   }.freeze
 
   # Ordered [label, value] pairs for selects / radio groups.

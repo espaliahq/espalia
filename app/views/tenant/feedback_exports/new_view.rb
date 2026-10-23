@@ -7,9 +7,8 @@
 class Views::Tenant::FeedbackExports::NewView < Views::Base
   include Phlex::Rails::Helpers::Routes
 
-  SELECT = "min-h-11 w-full rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900 " \
-           "sm:w-72 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-  LABEL = "text-sm font-medium text-gray-900 dark:text-white"
+  SELECT = "#{Components::Kit::Field::SELECT} min-h-11 sm:w-72"
+  LABEL = "text-sm font-medium text-default"
 
   # @param cycles [Array<AssessmentCycle>] newest first
   # @param cycle [AssessmentCycle, nil] the cycle being exported; nil when the
@@ -79,11 +78,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
           input(type: "hidden", name: "cycle_id", value: @cycle.cycle_id)
           month_field
           withdrawn_field
-          button(
-            type: "submit",
-            class: "inline-flex min-h-11 items-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white " \
-                   "hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
-          ) { "Download CSV" }
+          render Components::Kit::Button.new(touch: true, type: :submit) { "Download CSV" }
         end
         contents_note
       end
@@ -97,7 +92,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
         option(value: "") { "Whole cycle" }
         @months.each { |month| option(value: month.key) { month.label } }
       end
-      span(class: "text-xs text-gray-600 dark:text-gray-300") { "Feedback recorded in that calendar month (UTC)." }
+      span(class: "text-xs text-muted") { "Feedback recorded in that calendar month (UTC)." }
     end
   end
 
@@ -105,21 +100,20 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
     div(class: "flex min-h-11 items-center gap-2") do
       input(
         type: "checkbox", id: "feedback-export-include-withdrawn", name: "include_withdrawn", value: "1",
-        class: "h-4 w-4 rounded border-gray-300 text-primary dark:border-gray-600"
+        class: Components::Kit::Field::CHECKBOX
       )
-      label(for: "feedback-export-include-withdrawn", class: "text-sm text-gray-900 dark:text-white") do
+      label(for: "feedback-export-include-withdrawn", class: "text-sm text-default") do
         "Include withdrawn feedback"
       end
     end
   end
 
   def contents_note
-    div(class: "mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm text-gray-600 dark:border-gray-700 " \
-               "dark:text-gray-300") do
+    div(class: "mt-5 space-y-2 border-t border-default pt-4 text-sm text-muted") do
       p do
         plain "One row per piece of feedback: who gave it, who received it, what it says and the behaviours "
         plain "it applies to. The rows are the feedback the cycle's "
-        a(href: evidence_assessment_cycle_path(@cycle), class: "text-primary-ink underline") do
+        a(href: evidence_assessment_cycle_path(@cycle), class: "text-brand underline") do
           "feedback & evidence report"
         end
         plain " counts."
@@ -131,7 +125,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
   def empty_state
     render Components::Kit::Card.new do |card|
       card.body do
-        p(class: "text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "text-sm text-muted") do
           "No assessment cycles yet. Feedback is exported one cycle at a time."
         end
       end

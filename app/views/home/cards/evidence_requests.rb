@@ -25,7 +25,7 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
 
   def summary_line
     count = @requests.size
-    p(class: "text-sm text-gray-600 dark:text-gray-300") do
+    p(class: "text-sm text-muted") do
       "#{count} #{count == 1 ? "colleague is" : "colleagues are"} waiting on your feedback."
     end
   end
@@ -35,13 +35,13 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
 
     ul(class: "mt-3 space-y-1") do
       @requests.first(PREVIEW_LIMIT).each do |request|
-        li(class: "text-sm text-gray-700 dark:text-gray-300") do
+        li(class: "text-sm text-muted") do
           plain request.requester&.name || "A colleague"
-          span(class: "text-gray-600 dark:text-gray-300") { regarding_suffix(request) }
+          span(class: "text-muted") { regarding_suffix(request) }
         end
       end
       if @requests.size > PREVIEW_LIMIT
-        li(class: "text-sm text-gray-600 dark:text-gray-300") do
+        li(class: "text-sm text-muted") do
           "+#{@requests.size - PREVIEW_LIMIT} more"
         end
       end
@@ -61,12 +61,12 @@ class Views::Home::Cards::EvidenceRequests < Views::Base
     a(
       href: evidence_hub_path,
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline"
+      class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline"
     ) { "Respond →" }
     a(
       href: evidence_hub_path(give: 1),
       data: { turbo_frame: "_top" },
-      class: "inline-flex items-center min-h-11 ml-4 text-sm font-medium text-primary-ink hover:underline"
+      class: "inline-flex items-center min-h-11 ml-4 text-sm font-medium text-brand hover:underline"
     ) { "Give feedback →" }
   end
 end

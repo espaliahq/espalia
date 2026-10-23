@@ -4,7 +4,7 @@
 # {RecipientRow}s, replaced on each debounced keystroke (the frame `src`
 # carries the query). Empty until there is a query.
 class Views::Evidence::RecipientCandidatesFrame < Views::Base
-  PANEL = "rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 " \
+  PANEL = "rounded-md border border-default bg-overlay " \
           "shadow-lg max-h-64 overflow-y-auto"
 
   # @param entries [Array<Assessments::FeedbackRecipients::Recipient>]
@@ -29,11 +29,11 @@ class Views::Evidence::RecipientCandidatesFrame < Views::Base
   def panel
     div(class: PANEL) do
       if @entries.empty?
-        p(class: "px-3 py-3 text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "px-3 py-3 text-xs text-muted") do
           "No one matching “#{@query}” has an assessment to give feedback on."
         end
       else
-        div(class: "divide-y divide-gray-100 dark:divide-gray-800") do
+        div(class: "divide-y divide-subtle") do
           @entries.each do |recipient|
             render Views::Evidence::RecipientRow.new(recipient: recipient, return_to: @return_to, draft_token: @draft_token)
           end

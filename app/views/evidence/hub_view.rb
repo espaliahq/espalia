@@ -85,17 +85,16 @@ class Views::Evidence::HubView < Views::Base
   def header
     div(class: "flex flex-wrap items-start justify-between gap-3") do
       div(class: "flex-1 min-w-64") do
-        h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Feedback / Evidence" }
-        p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+        h1(class: "text-2xl font-bold text-default") { "Feedback / Evidence" }
+        p(class: "mt-1 text-sm text-muted") do
           "Feedback waiting to be placed, requests addressed to you, ones you've sent, and the feedback you've given."
         end
       end
       # Volunteer feedback to anyone with an assessment: the modal opens on
       # the "who is it for?" step. The hub controller clicks this same button
       # when the page arrives with ?give=1, so the two paths can't drift.
-      button(type: "button",
-             data: give_trigger_data.merge(evidence_hub_target: "autoTrigger"),
-             class: "shrink-0 inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") do
+      render Components::Kit::Button.new(tone: :brand, touch: true,
+                                         data: give_trigger_data.merge(evidence_hub_target: "autoTrigger")) do
         "Give feedback"
       end
     end
@@ -125,7 +124,7 @@ class Views::Evidence::HubView < Views::Base
 
     section(id: "feedback-to-place", class: "scroll-mt-20") do
       group_heading("Feedback to place")
-      p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "-mt-2 mb-4 text-sm text-muted") do
         "Given without a capability in mind. Until it is placed, it shows on no card and counts nowhere."
       end
       div(class: "space-y-8") do
@@ -156,7 +155,7 @@ class Views::Evidence::HubView < Views::Base
   # Plain links, so the view is in the URL (?place=org) and works without
   # JavaScript; the counts say there is more without switching.
   def place_toggle
-    nav(class: "inline-flex gap-1 rounded-md bg-gray-100 p-0.5 dark:bg-gray-800",
+    nav(class: "inline-flex gap-1 rounded-md bg-neutral-subtle p-0.5",
         aria: { label: "Whose feedback to place" }) do
       place_link("My team", @place_counts[:team], place: nil)
       place_link("My whole org", @place_counts[:org], place: "org")
@@ -169,22 +168,22 @@ class Views::Evidence::HubView < Views::Base
       aria: { current: active ? "page" : nil },
       class: [
         "inline-flex min-h-11 items-center rounded px-3 py-1 text-sm font-medium whitespace-nowrap",
-        active ? "bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white" :
-          "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+        active ? "bg-default text-default shadow-xs" :
+          "text-muted hover:text-default"
       ].join(" ")) { "#{label} · #{count}" }
   end
 
   def to_place_card(item, about_viewer:)
     detail = @cell_details.fetch(item.id, {})
     card(dom_id: EvidenceItem.dom_id(item.id)) do
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { to_place_scope_label(item, detail, about_viewer: about_viewer) }
-      p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+      p(class: "text-xs text-muted") { to_place_scope_label(item, detail, about_viewer: about_viewer) }
+      p(class: "text-xs font-semibold uppercase tracking-wide text-muted") { authored_type_label(item) }
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
       external_link(item)
       suggestion_area(item, offer_when_empty: true)
-      div(class: "pt-2 border-t border-gray-100 dark:border-gray-800") do
+      div(class: "pt-2 border-t border-subtle") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") do
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") do
           "Place on a capability"
         end
       end
@@ -201,17 +200,17 @@ class Views::Evidence::HubView < Views::Base
 
     section(id: "suggested-placements", class: "scroll-mt-20") do
       group_heading("May fit elsewhere too")
-      p(class: "-mt-2 mb-4 text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "-mt-2 mb-4 text-sm text-muted") do
         "Feedback already placed, which may also speak to other capabilities."
       end
       div(class: "space-y-4") do
         @with_suggestions.each do |item|
           detail = @cell_details.fetch(item.id, {})
           card(dom_id: EvidenceItem.dom_id(item.id)) do
-            p(class: "text-xs text-gray-600 dark:text-gray-300") do
+            p(class: "text-xs text-muted") do
               to_place_scope_label(item, detail, about_viewer: item.person_id == @viewer_person_id)
             end
-            render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+            render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
             suggestion_area(item)
           end
         end
@@ -290,7 +289,7 @@ class Views::Evidence::HubView < Views::Base
   def incoming_card(request)
     card(dom_id: request.dom_id) do
       div(class: "flex items-center justify-between gap-3") do
-        span(class: "text-sm text-gray-900 dark:text-white") do
+        span(class: "text-sm text-default") do
           "#{request.requester&.name || "A colleague"} asked you for feedback#{regarding_suffix(request)}"
         end
         status_badge(request) unless request.pending?
@@ -314,7 +313,7 @@ class Views::Evidence::HubView < Views::Base
     return if request.requestee_person_id == request.person_id
 
     name = request.assessee&.name || "the assessee"
-    p(class: "text-xs text-gray-500 dark:text-gray-400", data: { testid: "visibility-note" }) do
+    p(class: "text-xs text-muted", data: { testid: "visibility-note" }) do
       "Your response will be visible to #{name}, their managers, and workspace admins."
     end
   end
@@ -322,7 +321,7 @@ class Views::Evidence::HubView < Views::Base
   def outgoing_card(request)
     card(dom_id: request.dom_id) do
       div(class: "flex items-center justify-between gap-3") do
-        span(class: "text-sm text-gray-900 dark:text-white") { "To #{request.requestee&.name || "a colleague"}#{regarding_suffix(request)}" }
+        span(class: "text-sm text-default") { "To #{request.requestee&.name || "a colleague"}#{regarding_suffix(request)}" }
         status_badge(request)
       end
       request_cell_line(request)
@@ -333,7 +332,7 @@ class Views::Evidence::HubView < Views::Base
       elsif request.status == "responded"
         response_card(request)
       elsif request.status == "declined" && request.decline_reason.present?
-        p(class: "text-sm text-gray-700 dark:text-gray-200") { "Declined: #{Prose.to_plain(request.decline_reason)}" }
+        p(class: "text-sm text-muted") { "Declined: #{Prose.to_plain(request.decline_reason)}" }
       end
     end
   end
@@ -343,13 +342,13 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def outgoing_open_actions(request)
-    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
+    div(class: "pt-2 border-t border-subtle flex items-center gap-4") do
       if request.can_nudge?
         button_to("Send a nudge", nudge_evidence_request_path(request),
-          class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline cursor-pointer")
+          class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline cursor-pointer")
       end
       a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
-        class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline") { "Cancel request" }
+        class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline") { "Cancel request" }
     end
   end
 
@@ -361,18 +360,24 @@ class Views::Evidence::HubView < Views::Base
     return if response.nil?
 
     item = response[:item]
-    div(class: "rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-2") do
+    render Components::Kit::Card.new(variant: :inset, density: :compact) do |card|
+      card.body { response_card_body(item, response[:links]) }
+    end
+  end
+
+  def response_card_body(item, links)
+    div(class: "space-y-2") do
       div(class: "flex items-center justify-between gap-2") do
-        span(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "Response from #{item.author&.name || "a colleague"}" }
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { response_type_label(item) }
+        span(class: "text-xs font-semibold uppercase tracking-wide text-muted") { "Response from #{item.author&.name || "a colleague"}" }
+        span(class: "text-xs text-muted") { response_type_label(item) }
       end
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
       external_link(item)
-      applies_to_line(response[:links])
+      applies_to_line(links)
       suggestion_area(item)
       div(class: "flex items-center gap-4") do
         button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") { "Edit links" }
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") { "Edit links" }
         view_in_assessment_link(item)
       end
     end
@@ -391,7 +396,7 @@ class Views::Evidence::HubView < Views::Base
     end
     return if entries.empty?
 
-    div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted") do
       span { "Applies to:" }
       entries.each do |label, valence|
         span(class: "inline-flex items-center gap-1") do
@@ -410,11 +415,11 @@ class Views::Evidence::HubView < Views::Base
     detail = @authored_details.fetch(item.id, {})
     card(dom_id: EvidenceItem.dom_id(item.id)) do
       div do
-        p(class: "text-sm font-medium text-gray-900 dark:text-white") { authored_cell_label(item, detail) }
-        p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
+        p(class: "text-sm font-medium text-default") { authored_cell_label(item, detail) }
+        p(class: "text-xs text-muted") { authored_scope_label(item, detail) }
       end
-      p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
+      p(class: "text-xs font-semibold uppercase tracking-wide text-muted") { authored_type_label(item) }
+      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
       external_link(item)
       suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?)
       authored_actions(item, detail)
@@ -447,7 +452,7 @@ class Views::Evidence::HubView < Views::Base
     path = @in_situ_paths[item.id]
     return if path.blank?
 
-    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink hover:underline") do
+    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline") do
       "View in assessment"
     end
   end
@@ -459,7 +464,7 @@ class Views::Evidence::HubView < Views::Base
     return if url.blank?
 
     a(href: url, target: "_blank", rel: "noopener",
-      class: "inline-flex items-center gap-1 text-sm text-blue-600 hover:underline break-all") do
+      class: "inline-flex items-center gap-1 text-sm text-link hover:underline break-all") do
       plain item.external_reference&.system.presence&.humanize || "Link"
       span(aria: { hidden: "true" }) { " ↗" }
     end
@@ -468,13 +473,13 @@ class Views::Evidence::HubView < Views::Base
   def authored_actions(item, detail)
     return if detail[:assignment_id].blank?
 
-    div(class: "pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4") do
+    div(class: "pt-2 border-t border-subtle flex items-center gap-4") do
       view_in_assessment_link(item)
       button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-             class: "inline-flex items-center min-h-11 text-sm font-medium text-primary-ink cursor-pointer") { "Edit" }
+             class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") { "Edit" }
       form_with(url: evidence_item_path(item), method: :delete) do
         button(type: "submit", data: { turbo_confirm: "Withdraw this feedback? It will be hidden everywhere it appears." },
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-red-700 dark:text-red-400 hover:underline cursor-pointer") { "Withdraw" }
+               class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline cursor-pointer") { "Withdraw" }
       end
     end
   end
@@ -484,8 +489,8 @@ class Views::Evidence::HubView < Views::Base
   def request_cell_line(request)
     detail = @cell_details.fetch(request.id, {})
     div do
-      p(class: "text-sm font-medium text-gray-900 dark:text-white") { detail[:name] || "Capability" }
-      p(class: "text-xs text-gray-600 dark:text-gray-300") { request_scope_label(request, detail) }
+      p(class: "text-sm font-medium text-default") { detail[:name] || "Capability" }
+      p(class: "text-xs text-muted") { request_scope_label(request, detail) }
     end
   end
 
@@ -511,7 +516,7 @@ class Views::Evidence::HubView < Views::Base
   def message_line(request)
     return if request.message.blank?
 
-    p(class: "text-sm text-gray-700 dark:text-gray-200 italic") { "“#{Prose.to_plain(request.message)}”" }
+    p(class: "text-sm text-muted italic") { "“#{Prose.to_plain(request.message)}”" }
   end
 
   # On every open request card: the request's life so far — when it was asked
@@ -527,7 +532,7 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def timeline_line(text)
-    p(class: "text-xs text-gray-500 dark:text-gray-400") { text }
+    p(class: "text-xs text-muted") { text }
   end
 
   def due_suffix(request)
@@ -559,12 +564,15 @@ class Views::Evidence::HubView < Views::Base
   # ── Respond / edit (open the unified modal) ──
 
   def respond_actions(request)
-    div(class: "pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-2") do
-      button(type: "button", data: modal_trigger_data(mode: "respond", request_id: request.id),
-             class: "inline-flex items-center min-h-11 px-4 rounded-md bg-primary text-white text-sm font-medium hover:opacity-90 cursor-pointer") { "Provide feedback / evidence" }
-      button(type: "button",
-             data: { action: "click->modal#open", modal_target_id: Views::Evidence::DeclineRequestModal.dom_id_for(request) },
-             class: "kit-btn-secondary") { "Decline request" }
+    div(class: "pt-3 border-t border-subtle flex flex-wrap items-center gap-2") do
+      render Components::Kit::Button.new(tone: :brand, touch: true,
+                                         data: modal_trigger_data(mode: "respond", request_id: request.id)) do
+        "Provide feedback / evidence"
+      end
+      render Components::Kit::Button.new(
+        variant: :outline, touch: true,
+        data: { action: "click->modal#open", modal_target_id: Views::Evidence::DeclineRequestModal.dom_id_for(request) }
+      ) { "Decline request" }
     end
     render Views::Evidence::DeclineRequestModal.new(request: request)
   end
@@ -584,17 +592,18 @@ class Views::Evidence::HubView < Views::Base
 
   # ── Chrome ──
 
-  def card(dom_id: nil, &)
+  def card(dom_id: nil, &block)
     # `target:` highlights the card when reached via a notification deep link
     # (/evidence#evidence-request-<id>).
-    div(id: dom_id,
-        class: "scroll-mt-20 rounded-lg border border-gray-200 dark:border-gray-700 " \
-               "bg-white dark:bg-gray-900 p-4 space-y-2 " \
-               "target:ring-2 target:ring-primary target:border-primary", &)
+    div(id: dom_id, class: "scroll-mt-20 rounded-2xl target:ring-2 target:ring-(--gos-border-strong)") do
+      render Components::Kit::Card.new do |card|
+        card.body { div(class: "space-y-2", &block) }
+      end
+    end
   end
 
   def group_heading(text)
-    h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-4") { text }
+    h2(class: "text-lg font-semibold text-default mb-4") { text }
   end
 
   # @param aside [#call, nil] rendered beside the heading, wrapping below it
@@ -602,7 +611,7 @@ class Views::Evidence::HubView < Views::Base
   def subsection(title, aside: nil, testid: nil, &)
     div(data: { testid: testid }) do
       div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
-        h3(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { title }
+        h3(class: "text-sm font-semibold uppercase tracking-wide text-muted") { title }
         aside&.call
       end
       yield
@@ -610,8 +619,6 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def empty(text)
-    div(class: "rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center") do
-      p(class: "text-sm text-gray-600 dark:text-gray-300") { text }
-    end
+    render Components::Kit::EmptyState.new(title: text)
   end
 end

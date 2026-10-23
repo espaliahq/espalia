@@ -182,8 +182,11 @@ invisible control. In the framework explorer's grid that is
 `Views::Frameworks::Explorer::Concerns::MenuItems#render_menu_trigger` — a bare
 trigger whose menu one root-mounted controller builds on open (see
 [framework-explorer.md](framework-explorer.md) §11a; a per-kebab `Kit::Dropdown`
-does not scale to a grid). Elsewhere — and in the explorer's role tree — use
-`Kit::Dropdown` with `Concerns::KebabChrome#kebab_trigger`.
+does not scale to a grid). The explorer's role tree uses `Kit::Dropdown` with
+`Concerns::KebabChrome#kebab_trigger`. Everywhere else, `Kit::Dropdown#trigger(label:,
+button: { variant: :ghost, size: :xs, icon: true })` draws the ⋮ and its ARIA, and
+`#item` (or `.item_classes` on a `button_to`) draws each entry, as the comment and
+evidence cards do.
 
 ## Controller Rendering
 
