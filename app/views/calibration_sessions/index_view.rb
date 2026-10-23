@@ -199,7 +199,7 @@ class Views::CalibrationSessions::IndexView < Views::Base
   def restore_button(session)
     form(action: unarchive_calibration_session_path(session), method: "post", class: "relative mt-3") do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      render Components::Kit::Button.new(variant: :link, tone: :brand, type: :submit) { "Restore" }
+      render Components::Kit::Button.new(variant: :link, tone: :brand, compact: true, type: :submit) { "Restore" }
     end
   end
 
