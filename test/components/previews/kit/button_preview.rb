@@ -13,11 +13,13 @@ class Kit::ButtonPreview < Lookbook::Preview
   # @param tone select { choices: [neutral, brand, danger, success, warning, info] }
   # @param size select { choices: [xs, sm, md] }
   # @param touch toggle
+  # @param compact toggle
   # @param disabled toggle
   # @param href text
-  def playground(label: "Save ratings", variant: :solid, tone: :neutral, size: :md, touch: false, disabled: false, href: "")
+  def playground(label: "Save ratings", variant: :solid, tone: :neutral, size: :md, touch: false, compact: false,
+                 disabled: false, href: "")
     render Button.new(
-      variant: variant.to_sym, tone: tone.to_sym, size: size.to_sym, touch: touch, disabled: disabled,
+      variant: variant.to_sym, tone: tone.to_sym, size: size.to_sym, touch: touch, compact: compact, disabled: disabled,
       href: href.presence
     ) { label }
   end
