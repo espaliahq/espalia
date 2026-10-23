@@ -51,9 +51,12 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant, :with_ai_model)
+    # Placeholders follow id order, and two v7 ids minted in one millisecond
+    # can sort either way.
+    alex_id, anna_id = Array.new(2) { SecureRandom.uuid_v7 }.sort
     ActsAsTenant.with_tenant(@tenant) do
-      create(:person, tenant: @tenant, name: "Alex Chen")
-      create(:person, tenant: @tenant, name: "Anna Reid")
+      create(:person, tenant: @tenant, name: "Alex Chen", id: alex_id)
+      create(:person, tenant: @tenant, name: "Anna Reid", id: anna_id)
     end
   end
 
@@ -103,12 +106,14 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
       assert_equal "“Alex Chen led the review” shows ownership.", proposals.first.rationale
     end
 
-    should "send names as written when the tenant turned it off" do
-      @tenant.update!(ai_config: AiModelConfig.new(@tenant.ai_config.attributes.merge("pseudonymise_names" => false)))
-      proposals, call = run_model(FakeAdapter.new(suggestions: [ raw(rationale: "Person 1 is left alone.") ]))
+    should "replace names even when a stored config still says the tenant turned it off" do
+      stored = @tenant.read_attribute_before_type_cast(:ai_config)
+      stored = stored.is_a?(String) ? JSON.parse(stored) : stored
+      Tenant.where(id: @tenant.id).update_all(ai_config: stored.merge("pseudonymise_names" => false))
+      proposals, call = run_model(FakeAdapter.new(suggestions: [ raw ]), tenant: @tenant.reload)
 
-      assert_equal "Alex Chen led the review; Anna wrote it up.", call[:user]
-      assert_equal "Person 1 is left alone.", proposals.first.rationale
+      assert_equal "Person 1 led the review; Person 2 wrote it up.", call[:user]
+      assert_equal "“Alex Chen led the review” shows ownership.", proposals.first.rationale
     end
 
     should "keep another tenant's people out of the mapping" do

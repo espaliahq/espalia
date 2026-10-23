@@ -34,7 +34,7 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
 
   def settings(overrides = {})
     { ai_model: { provider: "openai_compatible", base_url: GATEWAY, model: "anthropic/claude-opus-5-5",
-                  effort: "low", suggestions_enabled: "1", pseudonymise_names: "1", api_key: KEY }.merge(overrides) }
+                  effort: "low", suggestions_enabled: "1", api_key: KEY }.merge(overrides) }
   end
 
   context "as a tenant admin" do
@@ -77,7 +77,8 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "input[name='ai_model[model]']"
         assert_select "input[type=password][name='ai_model[api_key]']"
         assert_select "input[type=checkbox][name='ai_model[suggestions_enabled]']"
-        assert_select "input[type=checkbox][name='ai_model[pseudonymise_names]'][checked]"
+        assert_select "input[name='ai_model[pseudonymise_names]']", count: 0
+        assert_select "dt", text: "Names hidden", count: 0
         assert_select "option", text: "Vercel AI Gateway: Jev (TypeSafe AI)"
       end
 
@@ -145,15 +146,21 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "select#ai_model_preset option[selected]", text: "Other Jev endpoint"
       end
 
-      should "keep the stored key when the field is left blank, and turn switches off" do
+      should "keep the stored key when the field is left blank, and turn suggestions off" do
         configure_gateway
 
-        patch tenant_ai_model_path, params: settings(api_key: "", suggestions_enabled: "0", pseudonymise_names: "0")
+        patch tenant_ai_model_path, params: settings(api_key: "", suggestions_enabled: "0")
 
         assert_redirected_to tenant_integration_path("ai-model")
         assert_not @tenant.reload.ai_config.suggestions_enabled?
-        assert_not @tenant.ai_config.pseudonymise_names?
         assert_equal KEY, @tenant.ai_secrets.api_key
+      end
+
+      should "save a form from before the name switch went, ignoring the switch" do
+        patch tenant_ai_model_path, params: settings(pseudonymise_names: "0")
+
+        assert_redirected_to tenant_integration_path("ai-model")
+        assert_not_includes @tenant.reload.read_attribute_before_type_cast(:ai_config).to_s, "pseudonymise_names"
       end
 
       should "store a blank address and model as nothing, and trim what it keeps" do

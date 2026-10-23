@@ -17,11 +17,11 @@
 # probabilities over the candidate cells, read by {Evidence::PlacementDecision},
 # and writes no rationale.
 #
-# When the tenant keeps pseudonymisation on (the default), every person's name
-# is swapped for a placeholder on the way out and swapped back in the rationales
-# that come in. See {Ai::NamePseudonymiser}. The framework text gets full names
-# only: it is about the framework, not a person, and a first name that is an
-# ordinary word (Will, Mark) would only damage it.
+# Every name of a person the workspace knows is swapped for a placeholder on
+# the way out and swapped back in the rationales that come in. See
+# {Ai::NamePseudonymiser}. The framework text gets full names only: it is
+# about the framework, not a person, and a first name that is an ordinary word
+# (Will, Mark) would only damage it.
 class Evidence::SuggestionModel
   MAX_SUGGESTIONS = 3
 
@@ -87,8 +87,8 @@ class Evidence::SuggestionModel
 
   def chat(prompt, names)
     response = adapter.suggest(
-      system: names ? names.pseudonymise(prompt.framework_text, first_names: false) : prompt.framework_text,
-      user: names ? names.pseudonymise(prompt.item_text) : prompt.item_text,
+      system: names.pseudonymise(prompt.framework_text, first_names: false),
+      user: names.pseudonymise(prompt.item_text),
       schema: prompt.schema
     )
     proposals = response.suggestions.map { |raw| proposal(raw, names) }.select(&:rationale).first(MAX_SUGGESTIONS)
@@ -111,7 +111,7 @@ class Evidence::SuggestionModel
   end
 
   def pseudonymiser
-    Ai::NamePseudonymiser.for(tenant) if tenant.effective_ai_config.pseudonymise_names?
+    Ai::NamePseudonymiser.for(tenant)
   end
 
   def log(response, count, refused: false)
@@ -128,7 +128,7 @@ class Evidence::SuggestionModel
       level_ordinal: raw["level_ordinal"].to_i,
       valence: raw["valence"].to_s,
       confidence: raw["confidence"].to_f.clamp(0.0, 1.0),
-      rationale: names && rationale ? names.restore(rationale) : rationale
+      rationale: rationale && names.restore(rationale)
     )
   end
 end

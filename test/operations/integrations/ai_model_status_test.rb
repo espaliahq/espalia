@@ -29,7 +29,7 @@ class Operations::Integrations::AiModelStatusTest < ActiveSupport::TestCase
     assert_not result[:configured]
     assert_not result[:api_key_present]
     assert_not result[:suggestions_enabled]
-    assert result[:pseudonymise_names]
+    assert_not result.key?(:pseudonymise_names), "names are always replaced; there is no switch to report"
     assert_equal "claude-opus-5-5", result[:model]
   end
 
