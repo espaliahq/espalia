@@ -317,7 +317,7 @@ The sidebar holds **Design Tokens** (colour roles, brand tokens, the contrast he
 ## Checking your work
 
 1. **Lookbook**, every theme and scheme, for the component on its own.
-2. **The app**, with the dev-only switch: `?theme=bento` and `?scheme=dark` (or `light`) on any URL. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`.
+2. **The app**, with the dev-only switch: `?theme=bento` and `?scheme=dark` (or `light`) on any URL. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`. `?theme=default` clears the switch rather than forcing Default, so a tenant set to Custom still shows Custom; to see Default there, switch that tenant on its Theme page, and switch it back afterwards.
 3. **The stress tenant**, for long text, volume, every state and empty state, and hard brand colours (a yellow brand and a lime navbar). Seed it with `bin/rails dev:seed:stress`, then sign in as `admin@stress-test-co.example.com` / `password123`.
 4. **Contrast:** text 4.5:1 and focus rings 3:1, on the surface the element actually sits on, in both schemes. The Lookbook pages above measure for you; for anything else, measure in the browser rather than trusting the value.
 5. **The visual pass** in a real browser, which every front-end change needs ([chrome-mcp.md](chrome-mcp.md)).

@@ -280,6 +280,10 @@ lives: it runs only in your turn, never in CI. So:
   MCP" never discharges the obligation to write/maintain the system test, and a
   green system test never discharges the obligation to lay eyes on the change
   before marking it done. A front-end change needs both.
+- **When you can't run the pass** (no server allowed, the browser won't connect), the change
+  isn't done. Run what still runs (`bin/rubocop`, the guard tests, a component render), then
+  hand off with the pass listed as owed, naming the screens, themes and viewports to check.
+  Never report a front-end change as verified on tests alone.
 
 ## UX quality skill (`/ux-quality`)
 
@@ -292,11 +296,25 @@ whole surface, not per-change verification). The skill is host-agnostic and
 resolves this repo via its discovery contract — answers live here, not in the
 skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
 
-- **Design system**: Phlex Kit components (`app/components/kit/`) +
-  [phlex-views.md](phlex-views.md) and
-  [tailwindcss.md](tailwindcss.md).
+- **Design system**: the Kit, Shared and Shell layers in `app/components/`, colour roles in
+  `app/assets/tailwind/theme/`, and the rules in [phlex-views.md](phlex-views.md),
+  [theming.md](theming.md) and [tailwindcss.md](tailwindcss.md).
+- **Component catalogue**: [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component)
+  maps a job to a component; [`app/components/README.md`](../../app/components/README.md) shows
+  each one in use; Lookbook (`/lookbook`) renders every state.
+- **Conformance checks**: `bin/rubocop` (`GrowthOs/UseKitButton`, `GrowthOs/UseKitField`) and the
+  guard tests in [theming.md → The guard tests](theming.md#the-guard-tests). Run both on the files
+  you change; a line marked `# rubocop:todo` is debt, never a model to copy.
+- **Theme matrix**: Default, Bento and Custom, each in light and dark, plus the stress tenant
+  ([theming.md → Checking your work](theming.md#checking-your-work)).
+- **Stricter house rules**: key actions on touch screens aim for 44px, above AA's 24px, and design
+  direction can override it ([phlex-views.md → Touch targets](phlex-views.md#touch-targets)).
+  Report a miss as a house-rule finding, not a WCAG failure.
+- **Voice and vocabulary**: the text rules in the root `AGENTS.md`, and
+  [the glossary](../02-glossary.md) for the product's names.
 - **App URL / login / seeded-data control**: *Reaching the app*
-  (`http://rails-app:6600` in the devcontainer, `http://localhost:6600` in a\n  Claude Code cloud session), *Signing in* (the Rails-credentials admin) and the
+  (`http://rails-app:6600` in the devcontainer, `http://localhost:6600` in a
+  Claude Code cloud session), *Signing in* (the Rails-credentials admin) and the
   seeded-tenant caveat under *Gotchas learned*, above.
 - **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
   — use it, not the skill's bundled dormant `ux-driver`.
