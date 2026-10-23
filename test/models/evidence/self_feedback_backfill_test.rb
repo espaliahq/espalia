@@ -35,6 +35,16 @@ class Evidence::SelfFeedbackBackfillTest < ActiveJob::TestCase
     end
   end
 
+  should "leave out self feedback an HRIS sync or a system job wrote" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @plain.update_columns(recorded_via: "hris")
+      @superseded.update_columns(recorded_via: "web")
+    end
+    configured do
+      assert_equal({ @tenant => [ @superseded.id ] }, Evidence::SelfFeedbackBackfill.new.candidates)
+    end
+  end
+
   should "leave out a workspace with suggestions off, or with no model" do
     other = create(:tenant, ai_config: AiModelConfig.new(suggestions_enabled: false))
     configured do

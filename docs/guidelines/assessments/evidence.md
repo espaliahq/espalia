@@ -313,7 +313,8 @@ Rules, all deliberate:
   suggestions when it is next edited. `bin/rails
   evidence:suggestions:backfill_self` (`Evidence::SelfFeedbackBackfill`)
   covers the rest when an admin chooses to: active, placed self feedback
-  with no pending or decided suggestion, in workspaces with suggestions on
+  that no HRIS sync or system job wrote, with no pending or decided
+  suggestion, in workspaces with suggestions on
   and a model configured. Without `CONFIRM=1` it only prints the count per
   workspace. With it, it schedules one job per item, `PER_MINUTE` (default
   20) a minute, and each claims the item's run through
