@@ -70,9 +70,17 @@ module LayoutHelpers
           if (x >= t.left && x <= t.right && y >= t.top && y <= t.bottom) continue;
           // Only a tap that would have reached el: a point a scrim or a
           // scroll container's clip already hides is nobody's to steal.
-          thief.setAttribute("data-probe-off", "");
-          const beneath = document.elementFromPoint(x, y);
-          thief.removeAttribute("data-probe-off");
+          // Hit areas can stack, so switch each one off until the point
+          // lands on something that isn't one.
+          const switchedOff = [];
+          let beneath;
+          for (let next = thief; next && !switchedOff.includes(next); next = beneath?.closest(HIT)) {
+            next.setAttribute("data-probe-off", "");
+            switchedOff.push(next);
+            beneath = document.elementFromPoint(x, y);
+            if (!beneath || beneath === el || el.contains(beneath)) break;
+          }
+          switchedOff.forEach((area) => area.removeAttribute("data-probe-off"));
           if (beneath && (beneath === el || el.contains(beneath))) stolen.add(`${name(el)} <- ${name(thief)}`);
         }
       }
