@@ -51,9 +51,12 @@ class Evidence::SuggestionModelTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant, :with_ai_model)
+    # Placeholders follow id order, and two v7 ids minted in one millisecond
+    # can sort either way.
+    alex_id, anna_id = Array.new(2) { SecureRandom.uuid_v7 }.sort
     ActsAsTenant.with_tenant(@tenant) do
-      create(:person, tenant: @tenant, name: "Alex Chen")
-      create(:person, tenant: @tenant, name: "Anna Reid")
+      create(:person, tenant: @tenant, name: "Alex Chen", id: alex_id)
+      create(:person, tenant: @tenant, name: "Anna Reid", id: anna_id)
     end
   end
 
