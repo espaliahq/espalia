@@ -52,7 +52,7 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | Term and detail pairs | `Kit::DescriptionList.new(items:, columns:)` |
 | A term whose definition shows on hover and focus | `Kit::DefinitionTip.new(term, definition:, id:)` |
 | Text a person wrote: feedback, a comment, a note | `Kit::Prose.new(text)`; `Kit::Prose.to_plain(text)` for an excerpt |
-| An icon | `icon(:pencil, class: "size-4")`, drawn from `Kit::IconSprite`; add a missing glyph there |
+| A glyph inside text or a control | `icon(:pencil, class: "size-4")`, drawn from `Kit::IconSprite`; add a missing glyph there |
 
 Examples of each are in [`app/components/README.md`](../../app/components/README.md). A button's variant is its form and its tone its meaning, so pick both by the job:
 
