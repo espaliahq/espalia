@@ -137,8 +137,8 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
         }
       ) { "" }
       div(class: "mt-1 flex items-center gap-2") do
-        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Reply" }
-        render Components::Kit::Button.new(variant: :ghost, size: :xs,
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Reply" }
+        render Components::Kit::Button.new(variant: :ghost, size: :xs, compact: true,
                                            data: { action: "click->comments-thread#cancelReply" }) { "Cancel" }
       end
     end
@@ -166,8 +166,8 @@ class Views::Frameworks::Suggestions::CommentCard < Views::Base
         data: { action: "keydown->comments-thread#submitOnModEnter" }
       ) { @comment.body }
       div(class: "mt-1 flex items-center gap-2") do
-        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Save" }
-        render Components::Kit::Button.new(variant: :ghost, size: :xs,
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Save" }
+        render Components::Kit::Button.new(variant: :ghost, size: :xs, compact: true,
                                            data: { action: "click->comments-thread#cancelEdit" }) { "Cancel" }
       end
     end

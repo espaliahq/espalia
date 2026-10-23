@@ -54,9 +54,11 @@ module LayoutHelpers
       for (const el of controls) {
         const r = el.getBoundingClientRect();
         if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight) continue;
-        const points = [[r.left + 1, r.top + 1], [r.right - 1, r.top + 1], [r.left + 1, r.bottom - 1], [r.right - 1, r.bottom - 1],
-                        [r.left + r.width / 2, r.top + 1], [r.left + r.width / 2, r.bottom - 1],
-                        [r.left + 1, r.top + r.height / 2], [r.right - 1, r.top + r.height / 2]];
+        // Every 6px along each edge, inset past a rounded corner, which
+        // elementFromPoint treats as outside the element.
+        const points = [];
+        for (let x = r.left + 3; x <= r.right - 3; x += 6) points.push([x, r.top + 2], [x, r.bottom - 2]);
+        for (let y = r.top + 3; y <= r.bottom - 3; y += 6) points.push([r.left + 2, y], [r.right - 2, y]);
         for (const [x, y] of points) {
           if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
           const thief = document.elementFromPoint(x, y)?.closest(HIT);

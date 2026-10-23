@@ -236,7 +236,7 @@ class Views::Assessments::Evidence::LinkThreadFrame < Views::Base
         span(id: composer_hint_id, class: "text-[10px] text-muted") do
           plain "#{Prose::COMPOSER_HINT} · ⌘/Ctrl+Enter to post"
         end
-        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Post" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Post" }
       end
     end
   end

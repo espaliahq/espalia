@@ -1109,6 +1109,18 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    # Post sits 4px under the comment box, so its hit area took clicks on
+    # the box's bottom edge and posted the comment.
+    should "give the comment box's edge to the comment box" do
+      visit assessment_path(@assignment)
+      assert_text "Synthesises information from multiple sources"
+      wait_for_stimulus "comments-thread"
+      page.execute_script("document.querySelector(\"button[aria-label='Add a comment']\").click()")
+      assert_selector "textarea[name='comment[body]']", visible: true
+
+      assert_no_stolen_taps
+    end
+
     should "contain capability cards within the viewport on narrow screens with many levels" do
       # Frameworks with many levels (E1-E8) produce a chip strip far
       # wider than mobile viewports — the card must contain that strip

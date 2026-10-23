@@ -137,7 +137,7 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
       ) { "" }
       div(class: "mt-1 flex items-center justify-between gap-2") do
         span(id: composer_hint_id, class: "text-[10px] text-muted") { Prose::COMPOSER_HINT }
-        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Comment" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Comment" }
       end
     end
   end
