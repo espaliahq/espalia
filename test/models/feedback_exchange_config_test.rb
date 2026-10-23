@@ -6,11 +6,11 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
   context "defaults" do
     subject { FeedbackExchangeConfig.new }
 
-    should "be off, with the standard export kinds and everything imported" do
+    should "be off, sending and importing every type" do
       assert_equal "exchange", subject.provider
       assert_not subject.enabled?
-      assert_empty subject.import_kinds
-      assert_equal %w[peer_feedback manager_feedback observation impact], subject.export_kinds
+      assert_equal %w[all], subject.import_kinds
+      assert_equal %w[all], subject.export_kinds
     end
   end
 
@@ -106,9 +106,54 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       end
     end
 
-    should "have defaults that are all evidence types" do
+    should "accept all in either list" do
       assert FeedbackExchangeConfig.new.valid?
-      assert_empty FeedbackExchangeConfig::DEFAULT_EXPORT_KINDS - EvidenceItem::EVIDENCE_TYPES
+      assert FeedbackExchangeConfig.new(import_kinds: %w[all], export_kinds: %w[all]).valid?
+    end
+  end
+
+  context "resolving the types" do
+    should "store all as all, and resolve it to every evidence type only when read" do
+      tenant = create(:tenant, feedback_exchange_config: FeedbackExchangeConfig.new(export_kinds: %w[all]))
+      stored = tenant.reload.read_attribute_before_type_cast(:feedback_exchange_config)
+
+      assert_equal %w[all], JSON.parse(stored)["export_kinds"]
+      assert tenant.feedback_exchange_config.exports_all_kinds?
+      assert_equal EvidenceItem::EVIDENCE_TYPES, tenant.feedback_exchange_config.exported_kinds
+    end
+
+    should "send exactly the listed types, and none for an empty list" do
+      assert_not FeedbackExchangeConfig.new(export_kinds: %w[impact]).exports_all_kinds?
+      assert_equal %w[impact], FeedbackExchangeConfig.new(export_kinds: %w[impact]).exported_kinds
+      assert_empty FeedbackExchangeConfig.new(export_kinds: []).exported_kinds
+    end
+
+    should "keep only all when types are listed beside it, however it is written" do
+      config = FeedbackExchangeConfig.new(export_kinds: %w[impact all], import_kinds: [ "impact", :all ])
+      loaded = FeedbackExchangeConfig.to_type.cast_value({ "export_kinds" => %w[all observation] })
+      tenant = create(:tenant)
+      tenant.update_feedback_exchange!(settings: { import_kinds: %w[peer_feedback all] })
+
+      assert_equal [ %w[all] ] * 2, [ config.export_kinds, config.import_kinds ]
+      assert_equal %w[all], loaded.export_kinds
+      assert_equal %w[all], tenant.reload.feedback_exchange_config.import_kinds
+      assert config.imports_kind?("observation")
+    end
+
+    should "import any kind when all, even one GrowthOS does not know" do
+      config = FeedbackExchangeConfig.new(import_kinds: %w[all])
+
+      assert config.imports_kind?("feedback")
+      assert config.imports_kind?("shout_out")
+    end
+
+    should "import exactly the listed kinds, and nothing for an empty list" do
+      config = FeedbackExchangeConfig.new(import_kinds: %w[peer_feedback])
+
+      assert config.imports_kind?("peer_feedback")
+      assert config.imports_kind?(:peer_feedback)
+      assert_not config.imports_kind?("feedback")
+      assert_not FeedbackExchangeConfig.new(import_kinds: []).imports_kind?("peer_feedback")
     end
   end
 

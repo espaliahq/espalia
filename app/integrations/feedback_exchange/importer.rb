@@ -215,7 +215,7 @@ class FeedbackExchange::Importer
   def assess(record)
     return [ "echo" ] if echo?(record)
     return [ "audience_too_narrow" ] if narrower_than_visibility?(record)
-    return [ "kind_not_imported" ] unless kind_imported?(record["kind"])
+    return [ "kind_not_imported" ] unless @config.imports_kind?(record["kind"])
 
     author = @matcher.match(record["author"])
     return [ "author_unmatched" ] if author.nil?
@@ -256,11 +256,6 @@ class FeedbackExchange::Importer
 
   def echo?(record)
     record["origin"] == SELF || record.dig("external_reference", "system") == SELF
-  end
-
-  def kind_imported?(kind)
-    kinds = Array(@config.import_kinds).compact_blank
-    kinds.empty? || kinds.include?(kind.to_s)
   end
 
   def record!(record, author, recipient, assignment)
