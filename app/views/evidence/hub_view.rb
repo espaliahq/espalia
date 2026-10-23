@@ -10,6 +10,11 @@ class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
   include Views::Evidence::Valence
 
+  # "May fit elsewhere too" sits above the open requests; once self feedback
+  # carries suggestions it can hold dozens of items, so it shows the most
+  # recent few unless the URL asks for all (?elsewhere=all).
+  ELSEWHERE_LIMIT = 5
+
   STATUS_VARIANT = {
     "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
   }.freeze
@@ -26,7 +31,13 @@ class Views::Evidence::HubView < Views::Base
   # @param with_suggestions [Array<EvidenceItem>] placed items about the viewer
   #   or their reports with pending placement suggestions. The viewer's own
   #   self feedback may also be listed under "Feedback you've provided", whose
-  #   card then leaves the suggestions to this list.
+  #   card then leaves the suggestions to this list. At most the controller's
+  #   limit unless `elsewhere_all`.
+  # @param elsewhere_ids [Set<String>] every item "May fit elsewhere too" has,
+  #   shown or not; its count goes on "Show all"
+  # @param elsewhere_all [Boolean] whether the URL asked for every item
+  # @param hub_params [Hash] the hub's query params, for links that change one
+  #   part of the view and keep the rest
   # @param suggestions [Hash{String=>Hash}] item id => { suggestions:, cells: }
   #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
   # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
@@ -40,7 +51,7 @@ class Views::Evidence::HubView < Views::Base
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
                  in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [],
                  with_suggestions: [], suggestions: {}, decidable_ids: Set.new, can_regenerate: false,
-                 viewer_person_id: nil)
+                 elsewhere_ids: nil, elsewhere_all: false, hub_params: {}, viewer_person_id: nil)
     @open_incoming = open_incoming
     @open_outgoing = open_outgoing
     @completed_incoming = completed_incoming
@@ -60,7 +71,9 @@ class Views::Evidence::HubView < Views::Base
     @current_tenant = current_tenant
     @tenants = tenants
     @with_suggestions = with_suggestions
-    @with_suggestion_ids = with_suggestions.to_set(&:id)
+    @with_suggestion_ids = elsewhere_ids || with_suggestions.to_set(&:id)
+    @elsewhere_all = elsewhere_all
+    @hub_params = hub_params
     @suggestions = suggestions
     @decidable_ids = decidable_ids
     @can_regenerate = can_regenerate
@@ -168,7 +181,7 @@ class Views::Evidence::HubView < Views::Base
 
   def place_link(label, count, place:)
     active = (@place_scope == "org") == (place == "org")
-    a(href: evidence_hub_path(place: place, anchor: "feedback-to-place"),
+    a(href: evidence_hub_path(**@hub_params.except(:place), place: place, anchor: "feedback-to-place"),
       aria: { current: active ? "page" : nil },
       class: [
         "inline-flex min-h-11 items-center rounded px-3 py-1 text-sm font-medium whitespace-nowrap",
@@ -219,6 +232,23 @@ class Views::Evidence::HubView < Views::Base
             suggestion_area(item)
           end
         end
+      end
+      elsewhere_toggle
+    end
+  end
+
+  # A plain link, so it works without JavaScript and the view stays in the URL.
+  def elsewhere_toggle
+    total = @with_suggestion_ids.size
+    return if total <= ELSEWHERE_LIMIT
+
+    showing_all = @elsewhere_all
+    params = showing_all ? @hub_params.except(:elsewhere) : @hub_params.merge(elsewhere: "all")
+    div(class: "mt-4 flex flex-wrap items-center gap-x-3 text-sm text-gray-600 dark:text-gray-300") do
+      span { "Showing #{@with_suggestions.size} of #{total}" } unless showing_all
+      a(href: evidence_hub_path(**params, anchor: "suggested-placements"), data: { testid: "elsewhere-toggle" },
+        class: "inline-flex items-center min-h-11 font-medium text-primary-ink hover:underline") do
+        showing_all ? "Show fewer" : "Show all (#{total})"
       end
     end
   end

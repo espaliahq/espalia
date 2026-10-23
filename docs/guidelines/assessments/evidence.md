@@ -485,7 +485,17 @@ Rules, all deliberate:
   listed there too, "From you", and its card under "Feedback you've
   provided" then leaves out the block and the anchor, which must be unique
   on the page. A manager sees a report's self feedback there like any other
-  item; a peer never does, as they see no one else's self feedback. Accept and Dismiss answer with a Turbo Stream that replaces
+  item; a peer never does, as they see no one else's self feedback.
+  The group sits above the open requests, and once self feedback carries
+  suggestions it can hold dozens of items, so it shows the five most recent
+  (`HubView::ELSEWHERE_LIMIT`) with "Showing 5 of N" and a plain "Show all
+  (N)" link to `?elsewhere=all`, which works without JavaScript; "Show
+  fewer" goes back. Both links keep the rest of the URL (`?place=org`) but
+  drop `give` and `draft`, which would reopen the modal. An item past the
+  cap waits for "Show all": its card under "Feedback you've provided" still
+  leaves its suggestions out. Accepting the last suggestion on a card leaves
+  the card with its status line until the next load, so nothing below it
+  moves up and no capped item slides in. Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an

@@ -38,7 +38,8 @@ class EvidenceHubController < ApplicationController
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
     suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
     listed_elsewhere = shown.reject { |item| item.source == "self" && item.author_id == current_person.id } + responded_items
-    with_suggestions = suggestions_live ? placed_with_suggestions(exclude: listed_elsewhere.map(&:id)) : []
+    all_with_suggestions = suggestions_live ? placed_with_suggestions(exclude: listed_elsewhere.map(&:id)) : []
+    with_suggestions = elsewhere_all? ? all_with_suggestions : all_with_suggestions.first(Views::Evidence::HubView::ELSEWHERE_LIMIT)
     decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
 
     all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
@@ -63,6 +64,9 @@ class EvidenceHubController < ApplicationController
       responses: responses,
       in_situ_paths: in_situ_paths_for(authored + responses.values.map { |r| r[:item] }),
       with_suggestions: with_suggestions,
+      elsewhere_ids: all_with_suggestions.to_set(&:id),
+      elsewhere_all: elsewhere_all?,
+      hub_params: hub_params,
       suggestions: Evidence::PlacementSuggestionRows.for(decidable),
       decidable_ids: decidable.to_set(&:id),
       can_regenerate: can_regenerate,
@@ -85,6 +89,14 @@ class EvidenceHubController < ApplicationController
     return @draft if defined?(@draft)
 
     @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
+  end
+
+  def elsewhere_all? = params[:elsewhere] == "all"
+
+  # The hub's view state, for links that change one part of it. The Slack
+  # draft and ?give=1 open the modal on arrival, so they are left behind.
+  def hub_params
+    request.query_parameters.except("give", "draft").symbolize_keys
   end
 
   # "My team" unless the URL asks for the whole org.

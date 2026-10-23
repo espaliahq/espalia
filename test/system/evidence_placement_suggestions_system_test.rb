@@ -124,6 +124,44 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "cap May fit elsewhere too at five, reveal the rest and accept one in place, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      items = (1..7).map do |n|
+        item = travel_to(n.hours.ago) { record_self_feedback(content: "Self example #{n}: led the rollout review.") }
+        ActsAsTenant.with_tenant(@tenant) do
+          create(:evidence_placement_suggestion, tenant: @tenant, item: item, capability_stable_id: @ownership.stable_id,
+            level_ordinal: 3, valence: "demonstrated", confidence: 0.7)
+        end
+        item
+      end
+      oldest = items.last
+      revealed = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find_by!(evidence_id: oldest.id) }
+      cards = "#suggested-placements [id^='evidence-item-']"
+
+      open_hub
+      assert_selector cards, count: 5
+      assert_no_selector "##{EvidenceItem.dom_id(oldest.id)}"
+      assert_selector "#suggested-placements", text: "Showing 5 of 7"
+      assert_no_sideways_overflow("the capped section must fit the #{name} viewport")
+      screenshot("#{name}_may_fit_elsewhere_capped")
+
+      click_selector_with_js_fallback("a[data-testid='elsewhere-toggle']", expect_text: "Show fewer")
+      assert_selector cards, count: 7
+      assert_current_path evidence_hub_path(elsewhere: "all")
+      page.execute_script("window.__hubNotReloaded = true")
+
+      click_selector_with_js_fallback("#{row(revealed)} form[action$='/accept'] button",
+                                      expect_text: "Placed on Ownership · E3 as Demonstrates.")
+      assert_no_selector row(revealed)
+      assert_selector cards, count: 7
+      assert page.evaluate_script("window.__hubNotReloaded"), "deciding a suggestion must not reload the hub"
+      assert_no_sideways_overflow("the expanded section must fit the #{name} viewport")
+      screenshot("#{name}_may_fit_elsewhere_all_after_accept")
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "accepted", revealed.reload.status }
+    end
+  end
+
   should "stage the suggestions in the editor and keep the ones left" do
     open_hub
     click_button_with_js_fallback("Adjust in the editor", expect_text: "Edit feedback / evidence")
