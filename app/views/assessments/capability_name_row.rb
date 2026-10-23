@@ -80,7 +80,7 @@ class Views::Assessments::CapabilityNameRow < Views::Base
   end
 
   def to_confirm_chip
-    render Components::Kit::ToConfirmChip.new(
+    render Components::Shared::ToConfirmChip.new(
       "To confirm", compact: true,
       title: "Carried from the last cycle — pick the same value to confirm it, or change it"
     )

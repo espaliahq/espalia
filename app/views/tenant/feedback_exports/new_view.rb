@@ -28,7 +28,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
   end
 
   def view_template
-    render Components::Kit::TenantAdminLayout.new(
+    render Components::Shell::TenantAdminLayout.new(
       active_section: :feedback_export,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
@@ -62,7 +62,7 @@ class Views::Tenant::FeedbackExports::NewView < Views::Base
               end
             end
           end
-          button(type: "submit", class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Choose cycle" }
+          button(type: "submit", class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Choose cycle" }
         end
       end
     end

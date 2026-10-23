@@ -88,7 +88,7 @@ class Views::Assessments::FrequencyPill < Views::Base
   # (submit-fallback controller, audit issue #316). Positioned below the
   # pill; empty and hidden until a failure injects the message.
   def transport_error_region
-    render Components::Kit::SubmitFallbackMessage.new(
+    render Components::Shared::SubmitFallbackMessage.new(
       classes: "absolute left-0 top-full mt-1 z-20 w-max max-w-64"
     )
   end

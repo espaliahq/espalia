@@ -2,26 +2,21 @@
 
 require "test_helper"
 
-# Every Kit component has a Lookbook preview. Checks files only: Lookbook
-# isn't loaded in the test environment.
+# Every Kit and Shared component has a Lookbook preview; previewing the Shell
+# stays optional. Checks files only: Lookbook isn't loaded in the test environment.
 class KitPreviewsTest < ActiveSupport::TestCase
-  KIT_DIR = Rails.root.join("app/components/kit")
-  PREVIEW_DIR = Rails.root.join("test/components/previews/kit")
+  LAYERS = %w[kit shared].freeze
 
-  # The app shell, deferred until it can be previewed outside a signed-in page.
-  SKIPPED = %w[navbar user_menu page_layout tenant_admin_layout impersonation_banner].freeze
-
-  def component_names
-    Dir[KIT_DIR.join("*.rb")].map { |path| File.basename(path, ".rb") }
+  def missing_previews(layer)
+    Dir[Rails.root.join("app/components/#{layer}/*.rb")]
+      .map { |path| File.basename(path, ".rb") }
+      .reject { |name| Rails.root.join("test/components/previews/#{layer}/#{name}_preview.rb").exist? }
   end
 
-  should "have a preview for every Kit component" do
-    missing = (component_names - SKIPPED).reject { |name| PREVIEW_DIR.join("#{name}_preview.rb").exist? }
-    assert_empty missing, "Add a preview at test/components/previews/kit/<name>_preview.rb for:\n#{missing.sort.join("\n")}"
-  end
-
-  should "only skip components that still exist" do
-    stale = SKIPPED - component_names
-    assert_empty stale, "Remove from KitPreviewsTest::SKIPPED, the component is gone:\n#{stale.join("\n")}"
+  LAYERS.each do |layer|
+    should "have a preview for every #{layer.capitalize} component" do
+      missing = missing_previews(layer)
+      assert_empty missing, "Add a preview at test/components/previews/#{layer}/<name>_preview.rb for:\n#{missing.sort.join("\n")}"
+    end
   end
 end

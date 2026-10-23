@@ -9,7 +9,7 @@
 #   icon("kebab", class: "w-4 h-4")
 #
 # Included in Components::Base, so every view and component has it. The sprite
-# itself is rendered once per page by {Components::Kit::PageLayout} — a call
+# itself is rendered once per page by {Components::Shell::PageLayout} — a call
 # site outside that layout (a bare mailer view, say) must render the sprite
 # itself or keep its inline `<svg>`.
 module Components::Helpers::IconHelpers

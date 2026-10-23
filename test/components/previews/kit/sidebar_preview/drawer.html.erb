@@ -1,9 +1,0 @@
-<%# The drawer is display:none until the sidebar controller opens it, and md:hidden keeps it hidden from 768px up. %>
-<div data-controller="sidebar">
-  <p class="mb-3 text-sm text-gray-600 dark:text-gray-300">Narrow the preview below 768px, then open the drawer.</p>
-  <button type="button" data-action="sidebar#toggle"
-          class="inline-flex items-center min-h-11 px-3 rounded-md text-sm font-medium bg-gray-900 text-white">
-    Toggle navigation
-  </button>
-  <%= render Components::Kit::Sidebar.new(links: links) %>
-</div>

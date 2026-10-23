@@ -246,7 +246,7 @@ Rules baked into the implementation:
 | `app/controllers/concerns/impersonatable.rb` | Impersonation session: context override, read-only guard, expiry, re-auth |
 | `app/policies/impersonation_policy.rb` | `create?` — who a tenant admin may "view as" |
 | `app/controllers/impersonations_controller.rb` | Start (`create`) / stop (`destroy`) impersonation |
-| `app/components/kit/impersonation_banner.rb` | Sticky read-only banner shown while impersonating |
+| `app/components/shell/impersonation_banner.rb` | Sticky read-only banner shown while impersonating |
 
 ## Anti-patterns
 

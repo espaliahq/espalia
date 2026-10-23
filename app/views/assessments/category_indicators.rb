@@ -94,7 +94,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
     return unless count.positive?
 
     a(href: @confirm_href, data: { turbo_frame: "_top" },
-      class: "#{Components::Kit::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
+      class: "#{Components::Shared::ToConfirmChip::COMPACT_CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950") do
       plain "Confirm #{count} carried"
       span(aria: { hidden: "true" }) { "→" }
     end

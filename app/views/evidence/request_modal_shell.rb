@@ -36,12 +36,12 @@ class Views::Evidence::RequestModalShell < Views::Base
                           "turbo:submit-start->submit-fallback#submitStart " \
                           "turbo:submit-end->submit-fallback#submitEnd " \
                           "modal:open@window->submit-fallback#submitStart" }) do
-        render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
+        render Components::Shared::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-request-modal", loading: "lazy",
                         data: { request_evidence_target: "frame", frame_error_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
         end
-        render Components::Kit::FrameLoadError.new(
+        render Components::Shared::FrameLoadError.new(
           id: "evidence-request-modal-error", subject: "the request form", closeable: true
         )
       end

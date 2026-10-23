@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Tenant administration dashboard: tiles linking to the admin sections.
-# Sidebar navigation lives in {Components::Kit::TenantAdminLayout}.
+# Sidebar navigation lives in {Components::Shell::TenantAdminLayout}.
 #
 class Views::Tenant::Dashboard::ShowView < Views::Base
   include Phlex::Rails::Helpers::Routes
@@ -42,7 +42,7 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::TenantAdminLayout.new(
+    render Components::Shell::TenantAdminLayout.new(
       active_section: :dashboard,
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do

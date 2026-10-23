@@ -44,7 +44,7 @@ class Views::Frameworks::Explorer::FieldEditorTemplate < Views::Base
         # no server-rendered message to show — the controller fills this in.
         div(
           role: "alert", hidden: true,
-          class: "mb-1 #{Components::Kit::SubmitFallbackMessage::PANEL_CLASSES}",
+          class: "mb-1 #{Components::Shared::SubmitFallbackMessage::PANEL_CLASSES}",
           data: { editor_error_live: true }
         ) { }
 

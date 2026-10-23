@@ -768,7 +768,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/views/mcp/approvals/show_view.rb` | Phlex view for the approval page |
 | **User-facing settings** | |
 | `app/controllers/settings/connected_clients_controller.rb` | "AI assistants" page — connect instructions + list/revoke connected clients |
-| `app/views/settings/connected_clients/index_view.rb` | Connect steps (Claude Code / Claude.ai & Desktop / ChatGPT / Codex) with copy-to-clipboard + connected-token table. Linked from the user dropdown (`Kit::UserMenu`). |
+| `app/views/settings/connected_clients/index_view.rb` | Connect steps (Claude Code / Claude.ai & Desktop / ChatGPT / Codex) with copy-to-clipboard + connected-token table. Linked from the user dropdown (`Shell::UserMenu`). |
 | `app/javascript/controllers/clipboard_controller.js` | Copy-to-clipboard for the server URL / CLI commands on the setup page |
 | **OAuth + Doorkeeper subclassing** | |
 | `app/controllers/oauth/authorizations_controller.rb` | Custom consent screen with tenant picker |

@@ -65,7 +65,7 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
+    render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
       div(data: { controller: "modal evidence-modal evidence-hub", evidence_hub_auto_open_value: @open_give_step.to_s,
                   action: "keydown.esc@window->modal#escape" }) do
         div(class: "max-w-3xl mx-auto space-y-10") do

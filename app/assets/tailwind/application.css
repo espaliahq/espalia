@@ -838,7 +838,7 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
 }
 
 /* The neutral secondary button and the red inline-error panel. Named here
- * because `Kit::FrameLoadError` ships one of each into EVERY expanded-row
+ * because `Shared::FrameLoadError` ships one of each into EVERY expanded-row
  * placeholder — ~11 KB of repeated utility text in one matrix frame. Their
  * Ruby constants now carry these names, so every other caller follows. */
 .kit-btn-secondary {

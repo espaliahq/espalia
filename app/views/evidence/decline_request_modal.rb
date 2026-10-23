@@ -38,7 +38,7 @@ class Views::Evidence::DeclineRequestModal < Views::Base
         p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { "#{@request.requester&.name || "The requester"} will see your reason." }
       end
       div(class: "flex items-center justify-end gap-2") do
-        button(type: "button", data: { action: "modal#close" }, class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Cancel" }
+        button(type: "button", data: { action: "modal#close" }, class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Cancel" }
         f.submit("Decline request",
                  class: "inline-flex items-center justify-center min-h-11 px-4 rounded-md bg-primary text-white " \
                         "text-sm font-medium hover:opacity-90 cursor-pointer")

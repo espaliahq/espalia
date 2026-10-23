@@ -13,8 +13,20 @@
 
 ## Naming Conventions
 
-- Components: `Kit::ComponentName` → `app/components/kit/component_name.rb`
+- Components: `Components::<Layer>::ComponentName` → `app/components/<layer>/component_name.rb`
 - Page views: `Views::Resource::ActionView` → `app/views/resource/action_view.rb`
+
+## Component layers
+
+`app/components/` holds three layers, each a namespace and a Lookbook group:
+
+| Layer | Holds | Put a new component here when |
+|---|---|---|
+| `Components::Kit` | Generic primitives: Badge, Card, Modal, Dropdown, DefinitionTip, DescriptionList, Prose, SectionHeading, IconSprite | it's named for what it is and knows nothing about the product |
+| `Components::Shared` | Small compositions with one job, built only from Kit: ToConfirmChip, FrameLoadError, SubmitFallbackMessage | it does one product job and several views need it |
+| `Components::Shell` | The app's layout chrome: Navbar, PageLayout, Sidebar, UserMenu, TenantAdminLayout, ImpersonationBanner | it frames every page |
+
+Anything used by one screen stays with that screen's views, not here.
 
 ## Page View Pattern
 
@@ -93,13 +105,13 @@ end
 
 [Lookbook](https://lookbook.build) shows Kit components on their own, outside any page, at **`/lookbook`** in development. Use it to build or restyle a component, state by state, before wiring it into a view.
 
-- **One preview class per component**, in `test/components/previews/kit/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
+- **One preview class per component**, in `test/components/previews/<layer>/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
 - **A `playground` scenario with `# @param` tags** gives live controls (text fields, selects) in the Lookbook UI.
 - **Previews render in `layouts/component_preview.html.erb`**: the app's stylesheets, import map and icon sprite on the page surface, so Tailwind, the colour roles and Stimulus behave as they do in the app. There's no tenant, so no tenant theme and no `PageLayout`. The toolbar's gear icon switches **Theme** and **Scheme** for every preview.
 - **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
 
-- **What's there:** **Design Tokens** (the colour roles, read from `theme/roles.css`, and the brand tokens, read from `application.css`, so a new one appears on its own, each with its measured contrast; a proof of the contrast helper; the Tailwind palette and the type scale), then every Kit component and an **Icons** gallery. The app-shell components (Navbar, UserMenu, PageLayout, TenantAdminLayout, ImpersonationBanner) aren't previewed yet.
-- **Every Kit component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing; skip a component there by name, with the reason.
+- **What's there:** **Design Tokens** (the colour roles, read from `theme/roles.css`, and the brand tokens, read from `application.css`, so a new one appears on its own, each with its measured contrast; a proof of the contrast helper; the Tailwind palette and the type scale), then **Kit** (with an **Icons** gallery), **Shared** and **Shell**. Only the Sidebar is previewed from the Shell so far.
+- **Every Kit and Shared component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing. Previewing the Shell is optional.
 - **The sidebar sorts folders alphabetically** and its path is the URL, so moving a preview changes its link. `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
 - **A class that appears only in a preview is still built into the CSS.** Pass a component its real arguments; don't write its class names into the preview, or a class the component builds by interpolation will render in Lookbook and nowhere else.
 
@@ -302,7 +314,7 @@ A panel that holds readable content must be **opaque**. `dark:bg-gray-800/50` ov
 
 ### Touch targets — 2.5.5 (≥44×44 CSS px)
 
-Standalone interactive controls need a 44px hit area. Icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Kit::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
+Standalone interactive controls need a 44px hit area. `Kit::Button` gives every size one by default: an invisible `::after`, centred on the button, at least 44px square, so the visual keeps its size. The box is positioned, so it paints, and takes the tap, over any neighbour that isn't positioned itself, whatever the DOM order; between two buttons the later one wins. Pass `compact: true` where that box would cover a neighbour's face: a tight icon row, a toolbar that wraps, a Save or Post sitting under its textarea, a row of actions above another control, or a `variant: :link` button inside a sentence. Pass it too where a larger target already surrounds the button, for a button in a sticky header, whose box would spill over the content scrolling under it, and for a small button in the last row of an `overflow-x-auto` table: that container scrolls on both axes, so 2px of hit area below the last row adds a scrollbar. `Kit::Modal` pads its scroll box for the same reason, so a footer button needs nothing. To find these on a page, probe each control's edges with `document.elementFromPoint` and flag any point that lands on another button outside that button's own box. `touch: true` makes the visual itself 44px. An `<input type="submit">` can't carry a pseudo-element, so build an `f.submit`'s class with `Components::Kit::Button.classes(…, touch: true)`, which makes the input itself 44px; `touch: true` passed to the form builder only becomes an HTML attribute. Hand-rolled icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Shell::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
 
 ### Accessible names
 
@@ -324,7 +336,7 @@ A global `:focus-visible` ring lives in `app/assets/tailwind/application.css` (2
 
 ### Document structure (layout-level, but views rely on it)
 
-`<html lang>`, the skip-to-content link, and the `main#main-content` landmark live in the layout / `Kit::PageLayout`. New top-level page views render inside that `<main>` — don't introduce a second `<main>` or bury page content outside it.
+`<html lang>`, the skip-to-content link, and the `main#main-content` landmark live in the layout / `Shell::PageLayout`. New top-level page views render inside that `<main>` — don't introduce a second `<main>` or bury page content outside it.
 
 ## Turbo Frames
 
@@ -360,7 +372,7 @@ click path (see [testing.md](testing.md) and [chrome-mcp.md](chrome-mcp.md)).
 foster-parents a `<turbo-frame>` out of a `<tbody>`, and a frame inside a
 single spanning `<td>` can't produce per-column cells, so the explorer's
 on-demand expanded row is fetched by its Stimulus controller and swapped in
-as a `<tr>` parsed through a `<template>` — reusing `Kit::FrameLoadError`
+as a `<tr>` parsed through a `<template>` — reusing `Shared::FrameLoadError`
 (with `retry_action:`) for the failure state so the vocabulary stays one
 (see [framework-explorer.md](framework-explorer.md), Hard-Won Lesson 25).
 For the related rule that a frame's re-render response must carry the same

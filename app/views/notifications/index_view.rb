@@ -14,7 +14,7 @@ class Views::Notifications::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "max-w-2xl mx-auto") do

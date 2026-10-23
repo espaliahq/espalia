@@ -1,0 +1,11 @@
+<div id="<%= id %>" class="max-w-md">
+  <%= render Components::Shared::SubmitFallbackMessage.new(classes: classes) %>
+</div>
+<%# Does what the submit-fallback controller does after a failed save: the component renders empty and hidden. %>
+<script>
+  (() => {
+    const region = document.querySelector("#<%= id %> [role=alert]")
+    region.textContent = <%= raw message.to_json %>
+    region.hidden = false
+  })()
+</script>

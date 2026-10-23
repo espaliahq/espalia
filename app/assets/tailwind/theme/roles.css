@@ -29,6 +29,7 @@
   --gos-surface-inverse: var(--color-gray-900);
   --gos-surface-hover: var(--color-gray-50);
   --gos-surface-default-hover: var(--color-gray-100);
+  --gos-surface-field: #ffffff;
   --gos-scrim: color-mix(in oklab, black 50%, transparent);
 
   /* Borders and focus. The keyboard focus ring is neutral on every theme; a coloured surface
@@ -39,6 +40,7 @@
   --gos-border-emphasized: var(--color-gray-300);
   --gos-border-strong: var(--color-gray-900);
   --gos-border-disabled: var(--color-gray-200);
+  --gos-border-field: var(--color-gray-500);
 
   /* Neutral fills: chips, toggles, tracks, the pressed chip */
   --gos-neutral-subtle: var(--color-gray-100);
@@ -55,6 +57,7 @@
   --gos-danger-strong-hover: var(--color-red-700);
   --gos-danger-content-inverse: #ffffff;
   --gos-border-danger: var(--color-red-200);
+  --gos-border-danger-strong: var(--color-red-600);
 
   --gos-content-success: var(--color-green-700);
   --gos-success-subtle: var(--color-green-50);
@@ -100,6 +103,7 @@
     --gos-surface-inverse: #ffffff;
     --gos-surface-hover: var(--color-gray-800);
     --gos-surface-default-hover: var(--color-gray-700);
+    --gos-surface-field: var(--color-gray-900);
 
     --gos-border-default: var(--color-gray-700);
     --gos-border-subtle: var(--color-gray-800);
@@ -107,8 +111,8 @@
     --gos-border-strong: #ffffff;
     --gos-border-disabled: var(--color-gray-700);
 
-    --gos-neutral-subtle: var(--color-gray-800);
-    --gos-neutral-muted: var(--color-gray-700);
+    --gos-neutral-subtle: var(--color-gray-700);
+    --gos-neutral-muted: var(--color-gray-600);
     --gos-neutral-strong: #ffffff;
     --gos-neutral-strong-hover: var(--color-gray-200);
     --gos-neutral-content-inverse: var(--color-gray-900);
@@ -117,6 +121,7 @@
     --gos-danger-subtle: color-mix(in oklab, var(--color-red-900) 30%, var(--gos-surface-default));
     --gos-danger-muted: color-mix(in oklab, var(--color-red-900) 50%, var(--gos-surface-default));
     --gos-border-danger: var(--color-red-800);
+    --gos-border-danger-strong: var(--color-red-500);
 
     --gos-content-success: var(--color-green-300);
     --gos-success-subtle: color-mix(in oklab, var(--color-green-900) 30%, var(--gos-surface-default));
@@ -298,6 +303,7 @@
   --background-color-inverse: var(--gos-surface-inverse);
   --background-color-hover: var(--gos-surface-hover);
   --background-color-default-hover: var(--gos-surface-default-hover);
+  --background-color-field: var(--gos-surface-field);
   --background-color-scrim: var(--gos-scrim);
   --background-color-nav: var(--gos-nav-surface);
   --background-color-neutral-subtle: var(--gos-neutral-subtle);
@@ -338,9 +344,11 @@
   --border-color-emphasized: var(--gos-border-emphasized);
   --border-color-strong: var(--gos-border-strong);
   --border-color-disabled: var(--gos-border-disabled);
+  --border-color-field: var(--gos-border-field);
   --border-color-brand: var(--gos-border-brand);
   --border-color-accent: var(--gos-border-accent);
   --border-color-danger: var(--gos-border-danger);
+  --border-color-danger-strong: var(--gos-border-danger-strong);
   --border-color-success: var(--gos-border-success);
   --border-color-warning: var(--gos-border-warning);
   --border-color-info: var(--gos-border-info);

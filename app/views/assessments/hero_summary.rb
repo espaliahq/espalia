@@ -392,7 +392,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "#{carried_to_confirm.size} to confirm",
-      classes: "#{Components::Kit::ToConfirmChip::CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950"
+      classes: "#{Components::Shared::ToConfirmChip::CLASSES} min-h-6 gap-1 hover:bg-amber-50 dark:hover:bg-amber-950"
     )
   end
 

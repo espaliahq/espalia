@@ -1,0 +1,79 @@
+<%= render "design_tokens/contrast_script" %>
+<% button = Components::Kit::Button %>
+<section class="space-y-8" data-button-contrast>
+  <div>
+    <h2 class="text-lg font-semibold text-default">Button contrast</h2>
+    <p class="mt-1 text-sm text-muted">
+      Each swatch is a state's fill and text, read from the component's own classes and measured as painted.
+      Text needs 4.5:1. Disabled buttons are exempt.
+    </p>
+    <p class="mt-1 text-sm text-muted" data-scheme-readout></p>
+  </div>
+
+  <% [ [ "On a card", "bg-default border border-default rounded-2xl p-4" ], [ "On the page", "bg-page" ] ].each do |title, surface| %>
+    <div>
+      <h3 class="text-sm font-semibold text-default"><%= title %></h3>
+      <div class="mt-2 overflow-x-auto <%= surface %>" data-surface>
+        <table class="text-sm">
+          <thead>
+            <tr class="text-left text-xs text-muted">
+              <th class="py-2 pr-4 font-medium">Tone</th>
+              <% forms.each do |form| %>
+                <th class="py-2 pr-4 font-medium"><%= form.to_s.capitalize %></th>
+              <% end %>
+            </tr>
+          </thead>
+          <tbody>
+            <% tones.each do |tone| %>
+              <tr class="align-top">
+                <td class="py-2 pr-4 font-mono text-xs text-default"><%= tone %></td>
+                <% forms.each do |form| %>
+                  <td class="py-2 pr-4">
+                    <%= render button.new(variant: form, tone: tone, size: :sm) { tone.to_s.capitalize } %>
+                    <% states[[ form, tone ]].each do |state, colours| %>
+                      <span class="mt-1 flex items-center gap-2 font-mono text-xs">
+                        <span class="<%= button::TONES[tone] %> inline-flex h-6 w-10 items-center justify-center rounded-md border border-subtle font-sans font-medium"
+                              style="background-color: <%= colours[:fill] %>; color: <%= colours[:text] %>" data-swatch>Aa</span>
+                        <span class="text-muted"><%= state %></span>
+                        <span data-ratio>—</span>
+                      </span>
+                    <% end %>
+                  </td>
+                <% end %>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+</section>
+<script>
+  (() => {
+    const { pixel, ratio, formatRatio, dark } = window.tokenContrast
+    const section = document.querySelector("[data-button-contrast]")
+
+    // The nearest painted background, so a transparent swatch reads on the surface it sits on.
+    const backdrop = (element) => {
+      const chain = []
+      for (let node = element.parentElement; node; node = node.parentElement) chain.push(getComputedStyle(node).backgroundColor)
+      return chain.reverse().reduce((under, colour) => pixel(colour, under), [255, 255, 255])
+    }
+
+    const paint = () => {
+      section.querySelector("[data-scheme-readout]").textContent = `Rendering ${dark() ? "dark" : "light"}.`
+      section.querySelectorAll("[data-swatch]").forEach((swatch) => {
+        const style = getComputedStyle(swatch)
+        const fill = pixel(style.backgroundColor, backdrop(swatch))
+        const value = ratio(pixel(style.color, fill), fill)
+        const cell = swatch.parentElement.querySelector("[data-ratio]")
+        cell.textContent = `${formatRatio(value)} ${value >= 4.5 ? "pass" : "fail"}`
+        cell.className = value >= 4.5 ? "text-success" : "font-semibold text-danger"
+        swatch.parentElement.dataset.result = value >= 4.5 ? "pass" : "fail"
+      })
+    }
+
+    paint()
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paint)
+  })()
+</script>

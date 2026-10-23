@@ -40,7 +40,7 @@ class Views::Assessments::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       page_header
@@ -375,7 +375,7 @@ class Views::Assessments::IndexView < Views::Base
     div(class: "flex items-center gap-1.5") do
       span(class: "text-xs text-gray-500 dark:text-gray-400") { label }
       if variant == :to_confirm
-        render Components::Kit::ToConfirmChip.new(
+        render Components::Shared::ToConfirmChip.new(
           text, title: "Carried from the previous cycle — open the assessment to confirm or change"
         )
       else

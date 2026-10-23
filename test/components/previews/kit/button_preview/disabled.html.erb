@@ -1,0 +1,12 @@
+<div class="space-y-4">
+  <% [ [ "On a card", "bg-default border border-default rounded-2xl p-4" ], [ "On the page", "py-4" ] ].each do |title, surface| %>
+    <div class="<%= surface %>">
+      <p class="mb-3 text-xs font-medium text-muted"><%= title %></p>
+      <div class="flex flex-wrap items-center gap-3">
+        <% forms.each do |form| %>
+          <%= render Components::Kit::Button.new(variant: form, tone: :brand, disabled: true) { form.to_s.capitalize } %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

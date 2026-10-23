@@ -1,0 +1,10 @@
+<div class="max-w-xl space-y-3">
+  <%= render Components::Kit::Alert.new(tone: :warning) do |alert| %>
+    <% alert.action do %><a href="#" class="inline-flex min-h-11 items-center underline">Place them</a><% end %>
+    2 pieces of feedback are waiting to be placed on a capability.
+  <% end %>
+  <%= render Components::Kit::Alert.new(tone: :danger, emphasis: :solid, title: "Sync failed", dismissible: true) do |alert| %>
+    <% alert.action do %><a href="#" class="inline-flex min-h-11 items-center underline">Retry</a><a href="#" class="inline-flex min-h-11 items-center underline">See the log</a><% end %>
+    HiBob rejected the API key.
+  <% end %>
+</div>

@@ -503,7 +503,7 @@ default horizontal scroll, leaving an empty dashed box where the affordance
 should be (found by #380's visual pass).
 
 **Icons are a sprite.** `Components::Kit::IconSprite` renders one `<symbol>` set
-per page from `Kit::PageLayout`; call sites use
+per page from `Shell::PageLayout`; call sites use
 `icon("pencil", class: "w-3 h-3")` → `<svg><use href="#icon-pencil"></svg>`. The
 grid drew the same handful of glyphs 758 times in the matrix and 208 times in
 every expanded row.

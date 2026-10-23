@@ -1,0 +1,11 @@
+<table class="w-full max-w-lg rounded-2xl bg-default text-sm">
+  <tbody>
+    <% [ [ "Priya Natarajan", "Self-assessment due" ], [ "Sam Okafor", "Ready to align" ] ].each do |name, status| %>
+      <tr class="border-b border-subtle">
+        <td class="px-4 py-3 text-default"><%= name %></td>
+        <td class="px-4 py-3 text-muted"><%= status %></td>
+        <td class="px-4 py-3 text-right"><%= render Components::Kit::Button.new(variant: :link, tone: :brand, href: "#person") { "Open" } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

@@ -10,7 +10,7 @@
 # isn't HTML at all (a proxy's text/plain 502, which Turbo discards in total
 # silence) — that placeholder stands forever: a modal stuck on "Loading…" with
 # no error and no way forward (audit issue #328). The shared `frame-error`
-# controller + `Kit::FrameLoadError` block give the failure a voice, a Retry,
+# controller + `Shared::FrameLoadError` block give the failure a voice, a Retry,
 # and — since the form's own ×/Cancel went down with the hidden frame — a way
 # out.
 #
@@ -34,12 +34,12 @@ class Views::Evidence::ModalShell < Views::Base
                           "turbo:submit-start->submit-fallback#submitStart " \
                           "turbo:submit-end->submit-fallback#submitEnd " \
                           "modal:open@window->submit-fallback#submitStart" }) do
-        render Components::Kit::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
+        render Components::Shared::SubmitFallbackMessage.new(classes: "mx-5 mt-4")
         turbo_frame_tag("evidence-modal", loading: "lazy",
                         data: { evidence_modal_target: "frame", frame_error_target: "frame" }) do
           div(class: "p-6 text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
         end
-        render Components::Kit::FrameLoadError.new(
+        render Components::Shared::FrameLoadError.new(
           id: "evidence-modal-error", subject: "the form", closeable: true
         )
       end

@@ -54,7 +54,7 @@ class Views::Frameworks::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(data: explorer_root_data) do

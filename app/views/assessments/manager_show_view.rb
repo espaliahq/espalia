@@ -56,7 +56,7 @@ class Views::Assessments::ManagerShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(data: { controller: "activity-pane", activity_pane_fit_viewport_value: true }) do

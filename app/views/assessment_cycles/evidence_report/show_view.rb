@@ -36,7 +36,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "mx-auto max-w-6xl space-y-6") do
@@ -108,7 +108,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
 
     a(
       href: tenant_feedback_exports_path(format: :csv, cycle_id: @cycle.cycle_id, month: month_key),
-      class: Components::Kit::FrameLoadError::BUTTON_CLASSES,
+      class: Components::Shared::FrameLoadError::BUTTON_CLASSES,
       data: { turbo: "false" }
     ) { @scope == "mine" ? "Download CSV (all participants)" : "Download CSV" }
   end
@@ -138,7 +138,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
           option(value: candidate[:month], selected: candidate[:month] == month_key) { candidate[:label] }
         end
       end
-      button(type: "submit", class: Components::Kit::FrameLoadError::BUTTON_CLASSES) { "Apply" }
+      button(type: "submit", class: Components::Shared::FrameLoadError::BUTTON_CLASSES) { "Apply" }
     end
   end
 

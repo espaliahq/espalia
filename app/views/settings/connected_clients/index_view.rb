@@ -26,7 +26,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "max-w-3xl mx-auto space-y-8") do

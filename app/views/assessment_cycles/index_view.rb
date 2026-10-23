@@ -31,7 +31,7 @@ class Views::AssessmentCycles::IndexView < Views::Base
   end
 
   def view_template
-    render Components::Kit::PageLayout.new(
+    render Components::Shell::PageLayout.new(
       user: @user, current_tenant: @current_tenant, tenants: @tenants
     ) do
       div(class: "max-w-6xl mx-auto px-4 py-8") do
