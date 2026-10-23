@@ -169,9 +169,12 @@ class EvidenceItem < ApplicationRecord
   # where a notification about one lands.
   #
   # @param id [String]
+  # @param place [String, nil] "org" when only the hub's org view lists the
+  #   item ({Assessments::FeedbackToPlace#hub_path}); the team view is the default
   # @return [String]
-  def self.hub_path(id)
-    "/evidence##{dom_id(id)}"
+  def self.hub_path(id, place: nil)
+    query = place == "org" ? "?place=org" : ""
+    "/evidence#{query}##{dom_id(id)}"
   end
 
   # @param id [String]

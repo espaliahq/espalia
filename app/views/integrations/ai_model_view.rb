@@ -108,7 +108,6 @@ class Views::Integrations::AiModelView < Views::Base
       { term: "Address", detail: @config.base_host || (@config.anthropic? ? "Anthropic API" : "—") },
       { term: "Model", detail: @config.model.presence || (@config.anthropic? ? AiModelConfig::DEFAULT_ANTHROPIC_MODEL : "—") },
       { term: "Suggestions", detail: @config.suggestions_enabled? ? "On" : "Off" },
-      { term: "Names hidden", detail: @config.pseudonymise_names? ? "Yes" : "No" },
       { term: "API key", detail: @key_stored ? "Stored" : "Not set" }
     ]
   end
@@ -155,10 +154,10 @@ class Views::Integrations::AiModelView < Views::Base
             key_field
             effort_field
             switch_field(:suggestions_enabled, "Suggest where feedback belongs", @form_config.suggestions_enabled?,
-                         hint: "While on, recorded feedback goes to this model so it can suggest capabilities and levels. Self feedback never does.")
-            switch_field(:pseudonymise_names, "Hide people's names from the model", @form_config.pseudonymise_names?,
-                         hint: "Names of people in this workspace are swapped for placeholders on the way out and restored in the answer. " \
-                               "The mapping is not stored. It hides names, not roles or the story itself.")
+                         hint: "While on, recorded feedback goes to this model so it can suggest capabilities and levels. " \
+                               "Self feedback never does. The names of people in this workspace are always swapped for " \
+                               "placeholders first and restored in the answer. A nickname or someone outside the " \
+                               "workspace is sent as written, and so are roles and the story itself.")
 
             div(class: "flex justify-end") do
               render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save settings" }

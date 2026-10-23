@@ -215,13 +215,30 @@ shared by web, MCP and Slack:
   last-row lock). `EvidenceItemsController#create` runs the usual diff; the
   first staged row leads, or the item is recorded unplaced.
 - **"Feedback to place"** on the hub: items about the viewer and, for the
-  manager side (`Person#all_reports` plus active delegations), about their
-  reports, each with "Place on a capability" — the edit modal with an empty
-  block, content disabled for a non-author. Cards are anchored
-  `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
+  manager side, about their reports, each with "Place on a capability" — the
+  edit modal with an empty block, content disabled for a non-author. The
+  reports' list has two views
+  ([#620](https://github.com/mr-yum/growth-os/issues/620)): **My team**, the
+  default — direct reports plus active rating delegations, exactly
+  `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
+  everyone deeper in the subtree (`#skip_level`). A manager of managers would
+  otherwise see every item their reports' reports received ahead of their
+  own. The view is in the URL (`?place=org`; absent is the team), switched by
+  plain links that carry both counts ("My team · 3", "My whole org · 41"),
+  and the toggle renders only when the org view reaches someone the team
+  view doesn't. "May fit elsewhere too" follows the same view. It is a view
+  filter, not authority: `EvidencePolicy#add_link?` still lets an ancestor
+  place anything in their subtree. `Operations::Assessments::FeedbackToPlace`
+  (`assessments_feedback_to_place`) builds the list over
+  `Assessments::FeedbackToPlace`, and the hub renders from it. Cards are
+  anchored `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
   notification lands. The assessment page shows
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
-  evidence, linking to that section.
+  evidence, linking to that section. A link that may reach a skip-level
+  viewer — the notice, and a notification to a recorded reporting manager who
+  is no longer the direct one — carries `?place=org` when only the org view
+  lists the item (`Assessments::FeedbackToPlace#scope_for` / `#hub_path`), so
+  the card it points at exists.
 
 **From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
 feedback given in a peer such as Chip arrives through the feedback exchange
@@ -387,7 +404,7 @@ Rules, all deliberate:
   `Tenant#update_ai_model!` like the card; nothing reads the gateway key from
   the credentials file at request time. Every other tenant, and every production one, enters its
   key on the card.
-- **Names stay home by default.** `Ai::NamePseudonymiser` swaps every person
+- **Names are always replaced.** `Ai::NamePseudonymiser` swaps every person
   in the tenant for `Person N` in both texts before they leave, and swaps them
   back in the rationales that return. Whole words only, longest first, so
   "Anna" is not found inside "Annabel"; a first name only one person has
@@ -399,8 +416,14 @@ Rules, all deliberate:
   the feedback gets first names too, and only the names whose first word a
   text contains are compiled into its pattern, so thousands of people cost a
   lookup per word. The mapping lives in the instance for one request and is
-  not stored. It hides names, not
-  roles, projects or the story; a tenant can turn it off (`pseudonymise_names`).
+  not stored. There is no switch: placement never needs to know who said
+  what about whom, so the per-tenant `pseudonymise_names` setting was removed
+  ([#620](https://github.com/mr-yum/growth-os/issues/620)). A config stored
+  with it still loads and the key is ignored; the next save of the AI model
+  card drops it. It
+  covers the names of people GrowthOS knows, nothing more: a nickname, someone
+  outside the directory, a role, a project or the story itself goes as
+  written.
   Test connection sends no names; the eval runs the same path as production.
 - **Admin: the AI model card.** Integrations → AI model
   (`Tenant::AiModelsController`, `IntegrationsPolicy#update_ai_model?` /
@@ -461,7 +484,7 @@ Rules, all deliberate:
   hand-placed items in `test/fixtures/files/evidence_suggestions/` (cell match
   for the top and any suggestion, valence match on hit cells, precision, and
   feedback the framework doesn't cover left alone), through the model that
-  tenant has configured: its adapter, effort and name hiding, so a gateway
+  tenant has configured: its adapter and effort, names replaced, so a gateway
   model is scored the way it will answer. `MODEL=…` tries another model id on
   the same endpoint; a `typesafe_jev` tenant is scored through Jev. The
   tenant is only read. `SUGGESTION_MODEL=baseline`

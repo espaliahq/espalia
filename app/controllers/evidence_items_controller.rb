@@ -20,9 +20,9 @@ class EvidenceItemsController < ApplicationController
     touched = apply_evidence_diff
     FeedbackDraft.open_for(token: params[:draft_token], email: current_user.email)&.consume!
     notice = touched.cells.empty? ? "Feedback recorded — not yet placed on a capability." : "Feedback recorded."
-    redirect_to evidence_hub_path, notice: notice, status: :see_other
+    redirect_to hub_return_path, notice: notice, status: :see_other
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+    redirect_to hub_return_path, alert: e.message, status: :see_other
   end
 
   # PATCH /evidence_items/:id — the unified modal's edit submit (content and/or
@@ -33,9 +33,9 @@ class EvidenceItemsController < ApplicationController
     authorize evidence_item, :add_link?, policy_class: EvidencePolicy
 
     apply_evidence_diff
-    redirect_to evidence_hub_path, notice: "Feedback updated."
+    redirect_to hub_return_path, notice: "Feedback updated."
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+    redirect_to hub_return_path, alert: e.message, status: :see_other
   end
 
   # DELETE /evidence_items/:id — withdraw
@@ -46,15 +46,23 @@ class EvidenceItemsController < ApplicationController
       context: pundit_user,
       params: { assignment_id: assignment_id, evidence_id: evidence_item.id, reason: params.dig(:evidence, :reason) }
     )
-    redirect_to evidence_hub_path, notice: "Feedback withdrawn.", status: :see_other
+    redirect_to hub_return_path, notice: "Feedback withdrawn.", status: :see_other
   rescue Operations::Base::ParameterError, PersonDevelopment::Aggregate::CommandError => e
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+    redirect_to hub_return_path, alert: e.message, status: :see_other
   end
 
   private
 
   def require_person
     head :forbidden unless current_person
+  end
+
+  # Back to the hub view the modal was opened from: placing one item from
+  # the whole-org view must not drop the manager into the team view.
+  def hub_return_path
+    from = URI.parse(request.referer.to_s) rescue nil
+    place = from&.query && Rack::Utils.parse_query(from.query)["place"]
+    evidence_hub_path(place: place == "org" ? "org" : nil)
   end
 
   def evidence_item

@@ -24,11 +24,8 @@ class EvidenceHubController < ApplicationController
     completed_outgoing = outgoing.resolved.recent_first.to_a
 
     authored = EvidenceItem.active.where(author_id: current_person.id).order(recorded_at: :desc).limit(50).to_a
-    # Items the viewer gave are under "Feedback you've given" with their own
-    # Place affordance, so they are not listed twice.
-    to_place = EvidenceItem.unplaced.where.not(author_id: current_person.id).includes(:author).order(:recorded_at)
-    to_place_about_me = to_place.for_person(current_person.id).to_a
-    to_place_for_team = to_place.exists? ? placeable_for_team(to_place) : []
+    placing = Operations::Assessments::FeedbackToPlace.call(context: pundit_user, params: { scope: place_param })
+    to_place_about_me, to_place_for_team = to_place_records(placing)
     responses = responses_for(completed_outgoing)
     shown = authored + to_place_about_me + to_place_for_team
     responded_items = responses.values.map { |r| r[:item] }
@@ -54,6 +51,8 @@ class EvidenceHubController < ApplicationController
       authored: authored,
       to_place_about_me: to_place_about_me,
       to_place_for_team: to_place_for_team,
+      place_scope: placing[:scope],
+      place_counts: (placing[:counts] if placing[:beyond_team]),
       open_give_step: params[:give].present? || draft.present?,
       draft: draft,
       cell_details: details,
@@ -85,31 +84,29 @@ class EvidenceHubController < ApplicationController
     @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
   end
 
-  # The unplaced items the viewer may place for others: anyone in their org
-  # subtree, plus a delegation's person on THAT framework only — the same set
-  # EvidencePolicy#add_link? admits on the manager side. Filtered in memory:
-  # unplaced items are few, and the subtree is walked only when some exist.
-  def placeable_for_team(scope)
-    report_ids = current_person.all_reports.pluck(:id).to_set
-    delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id)
-      .pluck(:person_id, :framework_id).to_set
-    scope.to_a.select { |item| report_ids.include?(item.person_id) || delegated.include?([ item.person_id, item.framework_id ]) }
+  # "My team" unless the URL asks for the whole org.
+  def place_param
+    params[:place] == "org" ? "org" : ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
   end
 
-  # Placed items about the viewer or the people they may place feedback for
-  # (their subtree, a delegation's person on that framework) with pending
-  # placement suggestions — the extra cells the model sees.
+  # The cards render records; the Operation decides which, in its order.
+  def to_place_records(placing)
+    ids = (placing[:about_you] + placing[:items]).map { |row| row[:evidence_id] }
+    items = EvidenceItem.where(id: ids).includes(:author).index_by(&:id)
+    [ placing[:about_you], placing[:items] ].map { |rows| rows.filter_map { |row| items[row[:evidence_id]] } }
+  end
+
+  # Placed items about the viewer, or about the assessments in the chosen
+  # view, with pending placement suggestions — the extra cells the model sees.
   def placed_with_suggestions(exclude:)
-    pending = EvidencePlacementSuggestion.pending
+    keys = ::Assessments::FeedbackToPlace.new(current_person).assignments(place_param).keys.to_set
+    person_ids = [ current_person.id, *keys.map(&:first) ].uniq
+    pending = EvidencePlacementSuggestion.pending.where(person_id: person_ids)
 
-    report_ids = current_person.all_reports.pluck(:id)
-    delegated = ManagerAssessmentDelegation.active.where(delegate_person_id: current_person.id).pluck(:person_id, :framework_id)
-    scope = pending.where(person_id: [ current_person.id, *report_ids ])
-    delegated.each { |person_id, framework_id| scope = scope.or(pending.where(person_id: person_id, framework_id: framework_id)) }
-
-    EvidenceItem.active.where(id: scope.select(:evidence_id)).where.not(id: exclude)
+    EvidenceItem.active.where(id: pending.select(:evidence_id)).where.not(id: exclude)
       .where.not(author_id: current_person.id).where.not(capability_stable_id: nil)
       .includes(:author).order(recorded_at: :desc).to_a
+      .select { |item| item.person_id == current_person.id || keys.include?([ item.person_id, item.framework_id ]) }
   end
 
   # Items whose suggestions the viewer may decide. Everything the hub already

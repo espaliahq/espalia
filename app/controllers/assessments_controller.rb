@@ -103,6 +103,7 @@ class AssessmentsController < ApplicationController
         candidate_delegates: load_candidate_delegates(policy),
         viewer_can_rate: policy.rating_participant?,
         unplaced_feedback_count: unplaced_feedback_count,
+        unplaced_feedback_place: unplaced_feedback_place,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -351,7 +352,16 @@ class AssessmentsController < ApplicationController
   # Feedback given about this person with no cell yet, for a viewer who can
   # place it — the same answer assessments_get gives (Assessments::UnplacedFeedback).
   def unplaced_feedback_count
-    Assessments::UnplacedFeedback.count_for(assignment: @assignment, context: pundit_user) || 0
+    @unplaced_feedback_count ||= Assessments::UnplacedFeedback.count_for(assignment: @assignment, context: pundit_user) || 0
+  end
+
+  # The hub lists a skip-level report's items only in its whole-org view, so
+  # the notice's link opens that view.
+  def unplaced_feedback_place
+    return nil unless current_person && unplaced_feedback_count.positive?
+
+    "org" if Assessments::FeedbackToPlace.new(current_person)
+      .scope_for(@assignment.person_id, @assignment.framework_id) == "org"
   end
 
   # Whether the current viewer is permitted to post comments on this
