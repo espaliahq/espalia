@@ -295,7 +295,7 @@ class Views::AssessmentCycles::ShowView < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "delete")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :xs, type: :submit) { "Unenroll" }
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :xs, compact: true, type: :submit) { "Unenroll" }
     end
   end
 
