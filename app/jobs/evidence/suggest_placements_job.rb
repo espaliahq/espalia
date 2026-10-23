@@ -76,8 +76,10 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     asked_about = item.content
     model = Evidence::SuggestionModel.new(tenant: item.tenant)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
+    return unless store(item, proposals, model: model, asked_about: asked_about)
+
     Rails.cache.write(self.class.answered_key(item.id), true, expires_in: ANSWER_REMEMBERED)
-    after_generate(item) if store(item, proposals, model: model, asked_about: asked_about)
+    after_generate(item)
   end
 
   def suggestable?(item)

@@ -94,8 +94,12 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
           level_ordinal: 3, valence: "demonstrated", confidence: 0.9, rationale: "x") ]
     end
 
-    Evidence::SuggestionModel.stub(:configured?, true) do
-      Evidence::SuggestionModel.stub(:new, ->(**) { editing_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        Evidence::SuggestionModel.stub(:new, ->(**) { editing_model }) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+      end
+      assert_not Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(item.id)),
+                 "an answer about text that changed is not remembered, so the backfill asks again"
     end
     assert_empty suggestions_for(item)
   end
