@@ -172,6 +172,7 @@ Then:
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |
 | `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius step or elevation role, or Shared or Shell adds a shadow |
 | `test/lib/kit_previews_test.rb` | a Kit or Shared component has no preview |
+| `test/lib/kit_component_table_test.rb` | a Kit component has no row in [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component), or a row names one that doesn't exist |
 | `test/lib/view_colour_roles_test.rb` | a view uses a palette colour, other than a site its `PENDING` list holds while it waits for a domain token |
 
 Every view directory except `pwa/` (the service worker) is in `view_colour_roles_test.rb` ([#544](https://github.com/mr-yum/growth-os/issues/544)–[#547](https://github.com/mr-yum/growth-os/issues/547)), so a new view starts on roles. A new directory under `app/views/` joins its `SOURCES`.

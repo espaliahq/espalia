@@ -48,6 +48,11 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | A message on the page, or one that comes and goes | `Kit::Alert`, `Kit::Toast` |
 | Nothing to show yet | `Kit::EmptyState` |
 | A dialog | `Kit::Modal` |
+| A section heading, with a subtitle or an action | `Kit::SectionHeading.new(title, subtitle:)`, then `heading.action { }` |
+| Term and detail pairs | `Kit::DescriptionList.new(items:, columns:)` |
+| A term whose definition shows on hover and focus | `Kit::DefinitionTip.new(term, definition:, id:)` |
+| Text a person wrote: feedback, a comment, a note | `Kit::Prose.new(text)`; `Kit::Prose.to_plain(text)` for an excerpt |
+| An icon | `icon(:pencil, class: "size-4")`, drawn from `Kit::IconSprite`; add a missing glyph there |
 
 Examples of each are in [`app/components/README.md`](../../app/components/README.md). A button's variant is its form and its tone its meaning, so pick both by the job:
 
