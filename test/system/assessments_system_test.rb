@@ -1113,10 +1113,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     # the box's bottom edge and posted the comment.
     should "give the comment box's edge to the comment box" do
       visit assessment_path(@assignment)
-      assert_text "Synthesises information from multiple sources"
+      # The cards live in a lazy frame, so a click before its load lands
+      # opens a composer the load then replaces.
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       wait_for_stimulus "comments-thread"
-      page.execute_script("document.querySelector(\"button[aria-label='Add a comment']\").click()")
-      assert_selector "textarea[name='comment[body]']", visible: true
+      click_selector_with_js_fallback "button[aria-label='Add a comment']",
+                                      expect_selector: "textarea[name='comment[body]']"
 
       assert_no_stolen_taps
     end
