@@ -302,9 +302,8 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
 - **Component catalogue**: [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component)
   maps a job to a component; [`app/components/README.md`](../../app/components/README.md) shows
   each one in use; Lookbook (`/lookbook`) renders every state.
-- **Conformance checks**: `bin/rubocop` (`GrowthOs/UseKitButton`, `GrowthOs/UseKitField`) and the
-  guard tests in [theming.md → The guard tests](theming.md#the-guard-tests). Run both on the files
-  you change; a line marked `# rubocop:todo` is debt, never a model to copy.
+- **Conformance checks**: the guard tests in [theming.md → The guard tests](theming.md#the-guard-tests)
+  and `bin/rubocop`. Run both on the files you change.
 - **Theme matrix**: Default, Bento and Custom, each in light and dark, plus the stress tenant
   ([theming.md → Checking your work](theming.md#checking-your-work)).
 - **Stricter house rules**: key actions on touch screens aim for 44px, above AA's 24px, and design
