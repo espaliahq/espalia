@@ -70,6 +70,21 @@ class Frameworks::InlineEditorSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  context "hit areas" do
+    # Save and Cancel sit 10px under the textarea, exactly as far as an xs
+    # button's 44px hit area reaches, so a pixel less would let a click on
+    # the textarea's edge submit the edit.
+    should "leave the textarea's edge to the textarea" do
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+
+      form = start_inline_edit(capability_name_host)
+      assert form.has_selector?("textarea[data-editor-input]")
+
+      assert_no_stolen_taps
+    end
+  end
+
   context "keyboard ergonomics" do
     should "cancel on Esc and save on Cmd/Ctrl+Enter" do
       sign_in_as(@admin_user)
