@@ -100,7 +100,7 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_empty suggestions_for(item)
   end
 
-  should "do nothing when the tenant has suggestions off, without a key, or for self feedback" do
+  should "do nothing when the tenant has suggestions off or without a key" do
     item = record_peer_feedback
     switch_suggestions(@tenant, false)
     fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
@@ -112,11 +112,19 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
         Evidence::SuggestPlacementsJob.perform_now(item.id)
       end
     end
-
-    ActsAsTenant.with_tenant(@tenant) { item.update_columns(source: "self") }
-    fake = with_fake_suggestion_model(proposals: [ proposal(@ownership) ]) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
-    assert_empty fake.prompts
     assert_empty suggestions_for(item)
+  end
+
+  should "suggest other cells for self feedback, never the one it was recorded on" do
+    item = record_self_feedback
+    fake = with_fake_suggestion_model(proposals: [ proposal(@ownership), proposal(@collaboration) ]) do
+      Evidence::SuggestPlacementsJob.perform_now(item.id)
+    end
+
+    assert_equal [ [ @ownership.stable_id, 3 ] ], suggestions_for(item).map(&:cell)
+    assert_equal %w[pending], suggestions_for(item).map(&:status)
+    assert_includes fake.prompts.last.item_text, "Feedback from the person themselves"
+    assert_not fake.prompts.last.open_cell?(@collaboration.stable_id, 3), "the cell it was recorded on is closed"
   end
 
   should "retry a rate limit and an outage, and give up quietly on a rejected request" do

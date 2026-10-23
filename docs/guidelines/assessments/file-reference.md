@@ -136,7 +136,7 @@
 | `app/models/ai_model_config.rb` / `ai_model_credentials.rb` | `Tenant.ai_config` (provider, address, model, effort, switches, presets) and the write-only key wrapper |
 | `app/controllers/tenant/ai_models_controller.rb` / `app/views/integrations/ai_model_view.rb` / `app/javascript/controllers/ai_model_preset_controller.js` | The Integrations → AI model card: settings, key, test connection, preset fill |
 | `app/jobs/evidence/suggest_placements_job.rb` | Generates a set: supersedes the pending one, re-validates every cell, stores the rest; `after_generate` is the notification hook |
-| `app/contexts/person_development/async_handlers/placement_suggester.rb` | Async handler on `EvidenceRecorded` / `EvidenceUpdated` that enqueues the job for human, non-self feedback when the tenant switch is on |
+| `app/contexts/person_development/async_handlers/placement_suggester.rb` | Async handler on `EvidenceRecorded` / `EvidenceUpdated` that enqueues the job for human-authored feedback, self feedback included, when the tenant switch is on |
 | `app/views/evidence/placement_suggestions.rb` / `placement_suggestion_status.rb` | The hub block under an item (rows, Accept, Dismiss…, Adjust, Suggest again) and the status line its responses write into |
 | `app/controllers/evidence_placement_suggestions_controller.rb` | Accept / dismiss / suggest again → Turbo Stream replacing the block |
 | `app/models/evidence/placement_suggestion_rows.rb` | Loads the pending rows and their cell context for a set of hub items |

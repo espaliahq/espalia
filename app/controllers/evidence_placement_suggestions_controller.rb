@@ -42,8 +42,8 @@ class EvidencePlacementSuggestionsController < ApplicationController
     unless Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
       return render_block(message: "Suggestions are switched off for this workspace.", error: true)
     end
-    if evidence_item.withdrawn? || evidence_item.source == "self"
-      return render_block(message: "Suggestions are made only for feedback someone else gave.", error: true)
+    if evidence_item.withdrawn?
+      return render_block(message: "Withdrawn feedback gets no suggestions.", error: true)
     end
 
     # Each run is a paid model call: one per item a minute, however often

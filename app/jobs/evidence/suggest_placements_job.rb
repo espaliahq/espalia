@@ -5,8 +5,8 @@
 #
 # Enqueued by {PersonDevelopment::AsyncHandlers::PlacementSuggester} when
 # feedback is recorded or edited, and by the hub's "Suggest again". A no-op
-# unless the tenant switched suggestions on and has a model and key configured, and
-# for self feedback. Each run supersedes the pending set it replaces. Nothing
+# unless the tenant switched suggestions on and has a model and key configured.
+# Each run supersedes the pending set it replaces. Nothing
 # here can fail the write that triggered it: it runs after that write
 # committed, and every failure ends in "no suggestions".
 class Evidence::SuggestPlacementsJob < ApplicationJob
@@ -52,7 +52,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
 
   def suggestable?(item)
     item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
-      item.link_status == "active" && item.source != "self"
+      item.link_status == "active"
   end
 
   # The schema keeps each field to known values; only the framework can say

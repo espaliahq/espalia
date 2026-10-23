@@ -161,8 +161,8 @@ class Views::Integrations::AiModelView < Views::Base
             key_field
             effort_field
             switch_field(:suggestions_enabled, "Suggest where feedback belongs", @form_config.suggestions_enabled?,
-                         hint: "While on, recorded feedback goes to this model so it can suggest capabilities and levels. " \
-                               "Self feedback never does. The names of people in this workspace are always swapped for " \
+                         hint: "While on, feedback goes to this model when it is recorded or edited, self feedback included, " \
+                               "so it can suggest capabilities and levels. The names of people in this workspace are always swapped for " \
                                "placeholders first and restored in the answer. A nickname or someone outside the " \
                                "workspace is sent as written, and so are roles and the story itself.")
 

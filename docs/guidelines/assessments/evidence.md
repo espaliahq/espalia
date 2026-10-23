@@ -296,12 +296,19 @@ Rules, all deliberate:
   (`Tenant#legacy_evidence_suggestions_enabled?` and the key fallback in
   `Tenant#ai_api_key`) is for one release: delete it once every tenant has
   been saved through the card.
-- **Only human feedback about someone else.** The async handler
+- **Only human feedback, self feedback included.** The async handler
   `PlacementSuggester` enqueues `Evidence::SuggestPlacementsJob` on
-  `EvidenceRecorded` and on `EvidenceUpdated`, skipping `source: "self"` and
-  events whose `acting_via` is `hris` or `system`. An edit supersedes the
-  pending set. It is never a projection: replaying it would re-ask the model
-  about every item ever recorded.
+  `EvidenceRecorded` and on `EvidenceUpdated`, skipping events whose
+  `acting_via` is `hris` or `system`. An edit supersedes the pending set. It
+  is never a projection: replaying it would re-ask the model about every
+  item ever recorded. Self feedback was left out at first, as "the person
+  placing their own words". That holds for unplaced feedback, but self
+  feedback is always recorded from a cell, so it is never unplaced; what it
+  gets is "May fit elsewhere too". It is two thirds of all feedback in
+  production, and one example often speaks to several capabilities, so it
+  is where those suggestions help most
+  ([#622](https://github.com/mr-yum/growth-os/issues/622)). The prompt
+  names its giver as "the person themselves".
 - **The model can only answer with cells that exist.**
   `Evidence::PlacementPrompt` takes the recipient's role cells from
   `FrameworkCellOptions#expectation_map` at their level and one either side,

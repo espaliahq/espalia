@@ -71,6 +71,20 @@ module PlacementSuggestionFixture
     end
   end
 
+  # Alex's own feedback, recorded from a cell as self feedback always is.
+  #
+  # @return [EvidenceItem]
+  def record_self_feedback(content: "I wrote the migration plan and walked the team through every step.",
+                           placed_on: @collaboration)
+    evidence_id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(@alex.id, @framework_id, evidence_id,
+        source: "self", evidence_type: "project_outcome", content: content, author_id: @alex.id,
+        capability_stable_id: placed_on.stable_id, level_ordinal: 3, valence: "demonstrated")
+      EvidenceItem.find(evidence_id)
+    end
+  end
+
   def proposal(capability, level_ordinal: 3, valence: "demonstrated", confidence: 0.8,
                rationale: "“owned the outage follow-up end to end” shows ownership.")
     Evidence::SuggestionModel::Proposal.new(capability_stable_id: capability.stable_id, level_ordinal: level_ordinal,

@@ -171,8 +171,21 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_response :success
     end
 
-    should "refuse self feedback" do
-      ActsAsTenant.with_tenant(@tenant) { @item.update_columns(source: "self") }
+    should "ask again for self feedback, for the person who wrote it" do
+      item = record_self_feedback
+      sign_in @alex_user
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        assert_enqueued_with(job: Evidence::SuggestPlacementsJob, args: [ item.id ]) do
+          stream_post evidence_item_placement_suggestions_path(item)
+        end
+      end
+      assert_response :success
+    end
+
+    should "refuse withdrawn feedback" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.withdraw_evidence(@alex.id, @framework_id, @item.id, withdrawn_by_id: @jordan.id)
+      end
       sign_in @alex_user
       Evidence::SuggestionModel.stub(:configured?, true) do
         assert_no_enqueued_jobs(only: Evidence::SuggestPlacementsJob) { stream_post evidence_item_placement_suggestions_path(@item) }
