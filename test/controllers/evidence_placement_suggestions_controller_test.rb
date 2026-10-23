@@ -102,6 +102,16 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
         assert_select "div", text: /\AI wrote the migration plan/, minimum: 2
       end
 
+      should "put owed placements first, then the open requests, then May fit elsewhere too, then history" do
+        sign_in @alex_user
+        get evidence_hub_path
+
+        headings = css_select("h2").map { |h| h.text.strip }
+        expected = [ "Feedback to place", "Open requests", "May fit elsewhere too", "Completed requests" ]
+        assert_equal expected, headings & expected
+        assert_operator headings.index("Open requests"), :<, headings.index("May fit elsewhere too")
+      end
+
       should "list it for their manager, and never for a peer" do
         sign_in @morgan_user
         get evidence_hub_path

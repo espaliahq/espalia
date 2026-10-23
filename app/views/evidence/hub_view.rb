@@ -10,9 +10,9 @@ class Views::Evidence::HubView < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
   include Views::Evidence::Valence
 
-  # "May fit elsewhere too" sits above the open requests; once self feedback
-  # carries suggestions it can hold dozens of items, so it shows the most
-  # recent few unless the URL asks for all (?elsewhere=all).
+  # Once self feedback carries suggestions, "May fit elsewhere too" can hold
+  # dozens of items, so it shows the most recent few unless the URL asks for
+  # all (?elsewhere=all).
   ELSEWHERE_LIMIT = 5
 
   STATUS_VARIANT = {
@@ -81,6 +81,9 @@ class Views::Evidence::HubView < Views::Base
     @viewer_person_id = viewer_person_id
   end
 
+  # Owed before waiting before optional before history: placement work the
+  # viewer owes, requests someone is waiting on, then suggestions, then what
+  # is done.
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
       div(data: { controller: "modal evidence-modal evidence-hub", evidence_hub_auto_open_value: @open_give_step.to_s,
@@ -88,8 +91,8 @@ class Views::Evidence::HubView < Views::Base
         div(class: "max-w-3xl mx-auto space-y-10") do
           header
           to_place_group
-          suggested_placements_group
           open_requests_group
+          suggested_placements_group
           completed_requests_group
         end
         render Views::Evidence::ModalShell.new
