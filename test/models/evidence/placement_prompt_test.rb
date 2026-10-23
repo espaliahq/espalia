@@ -55,6 +55,14 @@ class Evidence::PlacementPromptTest < ActiveSupport::TestCase
     assert_includes first.item_text, "a peer"
   end
 
+  should "name the person themselves as the giver of self feedback, with or without a recorded direction" do
+    item = record_self_feedback
+    assert_includes prompt_for(item).item_text, "Feedback from the person themselves"
+
+    ActsAsTenant.with_tenant(@tenant) { item.update_columns(feedback_direction: nil) }
+    assert_includes prompt_for(item.reload).item_text, "Feedback from the person themselves"
+  end
+
   should "limit the schema's ids and levels to the candidates" do
     schema = prompt_for(record_peer_feedback).schema
     item_props = schema.dig(:properties, :suggestions, :items, :properties)

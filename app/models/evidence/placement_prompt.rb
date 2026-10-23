@@ -203,9 +203,15 @@ class Evidence::PlacementPrompt
     end.join("; ")
   end
 
+  # Items recorded before feedback_direction existed carry none; their source
+  # still says who gave it.
   def relationship
     RELATIONSHIPS.fetch(item.feedback_direction.to_s) do
-      item.source == "manager" ? "their manager" : "a colleague"
+      case item.source
+      when "self" then RELATIONSHIPS["self"]
+      when "manager" then RELATIONSHIPS["manager_to_report"]
+      else "a colleague"
+      end
     end
   end
 
