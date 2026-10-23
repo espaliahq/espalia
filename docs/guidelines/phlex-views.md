@@ -295,7 +295,7 @@ Colour with role utilities, and check contrast on the surface an element actuall
 
 ### Touch targets — 2.5.5 (≥44×44 CSS px)
 
-Standalone interactive controls need a 44px hit area. Icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Shell::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
+Standalone interactive controls need a 44px hit area. `Kit::Button` gives every size one by default: an invisible `::after`, centred on the button, at least 44px square, so the visual keeps its size. Pass `compact: true` where that box would cover a neighbour's face, a tight icon row or a toolbar that wraps, or where a larger target already surrounds the button; whichever sibling comes later in the DOM takes a tap in the overlap. `touch: true` makes the visual itself 44px. An `<input type="submit">` can't carry a pseudo-element, so give `f.submit` `touch: true`. Hand-rolled icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Shell::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
 
 ### Accessible names
 
