@@ -155,22 +155,17 @@ class Views::Evidence::HubView < Views::Base
   # Plain links, so the view is in the URL (?place=org) and works without
   # JavaScript; the counts say there is more without switching.
   def place_toggle
-    nav(class: "inline-flex gap-1 rounded-md bg-neutral-subtle p-0.5",
-        aria: { label: "Whose feedback to place" }) do
-      place_link("My team", @place_counts[:team], place: nil)
-      place_link("My whole org", @place_counts[:org], place: "org")
+    nav(aria: { label: "Whose feedback to place" }) do
+      render Components::Kit::SegmentedControl.new(touch: true) do |control|
+        place_segment(control, "My team", @place_counts[:team], place: nil)
+        place_segment(control, "My whole org", @place_counts[:org], place: "org")
+      end
     end
   end
 
-  def place_link(label, count, place:)
-    active = (@place_scope == "org") == (place == "org")
-    a(href: evidence_hub_path(place: place, anchor: "feedback-to-place"),
-      aria: { current: active ? "page" : nil },
-      class: [
-        "inline-flex min-h-11 items-center rounded px-3 py-1 text-sm font-medium whitespace-nowrap",
-        active ? "bg-default text-default shadow-xs" :
-          "text-muted hover:text-default"
-      ].join(" ")) { "#{label} · #{count}" }
+  def place_segment(control, label, count, place:)
+    control.segment("#{label} · #{count}", href: evidence_hub_path(place: place, anchor: "feedback-to-place"),
+                                           selected: (@place_scope == "org") == (place == "org"))
   end
 
   def to_place_card(item, about_viewer:)
