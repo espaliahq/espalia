@@ -65,6 +65,10 @@ class Evidence::SelfFeedbackBackfillTest < ActiveJob::TestCase
 
           assert_equal 0, Evidence::SelfFeedbackBackfill.new(per_minute: 1).enqueue!
         end
+
+        travel 1.day do
+          assert_equal 0, Evidence::SelfFeedbackBackfill.new.count, "a run that stored nothing is not asked for again"
+        end
       end
     end
   end

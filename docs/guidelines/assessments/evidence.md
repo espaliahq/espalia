@@ -317,9 +317,10 @@ Rules, all deliberate:
   and a model configured. Without `CONFIRM=1` it only prints the count per
   workspace. With it, it schedules one job per item, `PER_MINUTE` (default
   20) a minute, and each claims the item's run through
-  `SuggestPlacementsJob.claim_run`, the guard "Suggest again" uses, so a
-  second run enqueues nothing new. `TENANT=<slug>` narrows it. Every item is
-  one model call.
+  `SuggestPlacementsJob.claim_run`, the guard "Suggest again" uses. A run
+  that finds nothing leaves no row, so the task also remembers every item it
+  enqueued for 90 days, in the cache: a second run enqueues nothing new.
+  `TENANT=<slug>` narrows it. Every item is one model call.
 - **The model can only answer with cells that exist.**
   `Evidence::PlacementPrompt` takes the recipient's role cells from
   `FrameworkCellOptions#expectation_map` at their level and one either side,
