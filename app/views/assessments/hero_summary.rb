@@ -367,7 +367,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "Rate next capability",
-      classes: Components::Kit::Button.classes(size: :sm)
+      classes: Components::Kit::Button.classes(size: :sm, compact: true)
     )
   end
 
@@ -733,7 +733,7 @@ class Views::Assessments::HeroSummary < Views::Base
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
       label: "Continue",
-      classes: Components::Kit::Button.classes(size: :xs)
+      classes: Components::Kit::Button.classes(size: :xs, compact: true)
     )
   end
 
