@@ -42,7 +42,6 @@ class AiModelConfig
   attribute :base_url, :string
   attribute :model, :string
   attribute :suggestions_enabled, :boolean, default: false
-  attribute :pseudonymise_names, :boolean, default: true
   attribute :effort, :string, default: "low"
 
   validates :provider, inclusion: { in: PROVIDERS }

@@ -56,7 +56,7 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
     manager_side_ids_for(item.person_id, item.framework_id).each do |person_id|
       next if skipped.include?(person_id)
 
-      deliver(TeamFeedbackReceivedNotifier, item, person_id, params)
+      deliver(TeamFeedbackReceivedNotifier, item, person_id, params.merge(url: manager_side_url(item, person_id, params)))
       skipped << person_id
     end
   end
@@ -67,6 +67,16 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifier < ApplicationJob
     return if already_delivered?(notifier_class, user, item)
 
     notifier_class.with(record: item, tenant_id: item.tenant_id, **params).deliver(user)
+  end
+
+  # The hub lists a report's unplaced item in its team view by default; a
+  # recorded reporting manager who is now a skip-level sees it only in the
+  # org view, so their link opens that view.
+  def manager_side_url(item, person_id, params)
+    return params[:url] if params[:placed]
+
+    viewer = Person.find_by(id: person_id)
+    viewer ? Assessments::FeedbackToPlace.new(viewer).hub_path(item) : params[:url]
   end
 
   def presentation(item)
