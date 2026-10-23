@@ -309,6 +309,17 @@ Rules, all deliberate:
   is where those suggestions help most
   ([#622](https://github.com/mr-yum/growth-os/issues/622)). The prompt
   names its giver as "the person themselves".
+- **No automatic backfill.** Self feedback recorded before that gets
+  suggestions when it is next edited. `bin/rails
+  evidence:suggestions:backfill_self` (`Evidence::SelfFeedbackBackfill`)
+  covers the rest when an admin chooses to: active, placed self feedback
+  with no pending or decided suggestion, in workspaces with suggestions on
+  and a model configured. Without `CONFIRM=1` it only prints the count per
+  workspace. With it, it schedules one job per item, `PER_MINUTE` (default
+  20) a minute, and each claims the item's run through
+  `SuggestPlacementsJob.claim_run`, the guard "Suggest again" uses, so a
+  second run enqueues nothing new. `TENANT=<slug>` narrows it. Every item is
+  one model call.
 - **The model can only answer with cells that exist.**
   `Evidence::PlacementPrompt` takes the recipient's role cells from
   `FrameworkCellOptions#expectation_map` at their level and one either side,

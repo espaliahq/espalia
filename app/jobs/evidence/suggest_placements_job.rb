@@ -12,6 +12,10 @@
 class Evidence::SuggestPlacementsJob < ApplicationJob
   queue_as :default
 
+  # Every run is a paid model call, so a run is asked for at most once per
+  # item in this window, however it is asked for.
+  REQUEST_INTERVAL = 1.minute
+
   GIVE_UP = ->(job, error) { Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: gave up, #{error.message}") }
 
   retry_on Evidence::SuggestionModel::RateLimited, wait: :polynomially_longer, attempts: 5, &GIVE_UP
@@ -19,6 +23,18 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
 
   discard_on Evidence::SuggestionModel::Rejected do |job, error|
     Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: request rejected, #{error.message}")
+  end
+
+  # Claims the item's run, so a second request inside the window (a double
+  # "Suggest again", a backfill run twice) enqueues nothing. A run scheduled
+  # for later holds its claim until it is due.
+  #
+  # @param evidence_id [String]
+  # @param wait [ActiveSupport::Duration] how long until the claimed run is due
+  # @return [Boolean] whether the caller may enqueue the run
+  def self.claim_run(evidence_id, wait: 0.seconds)
+    Rails.cache.write("evidence-suggestions:requested:#{evidence_id}", true,
+                      expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
   end
 
   # @param evidence_id [String]
