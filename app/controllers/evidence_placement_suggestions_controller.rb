@@ -44,7 +44,10 @@ class EvidencePlacementSuggestionsController < ApplicationController
       return render_block(message: "Withdrawn feedback gets no suggestions.", error: true)
     end
 
-    Evidence::SuggestPlacementsJob.request_run(evidence_item.id)
+    if Evidence::SuggestPlacementsJob.request_run(evidence_item.id) == :failed
+      return render_block(message: "Couldn't ask for new suggestions just now. Try again in a minute.", error: true)
+    end
+
     render_block(message: "Asking for new suggestions. They replace these when you next open the hub.")
   end
 

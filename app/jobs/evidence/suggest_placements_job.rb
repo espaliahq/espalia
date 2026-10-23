@@ -31,19 +31,26 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
 
   # Enqueues a run unless one was asked for inside the window (a double
   # "Suggest again", a backfill run twice). A run scheduled for later holds
-  # its claim until it is due; an enqueue that fails gives the claim back.
+  # its claim until it is due; an enqueue that fails, or raises, gives the
+  # claim back.
   #
   # @param evidence_id [String]
   # @param wait [ActiveSupport::Duration] how long until the run is due
-  # @return [Boolean] whether a run was enqueued
+  # @return [Symbol] :enqueued, :already_requested, or :failed
   def self.request_run(evidence_id, wait: 0.seconds)
     key = "evidence-suggestions:requested:#{evidence_id}"
-    return false unless Rails.cache.write(key, true, expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
-    job = set(wait: wait).perform_later(evidence_id)
-    return true if job && job.successfully_enqueued?
+    return :already_requested unless Rails.cache.write(key, true, expires_in: wait + REQUEST_INTERVAL, unless_exist: true)
+
+    begin
+      job = set(wait: wait).perform_later(evidence_id)
+    rescue StandardError
+      Rails.cache.delete(key)
+      raise
+    end
+    return :enqueued if job && job.successfully_enqueued?
 
     Rails.cache.delete(key)
-    false
+    :failed
   end
 
   # @param evidence_id [String]
@@ -82,9 +89,12 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     after_generate(item)
   end
 
+  # Feedback an HRIS sync or a system job wrote carries no one's judgement to
+  # place, however the run was asked for.
   def suggestable?(item)
     item.tenant.evidence_suggestions_enabled? && Evidence::SuggestionModel.configured?(item.tenant) &&
-      item.link_status == "active"
+      item.link_status == "active" &&
+      !PersonDevelopment::AsyncHandlers::PlacementSuggester::NON_HUMAN_SURFACES.include?(item.recorded_via.to_s)
   end
 
   # The schema keeps each field to known values; only the framework can say

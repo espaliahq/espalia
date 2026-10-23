@@ -297,6 +297,22 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_response :success
     end
 
+    should "say so when the run could not be enqueued, and keep the usual answer when one is already asked for" do
+      sign_in @alex_user
+      Evidence::SuggestionModel.stub(:configured?, true) do
+        Evidence::SuggestPlacementsJob.stub(:request_run, :failed) do
+          stream_post evidence_item_placement_suggestions_path(@item)
+          assert_response :unprocessable_content
+          assert_includes response.body, "ask for new suggestions just now"
+        end
+        Evidence::SuggestPlacementsJob.stub(:request_run, :already_requested) do
+          stream_post evidence_item_placement_suggestions_path(@item)
+          assert_response :success
+          assert_includes response.body, "Asking for new suggestions"
+        end
+      end
+    end
+
     should "refuse withdrawn feedback" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.withdraw_evidence(@alex.id, @framework_id, @item.id, withdrawn_by_id: @jordan.id)

@@ -65,7 +65,7 @@ class Evidence::SelfFeedbackBackfill
     candidates.each_value do |ids|
       ids.each do |id|
         wait = (scheduled / per_minute).minutes
-        scheduled += 1 if Evidence::SuggestPlacementsJob.request_run(id, wait: wait)
+        scheduled += 1 if Evidence::SuggestPlacementsJob.request_run(id, wait: wait) == :enqueued
       end
     end
     scheduled

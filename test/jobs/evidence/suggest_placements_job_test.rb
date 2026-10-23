@@ -151,12 +151,34 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     failing = Struct.new(:id) { def perform_later(*) = false }.new(1)
     Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
       Evidence::SuggestPlacementsJob.stub(:set, ->(**) { failing }) do
-        assert_not Evidence::SuggestPlacementsJob.request_run(item.id)
+        assert_equal :failed, Evidence::SuggestPlacementsJob.request_run(item.id)
       end
-      assert Evidence::SuggestPlacementsJob.request_run(item.id)
-      assert_not Evidence::SuggestPlacementsJob.request_run(item.id)
+      assert_equal :enqueued, Evidence::SuggestPlacementsJob.request_run(item.id)
+      assert_equal :already_requested, Evidence::SuggestPlacementsJob.request_run(item.id)
     end
     assert_enqueued_jobs 1, only: Evidence::SuggestPlacementsJob
+  end
+
+  should "give the claim back when the enqueue raises, and let the error through" do
+    item = record_peer_feedback
+    clear_enqueued_jobs
+    raising = Struct.new(:id) { def perform_later(*) = raise(ActiveJob::EnqueueError, "queue down") }.new(1)
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      Evidence::SuggestPlacementsJob.stub(:set, ->(**) { raising }) do
+        assert_raises(ActiveJob::EnqueueError) { Evidence::SuggestPlacementsJob.request_run(item.id) }
+      end
+      assert_equal :enqueued, Evidence::SuggestPlacementsJob.request_run(item.id)
+    end
+  end
+
+  should "ask nothing about feedback an HRIS sync or a system job wrote, however the run was asked for" do
+    item = record_peer_feedback
+    ActsAsTenant.with_tenant(@tenant) { EvidenceItem.where(id: item.id).update_all(recorded_via: "hris") }
+
+    fake = with_fake_suggestion_model(proposals: []) { Evidence::SuggestPlacementsJob.perform_now(item.id) }
+
+    assert_empty fake.prompts
+    assert_empty suggestions_for(item)
   end
 
   should "retry a rate limit and an outage, and give up quietly on a rejected request" do
