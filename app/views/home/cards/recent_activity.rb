@@ -5,13 +5,13 @@
 # inline) so it reads as a summary rather than a flat list. Read-only awareness.
 class Views::Home::Cards::RecentActivity < Views::Base
   DOT_COLOR = {
-    "self_rated" => "bg-emerald-500",
-    "manager_rated" => "bg-indigo-500",
-    "assessment_aligned" => "bg-amber-500",
-    "evidence_recorded" => "bg-amber-500",
-    "comment_posted" => "bg-sky-500",
-    "alignment_started" => "bg-amber-500",
-    "alignment_completed" => "bg-green-600"
+    "self_rated" => "bg-activity-self",
+    "manager_rated" => "bg-activity-manager",
+    "assessment_aligned" => "bg-activity-attention",
+    "evidence_recorded" => "bg-activity-attention",
+    "comment_posted" => "bg-activity-discussion",
+    "alignment_started" => "bg-activity-attention",
+    "alignment_completed" => "bg-activity-complete"
   }.freeze
 
   SNIPPET_LIMIT = 90
@@ -41,7 +41,7 @@ class Views::Home::Cards::RecentActivity < Views::Base
 
   def activity_row(item)
     li(class: "flex items-start gap-2") do
-      span(class: "mt-1.5 h-2 w-2 shrink-0 rounded-full #{DOT_COLOR.fetch(item.kind, "bg-gray-400")}")
+      span(class: "mt-1.5 h-2 w-2 shrink-0 rounded-full #{DOT_COLOR.fetch(item.kind, "bg-activity-cleared")}")
       div(class: "min-w-0 flex-1") do
         p(class: "text-sm text-gray-700 dark:text-gray-200") { sentence(item) }
         p(class: "mt-0.5 text-xs text-gray-500 dark:text-gray-400") { local_time_ago(item.occurred_at) }

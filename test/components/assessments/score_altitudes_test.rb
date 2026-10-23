@@ -83,14 +83,14 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       chip = html[/<button[^>]*aria-describedby="assessment-term-weight-cap-a"[^>]*>/]
       assert chip, "expected the weight chip trigger"
       assert_includes chip, "text-gray-700"
-      assert_not_includes chip, "text-green-700"
+      assert_not_includes chip, "text-score-performing"
     end
 
     should "show the score with its split, never the net alone" do
       html = name_row(score: SCORE)
       assert_includes html, "100%"
       assert_includes html, "50% · +50% toward E4"
-      assert_includes html, "text-green-700"
+      assert_includes html, "text-score-performing"
       assert_includes html, 'role="progressbar"'
       assert_includes html, 'aria-valuemax="200"'
     end
@@ -112,7 +112,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       html = name_row(blocked: true, score: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0, bands_above: 1,
                                               scorable: true, state: :progressing })
       assert_includes html, "Blocked"
-      assert_includes html, "text-amber-700"
+      assert_includes html, "text-score-progressing"
     end
   end
 
@@ -124,7 +124,7 @@ class Views::Assessments::ScoreAltitudesTest < ActiveSupport::TestCase
       assert_includes html, 'title="Mastering"'
       assert_not_includes html, ">Mastering<"
       assert_includes html, "100% · +50% toward E4"
-      assert_includes html, "text-purple-600"
+      assert_includes html, "text-score-ahead"
       assert_includes html, "2/2 rated"
     end
 

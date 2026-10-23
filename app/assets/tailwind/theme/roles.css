@@ -1,0 +1,352 @@
+/*
+ * Colour roles: what a colour is for, not which colour it is. Components use
+ * the role utilities (text-muted, bg-default, border-subtle, bg-tone-strong…)
+ * and never a palette step for a UI role, so a theme can restyle the app by
+ * setting the --gos-* variables below. Names follow Bento's vocabulary.
+ *
+ * These are the Default theme's values: each points at the palette step the
+ * app used for that role before roles existed, so moving a class onto a role
+ * renders the same. A preset ([data-theme]) or a tenant's Custom theme
+ * overrides the variables; dark values follow the dark variant's rule.
+ */
+:root {
+  --gos-brand: var(--color-primary);
+
+  /* Content (text and icons) */
+  --gos-content-default: var(--color-gray-900);
+  --gos-content-muted: var(--color-gray-600);
+  --gos-content-subtle: var(--color-gray-400);
+  --gos-content-disabled: var(--color-gray-400);
+  --gos-content-inverse: #ffffff;
+
+  /* Surfaces */
+  --gos-surface-page: var(--color-gray-50);
+  --gos-surface-default: #ffffff;
+  --gos-surface-overlay: #ffffff;
+  --gos-surface-subtle: var(--color-gray-50);
+  --gos-surface-muted: var(--color-gray-100);
+  --gos-surface-emphasized: var(--color-gray-200);
+  --gos-surface-inverse: var(--color-gray-900);
+  --gos-surface-hover: var(--color-gray-50);
+  --gos-surface-default-hover: var(--color-gray-100);
+  --gos-scrim: color-mix(in oklab, black 50%, transparent);
+
+  /* Borders and focus. The keyboard focus ring is neutral on every theme; a coloured surface
+     (the navbar, a strong fill) resets it from the contrast helper for what sits on it. */
+  --gos-focus-ring: var(--gos-content-default);
+  --gos-border-default: var(--color-gray-200);
+  --gos-border-subtle: var(--color-gray-100);
+  --gos-border-emphasized: var(--color-gray-300);
+  --gos-border-strong: var(--color-gray-900);
+  --gos-border-disabled: var(--color-gray-200);
+
+  /* Neutral fills: chips, toggles, tracks, the pressed chip */
+  --gos-neutral-subtle: var(--color-gray-100);
+  --gos-neutral-muted: var(--color-gray-200);
+  --gos-neutral-strong: var(--color-gray-900);
+  --gos-neutral-strong-hover: var(--color-gray-700);
+  --gos-neutral-content-inverse: #ffffff;
+
+  /* Status */
+  --gos-content-danger: var(--color-red-700);
+  --gos-danger-subtle: var(--color-red-50);
+  --gos-danger-muted: var(--color-red-100);
+  --gos-danger-strong: var(--color-red-600);
+  --gos-danger-strong-hover: var(--color-red-700);
+  --gos-danger-content-inverse: #ffffff;
+  --gos-border-danger: var(--color-red-200);
+
+  --gos-content-success: var(--color-green-700);
+  --gos-success-subtle: var(--color-green-50);
+  --gos-success-muted: color-mix(in oklab, var(--color-green-100) 70%, var(--gos-surface-default));
+  --gos-success-strong: var(--color-green-700);
+  --gos-success-strong-hover: var(--color-green-800);
+  --gos-success-content-inverse: #ffffff;
+  --gos-border-success: var(--color-green-200);
+
+  --gos-content-warning: var(--color-amber-700);
+  --gos-warning-subtle: var(--color-amber-50);
+  --gos-warning-muted: var(--color-amber-100);
+  --gos-warning-strong: var(--color-amber-500);
+  --gos-warning-strong-hover: var(--color-amber-600);
+  --gos-warning-content-inverse: var(--color-amber-950);
+  --gos-border-warning: var(--color-amber-200);
+
+  --gos-content-info: var(--color-blue-700);
+  --gos-info-subtle: var(--color-blue-100);
+  --gos-info-muted: var(--color-blue-200);
+  --gos-info-strong: var(--color-blue-600);
+  --gos-info-strong-hover: var(--color-blue-700);
+  --gos-info-content-inverse: #ffffff;
+  --gos-border-info: var(--color-blue-200);
+
+  /* The navbar: the tenant's own nav colours until tenant themes move onto roles (#550) */
+  --gos-nav-surface: var(--color-nav-bg);
+  --gos-nav-content: var(--color-nav-fg);
+
+  @variant dark {
+    --gos-content-default: #ffffff;
+    --gos-content-muted: var(--color-gray-300);
+    --gos-content-subtle: var(--color-gray-500);
+    --gos-content-disabled: var(--color-gray-600);
+    --gos-content-inverse: var(--color-gray-900);
+
+    --gos-surface-page: var(--color-gray-950);
+    --gos-surface-default: var(--color-gray-800);
+    --gos-surface-overlay: var(--color-gray-900);
+    --gos-surface-subtle: var(--color-gray-800);
+    --gos-surface-muted: var(--color-gray-900);
+    --gos-surface-emphasized: var(--color-gray-700);
+    --gos-surface-inverse: #ffffff;
+    --gos-surface-hover: var(--color-gray-800);
+    --gos-surface-default-hover: var(--color-gray-700);
+
+    --gos-border-default: var(--color-gray-700);
+    --gos-border-subtle: var(--color-gray-800);
+    --gos-border-emphasized: var(--color-gray-600);
+    --gos-border-strong: #ffffff;
+    --gos-border-disabled: var(--color-gray-700);
+
+    --gos-neutral-subtle: var(--color-gray-800);
+    --gos-neutral-muted: var(--color-gray-700);
+    --gos-neutral-strong: #ffffff;
+    --gos-neutral-strong-hover: var(--color-gray-200);
+    --gos-neutral-content-inverse: var(--color-gray-900);
+
+    --gos-content-danger: var(--color-red-300);
+    --gos-danger-subtle: color-mix(in oklab, var(--color-red-900) 30%, var(--gos-surface-default));
+    --gos-danger-muted: color-mix(in oklab, var(--color-red-900) 50%, var(--gos-surface-default));
+    --gos-border-danger: var(--color-red-800);
+
+    --gos-content-success: var(--color-green-300);
+    --gos-success-subtle: color-mix(in oklab, var(--color-green-900) 30%, var(--gos-surface-default));
+    --gos-success-muted: color-mix(in oklab, var(--color-green-900) 50%, var(--gos-surface-default));
+    --gos-success-strong: var(--color-green-700);
+    --gos-success-strong-hover: var(--color-green-800);
+    --gos-border-success: var(--color-green-800);
+
+    --gos-content-warning: var(--color-amber-300);
+    --gos-warning-subtle: color-mix(in oklab, var(--color-amber-900) 30%, var(--gos-surface-default));
+    --gos-warning-muted: color-mix(in oklab, var(--color-amber-900) 50%, var(--gos-surface-default));
+    --gos-border-warning: var(--color-amber-800);
+
+    --gos-content-info: var(--color-blue-400);
+    --gos-info-subtle: color-mix(in oklab, var(--color-blue-900) 30%, var(--gos-surface-default));
+    --gos-info-muted: color-mix(in oklab, var(--color-blue-900) 50%, var(--gos-surface-default));
+    --gos-border-info: var(--color-blue-800);
+  }
+}
+
+/*
+ * Colours derived from the brand. Declared on [data-theme-scope] as well as
+ * :root, because a custom property resolves where it is declared: an element
+ * that sets its own --gos-brand needs the attribute to re-derive these.
+ */
+:root,
+[data-theme-scope] {
+  /* A deeper fill that carries text (#447), and the brand as readable text on surfaces */
+  --gos-brand-strong: color-mix(in oklab, var(--gos-brand) 55%, black);
+  --gos-brand-strong-hover: color-mix(in oklab, var(--gos-brand-strong) 88%, black);
+  --gos-brand-subtle: color-mix(in oklab, var(--gos-brand) 10%, var(--gos-surface-default));
+  --gos-brand-muted: color-mix(in oklab, var(--gos-brand) 20%, var(--gos-surface-default));
+  --gos-content-brand: color-mix(in oklab, var(--gos-brand) 55%, black);
+  --gos-brand-content-inverse: #ffffff;
+  --gos-border-brand: var(--gos-brand);
+  --gos-content-link: var(--gos-content-brand);
+  --gos-content-link-hover: var(--gos-content-brand);
+
+  /* No separate accent in Default yet, so it follows brand */
+  --gos-accent-strong: var(--gos-brand-strong);
+  --gos-accent-strong-hover: var(--gos-brand-strong-hover);
+  --gos-accent-subtle: var(--gos-brand-subtle);
+  --gos-accent-muted: var(--gos-brand-muted);
+  --gos-content-accent: var(--gos-content-brand);
+  --gos-accent-content-inverse: var(--gos-brand-content-inverse);
+  --gos-border-accent: var(--gos-border-brand);
+
+  @variant dark {
+    --gos-content-brand: color-mix(in oklab, var(--gos-brand) 45%, white);
+  }
+
+  /* The exact clamps where relative colours work; the mixes above are the fallback */
+  @supports (color: oklch(from red min(l, 0.5) c h)) {
+    --gos-brand-strong: oklch(from var(--gos-brand) min(l, 0.5) c h);
+    --gos-brand-strong-hover: oklch(from var(--gos-brand-strong) calc(l - 0.06) c h);
+    --gos-content-brand: oklch(from var(--gos-brand) min(l, 0.5) c h);
+
+    @variant dark {
+      --gos-content-brand: oklch(from var(--gos-brand) max(l, 0.75) c h);
+    }
+  }
+
+  /*
+   * The contrast helper: black or white text, whichever reads better on a
+   * fill a tenant can pick. The fallback does the WCAG maths; 0.17913 is the
+   * relative luminance where black and white tie. Presets set their own.
+   */
+  @supports (color: color(from red srgb-linear r g b)) {
+    --gos-brand-content-inverse: color(from var(--gos-brand-strong) srgb-linear
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+      clamp(0, (0.17913 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1));
+  }
+
+  @supports (color: contrast-color(red)) {
+    --gos-brand-content-inverse: contrast-color(var(--gos-brand-strong));
+  }
+}
+
+/*
+ * Tones: a component styles bg-tone-strong / text-tone-content-inverse once,
+ * and a tone-* class on it (or an ancestor) picks which role set fills in.
+ */
+@utility tone-neutral {
+  --gos-tone-strong: var(--gos-neutral-strong);
+  --gos-tone-strong-hover: var(--gos-neutral-strong-hover);
+  --gos-tone-subtle: var(--gos-neutral-subtle);
+  --gos-tone-muted: var(--gos-neutral-muted);
+  --gos-tone-content-strong: var(--gos-content-default);
+  --gos-tone-content-inverse: var(--gos-neutral-content-inverse);
+  --gos-tone-border: var(--gos-border-emphasized);
+}
+
+@utility tone-brand {
+  --gos-tone-strong: var(--gos-brand-strong);
+  --gos-tone-strong-hover: var(--gos-brand-strong-hover);
+  --gos-tone-subtle: var(--gos-brand-subtle);
+  --gos-tone-muted: var(--gos-brand-muted);
+  --gos-tone-content-strong: var(--gos-content-brand);
+  --gos-tone-content-inverse: var(--gos-brand-content-inverse);
+  --gos-tone-border: var(--gos-border-brand);
+}
+
+@utility tone-accent {
+  --gos-tone-strong: var(--gos-accent-strong);
+  --gos-tone-strong-hover: var(--gos-accent-strong-hover);
+  --gos-tone-subtle: var(--gos-accent-subtle);
+  --gos-tone-muted: var(--gos-accent-muted);
+  --gos-tone-content-strong: var(--gos-content-accent);
+  --gos-tone-content-inverse: var(--gos-accent-content-inverse);
+  --gos-tone-border: var(--gos-border-accent);
+}
+
+@utility tone-danger {
+  --gos-tone-strong: var(--gos-danger-strong);
+  --gos-tone-strong-hover: var(--gos-danger-strong-hover);
+  --gos-tone-subtle: var(--gos-danger-subtle);
+  --gos-tone-muted: var(--gos-danger-muted);
+  --gos-tone-content-strong: var(--gos-content-danger);
+  --gos-tone-content-inverse: var(--gos-danger-content-inverse);
+  --gos-tone-border: var(--gos-border-danger);
+}
+
+@utility tone-success {
+  --gos-tone-strong: var(--gos-success-strong);
+  --gos-tone-strong-hover: var(--gos-success-strong-hover);
+  --gos-tone-subtle: var(--gos-success-subtle);
+  --gos-tone-muted: var(--gos-success-muted);
+  --gos-tone-content-strong: var(--gos-content-success);
+  --gos-tone-content-inverse: var(--gos-success-content-inverse);
+  --gos-tone-border: var(--gos-border-success);
+}
+
+@utility tone-warning {
+  --gos-tone-strong: var(--gos-warning-strong);
+  --gos-tone-strong-hover: var(--gos-warning-strong-hover);
+  --gos-tone-subtle: var(--gos-warning-subtle);
+  --gos-tone-muted: var(--gos-warning-muted);
+  --gos-tone-content-strong: var(--gos-content-warning);
+  --gos-tone-content-inverse: var(--gos-warning-content-inverse);
+  --gos-tone-border: var(--gos-border-warning);
+}
+
+@utility tone-info {
+  --gos-tone-strong: var(--gos-info-strong);
+  --gos-tone-strong-hover: var(--gos-info-strong-hover);
+  --gos-tone-subtle: var(--gos-info-subtle);
+  --gos-tone-muted: var(--gos-info-muted);
+  --gos-tone-content-strong: var(--gos-content-info);
+  --gos-tone-content-inverse: var(--gos-info-content-inverse);
+  --gos-tone-border: var(--gos-border-info);
+}
+
+/* The utilities: text-*, bg-*, border-*, ring-* and outline-* for each role */
+@theme inline {
+  --text-color-default: var(--gos-content-default);
+  --text-color-muted: var(--gos-content-muted);
+  --text-color-subtle: var(--gos-content-subtle);
+  --text-color-disabled: var(--gos-content-disabled);
+  --text-color-inverse: var(--gos-content-inverse);
+  --text-color-brand: var(--gos-content-brand);
+  --text-color-accent: var(--gos-content-accent);
+  --text-color-link: var(--gos-content-link);
+  --text-color-link-hover: var(--gos-content-link-hover);
+  --text-color-danger: var(--gos-content-danger);
+  --text-color-success: var(--gos-content-success);
+  --text-color-warning: var(--gos-content-warning);
+  --text-color-info: var(--gos-content-info);
+  --text-color-nav: var(--gos-nav-content);
+  --text-color-tone-content-strong: var(--gos-tone-content-strong);
+  --text-color-tone-content-inverse: var(--gos-tone-content-inverse);
+
+  --background-color-page: var(--gos-surface-page);
+  --background-color-default: var(--gos-surface-default);
+  --background-color-overlay: var(--gos-surface-overlay);
+  --background-color-subtle: var(--gos-surface-subtle);
+  --background-color-muted: var(--gos-surface-muted);
+  --background-color-emphasized: var(--gos-surface-emphasized);
+  --background-color-inverse: var(--gos-surface-inverse);
+  --background-color-hover: var(--gos-surface-hover);
+  --background-color-default-hover: var(--gos-surface-default-hover);
+  --background-color-scrim: var(--gos-scrim);
+  --background-color-nav: var(--gos-nav-surface);
+  --background-color-neutral-subtle: var(--gos-neutral-subtle);
+  --background-color-neutral-muted: var(--gos-neutral-muted);
+  --background-color-neutral-strong: var(--gos-neutral-strong);
+  --background-color-neutral-strong-hover: var(--gos-neutral-strong-hover);
+  --background-color-brand-subtle: var(--gos-brand-subtle);
+  --background-color-brand-muted: var(--gos-brand-muted);
+  --background-color-brand-strong: var(--gos-brand-strong);
+  --background-color-brand-strong-hover: var(--gos-brand-strong-hover);
+  --background-color-accent-subtle: var(--gos-accent-subtle);
+  --background-color-accent-muted: var(--gos-accent-muted);
+  --background-color-accent-strong: var(--gos-accent-strong);
+  --background-color-accent-strong-hover: var(--gos-accent-strong-hover);
+  --background-color-danger-subtle: var(--gos-danger-subtle);
+  --background-color-danger-muted: var(--gos-danger-muted);
+  --background-color-danger-strong: var(--gos-danger-strong);
+  --background-color-danger-strong-hover: var(--gos-danger-strong-hover);
+  --background-color-success-subtle: var(--gos-success-subtle);
+  --background-color-success-muted: var(--gos-success-muted);
+  --background-color-success-strong: var(--gos-success-strong);
+  --background-color-success-strong-hover: var(--gos-success-strong-hover);
+  --background-color-warning-subtle: var(--gos-warning-subtle);
+  --background-color-warning-muted: var(--gos-warning-muted);
+  --background-color-warning-strong: var(--gos-warning-strong);
+  --background-color-warning-strong-hover: var(--gos-warning-strong-hover);
+  --background-color-info-subtle: var(--gos-info-subtle);
+  --background-color-info-muted: var(--gos-info-muted);
+  --background-color-info-strong: var(--gos-info-strong);
+  --background-color-info-strong-hover: var(--gos-info-strong-hover);
+  --background-color-tone-strong: var(--gos-tone-strong);
+  --background-color-tone-strong-hover: var(--gos-tone-strong-hover);
+  --background-color-tone-subtle: var(--gos-tone-subtle);
+  --background-color-tone-muted: var(--gos-tone-muted);
+
+  --border-color-default: var(--gos-border-default);
+  --border-color-subtle: var(--gos-border-subtle);
+  --border-color-emphasized: var(--gos-border-emphasized);
+  --border-color-strong: var(--gos-border-strong);
+  --border-color-disabled: var(--gos-border-disabled);
+  --border-color-brand: var(--gos-border-brand);
+  --border-color-accent: var(--gos-border-accent);
+  --border-color-danger: var(--gos-border-danger);
+  --border-color-success: var(--gos-border-success);
+  --border-color-warning: var(--gos-border-warning);
+  --border-color-info: var(--gos-border-info);
+  --border-color-focus: var(--gos-focus-ring);
+  --border-color-tone: var(--gos-tone-border);
+
+  --ring-color-focus: var(--gos-focus-ring);
+  --outline-color-focus: var(--gos-focus-ring);
+}

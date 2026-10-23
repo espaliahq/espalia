@@ -88,4 +88,13 @@ Rails.application.configure do
   # cross-container HTTP requests against `rails-app:6600`. Only
   # applies in development.
   config.hosts << "rails-app"
+
+  config.lookbook.project_name = "GrowthOS"
+  config.lookbook.component_paths << Rails.root.join("app/components")
+  config.lookbook.preview_layout = "component_preview"
+  # Toolbar switches; the preview layout turns them into <html data-theme / data-scheme>
+  config.lookbook.preview_display_options = {
+    theme: [ [ "Default", "default" ] ],
+    scheme: [ [ "Auto", "auto" ], [ "Light", "light" ], [ "Dark", "dark" ] ]
+  }
 end

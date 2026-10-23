@@ -1,0 +1,17 @@
+<%= render Components::Kit::Modal.new(id: "modal-open", title: "Manage delegates") do |modal| %>
+  <% modal.trigger do %>Delegates · 2<% end %>
+  <% modal.body do %>
+    <p class="text-sm text-gray-600 dark:text-gray-400">Delegates can record manager ratings for Priya Natarajan but cannot start or complete alignment.</p>
+  <% end %>
+<% end %>
+<%# Clicks the trigger once the modal controller connects, so the dialog is in its real open state. %>
+<script>
+  (function openWhenConnected() {
+    const host = document.querySelector("#modal-open").closest("[data-controller~=modal]")
+    if (window.Stimulus?.getControllerForElementAndIdentifier(host, "modal")) {
+      host.querySelector("[data-action~='modal#open']").click()
+    } else {
+      setTimeout(openWhenConnected, 50)
+    }
+  })()
+</script>

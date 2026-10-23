@@ -1,0 +1,11 @@
+<section class="max-w-4xl">
+  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Copy colours</h2>
+  <ul class="mt-4 divide-y divide-gray-200 dark:divide-gray-800">
+    <% colours.each do |css_class, sentence| %>
+      <li class="py-3">
+        <p class="font-mono text-xs text-gray-600 dark:text-gray-300"><%= css_class %></p>
+        <p class="<%= css_class %> mt-1 text-base"><%= sentence %></p>
+      </li>
+    <% end %>
+  </ul>
+</section>

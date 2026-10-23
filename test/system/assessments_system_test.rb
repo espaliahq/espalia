@@ -1327,7 +1327,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
       # The chip color should update to reflect the new rating
       # ("Consistently" is blue-500 in the FrequencyPalette).
-      assert_selector "#cell-#{@cap1_stable}-2.bg-blue-500", wait: 5
+      assert_selector "#cell-#{@cap1_stable}-2.bg-rating-consistent", wait: 5
     end
 
     should "not jump scroll position when scrolling past the hero summary" do

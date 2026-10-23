@@ -33,10 +33,10 @@ class Views::CalibrationSessions::SessionLog < Views::Base
   # raises a question, sky is a request, emerald asks for evidence, indigo
   # is editorial.
   KIND_DOT = {
-    "expectation_flagged" => "bg-amber-500",
-    "revisit_requested"   => "bg-sky-500",
-    "evidence_requested"  => "bg-emerald-500",
-    "note_recorded"       => "bg-indigo-500"
+    "expectation_flagged" => "bg-activity-attention",
+    "revisit_requested"   => "bg-activity-discussion",
+    "evidence_requested"  => "bg-activity-added",
+    "note_recorded"       => "bg-activity-updated"
   }.freeze
 
   KIND_GROUP = {
@@ -193,7 +193,7 @@ class Views::CalibrationSessions::SessionLog < Views::Base
         kind_group: KIND_GROUP.fetch(entry[:kind], "all")
       }
     ) do
-      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{KIND_DOT.fetch(entry[:kind], 'bg-gray-400')}",
+      span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{KIND_DOT.fetch(entry[:kind], 'bg-activity-cleared')}",
            aria: { hidden: "true" }) { }
       div(class: "min-w-0 flex-1") do
         div(class: "flex flex-wrap items-center gap-2") do

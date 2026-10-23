@@ -84,7 +84,7 @@ class Views::Assessments::Comments::Card < Views::Base
 
   def avatar_dot
     span(
-      class: "mt-1 w-2 h-2 rounded-full shrink-0 bg-sky-500",
+      class: "mt-1 w-2 h-2 rounded-full shrink-0 bg-activity-discussion",
       title: "Comment"
     ) { }
   end

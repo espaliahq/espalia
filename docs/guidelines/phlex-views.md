@@ -89,6 +89,20 @@ module Kit
 end
 ```
 
+## Previewing components (Lookbook)
+
+[Lookbook](https://lookbook.build) shows Kit components on their own, outside any page, at **`/lookbook`** in development. Use it to build or restyle a component, state by state, before wiring it into a view.
+
+- **One preview class per component**, in `test/components/previews/kit/<name>_preview.rb`, subclassing `Lookbook::Preview`. Each public method is one scenario; wrap related scenarios in `# @!group` / `# @!endgroup` to show them side by side.
+- **A `playground` scenario with `# @param` tags** gives live controls (text fields, selects) in the Lookbook UI.
+- **Previews render in `layouts/component_preview.html.erb`**: the app's stylesheets, import map and icon sprite on the page surface, so Tailwind, the colour roles and Stimulus behave as they do in the app. There's no tenant, so no tenant theme and no `PageLayout`. The toolbar's gear icon switches **Theme** and **Scheme** for every preview.
+- **Development only.** The gem is in the `:development` group and the engine mounts only there, so nothing here reaches production. Lookbook pulls in the `view_component` gem as a dependency; don't write ViewComponents.
+
+- **What's there:** **Design Tokens** (the colour roles, read from `theme/roles.css`, and the brand tokens, read from `application.css`, so a new one appears on its own, each with its measured contrast; a proof of the contrast helper; the Tailwind palette and the type scale), then every Kit component and an **Icons** gallery. The app-shell components (Navbar, UserMenu, PageLayout, TenantAdminLayout, ImpersonationBanner) aren't previewed yet.
+- **Every Kit component needs a preview.** `test/lib/kit_previews_test.rb` fails when one is missing; skip a component there by name, with the reason.
+- **The sidebar sorts folders alphabetically** and its path is the URL, so moving a preview changes its link. `# @label`, `# @logical_path` and `# @priority` rename, move and order a preview without moving the file.
+- **A class that appears only in a preview is still built into the CSS.** Pass a component its real arguments; don't write its class names into the preview, or a class the component builds by interpolation will render in Lookbook and nowhere else.
+
 ## Slots Pattern
 
 ```ruby
@@ -274,6 +288,7 @@ and dark** and at a **mobile viewport**, then pin regressions with a test.
 
 ### Colour contrast — 1.4.3 (4.5:1 normal text, 3:1 large/≥18.66px-bold)
 
+- **New code colours itself with role utilities** (`text-muted`, `bg-default`, `border-subtle`, `text-danger`, `bg-tone-strong`…), defined in `app/assets/tailwind/theme/roles.css` ([ADR-23](../architecture/adrs.md)). A role carries both schemes, so it needs no `dark:` partner. The palette rules below still hold for code not yet moved onto roles (#539).
 - **Muted/secondary text uses one AA-safe pairing: `text-gray-600 dark:text-gray-300`.** Do not reach for `text-gray-400`/`text-gray-500` for readable text — both fall below 4.5:1 on white/`gray-50` (and on `gray-800` cards in dark). The lighter greys are for genuinely incidental/decorative glyphs only (e.g. faint empty-cell `—` placeholders), never for content.
 - **Coloured accent text on a light/neutral background needs `-700`, not `-600`** (`text-amber-700`, `text-green-700`, `text-red-700`). `blue-600` is the exception — it already clears AA. On the `-100` tinted fills used by `Kit::Badge`-style chips, go one darker again (`-800`).
 - **Brand-coloured text uses `text-primary-ink`, never `text-primary`.** The brand teal is 2:1 on white, and a tenant can set any primary, so `--color-primary-ink` clamps the active primary's OKLCH lightness (≤0.5 light, ≥0.75 dark) to clear 4.5:1 whatever the tenant chose. `text-primary` survives only where it paints a checkbox or radio mark; fills (`bg-primary/10`), borders and focus rings keep the brand colour. A faded hover (`hover:text-primary-ink/80`) drops below AA — hover with `hover:underline` instead.

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<% display = params.dig(:lookbook, :display) || {} %>
+<% theme = display[:theme].presence_in(DevThemeOverride::THEMES) %>
+<% scheme = display[:scheme].presence_in(DevThemeOverride::SCHEMES) %>
+<html <%= tag.attributes(lang: I18n.locale, data: { theme: theme, scheme: scheme }) %>>
+  <head>
+    <title>GrowthOS previews</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= stylesheet_link_tag "tailwind" %>
+    <%= stylesheet_link_tag "application" %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <%# The app's own page surface, so a dark preview isn't dark ink on white. %>
+  <body class="min-h-screen bg-page text-default p-6">
+    <%= render Components::Kit::IconSprite.new %>
+    <%= yield %>
+  </body>
+</html>

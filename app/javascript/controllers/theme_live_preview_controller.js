@@ -11,12 +11,9 @@
 // inline overrides would persist across the rest of the user's
 // session, defeating Cancel.
 //
-// Dark-mode caveat: dark color variables are scoped under a
-// `@media (prefers-color-scheme: dark)` rule by the layout's
-// <style id="tenant-theme">. Writing to documentElement.style applies
-// at the inline-style level, which the media query overrides only
-// when the user's OS is in dark mode. So light-mode previews are
-// invisible when the OS is dark, and vice-versa — acceptable trade-off.
+// Each field previews only in its own scheme: a light value is skipped
+// while the page renders dark (the OS, or <html data-scheme>), and the
+// reverse. The admin flips the scheme to preview the other half.
 //
 // Usage:
 // <form data-controller="theme-live-preview">
@@ -56,10 +53,10 @@ export default class extends BaseController {
     const mode = el.dataset.themeLivePreviewModeParam
     if (!varName) return
 
-    // Only preview the value for the OS color scheme actually being
+    // Only preview the value for the colour scheme actually being
     // rendered. Without this, light + dark fields share a CSS variable
     // and clobber each other (especially during revert, where the
-    // last-written value wins regardless of OS mode).
+    // last-written value wins regardless of scheme).
     if (mode === "light" && this.prefersDark) return
     if (mode === "dark" && !this.prefersDark) return
 
@@ -81,6 +78,8 @@ export default class extends BaseController {
   }
 
   get prefersDark() {
+    const scheme = document.documentElement.dataset.scheme
+    if (scheme) return scheme === "dark"
     return window.matchMedia("(prefers-color-scheme: dark)").matches
   }
 }
