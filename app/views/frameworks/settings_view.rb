@@ -100,14 +100,13 @@ class Views::Frameworks::SettingsView < Views::Base
     div(class: "mb-8") do
       a(
         href: framework_path(@framework.framework_id),
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
-               "dark:hover:text-gray-200 transition-colors"
+        class: "text-sm text-muted hover:text-default transition-colors"
       ) do
         plain "\u2190 Back to #{@framework.name}"
       end
 
-      h1(class: "mt-2 text-2xl font-bold text-gray-900 dark:text-white") { "Settings" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      h1(class: "mt-2 text-2xl font-bold text-default") { "Settings" }
+      p(class: "mt-1 text-sm text-muted") do
         plain "Configure how assessments are scored and evaluated for this framework."
       end
     end
@@ -140,7 +139,7 @@ class Views::Frameworks::SettingsView < Views::Base
         loading: "lazy",
         class: "block mt-6"
       ) do
-        p(class: "text-sm text-gray-600 dark:text-gray-300") { "Loading collaborators…" }
+        p(class: "text-sm text-muted") { "Loading collaborators…" }
       end
     end
   end
@@ -176,45 +175,38 @@ class Views::Frameworks::SettingsView < Views::Base
           # Label and description
           div(class: "mb-4") do
             div(class: "flex items-center gap-2") do
-              h3(class: "text-sm font-semibold text-gray-900 dark:text-white") { setting[:label] }
+              h3(class: "text-sm font-semibold text-default") { setting[:label] }
               if is_default
-                span(class: "inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-700 " \
-                            "px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300") do
-                  plain "System default"
-                end
+                render Components::Kit::Badge.new("System default")
               end
             end
-            p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") { setting[:description] }
+            p(class: "mt-1 text-sm text-muted") { setting[:description] }
           end
 
           # Input field
           div(class: "flex items-center gap-3") do
-            input(
-              type: "number",
-              name: "settings[#{key}]",
-              value: format_value(display_value, setting[:type]),
-              step: setting[:step],
-              min: setting[:min],
-              class: "block w-32 rounded-sm border border-gray-300 dark:border-gray-600 " \
-                     "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                     "shadow-xs focus:border-primary focus:ring-1 focus:ring-primary " \
-                     "focus:outline-hidden transition-colors",
-              data: {
-                setting_field_target: "input",
-                action: "input->setting-field#checkDefault"
-              }
-            )
+            div(class: "w-32") do
+              input(
+                type: "number",
+                name: "settings[#{key}]",
+                value: format_value(display_value, setting[:type]),
+                step: setting[:step],
+                min: setting[:min],
+                class: Components::Kit::Field::INPUT,
+                data: {
+                  setting_field_target: "input",
+                  action: "input->setting-field#checkDefault"
+                }
+              )
+            end
 
-            # Reset to default link
-            button(
-              type: "button",
-              class: "text-sm text-primary-ink hover:underline transition-colors #{'hidden' if is_default}",
-              data: {
-                setting_field_target: "reset",
-                action: "setting-field#reset"
-              }
-            ) do
-              plain "\u21A9 Reset to default (#{format_value(default_value, setting[:type])})"
+            # The controller toggles `hidden` here, because the button's own display class would win over it
+            span(class: ("hidden" if is_default), data: { setting_field_target: "reset" }) do
+              render Components::Kit::Button.new(
+                variant: :link, tone: :brand, size: :sm, data: { action: "setting-field#reset" }
+              ) do
+                plain "\u21A9 Reset to default (#{format_value(default_value, setting[:type])})"
+              end
             end
           end
         end
@@ -224,19 +216,8 @@ class Views::Frameworks::SettingsView < Views::Base
 
   def submit_section
     div(class: "flex items-center gap-4") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-sm bg-primary px-4 py-2 text-sm " \
-               "font-semibold text-white shadow-xs hover:bg-primary/90 " \
-               "focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2 " \
-               "transition-colors"
-      ) { "Save settings" }
-
-      a(
-        href: framework_path(@framework.framework_id),
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
-               "dark:hover:text-gray-200 transition-colors"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Save settings" }
+      render Components::Kit::Button.new(variant: :ghost, href: framework_path(@framework.framework_id)) { "Cancel" }
     end
   end
 

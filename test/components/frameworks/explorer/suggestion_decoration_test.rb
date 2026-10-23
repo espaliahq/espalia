@@ -12,7 +12,7 @@ class Views::Frameworks::Explorer::SuggestionDecorationTest < ActiveSupport::Tes
 
   setup { @d = Host.new }
 
-  WIGGLE = "decoration-amber-400"
+  WIGGLE = "decoration-suggestion-edit"
 
   context "#suggestion_text_classes" do
     should "return the wiggle for a pending edit" do

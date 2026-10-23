@@ -327,3 +327,103 @@ html[data-theme="bento"] {
   }
 }
 
+/* Cycle and calibration data-vis (#546): Default's steps on Bento's ramps */
+html[data-theme="bento"] {
+  --gos-attainment-high: #d3f1dd;
+  --gos-attainment-high-content: #065c3a;
+  --gos-attainment-good: #edfed4;
+  --gos-attainment-good-content: #4a690c;
+  --gos-attainment-fair: #fef0c7;
+  --gos-attainment-fair-content: #93370d;
+  --gos-attainment-low: #fbe2e1;
+  --gos-attainment-low-content: #8d1c14;
+
+  --gos-progress-self: #0869e7;
+  --gos-progress-manager: #b54708;
+  --gos-progress-aligned: #007345;
+
+  /* The lime is too pale for a bar on the light track; its deep step reads */
+  --gos-readiness-confirmed: #4a690c;
+  --gos-readiness-evidence: #484e59;
+
+  --gos-compared: #6b58da;
+  --gos-compared-content: #5b46c3;
+  --gos-compared-subtle: #f0f2fd;
+
+  --gos-rater-outside: #7b808a;
+  --gos-rater-outside-content: #0a0d12;
+  --gos-session-live: #00884d;
+
+  /* Six categories on Bento's ramps; 6 (cyan) and 7 (pink) keep Default's */
+  --gos-category-1-strong: #0869e7;
+  --gos-category-2-strong: #d02115;
+  --gos-category-3-strong: #007345;
+  --gos-category-4-strong: #6b58da;
+  --gos-category-5-strong: #b54708;
+  --gos-category-8-strong: #4a690c;
+
+  @variant dark {
+    --gos-attainment-high: color-mix(in srgb, #0a4e32 40%, var(--gos-surface-default));
+    --gos-attainment-high-content: #69d49b;
+    --gos-attainment-good: color-mix(in srgb, #374f0e 40%, var(--gos-surface-default));
+    --gos-attainment-good-content: #c6f226;
+    --gos-attainment-fair: color-mix(in srgb, #7a2e0e 40%, var(--gos-surface-default));
+    --gos-attainment-fair-content: #fec84b;
+    --gos-attainment-low: color-mix(in srgb, #742114 40%, var(--gos-surface-default));
+    --gos-attainment-low-content: #f1a39d;
+
+    --gos-progress-self: #44a3ee;
+    --gos-progress-manager: #fdb022;
+    --gos-progress-aligned: #2ab876;
+
+    --gos-readiness-confirmed: #c6f226;
+    --gos-readiness-evidence: #a5a6a9;
+
+    --gos-compared: #9191e9;
+    --gos-compared-content: #b0b5f1;
+    --gos-compared-subtle: #372e73;
+
+    --gos-rater-outside: #9b9ea5;
+    --gos-rater-outside-content: #0a0d12;
+    --gos-session-live: #2ab876;
+
+    --gos-category-1-strong: #44a3ee;
+    --gos-category-2-strong: #eb7268;
+    --gos-category-3-strong: #2ab876;
+    --gos-category-4-strong: #9191e9;
+    --gos-category-5-strong: #fdb022;
+    --gos-category-8-strong: #c6f226;
+  }
+}
+
+/* Framework explorer surfaces, suggestions and search (#545). The surfaces
+   follow Bento's own steps, so only the blue tint needs a dark value. */
+html[data-theme="bento"] {
+  --gos-surface-overlay-subtle: var(--gos-surface-subtle);
+  --gos-surface-overlay-muted: var(--gos-surface-default-hover);
+  --gos-surface-overlay-hover: var(--gos-surface-hover);
+  --gos-surface-empty: color-mix(in oklab, var(--gos-surface-subtle) 50%, transparent);
+  --gos-surface-expanded: color-mix(in srgb, var(--gos-info-subtle) 50%, var(--gos-surface-overlay));
+  --gos-surface-expanded-hover: var(--gos-info-subtle);
+
+  --gos-suggestion-edit: #dc6803;
+  --gos-suggestion-delete: #eb3f33;
+  --gos-suggestion-add: #2287f0;
+  --gos-suggestion-add-content: #1344a5;
+  --gos-search-hit: #fedf89;
+  --gos-search-hit-content: #4e1d09;
+  --gos-illustration-marker: #bcbec1;
+
+  @variant dark {
+    --gos-surface-empty: color-mix(in oklab, var(--gos-surface-hover) 50%, transparent);
+    --gos-surface-expanded: color-mix(in srgb, var(--gos-info-subtle) 20%, var(--gos-surface-overlay));
+    --gos-surface-expanded-hover: color-mix(in srgb, var(--gos-info-subtle) 35%, var(--gos-surface-overlay));
+
+    --gos-suggestion-edit: #fdb022;
+    --gos-suggestion-add: #44a3ee;
+    --gos-suggestion-add-content: #81c3f4;
+    --gos-search-hit: #93370d;
+    --gos-search-hit-content: #fffaeb;
+    --gos-illustration-marker: #51555c;
+  }
+}

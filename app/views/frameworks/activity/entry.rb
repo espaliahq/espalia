@@ -120,7 +120,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
   def view_template
     li(
       id: "framework-activity-#{dom_safe_id}",
-      class: "flex gap-2 text-xs text-gray-700 dark:text-gray-300 rounded -mx-2 px-2 py-1.5 " \
+      class: "flex gap-2 text-xs text-muted rounded -mx-2 px-2 py-1.5 " \
              "transition-colors data-[hidden=true]:hidden " \
              "#{navigable_classes if navigable?}",
       tabindex: (navigable? ? "0" : nil),
@@ -129,7 +129,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
     ) do
       span(class: "mt-1 w-2 h-2 rounded-full shrink-0 #{dot_class}") { }
       div(class: "min-w-0 flex-1") do
-        p(class: "font-medium text-gray-900 dark:text-gray-100") { summary_text }
+        p(class: "font-medium text-default") { summary_text }
         context_line if context_text
         secondary_line if secondary_text
         footer
@@ -201,11 +201,9 @@ class Views::Frameworks::Activity::Entry < Views::Base
   end
 
   def review_link
-    a(
-      href: framework_suggestion_path(@framework_id, @entry.suggestion_id),
-      class: "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium " \
-             "text-primary-ink hover:bg-primary/10 transition-colors",
-      data: { turbo_frame: "_top" }
+    render Components::Kit::Button.new(
+      variant: :ghost, tone: :brand, size: :xs,
+      href: framework_suggestion_path(@framework_id, @entry.suggestion_id), data: { turbo_frame: "_top" }
     ) { "Review" }
   end
 
@@ -230,7 +228,7 @@ class Views::Frameworks::Activity::Entry < Views::Base
       button(
         type: "button",
         class: "inline-flex items-center gap-1 max-w-full rounded px-1.5 py-0.5 text-[10px] " \
-               "text-gray-500 dark:text-gray-400 hover:text-primary-ink hover:bg-primary/10 " \
+               "text-muted hover:text-brand hover:bg-brand-subtle " \
                "transition-colors",
         data: {
           action: "click->context-pane#openSuggestionCard",
@@ -290,8 +288,8 @@ class Views::Frameworks::Activity::Entry < Views::Base
   end
 
   def navigable_classes
-    "cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-700/40 " \
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+    "cursor-pointer hover:bg-hover " \
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
   end
 
   def entry_data
@@ -329,15 +327,15 @@ class Views::Frameworks::Activity::Entry < Views::Base
   end
 
   def context_line
-    p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") { context_text }
+    p(class: "mt-0.5 text-[11px] text-muted") { context_text }
   end
 
   def secondary_line
-    p(class: "mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2") { secondary_text }
+    p(class: "mt-0.5 text-[11px] text-muted line-clamp-2") { secondary_text }
   end
 
   def footer
-    div(class: "mt-1 text-[10px] text-gray-500 dark:text-gray-400") do
+    div(class: "mt-1 text-[10px] text-muted") do
       bits = [ actor_name, time_ago ].compact
       span { bits.join(" · ") }
     end

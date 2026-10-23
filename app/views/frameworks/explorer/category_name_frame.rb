@@ -46,7 +46,7 @@ class Views::Frameworks::Explorer::CategoryNameFrame < Views::Base
   private
 
   def plain_name
-    base = "text-sm font-semibold text-gray-700 dark:text-gray-300"
+    base = "text-sm font-semibold text-muted"
     if @pending_edit
       span(class: base) do
         # interactive: false — this renders inside the category header's

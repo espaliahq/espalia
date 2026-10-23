@@ -47,8 +47,7 @@ class Views::AssessmentCycles::NewView < Views::Base
   def back_link
     a(
       href: assessment_cycles_path,
-      class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 " \
-             "dark:hover:text-gray-200 transition-colors"
+      class: "text-sm text-muted hover:text-default transition-colors"
     ) do
       plain "\u2190 Back to cycles"
     end
@@ -56,8 +55,8 @@ class Views::AssessmentCycles::NewView < Views::Base
 
   def page_header
     div(class: "mt-4 mb-6") do
-      h1(class: "text-2xl font-bold text-gray-900 dark:text-white") { "Define a new cycle" }
-      p(class: "mt-1 text-sm text-gray-600 dark:text-gray-300") do
+      h1(class: "text-2xl font-bold text-default") { "Define a new cycle" }
+      p(class: "mt-1 text-sm text-muted") do
         "A cycle is frozen against the currently-published framework version."
       end
     end
@@ -82,14 +81,13 @@ class Views::AssessmentCycles::NewView < Views::Base
     div do
       label(
         for: "assessment_cycle_framework_id",
-        class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        class: "block text-sm font-medium text-muted mb-1"
       ) { "Framework" }
       select(
         id: "assessment_cycle_framework_id",
         name: "assessment_cycle[framework_id]",
         required: true,
-        class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+        class: Components::Kit::Field::SELECT
       ) do
         @frameworks.each do |framework|
           option(value: framework.framework_id) do
@@ -97,7 +95,7 @@ class Views::AssessmentCycles::NewView < Views::Base
           end
         end
       end
-      p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-xs text-muted") do
         "Only frameworks without an open cycle are listed."
       end
     end
@@ -107,7 +105,7 @@ class Views::AssessmentCycles::NewView < Views::Base
     div do
       label(
         for: "assessment_cycle_name",
-        class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        class: "block text-sm font-medium text-muted mb-1"
       ) { "Name" }
       input(
         type: "text",
@@ -115,15 +113,14 @@ class Views::AssessmentCycles::NewView < Views::Base
         name: "assessment_cycle[name]",
         required: true,
         placeholder: "e.g. Q2 2026 Review",
-        class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+        class: Components::Kit::Field::INPUT
       )
     end
   end
 
   def cycle_type_field
     div do
-      label(class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2") { "Type" }
+      label(class: "block text-sm font-medium text-muted mb-2") { "Type" }
       div(class: "space-y-2") do
         @cycle_types.each_with_index do |type, idx|
           div(class: "flex items-center") do
@@ -133,11 +130,11 @@ class Views::AssessmentCycles::NewView < Views::Base
               name: "assessment_cycle[cycle_type]",
               value: type,
               checked: idx.zero?,
-              class: "h-4 w-4 text-primary"
+              class: Components::Kit::Field::RADIO
             )
             label(
               for: "assessment_cycle_cycle_type_#{type}",
-              class: "ml-2 text-sm text-gray-900 dark:text-white"
+              class: "ml-2 text-sm text-default"
             ) { CYCLE_TYPE_LABELS.fetch(type, type.humanize) }
           end
         end
@@ -149,35 +146,30 @@ class Views::AssessmentCycles::NewView < Views::Base
     div do
       label(
         for: "assessment_cycle_planned_end_at",
-        class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        class: "block text-sm font-medium text-muted mb-1"
       ) { "Target completion date (optional)" }
       input(
         type: "date",
         id: "assessment_cycle_planned_end_at",
         name: "assessment_cycle[planned_end_at]",
-        class: "block w-full rounded-sm border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+        class: Components::Kit::Field::INPUT
       )
-      p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+      p(class: "mt-1 text-xs text-muted") do
         "Soft deadline shown to participants. The cycle remains open until you close it."
       end
     end
   end
 
   def submit_section
-    div(class: "pt-4 border-t border-gray-200 dark:border-gray-700") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-primary px-4 py-2 " \
-               "text-sm font-semibold text-white shadow-xs hover:bg-primary/90 transition-colors"
-      ) { "Define cycle" }
+    div(class: "pt-4 border-t border-default") do
+      render Components::Kit::Button.new(tone: :brand, type: :submit) { "Define cycle" }
     end
   end
 
   def empty_state
-    div(class: "mt-6 text-center py-12") do
-      p(class: "text-gray-600 dark:text-gray-300") do
-        "Every framework already has an open cycle. Close one first to define a new one."
+    div(class: "mt-6") do
+      render Components::Kit::EmptyState.new(title: "Every framework has an open cycle") do
+        "Close one first to define a new one."
       end
     end
   end

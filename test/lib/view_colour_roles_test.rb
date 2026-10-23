@@ -3,11 +3,15 @@
 require "test_helper"
 require_relative "kit_colour_roles_test"
 
-# The views outside assessments, frameworks, cycles and calibration colour
-# themselves with the role utilities in theme/ (#547), as Kit does, so a theme
-# reaches them.
+# The views colour themselves with the role and domain utilities in theme/
+# (#544–#547), as Kit does, so a theme reaches them.
 class ViewColourRolesTest < ActiveSupport::TestCase
   SOURCES = %w[
+    app/views/assessments/**/*.rb
+    app/views/assessment_guides/**/*.rb
+    app/views/frameworks/**/*.rb
+    app/views/assessment_cycles/**/*.rb
+    app/views/calibration_sessions/**/*.rb
     app/views/evidence/**/*.rb
     app/views/home/**/*.rb
     app/views/settings/**/*.rb
@@ -23,8 +27,8 @@ class ViewColourRolesTest < ActiveSupport::TestCase
     app/javascript/controllers/person_picker_controller.js
   ].freeze
 
-  # A site still waiting on a domain token, with the reason. Remove an entry
-  # when its site moves; a stale entry fails too.
+  # Waiting on a component variant or a domain token. Remove an entry when its
+  # site moves; a stale entry fails too.
   PENDING = {}.freeze
 
   should "colour the views with role utilities" do
@@ -47,13 +51,14 @@ class ViewColourRolesTest < ActiveSupport::TestCase
   private
 
   def palette_utilities
-    SOURCES.flat_map { |glob| Dir[Rails.root.join(glob)] }.sort.to_h do |path|
+    SOURCES.flat_map { |glob| Dir[Rails.root.join(glob)] }.sort.filter_map do |path|
+      relative = Pathname(path).relative_path_from(Rails.root).to_s
       utilities = File.readlines(path).flat_map do |line|
         next [] if line.lstrip.start_with?("#", "//", "<%#")
 
         line.scan(KitColourRolesTest::PALETTE_UTILITY)
       end
-      [ Pathname(path).relative_path_from(Rails.root).to_s, utilities ]
-    end
+      [ relative, utilities ]
+    end.to_h
   end
 end

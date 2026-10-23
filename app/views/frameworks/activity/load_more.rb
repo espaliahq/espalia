@@ -21,12 +21,8 @@ class Views::Frameworks::Activity::LoadMore < Views::Base
       next unless @has_more && @load_more_path
 
       div(data: { controller: "activity-more", activity_more_url_value: @load_more_path }) do
-        button(
-          type: "button",
-          class: "w-full rounded-md border border-gray-200 dark:border-gray-700 " \
-                 "px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 " \
-                 "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors " \
-                 "disabled:opacity-50 disabled:cursor-wait",
+        render Components::Kit::Button.new(
+          variant: :outline, size: :sm, class: "w-full",
           data: { action: "activity-more#load", activity_more_target: "button" }
         ) { "Load older activity" }
       end

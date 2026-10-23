@@ -476,12 +476,14 @@ The matrix uses a precise z-index hierarchy for sticky elements:
 
 **Every sticky cell must be OPAQUE in both themes (NON-NEGOTIABLE).** A sticky cell is a mask — content scrolls underneath it — so a translucent background (`bg-…/NN`) or a missing one lets that content render straight through. This applies to hover and focus variants too, not just the base class. Where the design wants a tint, use the **opaque composite** (the literal hex of that tint over the surface behind it) rather than the translucent token, so the cell looks identical but actually masks; derive it by compositing in the browser, not by eye, and record the token + surface at the call site. The shared right-edge treatment and the full rationale live in [`concerns/sticky_column.rb`](../../app/views/frameworks/explorer/concerns/sticky_column.rb) — see Hard-Won Lesson 24.
 
-| Sticky cell | Light | Dark |
+The fills are roles from `theme/roles.css`, shared with the `.mx-*` classes; each tint role is already the opaque composite over the overlay surface.
+
+| Sticky cell | Role | Default (light / dark) |
 |---|---|---|
-| Header corner + level columns | `bg-gray-50` | `dark:bg-gray-900` |
-| Compact row (capability name) | `bg-white`, hover `bg-gray-50` | `dark:bg-gray-900`, hover `dark:bg-[#172131]` (= `gray-800/50` over `gray-900`) |
-| Expanded row (empty gutter) | `bg-[#fafcff]` (= `blue-50/30` over white) | `dark:bg-[#111b31]` (= `blue-900/10` over `gray-900`) |
-| Category header row | `bg-gray-100` | `dark:bg-gray-800` |
+| Header corner + level columns | `bg-overlay-subtle` | gray-50 / gray-900 |
+| Compact row (capability name) | `bg-overlay`, hover `bg-overlay-hover` | white / gray-900; hover gray-50 / gray-800 at 50% over gray-900 |
+| Expanded row (empty gutter) | `bg-expanded` | blue-50 at 30% over white / blue-900 at 10% over gray-900 |
+| Category header row | `bg-overlay-muted` | gray-100 / gray-800 |
 
 **The sticky offsets are MEASURED, never constants (NON-NEGOTIABLE).** The
 matrix header's height depends on the role selection — ~41 px of code badges

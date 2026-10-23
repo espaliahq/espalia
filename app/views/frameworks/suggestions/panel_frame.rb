@@ -47,14 +47,14 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   private
 
   def header
-    div(class: "px-4 py-3 border-b border-gray-200 dark:border-gray-700 " \
+    div(class: "px-4 py-3 border-b border-default " \
                 "flex items-start justify-between gap-2") do
       div(class: "min-w-0 flex-1") do
-        h2(class: "text-sm font-semibold text-gray-900 dark:text-white truncate",
+        h2(class: "text-sm font-semibold text-default truncate",
            data: { suggestion_panel_target: "focusTitle" }) do
           focus_title
         end
-        p(class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
+        p(class: "text-xs text-muted mt-0.5") do
           pending_count = pending.size
           "#{pending_count} pending"
         end
@@ -62,7 +62,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
       end
       a(
         href: framework_suggestions_path(@framework.framework_id),
-        class: "text-xs text-primary-ink hover:underline shrink-0",
+        class: "text-xs text-link hover:text-link-hover hover:underline shrink-0",
         data: { turbo_frame: "_top" }
       ) { "View all" }
     end
@@ -73,7 +73,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
     a(
       href: @clear_path,
-      class: "text-xs text-gray-600 dark:text-gray-300 hover:text-primary-ink mt-1 inline-block",
+      class: "text-xs text-muted hover:text-brand mt-1 inline-block",
       data: {
         turbo_frame: "suggestion-panel",
         action: "click->context-pane#clearFocus"
@@ -103,7 +103,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
       if pending.empty?
         empty_state
       else
-        ul(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+        ul(class: "divide-y divide-default") do
           pending.each { |s| panel_row(s) }
         end
       end
@@ -111,7 +111,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   end
 
   def empty_state
-    div(class: "p-6 text-center text-sm text-gray-600 dark:text-gray-300") do
+    div(class: "p-6 text-center text-sm text-muted") do
       p { "No pending suggestions." }
     end
   end
@@ -152,7 +152,7 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
     # Button (not div) for the navigable case so keyboard users can focus
     # + Enter to navigate. The non-navigable case (no coords) stays a div
     # to avoid a non-functional button landing in the tab order.
-    wrapper_class = "#{'w-full text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ' if coords}" \
+    wrapper_class = "#{'w-full text-left cursor-pointer hover:bg-hover ' if coords}" \
                     "-mx-4 -mb-3 px-4 pb-3 pt-0.5 rounded-b transition-colors"
     wrapper_attrs = { class: wrapper_class }
     wrapper_attrs[:data] = data if data.any?
@@ -167,9 +167,9 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
 
   def navigate_body_content(suggestion, label)
     if label
-      p(class: "text-xs text-gray-600 dark:text-gray-300 mb-0.5") { plain label }
+      p(class: "text-xs text-muted mb-0.5") { plain label }
     end
-    p(class: "text-xs text-gray-700 dark:text-gray-300 line-clamp-2") do
+    p(class: "text-xs text-muted line-clamp-2") do
       plain suggestion_preview(suggestion)
     end
   end
@@ -178,9 +178,9 @@ class Views::Frameworks::Suggestions::PanelFrame < Views::Base
   def detail_link(suggestion)
     a(
       href: framework_suggestion_path(@framework.framework_id, suggestion.suggestion_id),
-      class: "ml-auto text-gray-600 dark:text-gray-300 hover:text-primary-ink " \
-             "focus-visible:text-primary-ink focus-visible:opacity-100 " \
-             "focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 " \
+      class: "ml-auto text-muted hover:text-brand " \
+             "focus-visible:text-brand focus-visible:opacity-100 " \
+             "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 " \
              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
       data: { turbo_frame: "_top" },
       title: "View suggestion details",

@@ -51,20 +51,40 @@ module LayoutHelpers
       const name = (el) => `${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") || el.textContent).trim().slice(0, 40)}"`;
       const controls = document.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, summary, [role=button]");
       const stolen = new Set();
+      const off = document.createElement("style");
+      off.textContent = "[data-probe-off]::after { display: none !important; }";
+      document.head.append(off);
       for (const el of controls) {
         const r = el.getBoundingClientRect();
         if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight) continue;
-        const points = [[r.left + 1, r.top + 1], [r.right - 1, r.top + 1], [r.left + 1, r.bottom - 1], [r.right - 1, r.bottom - 1],
-                        [r.left + r.width / 2, r.top + 1], [r.left + r.width / 2, r.bottom - 1],
-                        [r.left + 1, r.top + r.height / 2], [r.right - 1, r.top + r.height / 2]];
+        // Every 6px along each edge, inset past a rounded corner, which
+        // elementFromPoint treats as outside the element.
+        const points = [];
+        for (let x = r.left + 3; x <= r.right - 3; x += 6) points.push([x, r.top + 2], [x, r.bottom - 2]);
+        for (let y = r.top + 3; y <= r.bottom - 3; y += 6) points.push([r.left + 2, y], [r.right - 2, y]);
         for (const [x, y] of points) {
           if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
           const thief = document.elementFromPoint(x, y)?.closest(HIT);
           if (!thief || thief === el || el.contains(thief) || thief.contains(el)) continue;
           const t = thief.getBoundingClientRect();
-          if (x < t.left || x > t.right || y < t.top || y > t.bottom) stolen.add(`${name(el)} <- ${name(thief)}`);
+          if (x >= t.left && x <= t.right && y >= t.top && y <= t.bottom) continue;
+          // Only a tap that would have reached el: a point a scrim or a
+          // scroll container's clip already hides is nobody's to steal.
+          // Hit areas can stack, so switch each one off until the point
+          // lands on something that isn't one.
+          const switchedOff = [];
+          let beneath;
+          for (let next = thief; next && !switchedOff.includes(next); next = beneath?.closest(HIT)) {
+            next.setAttribute("data-probe-off", "");
+            switchedOff.push(next);
+            beneath = document.elementFromPoint(x, y);
+            if (!beneath || beneath === el || el.contains(beneath)) break;
+          }
+          switchedOff.forEach((area) => area.removeAttribute("data-probe-off"));
+          if (beneath && (beneath === el || el.contains(beneath))) stolen.add(`${name(el)} <- ${name(thief)}`);
         }
       }
+      off.remove();
       return [...stolen];
     })()
   JS

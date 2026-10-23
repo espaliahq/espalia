@@ -37,8 +37,7 @@ module Views::Frameworks::Explorer::Concerns::StickyColumn
   # table's outer edge, not the column boundary — a shadow there would draw a
   # stray line down the far side of the matrix. It interrupts the column's edge
   # by design, being a band across it rather than a cell in it. It still owes
-  # the opacity invariant above, and satisfies it (`bg-gray-100
-  # dark:bg-gray-800`).
+  # the opacity invariant above, and satisfies it (`bg-overlay-muted`).
   #
   # The "+ Add capability" row used to be such a band too. It is now a single
   # cell in the capability column — the column it adds to — because a centred

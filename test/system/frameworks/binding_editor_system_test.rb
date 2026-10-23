@@ -110,7 +110,7 @@ class Frameworks::BindingEditorSystemTest < ApplicationSystemTestCase
       within "#binding-editor" do
         assert_text "Bound to every role."
         assert_no_text "New in draft"
-        assert_selector "span.decoration-amber-400", text: "Engineering Manager"
+        assert_selector "span.decoration-suggestion-edit", text: "Engineering Manager"
       end
       assert_header_shows_draft
     end

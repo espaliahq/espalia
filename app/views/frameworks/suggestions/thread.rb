@@ -34,7 +34,7 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
   def view_template
     div(
       id: "suggestion-thread-#{@suggestion_id}",
-      class: "mt-3 pt-3 border-t border-gray-200 dark:border-gray-700",
+      class: "mt-3 pt-3 border-t border-default",
       data: { controller: "comments-thread" }
     ) do
       header
@@ -57,14 +57,14 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
     div(class: header_label_classes) do
       span { "Discussion" }
       if visible_count.positive?
-        span(class: "text-gray-400 dark:text-gray-500") { visible_count.to_s }
+        span(class: "text-muted") { visible_count.to_s }
       end
     end
   end
 
   def header_label_classes
     "flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide " \
-      "text-gray-500 dark:text-gray-400 mb-1"
+      "text-muted mb-1"
   end
 
   def visible_count
@@ -129,20 +129,15 @@ class Views::Frameworks::Suggestions::Thread < Views::Base
         required: true,
         placeholder: "Add to the discussion…",
         aria: { label: "Comment on this suggestion", describedby: composer_hint_id },
-        class: "w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-2 focus:ring-primary",
+        class: Components::Kit::Field::INLINE,
         data: {
           comments_thread_target: "composerBody",
           action: "keydown->comments-thread#submitOnModEnter"
         }
       ) { "" }
       div(class: "mt-1 flex items-center justify-between gap-2") do
-        span(id: composer_hint_id, class: "text-[10px] text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
-        button(
-          type: "submit",
-          class: "px-2 py-1 text-[11px] rounded-md bg-primary text-white hover:bg-primary/90"
-        ) { "Comment" }
+        span(id: composer_hint_id, class: "text-[10px] text-muted") { Prose::COMPOSER_HINT }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, compact: true, type: :submit) { "Comment" }
       end
     end
   end

@@ -39,7 +39,7 @@ class Views::AssessmentCycles::CycleTypeFrame < Views::Base
   end
 
   def plain_value
-    span(class: "font-medium text-gray-900 dark:text-white") { current_label }
+    span(class: "font-medium text-default") { current_label }
   end
 
   def current_label
@@ -62,7 +62,7 @@ class Views::AssessmentCycles::CycleTypeFrame < Views::Base
     button(
       type: "button",
       class: "opacity-0 group-hover/ine:opacity-100 group-focus-within/ine:opacity-100 " \
-             "focus-visible:opacity-100 transition-opacity text-gray-400 hover:text-primary-ink shrink-0",
+             "focus-visible:opacity-100 transition-opacity text-muted hover:text-brand shrink-0",
       data: { action: "inline-editor#startEdit" },
       aria_label: "Edit cycle type"
     ) do
@@ -83,29 +83,23 @@ class Views::AssessmentCycles::CycleTypeFrame < Views::Base
     ) do
       input(type: "hidden", name: "_method", value: "patch")
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
-      select(
-        name: "assessment_cycle[cycle_type]",
-        class: "text-sm border border-primary rounded-sm px-2 py-1 " \
-               "bg-white dark:bg-gray-900 text-gray-900 dark:text-white " \
-               "focus:outline-none focus:ring-1 focus:ring-primary",
-        data: { inline_editor_target: "input" }
-      ) do
-        AssessmentCycle::CYCLE_TYPES.each do |type|
-          option(value: type, selected: (type == @cycle.cycle_type)) do
-            plain CYCLE_TYPE_LABELS.fetch(type, type.humanize)
+      div(class: "inline-block") do
+        select(
+          name: "assessment_cycle[cycle_type]",
+          class: Components::Kit::Field::SELECT,
+          data: { inline_editor_target: "input" }
+        ) do
+          AssessmentCycle::CYCLE_TYPES.each do |type|
+            option(value: type, selected: (type == @cycle.cycle_type)) do
+              plain CYCLE_TYPE_LABELS.fetch(type, type.humanize)
+            end
           end
         end
       end
       div(class: "inline-flex gap-1 ml-2") do
-        button(
-          type: "submit",
-          class: "text-xs px-2 py-0.5 rounded-sm bg-primary text-white hover:bg-primary/90"
-        ) { "Save" }
-        button(
-          type: "button",
-          class: "text-xs px-2 py-0.5 rounded-sm border border-gray-300 dark:border-gray-600 " \
-                 "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
-          data: { action: "inline-editor#cancel" }
+        render Components::Kit::Button.new(tone: :brand, size: :xs, type: :submit) { "Save" }
+        render Components::Kit::Button.new(
+          variant: :outline, size: :xs, data: { action: "inline-editor#cancel" }
         ) { "Cancel" }
       end
     end

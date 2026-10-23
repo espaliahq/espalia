@@ -21,7 +21,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   include Views::CalibrationSessions::PeopleNames
   include Views::CalibrationSessions::LanePacking
 
-  UNRATED_DOT = "border-2 border-gray-300 dark:border-gray-600"
+  UNRATED_DOT = "border-2 border-emphasized"
 
   # Not yet / Some / Most / Consistently at 12.5 / 37.5 / 62.5 / 87.5 % —
   # the board's 0–3 scale with half a band of margin at each end, so the
@@ -155,7 +155,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       a(href: calibration_session_path(
           @session, { person: opened_person_id, pins: @pin_ids.presence }.compact
         ),
-        class: "flex-1 min-w-0 text-sm text-gray-600 dark:text-gray-300 hover:underline") { "← #{@session.name}" }
+        class: "flex-1 min-w-0 text-sm text-muted hover:underline") { "← #{@session.name}" }
       if @session_log
         render Views::CalibrationSessions::LogPaneToggle.new(
           entry_count: @session_log[:entries].size
@@ -165,11 +165,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     div(class: "shrink-0 py-1.5") do
       div(class: "flex items-baseline gap-x-3 min-w-0") do
         if @stats[:capability][:category_name]
-          span(class: "shrink-0 text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+          span(class: "shrink-0 text-xs font-medium uppercase tracking-wide text-muted") do
             @stats[:capability][:category_name]
           end
         end
-        h1(class: "text-xl font-bold text-gray-900 dark:text-white truncate") { @stats[:capability][:name] }
+        h1(class: "text-xl font-bold text-default truncate") { @stats[:capability][:name] }
       end
     end
   end
@@ -178,13 +178,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # the role examples (each flaggable) and the cell's ⚑ flag affordance.
   def level_menu(ordinal)
     example_count = Array(@stats[:illustrations]&.dig(ordinal)).sum { |group| group[:items].size }
-    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left) do |dropdown|
+    render Components::Kit::Dropdown.new(strategy: :fixed, align: :left, role: "dialog") do |dropdown|
       dropdown.trigger do
         # 44px tap target — the only route to the level's examples and
         # flags. A DRAWN info glyph, not the ⓘ character: headless/minimal
         # font stacks render that as tofu.
         span(class: "inline-flex min-h-11 items-center gap-1.5 text-left text-xs font-medium " \
-                    "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white") do
+                    "text-muted hover:text-default") do
           span(class: "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border " \
                       "border-current text-[10px] font-serif italic leading-none",
                aria: { hidden: "true" }) { "i" }
@@ -193,14 +193,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           span(class: "sr-only") { " at L#{ordinal}" }
         end
       end
-      dropdown.menu(width: "w-[min(24rem,calc(100vw-2rem))]", role: "dialog",
+      dropdown.menu(width: "w-[min(24rem,calc(100vw-2rem))]",
                     label: "L#{ordinal} — what good looks like") do
         div(class: "px-3 py-2 text-left") do
-          p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+          p(class: "text-xs font-semibold uppercase tracking-wide text-muted") do
             "L#{ordinal} — what good looks like"
           end
           if example_count.zero?
-            p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+            p(class: "mt-1 text-xs text-muted") do
               "No examples for the roles calibrated at this level."
             end
           end
@@ -233,14 +233,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
         div do
           span(class: "text-[11px] font-medium uppercase tracking-wide " \
-                      "text-gray-600 dark:text-gray-300") { group[:role_name] }
+                      "text-muted") { group[:role_name] }
           ul(class: "mt-0.5 space-y-1") do
             items.each { |item| example_row(item) }
           end
         end
       end
       if limit && total > limit
-        p(class: "text-[11px] text-gray-600 dark:text-gray-300") do
+        p(class: "text-[11px] text-muted") do
           "+ #{total - limit} more — open a person's card to read them all"
         end
       end
@@ -248,9 +248,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def example_row(item)
-    li(class: "text-xs text-gray-700 dark:text-gray-200") do
+    li(class: "text-xs text-muted") do
       div(class: "flex gap-2") do
-        span(class: "text-gray-400", aria: { hidden: "true" }) { "•" }
+        span(class: "text-subtle", aria: { hidden: "true" }) { "•" }
         div(class: "min-w-0 flex-1") do
           plain item[:text]
           example_flag(item)
@@ -263,14 +263,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # as a marker; otherwise a live session's facilitator can raise one.
   def example_flag(item)
     if @stats[:flagged_illustration_ids].include?(item[:id])
-      div(class: "mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300") do
+      div(class: "mt-0.5 text-[11px] font-medium text-warning") do
         "⚑ Example flagged — clarification open on the framework"
       end
     elsif @can_flag
       details(class: "mt-0.5") do
         summary(
           class: "inline-flex min-h-11 cursor-pointer items-center text-[11px] font-medium " \
-                 "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300",
+                 "text-muted hover:text-warning",
           # The example text disambiguates — a level can hold several
           # identical "flag example" affordances (menu AND open cards).
           aria: { label: "Flag example as unclear — #{item[:text].to_s.truncate(60)}" }
@@ -288,17 +288,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           state_passthrough_fields
           textarea(
             name: "reason", rows: "2",
-            class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                   "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                   "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+            class: Components::Kit::Field::TEXTAREA,
             placeholder: "What misleads about this example (optional)",
             aria: { label: "Why this example is unclear — #{item[:text].to_s.truncate(60)}" }
           )
-          button(
-            type: "submit",
-            class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-xs " \
-                   "font-semibold text-white hover:bg-amber-700 transition-colors"
-          ) { "Flag example" }
+          render Components::Kit::Button.new(tone: :warning, size: :sm, type: :submit) { "Flag example" }
         end
       end
     end
@@ -311,7 +305,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def flag_affordance(ordinal)
     open_count = @stats[:clarifications][ordinal].to_i
     if open_count.positive?
-      div(class: "mt-1 text-xs font-medium text-amber-700 dark:text-amber-300") do
+      div(class: "mt-1 text-xs font-medium text-warning") do
         plain "⚑ Flagged — #{open_count} open #{'clarification'.pluralize(open_count)} on the framework"
       end
     elsif @can_flag
@@ -323,7 +317,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     details(class: "mt-1") do
       summary(
         class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-medium " \
-               "text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-300"
+               "text-muted hover:text-warning"
       ) { "⚑ Flag expectation as unclear" }
       expectation_flag_form(ordinal)
     end
@@ -346,17 +340,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         state_passthrough_fields
         textarea(
           id: field_id, name: "reason", rows: "2",
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          class: Components::Kit::Field::TEXTAREA,
           placeholder: "What is the room reading differently? (optional)",
           aria: { label: "What is unclear about this expectation" }
         )
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm " \
-                 "font-semibold text-white hover:bg-amber-700 transition-colors"
-        ) { "Raise clarification" }
+        render Components::Kit::Button.new(tone: :warning, type: :submit) { "Raise clarification" }
       end
   end
 
@@ -379,7 +367,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             rater_legend
             orientation_row
             if @stats[:ordinals].empty?
-              p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+              p(class: "mt-4 text-sm text-muted") do
                 "Nobody in the population is enrolled at a level yet."
               end
             end
@@ -395,14 +383,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def grid_heading
     div(class: "flex flex-wrap items-baseline justify-between gap-2") do
-      h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+      h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
         "At-level ratings by level"
       end
-      p(class: "text-xs text-gray-600 dark:text-gray-300") do
+      p(class: "text-xs text-muted") do
         "Click a rater to dim the others · click a dot to discuss · pin up to #{MAX_PINS} to compare"
       end
     end
-    p(class: "mt-1 text-xs text-gray-600 dark:text-gray-300") do
+    p(class: "mt-1 text-xs text-muted") do
       "Each dot is a person, placed by the rating their manager gave at their own level " \
         "and coloured by who rated them."
     end
@@ -412,7 +400,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     # One scrolling line on a phone — twenty raters would otherwise push the
     # first level a screen down — and wrapped where there is room.
     div(class: "mt-2 -mx-1 flex items-center gap-x-2 overflow-x-auto px-1 @lg:flex-wrap " \
-              "text-xs text-gray-600 dark:text-gray-300") do
+              "text-xs text-muted") do
       legend_rater_ids.each { |rater_id| legend_chip(rater_id) }
       if all_dots.any? { |dot| dot[:rater_id].nil? }
         span(class: "inline-flex shrink-0 items-center gap-1.5 px-1") do
@@ -421,11 +409,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         end
       end
     end
-    div(class: "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300") do
+    div(class: "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted") do
       defined_term(:backing, align: :right)
       span(class: "inline-flex items-center gap-1.5") do
-        span(class: "inline-block h-3 w-3 rounded-full border-2 border-dashed " \
-                    "border-gray-600 dark:border-gray-300", aria: { hidden: "true" })
+        span(class: "inline-block h-3 w-3 rounded-full border-2 border-dashed border-(--gos-content-muted)",
+             aria: { hidden: "true" })
         plain "Dashed = carried from last cycle"
       end
     end
@@ -451,9 +439,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       data: { action: "drill-in-filter#toggle", drill_in_filter_rater_param: rater_id }
     ) do
       span(class: "inline-flex min-h-7 items-center gap-1.5 whitespace-nowrap rounded-full border " \
-                  "border-gray-300 dark:border-gray-600 py-0.5 pl-1.5 pr-2.5 text-gray-900 dark:text-white " \
-                  "group-hover:bg-gray-50 dark:group-hover:bg-gray-700 group-aria-pressed:border-gray-900 " \
-                  "group-aria-pressed:font-semibold dark:group-aria-pressed:border-white") do
+                  "border-emphasized py-0.5 pl-1.5 pr-2.5 text-default " \
+                  "group-hover:bg-default-hover group-aria-pressed:border-strong " \
+                  "group-aria-pressed:font-semibold") do
         span(class: "inline-block h-3 w-3 rounded-full #{rater_dot_class(rater_index(rater_id))}",
              aria: { hidden: "true" })
         plain rater_name(rater_id)
@@ -468,10 +456,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def orientation_row
     div(
       class: "mt-4 grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
-             "border-t border-gray-100 dark:border-gray-700 py-4",
+             "border-t border-subtle py-4",
       data: { orientation_row: "true" }
     ) do
-      div(class: "min-w-0 text-xs text-gray-600 dark:text-gray-300") do
+      div(class: "min-w-0 text-xs text-muted") do
         div(class: "flex flex-wrap items-center gap-x-1") do
           plain "All levels · each rater's"
           defined_term(:rater_mean)
@@ -492,7 +480,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
           rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE_NARROW, visibility: "@3xl:hidden")
           rater_means_axis(@orientation[:rater_means], nudge: MEAN_LANE_NUDGE, visibility: "hidden @3xl:block")
         else
-          p(class: "self-center text-xs italic text-gray-600 dark:text-gray-300") do
+          p(class: "self-center text-xs italic text-muted") do
             "Fewer than two raters have rated this capability — nothing to compare yet."
           end
         end
@@ -513,21 +501,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     div(class: "relative min-w-0 #{visibility}",
         style: "height: #{(lanes * MEAN_LANE_HEIGHT) + 4}px",
         role: "img", aria: { label: "#{@stats[:capability][:name]} rater means: #{summary}" }) do
-      span(class: "absolute inset-x-0 top-[13px] h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700")
+      span(class: "absolute inset-x-0 top-[13px] h-1 -translate-y-1/2 rounded-full bg-neutral-muted")
       FREQUENCY_POSITIONS.each_value do |left|
         span(class: "absolute top-[13px] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full " \
-                    "bg-gray-300 dark:bg-gray-600", style: "left: #{left}%")
+                    "bg-(--gos-border-emphasized)", style: "left: #{left}%")
       end
       placed.each do |(rater_id, stats_hash), lane|
         index = rater_index(rater_id)
         div(
-          class: "group/dot absolute -translate-x-1/2 rounded-full bg-white dark:bg-gray-800",
+          class: "group/dot absolute -translate-x-1/2 rounded-full bg-default",
           style: "left: #{position.call(stats_hash)}%; top: #{2 + (lane * MEAN_LANE_HEIGHT)}px",
           title: "#{rater_name(rater_id)} — mean #{sprintf('%.2f', stats_hash[:mean])} (n #{stats_hash[:n]})",
           data: { rater_id: rater_id, dimmed: dimmed(rater_id) }
         ) do
           span(class: "flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 " \
-                      "border-white dark:border-gray-800 text-[10px] font-semibold #{DIMMABLE} " \
+                      "border-(--gos-surface-default) text-[10px] font-semibold #{DIMMABLE} " \
                       "#{index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : NOT_IN_SESSION_FILL}") do
             initials(rater_name(rater_id))
           end
@@ -543,7 +531,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
     div(
       class: "grid grid-cols-1 @3xl:grid-cols-[18rem_minmax(0,1fr)] gap-x-6 gap-y-2 " \
-             "border-t border-gray-100 dark:border-gray-700 py-4",
+             "border-t border-subtle py-4",
       role: "group", aria: { label: "L#{ordinal} — #{level_count(dots.size, dots.size - shown.size)}" },
       data: { level_row: ordinal }
     ) do
@@ -567,19 +555,18 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def level_header(ordinal, count, elsewhere)
     div(class: "min-w-0", data: { level_menu: ordinal }) do
       div(class: "flex flex-wrap items-center gap-x-2 gap-y-1") do
-        span(class: "rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 " \
-                    "px-2 py-0.5 text-xs font-bold text-gray-900 dark:text-white") { "L#{ordinal}" }
-        span(class: "text-xs text-gray-600 dark:text-gray-300") { level_count(count, elsewhere) }
+        render Components::Kit::Badge.new("L#{ordinal}", variant: :outline)
+        span(class: "text-xs text-muted") { level_count(count, elsewhere) }
         clarifications = @stats[:clarifications][ordinal].to_i
         if clarifications.positive?
           # Scannable without opening the menu — "which levels are already
           # contested" is a one-glance read.
-          span(class: "text-xs font-semibold text-amber-700 dark:text-amber-300",
+          span(class: "text-xs font-semibold text-warning",
                title: "#{clarifications} open #{'clarification'.pluralize(clarifications)} " \
                       "on this level's expectation") { "⚑#{clarifications}" }
         end
       end
-      p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") do
+      p(class: "mt-1.5 text-sm text-default") do
         @stats[:expectations][ordinal] || "No expectation defined at this level."
       end
       level_menu(ordinal)
@@ -592,7 +579,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       next if dots.empty?
 
       p(class: "h-[18px] text-center text-[10px] leading-none " \
-               "text-gray-600 dark:text-gray-300") { "Unrated" }
+               "text-muted") { "Unrated" }
       div(class: "flex flex-col items-center") do
         dots.each { |dot| render_dot(dot, ordinal) }
       end
@@ -611,7 +598,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       # name carries its rating, so this layer is hidden from assistive tech.
       div(aria: { hidden: "true" }) do
         div(class: "grid #{AXIS_COLUMNS} h-[18px] text-center text-[10px] leading-none " \
-                   "text-gray-600 dark:text-gray-300") do
+                   "text-muted") do
           FREQUENCY_POSITIONS.each_key do |frequency|
             config = CONFIG.fetch(frequency)
             span(class: "whitespace-nowrap") do
@@ -620,10 +607,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             end
           end
         end
-        span(class: "absolute inset-x-0 h-1 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-700",
+        span(class: "absolute inset-x-0 h-1 -translate-y-1/2 rounded-full bg-neutral-muted",
              style: "top: #{track_y}px")
         FREQUENCY_POSITIONS.each do |frequency, left|
-          span(class: "absolute bottom-0 w-px -translate-x-1/2 bg-gray-100 dark:bg-gray-700",
+          span(class: "absolute bottom-0 w-px -translate-x-1/2 bg-neutral-subtle",
                style: "left: #{left}%; top: #{track_y}px")
           span(class: "absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full " \
                       "#{CONFIG.fetch(frequency)[:dot]}",
@@ -666,7 +653,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     missing = @stats[:rater_ids].select { |rater_id| silent_rater_ids.include?(rater_id) }
     return if missing.empty?
 
-    p(class: "border-t border-gray-100 dark:border-gray-700 pt-3 text-sm italic text-gray-600 dark:text-gray-300",
+    p(class: "border-t border-subtle pt-3 text-sm italic text-muted",
       data: { silent_raters: "true" }) do
       missing.each_with_index do |rater_id, index|
         plain ", " if index.positive?
@@ -690,8 +677,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def unrated_person_link(dot)
     a(
       href: drill_in_path(view: nil, person: dot[:person_id], pins: [], filters: {}),
-      class: "underline underline-offset-2 decoration-gray-400 dark:decoration-gray-500 " \
-             "hover:decoration-gray-900 dark:hover:decoration-white",
+      class: "underline underline-offset-2 decoration-(--gos-content-subtle) " \
+             "hover:decoration-(--gos-content-default)",
       aria: { label: "#{dot[:name]} — unrated. Open to discuss." },
       data: { pane_keep_state: "true", person_id: dot[:person_id] }
     ) { dot[:name] }
@@ -723,7 +710,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     ) do
       # An opaque disc under the dot, so a dimmed dot fades into the card
       # rather than showing the track and ticks through it.
-      span(class: "inline-flex rounded-full bg-white dark:bg-gray-800") do
+      span(class: "inline-flex rounded-full bg-default") do
         # ONE affordance for "in the drawer" — anyone held there (inspected
         # OR pinned) reads by SIZE (1.5×), same vocabulary as Score by cohort.
         span(
@@ -742,17 +729,17 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # unconfirmed — the "dashed means carried" vocabulary the assessment
   # chips and pills use. An unrated person is a hollow grey dot.
   def dot_classes(dot)
-    return "#{UNRATED_DOT} bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300" unless dot[:frequency]
+    return "#{UNRATED_DOT} bg-default text-muted" unless dot[:frequency]
 
     index = rater_index(dot[:rater_id])
     if dot[:backed]
-      fill = index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : "#{NOT_IN_SESSION_FILL} text-white dark:text-gray-900"
-      edge = dot[:carried] ? "border-dashed border-gray-900 dark:border-white" : "border-white dark:border-gray-800"
+      fill = index ? "#{rater_dot_class(index)} #{rater_text_class(index)}" : "#{NOT_IN_SESSION_FILL} text-on-mark"
+      edge = dot[:carried] ? "border-dashed border-strong" : "border-(--gos-surface-default)"
       "#{fill} border-2 #{edge}"
     else
       edge = index ? rater_border_class(index) : NOT_IN_SESSION_BORDER
-      "bg-white dark:bg-gray-800 border-2 #{edge} #{'border-dashed' if dot[:carried]} " \
-        "text-gray-900 dark:text-white"
+      "bg-default border-2 #{edge} #{'border-dashed' if dot[:carried]} " \
+        "text-default"
     end
   end
 
@@ -821,17 +808,10 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # toggle closes it.
   def wall_toggle
     active = @view == "wall"
-    classes = if active
-      "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-    else
-      "border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white " \
-        "hover:bg-gray-50 dark:hover:bg-gray-800"
-    end
     div(class: "mt-6") do
-      a(
-        href: drill_in_path(view: active ? nil : "wall"),
-        aria: { expanded: active.to_s },
-        class: "inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium #{classes}"
+      render Components::Kit::Button.new(
+        variant: active ? :solid : :outline, touch: true,
+        href: drill_in_path(view: active ? nil : "wall"), aria: { expanded: active.to_s }
       ) { "Feedback / Evidence wall" }
     end
   end
@@ -904,21 +884,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       render Components::Kit::Card.new do |card|
         card.body do
           div(class: "flex flex-wrap items-baseline justify-between gap-2") do
-            h2(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+            h2(class: "text-sm font-semibold uppercase tracking-wide text-muted") do
               "Feedback / Evidence — #{@stats[:capability][:name]}"
             end
             # `data-wall-total` is the machine-readable count. The visible
             # text is not assertable: "1 item" is a substring of the utility
             # class `min-h-11 items-center`, so a body-substring check on it
             # passes on pages with no wall at all.
-            p(class: "text-xs text-gray-600 dark:text-gray-300",
+            p(class: "text-xs text-muted",
               data: { wall_total: @wall[:total] }) do
               "#{@wall[:total]} #{'item'.pluralize(@wall[:total])} across the population"
             end
           end
           wall_filters_form
           if @wall[:groups].empty?
-            p(class: "mt-4 text-sm text-gray-600 dark:text-gray-300") do
+            p(class: "mt-4 text-sm text-muted") do
               "No feedback / evidence linked to this capability for the population" \
                 "#{' with these filters' if wall_filtered?}."
             end
@@ -953,25 +933,19 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       wall_filter_select("wall_rater", "Rater",
                          @wall[:rater_ids].map { |id| [ rater_name(id), id ] },
                          @wall_filters[:rater_id])
-      button(
-        type: "submit",
-        class: "inline-flex min-h-11 items-center rounded-md border border-gray-300 " \
-               "dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-               "hover:bg-gray-50 dark:hover:bg-gray-800"
-      ) { "Filter" }
+      render Components::Kit::Button.new(variant: :outline, touch: true, type: :submit) { "Filter" }
     end
   end
 
   def wall_filter_select(name, label_text, options, selected)
     div do
       label(for: "wall-filter-#{name}",
-            class: "block text-xs font-medium text-gray-600 dark:text-gray-300") { label_text }
+            class: "block text-xs font-medium text-muted") { label_text }
       select(
         id: "wall-filter-#{name}", name: name,
         # min-w so the short-option Level select lines up with its siblings
         # instead of collapsing to the width of "All".
-        class: "mt-0.5 min-h-11 min-w-32 rounded-md border border-gray-300 dark:border-gray-600 " \
-               "bg-white dark:bg-gray-800 px-2 text-sm text-gray-900 dark:text-white"
+        class: "mt-0.5 #{Components::Kit::Field::SELECT} min-h-11 min-w-32"
       ) do
         option(value: "") { "All" }
         options.each do |text, value|
@@ -983,8 +957,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def wall_level_group(group)
     div(class: "mt-4") do
-      h3(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 " \
-                "border-b border-gray-200 dark:border-gray-700 pb-1") { "L#{group[:ordinal]}" }
+      h3(class: "text-xs font-semibold uppercase tracking-wide text-muted " \
+                "border-b border-default pb-1") { "L#{group[:ordinal]}" }
       ul(class: "mt-2 space-y-2") do
         group[:items].each { |item| wall_item(item) }
       end
@@ -995,21 +969,21 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   # rater) above the person and what was actually written about them.
   def wall_item(item)
     li(
-      class: "rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2",
+      class: "rounded-md border border-default px-3 py-2",
       data: { person_id: item[:person_id] }
     ) do
       div(class: "flex flex-wrap items-center gap-2") do
         rating_pill("Mgr", item[:frequency], carried: item[:frequency_carried])
         valence_badge(item[:valence])
-        span(class: "text-xs text-gray-600 dark:text-gray-300") do
+        span(class: "text-xs text-muted") do
           plain RELATION_LABELS.fetch(item[:relation], item[:relation])
           plain " · #{rater_name(item[:rater_id])}'s report" if item[:rater_id]
         end
       end
       div(class: "mt-1.5") do
-        p(class: "text-xs font-medium text-gray-900 dark:text-white") { item[:person_name] }
-        p(class: "mt-0.5 text-sm text-gray-900 dark:text-white") { Prose.to_plain(item[:content]).truncate(280) }
-        p(class: "mt-0.5 text-[11px] text-gray-600 dark:text-gray-300") do
+        p(class: "text-xs font-medium text-default") { item[:person_name] }
+        p(class: "mt-0.5 text-sm text-default") { Prose.to_plain(item[:content]).truncate(280) }
+        p(class: "mt-0.5 text-[11px] text-muted") do
           item[:recorded_at].strftime("%b %-d, %Y")
         end
       end
@@ -1047,16 +1021,16 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     dot = card_data[:dot]
     pinned = @pin_ids.include?(dot[:person_id])
     div(
-      class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-white dark:bg-gray-800 " \
+      class: "min-w-[320px] max-w-[440px] flex-1 shrink-0 rounded-lg border bg-default " \
              "p-3 h-full overflow-y-auto " \
-             "#{pinned ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200 dark:border-gray-700'}",
+             "#{pinned ? 'border-compared ring-1 ring-compared' : 'border-default'}",
       id: (inspector ? "calibration-person-card" : nil),
       data: { drawer_card: dot[:person_id] }
     ) do
       div(class: "flex flex-wrap items-start justify-between gap-2") do
         div do
-          h2(class: "text-base font-semibold text-gray-900 dark:text-white") { dot[:name] }
-          p(class: "mt-0.5 text-xs text-gray-600 dark:text-gray-300") do
+          h2(class: "text-base font-semibold text-default") { dot[:name] }
+          p(class: "mt-0.5 text-xs text-muted") do
             plain "L#{card_data[:ordinal]}"
             plain " · rated by #{rater_name(card_data[:rater_id])}" if card_data[:rater_id]
           end
@@ -1070,7 +1044,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
             a(
               href: drill_in_path(view: @view, person: nil),
               class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
-                     "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md",
+                     "text-muted hover:bg-default-hover rounded-md",
               aria: { label: "Close person card" }
             ) { "×" }
           end
@@ -1091,13 +1065,13 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       a(
         href: drill_in_path(view: @view, pins: @pin_ids - [ dot[:person_id] ]),
         class: "inline-flex h-11 w-11 items-center justify-center text-lg " \
-               "text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded-md",
+               "text-compared hover:bg-compared-subtle rounded-md",
         aria: { label: "Unpin #{dot[:name]} from the comparison drawer" }
       ) { "×" }
     elsif @pin_ids.size < MAX_PINS
       a(
         href: drill_in_path(view: @view, pins: @pin_ids + [ dot[:person_id] ]),
-        class: "inline-flex min-h-11 items-center px-2 text-sm text-primary-ink hover:underline",
+        class: "inline-flex min-h-11 items-center px-2 text-sm text-link hover:text-link-hover hover:underline",
         aria: { label: "Pin #{dot[:name]} to the comparison drawer" }
       ) { "Pin" }
     end
@@ -1143,11 +1117,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         span(
           class: "inline-flex h-9 min-w-11 items-center justify-center rounded-md border-2 px-1.5 " \
                  "text-[11px] font-semibold #{fill} #{border} " \
-                 "#{'ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-800' if focused}"
+                 "#{'ring-2 ring-offset-2 ring-(--gos-border-strong) ring-offset-(--gos-surface-default)' if focused}"
         ) { level[:code] }
       end
       if assessed
-        span(class: "text-[10px] font-semibold tracking-wide text-gray-600 dark:text-gray-300") do
+        span(class: "text-[10px] font-semibold tracking-wide text-muted") do
           "CURRENT"
         end
       end
@@ -1164,14 +1138,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       [ "#{config[:chip_carried]} #{config[:chip_txt]}", config[:chip_carried_border],
         "#{config[:phrase]} (carried forward, unconfirmed)" ]
     elsif config
-      [ "#{config[:chip_bg]} #{config[:chip_txt]}", "border-white dark:border-gray-800",
+      [ "#{config[:chip_bg]} #{config[:chip_txt]}", "border-(--gos-surface-default)",
         config[:phrase] ]
     elsif ordinal < card_data[:ordinal]
-      [ "bg-blue-300 dark:bg-blue-300 text-blue-950", "border-white dark:border-gray-800",
+      [ "bg-rating-consistent-carried text-rating-consistent-chip", "border-(--gos-surface-default)",
         "unrated — assumed consistent below the assessed level" ]
     else
-      [ "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200",
-        "border-white dark:border-gray-800", "unrated" ]
+      [ "bg-emphasized text-muted",
+        "border-(--gos-surface-default)", "unrated" ]
     end
   end
 
@@ -1188,12 +1162,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     ordinal = card_focus_ordinal(card_data)
     rating = card_data[:ratings_by_level][ordinal] || {}
 
-    div(class: "mt-3 border-t border-gray-100 dark:border-gray-800 pt-3") do
-      p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+    div(class: "mt-3 border-t border-subtle pt-3") do
+      p(class: "text-xs font-semibold uppercase tracking-wide text-muted") do
         "L#{ordinal}"
       end
       expectation = card_data[:expectations_by_level][ordinal]
-      p(class: "mt-1 text-sm text-gray-900 dark:text-white") do
+      p(class: "mt-1 text-sm text-default") do
         expectation || "No expectation defined at this level for this capability."
       end
 
@@ -1203,12 +1177,12 @@ class Views::CalibrationSessions::DrillInView < Views::Base
       end
 
       if card_data[:revisit_ordinals].include?(ordinal)
-        p(class: "mt-3 text-xs font-medium text-amber-700 dark:text-amber-300") do
+        p(class: "mt-3 text-xs font-medium text-warning") do
           plain "Revisit requested — it will appear in #{rater_name(card_data[:rater_id])}'s assessment activity."
         end
       end
       if @stats[:clarifications][ordinal].to_i.positive?
-        div(class: "mt-2 text-xs font-medium text-amber-700 dark:text-amber-300") do
+        div(class: "mt-2 text-xs font-medium text-warning") do
           "⚑ Flagged — #{@stats[:clarifications][ordinal]} open " \
             "#{'clarification'.pluralize(@stats[:clarifications][ordinal])} on the framework"
         end
@@ -1231,7 +1205,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
     details(class: "mt-3") do
       summary(class: "inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold " \
-                     "uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+                     "uppercase tracking-wide text-muted") do
         "Examples at L#{ordinal} (#{groups.sum { |group| group[:items].size }})"
       end
       example_groups(ordinal)
@@ -1268,7 +1242,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     render Components::Kit::Dropdown.new(align: :right) do |dropdown|
       dropdown.trigger(label: "Actions for #{@person_card[:dot][:name]}") do
         span(class: "inline-flex h-11 w-11 items-center justify-center rounded-md text-lg " \
-                    "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700") do
+                    "text-muted hover:bg-default-hover") do
           "⋮"
         end
       end
@@ -1284,8 +1258,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     a(
       href: drill_in_path(view: nil, person_action: action),
       role: "menuitem",
-      class: "block px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 " \
-             "hover:bg-gray-100 dark:hover:bg-gray-700"
+      class: "block px-4 py-2.5 text-sm text-muted " \
+             "hover:bg-default-hover"
     ) { label }
   end
 
@@ -1306,8 +1280,8 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     return unless @can_flag
     return if @stats[:clarifications][focus_ordinal].to_i.positive?
 
-    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
-      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+    div(class: "mt-4 border-t border-subtle pt-3") do
+      p(class: "text-xs font-medium text-muted") do
         "Flag the L#{focus_ordinal} expectation as unclear"
       end
       expectation_flag_form(focus_ordinal, field_id: "flag-reason-card")
@@ -1317,9 +1291,9 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   def request_evidence_section
     return unless @can_flag && @request_candidates
 
-    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+    div(class: "mt-4 border-t border-subtle pt-3") do
       if @request_candidates.empty?
-        p(class: "text-xs text-gray-600 dark:text-gray-300") do
+        p(class: "text-xs text-muted") do
           "No colleagues to ask about this behaviour — org neighbours appear here."
         end
       else
@@ -1330,7 +1304,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def request_evidence_form
     div do
-      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+      p(class: "text-xs font-medium text-muted") do
         "Request feedback / evidence about #{@person_card[:dot][:name]} at L#{focus_ordinal}"
       end
       form(
@@ -1350,9 +1324,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         state_passthrough_fields
         select(
           id: "evidence-request-requestee", name: "requestee_person_id", required: true,
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          class: Components::Kit::Field::SELECT,
           aria: { label: "Who to ask for feedback / evidence" }
         ) do
           option(value: "") { "Who to ask…" }
@@ -1360,17 +1332,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         end
         textarea(
           id: "evidence-request-message", name: "message", rows: "2",
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          class: Components::Kit::Field::TEXTAREA,
           placeholder: "Why the room is asking — e.g. \u201cnobody could answer what good looks like here\u201d",
           aria: { label: "Message to the person being asked" }
         )
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-emerald-700 px-3 py-2 text-sm " \
-                 "font-semibold text-white hover:bg-emerald-800 transition-colors"
-        ) { "Send request" }
+        render Components::Kit::Button.new(tone: :success, type: :submit) { "Send request" }
       end
     end
   end
@@ -1393,14 +1359,14 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     return unless @can_flag && @person_card[:rater_id]
     return if @person_card[:revisit_ordinals].include?(focus_ordinal)
 
-    div(class: "mt-4 border-t border-gray-100 dark:border-gray-800 pt-3") do
+    div(class: "mt-4 border-t border-subtle pt-3") do
       revisit_form
     end
   end
 
   def revisit_form
     div do
-      p(class: "text-xs font-medium text-gray-600 dark:text-gray-300") do
+      p(class: "text-xs font-medium text-muted") do
         "Ask #{rater_name(@person_card[:rater_id])} to revisit this rating at L#{focus_ordinal}"
       end
       form(
@@ -1422,17 +1388,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
         state_passthrough_fields
         textarea(
           id: "revisit-note", name: "note", rows: "2", required: true,
-          class: "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-                 "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-                 "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary",
+          class: Components::Kit::Field::TEXTAREA,
           placeholder: "The room's note — what the discussion surfaced (never a target rating)",
           aria: { label: "Discussion note for the revisit request" }
         )
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-amber-600 px-3 py-2 text-sm " \
-                 "font-semibold text-white hover:bg-amber-700 transition-colors"
-        ) { "Request revisit" }
+        render Components::Kit::Button.new(tone: :warning, type: :submit) { "Request revisit" }
       end
     end
   end
@@ -1448,7 +1408,7 @@ class Views::CalibrationSessions::DrillInView < Views::Base
     classes = if config
       carried ? config[:pill_carried] : config[:pill_bg]
     else
-      "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+      "bg-neutral-subtle text-muted"
     end
     phrase = if withheld
       "not shown"
@@ -1473,11 +1433,11 @@ class Views::CalibrationSessions::DrillInView < Views::Base
 
   def evidence_section(items, ordinal)
     div(class: "mt-4") do
-      h3(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") do
+      h3(class: "text-xs font-semibold uppercase tracking-wide text-muted") do
         "Feedback / Evidence at L#{ordinal}"
       end
       if items.empty?
-        p(class: "mt-2 text-sm text-gray-600 dark:text-gray-300") do
+        p(class: "mt-2 text-sm text-muted") do
           plain "None linked — if the room can't answer “what did you see?”, that is the finding."
         end
       else
@@ -1489,16 +1449,16 @@ class Views::CalibrationSessions::DrillInView < Views::Base
   end
 
   def evidence_row(item)
-    li(class: "rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2") do
+    li(class: "rounded-md border border-default px-3 py-2") do
       div(class: "flex flex-wrap items-center gap-2") do
         valence_badge(item[:valence])
-        span(class: "text-xs text-gray-600 dark:text-gray-300") do
+        span(class: "text-xs text-muted") do
           plain RELATION_LABELS.fetch(item[:relation], item[:relation])
           plain " · "
           plain item[:recorded_at].strftime("%b %-d, %Y")
         end
       end
-      p(class: "mt-1.5 text-sm text-gray-900 dark:text-white") { Prose.to_plain(item[:content]).truncate(280) }
+      p(class: "mt-1.5 text-sm text-default") { Prose.to_plain(item[:content]).truncate(280) }
     end
   end
 

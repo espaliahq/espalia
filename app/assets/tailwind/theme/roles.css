@@ -373,3 +373,37 @@
   --ring-color-focus: var(--gos-focus-ring);
   --outline-color-focus: var(--gos-focus-ring);
 }
+
+/*
+ * Framework explorer surfaces (#545). The role tree and the matrix sit on the
+ * overlay surface, so these step from it. The matrix's sticky column must be
+ * opaque (framework-explorer.md, Hard-Won Lesson 24), so the row hover and the
+ * expanded-row tint are composites over the overlay, not translucent fills.
+ * The empty-cell tint stays translucent: no sticky cell takes it.
+ */
+:root {
+  --gos-surface-overlay-subtle: var(--color-gray-50);
+  --gos-surface-overlay-muted: var(--color-gray-100);
+  --gos-surface-overlay-hover: var(--color-gray-50);
+  --gos-surface-empty: color-mix(in oklab, var(--color-gray-50) 50%, transparent);
+  --gos-surface-expanded: color-mix(in srgb, var(--color-blue-50) 30%, var(--gos-surface-overlay));
+  --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-100) 50%, var(--gos-surface-overlay));
+
+  @variant dark {
+    --gos-surface-overlay-subtle: var(--color-gray-900);
+    --gos-surface-overlay-muted: var(--color-gray-800);
+    --gos-surface-overlay-hover: color-mix(in srgb, var(--color-gray-800) 50%, var(--gos-surface-overlay));
+    --gos-surface-empty: color-mix(in oklab, var(--color-gray-800) 20%, transparent);
+    --gos-surface-expanded: color-mix(in srgb, var(--color-blue-900) 10%, var(--gos-surface-overlay));
+    --gos-surface-expanded-hover: color-mix(in srgb, var(--color-blue-900) 20%, var(--gos-surface-overlay));
+  }
+}
+
+@theme inline {
+  --background-color-overlay-subtle: var(--gos-surface-overlay-subtle);
+  --background-color-overlay-muted: var(--gos-surface-overlay-muted);
+  --background-color-overlay-hover: var(--gos-surface-overlay-hover);
+  --background-color-empty: var(--gos-surface-empty);
+  --background-color-expanded: var(--gos-surface-expanded);
+  --background-color-expanded-hover: var(--gos-surface-expanded-hover);
+}

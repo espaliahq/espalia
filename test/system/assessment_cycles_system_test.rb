@@ -237,6 +237,35 @@ class AssessmentCyclesSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "participants table" do
+    # The table's overflow-x-auto wrapper scrolls on both axes, so a hit area
+    # reaching past the last row's Unenroll button gave it a scrollbar.
+    should "fit its rows without a scrollbar or a stolen tap" do
+      ActsAsTenant.with_tenant(@tenant) do
+        cycle = FactoryBot.create(:assessment_cycle, tenant: @tenant, name: "Q1 2026",
+          framework_id: @framework_id, status: "open")
+        FactoryBot.create(:assessment_cycle_enrollment, tenant: @tenant, cycle: cycle,
+          person_id: @assigned_person.id, role_id: @role.role_id,
+          level_ordinal: 2, status: "enrolled")
+        @cycle = cycle
+      end
+
+      sign_in @admin_user
+      visit assessment_cycle_path(@cycle)
+      assert_selector "button", text: "Unenroll"
+
+      scrolls = page.evaluate_script(<<~JS)
+        (() => {
+          const unenroll = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Unenroll");
+          const wrapper = unenroll.closest(".overflow-x-auto");
+          return wrapper.scrollHeight > wrapper.clientHeight;
+        })()
+      JS
+      assert_not scrolls, "the participants table scrolls vertically"
+      assert_no_stolen_taps
+    end
+  end
+
   context "auto-enrollment on new assignment" do
     should "auto-enroll a newly-assigned person into the open cycle" do
       # Define a cycle first via the rails layer so the UI test stays focused

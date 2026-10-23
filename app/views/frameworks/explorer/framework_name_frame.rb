@@ -56,7 +56,7 @@ class Views::Frameworks::Explorer::FrameworkNameFrame < Views::Base
   end
 
   def heading
-    h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold text-gray-900 dark:text-white",
+    h1(class: "min-w-0 max-w-full truncate text-xl sm:text-2xl font-bold text-default",
        title: @name) { @name }
   end
 

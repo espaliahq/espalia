@@ -15,7 +15,7 @@ class Views::Frameworks::Explorer::DepartmentNameFrame < Views::Base
   include Views::Frameworks::Explorer::Concerns::HoverCluster
   include Views::Frameworks::Explorer::Concerns::InlineEditable
 
-  HEADER_CLASSES = "px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 " \
+  HEADER_CLASSES = "px-3 py-1.5 text-xs font-bold text-muted " \
                    "uppercase tracking-wider"
 
   # @param department [String] the department label (a non-blank group header)

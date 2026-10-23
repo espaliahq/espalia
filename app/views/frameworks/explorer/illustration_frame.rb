@@ -63,7 +63,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       data: { reorder_item_id: @illustration.illustration_id }
     ) do
       attrs = {
-        class: "relative text-xs text-gray-600 dark:text-gray-400"
+        class: "relative text-xs text-muted"
       }
       attrs[:data] = hover_cluster_data("ill").merge(editor_data) if @mode == :edit
 
@@ -104,7 +104,7 @@ class Views::Frameworks::Explorer::IllustrationFrame < Views::Base
       class: "flex items-start gap-1.5 pl-2",
       data: { editor_display: true }
     ) do
-      render_illustration_marker("bg-gray-300 dark:bg-gray-600")
+      render_illustration_marker("bg-illustration-marker")
       if @pending_edit
         span(class: "flex-1") do
           render_inline_diff(original: @illustration.description, pending_edit: @pending_edit)

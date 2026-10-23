@@ -45,15 +45,15 @@ class Views::Frameworks::Explorer::RejectSuggestionModal < Views::Base
       # closes the modal via submit-end) instead of redirecting to the index.
       input(type: "hidden", name: "inline", value: "1")
 
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         plain "Reject the proposed change to "
-        span(class: "font-semibold text-gray-900 dark:text-white",
+        span(class: "font-semibold text-default",
              data: { reject_suggestion_form_target: "title" }) { "this suggestion" }
         plain "."
       end
 
-      p(class: "hidden rounded-md bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm " \
-               "text-gray-700 dark:text-gray-200 line-clamp-3",
+      p(class: "hidden rounded-md bg-subtle px-3 py-2 text-sm " \
+               "text-muted line-clamp-3",
         data: { reject_suggestion_form_target: "preview" })
 
       reason_field
@@ -64,36 +64,23 @@ class Views::Frameworks::Explorer::RejectSuggestionModal < Views::Base
   def reason_field
     div do
       label(for: "reject_reason",
-            class: "block text-sm font-medium text-gray-900 dark:text-white mb-1") do
+            class: "block text-sm font-medium text-default mb-1") do
         plain "Reason "
-        span(class: "font-normal text-gray-500 dark:text-gray-400") { "(optional)" }
+        span(class: "font-normal text-muted") { "(optional)" }
       end
       textarea(
         id: "reject_reason", aria: { describedby: "reject_reason-hint" }, name: "comment", rows: "2",
-        class: field_classes, placeholder: "Why is this being rejected?",
+        class: Components::Kit::Field::TEXTAREA, placeholder: "Why is this being rejected?",
         data: { reject_suggestion_form_target: "reason" }
       )
-      p(id: "reject_reason-hint", class: "mt-1 text-xs text-gray-600 dark:text-gray-300") { Prose::COMPOSER_HINT }
+      p(id: "reject_reason-hint", class: "mt-1 text-xs text-muted") { Prose::COMPOSER_HINT }
     end
   end
 
   def actions
     div(class: "flex items-center gap-3 pt-1") do
-      button(
-        type: "submit",
-        class: "inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold " \
-               "text-white hover:bg-red-700 transition-colors"
-      ) { "Reject suggestion" }
-      button(
-        type: "button", data: { action: "click->modal#close" },
-        class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-      ) { "Cancel" }
+      render Components::Kit::Button.new(tone: :danger, type: :submit) { "Reject suggestion" }
+      render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
     end
-  end
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
   end
 end

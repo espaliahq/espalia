@@ -206,11 +206,10 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
   end
 
   context "with the matrix scrolled horizontally in edit mode" do
-    # `q` renders a search <mark> INSIDE the sticky capability cell, and that
-    # mark is translucent in dark mode (`dark:bg-amber-400/40`). Harmless — it
-    # composites over the cell's opaque background — so it is exactly the
-    # descendant the scan must NOT flag. Free to arrange, so the scan's scoping
-    # is exercised rather than merely asserted in a comment.
+    # `q` renders a search <mark> INSIDE the sticky capability cell: a
+    # descendant with a background of its own, which the scan must leave to the
+    # cell it sits on. Free to arrange, so the scan's scoping is exercised
+    # rather than merely asserted in a comment.
     setup { visit edit_framework_path(@framework_id, q: "Strategic") }
 
     should "paint every sticky cell fully opaque, the add-capability band included" do
@@ -220,9 +219,9 @@ class Frameworks::MatrixStickyColumnSystemTest < ApplicationSystemTestCase
     end
 
     should "declare no translucent background on any sticky cell, descendants aside" do
-      # Prove the translucent descendant is actually on the page — otherwise
+      # Prove the highlighted descendant is actually on the page — otherwise
       # the scan below passes without ever meeting the case it must tolerate.
-      assert_selector "td.sticky mark.dark\\:bg-amber-400\\/40", visible: :all
+      assert_selector "td.sticky mark", text: /strategic/i, visible: :all
 
       assert_no_translucent_sticky_backgrounds
     end

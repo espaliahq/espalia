@@ -308,7 +308,7 @@ class CalibrationSessionsControllerTest < ActionDispatch::IntegrationTest
       # Zed is rated to 100% by someone outside the room: plotted, honest.
       assert_select "a[aria-label*='Zed Outerling — 100% of expected, rated by someone outside this session']"
       # …and the disc is the neutral grey, never rater #1's colour.
-      assert_select "a[aria-label*='Zed Outerling'] span.bg-gray-500"
+      assert_select "a[aria-label*='Zed Outerling'] span.mark-rater-outside.bg-mark"
       assert_includes response.body, "rated outside this session",
                       "the legend names the neutral swatch"
     end

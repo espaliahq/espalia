@@ -34,7 +34,7 @@ class Views::Frameworks::Explorer::BindingEditorModal < Views::Base
     ) do
       turbo_frame_tag("binding-editor",
                       data: { binding_editor_form_target: "frame", frame_error_target: "frame" }) do
-        p(class: "text-sm text-gray-500 dark:text-gray-400") { "Loading…" }
+        p(class: "text-sm text-muted") { "Loading…" }
       end
       render Components::Shared::FrameLoadError.new(
         id: "binding-editor-error", subject: "the roles editor", closeable: true, classes: "space-y-3"

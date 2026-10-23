@@ -31,32 +31,19 @@ class Views::Frameworks::Explorer::AddCategoryModal < Views::Base
 
       div do
         label(for: "add_category_name", class: label_classes) { "Name" }
-        input(type: "text", id: "add_category_name", name: "category[name]", class: field_classes)
+        input(type: "text", id: "add_category_name", name: "category[name]", class: Components::Kit::Field::INPUT)
       end
       div do
         label(for: "add_category_description", class: label_classes) { "Description" }
-        textarea(id: "add_category_description", name: "category[description]", rows: "2", class: field_classes)
+        textarea(id: "add_category_description", name: "category[description]", rows: "2", class: Components::Kit::Field::TEXTAREA)
       end
 
       div(class: "flex items-center gap-3 pt-1") do
-        button(
-          type: "submit",
-          class: "inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold " \
-                 "text-white hover:bg-primary/90 transition-colors"
-        ) { "Add category" }
-        button(
-          type: "button", data: { action: "click->modal#close" },
-          class: "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200"
-        ) { "Cancel" }
+        render Components::Kit::Button.new(tone: :brand, type: :submit) { "Add category" }
+        render Components::Kit::Button.new(variant: :ghost, data: { action: "click->modal#close" }) { "Cancel" }
       end
     end
   end
 
-  def label_classes = "block text-sm font-medium text-gray-900 dark:text-white mb-1"
-
-  def field_classes
-    "block w-full rounded-md border border-gray-300 dark:border-gray-600 " \
-      "bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white " \
-      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-  end
+  def label_classes = "block text-sm font-medium text-default mb-1"
 end

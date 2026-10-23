@@ -10,7 +10,7 @@ class Views::Frameworks::Activity::Count < Views::Base
   end
 
   def view_template
-    p(id: "framework-activity-count", class: "text-xs text-gray-600 dark:text-gray-300 mt-0.5") do
+    p(id: "framework-activity-count", class: "text-xs text-muted mt-0.5") do
       "#{@total} #{@total == 1 ? 'event' : 'events'}"
     end
   end

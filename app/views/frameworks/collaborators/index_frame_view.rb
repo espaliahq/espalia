@@ -35,8 +35,8 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
   def rows_table
     if @rows.any?
       div(class: "overflow-x-auto") do
-        table(class: "min-w-full divide-y divide-gray-200 dark:divide-gray-700") do
-          thead(class: "bg-gray-50 dark:bg-gray-900/50") do
+        table(class: "min-w-full divide-y divide-default") do
+          thead(class: "bg-subtle") do
             tr do
               th_label "Person"
               th_label "Role"
@@ -44,13 +44,13 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
               th_label ""
             end
           end
-          tbody(class: "divide-y divide-gray-200 dark:divide-gray-700") do
+          tbody(class: "divide-y divide-default") do
             @rows.each { |row| collaborator_row(row) }
           end
         end
       end
     else
-      p(class: "text-sm text-gray-600 dark:text-gray-300") do
+      p(class: "text-sm text-muted") do
         "No collaborators on this framework yet."
       end
     end
@@ -74,16 +74,13 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
       input(type: "hidden", name: "_method", value: "DELETE")
       input(type: "hidden", name: "authenticity_token",
             value: view_context.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "text-sm text-red-700 dark:text-red-400 hover:underline"
-      ) { "Remove" }
+      render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, type: :submit) { "Remove" }
     end
   end
 
   def assignment_form_section
-    div(class: "pt-4 border-t border-gray-200 dark:border-gray-700") do
-      h4(class: "text-sm font-semibold text-gray-900 dark:text-white mb-3") do
+    div(class: "pt-4 border-t border-default") do
+      h4(class: "text-sm font-semibold text-default mb-3") do
         "Add a collaborator"
       end
       render Views::Frameworks::Collaborators::AssignmentForm.new(
@@ -98,11 +95,11 @@ class Views::Frameworks::Collaborators::IndexFrameView < Views::Base
 
   def th_label(text)
     th(class: "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider " \
-              "text-gray-600 dark:text-gray-300") { text }
+              "text-muted") { text }
   end
 
   def cell(extra_classes: nil, &block)
-    classes = "px-4 py-3 text-sm text-gray-900 dark:text-gray-100"
+    classes = "px-4 py-3 text-sm text-default"
     classes = "#{classes} #{extra_classes}" if extra_classes
     td(class: classes, &block)
   end

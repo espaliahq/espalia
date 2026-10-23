@@ -563,9 +563,9 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       within "turbo-frame#capability-name-#{capability.capability_id}" do
         # Added suffix "s" is styled with the sky-blue wavy underline.
-        assert_selector "span.decoration-sky-400", text: "s"
+        assert_selector "span.decoration-suggestion-add", text: "s"
         # Amber wavy underline no longer decorates the entity wrapper.
-        assert_no_selector "span.decoration-amber-400"
+        assert_no_selector "span.decoration-suggestion-edit"
       end
     end
 
@@ -586,7 +586,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       visit edit_framework_path(@framework_id)
 
       within "turbo-frame#capability-name-#{capability.capability_id}" do
-        assert_selector "span.decoration-sky-400", text: "Totally Unrelated Replacement Text"
+        assert_selector "span.decoration-suggestion-add", text: "Totally Unrelated Replacement Text"
         assert_no_selector "span.line-through"
       end
     end
@@ -610,7 +610,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
 
       within "turbo-frame#illustration-#{illustration.illustration_id}" do
         # Added "s" at the end renders as a sky-blue wavy span.
-        assert_selector "span.decoration-sky-400", text: "s"
+        assert_selector "span.decoration-suggestion-add", text: "s"
       end
     end
 
@@ -633,7 +633,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       # The suggested description must decorate on a full matrix render — not
       # only on the controller re-render right after submitting.
       within "turbo-frame#capability-description-#{capability.capability_id}" do
-        assert_selector "span.decoration-sky-400", text: "Considers long-term impact"
+        assert_selector "span.decoration-suggestion-add", text: "Considers long-term impact"
         # The editor is seeded with the pending PROPOSAL (so editing refines it),
         # not the original value — the host carries it for the shared editor.
         assert_equal "Considers long-term impact",
@@ -1341,7 +1341,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       assert_selector "[data-glyph='clarification']", visible: :all
       # …and deliberately NOT the pending-change wiggle: the expectation text
       # renders undecorated (a clarification proposes nothing).
-      assert_no_selector "td .decoration-amber-400", text: "Asks clarifying questions"
+      assert_no_selector "td .decoration-suggestion-edit", text: "Asks clarifying questions"
 
       visit framework_path(@framework_id)
       assert_no_text "Edit mode", exact: true
@@ -1435,6 +1435,27 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       click_selector_with_js_fallback "[data-glyph='clarification'][data-suggestion-id]",
                                       expect_text: "Back to activity"
       assert_text question
+    end
+
+    # Resolve… sits over the entry's Discuss link, and the modal's footer
+    # buttons sit at the bottom of its scroll box: an unchecked hit area takes
+    # the link's taps in one and gives the other a scrollbar.
+    should "keep Resolve… and the modal's buttons to their own space" do
+      page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      sign_in_as(@admin_user)
+      visit edit_framework_path(@framework_id)
+      assert_text "Asked for clarification"
+      assert_no_stolen_taps
+
+      click_button_with_js_fallback "Resolve…", expect_text: "Resolve clarification"
+      assert_selector "#resolve-clarification-modal", visible: true
+      scrolls = page.evaluate_script(<<~JS)
+        (() => {
+          const body = document.querySelector("#resolve-clarification-modal [data-modal-target='panel'] > .overflow-y-auto");
+          return body.scrollHeight > body.clientHeight || body.scrollWidth > body.clientWidth;
+        })()
+      JS
+      assert_not scrolls, "the resolve modal's body scrolls with nothing to scroll to"
     end
 
     should "resolve a clarification from the feed via the modal" do
