@@ -306,9 +306,10 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
   and `bin/rubocop`. Run both on the files you change.
 - **Theme matrix**: Default, Bento and Custom, each in light and dark, plus the stress tenant
   ([theming.md → Checking your work](theming.md#checking-your-work)).
-- **Stricter house rules**: key actions on touch screens aim for 44px, above AA's 24px, and design
-  direction can override it ([phlex-views.md → Touch targets](phlex-views.md#touch-targets)).
-  Report a miss as a house-rule finding, not a WCAG failure.
+- **Stricter house rules**: every `Kit::Button` takes a tap across 44px by default, and other key
+  actions on touch screens aim for 44px; design direction can opt out with `compact: true`, above
+  AA's 24px floor ([phlex-views.md → Touch targets](phlex-views.md#touch-targets)). Report a miss
+  as a house-rule finding, not a WCAG failure.
 - **Voice and vocabulary**: the text rules in the root `AGENTS.md`, and
   [the glossary](../02-glossary.md) for the product's names.
 - **App URL / login / seeded-data control**: *Reaching the app*
