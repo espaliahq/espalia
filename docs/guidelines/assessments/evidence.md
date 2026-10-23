@@ -215,10 +215,23 @@ shared by web, MCP and Slack:
   last-row lock). `EvidenceItemsController#create` runs the usual diff; the
   first staged row leads, or the item is recorded unplaced.
 - **"Feedback to place"** on the hub: items about the viewer and, for the
-  manager side (`Person#all_reports` plus active delegations), about their
-  reports, each with "Place on a capability" — the edit modal with an empty
-  block, content disabled for a non-author. Cards are anchored
-  `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
+  manager side, about their reports, each with "Place on a capability" — the
+  edit modal with an empty block, content disabled for a non-author. The
+  reports' list has two views
+  ([#620](https://github.com/mr-yum/growth-os/issues/620)): **My team**, the
+  default — direct reports plus active rating delegations, exactly
+  `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
+  everyone deeper in the subtree (`#skip_level`). A manager of managers would
+  otherwise see every item their reports' reports received ahead of their
+  own. The view is in the URL (`?place=org`; absent is the team), switched by
+  plain links that carry both counts ("My team · 3", "My whole org · 41"),
+  and the toggle renders only when the org view reaches someone the team
+  view doesn't. "May fit elsewhere too" follows the same view. It is a view
+  filter, not authority: `EvidencePolicy#add_link?` still lets an ancestor
+  place anything in their subtree. `Operations::Assessments::FeedbackToPlace`
+  (`assessments_feedback_to_place`) builds the list over
+  `Assessments::FeedbackToPlace`, and the hub renders from it. Cards are
+  anchored `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
   notification lands. The assessment page shows
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
   evidence, linking to that section.
