@@ -140,11 +140,7 @@ class Views::Evidence::HubView < Views::Base
   end
 
   def reports_to_place
-    div(data: { testid: "reports-to-place" }) do
-      div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
-        h3(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { "About your reports" }
-        place_toggle if place_toggle?
-      end
+    subsection("About your reports", aside: (method(:place_toggle) if place_toggle?), testid: "reports-to-place") do
       if @to_place_for_team.empty?
         empty("Nothing about your team is waiting to be placed.")
       else
@@ -601,9 +597,14 @@ class Views::Evidence::HubView < Views::Base
     h2(class: "text-lg font-semibold text-gray-900 dark:text-white mb-4") { text }
   end
 
-  def subsection(title, &)
-    div do
-      h3(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-3") { title }
+  # @param aside [#call, nil] rendered beside the heading, wrapping below it
+  #   when the row is too narrow
+  def subsection(title, aside: nil, testid: nil, &)
+    div(data: { testid: testid }) do
+      div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
+        h3(class: "text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { title }
+        aside&.call
+      end
       yield
     end
   end
