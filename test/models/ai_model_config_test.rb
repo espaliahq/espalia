@@ -6,10 +6,9 @@ class AiModelConfigTest < ActiveSupport::TestCase
   context "defaults" do
     subject { AiModelConfig.new }
 
-    should "be an Anthropic config with suggestions off, names pseudonymised and low effort" do
+    should "be an Anthropic config with suggestions off and low effort" do
       assert_equal "anthropic", subject.provider
       assert_not subject.suggestions_enabled?
-      assert subject.pseudonymise_names?
       assert_equal "low", subject.effort
       assert subject.valid?
     end

@@ -42,7 +42,7 @@ class Tenant::AiModelsController < ApplicationController
   end
 
   def settings_params
-    permitted = params.expect(ai_model: [ :provider, :base_url, :model, :effort, :suggestions_enabled, :pseudonymise_names ]).to_h.symbolize_keys
+    permitted = params.expect(ai_model: [ :provider, :base_url, :model, :effort, :suggestions_enabled ]).to_h.symbolize_keys
     permitted.merge(base_url: permitted[:base_url].to_s.strip.presence, model: permitted[:model].to_s.strip.presence)
   end
 

@@ -27,8 +27,8 @@ class Evidence::PlacementDecision
   NONE = "none"
 
   # @param prompt [Evidence::PlacementPrompt]
-  # @param names [Ai::NamePseudonymiser, nil] hides people's names in what is sent
-  def initialize(prompt, names: nil)
+  # @param names [Ai::NamePseudonymiser] hides people's names in what is sent
+  def initialize(prompt, names:)
     @prompt = prompt
     @names = names
   end
@@ -88,6 +88,6 @@ class Evidence::PlacementDecision
   end
 
   def hide(text, first_names: true)
-    names ? names.pseudonymise(text, first_names: first_names) : text
+    names.pseudonymise(text, first_names: first_names)
   end
 end

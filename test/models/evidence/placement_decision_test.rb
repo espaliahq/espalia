@@ -11,7 +11,10 @@ class Evidence::PlacementDecisionTest < ActiveSupport::TestCase
   setup { build_placement_fixture }
 
   def decision_for(item, names: nil)
-    ActsAsTenant.with_tenant(@tenant) { Evidence::PlacementDecision.new(Evidence::PlacementPrompt.new(item).tap(&:open_cells), names: names) }
+    ActsAsTenant.with_tenant(@tenant) do
+      Evidence::PlacementDecision.new(Evidence::PlacementPrompt.new(item).tap(&:open_cells),
+                                      names: names || Ai::NamePseudonymiser.for(@tenant))
+    end
   end
 
   def response(placement, valence: "demonstrated")

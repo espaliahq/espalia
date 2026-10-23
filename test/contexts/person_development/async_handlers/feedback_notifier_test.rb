@@ -107,6 +107,24 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
     end
   end
 
+  context "a recorded reporting manager who is now a skip-level" do
+    should "link to the item in the hub's whole-org view, and the direct manager to the default view" do
+      lead_user = create(:user)
+      lead = create(:person, tenant: @tenant, name: "Lee", manager: @manager)
+      create(:tenant_user, tenant: @tenant, user: lead_user, person: lead, role: :member)
+      @handler.record_reporting_manager(@assessee.id, @framework_id, @manager.id)
+      @handler.delegate_manager_rating(@assessee.id, @framework_id, lead.id, granted_by_id: @manager.id)
+      @assessee.update!(manager: lead)
+
+      id = nil
+      perform_enqueued_jobs { id = record!(author: @peer, source: "peer", placed: false) }
+
+      assert_equal "/evidence?place=org#evidence-item-#{id}", @manager_user.notifications.reload.first.inbox_url
+      assert_equal "/evidence#evidence-item-#{id}", lead_user.notifications.reload.first.inbox_url
+      assert_equal "/evidence#evidence-item-#{id}", @assessee_user.notifications.reload.first.inbox_url
+    end
+  end
+
   context "the manager records feedback" do
     should "notify only the recipient" do
       perform_enqueued_jobs { record!(author: @manager, source: "manager") }

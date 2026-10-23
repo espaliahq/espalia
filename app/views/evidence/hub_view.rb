@@ -29,7 +29,11 @@ class Views::Evidence::HubView < Views::Base
   #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
   # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
   # @param can_regenerate [Boolean] whether "Suggest again" can do anything here
+  # @param place_scope [String] the "Feedback to place" view: "team" or "org"
+  # @param place_counts [Hash, nil] `{ team:, org: }` item counts for the
+  #   toggle, nil when the org view reaches no one beyond the team
   def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false, draft: nil,
+                 place_scope: "team", place_counts: nil,
                  completed_incoming: [], completed_outgoing: [],
                  authored: [], cell_details: {}, authored_details: {}, responses: {},
                  in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [],
@@ -42,6 +46,8 @@ class Views::Evidence::HubView < Views::Base
     @authored = authored
     @to_place_about_me = to_place_about_me
     @to_place_for_team = to_place_for_team
+    @place_scope = place_scope
+    @place_counts = place_counts
     @open_give_step = open_give_step
     @draft = draft
     @cell_details = cell_details
@@ -110,10 +116,11 @@ class Views::Evidence::HubView < Views::Base
   # ── Feedback to place ──
 
   # Items given without a capability in mind: about the viewer, and about the
-  # people they manage. Either may place them (EvidencePolicy#add_link?); the
-  # edit modal opens with an empty "Applies to" block.
+  # people they manage — their team, or their whole org. Either may place
+  # them (EvidencePolicy#add_link?); the edit modal opens with an empty
+  # "Applies to" block.
   def to_place_group
-    return if @to_place_about_me.empty? && @to_place_for_team.empty?
+    return if @to_place_about_me.empty? && @to_place_for_team.empty? && !place_toggle?
 
     section(id: "feedback-to-place", class: "scroll-mt-20") do
       group_heading("Feedback to place")
@@ -126,13 +133,44 @@ class Views::Evidence::HubView < Views::Base
             div(class: "space-y-4") { @to_place_about_me.each { |item| to_place_card(item, about_viewer: true) } }
           end
         end
-        unless @to_place_for_team.empty?
-          subsection("About your reports") do
-            div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item, about_viewer: false) } }
-          end
-        end
+        reports_to_place if @to_place_for_team.any? || place_toggle?
       end
     end
+  end
+
+  def reports_to_place
+    subsection("About your reports", aside: (method(:place_toggle) if place_toggle?), testid: "reports-to-place") do
+      if @to_place_for_team.empty?
+        empty("Nothing about your team is waiting to be placed.")
+      else
+        div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item, about_viewer: false) } }
+      end
+    end
+  end
+
+  def place_toggle?
+    @place_counts.present? && @place_counts[:org].positive?
+  end
+
+  # Plain links, so the view is in the URL (?place=org) and works without
+  # JavaScript; the counts say there is more without switching.
+  def place_toggle
+    nav(class: "inline-flex gap-1 rounded-md bg-neutral-subtle p-0.5",
+        aria: { label: "Whose feedback to place" }) do
+      place_link("My team", @place_counts[:team], place: nil)
+      place_link("My whole org", @place_counts[:org], place: "org")
+    end
+  end
+
+  def place_link(label, count, place:)
+    active = (@place_scope == "org") == (place == "org")
+    a(href: evidence_hub_path(place: place, anchor: "feedback-to-place"),
+      aria: { current: active ? "page" : nil },
+      class: [
+        "inline-flex min-h-11 items-center rounded px-3 py-1 text-sm font-medium whitespace-nowrap",
+        active ? "bg-default text-default shadow-xs" :
+          "text-muted hover:text-default"
+      ].join(" ")) { "#{label} · #{count}" }
   end
 
   def to_place_card(item, about_viewer:)
@@ -568,9 +606,14 @@ class Views::Evidence::HubView < Views::Base
     h2(class: "text-lg font-semibold text-default mb-4") { text }
   end
 
-  def subsection(title, &)
-    div do
-      h3(class: "text-sm font-semibold uppercase tracking-wide text-muted mb-3") { title }
+  # @param aside [#call, nil] rendered beside the heading, wrapping below it
+  #   when the row is too narrow
+  def subsection(title, aside: nil, testid: nil, &)
+    div(data: { testid: testid }) do
+      div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
+        h3(class: "text-sm font-semibold uppercase tracking-wide text-muted") { title }
+        aside&.call
+      end
       yield
     end
   end
