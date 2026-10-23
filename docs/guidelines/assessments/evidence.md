@@ -493,9 +493,10 @@ Rules, all deliberate:
   fewer" goes back. Both links keep the rest of the URL (`?place=org`) but
   drop `give` and `draft`, which would reopen the modal. An item past the
   cap waits for "Show all": its card under "Feedback you've provided" still
-  leaves its suggestions out. Accepting the last suggestion on a card leaves
-  the card with its status line until the next load, so nothing below it
-  moves up and no capped item slides in. Accept and Dismiss answer with a Turbo Stream that replaces
+  leaves its suggestions out, but keeps the anchor while the item is not
+  listed above. A decided row leaves its card, and the last one leaves the
+  card with its status line until the next load: the card stays put, only
+  what is below it rises by the row's height, and no capped item slides in. Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an

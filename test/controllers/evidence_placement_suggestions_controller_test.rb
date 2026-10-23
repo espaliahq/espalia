@@ -155,6 +155,7 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
         @many.last(2).each do |hidden|
           assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(hidden.id)}", 0,
             "a capped item's suggestions wait for Show all rather than moving to its authored card"
+          assert_select "##{EvidenceItem.dom_id(hidden.id)}", 1, "its authored card keeps the anchor while it is capped"
         end
       end
 

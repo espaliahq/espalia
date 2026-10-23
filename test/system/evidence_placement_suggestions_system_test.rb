@@ -141,7 +141,7 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
 
       open_hub
       assert_selector cards, count: 5
-      assert_no_selector "##{EvidenceItem.dom_id(oldest.id)}"
+      assert_no_selector "#suggested-placements ##{EvidenceItem.dom_id(oldest.id)}"
       assert_selector "#suggested-placements", text: "Showing 5 of 7"
       assert_no_sideways_overflow("the capped section must fit the #{name} viewport")
       screenshot("#{name}_may_fit_elsewhere_capped")

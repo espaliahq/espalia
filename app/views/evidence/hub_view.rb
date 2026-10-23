@@ -72,6 +72,7 @@ class Views::Evidence::HubView < Views::Base
     @tenants = tenants
     @with_suggestions = with_suggestions
     @with_suggestion_ids = elsewhere_ids || with_suggestions.to_set(&:id)
+    @listed_elsewhere_ids = with_suggestions.to_set(&:id)
     @elsewhere_all = elsewhere_all
     @hub_params = hub_params
     @suggestions = suggestions
@@ -441,12 +442,13 @@ class Views::Evidence::HubView < Views::Base
 
   # Anchored like the to-place cards: an item the viewer gave unplaced is
   # listed only here, and its notification link lands on it. Self feedback
-  # listed under "May fit elsewhere too" keeps its anchor and suggestions
-  # there, since both ids must be unique on the page.
+  # with suggestions keeps them under "May fit elsewhere too", even past its
+  # cap; the anchor moves there only while the card is listed, since ids
+  # must be unique on the page.
   def authored_card(item)
     detail = @authored_details.fetch(item.id, {})
     suggested_above = @with_suggestion_ids.include?(item.id)
-    card(dom_id: (EvidenceItem.dom_id(item.id) unless suggested_above)) do
+    card(dom_id: (EvidenceItem.dom_id(item.id) unless @listed_elsewhere_ids.include?(item.id))) do
       div do
         p(class: "text-sm font-medium text-gray-900 dark:text-white") { authored_cell_label(item, detail) }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
