@@ -94,6 +94,36 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
+    should "let the assessee accept a May fit elsewhere too suggestion on their own self feedback, on #{name}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      self_item = record_self_feedback
+      self_suggestion = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_placement_suggestion, tenant: @tenant, item: self_item,
+          capability_stable_id: @ownership.stable_id, level_ordinal: 3, valence: "demonstrated", confidence: 0.74,
+          rationale: "“walked the team through every step” shows ownership of the rollout.")
+      end
+      open_hub
+
+      within("#suggested-placements ##{EvidenceItem.dom_id(self_item.id)}") do
+        assert_text "From you"
+        assert_selector row(self_suggestion), text: "74% confident"
+      end
+      assert_no_sideways_overflow("the self feedback's suggestions must fit the #{name} viewport")
+      screenshot("#{name}_self_feedback_may_fit_elsewhere")
+
+      click_selector_with_js_fallback("#{row(self_suggestion)} form[action$='/accept'] button",
+                                      expect_text: "Placed on Ownership · E3 as Demonstrates.")
+      assert_no_selector row(self_suggestion)
+      assert page.evaluate_script("window.__hubNotReloaded"), "deciding a suggestion must not reload the hub"
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal [ [ @collaboration.stable_id, 3 ], [ @ownership.stable_id, 3 ] ].sort,
+          EvidenceLink.active.where(evidence_id: self_item.id).pluck(:capability_stable_id, :level_ordinal).sort
+        assert_equal "accepted", self_suggestion.reload.status
+      end
+    end
+  end
+
   should "stage the suggestions in the editor and keep the ones left" do
     open_hub
     click_button_with_js_fallback("Adjust in the editor", expect_text: "Edit feedback / evidence")

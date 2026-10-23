@@ -24,7 +24,9 @@ class Views::Evidence::HubView < Views::Base
   # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
   #   to the item's first linkage (absent when the viewer may not see it)
   # @param with_suggestions [Array<EvidenceItem>] placed items about the viewer
-  #   or their reports with pending placement suggestions, not shown elsewhere
+  #   or their reports with pending placement suggestions. The viewer's own
+  #   self feedback may also be listed under "Feedback you've provided", whose
+  #   card then leaves the suggestions to this list.
   # @param suggestions [Hash{String=>Hash}] item id => { suggestions:, cells: }
   #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
   # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
@@ -58,6 +60,7 @@ class Views::Evidence::HubView < Views::Base
     @current_tenant = current_tenant
     @tenants = tenants
     @with_suggestions = with_suggestions
+    @with_suggestion_ids = with_suggestions.to_set(&:id)
     @suggestions = suggestions
     @decidable_ids = decidable_ids
     @can_regenerate = can_regenerate
@@ -194,8 +197,9 @@ class Views::Evidence::HubView < Views::Base
   # ── Suggested placements (placed items with more places to go) ──
 
   # Feedback already placed somewhere, about the viewer or their reports,
-  # where the model sees more cells it speaks to. Items the viewer gave are
-  # left to "Feedback you've provided", which carries the same block.
+  # where the model sees more cells it speaks to. Items the viewer gave
+  # someone else are left to "Feedback you've provided", which carries the
+  # same block; their own self feedback is about them, so it is listed here.
   def suggested_placements_group
     return if @with_suggestions.empty?
 
@@ -235,7 +239,8 @@ class Views::Evidence::HubView < Views::Base
   # only for a report's item; the "About you" subsection already says whose.
   def to_place_scope_label(item, detail, about_viewer:)
     whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && !about_viewer)
-    [ "From #{item.author&.name || 'a colleague'}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
+    from = item.author_id == @viewer_person_id ? "you" : item.author&.name || "a colleague"
+    [ "From #{from}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
   end
 
   # ── Open / completed request groups ──
@@ -405,10 +410,13 @@ class Views::Evidence::HubView < Views::Base
   # ── Authored evidence (edit / withdraw) — a Completed subsection ──
 
   # Anchored like the to-place cards: an item the viewer gave unplaced is
-  # listed only here, and its notification link lands on it.
+  # listed only here, and its notification link lands on it. Self feedback
+  # listed under "May fit elsewhere too" keeps its anchor and suggestions
+  # there, since both ids must be unique on the page.
   def authored_card(item)
     detail = @authored_details.fetch(item.id, {})
-    card(dom_id: EvidenceItem.dom_id(item.id)) do
+    suggested_above = @with_suggestion_ids.include?(item.id)
+    card(dom_id: (EvidenceItem.dom_id(item.id) unless suggested_above)) do
       div do
         p(class: "text-sm font-medium text-gray-900 dark:text-white") { authored_cell_label(item, detail) }
         p(class: "text-xs text-gray-600 dark:text-gray-300") { authored_scope_label(item, detail) }
@@ -416,7 +424,7 @@ class Views::Evidence::HubView < Views::Base
       p(class: "text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300") { authored_type_label(item) }
       render Components::Kit::Prose.new(item.content, class: "text-sm text-gray-700 dark:text-gray-200")
       external_link(item)
-      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?)
+      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?) unless suggested_above
       authored_actions(item, detail)
     end
   end

@@ -460,7 +460,8 @@ Rules, all deliberate:
   then says "from a suggestion". Dismissals keep an optional reason and are
   not feed entries.
 - **Who decides: `EvidencePolicy#add_link?`** — the recipient, their manager
-  chain, a rating delegate and the author. Plan decision D5 may narrow it to
+  chain, a rating delegate and the author. For self feedback the author is
+  the recipient, so the person decides on their own words. Plan decision D5 may narrow it to
   the manager side.
 - **On the hub, in place.** Each item the viewer may place shows its pending
   suggestions — capability · level, the valence badge, "82% confident" as
@@ -468,7 +469,11 @@ Rules, all deliberate:
   "Feedback you've provided", the responses you asked for, and a "May fit
   elsewhere too" group for placed items about you or your reports with more
   cells to go (a different name from the block's own "Suggested placements"
-  heading, so the page doesn't say it twice). Accept and Dismiss answer with a Turbo Stream that replaces
+  heading, so the page doesn't say it twice). Your own self feedback is
+  listed there too, "From you", and its card under "Feedback you've
+  provided" then leaves out the block and the anchor, which must be unique
+  on the page. A manager sees a report's self feedback there like any other
+  item; a peer never does, as they see no one else's self feedback. Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an

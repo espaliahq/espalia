@@ -77,6 +77,59 @@ class EvidencePlacementSuggestionsControllerTest < ActionDispatch::IntegrationTe
       assert_select "#suggested-placements ##{EvidenceItem.dom_id(placed.id)} li[data-suggestion-id]", count: 1
     end
 
+    context "on self feedback" do
+      setup do
+        @self_item = record_self_feedback
+        ActsAsTenant.with_tenant(@tenant) do
+          @self_suggestion = create(:evidence_placement_suggestion, tenant: @tenant, item: @self_item,
+            capability_stable_id: @ownership.stable_id, level_ordinal: 3)
+        end
+      end
+
+      should "list it for the person it is about under May fit elsewhere too, once" do
+        sign_in @alex_user
+        get evidence_hub_path
+
+        assert_select "#suggested-placements ##{EvidenceItem.dom_id(@self_item.id)}" do
+          assert_select "p", text: /\AFrom you · /
+          assert_select "li[data-suggestion-id='#{@self_suggestion.id}']", 1
+        end
+        assert_select "##{EvidenceItem.dom_id(@self_item.id)}", 1
+        assert_select "##{Views::Evidence::PlacementSuggestions.dom_id_for(@self_item.id)}", 1
+        assert_select "##{Views::Evidence::PlacementSuggestions.status_id_for(@self_item.id)}", 1
+        assert_select "div", text: /\AI wrote the migration plan/, minimum: 2
+      end
+
+      should "list it for their manager, and never for a peer" do
+        sign_in @morgan_user
+        get evidence_hub_path
+        assert_select "#suggested-placements li[data-suggestion-id='#{@self_suggestion.id}']", 1
+        sign_out @morgan_user
+
+        sign_in @jordan_user
+        get evidence_hub_path
+        assert_select "li[data-suggestion-id='#{@self_suggestion.id}']", count: 0
+        assert_not_includes response.body, "I wrote the migration plan"
+      end
+
+      should "let the person it is about accept it, and refuse a peer" do
+        sign_in @jordan_user
+        stream_post accept_evidence_placement_suggestion_path(@self_suggestion)
+        assert_redirected_to root_path
+        sign_out @jordan_user
+
+        sign_in @alex_user
+        stream_post accept_evidence_placement_suggestion_path(@self_suggestion)
+        assert_response :success
+        assert_includes response.body, "Placed on Ownership · E3 as Demonstrates."
+        ActsAsTenant.with_tenant(@tenant) do
+          assert_equal [ [ @collaboration.stable_id, 3 ], [ @ownership.stable_id, 3 ] ],
+            EvidenceLink.active.where(evidence_id: @self_item.id).order(:linked_at).pluck(:capability_stable_id, :level_ordinal)
+          assert_equal [ "accepted", @alex.id ], [ @self_suggestion.reload.status, @self_suggestion.decided_by_id ]
+        end
+      end
+    end
+
     should "show a requested response's suggestions once, on its response card" do
       request_id = SecureRandom.uuid_v7
       response_id = SecureRandom.uuid_v7
