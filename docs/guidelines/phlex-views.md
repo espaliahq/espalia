@@ -29,6 +29,28 @@
 
 Anything used by one screen stays with that screen's views, not here.
 
+### Which Kit component
+
+Look a job up here, then check its states in Lookbook (`/lookbook`) before writing markup.
+
+| You need | Use |
+|---|---|
+| A button, or a link that looks like one | `Kit::Button.new(variant:, tone:, size:, href:)`: variants `:solid`, `:subtle`, `:outline`, `:ghost`, `:link` |
+| An icon on its own | `Kit::Button.new(variant: :ghost, icon: true, aria_label:)` |
+| A `button_to`, `f.submit` or `link_to` | `class: Kit::Button.classes(...)` |
+| A toggle or filter, or a removable choice such as a person | `Kit::Chip.new(label, pressed:)`, `remove:` |
+| One choice from a few, on a shared track | `Kit::SegmentedControl` |
+| A menu, or one row in it | `Kit::Dropdown`; `Kit::Dropdown.item_classes(tone:, size:)` for a `button_to` row |
+| A status or count (square) | `Kit::Badge.new(label, tone:)` |
+| A level, role family or category (rounded) | `Kit::Tag.new(label, category:)` |
+| A text field, select, textarea, checkbox or radio | `class: Kit::Field::INPUT`, `SELECT`, `TEXTAREA`, `CHECKBOX` or `RADIO`, with layout classes beside it |
+| A panel, or a card that links | `Kit::Card` (`variant: :inset`, `href:`) |
+| A message on the page, or one that comes and goes | `Kit::Alert`, `Kit::Toast` |
+| Nothing to show yet | `Kit::EmptyState` |
+| A dialog | `Kit::Modal` |
+
+**No option fits?** Add the option to the Kit component, with its preview, and use it. Copying the markup instead is how a fix ends up landing in five places.
+
 ### Options before copies
 
 Each component owns its radius and shadow ([theming.md → Radius and shadow](theming.md#radius-and-shadow)), so views never set either on a Kit surface. Reach for an option before hand-rolling a near copy:
