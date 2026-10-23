@@ -25,6 +25,11 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
       rf = create(:framework_role_family, framework_id: @framework_id, name: "Eng")
       role = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
       level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
+      cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
+      cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
+      create(:framework_capability_role_binding, capability_id: cap.capability_id, role_id: role.role_id, weight: 1.0)
+      create(:framework_behavioural_expectation, capability_id: cap.capability_id, level_ordinal: 2,
+        description: "Weighs options and explains reasoning")
       handler = PersonDevelopment::CommandHandler.new
       [ @lead, @engineer ].each { |person| handler.assign_to_framework(person.id, @framework_id, role.role_id, level.level_id) }
       @engineer_assignment = PersonFrameworkAssignment.find_by(person_id: @engineer.id)
@@ -66,5 +71,15 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
     sign_in_as(@manager_user)
     switch_between_team_and_org
     assert_no_sideways_overflow("the hub scrolls sideways on a phone")
+  end
+
+  should "take a skip-level manager from the assessment's notice to the item in the whole-org view" do
+    sign_in_as(@manager_user)
+    visit assessment_path(@engineer_assignment)
+    assert_selector "[data-testid='unplaced-feedback-notice']", text: "1 piece of feedback about Sky Okafor is waiting"
+
+    click_link_with_js_fallback("Place it →", expect_text: "Wrote the on-call runbook.")
+    assert_current_path evidence_hub_path(place: "org")
+    assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My whole org · 2"
   end
 end

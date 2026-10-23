@@ -7,9 +7,12 @@
 class Views::Assessments::UnplacedFeedbackNotice < Views::Base
   # @param count [Integer] unplaced items on this assessment (> 0)
   # @param whose [String] "you" for the assessee, otherwise the assessee's name
-  def initialize(count:, whose:)
+  # @param place [String, nil] "org" when the hub lists these items only in
+  #   its whole-org view (a skip-level viewer)
+  def initialize(count:, whose:, place: nil)
     @count = count
     @whose = whose
+    @place = place
   end
 
   def view_template
@@ -19,7 +22,7 @@ class Views::Assessments::UnplacedFeedbackNotice < Views::Base
         class: "mb-4 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 " \
                "px-4 py-3 flex flex-wrap items-center justify-between gap-2") do
       p(class: "text-sm text-amber-800 dark:text-amber-200") { sentence }
-      a(href: evidence_hub_path(anchor: "feedback-to-place"),
+      a(href: evidence_hub_path(place: @place, anchor: "feedback-to-place"),
         class: "inline-flex items-center min-h-11 text-sm font-medium text-amber-900 dark:text-amber-100 hover:underline") do
         @count == 1 ? "Place it →" : "Place them →"
       end

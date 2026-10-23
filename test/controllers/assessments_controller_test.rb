@@ -337,6 +337,33 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, "Rate next capability"
     end
 
+    context "with feedback waiting to be placed" do
+      setup do
+        @skip_user = create(:user, password: "password123")
+        ActsAsTenant.with_tenant(@tenant) do
+          grand_manager = create(:person, tenant: @tenant, email: @skip_user.email, name: "Grand Manager")
+          create(:tenant_user, tenant: @tenant, user: @skip_user, person: grand_manager)
+          @manager.update!(manager: grand_manager)
+          peer = create(:person, tenant: @tenant, name: "Peer")
+          PersonDevelopment::CommandHandler.new.record_evidence(@person.id, @framework.framework_id, SecureRandom.uuid_v7,
+            source: "peer", evidence_type: "peer_feedback", content: "Calm under pressure", author_id: peer.id)
+        end
+      end
+
+      should "point the direct manager's notice at the hub's default team view" do
+        sign_in @manager_user
+        get assessment_path(@assignment)
+        assert_select "[data-testid='unplaced-feedback-notice'] a[href='#{evidence_hub_path(anchor: "feedback-to-place")}']"
+      end
+
+      should "point a skip-level manager's notice at the hub's whole-org view, where the item is listed" do
+        sign_in @skip_user
+        get assessment_path(@assignment)
+        assert_select "[data-testid='unplaced-feedback-notice'] " \
+                      "a[href='#{evidence_hub_path(place: "org", anchor: "feedback-to-place")}']", text: "Place it →"
+      end
+    end
+
     should "keep the imperative priming hero for the direct manager" do
       sign_in @manager_user
       get assessment_path(@assignment)

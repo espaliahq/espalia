@@ -234,7 +234,11 @@ shared by web, MCP and Slack:
   anchored `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
   notification lands. The assessment page shows
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
-  evidence, linking to that section.
+  evidence, linking to that section. A link that may reach a skip-level
+  viewer — the notice, and a notification to a recorded reporting manager who
+  is no longer the direct one — carries `?place=org` when only the org view
+  lists the item (`Assessments::FeedbackToPlace#scope_for` / `#hub_path`), so
+  the card it points at exists.
 
 **From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
 feedback given in a peer such as Chip arrives through the feedback exchange
