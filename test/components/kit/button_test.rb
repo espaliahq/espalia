@@ -70,12 +70,20 @@ class Components::Kit::ButtonTest < ActiveSupport::TestCase
       end
     end
 
-    should "leave the hit area to the visual when compact, touch-sized or a link" do
-      [ { compact: true }, { touch: true }, { variant: :link } ].each do |options|
+    should "give a link the hit area too" do
+      assert_empty Button::HIT_AREA.split - render_button(variant: :link)["class"].split
+    end
+
+    should "leave the hit area to the visual when compact or touch-sized" do
+      [ { compact: true }, { touch: true }, { variant: :link, compact: true } ].each do |options|
         classes = render_button(**options)["class"].split
 
         assert_not_includes classes, "after:min-h-11", "#{options} still adds a hit area"
       end
+    end
+
+    should "keep a label passed through aria: when aria_label: is absent" do
+      assert_equal "Close", render_button(aria: { label: "Close" })["aria-label"]
     end
 
     should "match .classes to the rendered button" do
