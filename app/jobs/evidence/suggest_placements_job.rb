@@ -16,6 +16,10 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   # item in this window, however it is asked for.
   REQUEST_INTERVAL = 1.minute
 
+  # How long a model's answer about an item, empty or not, keeps the
+  # self feedback backfill from asking again.
+  ANSWER_REMEMBERED = 90.days
+
   GIVE_UP = ->(job, error) { Rails.logger.warn("[evidence-suggestions] #{job.arguments.first}: gave up, #{error.message}") }
 
   retry_on Evidence::SuggestionModel::RateLimited, wait: :polynomially_longer, attempts: 5, &GIVE_UP
@@ -43,6 +47,10 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
   end
 
   # @param evidence_id [String]
+  # @return [String] the cache key set once the model answered about the item
+  def self.answered_key(evidence_id) = "evidence-suggestions:answered:#{evidence_id}"
+
+  # @param evidence_id [String]
   def perform(evidence_id)
     item = ActsAsTenant.without_tenant { EvidenceItem.find_by(id: evidence_id) }
     return if item.nil?
@@ -68,6 +76,7 @@ class Evidence::SuggestPlacementsJob < ApplicationJob
     asked_about = item.content
     model = Evidence::SuggestionModel.new(tenant: item.tenant)
     proposals = model.suggest(prompt).select { |p| usable?(prompt, p) }.uniq { |p| [ p.capability_stable_id, p.level_ordinal ] }
+    Rails.cache.write(self.class.answered_key(item.id), true, expires_in: ANSWER_REMEMBERED)
     after_generate(item) if store(item, proposals, model: model, asked_about: asked_about)
   end
 

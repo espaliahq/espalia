@@ -79,7 +79,21 @@ class Evidence::SelfFeedbackBackfillTest < ActiveJob::TestCase
         end
 
         travel 1.day do
-          assert_equal 0, Evidence::SelfFeedbackBackfill.new.count, "a run that stored nothing is not asked for again"
+          assert_equal 2, Evidence::SelfFeedbackBackfill.new.count, "a run that never answered is asked for again"
+        end
+      end
+    end
+  end
+
+  should "skip an item the model answered about, even with nothing to suggest" do
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      with_fake_suggestion_model(proposals: []) do
+        Evidence::SelfFeedbackBackfill.new.enqueue!
+        perform_enqueued_jobs(only: Evidence::SuggestPlacementsJob)
+      end
+      travel 1.day do
+        configured do
+          assert_equal 0, Evidence::SelfFeedbackBackfill.new.count, "an empty answer is not asked for again"
         end
       end
     end

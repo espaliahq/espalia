@@ -127,6 +127,20 @@ class Evidence::SuggestPlacementsJobTest < ActiveJob::TestCase
     assert_not fake.prompts.last.open_cell?(@collaboration.stable_id, 3), "the cell it was recorded on is closed"
   end
 
+  should "remember that the model answered, but not a run that failed" do
+    answered = record_peer_feedback
+    failed = record_peer_feedback(content: "Another one.")
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      with_fake_suggestion_model(proposals: []) { Evidence::SuggestPlacementsJob.perform_now(answered.id) }
+      with_fake_suggestion_model(error: Evidence::SuggestionModel::Rejected.new("401")) do
+        Evidence::SuggestPlacementsJob.perform_now(failed.id)
+      end
+
+      assert Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(answered.id))
+      assert_not Rails.cache.exist?(Evidence::SuggestPlacementsJob.answered_key(failed.id))
+    end
+  end
+
   should "request one run per item a minute, and give the claim back when the enqueue fails" do
     item = record_peer_feedback
     clear_enqueued_jobs

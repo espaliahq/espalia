@@ -317,10 +317,14 @@ Rules, all deliberate:
   and a model configured. Without `CONFIRM=1` it only prints the count per
   workspace. With it, it schedules one job per item, `PER_MINUTE` (default
   20) a minute, and each claims the item's run through
-  `SuggestPlacementsJob.request_run`, the guard "Suggest again" uses, which gives the claim back if the enqueue fails. A run
-  that finds nothing leaves no row, so the task also remembers every item it
-  enqueued for 90 days, in the cache: a second run enqueues nothing new.
-  `TENANT=<slug>` narrows it. Every item is one model call.
+  `SuggestPlacementsJob.request_run`, the guard "Suggest again" uses, which
+  gives the claim back if the enqueue fails. An answer that suggests nothing
+  leaves no row, so the job remembers for 90 days, in the cache, every item
+  the model answered about (`SuggestPlacementsJob.answered_key`), and the
+  backfill skips those. A run that gave up after its retries leaves the item
+  for the next backfill. `TENANT=<slug>` narrows it. Each item is one run:
+  one model call, more only when the provider rate-limits or fails and the
+  job retries.
 - **The model can only answer with cells that exist.**
   `Evidence::PlacementPrompt` takes the recipient's role cells from
   `FrameworkCellOptions#expectation_map` at their level and one either side,

@@ -10,12 +10,12 @@
 # suggestion, in workspaces with suggestions on and a model configured; an
 # item whose earlier set was only superseded still counts. Every run is a
 # paid model call, so runs are spread `per_minute` at a time and each claims
-# the item's run the way "Suggest again" does. A run that finds nothing
-# leaves no row, so every enqueued item is also remembered for `REMEMBER`:
-# running the backfill again inside that time enqueues nothing new.
+# the item's run the way "Suggest again" does. An answer that suggests
+# nothing leaves no row, so the job remembers every item the model answered
+# about ({Evidence::SuggestPlacementsJob::ANSWER_REMEMBERED}) and the
+# backfill skips it; a run that gave up leaves the item for the next one.
 class Evidence::SelfFeedbackBackfill
   DEFAULT_PER_MINUTE = 20
-  REMEMBER = 90.days
   SETTLED_STATUSES = [ "pending", *EvidencePlacementSuggestion::DECIDED_STATUSES ].freeze
 
   attr_reader :per_minute
@@ -35,8 +35,8 @@ class Evidence::SelfFeedbackBackfill
   def candidates
     @candidates ||= tenants.select { |tenant| eligible?(tenant) }.index_with do |tenant|
       ids = ActsAsTenant.with_tenant(tenant) { scope.pluck(:id) }
-      done = Rails.cache.read_multi(*ids.map { |id| remembered_key(id) })
-      ids.reject { |id| done.key?(remembered_key(id)) }
+      answered = Rails.cache.read_multi(*ids.map { |id| Evidence::SuggestPlacementsJob.answered_key(id) })
+      ids.reject { |id| answered.key?(Evidence::SuggestPlacementsJob.answered_key(id)) }
     end
   end
 
@@ -65,10 +65,7 @@ class Evidence::SelfFeedbackBackfill
     candidates.each_value do |ids|
       ids.each do |id|
         wait = (scheduled / per_minute).minutes
-        next unless Evidence::SuggestPlacementsJob.request_run(id, wait: wait)
-
-        Rails.cache.write(remembered_key(id), true, expires_in: REMEMBER)
-        scheduled += 1
+        scheduled += 1 if Evidence::SuggestPlacementsJob.request_run(id, wait: wait)
       end
     end
     scheduled
@@ -79,8 +76,6 @@ class Evidence::SelfFeedbackBackfill
   def tenants
     @tenants ||= (@tenant_slug ? Tenant.where(slug: @tenant_slug) : Tenant.all).order(:slug).to_a
   end
-
-  def remembered_key(id) = "evidence-suggestions:self-backfill:#{id}"
 
   def eligible?(tenant) = Evidence::PlacementSuggestionRows.regenerable?(tenant)
 
