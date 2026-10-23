@@ -12,8 +12,11 @@
 # @example Icon only
 #   render Components::Kit::Button.new(variant: :ghost, icon: true, aria_label: "Edit") { icon(:pencil, class: "size-4") }
 #
-# @example On a `button_to` or `f.submit`
+# @example On a `button_to`
 #   button_to "Delete", path, method: :delete, class: Components::Kit::Button.classes(tone: :danger)
+#
+# @example On an `f.submit`, an input that can't carry the hit area, so it is 44px to the eye
+#   f.submit "Save", class: Components::Kit::Button.classes(tone: :brand, touch: true)
 #
 class Components::Kit::Button < Components::Base
   BASE = "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border " \
@@ -61,7 +64,7 @@ class Components::Kit::Button < Components::Base
     md: "size-9 text-sm"
   }.freeze
 
-  # A link sits in running text, so its size is only its type and a small hit area.
+  # A link's size is only its type; it takes the 44px hit area like any button, and in a sentence passes compact.
   LINK_SIZES = {
     xs: "min-h-6 px-0.5 text-xs",
     sm: "min-h-6 px-0.5 text-sm",
@@ -80,12 +83,12 @@ class Components::Kit::Button < Components::Base
   # @param tone [Symbol] :neutral, :brand, :danger, :success, :warning or :info
   # @param size [Symbol] :xs, :sm or :md
   # @param touch [Boolean] at least 44px square to the eye, for a touch target
-  # @param compact [Boolean] the hit area is only the visual, for a dense group or a larger target around it
+  # @param compact [Boolean] the hit area is only the visual, for a dense group, a link in a sentence or a larger target around it
   # @param icon [Boolean] square, for an icon on its own
   # @return [String]
   def self.classes(variant: :solid, tone: :neutral, size: :md, touch: false, compact: false, icon: false)
     sizes = if variant == :link then LINK_SIZES elsif icon then ICON_SIZES else SIZES end
-    hit_area = HIT_AREA unless touch || compact || variant == :link
+    hit_area = HIT_AREA unless touch || compact
     [ BASE, TONES.fetch(tone), VARIANTS.fetch(variant), sizes.fetch(size), (TOUCH if touch), hit_area ].compact.join(" ")
   end
 
@@ -93,7 +96,7 @@ class Components::Kit::Button < Components::Base
   # @param tone [Symbol] the meaning: :neutral, :brand, :danger, :success, :warning or :info
   # @param size [Symbol] :xs, :sm or :md
   # @param touch [Boolean] at least 44px square to the eye, for a touch target
-  # @param compact [Boolean] the hit area is only the visual, for a dense group or a larger target around it
+  # @param compact [Boolean] the hit area is only the visual, for a dense group, a link in a sentence or a larger target around it
   # @param icon [Boolean] square, for an icon on its own; needs `aria_label:`
   # @param href [String, nil] renders an `a` instead of a `button`
   # @param type [Symbol] the button's type; ignored with `href:`
@@ -128,6 +131,6 @@ class Components::Kit::Button < Components::Base
   end
 
   def aria_attrs(**extra)
-    { **@attrs.fetch(:aria, {}), label: @aria_label, **extra }.compact
+    { **@attrs.fetch(:aria, {}), **{ label: @aria_label }.compact, **extra }.compact
   end
 end
