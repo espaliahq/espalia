@@ -35,6 +35,13 @@ class Evidence::SelfFeedbackBackfillTest < ActiveJob::TestCase
     end
   end
 
+  should "pick what the person wrote about themselves, though recorded as peer" do
+    ActsAsTenant.with_tenant(@tenant) { @plain.update_columns(source: "peer", feedback_direction: "peer_to_peer") }
+    configured do
+      assert_equal({ @tenant => [ @plain.id, @superseded.id ] }, Evidence::SelfFeedbackBackfill.new.candidates)
+    end
+  end
+
   should "leave out self feedback an HRIS sync or a system job wrote" do
     ActsAsTenant.with_tenant(@tenant) do
       @plain.update_columns(recorded_via: "hris")
