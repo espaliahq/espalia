@@ -64,7 +64,7 @@ class Reporting::FeedbackExport
       direction: DIRECTION_LABELS.fetch(
         Reporting::EvidenceAttribution.reporting_direction(
           feedback_direction: item.feedback_direction, source: item.source,
-          self_authored: item.author_id == item.person_id
+          self_authored: item.self_authored?
         )
       ),
       requested: request ? "Requested" : "Proactive",
