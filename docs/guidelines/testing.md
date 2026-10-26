@@ -563,6 +563,8 @@ end
 
 **When NOT needed:** Frames without `src:` (eager-rendered only) or frames whose inner content is already verified by an earlier `assert_text` on something only the loaded version would render.
 
+**`wait_for_turbo_idle` is not a substitute.** It waits for `turbo-frame[busy]`, and a frame is busy only once its fetch has started. A `loading: "lazy"` frame revealed by a toggle (the assessment activity pane) starts its fetch when it scrolls into view, which a busy runner can delay past the idle check. The load then lands after the test has acted, and the controllers inside reconnect with fresh state: the feed's filter resets, a cleared focus comes back. Wait for `[complete]` instead. To reproduce a late start, hold the request in a `turbo:before-fetch-request` listener (`event.preventDefault()`, then `event.detail.resume()` on a timer); the frame stays neither busy nor complete for as long as you hold it. Slowing the server doesn't reproduce it: the frame goes busy at once, and the idle check waits.
+
 ## Measuring a Scroll: Wait for It to Stop
 
 **Read a scroll position only once the page has stopped scrolling, and never

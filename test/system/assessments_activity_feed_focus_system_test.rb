@@ -80,31 +80,29 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
+  # Opens the activity pane once its lazy frame and the matrix frame have
+  # loaded. The pane's inline fallback already renders the feed, and the lazy
+  # fetch starts only once the opened pane is visible, so wait_for_turbo_idle
+  # can pass before it begins. When either load lands later, the feed
+  # reconnects (resetting its filter) or takes a fresh matrix focus.
+  def open_activity_pane
+    wait_for_stimulus "activity-pane"
+    toggle_activity_pane
+    assert_selector "turbo-frame#assessment-activity[complete]", visible: :all
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+    wait_for_stimulus "activity-feed"
+  end
+
   context "filter chips" do
     should "narrow the visible entries to ratings only when Ratings is selected" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
+      open_activity_pane
       assert_selector "#assessment-activity-pane[data-pane-state='open']", visible: true
       assert_selector "[data-activity-feed-target='entry']", count: 4, visible: :all
-      wait_for_stimulus "activity-feed"
-      wait_for_turbo_idle
 
-      click_filter_chip = <<~JS
-        const chip = document.querySelector("[data-activity-feed-filter-param='ratings']");
-        chip?.click();
+      page.execute_script(<<~JS)
+        document.querySelector("[data-activity-feed-filter-param='ratings']").click();
       JS
-      page.execute_script(click_filter_chip)
-
-      # On starved CI, the click can race a Turbo Frame reconnect of the
-      # activity-feed controller and miss the action handler. Retry once
-      # if the data-hidden attributes haven't flipped yet.
-      unless page.has_css?(
-        "[data-kind-group='evidence'][data-hidden='true']", visible: :all, count: 2, wait: 4
-      )
-        wait_for_turbo_idle
-        page.execute_script(click_filter_chip)
-      end
 
       # Both evidence entries get data-hidden="true"; both rating entries
       # stay visible.
@@ -155,11 +153,8 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
   context "focus highlight mode" do
     should "narrow data-match to the focused capability when its card header is clicked" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
-      wait_for_stimulus "activity-feed"
+      open_activity_pane
       wait_for_stimulus "matrix"
-      wait_for_turbo_idle
 
       # Highlight mode keeps the whole feed visible and accents the
       # matches — that accent is the behaviour under test here. Drive the
@@ -185,11 +180,8 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
   context "focus filter mode" do
     should "hide non-matching entries and not accent the visible ones when Filter mode is active" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
-      wait_for_stimulus "activity-feed"
+      open_activity_pane
       wait_for_stimulus "matrix"
-      wait_for_turbo_idle
 
       # Default mode is "filter" (the cookie default). Click cap2's card
       # header — non-matching cap1 entries should hide entirely.
@@ -304,11 +296,8 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
-      wait_for_stimulus "activity-feed"
+      open_activity_pane
       wait_for_stimulus "matrix"
-      wait_for_turbo_idle
 
       # Switch to highlight mode so the rest of the feed stays visible
       # and the matching entry has to be scrolled into view (filter mode
@@ -367,11 +356,8 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
       end
 
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
-      wait_for_stimulus "activity-feed"
+      open_activity_pane
       wait_for_stimulus "matrix"
-      wait_for_turbo_idle
 
       page.execute_script(<<~JS)
         const wrapper = document.querySelector("[data-controller~='activity-feed']");
@@ -732,8 +718,7 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
   context "rating entry summary" do
     should "include the capability name so each entry is readable at a glance" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
+      open_activity_pane
 
       assert_text "Self-rated Critical Thinking · L1"
       assert_text "Self-rated Problem Solving · L1"
@@ -743,39 +728,19 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
   context "clear-focus banner" do
     should "surface a Show all activity link whenever focus is active and clear focus when clicked" do
       visit assessment_path(@assignment)
-      wait_for_stimulus "activity-pane"
-      toggle_activity_pane
+      open_activity_pane
 
       # Initial connect dispatches category-level focus, so the banner
       # should be visible from page load.
       assert_selector "[data-activity-feed-target='focusBanner']", visible: true,
         text: "Show all activity"
 
-      # Wait for any in-flight Turbo Frame fetches (e.g. the lazy activity
-      # frame's initial load triggered by opening the pane) to settle.
-      # Without this, a frame load that lands between clearFocus and the
-      # assertion reconnects activity-feed and re-applies category focus,
-      # re-showing the banner.
-      wait_for_turbo_idle
-
       # Click "Show all activity" → focus clears, banner hides. Drive the
       # controller directly to avoid synthetic-click drops on CI.
-      clear_focus_js = <<~JS
+      page.execute_script(<<~JS)
         const wrapper = document.querySelector("[data-controller~='activity-feed']");
-        const ctrl = window.Stimulus
-          .getControllerForElementAndIdentifier(wrapper, "activity-feed");
-        ctrl?.clearFocus();
+        window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-feed").clearFocus();
       JS
-      page.execute_script(clear_focus_js)
-
-      # A late Turbo Frame load can reconnect the activity-feed controller
-      # and re-apply the initial category focus, re-showing the banner.
-      # Re-issue clearFocus once if the banner is still visible after a
-      # short wait — safe because focus only ever transitions one way here.
-      unless page.has_no_css?("[data-activity-feed-target='focusBanner']:not(.hidden)", wait: 4)
-        wait_for_turbo_idle
-        page.execute_script(clear_focus_js)
-      end
 
       assert page.has_no_css?(
         "[data-activity-feed-target='focusBanner']:not(.hidden)",
