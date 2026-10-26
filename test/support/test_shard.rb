@@ -34,11 +34,16 @@ module TestShard
     { index: index, total: total }
   end
 
+  # Prepended to Minitest::Test's singleton class, so every test class runs only its share.
   module Filter
+    # @return [Array<String>] the methods this shard runs
     def runnable_methods
-      TestShard.select(super, class_name: name, **TestShard.parse(ENV["TEST_SHARD"]))
+      TestShard.select(super, class_name: name, **TestShard::CURRENT)
     end
   end
 end
 
-Minitest::Test.singleton_class.prepend(TestShard::Filter) if ENV["TEST_SHARD"]
+if ENV["TEST_SHARD"]
+  TestShard::CURRENT = TestShard.parse(ENV["TEST_SHARD"]).freeze
+  Minitest::Test.singleton_class.prepend(TestShard::Filter)
+end
