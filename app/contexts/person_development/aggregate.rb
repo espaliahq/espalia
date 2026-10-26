@@ -913,6 +913,7 @@ class PersonDevelopment::Aggregate
     ensure_assigned!
     raise CommandError, "Evidence ID already exists" if @evidence.key?(evidence_id)
     raise CommandError, "Invalid evidence source: #{source}" unless EVIDENCE_SOURCES.include?(source)
+    raise CommandError, "Evidence about yourself must be self evidence" if author_id == @person_id && source != "self"
     unless EVIDENCE_DIRECTIONS_BY_SOURCE.fetch(source).include?(feedback_direction)
       raise CommandError, "Invalid feedback direction: #{feedback_direction}"
     end
