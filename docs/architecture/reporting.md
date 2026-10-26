@@ -224,7 +224,12 @@ Events published before direction capture replay to `NULL`: historical
 `source: manager` maps to manager → report, historical `source: self` remains
 self-provided, and historical `source: peer` maps to
 `legacy_peer_or_upward`. That combined bucket is emitted only while such items
-exist. This additive nullable field does not change how identical events replay,
+exist.
+
+An item whose author is its recipient is self-provided, whatever its event
+says (`EvidenceItem#self_authored?`). Until October 2026 an assessee's answer
+to a request about their own assessment was recorded as peer → peer, and the
+event cannot be corrected. This additive nullable field does not change how identical events replay,
 so `EvidenceCollection::CODE_VERSION` remains 3 and no rebuild is required.
 
 **Surfaces**:
@@ -269,7 +274,7 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   | Recipient role / Recipient level | the cycle enrollment snapshot (`Role#name`, `Level#title`), else the live framework assignment |
   | Recipient manager | the recipient's live manager |
   | Provider / Provider email / Provider role | `author_id` → Person, role as for the recipient |
-  | Direction | `feedback_direction`, else the legacy `source` fallback 4.9 uses, in 4.9's labels |
+  | Direction | *Self* when the provider is the recipient, else `feedback_direction`, else the legacy `source` fallback 4.9 uses, in 4.9's labels |
   | Requested or proactive | *Requested* when the item answered a request of this cycle (4.9's rule — evidence older than the request was reused, so it stays *Proactive*) |
   | Requested by / Requested at | that request |
   | Type | `evidence_type` humanised, or `custom_type_label` for *other* |
