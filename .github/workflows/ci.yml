@@ -184,54 +184,9 @@ jobs:
           bin/rails db:test:prepare
           bin/rails test test/integration/mcp_claude_cli_test.rb
 
-  # Split by test across the matrix (test/support/test_shard.rb). Add a shard by
-  # extending the list; the total comes from the matrix, so it can't drift. One
-  # worker per job, with spare cores: a starved Chrome drops clicks.
+  # Ten workers on 32 vCPUs leaves each Chrome about three cores: a starved
+  # Chrome drops clicks. Matched 12 sharded jobs for speed (.github/AGENTS.md).
   system-test:
-    name: system-test (${{ matrix.shard }}/${{ strategy.job-total }})
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-
-      - name: Run System Tests
-        env:
-          RAILS_ENV: test
-          DB_HOST: localhost
-          TEST_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
-        run: bin/rails db:test:prepare test:system
-
-      - name: Keep screenshots from failed system tests
-        uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: screenshots-${{ matrix.shard }}
-          path: ${{ github.workspace }}/tmp/screenshots
-          if-no-files-found: ignore
-
-  # TRIAL, to be removed before merge: the whole system suite on one 32-vCPU
-  # runner with ten workers, timed against the shards above.
-  system-test-single:
     runs-on: blacksmith-32vcpu-ubuntu-2404
 
     services:
@@ -264,7 +219,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: screenshots-single
+          name: screenshots
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
@@ -333,7 +288,7 @@ jobs:
   # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
   # read-only token whatever this job asks for. See .github/AGENTS.md before editing.
   dependabot-auto-merge:
-    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test, system-test-single, contract]
+    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test, contract]
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&

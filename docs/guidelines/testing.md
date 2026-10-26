@@ -728,22 +728,6 @@ bin/rails test test/system/{assessments,manager_assessments}_system_test.rb
 bin/rails test:system                                                 # deliberately all of them
 ```
 
-## Reproducing One CI System-Test Shard — `TEST_SHARD`
-
-**CI splits the system suite by test, not by file, across the `system-test` matrix.**
-Each job sets `TEST_SHARD=index/total` and runs only its share of every class
-(`test/support/test_shard.rb`). A test that fails only on CI may depend on
-what ran before it in the same process, so rerun the whole shard with the seed
-from the failing job's log, in one process as CI runs it (the devcontainer
-defaults to four workers):
-
-```bash
-SYSTEM_TEST_WORKERS=1 TEST_SHARD=3/12 bin/rails test:system --seed 12345
-```
-
-The job name shows the shard, e.g. `system-test (3/12)`. A value outside
-`1..total` raises rather than quietly running nothing.
-
 ## A `def` Inside a `context` Block Is Invisible to `should`
 
 Shoulda's `should` blocks are `instance_exec`'d against the test instance, but

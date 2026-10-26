@@ -56,19 +56,6 @@ class CiWorkflowTest < ActiveSupport::TestCase
     end
   end
 
-  context "the system-test shards" do
-    should "number the shards 1..n and tell each one the matrix's own total" do
-      job = ci_jobs.fetch("system-test")
-      matrix = job.dig("strategy", "matrix")
-      shards = matrix["shard"]
-      env = job["steps"].find { |step| step["run"].to_s.include?("test:system") }.fetch("env")
-
-      assert_equal [ "shard" ], matrix.keys, "job-total counts every job, so another axis or include: row skips tests"
-      assert_equal (1..shards.size).to_a, shards, "a shard outside 1..n raises; a gap skips its tests"
-      assert_equal "${{ matrix.shard }}/${{ strategy.job-total }}", env["TEST_SHARD"]
-    end
-  end
-
   context "every workflow" do
     should "keep expressions out of shell scripts" do
       offenders = WORKFLOWS.flat_map do |path|

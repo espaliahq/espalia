@@ -14,10 +14,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
-  # Default to a single worker — a CI job can't sustain several local Chrome
-  # processes (starved JS event loops miss Capybara's wait window), so CI fans
-  # out across jobs with TEST_SHARD instead. Devcontainer compose sets
-  # SYSTEM_TEST_WORKERS=4 to fan out across Selenium Grid nodes.
+  # Default to a single worker — each worker runs its own Chrome, and one short
+  # of cores starves its JS event loop past Capybara's wait window. CI sets 10 on
+  # a 32-vCPU runner; devcontainer compose sets 4 to fan out across Selenium
+  # Grid nodes.
   parallelize(workers: ENV.fetch("SYSTEM_TEST_WORKERS", "1").to_i)
 
   # Each worker forks its own process and needs its own Puma port. Worker 0 uses
