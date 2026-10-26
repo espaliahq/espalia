@@ -80,16 +80,6 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  def wait_for_scroll_to_settle
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
-    readings = []
-    until readings.last(3).uniq.size == 1 && readings.size >= 3
-      flunk "the page never stopped scrolling" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-      readings << page.evaluate_script("window.scrollY")
-      sleep 0.15
-    end
-  end
-
   context "kebab menu + link" do
     should "keep an item's menu on screen on mobile" do
       page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
@@ -106,6 +96,11 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       )
 
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Link to another capability", visible: true
+      # A fixed menu adds nothing to the page's scroll width, so measure its edge.
+      menu_right = page.evaluate_script(
+        "document.querySelector(\"#evidence-#{@evidence_id} [data-dropdown-target='menu']\").getBoundingClientRect().right"
+      )
+      assert_operator menu_right, :<=, page.evaluate_script("window.innerWidth")
       assert_no_sideways_overflow
     end
 

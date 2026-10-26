@@ -2,6 +2,21 @@
 
 # Page-level layout checks for responsive system tests.
 module LayoutHelpers
+  # Waits until the page's scroll position holds on three reads in a row, so
+  # a smooth scroll the page started on load (to a focused card) has ended.
+  # A fixed-position dropdown closes on any scroll; open one only after this.
+  #
+  # @return [void]
+  def wait_for_scroll_to_settle
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
+    readings = []
+    until readings.size >= 3 && readings.last(3).uniq.size == 1
+      flunk "the page never stopped scrolling" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      readings << page.evaluate_script("window.scrollY")
+      sleep 0.15
+    end
+  end
+
   # Asserts the page fits its width on two reads in a row, polling until it
   # does: one read can land before async layout work (an observer, a frame
   # load) has settled, and two in a row rule out a layout that flips back.
