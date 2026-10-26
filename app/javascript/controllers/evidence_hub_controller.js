@@ -27,8 +27,24 @@ export default class extends BaseController {
     url.searchParams.delete("draft")
     window.history.replaceState(window.history.state, "", url)
 
-    // Next frame, so the modal and evidence-modal controllers on the wrapper
-    // have connected and the click reaches both actions.
-    requestAnimationFrame(() => this.autoTriggerTarget.click())
+    this.#clickOnceModalConnected()
+  }
+
+  disconnect() {
+    cancelAnimationFrame(this.pendingFrame)
+    super.disconnect()
+  }
+
+  // Each controller registers when its own module loads, in no set order. A
+  // click before the wrapper's modal and evidence-modal controllers connect
+  // reaches neither action, and the modal never opens.
+  #clickOnceModalConnected() {
+    const connected = ["modal", "evidence-modal"].every(identifier =>
+      this.application.getControllerForElementAndIdentifier(this.element, identifier))
+    if (connected) {
+      this.autoTriggerTarget.click()
+    } else {
+      this.pendingFrame = requestAnimationFrame(() => this.#clickOnceModalConnected())
+    }
   }
 }
