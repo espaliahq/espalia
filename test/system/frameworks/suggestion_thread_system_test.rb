@@ -53,6 +53,32 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     JS
   end
 
+  # Posting broadcasts a signal that reloads the pane 300ms later and renders
+  # the new comment again, so a menu opened or a reply box revealed before then
+  # is wiped. Wait until no reload is pending or running and the comment has
+  # gone unreplaced for a second.
+  def wait_for_thread_to_settle
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 15
+    loop do
+      settled_for = page.evaluate_script(<<~JS)
+        (() => {
+          const comment = document.querySelector("li[id^='comment-']")
+          const pane = document.querySelector("[data-controller~='context-pane']")
+          const reloading = window.Stimulus.getControllerForElementAndIdentifier(pane, "context-pane")?._syncReloadTimer ||
+            pane.querySelector("turbo-frame[busy]")
+          if (!comment) return 0
+          if (reloading) { delete comment.dataset.settledSince; return 0 }
+          comment.dataset.settledSince ||= String(Date.now())
+          return Date.now() - Number(comment.dataset.settledSince)
+        })()
+      JS
+      return if settled_for >= 1000
+      flunk "the suggestion thread never settled" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      sleep 0.1
+    end
+  end
+
   def open_suggestion_card
     visit edit_framework_path(@framework_id)
     assert_text "Edit mode"
@@ -132,6 +158,7 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     # stale before `execute_script` uses it (testing.md, "Avoiding Stale
     # Element References with Turbo Streams"). The revealed reply box below is
     # the success signal, so a miss here still fails loudly.
+    wait_for_thread_to_settle
     open_dropdown(scope: "li[id^='comment-']")
     page.execute_script(<<~JS)
       const item = Array.from(
@@ -157,6 +184,7 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
     assert_text "Keyboard check"
 
     trigger = "li[id^='comment-'] button[aria-label='Comment actions']"
+    wait_for_thread_to_settle
     wait_for_stimulus "dropdown", scope: "li[id^='comment-']"
     page.execute_script("document.querySelector(arguments[0]).focus()", trigger)
     find(trigger).send_keys(:enter)
