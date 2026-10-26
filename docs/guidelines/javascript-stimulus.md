@@ -3,10 +3,12 @@
 ## Requirements
 
 - Use ES6 syntax (arrow functions, destructuring, etc.)
+- Extend `BaseController` (`controllers/base_controller`), not Stimulus's `Controller`. It marks the element `data-connected`, which the system tests' `wait_for_stimulus` waits for.
 - Add usage comment at the top of every Stimulus controller
 - Define `static targets`, `static values`, `static classes` at the top of the class
 - Use `connect()` for initialization, `disconnect()` for cleanup
 - Prefer toggling CSS classes over direct DOM manipulation
+- Hide an element with its `hidden` attribute (`el.hidden = true`), not a `hidden` class. Tailwind's base styles hide `[hidden]` with `!important`, while a `.hidden` class ties with the element's own `flex` or `grid` class and loses on source order
 - Use `stimulus-use` composable behaviors for common interaction patterns (see below)
 - Keep controller actions focused on a single responsibility
 
@@ -44,9 +46,9 @@ Available methods: `get`, `post`, `put`, `patch`, `destroy` from `@rails/request
 //      data-tooltip-content-value="Hello world"
 //      data-tooltip-placement-value="top"></div>
 
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 
-export default class extends Controller {
+export default class extends BaseController {
   static values = {
     content: String,
     placement: { type: String, default: "top" },
@@ -54,11 +56,13 @@ export default class extends Controller {
   }
 
   connect() {
+    super.connect()
     this.setup()
   }
 
   disconnect() {
     this.cleanup()
+    super.disconnect()
   }
 
   // private
@@ -85,13 +89,14 @@ Common behaviors:
 - `useHover` — hover interactions
 
 ```javascript
-import { Controller } from "@hotwired/stimulus"
+import BaseController from "controllers/base_controller"
 import { useClickOutside, useTransition } from "stimulus-use"
 
-export default class extends Controller {
+export default class extends BaseController {
   static targets = ["menu"]
 
   connect() {
+    super.connect()
     useClickOutside(this)
     useTransition(this, { element: this.menuTarget })
   }
@@ -109,7 +114,7 @@ export default class extends Controller {
 ## Anti-patterns
 
 ```javascript
-// Bad - var, anonymous functions, no disconnect cleanup, manual CSRF
+// Bad - extends Controller, var, anonymous functions, no disconnect cleanup, manual CSRF
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {

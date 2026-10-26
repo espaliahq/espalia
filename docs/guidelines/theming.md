@@ -121,16 +121,7 @@ and the caller passes a meaning: `tone: :danger`. The tones are `neutral`, `bran
 
 ### Which form and tone for which job
 
-Variants are named for their **form** (`solid`, `subtle`, `outline`, `ghost`, `link`), never their job; meaning comes from `tone:`. There is no `primary` or `secondary` in the API. Pick by job:
-
-| Job | `Kit::Button` |
-|---|---|
-| The main action on a view | `solid` · `brand` |
-| An alternative beside it | `outline` · `neutral` |
-| A quiet toolbar or row action | `ghost` · `neutral` |
-| Confirm a destructive action | `solid` · `danger` |
-| Start a destructive action | `ghost` or `outline` · `danger` |
-| Navigation that reads as text | `link` · `brand` |
+Variants are named for their **form** (`solid`, `subtle`, `outline`, `ghost`, `link`), never their job; meaning comes from `tone:`. There is no `primary` or `secondary` in the API. Which pair suits which job is in [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component).
 
 Labels follow the same rule:
 
@@ -165,11 +156,7 @@ What makes it themeable:
 - **A strong fill resets the focus ring** to its own text colour, which already reads on it: `[--gos-focus-ring:var(--gos-tone-content-inverse)]` in `Kit::Alert`'s solid emphasis.
 - **Icons use `currentColor`**, so they take the text role.
 
-Then:
-
-1. A preview in `test/components/previews/kit/<name>_preview.rb` (see [Lookbook](#lookbook)), checked under every theme and scheme.
-2. A component test in `test/components/kit/<name>_test.rb`.
-3. Its radius and shadow step in `test/lib/radius_shadow_steps_test.rb`.
+The preview, test and table row a new component needs are in [phlex-views.md → Extending Kit](phlex-views.md#extending-kit).
 
 ### The guard tests
 
@@ -181,13 +168,14 @@ Then:
 | `test/lib/brand_text_classes_test.rb` | `text-primary` or `text-secondary` is used as text |
 | `test/lib/radius_shadow_steps_test.rb` | a Kit component leaves its radius step or elevation role, or Shared or Shell adds a shadow |
 | `test/lib/kit_previews_test.rb` | a Kit or Shared component has no preview |
+| `test/lib/kit_component_table_test.rb` | a Kit component has no row in [phlex-views.md → Which Kit component](phlex-views.md#which-kit-component), or a row names one that doesn't exist |
 | `test/lib/view_colour_roles_test.rb` | a view uses a palette colour, other than a site its `PENDING` list holds while it waits for a domain token |
 
 Every view directory except `pwa/` (the service worker) is in `view_colour_roles_test.rb` ([#544](https://github.com/mr-yum/growth-os/issues/544)–[#547](https://github.com/mr-yum/growth-os/issues/547)), so a new view starts on roles. A new directory under `app/views/` joins its `SOURCES`.
 
 ## Reuse before you build
 
-Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot. A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
+Check Kit and Lookbook before writing markup. If something close exists, extend it with a variant, tone, size or slot ([phlex-views.md → Extending Kit](phlex-views.md#extending-kit)). A tinted note with a title is already `Kit::Alert` with `emphasis: :subtle`, and its `role:` decides whether it is announced. A hand-rolled copy looks right on the day and drifts afterwards. The comment and evidence kebab menus hand-rolled `Kit::Dropdown`'s widget, so every fix, and the theming migration, had to land three times ([#555](https://github.com/mr-yum/growth-os/issues/555)).
 
 The same goes for previews: render the real component, never a copy of its markup.
 
@@ -317,7 +305,7 @@ The sidebar holds **Design Tokens** (colour roles, brand tokens, the contrast he
 ## Checking your work
 
 1. **Lookbook**, every theme and scheme, for the component on its own.
-2. **The app**, with the dev-only switch: `?theme=bento` and `?scheme=dark` (or `light`) on any URL. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`.
+2. **The app**, with the dev-only switch: `?theme=bento` and `?scheme=dark` (or `light`) on any URL. The choice sticks in a cookie until `?theme=default` or `?scheme=auto`. `?theme=default` clears the switch rather than forcing Default, so a tenant set to Custom still shows Custom; to see Default there, switch that tenant on its Theme page, and switch it back afterwards.
 3. **The stress tenant**, for long text, volume, every state and empty state, and hard brand colours (a yellow brand and a lime navbar). Seed it with `bin/rails dev:seed:stress`, then sign in as `admin@stress-test-co.example.com` / `password123`.
 4. **Contrast:** text 4.5:1 and focus rings 3:1, on the surface the element actually sits on, in both schemes. The Lookbook pages above measure for you; for anything else, measure in the browser rather than trusting the value.
 5. **The visual pass** in a real browser, which every front-end change needs ([chrome-mcp.md](chrome-mcp.md)).

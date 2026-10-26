@@ -71,6 +71,10 @@ duplicate ids are never a finding in themselves).
 
 ## Consistency with the host system
 
+- **Static checks first:** where the host has lint rules or guard tests
+  for its design system, their offences are the cheapest consistency
+  evidence. Run them before measuring, and spend browser time on what
+  they can't see.
 - **Reuse over reinvention:** a new feature uses the host's existing
   Button/Input/Modal/Toast components. A hand-rolled lookalike with
   slightly different padding or radius is a finding even if it looks fine

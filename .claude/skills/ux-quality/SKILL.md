@@ -38,7 +38,18 @@ these from the host, in order, and note what you found in your output:
    criteria consume all three.
    Found → consistency criteria in `references/visual.md` run against it.
    Not found → fall back to the generic craft rules; do not invent a
-   system.
+   system. With a design system, also resolve:
+   - **Component catalogue:** where a job maps to a component (a docs
+     table, Storybook, Lookbook), so build mode picks before it writes.
+   - **Conformance checks:** the lint rules and guard tests that enforce
+     the system, and how the host marks existing violations (a lint
+     todo or baseline). Marked code is debt, never a model to copy.
+   - **Theme matrix:** every theme, colour scheme and seeded stress
+     fixture the UI must hold up in. Default-only evidence hides the
+     bugs the other themes carry.
+   - **House rules stricter than AA,** such as a larger touch target
+     for key actions. Build to them; report a miss as a house-rule
+     finding, never as a WCAG failure.
 2. **App URL and how to run it.** Host docs first; a project `run`-style
    skill second; probing last. Never start servers the host docs say the
    user owns.

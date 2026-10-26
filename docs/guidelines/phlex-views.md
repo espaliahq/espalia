@@ -29,6 +29,45 @@
 
 Anything used by one screen stays with that screen's views, not here.
 
+### Which Kit component
+
+Look a job up here, then check its states in Lookbook (`/lookbook`) before writing markup.
+
+| You need | Use |
+|---|---|
+| A button, or a link that looks like one | `Kit::Button.new(variant:, tone:, size:, href:)`: variants `:solid`, `:subtle`, `:outline`, `:ghost`, `:link` |
+| An icon on its own | `Kit::Button.new(variant: :ghost, icon: true, aria_label:)` |
+| A `button_to`, `f.submit` or `link_to` | `class: Kit::Button.classes(...)` |
+| A toggle or filter, or a removable choice such as a person | `Kit::Chip.new(label, pressed:)`, `remove:` |
+| One choice from a few, on a shared track | `Kit::SegmentedControl` |
+| A menu, or one row in it | `Kit::Dropdown`; `Kit::Dropdown.item_classes(tone:, size:)` for a `button_to` row |
+| A status or count (square) | `Kit::Badge.new(label, tone:)` |
+| A level, role family or category (rounded) | `Kit::Tag.new(label, category:)` |
+| A text field, select, textarea, checkbox or radio | `class: Kit::Field::INPUT`, `SELECT`, `TEXTAREA`, `CHECKBOX` or `RADIO`, with layout classes beside it |
+| A panel, or a card that links | `Kit::Card` (`variant: :inset`, `href:`) |
+| A message on the page, or one that comes and goes | `Kit::Alert`, `Kit::Toast` |
+| Nothing to show yet | `Kit::EmptyState` |
+| A dialog | `Kit::Modal` |
+| A section heading, with a subtitle or an action | `Kit::SectionHeading.new(title, subtitle:)`, then `heading.action { }` |
+| Term and detail pairs | `Kit::DescriptionList.new(items:, columns:)` |
+| A term whose definition shows on hover and focus | `Kit::DefinitionTip.new(term, definition:, id:)` |
+| Text a person wrote: feedback, a comment, a note | `Kit::Prose.new(text)`; `Kit::Prose.to_plain(text)` for an excerpt |
+| A glyph inside text or a control | `icon(:pencil, class: "size-4")`, drawn from `Kit::IconSprite`; add a missing glyph there |
+
+Examples of each are in [`app/components/README.md`](../../app/components/README.md). A button's variant is its form and its tone its meaning, so pick both by the job:
+
+| Job | `Kit::Button` `variant:` · `tone:` |
+|---|---|
+| The main action on a view | `:solid` · `:brand` |
+| An alternative beside it | `:outline` · `:neutral` |
+| A quiet toolbar or icon action | `:ghost` · `:neutral` |
+| A text action in a row of metadata ("Send a nudge") | `:link` · `:brand`; `:danger` to start a destructive one ("Cancel request") |
+| Confirm a destructive action | `:solid` · `:danger` |
+| Start a destructive action | `:ghost` or `:outline` · `:danger` |
+| Navigation that reads as text | `:link` · `:brand` |
+
+**No option fits?** Add the option to the Kit component, with its preview, and use it. Copying the markup instead is how a fix ends up landing in five places.
+
 ### Options before copies
 
 Each component owns its radius and shadow ([theming.md → Radius and shadow](theming.md#radius-and-shadow)), so views never set either on a Kit surface. Reach for an option before hand-rolling a near copy:
@@ -37,6 +76,37 @@ Each component owns its radius and shadow ([theming.md → Radius and shadow](th
 - **A clickable card:** `Kit::Card` `href:` renders an `a` with one hover and focus treatment, so it can't hold other links. `interactive: true` gives a `div` the same look, and `data-focused="true"` holds it on.
 - **A wide modal, or one whose body draws its own heading and ×:** `Kit::Modal` `size: :xl`, `:"2xl"` or `:"3xl"` (the evidence modals, 768px), and `header: false`. The title still names the dialog.
 - **A controller that must wrap the whole modal body** (a lazy frame's `frame-error`, `submit-fallback`): pass it as `Kit::Modal` `panel_data:`. The evidence shells do.
+
+### Extending Kit
+
+Work down this list and stop at the first step that fits:
+
+1. **Use the component as it is.** Check its options in Lookbook first.
+2. **Add an option** (a keyword such as `type:`, `size:` or `compact:`) when the component does the same job with one difference.
+3. **Add a slot** when callers need to put their own markup somewhere the component draws, as `Kit::SectionHeading`'s `action` does.
+4. **Add a component** when an option would give an existing one a second job. A piece one view uses stays with that view; move it into Kit or Shared when a second view needs it.
+
+**Adding an option:**
+
+- the keyword, with a default that leaves every existing call site rendering as before, and a YARD `@param`;
+- a scenario for it in the component's preview, and a `# @param` in its `playground`;
+- a case in `test/components/kit/<name>_test.rb`;
+- the component's row in [Which Kit component](#which-kit-component) and its example in `app/components/README.md`, if the option changes which jobs it fits.
+
+**Adding a slot:** store the block in the slot method and call it from `view_template`, so callers can pass slots in any order; `Kit::EmptyState#action` is the model. Call it with `@block.call`, never `instance_exec` ([Slots Pattern](#slots-pattern)). Give it a preview scenario and a test, as for an option.
+
+**Adding a component:**
+
+- the layer ([Component layers](#component-layers)) and its file, `app/components/<layer>/<name>.rb`;
+- colour, fill and focus from [theming.md → Building a themed component](theming.md#building-a-themed-component);
+- a preview, `test/components/previews/<layer>/<name>_preview.rb`, checked under every theme and scheme;
+- a component test, `test/components/<layer>/<name>_test.rb`;
+- its radius and shadow step in `test/lib/radius_shadow_steps_test.rb`;
+- for Kit, a row in [Which Kit component](#which-kit-component) and an example in `app/components/README.md`.
+
+The guards fail if you forget a step: `kit_previews_test.rb` (no preview), `kit_component_table_test.rb` (no row), `radius_shadow_steps_test.rb` (an unlisted radius or shadow) and `kit_colour_roles_test.rb` (a palette colour). Nothing checks for the component test; add it anyway.
+
+**Adding an icon:** add its path to `Kit::IconSprite`: `STROKE_ICONS` for an outline on the 24×24 grid, `FILL_ICONS` for a solid glyph on 20×20. A glyph with several parts joins them as subpaths in one `d`, as `pencil` does. Check it in Lookbook's icon gallery. `icon(:name)` refuses a name the sprite doesn't define.
 
 ## Page View Pattern
 
@@ -296,9 +366,14 @@ and dark** and at a **mobile viewport**, then pin regressions with a test.
 
 Colour with role utilities, and check contrast on the surface an element actually sits on, in both schemes. Which role to use, opaque fills under text, and how to measure are in [theming.md](theming.md). A view still on palette steps keeps its AA pairings (`text-gray-600 dark:text-gray-300` for muted text, `-700` for coloured text) until it moves; don't tune them, move what you touch onto roles.
 
-### Touch targets — 2.5.5 (≥44×44 CSS px)
+### Touch targets
 
-Standalone interactive controls need a 44px hit area. `Kit::Button` gives every size one by default: an invisible `::after`, centred on the button, at least 44px square, so the visual keeps its size. The box is positioned, so it paints, and takes the tap, over any neighbour that isn't positioned itself, whatever the DOM order; between two buttons the later one wins. Pass `compact: true` where that box would cover a neighbour's face: a tight icon row, a toolbar that wraps, a Save or Post sitting under its textarea, a row of actions above another control, or a `variant: :link` button inside a sentence. Pass it too where a larger target already surrounds the button, for a button in a sticky header, whose box would spill over the content scrolling under it, and for a small button in the last row of an `overflow-x-auto` table: that container scrolls on both axes, so 2px of hit area below the last row adds a scrollbar. `Kit::Modal` pads its scroll box for the same reason, so a footer button needs nothing. To find these on a page, probe each control's edges with `document.elementFromPoint` and flag any point that lands on another button outside that button's own box and would have reached the control with that box switched off; `assert_no_stolen_taps` in system tests does this. `touch: true` makes the visual itself 44px. An `<input type="submit">` can't carry a pseudo-element, so build an `f.submit`'s class with `Components::Kit::Button.classes(…, touch: true)`, which makes the input itself 44px; `touch: true` passed to the form builder only becomes an HTML attribute. Hand-rolled icon-only buttons use `h-11 w-11` with `inline-flex items-center justify-center`; standalone text links/rows use `min-h-11` (wrap a smaller visual in a 44px box rather than enlarging the visual — see `Shell::UserMenu`'s avatar). The inline-link exception only applies to links *within a sentence*.
+- **Every target is at least 24×24**, or has 24px of clear space around it (WCAG 2.5.8, AA). A link inside a sentence is exempt. This floor can't be traded away.
+- **`Kit::Button` takes a tap across 44px by default, at the size it looks:** an invisible `::after`, centred on the button and at least 44px square. The box is positioned, so it paints, and takes the tap, over any neighbour that isn't positioned itself, whatever the DOM order; between two buttons the later one wins.
+- **Pass `compact: true` where that box would cover a neighbour's face, or where the design wants the tight version:** a tight icon row, a toolbar that wraps, a Save or Post under its textarea, a row of actions above another control, a `variant: :link` button inside a sentence, a button in a sticky header (its box would spill over the content scrolling under it), and a small button in the last row of an `overflow-x-auto` table (2px of hit area below it adds a scrollbar). `Kit::Modal` pads its scroll box, so a footer button needs nothing. A larger target already around the button also makes the box redundant.
+- **Find stolen taps** by probing each control's edges with `document.elementFromPoint`: a point that lands on another button, outside that button's own box, and would reach the control with the box switched off is one. `assert_no_stolen_taps` does this in system tests.
+- **`touch: true` makes the visual itself 44px**, for a key action on a touch screen that should look the size it taps. An `<input type="submit">` can't carry a pseudo-element, so build an `f.submit`'s class with `Components::Kit::Button.classes(…, touch: true)`; `touch: true` passed to the form builder only becomes an HTML attribute.
+- **A control that isn't a `Kit::Button`** aims for 44px when it's a key action on a touch screen: the main action on a view, a control people tap often, an icon that is the only way to do something. Size it with `pointer-coarse:` (`pointer-coarse:min-h-11`, as `Kit::SegmentedControl` does) so it stays compact under a mouse, or wrap a smaller visual in a 44px box, as `Shell::UserMenu`'s avatar does. Design direction can override the 44px aim; never the 24px floor.
 
 ### Accessible names
 
@@ -372,4 +447,4 @@ A minor fix to an ERB view renders the Phlex component, or uses its `.classes` o
 <%= f.submit "Save", class: Components::Kit::Button.classes(tone: :brand) %>
 ```
 
-Variants are named for their form and take a `tone:`; which pair suits which job is in [theming.md → Which form and tone for which job](theming.md#which-form-and-tone-for-which-job).
+Variants are named for their form and take a `tone:`; which pair suits which job is in [Which Kit component](#which-kit-component).
