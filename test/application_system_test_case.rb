@@ -14,9 +14,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
-  # Default to a single worker — 2-core CI runners can't sustain multiple Chrome
-  # processes (starved JS event loops miss Capybara's wait window). Devcontainer
-  # compose sets SYSTEM_TEST_WORKERS=2 to fan out across Selenium Grid nodes.
+  # Default to a single worker — a CI job can't sustain several local Chrome
+  # processes (starved JS event loops miss Capybara's wait window), so CI fans
+  # out across jobs with TEST_SHARD instead. Devcontainer compose sets
+  # SYSTEM_TEST_WORKERS=2 to fan out across Selenium Grid nodes.
   parallelize(workers: ENV.fetch("SYSTEM_TEST_WORKERS", "1").to_i)
 
   # Each worker forks its own process and needs its own Puma port. Worker 0 uses
@@ -66,8 +67,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   Capybara.default_driver = :selenium_headless_chrome
   Capybara.javascript_driver = :selenium_headless_chrome
 
-  # CI runners (especially GitHub-hosted ubuntu-latest with no Selenium grid)
-  # are slow under load — Chrome's JS event loop can be starved long enough
+  # CI runners (no Selenium grid) are slow under load — Chrome's JS event loop can be starved long enough
   # that Turbo Drive round-trips exceed even a 5s wait. Bumping the default
   # to 10s gives Turbo + Stimulus time to settle without making fast-local
   # tests slower (Capybara only waits as long as needed).

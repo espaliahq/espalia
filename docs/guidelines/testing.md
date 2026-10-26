@@ -284,7 +284,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 ## Default Capybara Wait Time
 
-**Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. GitHub-hosted ubuntu-latest runners (no Selenium grid, 2 cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
+**Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. CI runners (no Selenium grid, Puma, Chrome and the test process on a few cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
 
 ## Flake-Prone Click Guards (automated)
 
@@ -727,6 +727,21 @@ bin/rails test test/system/assessments_system_test.rb                 # one file
 bin/rails test test/system/{assessments,manager_assessments}_system_test.rb
 bin/rails test:system                                                 # deliberately all of them
 ```
+
+## Reproducing One CI System-Test Shard — `TEST_SHARD`
+
+**CI splits the system suite by test, not by file, across the `system-test` matrix.**
+Each job sets `TEST_SHARD=index/total` and runs only its share of every class
+(`test/support/test_shard.rb`). A test that fails only on CI may depend on
+what ran before it in the same process, so rerun the whole shard with the seed
+from the failing job's log:
+
+```bash
+TEST_SHARD=3/12 bin/rails test:system --seed 12345
+```
+
+The job name shows the shard, e.g. `system-test (3/12)`. A value outside
+`1..total` raises rather than quietly running nothing.
 
 ## A `def` Inside a `context` Block Is Invisible to `should`
 

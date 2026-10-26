@@ -184,8 +184,16 @@ jobs:
           bin/rails db:test:prepare
           bin/rails test test/integration/mcp_claude_cli_test.rb
 
+  # Split by test across the matrix (test/support/test_shard.rb). Add a shard by
+  # extending the list; the total comes from the matrix, so it can't drift. One
+  # worker per job, with spare cores: a starved Chrome drops clicks.
   system-test:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    name: system-test (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     services:
       postgres:
@@ -210,13 +218,14 @@ jobs:
         env:
           RAILS_ENV: test
           DB_HOST: localhost
+          TEST_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
         run: bin/rails db:test:prepare test:system
 
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.shard }}
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
