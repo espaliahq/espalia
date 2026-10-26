@@ -108,6 +108,23 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
       end
     end
 
+    should "record the assessee's answer to their manager's request as self evidence" do
+      request_id = request!(ctx: @manager_ctx, requestee_person_id: @report.id)[:request_id]
+
+      result = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::RespondToEvidenceRequest.call(
+          context: @report_ctx,
+          params: { request_id: request_id, evidence_type: "observation", content: "My reflection.", valence: "demonstrated" }
+        )
+      end
+
+      ActsAsTenant.with_tenant(@tenant) do
+        item = EvidenceItem.find(result[:evidence_id])
+        assert_equal "self", item.source
+        assert_equal "self", item.feedback_direction
+      end
+    end
+
     should "attribute a late response to the request cycle after it closes" do
       ActsAsTenant.with_tenant(@tenant) do
         AssessmentCycles::CommandHandler.new.close_cycle(@cycle_id)

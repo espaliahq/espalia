@@ -2,7 +2,8 @@
 
 # Fulfils a pending evidence request by recording the requestee's evidence
 # against the request's cell and marking the request responded. The evidence
-# source is derived from the requestee↔assessee relationship (peer / manager).
+# source is derived from the requestee↔assessee relationship (self / manager /
+# peer): a manager may ask the assessee themselves for more evidence.
 #
 # Write — :mcp_client. Same friction as recording evidence directly.
 class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
@@ -66,8 +67,7 @@ class Operations::Assessments::RespondToEvidenceRequest < Operations::Base
   end
 
   def derive_source
-    assessee = Person.find_by(id: evidence_request.person_id)
-    assessee&.managed_by?(context.person) ? "manager" : "peer"
+    EvidenceItem.source_for(author: context.person, recipient: Person.find_by(id: evidence_request.person_id))
   end
 
   def validate_external_reference!
