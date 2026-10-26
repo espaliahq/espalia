@@ -80,7 +80,35 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
+  def wait_for_scroll_to_settle
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
+    readings = []
+    until readings.last(3).uniq.size == 1 && readings.size >= 3
+      flunk "the page never stopped scrolling" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      readings << page.evaluate_script("window.scrollY")
+      sleep 0.15
+    end
+  end
+
   context "kebab menu + link" do
+    should "keep an item's menu on screen on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
+      assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
+
+      # The menu is fixed-position and closes on any scroll, so let the page's
+      # scroll to the focused card finish first.
+      wait_for_scroll_to_settle
+      # Hover-revealed: a resized desktop window is not a coarse pointer, so
+      # the trigger stays transparent until the script opens its menu.
+      page.execute_script(
+        "document.querySelector(\"#evidence-#{@evidence_id} [data-dropdown-target='trigger']\").click()"
+      )
+
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Link to another capability", visible: true
+      assert_no_sideways_overflow
+    end
+
     should "link evidence to a second capability via the Edit modal's picker" do
       # Evidence rendering is gated on cell focus (`data-focused="true"`
       # on the expanded `<td>`), so deep-link to the cell.

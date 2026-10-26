@@ -296,12 +296,14 @@ class Views::Assessments::Evidence::Card < Views::Base
   # The wrapper stays opacity-100 while the menu is open (`aria-expanded` on
   # the trigger) so it doesn't fade out when the cursor leaves the card.
   # Compact: a 44px hit area here would cover the Discuss toggle just below.
+  # Fixed: the controller clamps the menu to the viewport, which a trigger
+  # partway along a phone-width line would otherwise push off the right edge.
   def actions_menu
     div(
       class: "shrink-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 " \
              "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
-      render Components::Kit::Dropdown.new(align: :left) do |dropdown|
+      render Components::Kit::Dropdown.new(align: :left, strategy: :fixed) do |dropdown|
         dropdown.trigger(label: "Actions for feedback from #{author_name}",
                          button: { variant: :ghost, size: :xs, icon: true, compact: true }) do
           icon("kebab", class: "size-4")
