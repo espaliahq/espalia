@@ -89,10 +89,10 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The author manages links inside Edit (the unified modal); a separate
-      # "Link" item is only for non-author link-holders. Unlink (disabled at
-      # one link) + Withdraw remain.
+      # The author's Edit can link too, but the menu names linking for them as
+      # it does for every link-holder. Unlink (disabled at one link) + Withdraw remain.
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Edit", visible: :all
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Link to another capability", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
                       text: "Unlink from this capability", visible: :all

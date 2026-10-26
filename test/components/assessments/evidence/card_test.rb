@@ -11,10 +11,11 @@ class Views::Assessments::Evidence::CardTest < ActiveSupport::TestCase
 
   teardown { ActsAsTenant.current_tenant = nil }
 
-  def render_card
+  def render_card(**permissions)
     html = view_context.render(Views::Assessments::Evidence::Card.new(
       item: @item, assessment_id: SecureRandom.uuid_v7,
-      current_capability_stable_id: @item.capability_stable_id, current_level_ordinal: @item.level_ordinal
+      current_capability_stable_id: @item.capability_stable_id, current_level_ordinal: @item.level_ordinal,
+      **permissions
     ))
     Nokogiri::HTML5.fragment(html)
   end
@@ -61,6 +62,25 @@ class Views::Assessments::Evidence::CardTest < ActiveSupport::TestCase
 
       @item.exchange_acks = nil
       assert_nil render_card.at_css("[data-exchange-ack]")
+    end
+  end
+
+  context "the actions menu" do
+    should "sit on the author line and be named for the item's author" do
+      @item.author = build(:person, tenant: @tenant, name: "Sam Rivera")
+
+      footer = render_card(can_update: true, can_manage_links: true).at_css(
+        "[aria-label='Actions for feedback from Sam Rivera']"
+      ).ancestors("div.mt-1").first
+
+      assert_includes footer.text, "Sam Rivera"
+    end
+
+    should "offer the author Link to another capability beside Edit" do
+      items = render_card(can_update: true, can_manage_links: true, can_withdraw: true)
+        .css("[role='menuitem']").map { |item| item.text.strip }
+
+      assert_equal [ "Edit", "Link to another capability", "Unlink from this capability", "Withdraw" ], items
     end
   end
 

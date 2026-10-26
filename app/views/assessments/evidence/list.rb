@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Stack of evidence cards inside the expanded cell, plus a hover-revealed
-# "+ Add evidence" affordance when the viewer has create permission.
+# Stack of evidence cards inside the expanded cell, under a header carrying
+# the Add and Request actions the viewer is permitted.
 #
 class Views::Assessments::Evidence::List < Views::Base
   # @param items [Array<EvidenceItem>]
@@ -55,13 +55,13 @@ class Views::Assessments::Evidence::List < Views::Base
     "evidence-list-#{@capability_stable_id}-#{@level_ordinal}"
   end
 
-  # Section label on the left; a kebab (⋮) menu on the right gathering the cell
-  # actions ("Add evidence" / "Request evidence"), shown only for the actions the
-  # viewer is permitted. Read-only peers see the plain label.
+  # Section label on the left; the cell actions as visible buttons on the
+  # right, shown only for the actions the viewer is permitted. Not a kebab:
+  # each card has one, and two stacked kebabs were mistaken for each other.
   def header
     div(class: "flex items-center justify-between mb-2") do
       div(class: header_label_classes) { header_label_content }
-      actions_menu if @can_create || @can_request
+      actions if @can_create || @can_request
     end
   end
 
@@ -74,23 +74,20 @@ class Views::Assessments::Evidence::List < Views::Base
     span(class: "font-mono") { "(#{@items.size})" } if @items.any?
   end
 
-  def actions_menu
-    render Components::Kit::Dropdown.new do |dropdown|
-      dropdown.trigger(label: "Feedback / evidence actions", button: { variant: :ghost, size: :xs, icon: true }) do
-        icon("kebab", class: "size-4")
-      end
-      dropdown.menu(width: "w-48") do
-        add_menu_item(dropdown) if @can_create
-        request_menu_item(dropdown) if @can_request
-      end
+  def actions
+    div(class: "flex items-center gap-1") do
+      add_button if @can_create
+      request_button if @can_request
     end
   end
 
-  def add_menu_item(dropdown)
-    dropdown.item(
-      size: :xs,
+  # The ids let the modal return focus to the button's replacement when a
+  # frame load or a saved cell re-renders the list.
+  def add_button
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :xs, id: "#{dom_id}-add",
       data: {
-        action: "click->dropdown#close evidence-modal#load click->modal#open",
+        action: "evidence-modal#load click->modal#open",
         modal_target_id: "evidence-modal-overlay",
         evidence_modal_mode_param: "new",
         evidence_modal_assignment_id_param: @assessment_id,
@@ -98,20 +95,27 @@ class Views::Assessments::Evidence::List < Views::Base
         evidence_modal_level_ordinal_param: @level_ordinal,
         evidence_modal_return_to_param: "assessment:#{@assessment_id}"
       }
-    ) { "Add feedback / evidence" }
+    ) do
+      icon("plus", class: "size-3")
+      plain "Add"
+      span(class: "sr-only") { " feedback / evidence" }
+    end
   end
 
-  def request_menu_item(dropdown)
-    dropdown.item(
-      size: :xs,
+  def request_button
+    render Components::Kit::Button.new(
+      variant: :ghost, size: :xs, id: "#{dom_id}-request",
       data: {
-        action: "click->dropdown#close request-evidence#load click->modal#open",
+        action: "request-evidence#load click->modal#open",
         modal_target_id: "evidence-request-modal-overlay",
         request_evidence_assignment_id_param: @assessment_id,
         request_evidence_capability_stable_id_param: @capability_stable_id,
         request_evidence_level_ordinal_param: @level_ordinal
       }
-    ) { "Request feedback / evidence" }
+    ) do
+      plain "Request"
+      span(class: "sr-only") { " feedback / evidence" }
+    end
   end
 
   def can_withdraw?(item)

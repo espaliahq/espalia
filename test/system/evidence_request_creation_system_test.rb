@@ -55,15 +55,11 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
 
   # `patch_fetch` is shared — test/support/system/fetch_stub_helpers.rb.
   #
-  # Open the evidence-actions kebab, then the "Request evidence" item.
-  # JS-dispatch so a starved CI loop can't drop the Stimulus clicks.
+  # Click the cell's Request button. JS-dispatch so a starved CI loop can't
+  # drop the Stimulus click.
   def trigger_request_modal
     page.execute_script(<<~JS)
-      document.querySelector("button[aria-label='Feedback / evidence actions']")?.click()
-    JS
-    page.execute_script(<<~JS)
-      [...document.querySelectorAll("button")]
-        .find((b) => b.textContent.trim() === "Request feedback / evidence")?.click()
+      document.querySelector("button[data-request-evidence-assignment-id-param]")?.click()
     JS
   end
 
@@ -261,10 +257,13 @@ class EvidenceRequestCreationSystemTest < ApplicationSystemTestCase
     end
   end
 
-  should "show the evidence-actions menu on mobile too" do
-    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
-    visit assessment_path(@report_assignment)
-    assert_text "Critical Thinking"
-    assert_selector "button[aria-label='Feedback / evidence actions']", visible: :all
+  [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+    should "show Request beside Add without a hover on #{label}" do
+      page.driver.browser.manage.window.resize_to(*size)
+      visit assessment_path(@report_assignment, capability: @cap_stable, level_ordinal: 2)
+      assert_selector "button[data-request-evidence-assignment-id-param]", text: "Request", visible: true
+      assert_selector "button[data-evidence-modal-mode-param='new']", text: "Add", visible: true
+      assert_no_stolen_taps
+    end
   end
 end

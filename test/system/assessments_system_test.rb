@@ -970,7 +970,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       )
     end
 
-    should "keep the feedback actions glyph above the 3:1 icon floor" do
+    should "keep the feedback actions legible: Add at 4.5:1, the item kebab above the 3:1 icon floor" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(
           @person.id, @framework_id, SecureRandom.uuid_v7,
@@ -983,12 +983,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # The frame's load replaces the cards; a kebab focused before it lands
       # is gone by the time the contrast is read.
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-      assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
+      add_button = "#evidence-list-#{@cap1_stable}-2 [data-evidence-modal-mode-param='new']"
+      assert_selector add_button, visible: :all
+      assert_operator rendered_contrast(add_button), :>=, 4.5
 
-      # Two share the label: the list header's, and the card's, which only
-      # shows on hover or focus.
-      assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
-      card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
+      # The card's kebab only shows on hover or focus.
+      card_kebab = "#evidence-list-#{@cap1_stable}-2 [aria-label='Actions for feedback from #{@person.name}']"
       page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
       assert_selector "#{card_kebab}:focus", visible: :all
       assert_operator rendered_contrast(card_kebab), :>=, 3
