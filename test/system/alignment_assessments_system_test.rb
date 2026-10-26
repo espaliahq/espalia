@@ -289,6 +289,19 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       assert_no_selector "a", text: "1 to align"
     end
 
+    should "count the agreement instead of scoring it on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@report_assignment)
+      assert_text "Aligning"
+
+      within("#scoring-panel") do
+        assert_text "The score appears once everything is agreed"
+        assert_text "0/1"
+        assert_text "Mgr:"
+      end
+      assert_no_sideways_overflow
+    end
+
     should "restore the hero secondaries when an agreement is cleared" do
       handler = PersonDevelopment::CommandHandler.new
       ActsAsTenant.with_tenant(@tenant) do
@@ -319,14 +332,22 @@ class AlignmentAssessmentsSystemTest < ApplicationSystemTestCase
       wait_for_stimulus "matrix"
       assert_button "Mark alignment complete", disabled: true
       # While a cell remains unagreed the hero still shows the Self/Mgr
-      # working numbers.
+      # working numbers, and counts the agreement instead of scoring it.
       assert_selector "#hero-secondary-percents", visible: :all
+      within("#scoring-panel") do
+        assert_text "The score appears once everything is agreed"
+        assert_text "0/1"
+      end
 
       # Agreeing the final current-level cell enables the control in place
       # (Turbo Stream replace — no reload)…
       click_rating_frequency("#rating-#{@cap_stable}-2", "Consistent")
       assert_button "Mark alignment complete", disabled: false
       assert_no_selector "a", text: "1 to align"
+      within("#scoring-panel") do
+        assert_no_text "The score appears once everything is agreed"
+        assert_text "100%"
+      end
       # …and the hero drops the Self/Mgr secondaries at the same moment —
       # the agreed record is whole, so only the aligned score shows, even
       # before "Mark alignment complete" is pressed.

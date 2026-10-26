@@ -28,11 +28,16 @@ class Views::Assessments::HeroSummary < Views::Base
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
   # How many of `total` current-level capabilities must be rated before the
-  # score shows.
+  # score shows. In alignment that is every one: the agreed score counts an
+  # unagreed cell as 0, so a half-agreed record read as a verdict on the
+  # person rather than on how far the conversation had got.
   #
   # @param total [Integer]
+  # @param context [Symbol, nil]
   # @return [Integer]
-  def self.unlock_target_for(total)
+  def self.unlock_target_for(total, context: nil)
+    return total if context == :alignment
+
     (total * COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
@@ -103,7 +108,7 @@ class Views::Assessments::HeroSummary < Views::Base
     div(id: "scoring-panel",
         class: "mb-6 rounded-xl border border-default " \
                "bg-overlay overflow-hidden",
-        data: { performance_pct: (ratio * 100).round(0) }) do
+        data: { performance_pct: coverage_unlocked? ? (ratio * 100).round(0) : nil }) do
       if current_level_total.zero?
         unscorable_header
       elsif coverage_unlocked?
@@ -224,7 +229,8 @@ class Views::Assessments::HeroSummary < Views::Base
   # ── Priming state (coverage below the unlock threshold) ──
   #
   # Shown before enough current-level capabilities are rated to make the
-  # score meaningful. Neutral framing (never red), the score and gap panel
+  # score meaningful — in alignment, before every one is agreed. Neutral
+  # framing (never red), the score and gap panel
   # are withheld, and the "rate next" action is promoted from a chip to the
   # primary affordance. Mirrors header_row's two-column layout: prompt +
   # CTA on the left, coverage fraction + progress on the right.
@@ -244,8 +250,11 @@ class Views::Assessments::HeroSummary < Views::Base
           span(class: "text-4xl font-bold leading-none text-default tabular-nums") do
             "#{current_level_rated}/#{current_level_total}"
           end
-          div(class: "text-xs text-muted uppercase tracking-wide") { "rated" }
+          div(class: "text-xs text-muted uppercase tracking-wide") { rated_word }
           coverage_progress_bar
+          # Self and Mgr are the conversation's working material while the
+          # agreed score waits; outside alignment priming shows no numbers.
+          secondary_percents if @context == :alignment
         end
       end
     end
@@ -254,7 +263,9 @@ class Views::Assessments::HeroSummary < Views::Base
   def priming_headline
     return lens_priming_headline if new_to_role_count.positive?
 
-    if !can_rate?
+    if @context == :alignment
+      "The score appears once everything is agreed"
+    elsif !can_rate?
       # View-only chain ancestor, or ratings frozen — an imperative "Rate …" would prompt an
       # action this viewer isn't permitted to take.
       @assessee_name.present? ? "No score for #{@assessee_name.split.first} yet" : "No score yet"
@@ -271,6 +282,11 @@ class Views::Assessments::HeroSummary < Views::Base
     return lens_priming_gloss if new_to_role_count.positive? && !can_rate_new_cells?
 
     level_code = level_code(@person_level) || "L#{@person_level}"
+    if @context == :alignment
+      remaining = current_level_total - current_level_rated
+      return "#{remaining} of #{current_level_total} #{level_code} " \
+             "#{'capability'.pluralize(current_level_total)} still to agree."
+    end
     unless can_rate?
       return "The score appears once at least half of these #{level_code} capabilities are rated."
     end
@@ -366,7 +382,7 @@ class Views::Assessments::HeroSummary < Views::Base
     render Views::Assessments::ContinueAssessingLink.new(
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
-      label: "Rate next capability",
+      label: @context == :alignment ? "Agree next capability" : "Rate next capability",
       classes: Components::Kit::Button.classes(size: :sm, compact: true)
     )
   end
@@ -377,6 +393,10 @@ class Views::Assessments::HeroSummary < Views::Base
     span(class: "text-xs text-muted tabular-nums") do
       "#{current_level_rated} of #{current_level_total} rated"
     end
+  end
+
+  def rated_word
+    @context == :alignment ? "agreed" : "rated"
   end
 
   # Once every cell holds a value, the work left is confirming the carried
@@ -419,24 +439,15 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # Number of rated current-level capabilities needed to reveal the score.
   def unlock_target
-    self.class.unlock_target_for(current_level_total)
+    self.class.unlock_target_for(current_level_total, context: @context)
   end
 
-  # Whether the score + verdict are trustworthy enough to show. Alignment
-  # context keeps the scoring hero unconditionally (individual ratings are
-  # frozen by then and coverage is high by construction). A role with no
-  # current-level cells unlocks too, to avoid a permanently-stuck prompt.
+  # Whether the score + verdict are trustworthy enough to show. A role with
+  # no current-level cells unlocks too, to avoid a permanently-stuck prompt.
   def coverage_unlocked?
-    return true if @context == :alignment
     return true if current_level_total.zero?
 
-    coverage_ratio >= COVERAGE_UNLOCK_THRESHOLD
-  end
-
-  def coverage_ratio
-    return 0.0 if current_level_total.zero?
-
-    current_level_rated.to_f / current_level_total
+    current_level_rated >= unlock_target
   end
 
   # Compact one-row gloss: "94% of E3 demonstrated · 38% of the way to E4."
@@ -893,6 +904,8 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def diverges?(scoring)
+    return false unless coverage_unlocked?
+
     scoring[:performance_state] != primary_scoring[:performance_state]
   end
 

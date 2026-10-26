@@ -374,7 +374,8 @@ class Views::AssessmentGuides::ShowView < Views::Base
         [ :growthos, "Matching cells agree themselves",
           "Same rating from both of you this cycle? It's settled before you meet. Carried ratings still need agreeing." ],
         [ :you, "You both settle the rest",
-          "Either of you can record the agreed value. Split chips turn solid as you go." ],
+          "Either of you can record the agreed value. Split chips turn solid as you go, " \
+          "and the score appears once every cell at your level is agreed." ],
         [ :manager, "Your manager marks it complete",
           "Only once every cell at your level is agreed. A mistake can be re-opened." ]
       ]

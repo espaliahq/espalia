@@ -453,4 +453,55 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_not_includes html, "to confirm"
     end
   end
+
+  # The agreed score counts every unagreed cell as 0, so a manager's 109%
+  # read as 83% the moment alignment started, with six cells still open.
+  def render_alignment(agreed:)
+    caps = [ CAP.new(stable_id: "cap-a", name: "Strategic Thinking"), CAP.new(stable_id: "cap-b", name: "Delivery") ]
+    capabilities = caps.each_with_index.map do |cap, i|
+      { capability: cap,
+        cells: { 3 => { manager_frequency: "consistent", aligned_frequency: (i < agreed ? "consistent" : nil) } } }
+    end
+    agreed_scoring = { performance_ratio: 0.47, performance_state: :underperforming,
+                       components: { prior: 1.0, current: 0.47, next: 0.0, score: 0.47, bands_above: 1 },
+                       capability_scores: scored({ "cap-a" => 1.0, "cap-b" => 0.0 }),
+                       capability_scores_at_next_level: scored({}) }
+    manager_scoring = { performance_ratio: 1.09, performance_state: :performing,
+                        components: { prior: 1.0, current: 1.0, next: 0.09, score: 1.09, bands_above: 1 } }
+
+    Views::Assessments::HeroSummary.new(
+      scoring: agreed_scoring, aligned_scoring: agreed_scoring, manager_scoring: manager_scoring,
+      categories: [ { category: nil, capabilities: capabilities } ], person_level: 3,
+      merged_levels: LEVELS, assessment_id: SecureRandom.uuid_v7, context: :alignment,
+      viewer_is_manager: true, viewer_can_rate: true, assessee_name: "Alex Developer"
+    ).call
+  end
+
+  context "alignment before every cell is agreed" do
+    should "count what is agreed instead of scoring it" do
+      html = render_alignment(agreed: 1)
+      panel = Nokogiri::HTML5.fragment(html).at_css("#scoring-panel")
+
+      assert_includes html, "The score appears once everything is agreed"
+      assert_includes html, "1 of 2 E3 capabilities still to agree."
+      assert_includes panel.text, "1/2agreed"
+      assert_includes html, "Score unlocks at 2"
+      assert_includes html, "Agree next capability"
+      assert_not_includes html, "47%", "the half-agreed score must not show"
+      assert_nil panel["data-performance-pct"]
+    end
+
+    should "keep the manager's own percentage beside the count" do
+      html = render_alignment(agreed: 1)
+
+      assert_includes Nokogiri::HTML5.fragment(html).at_css("#hero-secondary-percents")&.text.to_s, "Mgr: 109%"
+    end
+
+    should "score once the last cell is agreed" do
+      html = render_alignment(agreed: 2)
+
+      assert_not_includes html, "The score appears once everything is agreed"
+      assert_includes html, "47%"
+    end
+  end
 end

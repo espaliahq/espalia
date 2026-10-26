@@ -13,7 +13,8 @@
 # Honesty guards, both the hero's own rules:
 # - **Coverage gate.** Until at least half of the category's assessed-level
 #   cells carry the viewer's rating, no score shows — "1/4 rated · score
-#   unlocks at 2" instead of a misleadingly low number.
+#   unlocks at 2" instead of a misleadingly low number. In alignment the
+#   agreed score waits for every cell.
 # - **Secondary perspectives** appear only when they diverge (a different
 #   state, or five or more points apart) AND clear the same coverage gate
 #   against their own ratings.
@@ -21,8 +22,6 @@ class Views::Assessments::CategoryIndicators < Views::Base
   include Views::Assessments::Concerns::RatedCount
   include Views::Assessments::Concerns::ScoreScale
   include Views::Assessments::Concerns::DefinedTerms
-
-  COVERAGE_UNLOCK_THRESHOLD = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
 
   # @param category_id [String]
   # @param category_score [Hash, nil] the primary perspective's
@@ -111,7 +110,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
   end
 
   def unlock_target
-    (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+    Views::Assessments::HeroSummary.unlock_target_for(counts[:total], context: @context)
   end
 
   def unlocked?
@@ -125,7 +124,7 @@ class Views::Assessments::CategoryIndicators < Views::Base
     perspective_counts = context == @context ? counts : category_rated_count(@category_data, context)
     return true if perspective_counts[:total].zero?
 
-    perspective_counts[:rated] >= (perspective_counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+    perspective_counts[:rated] >= Views::Assessments::HeroSummary.unlock_target_for(perspective_counts[:total], context: context)
   end
 
   # "3/24 rated" — quiet text count so in-progress assessments show what's

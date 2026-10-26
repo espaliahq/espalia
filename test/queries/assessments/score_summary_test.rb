@@ -178,16 +178,34 @@ class Assessments::ScoreSummaryTest < ActiveSupport::TestCase
       assert_equal 1, category[:unlocks_at]
     end
 
-    should "keep scoring in alignment, where individual ratings are frozen" do
+    # The agreed score counts an unagreed cell as 0, so mid-conversation it
+    # read as a verdict: 109% from the manager fell to 83% the moment
+    # alignment started, with six cells still to agree.
+    should "withhold the agreed score in alignment until every cell is agreed" do
       ActsAsTenant.with_tenant(@tenant) do
-        AssessmentLevelRating.where(person_id: @person.id)
-          .update_all(manager_rated_frequency: nil, self_rated_frequency: nil)
+        AssessmentLevelRating.where(person_id: @person.id, capability_stable_id: @caps.first.stable_id)
+          .update_all(aligned_frequency: "consistent")
       end
-      overall = ActsAsTenant.with_tenant(@tenant) do
-        Assessments::ScoreSummary.new(assignment: @assignment, context: :alignment).overall
-      end
+      overall = summary_for(:alignment)
 
-      assert overall[:scored], "alignment is exempt from the coverage gate"
+      assert_equal false, overall[:scored], "1 of 2 agreed is past half but not whole"
+      assert_equal "agreement_incomplete", overall[:unscored_reason]
+      assert_nil overall[:score]
+      assert_equal 2, overall.dig(:coverage, :unlocks_at)
+      category = overall[:categories].sole
+      assert_equal false, category[:scored]
+      assert_equal "agreement_incomplete", category[:unscored_reason]
+    end
+
+    should "score alignment once the record is whole" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentLevelRating.where(person_id: @person.id).update_all(aligned_frequency: "consistent")
+      end
+      overall = summary_for(:alignment)
+
+      assert overall[:scored]
+      assert_equal 100, overall[:score]
+      assert overall[:categories].sole[:scored]
     end
   end
 
