@@ -988,7 +988,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       assert_operator rendered_contrast(add_button), :>=, 4.5
 
       # The card's kebab only shows on hover or focus.
-      card_kebab = "#evidence-list-#{@cap1_stable}-2 [aria-label='Actions for feedback from #{@person.name}']"
+      card_kebab = "#evidence-list-#{@cap1_stable}-2 [aria-label='Actions for “Launch” from #{@person.name}']"
       page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
       assert_selector "#{card_kebab}:focus", visible: :all
       assert_operator rendered_contrast(card_kebab), :>=, 3

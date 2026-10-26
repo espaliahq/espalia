@@ -253,6 +253,11 @@ class Views::Assessments::Evidence::Card < Views::Base
     @item.author&.name || "Unknown"
   end
 
+  # Tells one author's items apart in a screen reader's list of buttons.
+  def item_name
+    @item.title.present? ? "“#{@item.title}”" : type_label.downcase
+  end
+
   def type_label
     if @item.evidence_type == "other"
       @item.custom_type_label.presence || "Other"
@@ -295,7 +300,8 @@ class Views::Assessments::Evidence::Card < Views::Base
   #
   # The wrapper stays opacity-100 while the menu is open (`aria-expanded` on
   # the trigger) so it doesn't fade out when the cursor leaves the card.
-  # Compact: a 44px hit area here would cover the Discuss toggle just below.
+  # Compact: a 44px hit area here would cover the Discuss toggle just below,
+  # so a touch screen gets a 44px visual instead.
   # Fixed: the controller clamps the menu to the viewport, which a trigger
   # partway along a phone-width line would otherwise push off the right edge.
   def actions_menu
@@ -304,8 +310,9 @@ class Views::Assessments::Evidence::Card < Views::Base
              "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
       render Components::Kit::Dropdown.new(align: :left, strategy: :fixed) do |dropdown|
-        dropdown.trigger(label: "Actions for feedback from #{author_name}",
-                         button: { variant: :ghost, size: :xs, icon: true, compact: true }) do
+        dropdown.trigger(label: "Actions for #{item_name} from #{author_name}",
+                         button: { variant: :ghost, size: :xs, icon: true, compact: true,
+                                   class: "pointer-coarse:size-11" }) do
           icon("kebab", class: "size-4")
         end
         dropdown.menu(width: "w-52") do

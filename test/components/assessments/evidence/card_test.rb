@@ -66,14 +66,23 @@ class Views::Assessments::Evidence::CardTest < ActiveSupport::TestCase
   end
 
   context "the actions menu" do
-    should "sit on the author line and be named for the item's author" do
+    should "sit on the author line and be named for the item and its author" do
       @item.author = build(:person, tenant: @tenant, name: "Sam Rivera")
+      @item.title = "Auth migration RFC"
 
       footer = render_card(can_update: true, can_manage_links: true).at_css(
-        "[aria-label='Actions for feedback from Sam Rivera']"
+        "[aria-label='Actions for “Auth migration RFC” from Sam Rivera']"
       ).ancestors("div.mt-1").first
 
       assert_includes footer.text, "Sam Rivera"
+    end
+
+    should "fall back to the item's type when it has no title" do
+      @item.author = build(:person, tenant: @tenant, name: "Sam Rivera")
+      @item.title = nil
+      @item.evidence_type = "code_review"
+
+      assert render_card(can_update: true).at_css("[aria-label='Actions for code review from Sam Rivera']")
     end
 
     should "offer the author Link to another capability beside Edit" do
