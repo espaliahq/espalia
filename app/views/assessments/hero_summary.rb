@@ -28,11 +28,15 @@ class Views::Assessments::HeroSummary < Views::Base
   COVERAGE_UNLOCK_THRESHOLD = 0.5
 
   # How many of `total` current-level capabilities must be rated before the
-  # score shows.
+  # score shows — every one while an alignment is still agreeing them, as
+  # the agreed score counts an unagreed cell as 0.
   #
   # @param total [Integer]
+  # @param awaiting_agreement [Boolean] a category's `:awaiting_agreement`
   # @return [Integer]
-  def self.unlock_target_for(total)
+  def self.unlock_target_for(total, awaiting_agreement: false)
+    return total if awaiting_agreement
+
     (total * COVERAGE_UNLOCK_THRESHOLD).ceil
   end
 
@@ -224,7 +228,8 @@ class Views::Assessments::HeroSummary < Views::Base
   # ── Priming state (coverage below the unlock threshold) ──
   #
   # Shown before enough current-level capabilities are rated to make the
-  # score meaningful. Neutral framing (never red), the score and gap panel
+  # score meaningful — in alignment, before every one is agreed. Neutral
+  # framing (never red), the score and gap panel
   # are withheld, and the "rate next" action is promoted from a chip to the
   # primary affordance. Mirrors header_row's two-column layout: prompt +
   # CTA on the left, coverage fraction + progress on the right.
@@ -244,14 +249,18 @@ class Views::Assessments::HeroSummary < Views::Base
           span(class: "text-4xl font-bold leading-none text-default tabular-nums") do
             "#{current_level_rated}/#{current_level_total}"
           end
-          div(class: "text-xs text-muted uppercase tracking-wide") { "rated" }
+          div(class: "text-xs text-muted uppercase tracking-wide") { rated_word }
           coverage_progress_bar
+          # Self and Mgr are the conversation's working material while the
+          # agreed score waits; outside alignment priming shows no numbers.
+          secondary_percents(justify: "justify-start sm:justify-end") if awaiting_agreement?
         end
       end
     end
   end
 
   def priming_headline
+    return "The score appears once everything is agreed" if awaiting_agreement?
     return lens_priming_headline if new_to_role_count.positive?
 
     if !can_rate?
@@ -268,9 +277,14 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def priming_gloss
+    level_code = level_code(@person_level) || "L#{@person_level}"
+    if awaiting_agreement?
+      remaining = current_level_total - current_level_rated
+      return "#{remaining} of #{current_level_total} #{level_code} " \
+             "#{'capability'.pluralize(current_level_total)} still to agree."
+    end
     return lens_priming_gloss if new_to_role_count.positive? && !can_rate_new_cells?
 
-    level_code = level_code(@person_level) || "L#{@person_level}"
     unless can_rate?
       return "The score appears once at least half of these #{level_code} capabilities are rated."
     end
@@ -366,7 +380,7 @@ class Views::Assessments::HeroSummary < Views::Base
     render Views::Assessments::ContinueAssessingLink.new(
       capability_stable_id: target[:capability].stable_id,
       level_ordinal: @person_level,
-      label: "Rate next capability",
+      label: awaiting_agreement? ? "Agree next capability" : "Rate next capability",
       classes: Components::Kit::Button.classes(size: :sm, compact: true)
     )
   end
@@ -377,6 +391,10 @@ class Views::Assessments::HeroSummary < Views::Base
     span(class: "text-xs text-muted tabular-nums") do
       "#{current_level_rated} of #{current_level_total} rated"
     end
+  end
+
+  def rated_word
+    awaiting_agreement? ? "agreed" : "rated"
   end
 
   # Once every cell holds a value, the work left is confirming the carried
@@ -419,24 +437,23 @@ class Views::Assessments::HeroSummary < Views::Base
 
   # Number of rated current-level capabilities needed to reveal the score.
   def unlock_target
-    self.class.unlock_target_for(current_level_total)
+    self.class.unlock_target_for(current_level_total, awaiting_agreement: awaiting_agreement?)
   end
 
-  # Whether the score + verdict are trustworthy enough to show. Alignment
-  # context keeps the scoring hero unconditionally (individual ratings are
-  # frozen by then and coverage is high by construction). A role with no
-  # current-level cells unlocks too, to avoid a permanently-stuck prompt.
+  # Whether the score + verdict are trustworthy enough to show. Outside an
+  # alignment still agreeing cells, :alignment always scores: individual
+  # ratings are frozen, and a completed record has nothing left to agree.
+  # A role with no current-level cells unlocks too, to avoid a
+  # permanently-stuck prompt.
   def coverage_unlocked?
-    return true if @context == :alignment
+    return true if @context == :alignment && !awaiting_agreement?
     return true if current_level_total.zero?
 
-    coverage_ratio >= COVERAGE_UNLOCK_THRESHOLD
+    current_level_rated >= unlock_target
   end
 
-  def coverage_ratio
-    return 0.0 if current_level_total.zero?
-
-    current_level_rated.to_f / current_level_total
+  def awaiting_agreement?
+    @context == :alignment && @categories.any? { |cat| cat[:awaiting_agreement] }
   end
 
   # Compact one-row gloss: "94% of E3 demonstrated · 38% of the way to E4."
@@ -875,11 +892,11 @@ class Views::Assessments::HeroSummary < Views::Base
   # when that perspective lands in a different state, the same marker the
   # category header uses. The gap between two numbers is the message; the
   # dot only says it is worth reading.
-  def secondary_percents
+  def secondary_percents(justify: "justify-end")
     return if secondary_perspectives.empty?
 
     div(id: "hero-secondary-percents",
-        class: "flex items-center justify-end gap-1 text-[11px] " \
+        class: "flex items-center #{justify} gap-1 text-[11px] " \
                "text-muted mt-1 tabular-nums") do
       secondary_perspectives.each_with_index do |(label, scoring), i|
         span(class: "text-subtle") { "·" } if i.positive?
@@ -893,6 +910,8 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def diverges?(scoring)
+    return false unless coverage_unlocked?
+
     scoring[:performance_state] != primary_scoring[:performance_state]
   end
 
