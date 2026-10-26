@@ -115,6 +115,7 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
   # form swaps two glyphs instead.
   should "flash the copied glyph without destroying the link icon" do
     open_suggestion_card
+    stub_clipboard_write
 
     assert_selector "[data-clipboard-target='idle']", visible: true
     assert_no_selector "[data-clipboard-target='copied']", visible: true

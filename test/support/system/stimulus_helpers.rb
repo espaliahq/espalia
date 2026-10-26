@@ -780,6 +780,19 @@ module StimulusHelpers
     JS
   end
 
+  # Gives the page a clipboard whose writes succeed at once, for a test of the
+  # copy *feedback*. CI's headless Chromium never settles +writeText+, and the
+  # clipboard controller's +execCommand+ fallback needs the click's user
+  # activation, which lapses when the renderer stalls for a few seconds after
+  # the click. Call it after the visit: a navigation resets it.
+  def stub_clipboard_write
+    page.execute_script(<<~JS)
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true, value: { writeText: () => Promise.resolve() }
+      });
+    JS
+  end
+
   # Stubs +window.confirm+ to always return true, then runs the block.
   # Use for clicks that submit forms with +data-turbo-confirm+ when the
   # action under test is the form submission, not the dialog itself.

@@ -405,6 +405,13 @@ system test that copies clicks for real (`click_with_retry`), never through a JS
 helper, and the `clipboard` controller shows "Copied!" only once a copy succeeds, falling back
 to `execCommand` when `writeText` hangs.
 
+**A test of the copy's feedback calls `stub_clipboard_write` after the visit.** The fallback
+runs a second after the click and needs the click's user activation, which Chrome drops after
+about five seconds. A runner busy enough to stall the page that long after the click loses the
+copy and the feedback with it: a 6s stall reproduces it every time. Only CI takes this path.
+The devcontainer serves the app from `http://rails-app`, which is not a secure context, so
+`navigator.clipboard` is undefined there and the fallback runs at once.
+
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.
