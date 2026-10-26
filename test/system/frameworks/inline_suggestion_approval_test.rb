@@ -490,7 +490,7 @@ class Frameworks::InlineSuggestionApprovalTest < ApplicationSystemTestCase
         "document.querySelector(\"#suggestion-panel button[data-modal-target-id='reject-suggestion-modal']\").click()"
       )
       assert_selector "#reject-suggestion-modal", visible: true
-      fill_in "reject_reason", with: "Not aligned with the level framing"
+      js_fill_in "reject_reason", with: "Not aligned with the level framing"
       # Neutralise the broadcast reload so the transient local marker can't be
       # replaced by the canonical feed entry before the assertion polls it.
       page.execute_script("document.querySelector('#suggestion-panel').reload = () => {}")
