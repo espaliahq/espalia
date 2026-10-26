@@ -81,6 +81,29 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
   end
 
   context "kebab menu + link" do
+    should "keep an item's menu on screen on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment, capability: @cap1_stable, level_ordinal: 1)
+      assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
+
+      # The menu is fixed-position and closes on any scroll, so let the page's
+      # scroll to the focused card finish first.
+      wait_for_scroll_to_settle
+      # Hover-revealed: a resized desktop window is not a coarse pointer, so
+      # the trigger stays transparent until the script opens its menu.
+      page.execute_script(
+        "document.querySelector(\"#evidence-#{@evidence_id} [data-dropdown-target='trigger']\").click()"
+      )
+
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Link to another capability", visible: true
+      # A fixed menu adds nothing to the page's scroll width, so measure its edge.
+      menu_right = page.evaluate_script(
+        "document.querySelector(\"#evidence-#{@evidence_id} [data-dropdown-target='menu']\").getBoundingClientRect().right"
+      )
+      assert_operator menu_right, :<=, page.evaluate_script("window.innerWidth")
+      assert_no_sideways_overflow
+    end
+
     should "link evidence to a second capability via the Edit modal's picker" do
       # Evidence rendering is gated on cell focus (`data-focused="true"`
       # on the expanded `<td>`), so deep-link to the cell.
@@ -89,10 +112,10 @@ class AssessmentsEvidenceLinkSystemTest < ApplicationSystemTestCase
       assert_selector "#evidence-#{@evidence_id}", visible: true
       assert_selector "#evidence-#{@evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
 
-      # The author manages links inside Edit (the unified modal); a separate
-      # "Link" item is only for non-author link-holders. Unlink (disabled at
-      # one link) + Withdraw remain.
+      # The author's Edit can link too, but the menu names linking for them as
+      # it does for every link-holder. Unlink (disabled at one link) + Withdraw remain.
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Edit", visible: :all
+      assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Link to another capability", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem']", text: "Withdraw", visible: :all
       assert_selector "#evidence-#{@evidence_id} [role='menuitem'][aria-disabled='true']",
                       text: "Unlink from this capability", visible: :all
