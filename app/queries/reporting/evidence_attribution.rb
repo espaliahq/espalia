@@ -42,10 +42,16 @@ class Reporting::EvidenceAttribution
   # Historical peer-source items cannot be split into peer and upward
   # feedback, so they land in their own combined bucket.
   #
+  # An item the recipient wrote is self feedback whatever its event says:
+  # answers to a request about one's own assessment were recorded as peer
+  # feedback until October 2026, and events cannot be corrected.
+  #
   # @param feedback_direction [String, nil]
   # @param source [String]
+  # @param self_authored [Boolean] whether the author is the recipient
   # @return [String] one of EvidenceItem::FEEDBACK_DIRECTIONS or "legacy_peer_or_upward"
-  def self.reporting_direction(feedback_direction:, source:)
+  def self.reporting_direction(feedback_direction:, source:, self_authored: false)
+    return "self" if self_authored
     return feedback_direction if EvidenceItem::FEEDBACK_DIRECTIONS.include?(feedback_direction)
 
     case source

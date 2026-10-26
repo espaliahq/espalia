@@ -114,6 +114,14 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_equal 20, directionality.percentage_for(:report_to_manager)
       assert_equal 20, directionality.percentage_for(:legacy_peer_or_upward)
     end
+
+    should "count what the recipient wrote as self feedback, though recorded as peer" do
+      feedback(person: @first, author: @first, source: "peer", feedback_direction: "peer_to_peer")
+      directionality = result.metrics.directionality
+
+      assert_equal 1, directionality.peer_to_peer
+      assert_equal 2, directionality.self_provided
+    end
   end
 
   context "origin" do
@@ -304,9 +312,9 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
 
   def feedback(person:, cycle_id: @cycle.cycle_id, framework_id: @framework_id,
                status: "active", recorded_at: Time.current, source: "self",
-               feedback_direction: nil, external_reference: {})
+               feedback_direction: nil, external_reference: {}, author: @peer)
     create(:evidence_item, with_link: false,
-      tenant: @tenant, author: @peer, person_id: person.id,
+      tenant: @tenant, author: author, person_id: person.id,
       framework_id: framework_id, cycle_id: cycle_id,
       source: source, feedback_direction: feedback_direction,
       link_status: status, recorded_at: recorded_at).tap do |item|
