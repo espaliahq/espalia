@@ -81,8 +81,10 @@ class Evidence::SelfFeedbackBackfill
 
   # Like the handler, never items an HRIS sync or a system job wrote.
   def scope
-    via = EvidenceItem.arel_table[:recorded_via]
-    EvidenceItem.active.where(source: "self").where.not(capability_stable_id: nil)
+    items = EvidenceItem.arel_table
+    via = items[:recorded_via]
+    EvidenceItem.active.where(items[:source].eq("self").or(items[:author_id].eq(items[:person_id])))
+      .where.not(capability_stable_id: nil)
       .where(via.eq(nil).or(via.not_in(PersonDevelopment::AsyncHandlers::PlacementSuggester::NON_HUMAN_SURFACES)))
       .where.not(id: EvidencePlacementSuggestion.where(status: SETTLED_STATUSES).select(:evidence_id))
       .order(:recorded_at, :id)

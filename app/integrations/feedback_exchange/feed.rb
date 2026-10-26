@@ -7,7 +7,9 @@
 # never skipped. Runs inside the signing tenant's `ActsAsTenant` scope.
 #
 # What leaves is limited by who wrote it and where it already lives:
-# - not the person's own self-assessment (`source: self`);
+# - not the person's own self-assessment: `source: self`, or anything they
+#   wrote about themselves (older answers to a request about their own
+#   assessment carry a peer source);
 # - only a person's own writing, not an HRIS, system or exchange import;
 # - not what the asking consumer itself sent us (protocol §2.5), nor another
 #   system's import it has since acknowledged;
@@ -69,6 +71,7 @@ class FeedbackExchange::Feed
 
   def eligible
     scope = EvidenceItem.where.not(source: "self")
+                        .where("evidence_items.author_id <> evidence_items.person_id")
                         .where("evidence_items.recorded_via IS NULL OR evidence_items.recorded_via NOT IN (?)", NON_HUMAN_VIA)
                         .where("LOWER(COALESCE(evidence_items.external_reference ->> 'system', '')) <> ?", @consumer.downcase)
                         .where.not(acknowledged_import_sql, @consumer)

@@ -43,6 +43,10 @@ links is maintained by EvidenceLinkAdded/Removed):
       or neither; a valence or additional_links without a cell are refused.
       Every event published before unplaced feedback carries a cell.
     source: self | manager | peer
+    ← An author recording evidence about themselves must use source self; the
+      aggregate refuses any other. Answers to a request about one's own
+      assessment were recorded as peer until October 2026, so readers that
+      bucket by source also check EvidenceItem#self_authored?.
     evidence_type: peer_feedback | project_outcome | code_review | design_review |
                    customer_feedback | incident_response | presentation | mentoring | other
     external_reference: { system, url?, external_id?, metadata? }

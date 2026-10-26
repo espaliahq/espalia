@@ -167,7 +167,7 @@ Three more signed endpoints, all `ActionController::Base` controllers that inclu
 
 What is left out (protocol §2.5, §2.3):
 
-- `source: self`, a person's own self-assessment evidence.
+- A person's own self-assessment evidence: `source: self`, or any item whose author is its recipient. Answers to a request about one's own assessment were recorded with a peer source until October 2026, and their events cannot be corrected.
 - Items nobody wrote: `recorded_via` of `feedback_exchange`, `hris` or `system`. A nil `recorded_via` is history and counts as human.
 - What the asking consumer itself sent us: `external_reference.system` equal to its name. Matching is case-insensitive.
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.

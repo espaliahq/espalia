@@ -97,6 +97,7 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
   context "filtering" do
     should "leave out a person's own self-assessment evidence" do
       create_item(author: @author, recipient: @author, source: "self", evidence_type: "impact")
+      create_item(author: @author, recipient: @author, source: "peer")
       peer = create_item(author: @author, recipient: @recipient)
 
       signed_get

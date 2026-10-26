@@ -123,6 +123,13 @@ class EvidenceItem < ApplicationRecord
     active.where.not(EvidenceLink.active.where("evidence_links.evidence_id = evidence_items.id").arel.exists)
   }
 
+  # Whether the recipient wrote it. Answers to a request about one's own
+  # assessment were recorded with a peer source until October 2026, and their
+  # events cannot be corrected, so readers that bucket by source check this too.
+  #
+  # @return [Boolean]
+  def self_authored? = author_id == person_id
+
   # Where feedback comes from, read from the author's place relative to the
   # recipient when it is recorded: their own ("self"), from anyone above them
   # in the org chart ("manager"), or from anyone else ("peer"). Never trusted

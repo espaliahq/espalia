@@ -89,7 +89,7 @@ class Reporting::EvidenceCoverage
     :feedback_directions, :provided_origins, :request_statuses
   )
   EvidenceRow = Data.define(
-    :id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
+    :id, :person_id, :author_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
     :origin_system, :origin_imported
   )
   private_constant :Participant, :EvidenceRow
@@ -143,7 +143,7 @@ class Reporting::EvidenceCoverage
 
   def load_evidence_rows
     rows = @attribution.evidence_scope(period: @period)
-      .pluck(:id, :person_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
+      .pluck(:id, :person_id, :author_id, :link_status, :recorded_at, :cycle_id, :source, :feedback_direction,
              Arel.sql(ORIGIN_SYSTEM_SQL), Arel.sql(ORIGIN_IMPORTED_SQL))
       .map { |attributes| EvidenceRow.new(*attributes) }
     attributed = @attribution.attribute_evidence(rows)
@@ -153,7 +153,8 @@ class Reporting::EvidenceCoverage
 
   def reporting_direction(row)
     Reporting::EvidenceAttribution.reporting_direction(
-      feedback_direction: row.feedback_direction, source: row.source
+      feedback_direction: row.feedback_direction, source: row.source,
+      self_authored: row.author_id == row.person_id
     )
   end
 

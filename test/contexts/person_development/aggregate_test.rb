@@ -1285,6 +1285,15 @@ class PersonDevelopment::AggregateTest < ActiveSupport::TestCase
       assert_match /Invalid evidence source/, err.message
     end
 
+    should "raise when the assessee's own evidence carries another source" do
+      err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
+        @aggregate.record_evidence(@evidence_id,
+          capability_stable_id: @cap_sid, level_ordinal: 1, source: "peer",
+          evidence_type: "peer_feedback", content: "x", author_id: @person_id, valence: "demonstrated")
+      end
+      assert_match /must be self evidence/, err.message
+    end
+
     should "raise on invalid feedback direction" do
       err = assert_raises(PersonDevelopment::Aggregate::CommandError) do
         @aggregate.record_evidence(@evidence_id,

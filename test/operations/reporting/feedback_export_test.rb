@@ -94,6 +94,14 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       assert_nil row[:requested_by]
       assert_equal "Project outcome", row[:type]
     end
+
+    should "report what the recipient wrote as self feedback, though recorded as peer" do
+      feedback(person: @second, author: @second, source: "peer", feedback_direction: "peer_to_peer",
+        content: "My reflection.")
+      row = call_op[:rows].find { |candidate| candidate[:feedback] == "My reflection." }
+
+      assert_equal "Self", row[:direction]
+    end
   end
 
   context "origin" do
@@ -315,9 +323,10 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
     instance_variable_set(person == @first ? :@first_enrollment : :@second_enrollment, enrollment)
   end
 
-  def feedback(person:, cycle_id: @cycle.cycle_id, status: "active", recorded_at: Time.current, **attributes)
+  def feedback(person:, cycle_id: @cycle.cycle_id, status: "active", recorded_at: Time.current, author: @peer,
+               **attributes)
     create(:evidence_item, with_link: false,
-      tenant: @tenant, author: @peer, person_id: person.id, framework_id: @framework_id,
+      tenant: @tenant, author: author, person_id: person.id, framework_id: @framework_id,
       cycle_id: cycle_id, link_status: status, recorded_at: recorded_at,
       withdrawn_at: (Time.current if status == "withdrawn"), **attributes)
   end
