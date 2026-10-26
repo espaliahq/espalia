@@ -18,7 +18,7 @@ This guide is the entry point; it loads whenever you open a file under `app/view
 | [lifecycle.md](assessments/lifecycle.md) | change what a status allows, alignment milestones, carry-forward seeding or delegation | Manager-rating delegation, Lifecycle (incl. auto-alignment on start and cross-cycle seeding / carry-forward) |
 | [evidence.md](assessments/evidence.md) | change recording, linking or requesting feedback / evidence, or comment notifications | Evidence-link valence, linkage threads, the "Applies to" block, proactive feedback, requesting evidence, comment notifications |
 | [stimulus-controllers.md](assessments/stimulus-controllers.md) | change a Stimulus controller the assessment screens use | Stimulus controllers |
-| [lessons.md](assessments/lessons.md) | touch anything a lesson below names | Hard-Won Lessons 1–20 |
+| [lessons.md](assessments/lessons.md) | touch anything a lesson below names | Hard-Won Lessons 1–21 |
 | [file-reference.md](assessments/file-reference.md) | look for the file that owns something | File Reference |
 
 ### Hard-Won Lessons — index
@@ -46,6 +46,7 @@ Each title is the rule. Read the lesson in [lessons.md](assessments/lessons.md) 
 - **18.** Per-card selected level needs its own *rendering* axis, separate from the single *focus* axis
 - **19.** A sticky pane under a moving header can't be sized by CSS alone
 - **20.** A swapped card is a new node — never remember a card by its element
+- **21.** A write inside the matrix frame should swap only what it changed, never redirect
 
 ## Overview
 
@@ -303,13 +304,22 @@ A horizontal `flex` of `LevelChip`s, one per merged level ordinal. Each chip is 
 
 **A chip click never reloads the matrix ([#488](https://github.com/mr-yum/growth-os/issues/488)).** It used to: every click refetched the whole frame (~420 KB, every card, a ~100 ms main-thread block), and someone rating their current and next level does that once per capability. Now `#loadCard` fetches `GET /assessments/:id/capability_card?capability=&level_ordinal=` with `@rails/request.js`; the response is a Turbo Stream replacing `#capability-card-<stable_id>` (`CapabilityCard.dom_id_for`). Rules:
 
-- **One render path.** The endpoint renders `AssessmentMatrix` with `only_capability:`, the matrix frame's own arguments (`AssessmentsController#matrix_view_args`) narrowed to one card, so the card can't drift from the one the frame renders. The URL, lens params included, rides on the matrix root as `data-matrix-card-url-value`; the framework explorer has none and keeps its own behaviour.
+- **One render path.** The endpoint builds the card with `AssessmentMatrix#capability_card` from the matrix frame's own arguments (`Assessments::CapabilityCardRendering#capability_card_view`, whose `matrix_card_args` `AssessmentsController#matrix_view_args` builds on), so the card can't drift from the one the frame renders. The URL, lens params included, rides on the matrix root as `data-matrix-card-url-value`; the framework explorer has none and keeps its own behaviour.
 - **The response is the bare card**, not the list around it, so each swap replaces a card with a card.
 - **The last click wins.** One fetch per card at a time, queued on the frame element (it outlives a controller instance across a broadcast reload); a click during a fetch queues its level, so the card always ends on the level last picked — including after a failure.
 - **Never while the frame is loading.** A swap made before the frame's first load, or during a broadcast reload, would be overwritten when that load lands, so those clicks take the whole-frame path, which supersedes it.
 - **The client places the focus ring.** The card arrives unfocused and the controller re-stamps the ring where focus is *now* — it may have moved while the fetch ran. Turbo renders a stream on a later frame than `get()` resolves, so the controller waits for the new node first.
 - **Any failure falls back to the whole-frame reload** — a network drop, a session bounce (the fetch follows the redirect to an HTML page, which isn't a stream), a card no longer in scope (404). That path already has the recovery UI, and it replaces the history entry the click already pushed rather than adding a second.
 - **The scroll starts at click time.** A card's top doesn't move when its contents change, so it doesn't wait for the response.
+
+**A cell comment swaps its thread and chip ([#625](https://github.com/mr-yum/growth-os/issues/625)).** Posting, replying to, editing or deleting a cell comment used to redirect to the show page, which reloaded the matrix frame; the reconnecting `matrix_controller` then deep-link-scrolled the card to the top. `Assessments::CommentsController` now answers a Turbo request with streams that replace the thread (`comments-thread-<stable_id>-<ordinal>`) and that level's chip (`cell-<stable_id>-<ordinal>`, whose glyph and label count the comments), built from the same card the frame renders, at the comment's level. Nothing else in the card counts cell comments: the evidence card's count is its own link discussion. Evidence-link comments count toward the chip's glyph too (see [evidence.md](assessments/evidence.md)), but they keep their frame-scoped redirect, so the chip doesn't update after a link comment. That predates the thread swap. The whole card is not swapped, because that closes any open "Discuss" thread above the comments (Hard-Won Lesson 21). The live region names the cell: "Comment posted — Critical Thinking, E3" (`Assessments::TurboStreamHelpers.cell_announcement`, which the rating announcements share).
+
+- **Access is checked before anything is sent back.** Editing and deleting need only authorship, so a former manager or a revoked delegate can still do both; their response is the redirect, which `show` refuses, not a stream of the assessment (`AssessmentPolicy#matrix?`).
+- **Focus follows the change.** The swap removes the focused control, so the stream tells the new thread what to focus: `data-comments-thread-focus-value` names the viewer's own new or edited comment (`comment-<id>`), or `thread` after a delete (the add button, or the thread when there is none). The server names it because a colleague's comment can arrive in the same response, so "the row that wasn't there before" can be theirs. `comments_thread_controller` focuses it on connect without scrolling, then drops the attribute. Only the stream carries it, so a page load, a frame reload or the redirect fallback never moves focus.
+- **Rows become focusable only when we focus them.** Script adds `tabindex="-1"` just before the focus; the markup has none, because Safari focuses a focusable row when a button inside it is clicked, and the evidence-link threads share the row. Rows and the fallback thread draw `LevelChip::FOCUS_RING`, as the chip does.
+- **Turbo would take focus back.** After a stream render it re-focuses whatever had focus if an element with that id survives, without `preventScroll`, which can scroll the page to an off-screen row. A row we focused keeps its `tabindex` and can still hold focus at the next submit, so `releaseFocus` blurs a focused element with an id inside the thread at `turbo:submit-start`, leaving Turbo nothing to restore. Deferring our focus past Turbo's isn't enough: its scroll has already happened.
+- **The lens rides the forms.** The comment forms carry the page's `as_role` / `as_level`, so the thread and chip match the page. The comment is written before the lens is read: a publish that drops the viewed role or level must not lose what someone typed. A lens that no longer resolves gets the redirect without lens params, to the home view.
+- A non-Turbo request, one that accepts anything (`format.html` is declared first), or a cell no longer on the page, keeps the redirect. Evidence-link comments keep their frame-scoped redirect.
 
 The chip strip wraps `overflow-x-auto -mx-4 px-4` so it scrolls horizontally on narrow viewports without breaking the card's padded edges.
 

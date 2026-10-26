@@ -11,6 +11,9 @@ class Views::Assessments::CapabilityCard < Views::Base
   # @return [String] the card's element id — the single-card swap's target
   def self.dom_id_for(stable_id) = "capability-card-#{stable_id}"
 
+  # @return [FrameworkState::Capability]
+  attr_reader :capability
+
   # @param capability_data [Hash] from MatrixDataBuilder
   # @param merged_levels [Array<Hash>]
   # @param person_level [Integer]
@@ -115,22 +118,61 @@ class Views::Assessments::CapabilityCard < Views::Base
       }
     ) do
       card_header
-      render Views::Assessments::LevelStrip.new(
-        cells: @cells,
-        merged_levels: @merged_levels,
-        capability_stable_id: @capability.stable_id,
-        person_level: @person_level,
-        context: @context,
-        viewer_is_manager: @viewer_is_manager,
-        focused_ordinal: @focused_ordinal,
-        alignment_locked: @alignment_locked,
-        assumed_below: @lens&.assumed_below,
-        badge_label: lens_badge_label
-      )
+      render level_strip
       # Expansion always renders — every card auto-focuses the person's
       # current level (or the URL-specified level when present).
       expansion_panel
     end
+  end
+
+  # The card's level strip, unrendered, so a response can swap one chip.
+  #
+  # @return [Views::Assessments::LevelStrip]
+  def level_strip
+    Views::Assessments::LevelStrip.new(
+      cells: @cells,
+      merged_levels: @merged_levels,
+      capability_stable_id: @capability.stable_id,
+      person_level: @person_level,
+      context: @context,
+      viewer_is_manager: @viewer_is_manager,
+      focused_ordinal: @focused_ordinal,
+      alignment_locked: @alignment_locked,
+      assumed_below: @lens&.assumed_below,
+      badge_label: lens_badge_label
+    )
+  end
+
+  # The selected level's panel, unrendered, so a response can swap a piece
+  # of it.
+  #
+  # @return [Views::Assessments::CapabilityCardExpansion, nil] nil when the
+  #   selected level has no cell
+  def expansion
+    focused_level = @merged_levels.find { |l| l[:ordinal] == @focused_ordinal }
+    cell_data = @cells[@focused_ordinal]
+    return unless cell_data && focused_level
+
+    Views::Assessments::CapabilityCardExpansion.new(
+      cell_data: cell_data,
+      capability: @capability,
+      level: focused_level,
+      capability_stable_id: @capability.stable_id,
+      ordinal: @focused_ordinal,
+      person_level: @person_level,
+      assessment_id: @assessment_id,
+      context: @context,
+      category_id: @category_id,
+      frozen: @frozen,
+      alignment_locked: @alignment_locked,
+      viewer_person_id: @viewer_person_id,
+      can_create_evidence: @can_create_evidence,
+      can_request_evidence: @can_request_evidence,
+      can_relink_others_evidence: @can_relink_others_evidence,
+      can_comment: @can_comment,
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @lens
+    )
   end
 
   private
@@ -226,29 +268,7 @@ class Views::Assessments::CapabilityCard < Views::Base
   end
 
   def expansion_panel
-    focused_level = @merged_levels.find { |l| l[:ordinal] == @focused_ordinal }
-    cell_data = @cells[@focused_ordinal]
-    return unless cell_data && focused_level
-
-    render Views::Assessments::CapabilityCardExpansion.new(
-      cell_data: cell_data,
-      capability: @capability,
-      level: focused_level,
-      capability_stable_id: @capability.stable_id,
-      ordinal: @focused_ordinal,
-      person_level: @person_level,
-      assessment_id: @assessment_id,
-      context: @context,
-      category_id: @category_id,
-      frozen: @frozen,
-      alignment_locked: @alignment_locked,
-      viewer_person_id: @viewer_person_id,
-      can_create_evidence: @can_create_evidence,
-      can_request_evidence: @can_request_evidence,
-      can_relink_others_evidence: @can_relink_others_evidence,
-      can_comment: @can_comment,
-      viewer_is_tenant_admin: @viewer_is_tenant_admin,
-      lens: @lens
-    )
+    panel = expansion
+    render panel if panel
   end
 end

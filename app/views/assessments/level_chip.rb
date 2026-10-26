@@ -33,6 +33,20 @@ class Views::Assessments::LevelChip < Views::Base
   # explicit frequency — so it paints {ASSUMED_CONSISTENT_BG}, not grey.
   ASSUMED = :assumed_consistent
 
+  # Shared with the comment rows and thread, which take focus from script:
+  # the global `:focus-visible` ring skips `tabindex="-1"`. `outline-hidden`,
+  # not `outline-none`, keeps the outline in forced-colours mode.
+  FOCUS_RING = "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus " \
+               "focus-visible:ring-offset-1"
+
+  # @param capability_stable_id [String]
+  # @param ordinal [Integer]
+  # @return [String] the chip's element id, the target that replaces it
+  def self.dom_id_for(capability_stable_id, ordinal) = "cell-#{capability_stable_id}-#{ordinal}"
+
+  # @return [String] compact label (e.g. "E7")
+  attr_reader :level_code
+
   # @param cell_data [Hash, nil] from MatrixDataBuilder
   # @param capability_stable_id [String]
   # @param ordinal [Integer]
@@ -73,7 +87,7 @@ class Views::Assessments::LevelChip < Views::Base
 
   def view_template
     button(
-      id: "cell-#{@capability_stable_id}-#{@ordinal}",
+      id: self.class.dom_id_for(@capability_stable_id, @ordinal),
       type: "button",
       class: chip_classes,
       aria: { label: aria_label, pressed: @focused.to_s },
@@ -104,7 +118,7 @@ class Views::Assessments::LevelChip < Views::Base
            "relative flex flex-col items-center justify-center " \
            "h-12 flex-1 min-w-16 rounded-lg cursor-pointer " \
            "transition-all border-2 " \
-           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 "
+           "#{FOCUS_RING} "
     base += "#{muted_split_classes} " if muted_split?
     if @focused
       base + "#{chip_bg} #{chip_text} #{focus_border} shadow-lifted"

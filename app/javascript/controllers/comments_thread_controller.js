@@ -12,17 +12,29 @@
 // Manages the inline edit toggle and clears the composer textarea on
 // successful submit so the form is ready for the next comment without a
 // full page reload.
+//
+// A cell thread also binds `turbo:submit-start->comments-thread#releaseFocus`.
+// The response to the viewer's own write replaces the thread, and the
+// control that had focus with it, so the new thread carries a `focus` value
+// naming what to focus: a comment's element id, or "thread" after a delete.
 
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
-  static targets = ["composer", "composerBody", "displayBody", "editForm", "replyForm", "replyBody"]
+  static targets = ["composer", "composerBody", "displayBody", "editForm", "replyForm", "replyBody", "addButton"]
+  static values = { focus: String }
+
+  connect() {
+    super.connect()
+    this.#restoreFocus()
+  }
 
   // Cancel a pending jump-to-parent highlight so its callback can't fire
   // against a detached element after the thread frame is replaced.
   disconnect() {
     if (this.flashTimeoutId) clearTimeout(this.flashTimeoutId)
     this.flashTimeoutId = null
+    super.disconnect()
   }
 
   // Toggles the comment composer's visibility. The composer starts
@@ -134,9 +146,9 @@ export default class extends BaseController {
   }
 
   // On successful submit, blank the composer textarea so the form is
-  // ready for the next comment. The Turbo Drive redirect+frame reload
-  // brings in the just-posted card; without clearing the textarea the
-  // user's just-submitted text would still be sitting there.
+  // ready for the next comment. A cell comment's response usually swaps
+  // the whole thread, composer included; this covers the responses that
+  // don't (the redirect fallback).
   submitted(event) {
     if (!event.detail?.success) return
     if (this.hasComposerBodyTarget) {
@@ -148,5 +160,34 @@ export default class extends BaseController {
     if (this.hasComposerTarget) {
       this.composerTarget.classList.add("hidden")
     }
+  }
+
+  // After a stream render Turbo re-focuses the element that had focus if
+  // one with its id is still there, without preventScroll, so it would undo
+  // our focus and could scroll to it. A row we focused is how that happens:
+  // it keeps its tabindex, so it can still hold focus at the next submit.
+  releaseFocus() {
+    const active = document.activeElement
+    if (active?.id && this.element.contains(active)) active.blur()
+  }
+
+  #restoreFocus() {
+    if (!this.focusValue) return
+    const focus = this.focusValue
+    this.element.removeAttribute(`data-${this.identifier}-focus-value`)
+
+    let element
+    if (focus === "thread") {
+      element = this.hasAddButtonTarget ? this.addButtonTarget : this.element
+    } else {
+      element = this.element.querySelector(`#${CSS.escape(focus)}`)
+    }
+    if (!element) return
+
+    // Rows and the thread are focusable only once we focus them, so a click
+    // inside one never lands focus on it.
+    if (element.tabIndex < 0) element.setAttribute("tabindex", "-1")
+    // The page mustn't move: the new node sits where the old control was.
+    element.focus({ preventScroll: true })
   }
 }

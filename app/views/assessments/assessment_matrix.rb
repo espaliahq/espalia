@@ -23,8 +23,6 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   # @param can_relink_others_evidence [Boolean]
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
-  # @param only_capability [String, nil] a capability stable_id — renders just
-  #   that card, for the single-card swap a level-chip click makes (#488)
   def initialize(matrix_data:, assessment_id:, context: :self,
                  viewer_is_manager: false,
                  expanded_capability_id: nil,
@@ -32,8 +30,7 @@ class Views::Assessments::AssessmentMatrix < Views::Base
                  viewer_person_id: nil, can_create_evidence: false,
                  can_request_evidence: false,
                  can_relink_others_evidence: false,
-                 can_comment: false, viewer_is_tenant_admin: false, only_capability: nil)
-    @only_capability = only_capability
+                 can_comment: false, viewer_is_tenant_admin: false)
     @matrix_data = matrix_data
     @assessment_id = assessment_id
     @context = context
@@ -52,8 +49,6 @@ class Views::Assessments::AssessmentMatrix < Views::Base
   end
 
   def view_template
-    return render_categories(only_capability_category) if @only_capability
-
     div(data: {
       controller: "matrix",
       matrix_url_sync_value: true,
@@ -65,48 +60,55 @@ class Views::Assessments::AssessmentMatrix < Views::Base
       div(id: "matrix-header", class: "hidden") { }
 
       div(class: "space-y-8") do
-        render_categories(@matrix_data[:categories])
+        @matrix_data[:categories].each { |cat_data| render category_section(cat_data) }
       end
     end
   end
 
-  private
-
-  def render_categories(categories)
-    categories.each do |cat_data|
-      render Views::Assessments::CategorySection.new(
-        category_data: cat_data,
-        merged_levels: @matrix_data[:merged_levels],
-        person_level: @matrix_data[:person_level],
-        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
-        assessment_id: @assessment_id,
-        context: @context,
-        viewer_is_manager: @viewer_is_manager,
-        scoring: @matrix_data[:scoring],
-        self_scoring: @matrix_data[:self_scoring],
-        manager_scoring: @matrix_data[:manager_scoring],
-        aligned_scoring: @matrix_data[:aligned_scoring],
-        expanded_capability_id: @expanded_capability_id,
-        focused_level_ordinal: @expanded_level_ordinal,
-        selected_levels: @selected_levels,
-        frozen: @frozen,
-        alignment_locked: @alignment_locked,
-        viewer_person_id: @viewer_person_id,
-        can_create_evidence: @can_create_evidence,
-        can_request_evidence: @can_request_evidence,
-        can_relink_others_evidence: @can_relink_others_evidence,
-        can_comment: @can_comment,
-        viewer_is_tenant_admin: @viewer_is_tenant_admin,
-        lens: @matrix_data[:lens],
-        only_capability: @only_capability
-      )
+  # One card, unrendered, built exactly as the matrix builds it: the
+  # level-chip swap renders all of it
+  # ([#488](https://github.com/mr-yum/growth-os/issues/488)), a cell comment
+  # only its thread and chip ([#625](https://github.com/mr-yum/growth-os/issues/625)).
+  #
+  # @param stable_id [String]
+  # @return [Views::Assessments::CapabilityCard, nil] nil when the matrix
+  #   doesn't show it
+  def capability_card(stable_id)
+    @matrix_data[:categories].each do |cat_data|
+      card = category_section(cat_data).capability_card(stable_id)
+      return card if card
     end
+    nil
   end
 
-  def only_capability_category
-    @matrix_data[:categories].select do |cat_data|
-      cat_data[:capabilities].any? { |cap| cap[:capability].stable_id == @only_capability }
-    end
+  private
+
+  def category_section(cat_data)
+    Views::Assessments::CategorySection.new(
+      category_data: cat_data,
+      merged_levels: @matrix_data[:merged_levels],
+      person_level: @matrix_data[:person_level],
+      thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
+      assessment_id: @assessment_id,
+      context: @context,
+      viewer_is_manager: @viewer_is_manager,
+      scoring: @matrix_data[:scoring],
+      self_scoring: @matrix_data[:self_scoring],
+      manager_scoring: @matrix_data[:manager_scoring],
+      aligned_scoring: @matrix_data[:aligned_scoring],
+      expanded_capability_id: @expanded_capability_id,
+      focused_level_ordinal: @expanded_level_ordinal,
+      selected_levels: @selected_levels,
+      frozen: @frozen,
+      alignment_locked: @alignment_locked,
+      viewer_person_id: @viewer_person_id,
+      can_create_evidence: @can_create_evidence,
+      can_request_evidence: @can_request_evidence,
+      can_relink_others_evidence: @can_relink_others_evidence,
+      can_comment: @can_comment,
+      viewer_is_tenant_admin: @viewer_is_tenant_admin,
+      lens: @matrix_data[:lens]
+    )
   end
 
   def first_category_id

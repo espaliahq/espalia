@@ -73,6 +73,8 @@
 | `app/views/assessments/delegations/frame.rb` | `delegations-list` Turbo Frame — add-form + active-delegate list (revoke) |
 | **Controllers** | |
 | `app/controllers/assessments_controller.rb` | show / index / matrix / scoring / capability_card (one card, for a chip click) / activity — self/manager/alignment context routing; index unions delegated reports; show loads delegates |
+| `app/controllers/concerns/assessments/capability_card_rendering.rb` | Reads the assessment the way the page does (lens, context, matrix data, viewer flags) and builds one card as the matrix does (`capability_card_view`) — shared by `AssessmentsController` and the comments controller |
+| `app/controllers/assessments/comments_controller.rb` | Comment POST / PATCH / DELETE — a cell comment answers Turbo by replacing its thread and level chip, once the viewer can still see the assessment (Hard-Won Lesson 21); an evidence-link comment redirects within its thread frame |
 | `app/controllers/assessments/delegations_controller.rb` | Grant / revoke a manager-rating delegation (Turbo Frame; dispatches `Operations::Assessments::{Delegate,Revoke}…`) |
 | `app/controllers/assessments/ratings_controller.rb` | Self-rating POST (rate_self, revise, clear) |
 | `app/controllers/assessments/manager_ratings_controller.rb` | Manager-rating POST (rate_as_manager, revise, clear) |

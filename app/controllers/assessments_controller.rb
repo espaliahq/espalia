@@ -9,7 +9,7 @@
 # separate entity.
 #
 class AssessmentsController < ApplicationController
-  include AssessmentVisibility
+  include Assessments::CapabilityCardRendering
 
   # Skip-level subtrees can be large for senior managers — the section is
   # paginated rather than rendering an unbounded card grid.
@@ -146,21 +146,20 @@ class AssessmentsController < ApplicationController
   #
   # One card, rendered through the same path as the matrix frame and
   # narrowed to `?capability=`, as a Turbo Stream replacing it in place.
+  #
+  # The ring is the client's to place: focus may have moved on by the time
+  # this lands, so the card arrives unfocused and `matrix_controller`
+  # re-stamps it.
   def capability_card
     authorize @assignment, :matrix?
     load_assessment_data
     stable_id = params.expect(:capability)
-    return head(:not_found) unless capability_in_matrix?(stable_id)
+    card = capability_card_view(stable_id, selected_levels: selected_levels_param)
+    return head(:not_found) unless card
 
-    # The ring is the client's to place: focus may have moved on by the time
-    # this lands, so the card arrives unfocused and the controller re-stamps it.
-    args = matrix_view_args.except(:framework, :assignment, :active_category_id)
-      .merge(expanded_capability_id: nil, expanded_level_ordinal: nil)
-    html = render_to_string(
-      Views::Assessments::AssessmentMatrix.new(**args, assessment_id: @assignment.id, only_capability: stable_id),
-      layout: false
+    render turbo_stream: turbo_stream.replace(
+      Views::Assessments::CapabilityCard.dom_id_for(stable_id), render_to_string(card, layout: false)
     )
-    render turbo_stream: turbo_stream.replace(Views::Assessments::CapabilityCard.dom_id_for(stable_id), html)
   end
 
   # GET /assessments/:id/scoring
@@ -192,16 +191,6 @@ class AssessmentsController < ApplicationController
     end
   end
 
-  # The role and level the page is read against (`as_role` / `as_level`),
-  # resolved once per request and only after `authorize`, so a pair the
-  # framework doesn't have is a 404 to a permitted viewer and nobody else.
-  #
-  # @return [Assessments::Lens]
-  # @raise [Assessments::Lens::NotFound]
-  def lens
-    @lens ||= Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level])
-  end
-
   def set_assignment
     return unless current_person
 
@@ -216,32 +205,18 @@ class AssessmentsController < ApplicationController
     end
   end
 
-  # The matrix frame's arguments, shared with the single-card render so the
-  # two can't drift.
+  # The matrix frame's arguments.
   #
   # @return [Hash]
   def matrix_view_args
-    {
+    matrix_card_args.merge(
       framework: @framework,
-      matrix_data: @matrix_data,
       assignment: @assignment,
-      context: assessment_context,
-      viewer_is_manager: manager_viewing?,
       active_category_id: resolve_active_category_id,
       expanded_capability_id: params[:capability],
       expanded_level_ordinal: focused_level_ordinal_param,
-      selected_levels: selected_levels_param,
-      viewer_person_id: current_person&.id,
-      can_create_evidence: viewer_can_create_evidence?,
-      can_request_evidence: viewer_can_request_evidence?,
-      can_relink_others_evidence: viewer_can_relink_others_evidence?,
-      can_comment: viewer_can_comment?,
-      viewer_is_tenant_admin: viewer_is_tenant_admin?
-    }
-  end
-
-  def capability_in_matrix?(stable_id)
-    @matrix_data[:categories].any? { |c| c[:capabilities].any? { |cap| cap[:capability].stable_id == stable_id } }
+      selected_levels: selected_levels_param
+    )
   end
 
   # Whether current_person is viewing a direct report's assessment.
@@ -252,45 +227,6 @@ class AssessmentsController < ApplicationController
   # @return [Boolean]
   def manager_viewing?
     viewer_is_manager?
-  end
-
-  # Returns the assessment context based on the viewer's relationship and
-  # the cycle's lifecycle. Once the manager has formally started alignment
-  # (cycle status `aligning` or `aligned`), both parties view the assessment
-  # in alignment mode automatically — there is no opt-in/opt-out toggle.
-  #
-  # @return [Symbol] :self, :manager, or :alignment
-  def assessment_context
-    @assessment_context ||=
-      Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user, lens: lens)
-  end
-
-  def load_assessment_data
-    @matrix_data = Assessments::MatrixDataBuilder.for_lens(
-      lens: lens,
-      context: assessment_context,
-      viewer_person_id: current_person&.id,
-      viewer_sees_all_evidence: viewer_sees_all_evidence?
-    )
-    apply_viewer_rating_lock
-  end
-
-  # View-only manager-side viewers (manager-chain ancestors who are neither
-  # the recorded reporting manager nor an active rating delegate) get static
-  # rating pills — the rating policies would reject their POSTs, so no
-  # interactive affordance should render. Rating-capable viewers keep the
-  # lifecycle-derived flags untouched.
-  def apply_viewer_rating_lock
-    return unless manager_viewing?
-
-    @matrix_data[:individual_ratings_frozen] = true unless assignment_policy.create_manager_rating?
-    if assessment_context == :alignment && !assignment_policy.create_alignment_rating?
-      @matrix_data[:alignment_locked] = true
-    end
-  end
-
-  def assignment_policy
-    @assignment_policy ||= AssessmentPolicy.new(pundit_user, @assignment)
   end
 
   # Whose ratings the lens banner speaks of on the manager view: the
@@ -331,24 +267,6 @@ class AssessmentsController < ApplicationController
   # concern so every assessment controller (page, activity frame, evidence
   # frame) applies the same rule.
 
-  # Whether the current viewer is permitted to record evidence on this
-  # assessment. V1 allows any tenant member with a Person to record peer
-  # evidence — see {EvidencePolicy#create?}.
-  def viewer_can_create_evidence?
-    return false unless current_person
-
-    EvidencePolicy.new(pundit_user, @assignment).create?
-  end
-
-  # Whether to render the per-cell "Request evidence" affordance — same
-  # population as who may create a request (assessee / manager chain / active
-  # rating delegate / tenant admin), enforced again server-side on submit.
-  def viewer_can_request_evidence?
-    return false unless current_person
-
-    EvidenceRequestPolicy.new(pundit_user, @assignment).request?
-  end
-
   # Feedback given about this person with no cell yet, for a viewer who can
   # place it — the same answer assessments_get gives (Assessments::UnplacedFeedback).
   def unplaced_feedback_count
@@ -362,22 +280,6 @@ class AssessmentsController < ApplicationController
 
     "org" if Assessments::FeedbackToPlace.new(current_person)
       .scope_for(@assignment.person_id, @assignment.framework_id) == "org"
-  end
-
-  # Whether the current viewer is permitted to post comments on this
-  # assessment. V1 allows any tenant member with a Person to comment —
-  # the conversation lane is intentionally broader than the evidence
-  # lane. Authority for editing/deleting is gated per-card in the view.
-  def viewer_can_comment?
-    return false unless current_person
-
-    PersonDevelopmentCommentPolicy.new(pundit_user, @assignment).create?
-  end
-
-  # Tenant admins gain a delete-only override for moderation. Not a
-  # general edit override — only the author can rewrite their own words.
-  def viewer_is_tenant_admin?
-    current_user&.global_admin? || current_tenant_user&.admin? || false
   end
 
   # Loads the activity feed entries the current viewer is permitted to
