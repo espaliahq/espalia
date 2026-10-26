@@ -552,9 +552,9 @@ A manager (or the assessee, or an active rating delegate, or a tenant admin —
 capability × level**. The whole flow is cell-scoped: it originates from a cell and
 the response lands pre-linked to it.
 
-- **Entry point** — a per-cell **"Request evidence"** button on the capability-card
-  expansion ([capability_card_expansion.rb](../../../app/views/assessments/capability_card_expansion.rb),
-  `#request_evidence_section`), next to "Add evidence". Gated on
+- **Entry point** — a per-cell **"Request"** button in the feedback / evidence
+  header ([Views::Assessments::Evidence::List](../../../app/views/assessments/evidence/list.rb),
+  `#request_button`), next to "Add". Gated on
   `can_request_evidence`, threaded from `AssessmentsController#viewer_can_request_evidence?`
   through the card view chain exactly like `can_create_evidence`.
 - **The modal** ([Views::Evidence::RequestForm](../../../app/views/evidence/request_form.rb),
