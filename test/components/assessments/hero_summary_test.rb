@@ -454,9 +454,8 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
     end
   end
 
-  # The agreed score counts every unagreed cell as 0, so a manager's 109%
-  # read as 83% the moment alignment started, with six cells still open.
-  def render_alignment(agreed:)
+  # The agreed score counts an unagreed cell as 0.
+  def render_alignment(agreed:, awaiting: true)
     caps = [ CAP.new(stable_id: "cap-a", name: "Strategic Thinking"), CAP.new(stable_id: "cap-b", name: "Delivery") ]
     capabilities = caps.each_with_index.map do |cap, i|
       { capability: cap,
@@ -471,7 +470,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
     Views::Assessments::HeroSummary.new(
       scoring: agreed_scoring, aligned_scoring: agreed_scoring, manager_scoring: manager_scoring,
-      categories: [ { category: nil, capabilities: capabilities } ], person_level: 3,
+      categories: [ { category: nil, awaiting_agreement: awaiting, capabilities: capabilities } ], person_level: 3,
       merged_levels: LEVELS, assessment_id: SecureRandom.uuid_v7, context: :alignment,
       viewer_is_manager: true, viewer_can_rate: true, assessee_name: "Alex Developer"
     ).call
@@ -487,8 +486,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_includes panel.text, "1/2agreed"
       assert_includes html, "Score unlocks at 2"
       assert_includes html, "Agree next capability"
-      assert_not_includes html, "47%", "the half-agreed score must not show"
-      assert_nil panel["data-performance-pct"]
+      assert_not_includes panel.text, "47%", "the half-agreed score must not show"
     end
 
     should "keep the manager's own percentage beside the count" do
@@ -499,6 +497,15 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
 
     should "score once the last cell is agreed" do
       html = render_alignment(agreed: 2)
+
+      assert_not_includes html, "The score appears once everything is agreed"
+      assert_includes html, "47%"
+    end
+
+    # A completed record, or another level read through the lens, has
+    # nothing left to agree — withholding there would hide the score for good.
+    should "keep scoring when there is nothing left to agree" do
+      html = render_alignment(agreed: 1, awaiting: false)
 
       assert_not_includes html, "The score appears once everything is agreed"
       assert_includes html, "47%"

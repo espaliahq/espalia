@@ -154,9 +154,9 @@ needs and a screen does not:
   2"), `not_rated_at_assessed_level` (a card's "Not rated"),
   `no_expectation_at_assessed_level`, or
   `assignment_structure_unavailable` when the assignment's role or level
-  record is gone. In alignment the gate is every assessed-level cell
-  agreed, exactly as the hero's, and the reason reads
-  `agreement_incomplete`. Without this an agent reads a number off an assessment
+  record is gone. While an alignment is under way at the level read, the
+  gate is every cell agreed, exactly as the hero's, and the reason reads
+  `agreement_incomplete`; any other alignment read is exempt. Without this an agent reads a number off an assessment
   nobody has started and reports it as a verdict — the failure the whole
   surface exists to avoid.
 

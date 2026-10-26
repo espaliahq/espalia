@@ -131,9 +131,10 @@ whole cluster atomically.
   assessed-level cells carry the viewer's rating, the header shows "1/4
   rated · score unlocks at 2" instead of a number, and the **chip bar**
   hides that category's state dot and percent on the same rule. A category
-  nobody has touched must not read as underperforming. In alignment the
-  agreed score waits until every one of the category's cells is agreed, as
-  the hero's does ([scoring.md](assessments/scoring.md)). The gate applies to
+  nobody has touched must not read as underperforming. While an alignment
+  is still agreeing cells, the count reads "N/M agreed" and the agreed
+  score waits until every one of the category's cells is agreed, as the
+  hero's does ([scoring.md](assessments/scoring.md)). The gate applies to
   each **secondary** perspective against *its own* ratings too — a manager
   who has rated everything must not read "Self: 0%" as a verdict when the
   assessee has not started. `Assessments::SecondaryPerspectives` is the one

@@ -112,6 +112,12 @@ class Views::Assessments::Glossary
                     "at least half do, no score appears — a number drawn from two answers out of " \
                     "nine says more about the missing seven."
       },
+      agreed_count: {
+        label: "Agreed",
+        definition: "How many of this section's #{@current_code} capabilities carry an agreed value. " \
+                    "The section's score appears once every one does, because a capability not " \
+                    "yet agreed would count as zero."
+      },
       below_levels: {
         label: "Levels below #{@current_code}",
         definition: "Levels below #{@current_code} are assumed to be met, so they neither add to the " \
