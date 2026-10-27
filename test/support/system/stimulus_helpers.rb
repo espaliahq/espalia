@@ -401,7 +401,7 @@ module StimulusHelpers
     clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
-        const links = Array.from(document.querySelectorAll("a")).filter(a => a.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
+        const links = Array.from(document.querySelectorAll("a[href]")).filter(a => a.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
         const exact = links.filter(a =>
           a.id === text ||
           (a.getAttribute("title") || "") === text ||
