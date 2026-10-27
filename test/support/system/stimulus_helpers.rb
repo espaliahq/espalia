@@ -62,14 +62,15 @@ module StimulusHelpers
   # Locates a button the way +click_button_with_js_fallback+'s recovery does,
   # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
   # can never make them resolve different buttons.
-  # Resolves the button as Capybara would: visible only, an exact label over a
-  # partial one, and none when several match. Taking the first partial match
-  # once clicked the role tree's "+ Add role" for the binding editor's "Add role".
+  # Resolves the button as Capybara would: visible only (a zero opacity or
+  # visibility: hidden counts as hidden), an exact label over a partial one,
+  # and none when several match. Taking the first partial match once clicked
+  # the role tree's "+ Add role" for the binding editor's "Add role".
   BUTTON_FINDER_JS = <<~JS
     const text = arguments[0];
     const label = b => (b.textContent || b.value || "").trim();
     const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"))
-      .filter(b => b.checkVisibility());
+      .filter(b => b.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
     const exact = buttons.filter(b => label(b) === text);
     const matches = exact.length ? exact : buttons.filter(b => label(b).includes(text));
     const btn = matches.length === 1 ? matches[0] : null;
@@ -400,7 +401,7 @@ module StimulusHelpers
     clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
-        const links = Array.from(document.querySelectorAll("a")).filter(a => a.checkVisibility());
+        const links = Array.from(document.querySelectorAll("a")).filter(a => a.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
         const exact = links.filter(a =>
           a.id === text ||
           (a.getAttribute("title") || "") === text ||
