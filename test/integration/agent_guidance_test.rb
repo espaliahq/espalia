@@ -16,7 +16,7 @@ class AgentGuidanceTest < ActiveSupport::TestCase
   DIRECTORY_BUDGET = 100_000
 
   STARTUP_FILES = %w[CLAUDE.md .claude/CLAUDE.md].freeze
-  SKIPPED_DIRS = %r{\A(\.git|node_modules|vendor|tmp|log|storage|coverage)/}
+  SKIPPED_DIRS = %r{\A(\.git|\.claude/worktrees|node_modules|vendor|tmp|log|storage|coverage)/}
   IMPORT = %r{(?:\A|[\s|(,])@([^\s`|),]+\.\w+)}
 
   context "the files every session loads" do
