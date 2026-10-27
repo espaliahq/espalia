@@ -557,7 +557,8 @@ module StimulusHelpers
   def js_set_checkbox(locator, checked:)
     box = find_field(locator, visible: :all)
     page.execute_script("arguments[0].click()", box) unless box.checked? == checked
-    assert_equal checked, box.checked?, "#{locator} should be #{checked ? 'ticked' : 'clear'}"
+    landed = checked ? has_checked_field?(locator, visible: :all) : has_unchecked_field?(locator, visible: :all)
+    assert landed, "#{locator} should be #{checked ? 'ticked' : 'clear'}"
   end
 
   # Resolves a field locator (label / name / id) or CSS selector to an element.
