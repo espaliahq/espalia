@@ -60,6 +60,17 @@ sockets in `TIME_WAIT` and every connection to `postgres` failing with
 that had the password right. `pg_isready` reporting `no response` while the
 server is fine is the tell; it clears on its own once the sockets expire.
 
+**In a worktree nested inside the main checkout (Claude Code's
+`.claude/worktrees/<name>`), RuboCop also runs the main checkout's custom cops.**
+RuboCop reads `AllCops/Exclude` from the outermost `.rubocop.yml` it finds, and
+loading that file executes its `require:` list, so the main checkout's
+`lib/rubocop/cop/**` loads after the worktree's and redefines each cop. The tell
+is a run of `already initialized constant RuboCop::Cop::…` warnings naming both
+paths. Harmless while the two copies match; when you change a custom cop, `bin/rubocop`
+in the nested worktree runs main's version of it, so test the cop with its unit
+test under `test/lib/rubocop/` or from a worktree outside the checkout
+(`git worktree add /tmp/wt-<name>`).
+
 ## The macOS host
 
 **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
