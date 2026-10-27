@@ -478,6 +478,8 @@ js_fill_in "Participants (raters)", with: "Raj"
 
 It accepts a Capybara element, a CSS selector, or a field locator. Use it wherever the exact value is assertion-critical — typeahead queries, names asserted verbatim after save, anything a controller reads. Fields that are only submitted and never asserted (a reject reason, say) can stay on `fill_in`, which also keeps real typing exercised somewhere in the suite.
 
+**Checkboxes lose clicks the same way: use `js_set_checkbox(locator, checked:)`.** Capybara's `check` / `uncheck` never confirm the box changed, so a dropped click saves the old value and the failure shows up after the save. The notification settings test saved Slack still on. The helper clicks through JS and asserts the new state.
+
 ## An Assertion a Dropped Click Would Also Satisfy Is Not a Test
 
 **After a click, assert something that was NOT already true before it.** This is the failure mode behind three separate "flaky" tests on this branch, and in each case the test had never been testing its own subject:

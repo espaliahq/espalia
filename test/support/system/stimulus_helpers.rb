@@ -548,6 +548,18 @@ module StimulusHelpers
     el
   end
 
+  # Ticks or clears a checkbox with a JS click, which a busy runner can't drop
+  # the way it drops a pointer click. Capybara's +check+ / +uncheck+ never
+  # confirm the box changed, so a lost click saves the old value silently.
+  #
+  # @param locator [String] the field's id, name or label
+  # @param checked [Boolean] the state to leave it in
+  def js_set_checkbox(locator, checked:)
+    box = find_field(locator, visible: :all)
+    page.execute_script("arguments[0].click()", box) unless box.checked? == checked
+    assert_equal checked, box.checked?, "#{locator} should be #{checked ? 'ticked' : 'clear'}"
+  end
+
   # Resolves a field locator (label / name / id) or CSS selector to an element.
   #
   # Zero-wait probes run first: the element is almost always already on the

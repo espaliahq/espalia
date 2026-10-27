@@ -413,7 +413,7 @@ class Frameworks::EditModeSystemTest < ApplicationSystemTestCase
       within "#add-capability-modal" do
         assert_text "Thinking" # category name prefilled from the trigger
         js_fill_in "add_capability_name", with: "Systems Design"
-        check "Software Engineer"
+        js_set_checkbox "Software Engineer", checked: true
       end
       # "Added" is all over the activity feed — the new capability landing in
       # the matrix is the signal. Scoped to the modal: the grid's own
