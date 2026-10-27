@@ -25,8 +25,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   # @param can_comment [Boolean]
   # @param viewer_is_tenant_admin [Boolean]
   # @param lens [Assessments::Lens, nil] the role and level the page is read
-  #   against; its params ride the pill's forms so the response re-renders
-  #   through it
+  #   against; its params ride the pill's and the comments' forms so the
+  #   response re-renders through it
   def initialize(cell_data:, capability:, level:, capability_stable_id:,
                  ordinal:, person_level:, assessment_id:, context: :self,
                  category_id: nil, frozen: false, alignment_locked: false,
@@ -69,6 +69,30 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       evidence_section
       comments_section
     end
+  end
+
+  # The cell's comment thread, unrendered, so a comment's response can swap
+  # just the thread ([#625](https://github.com/mr-yum/growth-os/issues/625)).
+  #
+  # @param focus [String, nil] what the thread focuses on connect, after the
+  #   viewer's own write (see Comments::Thread)
+  # @return [Views::Assessments::Comments::Thread, nil] nil when the viewer
+  #   neither sees comments here nor can add one
+  def comments_thread(focus: nil)
+    comments = @cell_data[:comments] || []
+    return unless @viewer_person_id && (comments.any? || @can_comment)
+
+    Views::Assessments::Comments::Thread.new(
+      comments: comments,
+      assessment_id: @assessment_id,
+      viewer_person_id: @viewer_person_id,
+      can_create: @can_comment,
+      tenant_admin: @viewer_is_tenant_admin,
+      capability_stable_id: @capability_stable_id,
+      level_ordinal: @ordinal,
+      lens_params: @lens&.to_params || {},
+      focus: focus
+    )
   end
 
   private
@@ -184,18 +208,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
   end
 
   def comments_section
-    comments = @cell_data[:comments] || []
-    return unless @viewer_person_id && (comments.any? || @can_comment)
-
-    render Views::Assessments::Comments::Thread.new(
-      comments: comments,
-      assessment_id: @assessment_id,
-      viewer_person_id: @viewer_person_id,
-      can_create: @can_comment,
-      tenant_admin: @viewer_is_tenant_admin,
-      capability_stable_id: @capability_stable_id,
-      level_ordinal: @ordinal
-    )
+    thread = comments_thread
+    render thread if thread
   end
 
   # Freeze is per cell (ADR-22): a self or manager rating freezes once any

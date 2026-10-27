@@ -19,6 +19,21 @@ module Assessments::TurboStreamHelpers
     around_action ->(_, action) { Assessments::RoleScope.reusing(&action) }, only: :create
   end
 
+  # What the live region says about one cell: "Rated most of the time —
+  # Critical Thinking, E1", "Comment posted — Critical Thinking, E3".
+  #
+  # Capability names and level codes are user-authored and
+  # `turbo_stream.update` marks string content html_safe, so both are escaped
+  # here.
+  #
+  # @param what [String] what happened, e.g. "Comment posted"
+  # @param capability_name [String]
+  # @param level_code [String] e.g. "E3"
+  # @return [String]
+  def self.cell_announcement(what, capability_name:, level_code:)
+    "#{what} — #{ERB::Util.html_escape(capability_name)}, #{ERB::Util.html_escape(level_code)}"
+  end
+
   private
 
   # The lens the page was read through when the rating was made — the pill's
@@ -59,18 +74,15 @@ module Assessments::TurboStreamHelpers
   def live_status_stream(cap_data:, cell_data:, level_code:, frequency:, verb: "Rated")
     return nil if cell_data.nil?
 
-    # Capability names are user-authored and turbo_stream.update marks string
-    # content html_safe — escape, as every other helper in this concern does.
-    capability_name = ERB::Util.html_escape(cap_data[:capability].name)
-    text =
+    what =
       if frequency.present?
-        spoken = Views::Assessments::FrequencyPalette.spoken_for(frequency)
-        "#{verb} #{spoken} — #{capability_name}, #{level_code}"
+        "#{verb} #{Views::Assessments::FrequencyPalette.spoken_for(frequency)}"
       else
-        cleared = verb == "Agreed" ? "Agreement" : "Rating"
-        "#{cleared} cleared — #{capability_name}, #{level_code}"
+        "#{verb == 'Agreed' ? 'Agreement' : 'Rating'} cleared"
       end
-    turbo_stream.update("assessment-live-status", text)
+    turbo_stream.update("assessment-live-status",
+      Assessments::TurboStreamHelpers.cell_announcement(what, capability_name: cap_data[:capability].name,
+                                                              level_code: level_code))
   end
 
   # The capability's name row after a rating — rendered by the same view

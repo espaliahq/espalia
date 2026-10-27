@@ -55,6 +55,12 @@ class Assessments::ScoreSummaryTest < ActiveSupport::TestCase
     end
   end
 
+  def start_alignment
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @framework_id, @cycle_id, started_by_id: @person.id)
+    end
+  end
+
   context "#overall" do
     should "read the assessee's own ratings in self context" do
       assert_equal 100, summary_for(:self)[:score]
@@ -178,16 +184,65 @@ class Assessments::ScoreSummaryTest < ActiveSupport::TestCase
       assert_equal 1, category[:unlocks_at]
     end
 
-    should "keep scoring in alignment, where individual ratings are frozen" do
+    # The agreed score counts an unagreed cell as 0. Starting alignment
+    # agrees only the first capability, where self and manager match.
+    should "withhold the agreed score in alignment until every cell is agreed" do
+      start_alignment
+      overall = summary_for(:alignment)
+
+      assert_equal false, overall[:scored], "1 of 2 agreed is past half but not whole"
+      assert_equal "agreement_incomplete", overall[:unscored_reason]
+      assert_nil overall[:score]
+      assert_equal 1, overall.dig(:coverage, :rated_at_assessed_level)
+      assert_equal 2, overall.dig(:coverage, :unlocks_at)
+      category = overall[:categories].sole
+      assert_equal false, category[:scored]
+      assert_equal "agreement_incomplete", category[:unscored_reason]
+    end
+
+    should "score alignment once the record is whole" do
+      start_alignment
       ActsAsTenant.with_tenant(@tenant) do
-        AssessmentLevelRating.where(person_id: @person.id)
-          .update_all(manager_rated_frequency: nil, self_rated_frequency: nil)
+        PersonDevelopment::CommandHandler.new.align_assessment(@person.id, @framework_id, @caps.last.stable_id,
+          level_ordinal: 2, aligned_frequency: "consistent", cycle_id: @cycle_id, aligned_by_id: @person.id)
       end
+      overall = summary_for(:alignment)
+
+      assert overall[:scored]
+      assert_equal 100, overall[:score]
+      assert overall[:categories].sole[:scored]
+    end
+
+    # A completed record can still carry an unagreed cell — one completed
+    # before the gate, or a capability a later publish added. Nothing can be
+    # agreed there any more, so withholding would hide the score for good.
+    should "keep scoring a completed alignment with a cell left unagreed" do
+      start_alignment
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.where(person_id: @person.id, cycle_id: @cycle_id).update_all(status: "aligned")
+      end
+      overall = summary_for(:alignment)
+
+      assert overall[:scored]
+      assert_nil overall[:unscored_reason]
+    end
+
+    # The alignment is about E2; "See Alice as E3" reads a level nobody is
+    # agreeing, so the full-agreement gate would never lift there.
+    should "keep scoring another level of the role read through the lens" do
+      start_alignment
       overall = ActsAsTenant.with_tenant(@tenant) do
-        Assessments::ScoreSummary.new(assignment: @assignment, context: :alignment).overall
+        create(:framework_level, role_id: @role.role_id, ordinal: 3, title: "Senior", code: "E3")
+        @caps.each do |cap|
+          create(:framework_behavioural_expectation,
+            capability_id: cap.capability_id, level_ordinal: 3, description: "Does more")
+        end
+        lens = Assessments::Lens.resolve(assignment: @assignment.reload, as_level: 3)
+        Assessments::ScoreSummary.new(assignment: @assignment, context: :alignment, lens: lens).overall
       end
 
-      assert overall[:scored], "alignment is exempt from the coverage gate"
+      assert_equal "E3", overall.dig(:scale, :assessed_level)
+      assert overall[:scored]
     end
   end
 

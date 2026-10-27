@@ -923,6 +923,118 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "scroll stability on comments" do
+    [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
+      should "keep the thread where it was, and Discuss open above it, when a comment is posted at #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        prepare_comment_scroll
+        page.execute_script(<<~JS)
+          document.querySelector("#{comment_thread} button[aria-label='Add a comment']").click()
+        JS
+        before = center_and_measure("#{comment_thread} form[data-comments-thread-target='composer'] textarea")
+
+        submit_comment_form("#{comment_thread} form[data-comments-thread-target='composer']", "Paired with Sam on this.")
+
+        assert_selector comment_thread, text: "Paired with Sam on this."
+        assert_comment_kept_place(before)
+        posted_id = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.find_by!(body: "Paired with Sam on this.").id }
+        assert_focus_on "comment-#{posted_id}"
+        assert_selector "#{comment_thread} form[data-comments-thread-target='composer']", visible: :hidden
+        assert_selector "#cell-#{@cap3_stable}-2 svg[data-glyph='comment']", visible: :all
+        assert_selector "#assessment-live-status", text: "Comment posted — Execution, E2", visible: :all
+      end
+
+      should "keep the thread where it was, and Discuss open above it, through a reply, an edit and a delete at #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        comment_id = seed_comment("First thoughts")
+        prepare_comment_scroll
+
+        page.execute_script(<<~JS)
+          document.querySelector("#comment-#{comment_id} [data-action*='comments-thread#startReply']").click()
+        JS
+        before = center_and_measure("#comment-#{comment_id} form[data-comments-thread-target='replyForm'] textarea")
+        submit_comment_form("#comment-#{comment_id} form[data-comments-thread-target='replyForm']", "Agreed, see the RFC.")
+        assert_selector comment_thread, text: "Agreed, see the RFC."
+        assert_comment_kept_place(before)
+        reply_id = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.find_by!(parent_id: comment_id).id }
+        assert_focus_on "comment-#{reply_id}"
+
+        page.execute_script(<<~JS)
+          document.querySelector("#comment-#{comment_id} [data-action*='comments-thread#startEdit']").click()
+        JS
+        before = center_and_measure("#comment-#{comment_id} form[data-comments-thread-target='editForm'] textarea",
+          anchor: "#comment-#{comment_id}")
+        submit_comment_form("#comment-#{comment_id} form[data-comments-thread-target='editForm']", "Second thoughts")
+        assert_selector "#comment-#{comment_id}", text: "Second thoughts"
+        assert_comment_kept_place(before)
+        assert_focus_on "comment-#{comment_id}"
+
+        open_dropdown(scope: "#comment-#{reply_id}")
+        before = center_and_measure("#comment-#{reply_id}")
+        auto_confirm do
+          page.execute_script("document.querySelector('#comment-#{reply_id} button[data-turbo-confirm]').click()")
+        end
+        assert_no_selector comment_thread, text: "Agreed, see the RFC."
+        assert_comment_kept_place(before)
+        assert_equal "Add a comment", page.evaluate_script("document.activeElement.getAttribute('aria-label')"),
+          "focus should land on the thread's add button after a delete"
+      end
+
+      should "focus the viewer's own new comment, not one someone else posted meanwhile, at #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        colleague = ActsAsTenant.with_tenant(@tenant) { FactoryBot.create(:person, tenant: @tenant, name: "Sam Colleague") }
+        theirs_id = seed_comment("Posted while you typed", author: colleague)
+        prepare_comment_scroll
+        assert_no_selector "#{comment_thread} li[tabindex]", visible: :all
+        # The page loaded before their comment, so the response is the first to show it.
+        page.execute_script("document.getElementById('comment-#{theirs_id}').remove()")
+
+        page.execute_script(<<~JS)
+          document.querySelector("#{comment_thread} button[aria-label='Add a comment']").click()
+        JS
+        before = center_and_measure("#{comment_thread} form[data-comments-thread-target='composer'] textarea")
+        submit_comment_form("#{comment_thread} form[data-comments-thread-target='composer']", "Mine, posted second.")
+
+        assert_selector "#comment-#{theirs_id}"
+        assert_selector comment_thread, text: "Mine, posted second."
+        assert_comment_kept_place(before)
+        mine_id = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.find_by!(body: "Mine, posted second.").id }
+        assert_focus_on "comment-#{mine_id}"
+      end
+
+      # A row we focused keeps its tabindex, so it can hold focus at the next
+      # submit, and after a stream render Turbo re-focuses whatever had focus
+      # if its id survives, scrolling to it.
+      should "move focus to a reply, without scrolling, while another comment row has focus at #{label}" do
+        page.driver.browser.manage.window.resize_to(*size)
+        focused_id = seed_comment("Off-screen comment")
+        seed_comment((1..60).map { |n| "Paragraph #{n}." }.join("\n\n"))
+        answered_id = seed_comment("Answer this one")
+        prepare_comment_scroll
+
+        page.execute_script(<<~JS)
+          document.querySelector("#comment-#{answered_id} [data-action*='comments-thread#startReply']").click()
+        JS
+        before = center_and_measure("#comment-#{answered_id} form[data-comments-thread-target='replyForm'] textarea")
+        page.execute_script(<<~JS)
+          const row = document.getElementById('comment-#{focused_id}')
+          row.setAttribute('tabindex', '-1')
+          row.focus({ preventScroll: true })
+        JS
+        assert_focus_on "comment-#{focused_id}"
+        assert_operator page.evaluate_script(
+          "document.getElementById('comment-#{focused_id}').getBoundingClientRect().bottom"
+        ), :<, 0, "Setup: the focused comment should be above the viewport"
+
+        submit_comment_form("#comment-#{answered_id} form[data-comments-thread-target='replyForm']", "On it.")
+        assert_selector comment_thread, text: "On it."
+        assert_comment_kept_place(before)
+        reply_id = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.find_by!(parent_id: answered_id).id }
+        assert_focus_on "comment-#{reply_id}"
+      end
+    end
+  end
+
   context "contrast (WCAG 1.4.3 / 1.4.11)" do
     should "keep the All chip's count at AA while a category chip is active" do
       visit assessment_path(@assignment)
@@ -970,7 +1082,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       )
     end
 
-    should "keep the feedback actions glyph above the 3:1 icon floor" do
+    should "keep the feedback actions legible: Add at 4.5:1, the item kebab above the 3:1 icon floor" do
       ActsAsTenant.with_tenant(@tenant) do
         PersonDevelopment::CommandHandler.new.record_evidence(
           @person.id, @framework_id, SecureRandom.uuid_v7,
@@ -983,12 +1095,12 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       # The frame's load replaces the cards; a kebab focused before it lands
       # is gone by the time the contrast is read.
       assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-      assert_selector "[aria-label='Feedback / evidence actions']", minimum: 2, visible: :all
+      add_button = "#evidence-list-#{@cap1_stable}-2 [data-evidence-modal-mode-param='new']"
+      assert_selector add_button, visible: :all
+      assert_operator rendered_contrast(add_button), :>=, 4.5
 
-      # Two share the label: the list header's, and the card's, which only
-      # shows on hover or focus.
-      assert_operator rendered_contrast("#evidence-list-#{@cap1_stable}-2 > div [aria-label='Feedback / evidence actions']"), :>=, 3
-      card_kebab = ".absolute.top-1.right-1 [aria-label='Feedback / evidence actions']"
+      # The card's kebab only shows on hover or focus.
+      card_kebab = "#evidence-list-#{@cap1_stable}-2 [aria-label='Actions for “Launch” from #{@person.name}']"
       page.execute_script("document.querySelector(arguments[0]).focus()", card_kebab)
       assert_selector "#{card_kebab}:focus", visible: :all
       assert_operator rendered_contrast(card_kebab), :>=, 3
@@ -2000,6 +2112,127 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
 
     flunk "Capability card top should #{expectation} once scrolling stops " \
           "(offset=#{last[0]}, diagnostics=#{last[1].inspect})"
+  end
+
+  def comment_thread = "#comments-thread-#{@cap3_stable}-2"
+
+  # @return [String] the comment's id
+  def seed_comment(body, author: @person)
+    comment_id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.post_comment(
+        @person.id, @framework_id, comment_id,
+        commentable_type: PersonDevelopmentComment::ASSESSMENT_CELL,
+        capability_stable_id: @cap3_stable, level_ordinal: 2,
+        body: body, author_id: author.id
+      )
+    end
+    comment_id
+  end
+
+  # Opens the page with room below the last card (Execution), so any element
+  # in it can sit mid-viewport, and opens the Discuss thread of a feedback
+  # item in the same cell, above the comments. Anything that re-renders the
+  # card closes it, and everything below moves up by its height.
+  def prepare_comment_scroll
+    evidence_id = SecureRandom.uuid_v7
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.record_evidence(
+        @person.id, @framework_id, evidence_id,
+        capability_stable_id: @cap3_stable, level_ordinal: 2, source: "self",
+        evidence_type: "project_outcome", title: "Checkout rewrite", content: "Shipped it.",
+        author_id: @person.id, valence: "demonstrated"
+      )
+    end
+    @discuss = "#evidence-#{evidence_id} details"
+
+    visit assessment_path(@assignment)
+    assert_selector "turbo-frame#assessment-matrix[complete]:not([busy])", visible: :all
+    wait_for_stimulus "matrix"
+    wait_for_stimulus "comments-thread", scope: comment_thread
+    page.execute_script(
+      "document.querySelector('main').insertAdjacentHTML('beforeend', '<div style=\"height:2000px\"></div>')"
+    )
+    # The thread frame is lazy: it loads once it scrolls into view.
+    page.execute_script(<<~JS)
+      const details = document.querySelector(#{@discuss.to_json})
+      details.open = true
+      details.scrollIntoView({ block: "center" })
+    JS
+    assert_selector "#{@discuss} turbo-frame[complete] textarea", visible: true
+  end
+
+  # Scrolls the element to the middle of the viewport, once the page has
+  # settled, and returns where things are: the scroll position and the
+  # viewport top of `anchor` (the comment thread, unless given).
+  def center_and_measure(selector, anchor: comment_thread)
+    page.execute_script("document.querySelector(#{selector.to_json}).scrollIntoView({ block: 'center' })")
+    scroll_y = settled_scroll_y
+    assert scroll_y > 200, "Setup: should be scrolled into the page (scrollY=#{scroll_y})"
+    { scroll_y: scroll_y, anchor: anchor, top: viewport_top(anchor) }
+  end
+
+  def viewport_top(selector)
+    page.evaluate_script("document.querySelector(#{selector.to_json}).getBoundingClientRect().top")
+  end
+
+  # JS-fills and submits, so Capybara never scrolls the field into view.
+  def submit_comment_form(form_selector, body)
+    page.execute_script(<<~JS, form_selector, body)
+      const form = document.querySelector(arguments[0])
+      form.querySelector("textarea[name='comment[body]']").value = arguments[1]
+      form.requestSubmit()
+    JS
+  end
+
+  # What the reader sees stays put: the page didn't scroll, the thread (or
+  # comment) sits where it was on screen, the Discuss thread above it is
+  # still open, and the card keeps its ring if focus is on it.
+  def assert_comment_kept_place(before)
+    scroll_after = settled_scroll_y
+    assert_in_delta before[:scroll_y], scroll_after, 5,
+      "the page scrolled when the comment landed (was #{before[:scroll_y]}, now #{scroll_after})"
+    top_after = viewport_top(before[:anchor])
+    assert_in_delta before[:top], top_after, 3,
+      "#{before[:anchor]} moved on screen when the comment landed (was #{before[:top]}, now #{top_after})"
+    assert page.evaluate_script("document.querySelector(#{@discuss.to_json}).open"),
+      "the Discuss thread above the comments should still be open"
+
+    ring = page.evaluate_script(<<~JS)
+      (() => {
+        const matrix = document.querySelector("[data-controller~='matrix']")
+        const focus = window.Stimulus.getControllerForElementAndIdentifier(matrix, "matrix").currentFocus
+        const ringed = [...document.querySelectorAll("[data-matrix-target~='card'][data-focused='true']")]
+        return { focused: focus?.capabilityStableId, level: focus?.level,
+                 ringed: ringed.map(c => c.dataset.capabilityStableId) }
+      })()
+    JS
+    expected = %w[capability cell].include?(ring["level"]) ? [ ring["focused"] ] : []
+    assert_equal expected, ring["ringed"], "the ring should sit on the focused card (#{ring.inspect})"
+  end
+
+  def assert_focus_on(id)
+    assert_equal id, page.evaluate_script("document.activeElement.id"), "keyboard focus should land on ##{id}"
+  end
+
+  # Two equal readings 150ms apart, then a third after the matrix
+  # controller's 600ms settle pass, so a scroll still in flight, or one that
+  # starts late, isn't read.
+  def settled_scroll_y
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Capybara.default_max_wait_time
+    previous = nil
+    loop do
+      current = page.evaluate_script("window.scrollY")
+      if current == previous
+        sleep 0.6
+        return current if page.evaluate_script("window.scrollY") == current
+      end
+      flunk "the page never stopped scrolling (last scrollY=#{current})" if
+        Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      previous = current
+      sleep 0.15
+    end
   end
 
   # Rates one current-level capability (cap1) so the assessment clears the

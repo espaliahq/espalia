@@ -22,8 +22,10 @@ class Views::Assessments::Comments::Card < Views::Base
   #   answers, when it should be surfaced (i.e. the parent isn't the line
   #   rendered directly above — see Thread#render_thread_tree). nil hides
   #   the "↳ replying to" affordance.
+  # @param lens_params [Hash] the lens the page is read through, carried by
+  #   every form so the card that comes back matches the page around it
   def initialize(comment:, assessment_id:, can_edit: false, can_delete: false,
-                 can_reply: false, indent: false, reply_to: nil)
+                 can_reply: false, indent: false, reply_to: nil, lens_params: {})
     @comment = comment
     @assessment_id = assessment_id
     @can_edit = can_edit
@@ -32,13 +34,15 @@ class Views::Assessments::Comments::Card < Views::Base
     @can_reply = can_reply
     @indent = indent
     @reply_to = reply_to
+    @lens_params = lens_params
   end
 
   def view_template
     li(
       id: "comment-#{@comment.id}",
+      # Focus lands here after the comment is posted or edited.
       class: [ "group relative flex gap-2 py-1.5 text-xs",
-               "text-muted",
+               "text-muted", Views::Assessments::LevelChip::FOCUS_RING,
                @indent ? "pl-5" : "" ].join(" ")
     ) do
       avatar_dot
@@ -161,7 +165,7 @@ class Views::Assessments::Comments::Card < Views::Base
   # threads it under this comment.
   def reply_form
     form(
-      action: assessment_comments_path(@assessment_id),
+      action: assessment_comments_path(@assessment_id, @lens_params),
       method: "post",
       class: "hidden mt-1",
       data: {
@@ -204,7 +208,7 @@ class Views::Assessments::Comments::Card < Views::Base
 
   def edit_form
     form(
-      action: assessment_comment_path(@assessment_id, @comment.id),
+      action: assessment_comment_path(@assessment_id, @comment.id, @lens_params),
       method: "post",
       class: "hidden mt-1",
       data: {
@@ -278,7 +282,7 @@ class Views::Assessments::Comments::Card < Views::Base
     # work but is less reliable in practice (some Turbo versions only
     # look at the submitter). Keeping it on the button is unambiguous.
     button_to(
-      assessment_comment_path(@assessment_id, @comment.id),
+      assessment_comment_path(@assessment_id, @comment.id, @lens_params),
       method: :delete,
       class: Components::Kit::Dropdown.item_classes(tone: :danger, size: :xs),
       role: "menuitem",

@@ -97,3 +97,13 @@ The activity sidebar is sticky at `top: --sticky-header-h + 1rem` and was capped
 ### 20. A swapped card is a new node — never remember a card by its element
 
 `#applyCardFocus` used to remember the focused card as a DOM node and clear only that node on the next focus change. Once a chip click swapped a card in place ([#488](https://github.com/mr-yum/growth-os/issues/488)), the replacement was a different node that the server had already stamped `data-focused="true"`; the remembered node was detached, so scrolling to another card left two rings. It now clears by attribute across `cardTargets`. Anything else that holds a card element across an interaction has the same problem: re-find it by `data-capability-stable-id`.
+
+### 21. A write inside the matrix frame should swap only what it changed, never redirect
+
+A form inside `assessment-matrix` that answers with a redirect makes Turbo reload the whole frame. `matrix_controller` lives inside it, so it reconnects, and `#dispatchInitialFocus` treats the `?capability=` in the URL as a deep link and scrolls that card's top under the sticky header. Posting a comment mid-card jumped the reader 50–130px ([#625](https://github.com/mr-yum/growth-os/issues/625)).
+
+Swapping the whole card instead held `window.scrollY` and still moved the page. A swap resets state the client holds and the server doesn't render: every open "Discuss" `<details>` in the evidence above the comments, with its lazy frame, came back closed, and everything below moved up by its height. With one open that was 125px on desktop and 142px on mobile; with two, 394px. A test that reads only `scrollY` passes.
+
+So a cell comment's success replaces just the thread and that level's chip (`Assessments::CommentsController#thread_streams`), built through the card's own builders (`AssessmentMatrix#capability_card`) so neither can drift from the card. Swap the smallest fragment that covers the change, and check what above it the reader may have opened. The comments system test opens a Discuss thread above the comments, then pins the thread's on-screen top within 3px as well as `scrollY`.
+
+Not every path follows the rule. A blank edit, a `CommandError` and a Pundit denial still `redirect_back` from inside the frame, so the frame reloads, the page jumps, and the flash renders outside the frame where nobody sees it. A viewer who can no longer see the assessment is redirected on purpose: the page refuses them. The non-Turbo fallback redirects too.

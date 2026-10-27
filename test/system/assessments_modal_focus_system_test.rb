@@ -63,8 +63,8 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  # Opens the unified evidence modal via the kebab and waits for the lazy
-  # frame's form to render.
+  # Opens the unified evidence modal via the cell's Add button and waits for
+  # the lazy frame's form to render.
   def open_evidence_modal
     visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
     wait_for_stimulus "evidence-modal"
@@ -143,8 +143,26 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
   end
 
   context "closing the dialog" do
-    should "return focus to the visible invoker (the kebab for menu items)" do
-      open_evidence_modal
+    should "return focus to the item's kebab when its Edit item opened it" do
+      evidence_id = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.record_evidence(
+          @person.id, @framework_id, evidence_id,
+          capability_stable_id: @cap_stable, level_ordinal: 1, source: "self",
+          evidence_type: "project_outcome", title: "Launch", content: "Shipped it.",
+          author_id: @person.id, valence: "demonstrated"
+        )
+      end
+      visit assessment_path(@assignment, capability: @cap_stable, level_ordinal: 1)
+      wait_for_stimulus "evidence-modal"
+      kebab = "#evidence-#{evidence_id} [data-dropdown-target='trigger']"
+      assert_selector "#evidence-#{evidence_id} [data-controller~='dropdown'][data-connected]", visible: :all
+      page.execute_script("document.querySelector(arguments[0]).click()", kebab)
+      page.execute_script(
+        "document.querySelector(\"#evidence-#{evidence_id} [data-evidence-modal-mode-param='edit']\").click();"
+      )
+      assert_selector "#evm-content", visible: true
+
       page.execute_script(<<~JS)
         const overlay = document.getElementById("evidence-modal-overlay");
         ([...overlay.querySelectorAll("button")].find(b => b.textContent.trim() === "Cancel")
@@ -152,44 +170,19 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
       JS
       assert_no_selector "#evidence-modal-overlay", visible: true
       # The return is deferred two animation frames (it must outlive the
-      # response's Turbo Streams) — poll briefly rather than racing it.
-      returned = false
-      deadline = Time.zone.now + 5
-      until returned || Time.zone.now > deadline
-        returned = page.evaluate_script(
-          "document.activeElement === document.querySelector(\"[aria-label='Feedback / evidence actions']\")"
-        )
-        sleep 0.1 unless returned
-      end
-      unless returned
-        # CI-only failure — capture where focus actually went so the log is
-        # diagnosable (this has never reproduced locally).
-        diag = page.evaluate_script(<<~JS)
-          (() => {
-            const a = document.activeElement;
-            const k = document.querySelector("[aria-label='Feedback / evidence actions']");
-            return JSON.stringify({
-              activeTag: a?.tagName, activeId: a?.id || null,
-              activeAria: a?.getAttribute?.("aria-label") || null,
-              activeText: (a?.textContent || "").trim().slice(0, 40),
-              kebabExists: !!k, kebabVisible: k ? k.offsetParent !== null : null,
-              kebabCount: document.querySelectorAll("[aria-label='Feedback / evidence actions']").length,
-              overlayHidden: document.getElementById("evidence-modal-overlay")?.classList?.contains("hidden"),
-              guardWouldBail: !!document.querySelector("[data-modal-target='overlay']:not(.hidden)"),
-              overlays: [...document.querySelectorAll("[data-modal-target='overlay']")]
-                .map(o => (o.id || "anon") + ":" + (o.classList.contains("hidden") ? "hidden" : "VISIBLE")),
-              triggerStillInDom: !!document.querySelector("[data-evidence-modal-mode-param='new']"),
-              dropdownOfTrigger: (() => {
-                const t = document.querySelector("[data-evidence-modal-mode-param='new']");
-                const d = t?.closest("[data-controller~='dropdown']");
-                const k = d?.querySelector("[data-dropdown-target='trigger']");
-                return { hasDropdown: !!d, hasKebab: !!k, kebabVisible: k ? k.offsetParent !== null : null };
-              })()
-            });
-          })()
-        JS
-        flunk "focus should return to the kebab that opened the menu — #{diag}"
-      end
+      # response's Turbo Streams), and the hidden Edit item can't take it.
+      assert_selector "#{kebab}:focus", visible: :all
+    end
+
+    should "return focus to the Add button that opened it" do
+      open_evidence_modal
+      page.execute_script(<<~JS)
+        const overlay = document.getElementById("evidence-modal-overlay");
+        ([...overlay.querySelectorAll("button")].find(b => b.textContent.trim() === "Cancel")
+          || overlay.querySelector("[data-action*='modal#close']")).click();
+      JS
+      assert_no_selector "#evidence-modal-overlay", visible: true
+      assert_selector "[data-evidence-modal-mode-param='new']:focus", visible: :all
     end
 
     should "return focus to a standalone trigger that survives the close" do

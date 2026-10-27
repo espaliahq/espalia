@@ -44,22 +44,35 @@ class Views::Assessments::LevelStrip < Views::Base
     # to the card's padded edges so users can swipe to the very end.
     div(class: "overflow-x-auto -mx-4 px-4") do
       div(class: "flex gap-1 min-w-fit") do
-        @merged_levels.each do |level|
-          render Views::Assessments::LevelChip.new(
-            cell_data: @cells[level[:ordinal]],
-            capability_stable_id: @capability_stable_id,
-            ordinal: level[:ordinal],
-            person_level: @person_level,
-            level_code: level[:level_code],
-            context: @context,
-            viewer_is_manager: @viewer_is_manager,
-            focused: level[:ordinal] == @focused_ordinal,
-            alignment_locked: @alignment_locked,
-            assumed_below: @assumed_below,
-            badge_label: @badge_label
-          )
-        end
+        @merged_levels.each { |level| render chip_for(level) }
       end
     end
+  end
+
+  # One level's chip, unrendered, so a response can swap just that chip.
+  #
+  # @param ordinal [Integer]
+  # @return [Views::Assessments::LevelChip, nil] nil when no level has it
+  def chip(ordinal)
+    level = @merged_levels.find { |l| l[:ordinal] == ordinal }
+    chip_for(level) if level
+  end
+
+  private
+
+  def chip_for(level)
+    Views::Assessments::LevelChip.new(
+      cell_data: @cells[level[:ordinal]],
+      capability_stable_id: @capability_stable_id,
+      ordinal: level[:ordinal],
+      person_level: @person_level,
+      level_code: level[:level_code],
+      context: @context,
+      viewer_is_manager: @viewer_is_manager,
+      focused: level[:ordinal] == @focused_ordinal,
+      alignment_locked: @alignment_locked,
+      assumed_below: @assumed_below,
+      badge_label: @badge_label
+    )
   end
 end

@@ -12,6 +12,16 @@
 class Views::Assessments::Comments::Thread < Views::Base
   include Phlex::Rails::Helpers::TimeAgoInWords
 
+  # Focus after a delete: the add button, or the thread when there is none.
+  FOCUS_SELF = "thread"
+
+  # @param capability_stable_id [String]
+  # @param level_ordinal [Integer]
+  # @return [String] the thread's element id, the target that replaces it
+  def self.dom_id_for(capability_stable_id, level_ordinal)
+    "comments-thread-#{capability_stable_id}-#{level_ordinal}"
+  end
+
   # @param comments [Array<PersonDevelopmentComment>] all comments on the cell (any depth)
   # @param assessment_id [String]
   # @param viewer_person_id [String]
@@ -19,8 +29,12 @@ class Views::Assessments::Comments::Thread < Views::Base
   # @param tenant_admin [Boolean] tenant admins can delete (but not edit) others' comments
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
+  # @param lens_params [Hash] the lens the page is read through (`as_role` /
+  #   `as_level`), so the card that comes back matches the page around it
+  # @param focus [String, nil] set only in the response to the viewer's own
+  #   write: the id of the comment to focus, or FOCUS_SELF
   def initialize(comments:, assessment_id:, viewer_person_id:, can_create:,
-                 capability_stable_id:, level_ordinal:, tenant_admin: false)
+                 capability_stable_id:, level_ordinal:, tenant_admin: false, lens_params: {}, focus: nil)
     @comments = comments
     @assessment_id = assessment_id
     @viewer_person_id = viewer_person_id
@@ -28,13 +42,20 @@ class Views::Assessments::Comments::Thread < Views::Base
     @tenant_admin = tenant_admin
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
+    @lens_params = lens_params
+    @focus = focus
   end
 
   def view_template
     div(
       id: dom_id,
-      class: "mt-4 pt-3 border-t border-default",
-      data: { controller: "comments-thread" }
+      class: [ "mt-4 pt-3 border-t border-default",
+               (Views::Assessments::LevelChip::FOCUS_RING unless @can_create) ].compact.join(" "),
+      data: {
+        controller: "comments-thread",
+        comments_thread_focus_value: focus_value,
+        action: "turbo:submit-start->comments-thread#releaseFocus"
+      }
     ) do
       header
       if @comments.any?
@@ -53,7 +74,13 @@ class Views::Assessments::Comments::Thread < Views::Base
   end
 
   def dom_id
-    "comments-thread-#{@capability_stable_id}-#{@level_ordinal}"
+    self.class.dom_id_for(@capability_stable_id, @level_ordinal)
+  end
+
+  def focus_value
+    return if @focus.nil?
+
+    @focus == FOCUS_SELF ? FOCUS_SELF : "comment-#{@focus}"
   end
 
   # Header pairs the section label with a `+` affordance that toggles
@@ -76,7 +103,7 @@ class Views::Assessments::Comments::Thread < Views::Base
       class: "#{header_label_classes} w-full min-h-6 text-left cursor-pointer rounded px-1 -mx-1 py-1 " \
              "hover:bg-default-hover hover:text-default transition-colors",
       aria: { label: "Add a comment" },
-      data: { action: "click->comments-thread#toggleComposer" }
+      data: { comments_thread_target: "addButton", action: "click->comments-thread#toggleComposer" }
     ) do
       header_label_content
       span(class: "ml-auto block text-sm leading-none", aria_hidden: "true") { "+" }
@@ -154,7 +181,8 @@ class Views::Assessments::Comments::Thread < Views::Base
       # a comment can reply to any comment on the cell.
       can_reply: @can_create,
       indent: indent,
-      reply_to: reply_to
+      reply_to: reply_to,
+      lens_params: @lens_params
     )
   end
 
@@ -174,7 +202,7 @@ class Views::Assessments::Comments::Thread < Views::Base
   # composer so the next interaction returns to the compact state.
   def composer
     form(
-      action: assessment_comments_path(@assessment_id),
+      action: assessment_comments_path(@assessment_id, @lens_params),
       method: "post",
       class: "hidden mt-2",
       data: {

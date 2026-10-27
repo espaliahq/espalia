@@ -6,7 +6,8 @@
 # Shows source dot (self/manager/peer), type label, optional title,
 # content, optional external-link chip, author + relative timestamp, and —
 # when the item is attached to more than one cell — an "also linked to N
-# other places" indicator. A hover-revealed action menu lets the author or
+# other places" indicator. A hover-revealed action menu at the end of the
+# author line lets the author or
 # anyone in the assessee's manager chain link the item to another
 # capability, remove it from THIS cell (greyed out when it's the item's
 # only link), or withdraw it everywhere.
@@ -61,7 +62,7 @@ class Views::Assessments::Evidence::Card < Views::Base
   def view_template
     li(
       id: "evidence-#{@item.id}",
-      class: "group relative flex gap-2 py-1.5 text-xs text-muted"
+      class: "group flex gap-2 py-1.5 text-xs text-muted"
     ) do
       source_dot
       div(class: "min-w-0 flex-1") do
@@ -72,7 +73,6 @@ class Views::Assessments::Evidence::Card < Views::Base
         footer_line
         discussion_disclosure
       end
-      actions_menu if @can_withdraw || @can_manage_links || @can_update
     end
   end
 
@@ -231,17 +231,31 @@ class Views::Assessments::Evidence::Card < Views::Base
   end
 
   def footer_line
-    div(class: "mt-1 text-[10px] text-muted") do
-      span { @item.author&.name || "Unknown" }
-      plain " · "
-      span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
-      if @item.edited_at.present?
-        plain " · "
-        span(title: "Last edited #{@item.edited_at.utc.iso8601}") do
-          "edited #{time_ago_in_words(@item.edited_at)} ago"
-        end
-      end
+    div(class: "mt-1 flex items-center gap-1 text-[10px] text-muted") do
+      span(class: "min-w-0") { footer_text }
+      actions_menu if @can_withdraw || @can_manage_links || @can_update
     end
+  end
+
+  def footer_text
+    span { author_name }
+    plain " · "
+    span { @item.recorded_at ? "#{time_ago_in_words(@item.recorded_at)} ago" : "—" }
+    return if @item.edited_at.blank?
+
+    plain " · "
+    span(title: "Last edited #{@item.edited_at.utc.iso8601}") do
+      "edited #{time_ago_in_words(@item.edited_at)} ago"
+    end
+  end
+
+  def author_name
+    @item.author&.name || "Unknown"
+  end
+
+  # Tells one author's items apart in a screen reader's list of buttons.
+  def item_name
+    @item.title.present? ? "“#{@item.title}”" : type_label.downcase
   end
 
   def type_label
@@ -281,23 +295,30 @@ class Views::Assessments::Evidence::Card < Views::Base
 
   # Hover-revealed kebab menu that hosts Edit, link management
   # (Link to another capability / Unlink from this capability), and Withdraw.
+  # It sits on the author line, not the card's corner, where it lined up under
+  # the list header's actions and was mistaken for them.
   #
   # The wrapper stays opacity-100 while the menu is open (`aria-expanded` on
   # the trigger) so it doesn't fade out when the cursor leaves the card.
+  # Compact: a 44px hit area here would cover the Discuss toggle just below,
+  # so a touch screen gets a 44px visual instead.
+  # Fixed: the controller clamps the menu to the viewport, which a trigger
+  # partway along a phone-width line would otherwise push off the right edge.
   def actions_menu
     div(
-      class: "absolute top-1 right-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 " \
+      class: "shrink-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 " \
              "focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 transition-opacity"
     ) do
-      render Components::Kit::Dropdown.new do |dropdown|
-        dropdown.trigger(label: "Feedback / evidence actions", button: { variant: :ghost, size: :xs, icon: true }) do
+      render Components::Kit::Dropdown.new(align: :left, strategy: :fixed) do |dropdown|
+        dropdown.trigger(label: "Actions for #{item_name} from #{author_name}",
+                         button: { variant: :ghost, size: :xs, icon: true, compact: true,
+                                   class: "pointer-coarse:size-11" }) do
           icon("kebab", class: "size-4")
         end
-        dropdown.menu(width: "w-44") do
+        dropdown.menu(width: "w-52") do
           edit_menu_item(dropdown) if @can_update
-          # The author's Edit already manages links (the unified modal). Offer a
-          # link-only entry only to non-author link-holders (content disabled there).
-          link_menu_item(dropdown) if @can_manage_links && !@can_update
+          # Edit can link too, but the menu names linking for everyone who may.
+          link_menu_item(dropdown) if @can_manage_links
           remove_link_menu_item if @can_manage_links
           withdraw_menu_item if @can_withdraw
         end
@@ -309,9 +330,9 @@ class Views::Assessments::Evidence::Card < Views::Base
     modal_menu_button(dropdown, "Edit")
   end
 
-  # Opens the unified modal in edit mode for a non-author who may manage links
-  # but not edit content — the server disables the content fields, leaving the
-  # "Applies to" block active.
+  # Opens the unified modal in edit mode, as Edit does. For a non-author who
+  # may manage links but not edit content, the server disables the content
+  # fields, leaving the "Applies to" block active.
   def link_menu_item(dropdown)
     modal_menu_button(dropdown, "Link to another capability")
   end

@@ -262,7 +262,224 @@ class Assessments::CommentsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  TURBO_STREAM_ACCEPT = { "Accept" => "text/vnd.turbo-stream.html, text/html, application/xhtml+xml" }.freeze
+
+  context "Turbo Stream responses" do
+    setup do
+      sign_in @assessee_user
+      @cell = { capability_stable_id: @cap.stable_id, level_ordinal: 2 }
+    end
+
+    should "replace just the thread and the chip when a comment is posted, and name the cell" do
+      post_stream assessment_comments_path(@assignment), comment: @cell.merge(body: "Working on it.")
+
+      assert_thread_stream
+      assert_includes response.body, "Working on it."
+      assert_includes response.body, %(target="assessment-live-status")
+      assert_includes response.body, "Comment posted — Critical Thinking, E2"
+      assert_not_includes response.body, "capability-card-", "the card itself stays, with whatever is open in it"
+      assert_includes stream_html("cell-#{@cap.stable_id}-2"), %(data-glyph="comment")
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "Working on it.", PersonDevelopmentComment.last.body }
+    end
+
+    should "render the thread and the chip at the level the comment was posted on" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_level, role_id: @role.role_id, ordinal: 3, title: "Senior", code: "E3")
+        create(:framework_behavioural_expectation,
+          capability_id: @cap.capability_id, level_ordinal: 3, description: "Shapes the team's thinking")
+      end
+
+      post_stream assessment_comments_path(@assignment), comment: @cell.merge(level_ordinal: 3, body: "Stretch")
+
+      assert_thread_stream(level_ordinal: 3)
+      assert_includes response.body, "Comment posted — Critical Thinking, E3"
+      assert_includes stream_html("cell-#{@cap.stable_id}-3"), %(aria-pressed="true"), "the chip stays selected"
+    end
+
+    should "replace the thread when a reply is posted" do
+      top = post_comment_as_html("Top")
+      post_stream assessment_comments_path(@assignment), comment: @cell.merge(body: "A reply", parent_id: top.id)
+
+      assert_thread_stream
+      assert_includes response.body, "A reply"
+      ActsAsTenant.with_tenant(@tenant) { assert_equal top.id, PersonDevelopmentComment.last.parent_id }
+    end
+
+    should "replace the thread when a comment is edited" do
+      comment = post_comment_as_html("Original")
+      patch assessment_comment_path(@assignment, comment), params: { comment: { body: "Revised" } },
+        headers: TURBO_STREAM_ACCEPT
+
+      assert_thread_stream
+      assert_includes response.body, "Revised"
+      assert_includes response.body, "Comment updated — Critical Thinking, E2"
+    end
+
+    should "replace the thread and clear the chip's glyph when the last comment is deleted" do
+      comment = post_comment_as_html("Short-lived")
+      delete assessment_comment_path(@assignment, comment), headers: TURBO_STREAM_ACCEPT
+
+      assert_thread_stream
+      assert_not_includes response.body, "Short-lived"
+      assert_not_includes stream_html("cell-#{@cap.stable_id}-2"), %(data-glyph="comment")
+      assert_includes response.body, "Comment deleted — Critical Thinking, E2"
+    end
+
+    should "carry the page's lens through to the thread and the redirect" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_level, role_id: @role.role_id, ordinal: 3, title: "Senior", code: "E3")
+        create(:framework_behavioural_expectation,
+          capability_id: @cap.capability_id, level_ordinal: 3, description: "Shapes the team's thinking")
+      end
+
+      post_stream assessment_comments_path(@assignment, as_level: 3), comment: @cell.merge(body: "Through a lens")
+      assert_thread_stream
+      assert_includes response.body, %(action="/assessments/#{@assignment.id}/comments?as_level=3")
+
+      post assessment_comments_path(@assignment, as_level: 3), params: { comment: @cell.merge(body: "Without Turbo") }
+      assert_match "as_level=3", response.location
+    end
+
+    should "save the comment through a stale lens and fall back to the home view" do
+      post_stream assessment_comments_path(@assignment, as_role: SecureRandom.uuid_v7, as_level: 2),
+        comment: @cell.merge(body: "Not lost")
+
+      assert_no_stream
+      assert_response :see_other
+      assert_match "capability=#{@cap.stable_id}", response.location
+      assert_no_match "as_role", response.location
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "Not lost", PersonDevelopmentComment.last.body }
+    end
+
+    should "save an edit and a delete through a stale lens" do
+      comment = post_comment_as_html("Original")
+      stale = { as_role: SecureRandom.uuid_v7, as_level: 2 }
+
+      patch assessment_comment_path(@assignment, comment, stale), params: { comment: { body: "Revised" } },
+        headers: TURBO_STREAM_ACCEPT
+      assert_no_stream
+      assert_no_match "as_role", response.location
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "Revised", comment.reload.body }
+
+      delete assessment_comment_path(@assignment, comment, stale), headers: TURBO_STREAM_ACCEPT
+      assert_no_stream
+      ActsAsTenant.with_tenant(@tenant) { assert_not_nil comment.reload.deleted_at }
+    end
+
+    should "redirect a request that accepts anything" do
+      post assessment_comments_path(@assignment), params: { comment: @cell.merge(body: "Any format") },
+        headers: { "Accept" => "*/*" }
+
+      assert_response :see_other
+      assert_match "capability=#{@cap.stable_id}", response.location
+    end
+
+    should "tell the new thread to focus the viewer's own comment, or itself after a delete" do
+      post_stream assessment_comments_path(@assignment), comment: @cell.merge(body: "Mine")
+      comment = ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.last }
+      assert_includes thread_html, %(data-comments-thread-focus-value="comment-#{comment.id}")
+
+      patch assessment_comment_path(@assignment, comment), params: { comment: { body: "Mine, revised" } },
+        headers: TURBO_STREAM_ACCEPT
+      assert_includes thread_html, %(data-comments-thread-focus-value="comment-#{comment.id}")
+
+      delete assessment_comment_path(@assignment, comment), headers: TURBO_STREAM_ACCEPT
+      assert_includes thread_html, %(data-comments-thread-focus-value="thread")
+    end
+
+    should "keep the redirect for a request that isn't Turbo's" do
+      post assessment_comments_path(@assignment), params: { comment: @cell.merge(body: "Plain form") }
+
+      assert_response :see_other
+      assert_match "capability=#{@cap.stable_id}", response.location
+      assert_equal "Comment posted.", flash[:notice]
+    end
+
+    should "still deny another viewer's edit, with no stream" do
+      comment = post_comment_as_html("Mine")
+      sign_out_and_in @manager_user
+      patch assessment_comment_path(@assignment, comment), params: { comment: { body: "Hijack" } },
+        headers: TURBO_STREAM_ACCEPT
+
+      assert_no_stream
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "Mine", comment.reload.body }
+    end
+
+    context "for an author who can no longer see the assessment" do
+      setup do
+        @other_manager = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, name: "New Mgr") }
+      end
+
+      should "send a former manager's edit and delete no stream" do
+        sign_out_and_in @manager_user
+        comment = post_comment_as_html("Before the reorg")
+        ActsAsTenant.with_tenant(@tenant) { @assessee.update!(manager: @other_manager) }
+
+        patch assessment_comment_path(@assignment, comment), params: { comment: { body: "After" } },
+          headers: TURBO_STREAM_ACCEPT
+        assert_no_stream
+
+        delete assessment_comment_path(@assignment, comment), headers: TURBO_STREAM_ACCEPT
+        assert_no_stream
+      end
+
+      should "send a revoked delegate's edit and delete no stream" do
+        delegation = ActsAsTenant.with_tenant(@tenant) do
+          create(:manager_assessment_delegation, tenant: @tenant, person_id: @assessee.id,
+            framework_id: @framework.framework_id, delegate_person_id: @peer.id, granted_by_id: @manager.id)
+        end
+        sign_out_and_in @peer_user
+        comment = post_comment_as_html("While delegated")
+        ActsAsTenant.with_tenant(@tenant) { delegation.update!(status: "revoked") }
+
+        patch assessment_comment_path(@assignment, comment), params: { comment: { body: "After" } },
+          headers: TURBO_STREAM_ACCEPT
+        assert_no_stream
+
+        delete assessment_comment_path(@assignment, comment), headers: TURBO_STREAM_ACCEPT
+        assert_no_stream
+      end
+    end
+  end
+
   private
+
+  def post_stream(path, comment:)
+    post path, params: { comment: comment }, headers: TURBO_STREAM_ACCEPT
+  end
+
+  def post_comment_as_html(body)
+    post assessment_comments_path(@assignment), params: { comment: @cell.merge(body: body) }
+    ActsAsTenant.with_tenant(@tenant) { PersonDevelopmentComment.last }
+  end
+
+  def assert_thread_stream(level_ordinal: 2)
+    assert_response :success
+    assert_equal "text/vnd.turbo-stream.html", response.media_type
+    assert_includes response.body,
+      %(action="replace" target="comments-thread-#{@cap.stable_id}-#{level_ordinal}")
+    assert_includes response.body, %(action="replace" target="cell-#{@cap.stable_id}-#{level_ordinal}")
+  end
+
+  def assert_no_stream
+    assert_response :redirect
+    assert_not_includes response.body, "<turbo-stream"
+    assert_not_includes response.body, "comments-thread-"
+  end
+
+  # The markup one replace stream carries.
+  def stream_html(target)
+    Nokogiri::HTML5.fragment(response.body).at_css(%(turbo-stream[target="#{target}"] template)).inner_html
+  end
+
+  def thread_html
+    stream_html("comments-thread-#{@cap.stable_id}-2")
+  end
+
+  def sign_out_and_in(user)
+    delete destroy_user_session_path
+    sign_in user
+  end
 
   def sign_in(user)
     post user_session_path, params: { user: { email: user.email, password: "password123" } }

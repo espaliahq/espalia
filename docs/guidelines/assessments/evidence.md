@@ -140,6 +140,13 @@ Rules — all deliberate:
   row sorts first, gets a primary ring + tooltip ("You opened this feedback
   from here"), and its Examples render pre-expanded. Hub-opened edits carry
   no entry cell — rows keep `linked_at` order.
+- **A cell has no kebab of its own; only its items do.** The list header
+  shows Add and Request as visible buttons. Each card's kebab sits at the
+  end of its author line and is named for it ("Actions for feedback from
+  Sam"). Both were once identically labelled kebabs on the same right edge:
+  a manager opened the card's while looking for Request and concluded it had
+  gone. The card menu offers "Link to another capability" to every
+  link-holder, author included, though the author's Edit links too.
 - **:new / :respond seed the block** with a fixed (non-removable) origin row
   carrying the REQUIRED valence — it anchors `record_evidence` / the
   request's cell, so `evidence[primary_cell]` still submits in these modes.
@@ -545,9 +552,9 @@ A manager (or the assessee, or an active rating delegate, or a tenant admin —
 capability × level**. The whole flow is cell-scoped: it originates from a cell and
 the response lands pre-linked to it.
 
-- **Entry point** — a per-cell **"Request evidence"** button on the capability-card
-  expansion ([capability_card_expansion.rb](../../../app/views/assessments/capability_card_expansion.rb),
-  `#request_evidence_section`), next to "Add evidence". Gated on
+- **Entry point** — a per-cell **"Request"** button in the feedback / evidence
+  header ([Views::Assessments::Evidence::List](../../../app/views/assessments/evidence/list.rb),
+  `#request_button`), next to "Add". Gated on
   `can_request_evidence`, threaded from `AssessmentsController#viewer_can_request_evidence?`
   through the card view chain exactly like `can_create_evidence`.
 - **The modal** ([Views::Evidence::RequestForm](../../../app/views/evidence/request_form.rb),

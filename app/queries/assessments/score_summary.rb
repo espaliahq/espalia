@@ -23,8 +23,6 @@ class Assessments::ScoreSummary
   # definition, so an agent's "4 of 9 rated" matches the screen's.
   include Views::Assessments::Concerns::RatedCount
 
-  COVERAGE_UNLOCK_THRESHOLD = Views::Assessments::HeroSummary::COVERAGE_UNLOCK_THRESHOLD
-
   # @param assignment [PersonFrameworkAssignment]
   # @param context [Symbol] :self, :manager or :alignment — the viewer's
   #   perspective, resolved by the caller exactly as the web resolves it
@@ -47,7 +45,7 @@ class Assessments::ScoreSummary
       lens: @lens.payload,
       scale: scale,
       scored: scored,
-      unscored_reason: scored ? nil : "coverage_below_threshold",
+      unscored_reason: scored ? nil : coverage_reason(matrix_data),
       score: scored ? percent(scoring[:components][:score]) : nil,
       state: scored ? scoring[:performance_state].to_s : nil,
       components: scored ? components_payload(scoring[:components]) : nil,
@@ -116,15 +114,29 @@ class Assessments::ScoreSummary
   end
 
   # The hero's rule: below half the assessed-level cells rated there is no
-  # score, with alignment exempt (individual ratings are frozen by then and
-  # coverage is high by construction) and a role with no cells never stuck.
+  # score, and while an alignment is still agreeing cells none until every
+  # one is agreed. Any other alignment read always scores, and a role with
+  # no cells is never stuck.
   def overall_scored?
-    return true if @context == :alignment
+    return true if @context == :alignment && !awaiting_agreement?(matrix_data)
 
     counts = overall_counts
     return true if counts[:total].zero?
 
-    counts[:rated] >= (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+    counts[:rated] >= unlock_target(counts[:total], matrix_data)
+  end
+
+  # @param data [Hash] the builder's output, or one of its categories
+  def awaiting_agreement?(data)
+    data[:awaiting_agreement] || false
+  end
+
+  def unlock_target(total, data)
+    Views::Assessments::HeroSummary.unlock_target_for(total, awaiting_agreement: awaiting_agreement?(data))
+  end
+
+  def coverage_reason(data)
+    awaiting_agreement?(data) ? "agreement_incomplete" : "coverage_below_threshold"
   end
 
   def overall_counts
@@ -141,7 +153,7 @@ class Assessments::ScoreSummary
       # Rated cells whose value was carried from the last cycle and still
       # waits to be confirmed — "rated" but not yet this cycle's work (#480).
       to_confirm_at_assessed_level: matrix_data.dig(:current_level_work, :to_confirm).to_i,
-      unlocks_at: (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+      unlocks_at: unlock_target(counts[:total], matrix_data)
     }
   end
 
@@ -265,7 +277,7 @@ class Assessments::ScoreSummary
       # capability (it drops the rest), so it always has components.
       components = scoring.fetch(:category_scores).fetch(category.category_id)
       counts = category_rated_count(cat_data, @context)
-      reason = category_unscored_reason(components, counts)
+      reason = category_unscored_reason(components, counts, cat_data)
       {
         id: category.category_id,
         name: category.name,
@@ -276,18 +288,18 @@ class Assessments::ScoreSummary
         components: reason ? nil : components_payload(components),
         rated_at_assessed_level: counts[:rated],
         total_at_assessed_level: counts[:total],
-        unlocks_at: (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+        unlocks_at: unlock_target(counts[:total], cat_data)
       }
     end
   end
 
   # The category header's own gate, in fields.
-  def category_unscored_reason(components, counts)
+  def category_unscored_reason(components, counts, cat_data)
     return "no_expectation_at_assessed_level" unless components[:scorable]
     return nil if counts[:total].zero?
-    return nil if counts[:rated] >= (counts[:total] * COVERAGE_UNLOCK_THRESHOLD).ceil
+    return nil if counts[:rated] >= unlock_target(counts[:total], cat_data)
 
-    "coverage_below_threshold"
+    coverage_reason(cat_data)
   end
 
   def capability_names

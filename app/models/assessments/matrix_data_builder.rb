@@ -203,6 +203,7 @@ class Assessments::MatrixDataBuilder
       disclosure: @disclosure,
       individual_ratings_frozen: lens_alignment_started?,
       alignment_locked: lens_alignment_completed?,
+      awaiting_agreement: awaiting_agreement?,
       current_level_complete: current_level_complete?(categories),
       current_level_work: current_level_work(categories)
     }
@@ -256,6 +257,7 @@ class Assessments::MatrixDataBuilder
         category: category,
         deficit_threshold: category.deficit_threshold,
         person_level: @level.ordinal,
+        awaiting_agreement: awaiting_agreement?,
         capabilities: capabilities
       }
     end
@@ -634,6 +636,18 @@ class Assessments::MatrixDataBuilder
     return @participant_status == "aligned" if home_lifecycle?
 
     lens_alignment&.aligned? || false
+  end
+
+  # An alignment under way, read at the level it is about. Only then does
+  # the agreed score wait for every cell: it counts an unagreed one as 0.
+  # A completed record, or another level read through the lens, has nothing
+  # left to agree, so those keep scoring as they did.
+  def awaiting_agreement?
+    return @awaiting_agreement if defined?(@awaiting_agreement)
+
+    @awaiting_agreement =
+      @context == :alignment && lens_alignment_started? && !lens_alignment_completed? &&
+      @level.ordinal == (home_lifecycle? ? @home_level_ordinal : lens_alignment&.level_ordinal)
   end
 
   def home_lifecycle?
