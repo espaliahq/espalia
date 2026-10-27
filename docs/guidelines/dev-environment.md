@@ -66,10 +66,11 @@ RuboCop reads `AllCops/Exclude` from the outermost `.rubocop.yml` it finds, and
 loading that file executes its `require:` list, so the main checkout's
 `lib/rubocop/cop/**` loads after the worktree's and redefines each cop. The tell
 is a run of `already initialized constant RuboCop::Cop::…` warnings naming both
-paths. Harmless while the two copies match; when you change a custom cop, `bin/rubocop`
-in the nested worktree runs main's version of it, so test the cop with its unit
-test under `test/lib/rubocop/` or from a worktree outside the checkout
-(`git worktree add /tmp/wt-<name>`).
+paths. Harmless while the two copies match. When you change a custom cop,
+`bin/rubocop` in the nested worktree runs main's version of it; when main has a
+cop your branch lacks, it can report offenses your branch's config never asked
+for. Test a changed cop with its unit test under `test/lib/rubocop/`, or lint from
+a worktree outside the checkout (`git worktree add /tmp/wt-<name>`).
 
 ## The macOS host
 
