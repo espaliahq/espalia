@@ -61,16 +61,15 @@ that had the password right. `pg_isready` reporting `no response` while the
 server is fine is the tell; it clears on its own once the sockets expire.
 
 **In a worktree nested inside the main checkout (Claude Code's
-`.claude/worktrees/<name>`), RuboCop also runs the main checkout's custom cops.**
-RuboCop reads `AllCops/Exclude` from the outermost `.rubocop.yml` it finds, and
-loading that file executes its `require:` list, so the main checkout's
-`lib/rubocop/cop/**` loads after the worktree's and redefines each cop. The tell
-is a run of `already initialized constant RuboCop::Cop::…` warnings naming both
-paths. Harmless while the two copies match. When you change a custom cop,
-`bin/rubocop` in the nested worktree runs main's version of it; when main has a
-cop your branch lacks, it can report offenses your branch's config never asked
-for. Test a changed cop with its unit test under `test/lib/rubocop/`, or lint from
-a worktree outside the checkout (`git worktree add /tmp/wt-<name>`).
+`.claude/worktrees/<name>`), a bare `rubocop` also runs the main checkout's
+custom cops.** Without `--config`, RuboCop reads `AllCops/Exclude` from the
+outermost `.rubocop.yml` it finds, and loading that file executes its `require:`
+list, so the main checkout's `lib/rubocop/cop/**` loads after the worktree's and
+redefines each cop. The tell is a run of `already initialized constant
+RuboCop::Cop::…` warnings naming both paths. It hits `bundle exec rubocop` and
+editor integrations; `bin/rubocop`, and so precommit, passes `--config` and is
+immune. When you change a custom cop in a nested worktree, lint with
+`bin/rubocop` or add `--ignore-parent-exclusion`.
 
 ## The macOS host
 
