@@ -80,15 +80,10 @@ class AssessmentsActivityFeedFocusSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  # Opens the activity pane once its lazy frame and the matrix frame have
-  # loaded. The pane's inline fallback already renders the feed, and the lazy
-  # fetch starts only once the opened pane is visible, so wait_for_turbo_idle
-  # can pass before it begins. When either load lands later, the feed
-  # reconnects (resetting its filter) or takes a fresh matrix focus.
+  # A matrix frame landing later would re-dispatch focus to the feed (testing.md → lazy frames).
   def open_activity_pane
     wait_for_stimulus "activity-pane"
     toggle_activity_pane
-    assert_selector "turbo-frame#assessment-activity[complete]", visible: :all
     assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     wait_for_stimulus "activity-feed"
   end

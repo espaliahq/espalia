@@ -897,13 +897,18 @@ module StimulusHelpers
   # Stimulus controller's #toggle method. JS pointer clicks on the
   # toggle button have been observed dropped on parallel CI runners
   # when Chrome's event loop is starved, so we bypass the event chain
-  # entirely and call the controller method.
+  # entirely and call the controller method. Opening it waits for the pane's
+  # lazy frame (testing.md → Waiting for Lazy-Loaded Turbo Frames).
   def toggle_activity_pane
-    page.execute_script(<<~JS)
-      const wrapper = document.querySelector("[data-controller~='activity-pane']");
-      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane");
-      ctrl.toggle();
+    opening = page.evaluate_script(<<~JS)
+      (() => {
+        const wasOpen = document.getElementById("assessment-activity-pane")?.dataset.paneState === "open";
+        const wrapper = document.querySelector("[data-controller~='activity-pane']");
+        window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane").toggle();
+        return !wasOpen;
+      })()
     JS
+    assert_selector "turbo-frame#assessment-activity[complete]", visible: :all if opening
   end
 
   # Picks a frequency on the inline pill (open popover → click option).
