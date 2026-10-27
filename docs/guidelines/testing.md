@@ -405,7 +405,8 @@ system test that copies clicks for real (`click_with_retry`), never through a JS
 helper, and the `clipboard` controller shows "Copied!" only once a copy succeeds, falling back
 to `execCommand` when `writeText` hangs.
 
-**A test of the copy's feedback calls `stub_clipboard_write` after the visit.** The fallback
+**A test of the copy's feedback calls `stub_clipboard_write` after the visit; a test of the
+copy itself calls `remove_clipboard_api`, so the fallback runs inside the click.** The fallback
 runs a second after the click and needs the click's user activation, which Chrome drops after
 about five seconds. A runner busy enough to stall the page that long after the click loses the
 copy and the feedback with it: a 6s stall reproduces it every time. Only CI takes this path.

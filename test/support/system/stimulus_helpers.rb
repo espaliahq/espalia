@@ -805,6 +805,13 @@ module StimulusHelpers
     JS
   end
 
+  # Removes +navigator.clipboard+, so the clipboard controller copies with its
+  # +execCommand+ fallback inside the click, while the activation still holds:
+  # the real copy path, without the wait that load can stretch past it.
+  def remove_clipboard_api
+    page.execute_script(%q(Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })))
+  end
+
   # Stubs +window.confirm+ to always return true, then runs the block.
   # Use for clicks that submit forms with +data-turbo-confirm+ when the
   # action under test is the form submission, not the dialog itself.
