@@ -62,13 +62,17 @@ module StimulusHelpers
   # Locates a button the way +click_button_with_js_fallback+'s recovery does,
   # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
   # can never make them resolve different buttons.
+  # Resolves the button as Capybara would: visible only, an exact label over a
+  # partial one, and none when several match. Taking the first partial match
+  # once clicked the role tree's "+ Add role" for the binding editor's "Add role".
   BUTTON_FINDER_JS = <<~JS
     const text = arguments[0];
-    const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
-    const btn = buttons.find(b => {
-      const label = (b.textContent || b.value || "").trim();
-      return label === text || label.includes(text);
-    });
+    const label = b => (b.textContent || b.value || "").trim();
+    const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"))
+      .filter(b => b.checkVisibility());
+    const exact = buttons.filter(b => label(b) === text);
+    const matches = exact.length ? exact : buttons.filter(b => label(b).includes(text));
+    const btn = matches.length === 1 ? matches[0] : null;
   JS
 
   # Waits until the named Stimulus controller has connected.
@@ -396,20 +400,21 @@ module StimulusHelpers
     clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
-        const links = Array.from(document.querySelectorAll("a"));
-        const link = links.find(a =>
+        const links = Array.from(document.querySelectorAll("a")).filter(a => a.checkVisibility());
+        const exact = links.filter(a =>
           a.id === text ||
           (a.getAttribute("title") || "") === text ||
-          a.textContent.trim() === text ||
-          a.textContent.includes(text)
+          a.textContent.trim() === text
         );
+        const matches = exact.length ? exact : links.filter(a => a.textContent.includes(text));
+        const link = matches.length === 1 ? matches[0] : null;
         if (!link) return false;
         link.click();
         return true;
       })()
     JS
 
-    misses = single_stage_misses(clicked, "found no <a> matching #{locator.inspect}")
+    misses = single_stage_misses(clicked, "found no <a> matching #{locator.inspect}, or more than one visible")
 
     assert_after_recovery(misses, expect_text: expect_text, expect_selector: expect_selector)
   end
@@ -1137,7 +1142,7 @@ module StimulusHelpers
                       "#{locator.inspect}, and the requestSubmit stage found one outside any <form>") ]
     else
       [ recovery_note("neither stage found a button matching #{locator.inspect} — the locator " \
-                      "has likely drifted") ]
+                      "has likely drifted, or matches more than one visible button") ]
     end
   end
 
