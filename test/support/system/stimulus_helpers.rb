@@ -62,13 +62,18 @@ module StimulusHelpers
   # Locates a button the way +click_button_with_js_fallback+'s recovery does,
   # leaving it in `btn`. Shared by both recovery stages so a one-sided edit
   # can never make them resolve different buttons.
+  # Resolves the button as Capybara would: visible only (a zero opacity or
+  # visibility: hidden counts as hidden), an exact label over a partial one,
+  # and none when several match. Taking the first partial match once clicked
+  # the role tree's "+ Add role" for the binding editor's "Add role".
   BUTTON_FINDER_JS = <<~JS
     const text = arguments[0];
-    const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"));
-    const btn = buttons.find(b => {
-      const label = (b.textContent || b.value || "").trim();
-      return label === text || label.includes(text);
-    });
+    const label = b => (b.textContent || b.value || "").trim();
+    const buttons = Array.from(document.querySelectorAll("button, input[type='submit']"))
+      .filter(b => b.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
+    const exact = buttons.filter(b => label(b) === text);
+    const matches = exact.length ? exact : buttons.filter(b => label(b).includes(text));
+    const btn = matches.length === 1 ? matches[0] : null;
   JS
 
   # Waits until the named Stimulus controller has connected.
@@ -396,20 +401,21 @@ module StimulusHelpers
     clicked = evaluate_recovery_script(<<~JS, locator)
       (() => {
         const text = arguments[0];
-        const links = Array.from(document.querySelectorAll("a"));
-        const link = links.find(a =>
+        const links = Array.from(document.querySelectorAll("a[href]")).filter(a => a.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
+        const exact = links.filter(a =>
           a.id === text ||
           (a.getAttribute("title") || "") === text ||
-          a.textContent.trim() === text ||
-          a.textContent.includes(text)
+          a.textContent.trim() === text
         );
+        const matches = exact.length ? exact : links.filter(a => a.textContent.includes(text));
+        const link = matches.length === 1 ? matches[0] : null;
         if (!link) return false;
         link.click();
         return true;
       })()
     JS
 
-    misses = single_stage_misses(clicked, "found no <a> matching #{locator.inspect}")
+    misses = single_stage_misses(clicked, "found no <a> matching #{locator.inspect}, or more than one visible")
 
     assert_after_recovery(misses, expect_text: expect_text, expect_selector: expect_selector)
   end
@@ -546,6 +552,19 @@ module StimulusHelpers
       el.dispatchEvent(new Event("change", { bubbles: true }));
     JS
     el
+  end
+
+  # Ticks or clears a checkbox with a JS click, which a busy runner can't drop
+  # the way it drops a pointer click. Capybara's +check+ / +uncheck+ never
+  # confirm the box changed, so a lost click saves the old value silently.
+  #
+  # @param locator [String] the field's id, name or label
+  # @param checked [Boolean] the state to leave it in
+  def js_set_checkbox(locator, checked:)
+    box = find_field(locator, visible: :all)
+    page.execute_script("arguments[0].click()", box) unless box.checked? == checked
+    landed = checked ? has_checked_field?(locator, visible: :all) : has_unchecked_field?(locator, visible: :all)
+    assert landed, "#{locator} should be #{checked ? 'ticked' : 'clear'}"
   end
 
   # Resolves a field locator (label / name / id) or CSS selector to an element.
@@ -780,6 +799,26 @@ module StimulusHelpers
     JS
   end
 
+  # Gives the page a clipboard whose writes succeed at once, for a test of the
+  # copy *feedback*. CI's headless Chromium never settles +writeText+, and the
+  # clipboard controller's +execCommand+ fallback needs the click's user
+  # activation, which lapses when the renderer stalls for a few seconds after
+  # the click. Call it after the visit: a navigation resets it.
+  def stub_clipboard_write
+    page.execute_script(<<~JS)
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true, value: { writeText: () => Promise.resolve() }
+      });
+    JS
+  end
+
+  # Removes +navigator.clipboard+, so the clipboard controller copies with its
+  # +execCommand+ fallback inside the click, while the activation still holds:
+  # the real copy path, without the wait that load can stretch past it.
+  def remove_clipboard_api
+    page.execute_script(%q(Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })))
+  end
+
   # Stubs +window.confirm+ to always return true, then runs the block.
   # Use for clicks that submit forms with +data-turbo-confirm+ when the
   # action under test is the form submission, not the dialog itself.
@@ -865,13 +904,18 @@ module StimulusHelpers
   # Stimulus controller's #toggle method. JS pointer clicks on the
   # toggle button have been observed dropped on parallel CI runners
   # when Chrome's event loop is starved, so we bypass the event chain
-  # entirely and call the controller method.
+  # entirely and call the controller method. Opening it waits for the pane's
+  # lazy frame (testing.md → Waiting for Lazy-Loaded Turbo Frames).
   def toggle_activity_pane
-    page.execute_script(<<~JS)
-      const wrapper = document.querySelector("[data-controller~='activity-pane']");
-      const ctrl = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane");
-      ctrl.toggle();
+    opening = page.evaluate_script(<<~JS)
+      (() => {
+        const wasOpen = document.getElementById("assessment-activity-pane")?.dataset.paneState === "open";
+        const wrapper = document.querySelector("[data-controller~='activity-pane']");
+        window.Stimulus.getControllerForElementAndIdentifier(wrapper, "activity-pane").toggle();
+        return !wasOpen;
+      })()
     JS
+    assert_selector "turbo-frame#assessment-activity[complete]", visible: :all if opening
   end
 
   # Picks a frequency on the inline pill (open popover → click option).
@@ -1099,7 +1143,7 @@ module StimulusHelpers
                       "#{locator.inspect}, and the requestSubmit stage found one outside any <form>") ]
     else
       [ recovery_note("neither stage found a button matching #{locator.inspect} — the locator " \
-                      "has likely drifted") ]
+                      "has likely drifted, or matches more than one visible button") ]
     end
   end
 

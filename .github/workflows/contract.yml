@@ -27,7 +27,7 @@ concurrency:
 jobs:
   contract-change:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     steps:
       - name: Checkout code
@@ -47,7 +47,7 @@ jobs:
 
   nightly:
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     services:
       postgres:

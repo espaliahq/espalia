@@ -30,4 +30,39 @@ class SlackDraftSystemTest < ApplicationSystemTestCase
                                     expect_text: "Feedback recorded — not yet placed on a capability.")
     assert_not_nil @draft.reload.consumed_at
   end
+
+  # Each controller registers when its own module loads, in no set order, so the
+  # hub must not click its trigger before the modal's controllers exist.
+  should "open the prefilled form even when the modal controller registers late" do
+    delay_controller_registration("modal", ms: 2000) do
+      visit @draft.path
+      assert_current_path new_user_session_path
+      fill_in "Email", with: "newcomer@example.com"
+      fill_in "Password", with: "password123"
+      click_button_with_js_fallback("Log in", expect_text: "For Alex Chen")
+    end
+  end
+
+  # The script runs on every document the browser session loads, and the session
+  # outlives the test, so it is removed afterwards.
+  def delay_controller_registration(identifier, ms:)
+    script = <<~JS
+      let app;
+      Object.defineProperty(window, "Stimulus", {
+        configurable: true,
+        get() { return app },
+        set(value) {
+          app = value;
+          const register = value.register.bind(value);
+          value.register = (name, constructor) => name === #{identifier.to_json}
+            ? setTimeout(() => register(name, constructor), #{ms.to_i})
+            : register(name, constructor);
+        }
+      });
+    JS
+    cdp_id = page.driver.browser.execute_cdp("Page.addScriptToEvaluateOnNewDocument", source: script)["identifier"]
+    yield
+  ensure
+    page.driver.browser.execute_cdp("Page.removeScriptToEvaluateOnNewDocument", identifier: cdp_id) if cdp_id
+  end
 end

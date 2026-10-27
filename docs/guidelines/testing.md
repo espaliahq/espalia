@@ -284,7 +284,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 ## Default Capybara Wait Time
 
-**Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. GitHub-hosted ubuntu-latest runners (no Selenium grid, 2 cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
+**Capybara's `default_max_wait_time` is 10s in this project**, set in `ApplicationSystemTestCase`. CI runners (no Selenium grid, Puma, Chrome and the test process on a few cores) starve Chrome's JS event loop enough that Turbo Drive round-trips can exceed even 5s under load. 10s is the floor — don't lower it or pass shorter waits to assertions unless you have a specific reason.
 
 ## Flake-Prone Click Guards (automated)
 
@@ -392,6 +392,8 @@ end
 
 These do one Capybara click, and if the destination text/selector doesn't appear within 8s, re-find the target and dispatch a synchronous `el.click()` from an `evaluate_script` that reports whether it found anything — bypassing Selenium pointer hit-testing entirely, so the second attempt is guaranteed to fire.
 
+**The re-find resolves the target as Capybara does:** visible elements only, an exact label before a partial one, and no click when several match. It used to take the first partial match in the page, so a dropped click on the binding editor's "Add role" became a click on the role tree's "+ Add role". To check every locator still resolves after changing a finder, skip the first click in both helpers temporarily and run `bin/rails test:system`: only `ClickRecoveryNoteSystemTest`, which needs the real click, should fail.
+
 **If a failure carries a `note: JS recovery —` line, read it first.** That is the shared cue for every recovery in the helpers, and the phrase after it names the cause the evidence actually supports: a drifted locator, an element rendered late, a frame re-render, a detached node, or a document replaced mid-navigation. The helpers never fail *because* of a miss (a slow first click can land after the recovery runs, so the assertion keeps its full wait); the note appears only alongside a genuine failure it is likely to explain.
 
 **Pass exactly one signal** — exactly one of `expect_text:` or `expect_selector:` (plus `expect_no_text:`, accepted only by `click_button_with_js_fallback`), never two. Each helper (`click_with_retry` included) checks a single signal by precedence, so a second one would be silently ignored: never armed, never asserted. Passing zero or more than one raises `ArgumentError` at authoring time. When a click needs a second assertion, write it yourself after the helper returns.
@@ -404,6 +406,14 @@ permission granted, in Playwright's Chromium, Chrome for Testing and under Xvfb 
 system test that copies clicks for real (`click_with_retry`), never through a JS-dispatch
 helper, and the `clipboard` controller shows "Copied!" only once a copy succeeds, falling back
 to `execCommand` when `writeText` hangs.
+
+**A test of the copy's feedback calls `stub_clipboard_write` after the visit; a test of the
+copy itself calls `remove_clipboard_api`, so the fallback runs inside the click.** The fallback
+runs a second after the click and needs the click's user activation, which Chrome drops after
+about five seconds. A runner busy enough to stall the page that long after the click loses the
+copy and the feedback with it: a 6s stall reproduces it every time. Only CI takes this path.
+The devcontainer serves the app from `http://rails-app`, which is not a secure context, so
+`navigator.clipboard` is undefined there and the fallback runs at once.
 
 ## Confirm Dialogs: Auto-Confirm Over Accept-Confirm (NON-NEGOTIABLE)
 
@@ -470,6 +480,8 @@ js_fill_in "Participants (raters)", with: "Raj"
 ```
 
 It accepts a Capybara element, a CSS selector, or a field locator. Use it wherever the exact value is assertion-critical — typeahead queries, names asserted verbatim after save, anything a controller reads. Fields that are only submitted and never asserted (a reject reason, say) can stay on `fill_in`, which also keeps real typing exercised somewhere in the suite.
+
+**Checkboxes lose clicks the same way: use `js_set_checkbox(locator, checked:)`.** Capybara's `check` / `uncheck` never confirm the box changed, so a dropped click saves the old value and the failure shows up after the save. The notification settings test saved Slack still on. The helper clicks through JS and asserts the new state.
 
 ## An Assertion a Dropped Click Would Also Satisfy Is Not a Test
 
@@ -562,6 +574,8 @@ end
 **When to use:** Any time the test interacts with content inside a `turbo_frame_tag(name, src: ..., data: ...) do ... end` block on a page where the frame's eager-loaded `src` will replace the inline fallback.
 
 **When NOT needed:** Frames without `src:` (eager-rendered only) or frames whose inner content is already verified by an earlier `assert_text` on something only the loaded version would render.
+
+**`wait_for_turbo_idle` is not a substitute.** It waits for `turbo-frame[busy]`, and a frame is busy only once its fetch has started. A `loading: "lazy"` frame revealed by a toggle (the assessment activity pane) starts its fetch when it scrolls into view, which a busy runner can delay past the idle check. The load then lands after the test has acted, and the controllers inside reconnect with fresh state: the feed's filter resets, a cleared focus comes back. Wait for `[complete]` instead. To reproduce a late start, hold the request in a `turbo:before-fetch-request` listener (`event.preventDefault()`, then `event.detail.resume()` on a timer); the frame stays neither busy nor complete for as long as you hold it. Slowing the server doesn't reproduce it: the frame goes busy at once, and the idle check waits.
 
 ## Measuring a Scroll: Wait for It to Stop
 

@@ -10,6 +10,8 @@
 
 import BaseController from "controllers/base_controller"
 
+const CONNECT_TIMEOUT_MS = 10000
+
 export default class extends BaseController {
   static targets = ["autoTrigger"]
   static values = { autoOpen: Boolean }
@@ -27,8 +29,26 @@ export default class extends BaseController {
     url.searchParams.delete("draft")
     window.history.replaceState(window.history.state, "", url)
 
-    // Next frame, so the modal and evidence-modal controllers on the wrapper
-    // have connected and the click reaches both actions.
-    requestAnimationFrame(() => this.autoTriggerTarget.click())
+    this.#clickOnceModalConnected(performance.now() + CONNECT_TIMEOUT_MS)
+  }
+
+  disconnect() {
+    cancelAnimationFrame(this.pendingFrame)
+    super.disconnect()
+  }
+
+  // Each controller registers when its own module loads, in no set order. A
+  // click before the wrapper's modal and evidence-modal controllers connect
+  // reaches neither action, and the modal never opens.
+  #clickOnceModalConnected(deadline) {
+    const connected = ["modal", "evidence-modal"].every(identifier =>
+      this.application.getControllerForElementAndIdentifier(this.element, identifier))
+    if (connected) {
+      this.autoTriggerTarget.click()
+    } else if (performance.now() > deadline) {
+      console.error("evidence-hub: the modal controllers never connected, so the form was not opened")
+    } else {
+      this.pendingFrame = requestAnimationFrame(() => this.#clickOnceModalConnected(deadline))
+    }
   }
 }

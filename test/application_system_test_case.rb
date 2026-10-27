@@ -14,9 +14,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
-  # Default to a single worker — 2-core CI runners can't sustain multiple Chrome
-  # processes (starved JS event loops miss Capybara's wait window). Devcontainer
-  # compose sets SYSTEM_TEST_WORKERS=2 to fan out across Selenium Grid nodes.
+  # Default to a single worker — each worker runs its own Chrome, and one short
+  # of cores starves its JS event loop past Capybara's wait window. CI sizes its
+  # count to its runner (.github/AGENTS.md); devcontainer compose sets 4 to fan
+  # out across Selenium Grid nodes.
   parallelize(workers: ENV.fetch("SYSTEM_TEST_WORKERS", "1").to_i)
 
   # Each worker forks its own process and needs its own Puma port. Worker 0 uses
@@ -66,11 +67,11 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   Capybara.default_driver = :selenium_headless_chrome
   Capybara.javascript_driver = :selenium_headless_chrome
 
-  # CI runners (especially GitHub-hosted ubuntu-latest with no Selenium grid)
-  # are slow under load — Chrome's JS event loop can be starved long enough
-  # that Turbo Drive round-trips exceed even a 5s wait. Bumping the default
-  # to 10s gives Turbo + Stimulus time to settle without making fast-local
-  # tests slower (Capybara only waits as long as needed).
+  # CI runners (no Selenium grid) are slow under load — Chrome's JS event
+  # loop can be starved long enough that Turbo Drive round-trips exceed even
+  # a 5s wait. Bumping the default to 10s gives Turbo + Stimulus time to
+  # settle without making fast-local tests slower (Capybara only waits as
+  # long as needed).
   Capybara.default_max_wait_time = 10
 
   # Maximum number of times to retry browser session creation when the

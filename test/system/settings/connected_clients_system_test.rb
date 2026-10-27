@@ -40,6 +40,7 @@ class Settings::ConnectedClientsSystemTest < ApplicationSystemTestCase
       visit settings_connected_clients_path
       assert_text "Connect an assistant"
       wait_for_stimulus "clipboard"
+      remove_clipboard_api
 
       # A real click: copying needs the user activation a JS-dispatched click lacks.
       click_with_retry(expect_text: "Copied!") { first(:button, "Copy", exact_text: true).click }

@@ -74,6 +74,8 @@ class AssessmentsModalFocusSystemTest < ApplicationSystemTestCase
     )
     assert_selector "#evidence-modal-overlay", visible: true
     assert_selector "#evm-content", visible: true
+    # The first-field focus fires with `complete`, two repaints after the form shows.
+    assert_selector "turbo-frame#evidence-modal[complete]", visible: :all
   end
 
   def active_in_overlay?

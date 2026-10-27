@@ -115,11 +115,11 @@ class Frameworks::SuggestionThreadSystemTest < ApplicationSystemTestCase
   # form swaps two glyphs instead.
   should "flash the copied glyph without destroying the link icon" do
     open_suggestion_card
+    stub_clipboard_write
 
     assert_selector "[data-clipboard-target='idle']", visible: true
     assert_no_selector "[data-clipboard-target='copied']", visible: true
 
-    # A real click: copying needs the user activation a JS-dispatched click lacks.
     click_with_retry(expect_selector: "[data-clipboard-target='copied']") do
       click_button "Copy a link to this discussion"
     end
