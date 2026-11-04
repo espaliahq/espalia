@@ -13,15 +13,24 @@ class MoveHrisWebhookSecretToCredentials < ActiveRecord::Migration[8.1]
 
     rows = select_all("SELECT id, hris_config->>'webhook_secret' AS secret FROM tenants WHERE hris_config ? 'webhook_secret'")
     rows.each do |row|
-      next if row["secret"].blank?
+      if row["secret"].present?
+        begin
+          tenant = Tenant.find(row["id"])
+          credentials = (tenant.hris_credentials.is_a?(Hash) ? tenant.hris_credentials : {}).dup
+          credentials["webhook_secret"] ||= row["secret"]
+          tenant.update_columns(hris_credentials: credentials)
+        rescue ActiveRecord::Encryption::Errors::Base => e
+          # An undecryptable credentials row must not abort the deploy; the
+          # secret stays where it was for a human to move.
+          say "Skipping tenant #{row['id']}: #{e.class}", true
+          next
+        end
+      end
 
-      tenant = Tenant.find(row["id"])
-      credentials = (tenant.hris_credentials.is_a?(Hash) ? tenant.hris_credentials : {}).dup
-      credentials["webhook_secret"] ||= row["secret"]
-      tenant.update_columns(hris_credentials: credentials)
+      execute(<<~SQL)
+        UPDATE tenants SET hris_config = hris_config - 'webhook_secret' WHERE id = '#{row['id']}'
+      SQL
     end
-
-    execute("UPDATE tenants SET hris_config = hris_config - 'webhook_secret' WHERE hris_config ? 'webhook_secret'")
   end
 
   def down
