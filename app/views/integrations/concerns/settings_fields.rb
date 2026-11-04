@@ -77,9 +77,8 @@ module Views::Integrations::Concerns::SettingsFields
   def danger_action(modal_id:, title:, description:, button_label:, confirm_label:, action_path:, &explanation)
     div(class: "mt-6 pt-6 border-t border-default flex flex-wrap items-center gap-4") do
       render Components::Kit::Modal.new(id: modal_id, title: title) do |modal|
-        button(type: "button",
-               class: Components::Kit::Button.classes(variant: :outline, tone: :danger, touch: true),
-               data: { action: "modal#open" }) { button_label }
+        render Components::Kit::Button.new(variant: :outline, tone: :danger, touch: true,
+                                           data: { action: "modal#open" }) { button_label }
         modal.body do
           div(class: "space-y-4 text-sm text-default") do
             explanation&.call

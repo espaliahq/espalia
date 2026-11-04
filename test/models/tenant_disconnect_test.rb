@@ -18,6 +18,17 @@ class TenantDisconnectTest < ActiveSupport::TestCase
       assert_not tenant.hris_config.configured?(tenant)
     end
 
+    should "sever even when the stored config no longer validates" do
+      tenant = create(:tenant, :with_hibob_config)
+      tenant.update_columns(hris_config: HrisConfig.new(provider: "bamboohr", sync_enabled: true))
+
+      tenant.disconnect_hris!
+
+      tenant.reload
+      assert_nil tenant.hris_credentials
+      assert_not tenant.hris_config.sync_enabled?
+    end
+
     should "keep sync state a job wrote since this tenant was loaded" do
       tenant = create(:tenant, :with_hibob_config)
       stale = Tenant.find(tenant.id)
@@ -43,10 +54,29 @@ class TenantDisconnectTest < ActiveSupport::TestCase
       assert_nil tenant.ai_credentials
       assert_not tenant.ai_secrets.api_key?
       assert_not tenant.ai_config.suggestions_enabled?
-      assert_equal tenant.ai_config.provider, tenant.ai_config.provider # settings survive
+      assert_equal "anthropic", tenant.ai_config.provider, "the settings survive"
       assert_raises(ActiveRecord::RecordInvalid, "suggestions cannot come back without a key") do
         tenant.update_ai_model!(settings: { suggestions_enabled: true })
       end
+    end
+
+    should "clear the legacy settings switch too" do
+      tenant = create(:tenant, :with_ai_model, settings: { "evidence_suggestions_enabled" => true })
+
+      tenant.remove_ai_api_key!
+
+      assert_not tenant.reload.evidence_suggestions_enabled?
+    end
+
+    should "work on an instance left dirty by a refused save" do
+      tenant = create(:tenant, :with_ai_model)
+      assert_raises(ActiveRecord::RecordInvalid) do
+        tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: "https://other.example.com/v1", model: "a/b" })
+      end
+
+      tenant.remove_ai_api_key!
+
+      assert_not tenant.reload.ai_secrets.api_key?
     end
   end
 
