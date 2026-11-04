@@ -133,4 +133,26 @@ class AiModelSystemTest < ApplicationSystemTestCase
     assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
            "the page scrolls sideways; wider than the viewport: #{overflowing.inspect}"
   end
+  context "removing the key" do
+    setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
+
+    should "remove the key through the danger dialog and switch suggestions off" do
+      @tenant.update_ai_model!(
+        settings: { provider: "openai_compatible", base_url: "https://ai-gateway.vercel.sh/v1",
+                    model: "anthropic/claude-opus-5-5", suggestions_enabled: true },
+        api_key: KEY
+      )
+      sign_in_as(@admin_user)
+      visit tenant_integration_path("ai-model")
+      assert_text "A stored key is never shown"
+
+      click_button_with_js_fallback "Remove key\u2026", expect_text: "save a new key to switch suggestions back on"
+      screenshot("remove_key_modal")
+      click_button_with_js_fallback "Remove API key", expect_text: "API key removed."
+
+      assert_selector "label[for='ai_model_api_key']", text: /Not set/
+      assert_no_button "Remove key\u2026"
+      assert_text "Not configured" # no key, so suggestions are off and the model is unusable
+    end
+  end
 end

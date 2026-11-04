@@ -114,21 +114,21 @@ Rails.application.routes.draw do
 
     # AI model: save settings and key, and test the connection. The page itself
     # is integrations#show with id "ai-model".
-    resource :ai_model, only: [ :update ],
+    resource :ai_model, only: [ :update, :destroy ],
       path: "integrations/ai-model", controller: "ai_models" do
       post :test_connection
     end
 
     # Feedback exchange: save settings and secrets, and test the connection. The
     # page itself is integrations#show with id "feedback-exchange".
-    resource :feedback_exchange, only: [ :update ],
+    resource :feedback_exchange, only: [ :update, :destroy ],
       path: "integrations/feedback-exchange", controller: "feedback_exchanges" do
       post :test_connection
     end
 
     # HRIS connection: save provider, sync settings and credentials. The page
     # itself is integrations#show with id "hris".
-    resource :hris_connection, only: [ :update ],
+    resource :hris_connection, only: [ :update, :destroy ],
       path: "integrations/hris/connection", controller: "hris_connections"
 
     # Map / unmap one HRIS job title to a framework role (#436). The title

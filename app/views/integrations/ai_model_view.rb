@@ -163,7 +163,22 @@ class Views::Integrations::AiModelView < Views::Base
               render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save settings" }
             end
           end
+          remove_key_action if @key_field_stored
         end
+      end
+    end
+  end
+
+  def remove_key_action
+    danger_action(
+      modal_id: "ai-key-remove-modal", title: "Remove the API key",
+      button_label: "Remove key…", confirm_label: "Remove API key",
+      action_path: tenant_ai_model_path,
+      description: "Removes the stored key and switches suggestions off."
+    ) do
+      p do
+        plain "The stored key is removed and suggestions switch off with it. " \
+              "The provider, address and model stay; save a new key to switch suggestions back on."
       end
     end
   end

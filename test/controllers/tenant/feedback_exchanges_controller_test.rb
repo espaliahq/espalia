@@ -419,8 +419,42 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "DELETE /integrations/feedback-exchange as a tenant admin" do
+    setup { sign_in @admin_user }
+
+    should "disconnect: secrets and key ids gone, exchange off, peer kept" do
+      @tenant.update_feedback_exchange!(
+        settings: { provider: "exchange", peer_name: "chip", base_url: "https://chip.example.com/api/feedback-exchange", enabled: true },
+        outbound_secret: "out-secret-0123456789abcdef0123456789abcd",
+        inbound_secret: "in-secret-0123456789abcdef0123456789abcd"
+      )
+
+      delete tenant_feedback_exchange_path
+
+      assert_redirected_to tenant_integration_path("feedback-exchange")
+      @tenant.reload
+      assert_nil @tenant.feedback_exchange_credentials
+      assert_nil @tenant.inbound_key_id
+      assert_not @tenant.feedback_exchange_config.enabled?
+      assert_equal "chip", @tenant.feedback_exchange_config.peer_name
+    end
+  end
+
   context "as a non-admin member" do
     setup { sign_in @member_user }
+
+    should "be refused the disconnect, and change nothing" do
+      @tenant.update_feedback_exchange!(
+        settings: { provider: "exchange", peer_name: "chip", base_url: "https://chip.example.com/api/feedback-exchange" },
+        outbound_secret: "out-secret-0123456789abcdef0123456789abcd",
+        inbound_secret: "in-secret-0123456789abcdef0123456789abcd"
+      )
+
+      delete tenant_feedback_exchange_path
+
+      assert_redirected_to root_path
+      assert @tenant.reload.feedback_exchange_secrets.complete?
+    end
 
     should "be redirected from the page" do
       get tenant_integration_path("feedback-exchange")

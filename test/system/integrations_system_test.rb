@@ -111,6 +111,21 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       assert_no_text "hook-system-test-secret"
     end
 
+    should "disconnect the HRIS through the danger dialog" do
+      sign_in @admin_user
+      visit tenant_integration_path("hris")
+      assert_text "Connection settings"
+
+      click_button_with_js_fallback "Disconnect\u2026", expect_text: "a reconnect only needs new credentials"
+      screenshot("hris_disconnect_modal")
+      click_button_with_js_fallback "Disconnect HRIS", expect_text: "HRIS disconnected."
+
+      assert_selector "label[for='hris_connection_api_token']", text: /Not set/
+      assert_no_button "Disconnect\u2026"
+      assert_text "Software Engineer" # the mappings survive
+      screenshot("hris_disconnected")
+    end
+
     should "show the message when the connection does not validate" do
       sign_in @admin_user
       visit tenant_integration_path("hris")

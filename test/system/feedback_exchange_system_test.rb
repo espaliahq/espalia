@@ -165,4 +165,26 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
     assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"),
            "the page scrolls sideways; wider than the viewport: #{overflowing.inspect}"
   end
+  context "disconnecting" do
+    setup { page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE) }
+
+    should "disconnect the exchange through the danger dialog" do
+      @tenant.update_feedback_exchange!(
+        settings: { provider: "exchange", peer_name: "chip",
+                    base_url: "https://chip.example.com/api/feedback-exchange", enabled: true },
+        outbound_secret: "out-secret-0123456789abcdef0123456789abcd",
+        inbound_secret: "in-secret-0123456789abcdef0123456789abcd"
+      )
+      sign_in_as(@admin_user)
+      visit tenant_integration_path("feedback-exchange")
+      assert_text "Stored secrets are never shown"
+
+      click_button_with_js_fallback "Disconnect\u2026", expect_text: "only its admin can discard them"
+      screenshot("fx_disconnect_modal")
+      click_button_with_js_fallback "Disconnect exchange", expect_text: "Feedback exchange disconnected."
+
+      assert_selector "label[for='feedback_exchange_outbound_secret']", text: /Not set/
+      assert_no_button "Disconnect\u2026"
+    end
+  end
 end

@@ -71,6 +71,32 @@ module Views::Integrations::Concerns::SettingsFields
     end
   end
 
+  # A destructive integration action: a danger-toned trigger and the real
+  # dialog that confirms it (never a native confirm — testing.md). The block
+  # is the dialog's explanation of exactly what is removed and what is kept.
+  def danger_action(modal_id:, title:, description:, button_label:, confirm_label:, action_path:, &explanation)
+    div(class: "mt-6 pt-6 border-t border-default flex flex-wrap items-center gap-4") do
+      render Components::Kit::Modal.new(id: modal_id, title: title) do |modal|
+        render Components::Kit::Button.new(variant: :outline, tone: :danger, touch: true,
+                                           data: { action: "modal#open" }) { button_label }
+        modal.body do
+          div(class: "space-y-4 text-sm text-default") do
+            explanation&.call
+            div(class: "flex justify-end gap-3") do
+              render Components::Kit::Button.new(variant: :outline, data: { action: "modal#close" }) { "Cancel" }
+              form(action: action_path, method: "post", class: "contents") do
+                input(type: "hidden", name: "_method", value: "delete")
+                input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+                render Components::Kit::Button.new(variant: :solid, tone: :danger, type: :submit) { confirm_label }
+              end
+            end
+          end
+        end
+      end
+      p(class: "text-xs text-muted max-w-prose") { description }
+    end
+  end
+
   def switch_field(name, label_text, checked, hint:)
     div do
       input(type: "hidden", name: field_name(name), value: "0")

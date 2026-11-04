@@ -19,6 +19,15 @@ class Tenant::HrisConnectionsController < ApplicationController
     render_hris_page(errors: setting_errors(e.record), status: :unprocessable_content)
   end
 
+  # DELETE /tenant/integrations/hris/connection
+  def destroy
+    authorize :integrations, :disconnect_hris?
+
+    current_tenant.disconnect_hris!
+    redirect_to tenant_integration_path("hris"), status: :see_other,
+                notice: "HRIS disconnected. The credentials are gone and the sync is off; the mappings are kept."
+  end
+
   private
 
   # The field-level messages ("Provider is not included in the list") live on

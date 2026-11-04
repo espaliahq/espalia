@@ -24,6 +24,15 @@ class Tenant::FeedbackExchangesController < ApplicationController
     render_feedback_exchange_page(errors: setting_errors(e.record), status: :unprocessable_content)
   end
 
+  # DELETE /tenant/integrations/feedback-exchange
+  def destroy
+    authorize :integrations, :disconnect_feedback_exchange?
+
+    current_tenant.disconnect_feedback_exchange!
+    redirect_to tenant_integration_path("feedback-exchange"), status: :see_other,
+                notice: "Feedback exchange disconnected. Our secrets are gone; ask the peer to discard its copies."
+  end
+
   # POST /tenant/integrations/feedback-exchange/test_connection
   def test_connection
     authorize :integrations, :test_feedback_exchange?

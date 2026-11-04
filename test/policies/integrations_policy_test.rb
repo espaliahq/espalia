@@ -28,16 +28,19 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
       assert_not policy.update_hris_connection?
+      assert_not policy.disconnect_hris?
     end
 
     should "deny the AI model" do
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
+      assert_not policy.remove_ai_key?
     end
 
     should "deny the feedback exchange" do
       assert_not policy.update_feedback_exchange?
       assert_not policy.test_feedback_exchange?
+      assert_not policy.disconnect_feedback_exchange?
     end
   end
 
@@ -62,16 +65,19 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.sync?
       assert policy.update_role_mappings?
       assert policy.update_hris_connection?
+      assert policy.disconnect_hris?
     end
 
     should "allow the AI model" do
       assert policy.update_ai_model?
       assert policy.test_ai_model?
+      assert policy.remove_ai_key?
     end
 
     should "allow the feedback exchange" do
       assert policy.update_feedback_exchange?
       assert policy.test_feedback_exchange?
+      assert policy.disconnect_feedback_exchange?
     end
   end
 
@@ -93,11 +99,13 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.sync?
       assert policy.update_role_mappings?
       assert policy.update_hris_connection?
+      assert policy.disconnect_hris?
     end
 
     should "allow the feedback exchange" do
       assert policy.update_feedback_exchange?
       assert policy.test_feedback_exchange?
+      assert policy.disconnect_feedback_exchange?
     end
   end
 
@@ -113,6 +121,9 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
       assert_not policy.update_hris_connection?
+      assert_not policy.disconnect_hris?
+      assert_not policy.remove_ai_key?
+      assert_not policy.disconnect_feedback_exchange?
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
       assert_not policy.update_feedback_exchange?

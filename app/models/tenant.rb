@@ -252,6 +252,67 @@ class Tenant < ApplicationRecord
     end
   end
 
+  # Sever the HRIS connection: credentials gone, sync off. The config —
+  # provider, role mappings, level column — is months of accumulated work and
+  # is kept intact for a reconnect.
+  #
+  # Severing must not be blockable by a config that no longer validates (the
+  # case where disconnecting matters most), so this writes columns directly.
+  #
+  # @return [Boolean]
+  def disconnect_hris!
+    restore_attributes(%w[hris_config hris_credentials])
+    with_lock do
+      update_columns(
+        hris_config: HrisConfig.new(hris_config.attributes.merge("sync_enabled" => false)),
+        hris_credentials: nil,
+        updated_at: Time.current
+      )
+    end
+    true
+  end
+
+  # Remove the AI model's API key and switch suggestions off with it — the
+  # legacy settings switch included — a model with no key can suggest
+  # nothing, and {#update_ai_model!} refuses to switch suggestions back on
+  # until a new key is saved. Writes columns directly, as {#disconnect_hris!}.
+  #
+  # @return [Boolean]
+  def remove_ai_api_key!
+    restore_attributes(%w[ai_config ai_credentials settings])
+    with_lock do
+      update_columns(
+        ai_config: AiModelConfig.new(ai_config.attributes.merge("suggestions_enabled" => false)),
+        ai_credentials: nil,
+        settings: settings.to_h.except("evidence_suggestions_enabled", "evidence_suggestions_model"),
+        updated_at: Time.current
+      )
+    end
+    true
+  end
+
+  # Sever the feedback exchange: both signing secrets and their derived key
+  # ids gone, exchange disabled. Peer, address, kinds and cursors are kept
+  # for a reconnect — and the peer still holds its copies of the shared
+  # secrets, which only it can discard. Writes columns directly, as
+  # {#disconnect_hris!}; the key ids are cleared explicitly because the
+  # before_validation sync does not run here.
+  #
+  # @return [Boolean]
+  def disconnect_feedback_exchange!
+    restore_attributes(%w[feedback_exchange_config feedback_exchange_credentials inbound_key_id previous_inbound_key_id])
+    with_lock do
+      update_columns(
+        feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge("enabled" => false)),
+        feedback_exchange_credentials: nil,
+        inbound_key_id: nil,
+        previous_inbound_key_id: nil,
+        updated_at: Time.current
+      )
+    end
+    true
+  end
+
   # @return [Boolean] whether this tenant has a usable Slack connection
   def slack_connected?
     slack_bot_token.present?
