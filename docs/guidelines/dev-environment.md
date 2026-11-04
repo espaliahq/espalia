@@ -73,6 +73,12 @@ immune. When you change a custom cop in a nested worktree, lint with
 
 ## A checkout without `config/master.key`
 
+**The seeded dev admin is `admin@example.com` / `password123`** — created by
+`SeedAdmin` with no credentials file involved. `SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD` override it in any environment (that pair is also how a
+production first deploy bootstraps its admin; `bin/rails admin:create
+EMAIL=… PASSWORD=…` does it after the fact).
+
 Development derives its ActiveRecord encryption keys from the local
 `secret_key_base` (`tmp/local_secret.txt`) when the credentials file can't be
 decrypted (`config/environments/development.rb`). Two consequences:
@@ -87,6 +93,17 @@ decrypted (`config/environments/development.rb`). Two consequences:
   Otherwise `bin/rails db:reset` re-seeds, losing whatever was created after
   the last seed. A checkout **with** `master.key` is immune: its keys come
   from the credentials file.
+
+## Stopping `bin/dev` or a test run from a script
+
+`pkill -f "bin/dev"` (or any `pkill -f` whose pattern appears in your own
+command line) matches the shell that runs it and kills itself — exit 144,
+work half done. Kill by PID instead: `pgrep -x overmind`, check the state,
+`kill <pid>`. A `Z`/`<defunct>` result is already dead and unkillable;
+ignore it. After killing a test run, clear stale `growth_os_test` backends
+before the next one (see the killed-test-run note in testing lore): a
+leftover `idle in transaction` backend makes the next run hang before it
+prints anything.
 
 ## The macOS host
 

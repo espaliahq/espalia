@@ -121,15 +121,14 @@ app with `bin/rails server -p 6600`. What `bin/cloud-setup` installs, and why, i
 
 ## Signing in
 
-Credentials live in Rails credentials — never hardcode them. Fetch the seeded
-global admin:
-
-```bash
-bin/rails runner 'a = Rails.application.credentials.dig(:admin, :user_1); puts a.email; puts a.password'
-```
-
-Then fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
-global admin in the `me&u` tenant, so it can reach every surface.
+The seeded dev admin is **`admin@example.com` / `password123`** (created by
+`SeedAdmin`, no credentials file involved; see
+[dev-environment.md](dev-environment.md#a-checkout-without-configmasterkey)).
+Fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
+global admin in the `me&u` tenant, so it can reach every surface. Two caveats:
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` make the seed create that account
+instead, and re-seeding never resets an existing user's password — a dev
+database whose admin predates this login keeps its old password.
 
 ## Standard viewports
 
@@ -314,7 +313,7 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
   [the glossary](../02-glossary.md) for the product's names.
 - **App URL / login / seeded-data control**: *Reaching the app*
   (`http://rails-app:6600` in the devcontainer, `http://localhost:6600` in a
-  Claude Code cloud session), *Signing in* (the Rails-credentials admin) and the
+  Claude Code cloud session), *Signing in* (the seeded dev admin) and the
   seeded-tenant caveat under *Gotchas learned*, above.
 - **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
   — use it, not the skill's bundled dormant `ux-driver`.

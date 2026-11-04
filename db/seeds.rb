@@ -15,52 +15,39 @@ $stdout.sync = true
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
 
-[ Rails.application.credentials.admin.user_1 ].each do |admin_user_credentials|
-  admin_user = User.where(email: admin_user_credentials.email).first
-  if admin_user.nil?
-    puts "Creating admin user: #{admin_user_credentials.email}"
-    admin_user = User.new(
-      email: admin_user_credentials.email,
-      # name: admin_user_credentials.name,
-      global_admin: true,
-      password: admin_user_credentials.password,
-      password_confirmation: admin_user_credentials.password
-    )
-    admin_user.save!
-  else
-    puts "Admin user #{admin_user_credentials.email} already exists"
+# See SeedAdmin for the contract: dev default, SEED_ADMIN_* override,
+# no-op once an admin exists, and a clear error on a first production
+# deploy that sets neither.
+admin_user = SeedAdmin.bootstrap!
+[
+  { slug: "meandu", name: "me&u", theme: "custom", font_family: "Zalando Sans Regular",
+    custom_theme: { "brand" => { "light" => "#00362F", "dark" => "#5ee0a0" },
+                    "nav-surface" => { "light" => "#DBFC45", "dark" => "#0a1f1a" } } },
+  { slug: "testco", name: "Testco", theme: "custom", font_family: "Poppins",
+    custom_theme: { "brand" => { "light" => "#6366f1", "dark" => "#818cf8" },
+                    "nav-surface" => { "light" => "#1e1b4b", "dark" => "#0f0d2e" } } }
+].each do |tenant_attrs|
+  theme_attrs = tenant_attrs.slice(:theme, :custom_theme, :font_family)
+
+  tenant = Tenant.find_or_create_by!(slug: tenant_attrs[:slug]) do |t|
+    t.name = tenant_attrs[:name]
+    t.assign_attributes(theme_attrs)
+    puts "Creating tenant: #{tenant_attrs[:name]}"
   end
 
-  [
-    { slug: "meandu", name: "me&u", theme: "custom", font_family: "Zalando Sans Regular",
-      custom_theme: { "brand" => { "light" => "#00362F", "dark" => "#5ee0a0" },
-                      "nav-surface" => { "light" => "#DBFC45", "dark" => "#0a1f1a" } } },
-    { slug: "testco", name: "Testco", theme: "custom", font_family: "Poppins",
-      custom_theme: { "brand" => { "light" => "#6366f1", "dark" => "#818cf8" },
-                      "nav-surface" => { "light" => "#1e1b4b", "dark" => "#0f0d2e" } } }
-  ].each do |tenant_attrs|
-    theme_attrs = tenant_attrs.slice(:theme, :custom_theme, :font_family)
+  # Update theme on existing tenants
+  tenant.assign_attributes(theme_attrs)
+  if tenant.changed?
+    tenant.save!
+    puts "Updated theme for #{tenant_attrs[:name]}"
+  end
 
-    tenant = Tenant.find_or_create_by!(slug: tenant_attrs[:slug]) do |t|
-      t.name = tenant_attrs[:name]
-      t.assign_attributes(theme_attrs)
-      puts "Creating tenant: #{tenant_attrs[:name]}"
-    end
-
-    # Update theme on existing tenants
-    tenant.assign_attributes(theme_attrs)
-    if tenant.changed?
-      tenant.save!
-      puts "Updated theme for #{tenant_attrs[:name]}"
-    end
-
-    ActsAsTenant.with_tenant(tenant) do
-      unless TenantUser.exists?(user: admin_user)
-        TenantUser.create!(tenant: tenant, user: admin_user, role: :admin)
-        puts "Assigned #{admin_user.email} to tenant #{tenant_attrs[:name]} as admin"
-      else
-        puts "#{admin_user.email} already assigned to tenant #{tenant_attrs[:name]}"
-      end
+  ActsAsTenant.with_tenant(tenant) do
+    unless TenantUser.exists?(user: admin_user)
+      TenantUser.create!(tenant: tenant, user: admin_user, role: :admin)
+      puts "Assigned #{admin_user.email} to tenant #{tenant_attrs[:name]} as admin"
+    else
+      puts "#{admin_user.email} already assigned to tenant #{tenant_attrs[:name]}"
     end
   end
 end
@@ -79,8 +66,6 @@ if meandu_tenant
       # than leaving the guard's `.none?` predicate false forever.
       ActiveRecord::Base.transaction do
       handler = Frameworks::CommandHandler.new
-      admin_user = User.find_by(global_admin: true)
-      raise "No global admin user found — cannot seed suggestions" unless admin_user
 
       # framework_suggested_edits.author_id is a foreign key to people(id).
       # TenantUser#ensure_person! is the shared invariant helper — it links

@@ -26,10 +26,10 @@ reviews your screenshots. Your job is accurate driving and faithful capture.
 
 # Signing in
 
-Credentials are in Rails credentials — never hardcode, never invent:
+The seeded dev admin is `admin@example.com` / `password123` (dev-only, from SeedAdmin; a SEED_ADMIN_* override creates that account instead, and re-seeding never resets an existing password). If it is missing, re-seed rather than inventing credentials:
 
 ```bash
-bin/rails runner 'a = Rails.application.credentials.dig(:admin, :user_1); puts a.email; puts a.password'
+bin/rails db:seed
 ```
 
 Then fill the Devise form (`Email`, `Password` fields) with `fill_form` and
