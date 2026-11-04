@@ -13,7 +13,8 @@ class Views::Evidence::ConversationThread < Views::Base
   # @param new_keys [Set<String>] read keys that were unread when the thread opened
   # @param explicit [Boolean] whether the URL named this thread (false when
   #   the page opened the newest one itself)
-  # @param place [String, nil] "org" while "Needs you" shows the whole org
+  # @param place [String, nil] "mine" or "org" while the switch shows My
+  #   feedback or the whole org
   def initialize(partner:, viewer_id:, group:, details:, new_keys:, explicit:, place: nil)
     @partner = partner
     @viewer_id = viewer_id

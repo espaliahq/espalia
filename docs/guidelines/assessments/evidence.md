@@ -224,18 +224,20 @@ shared by web, MCP and Slack:
 - **"Needs you"** at the top of the Feedback / Evidence page lists feedback to
   place: items about the viewer and, for the manager side, about their
   reports, each with "Place" — the edit modal with an empty block, content
-  disabled for a non-author. The reports' list has two views
-  ([#620](https://github.com/mr-yum/growth-os/issues/620)): **My team**, the
+  disabled for a non-author. A manager's switch has three views
+  ([#620](https://github.com/mr-yum/growth-os/issues/620),
+  [#652](https://github.com/mr-yum/growth-os/issues/652)): **My feedback**,
+  below; **My team**, the
   default — direct reports plus active rating delegations, exactly
   `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
   everyone deeper in the subtree (`#skip_level`). The view is in the URL
   (`?place=org`; absent is the team), switched by plain links that carry both
-  counts ("My team · 3", "My whole org · 41"), and the toggle renders whenever
-  the org view reaches someone the team view doesn't, even with nothing to
-  place there. The same switch scopes the conversations
-  ([#650](https://github.com/mr-yum/growth-os/issues/650)), and leads with
-  **My feedback** (`?place=mine`, [#652](https://github.com/mr-yum/growth-os/issues/652)):
-  only what is about the viewer, and their own exchanges. Each segment's count
+  counts ("My team · 3", "My whole org · 41"). The switch renders for anyone
+  with reports, and offers My whole org only when the org reaches someone
+  the team doesn't. It scopes the conversations too
+  ([#650](https://github.com/mr-yum/growth-os/issues/650)). **My feedback**
+  (`?place=mine`) holds only what is about the viewer, and their own
+  exchanges. Each segment's count
   is what that view lists to place, shown only where some waits; below `sm`
   the segments take short labels (Mine, Team, Whole org) through
   `Kit::SegmentedControl#segment(short:)`. It is a view filter, not
