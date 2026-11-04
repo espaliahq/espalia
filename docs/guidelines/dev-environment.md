@@ -71,6 +71,22 @@ editor integrations; `bin/rubocop`, and so precommit, passes `--config` and is
 immune. When you change a custom cop in a nested worktree, lint with
 `bin/rubocop` or add `--ignore-parent-exclusion`.
 
+## A checkout without `config/master.key`
+
+Development derives its ActiveRecord encryption keys from the local
+`secret_key_base` (`tmp/local_secret.txt`) when the credentials file can't be
+decrypted (`config/environments/development.rb`). Two consequences:
+
+- `bin/setup` and the app work with no secrets at all — nothing to fetch
+  before a first run.
+- **Those keys live in `tmp/`.** Wiping it (`git clean -dfx`, a rebuilt
+  volume) while keeping the database makes every encrypted tenant column
+  (`hris_credentials`, `ai_credentials`, …) raise
+  `ActiveRecord::Encryption::Errors::Decryption` on read. The remedy is
+  `bin/rails db:reset` (dev data is seeded, nothing is lost), or restoring
+  the old `tmp/local_secret.txt`. A checkout **with** `master.key` is immune:
+  its keys come from the credentials file.
+
 ## The macOS host
 
 **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
