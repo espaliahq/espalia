@@ -66,8 +66,6 @@ if meandu_tenant
       # than leaving the guard's `.none?` predicate false forever.
       ActiveRecord::Base.transaction do
       handler = Frameworks::CommandHandler.new
-      admin_user = User.find_by(global_admin: true)
-      raise "No global admin user found — cannot seed suggestions" unless admin_user
 
       # framework_suggested_edits.author_id is a foreign key to people(id).
       # TenantUser#ensure_person! is the shared invariant helper — it links

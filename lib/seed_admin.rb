@@ -19,9 +19,21 @@ class SeedAdmin
     password = ENV["SEED_ADMIN_PASSWORD"].presence
     raise ArgumentError, "SEED_ADMIN_EMAIL is set but SEED_ADMIN_PASSWORD is not." if email && password.nil?
 
+    dev_default_password = false
     unless env.production?
       email ||= DEV_EMAIL
-      password ||= DEV_PASSWORD
+      if password.nil?
+        password = DEV_PASSWORD
+        dev_default_password = true
+      end
+    end
+
+    # Production: one bootstrap, never a second admin minted (or a demoted
+    # account re-promoted) by a lingering SEED_ADMIN_EMAIL. Development still
+    # creates its documented dev admin beside whatever the database holds.
+    if env.production? && (existing = User.find_by(global_admin: true))
+      output.puts "Admin user #{existing.email} already exists"
+      return existing
     end
 
     if (user = email && User.find_by(email: email))
@@ -33,14 +45,6 @@ class SeedAdmin
       return user
     end
 
-    # Production: one bootstrap, never a second admin minted by a later
-    # SEED_ADMIN_EMAIL rotation. Development still creates its documented
-    # dev admin beside whatever admins the database already holds.
-    if env.production? && (existing = User.find_by(global_admin: true))
-      output.puts "A global admin already exists (#{existing.email}); not creating another. Use bin/rails admin:create to add one."
-      return existing
-    end
-
     if email.nil?
       raise ArgumentError, "No global admin exists and SEED_ADMIN_EMAIL is not set. Set SEED_ADMIN_EMAIL and " \
                            "SEED_ADMIN_PASSWORD for the first deploy, or run bin/rails admin:create afterwards."
@@ -48,10 +52,12 @@ class SeedAdmin
 
     output.puts "Creating admin user: #{email}"
     user = User.create!(email: email, global_admin: true, password: password, password_confirmation: password)
-    if env.production?
-      output.puts "  Sign in with #{email} and the SEED_ADMIN_PASSWORD you set."
-    else
+    # A supplied password is never printed, whatever the environment — only
+    # the fixed, documented dev default is safe to echo.
+    if dev_default_password
       output.puts "  Sign in with #{email} / #{password}"
+    else
+      output.puts "  Sign in with #{email} and the SEED_ADMIN_PASSWORD you set."
     end
     user
   end

@@ -26,7 +26,7 @@ reviews your screenshots. Your job is accurate driving and faithful capture.
 
 # Signing in
 
-The seeded dev admin is `admin@example.com` / `password123` (dev-only, from SeedAdmin). If it is missing, re-seed rather than inventing credentials:
+The seeded dev admin is `admin@example.com` / `password123` (dev-only, from SeedAdmin; a SEED_ADMIN_* override creates that account instead, and re-seeding never resets an existing password). If it is missing, re-seed rather than inventing credentials:
 
 ```bash
 bin/rails db:seed

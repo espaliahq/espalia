@@ -125,7 +125,10 @@ The seeded dev admin is **`admin@example.com` / `password123`** (created by
 `SeedAdmin`, no credentials file involved; see
 [dev-environment.md](dev-environment.md#a-checkout-without-configmasterkey)).
 Fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
-global admin in the `me&u` tenant, so it can reach every surface.
+global admin in the `me&u` tenant, so it can reach every surface. Two caveats:
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` make the seed create that account
+instead, and re-seeding never resets an existing user's password — a dev
+database whose admin predates this login keeps its old password.
 
 ## Standard viewports
 
