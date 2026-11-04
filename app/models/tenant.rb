@@ -252,6 +252,52 @@ class Tenant < ApplicationRecord
     end
   end
 
+  # Sever the HRIS connection: credentials gone, sync off. The config —
+  # provider, role mappings, level column — is months of accumulated work and
+  # is kept intact for a reconnect.
+  #
+  # @return [Boolean]
+  def disconnect_hris!
+    restore_attributes(%w[hris_config hris_credentials])
+    with_lock do
+      update!(
+        hris_config: HrisConfig.new(hris_config.attributes.merge("sync_enabled" => false)),
+        hris_credentials: nil
+      )
+    end
+  end
+
+  # Remove the AI model's API key and switch suggestions off with it — a
+  # model with no key can suggest nothing, and {#update_ai_model!} refuses to
+  # switch suggestions back on until a new key is saved.
+  #
+  # @return [Boolean]
+  def remove_ai_api_key!
+    restore_attributes(%w[ai_config ai_credentials])
+    with_lock do
+      update!(
+        ai_config: AiModelConfig.new(ai_config.attributes.merge("suggestions_enabled" => false)),
+        ai_credentials: nil
+      )
+    end
+  end
+
+  # Sever the feedback exchange: both signing secrets gone (the derived key
+  # ids follow via the before_validation sync), exchange disabled. Peer,
+  # address, kinds and cursors are kept for a reconnect — and the peer still
+  # holds its copies of the shared secrets, which only it can discard.
+  #
+  # @return [Boolean]
+  def disconnect_feedback_exchange!
+    restore_attributes(%w[feedback_exchange_config feedback_exchange_credentials inbound_key_id previous_inbound_key_id])
+    with_lock do
+      update!(
+        feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge("enabled" => false)),
+        feedback_exchange_credentials: nil
+      )
+    end
+  end
+
   # @return [Boolean] whether this tenant has a usable Slack connection
   def slack_connected?
     slack_bot_token.present?
