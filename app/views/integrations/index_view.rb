@@ -203,9 +203,7 @@ class Views::Integrations::IndexView < Views::Base
   end
 
   def provider_label
-    return "Not configured" if @hris_config.provider.blank?
-
-    Views::Integrations::HrisView::PROVIDER_LABELS[@hris_config.provider] || @hris_config.provider.humanize
+    HrisConfig.provider_label(@hris_config.provider)
   end
 
   def status_label

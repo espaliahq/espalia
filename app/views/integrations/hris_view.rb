@@ -24,8 +24,6 @@ class Views::Integrations::HrisView < Views::Base
   CHIP_CLASSES = "inline-flex items-center rounded-sm text-xs " \
                  "bg-neutral-subtle text-muted"
 
-  PROVIDER_LABELS = { "hibob" => "HiBob", "bamboohr" => "BambooHR" }.freeze
-
   INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
   SELECT_CLASSES = "#{Components::Kit::Field::SELECT} min-h-11 mt-1"
   LABEL_CLASSES = "block text-sm font-medium text-default"
@@ -207,7 +205,7 @@ class Views::Integrations::HrisView < Views::Base
       label(for: field_id(:provider), class: LABEL_CLASSES) { "Provider" }
       select(id: field_id(:provider), name: field_name(:provider), class: SELECT_CLASSES, autocomplete: "off") do
         option(value: "", selected: @form_config.provider.blank?) { "Not configured" }
-        PROVIDER_LABELS.each do |value, label_text|
+        HrisConfig::PROVIDER_LABELS.each do |value, label_text|
           option(value: value, selected: value == @form_config.provider) { label_text }
         end
       end
@@ -551,7 +549,7 @@ class Views::Integrations::HrisView < Views::Base
   end
 
   def provider_label
-    PROVIDER_LABELS[@hris_config.provider] || @hris_config.provider.presence&.humanize || "Not configured"
+    HrisConfig.provider_label(@hris_config.provider)
   end
 
   def last_synced_label

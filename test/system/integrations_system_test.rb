@@ -97,17 +97,16 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       assert_text "Connection settings"
       screenshot("hris_connection_form")
 
-      select "BambooHR", from: "Provider"
       js_fill_in "API token", with: "tok-system-test-secret"
+      js_fill_in "Webhook secret", with: "hook-system-test-secret"
       click_button_with_js_fallback "Save connection", expect_text: "HRIS connection saved."
 
-      assert_text "BambooHR"
       screenshot("hris_connection_saved")
-      within("form[action='#{tenant_hris_connection_path}']") do
-        assert_text "Stored"
-      end
+      assert_selector "label[for='hris_connection_webhook_secret']", text: /Stored/
       assert_equal "", find_field("API token").value
+      assert_equal "", find_field("Webhook secret").value
       assert_no_text "tok-system-test-secret"
+      assert_no_text "hook-system-test-secret"
     end
 
     should "show the message when the connection does not validate" do
