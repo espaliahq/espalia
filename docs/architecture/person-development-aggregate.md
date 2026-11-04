@@ -132,7 +132,7 @@ Evidence and feedback:
 
 Self-assessment:
   SelfRated { capability_stable_id, level_ordinal, frequency, comment, source, seeded_from_cycle_id }
-    frequency: "some" (0.25×) | "occasional" (0.5×) | "consistent" (1.0×)
+    frequency: "none" (0×) | "some" (⅓×) | "occasional" (⅔×) | "consistent" (1.0×)
     source: "human" (default, person entered it) | "seeded" (carried from prior cycle's
             aligned value at cycle join) | "agent" (reserved for future AI-generated ratings)
     seeded_from_cycle_id: UUID of the originating cycle when source == "seeded".

@@ -96,6 +96,21 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
     should "block on a current-level 'not yet' but not on 'some of the time'" do
       assert_equal 0.75, PersonDevelopment::Scoring::DEFAULT_DEFICIT_THRESHOLD
+      assert_equal :blocked, scorer_with_current("none").capability_statuses[CAP_A]
+      assert_not_equal :blocked, scorer_with_current("some").capability_statuses[CAP_A]
+    end
+
+    should "block a ×2 capability on 'some of the time' but not on 'most of the time'" do
+      # The deficit is the gap times the weight: 2 × ⅔ = 1.33 blocks, 2 × ⅓ = 0.67 doesn't (ADR-24).
+      assert_equal :blocked, scorer_with_current("some", weight: 2.0).capability_statuses[CAP_A]
+      assert_not_equal :blocked, scorer_with_current("occasional", weight: 2.0).capability_statuses[CAP_A]
+    end
+
+    should "space the four ratings in equal steps from 0 to 1" do
+      values = PersonDevelopment::Scoring::FREQUENCY.values_at("none", "some", "occasional", "consistent")
+      steps = values.each_cons(2).map { |low, high| high - low }
+      assert_equal [ 0.0, 1.0 ], values.values_at(0, -1)
+      steps.each { |step| assert_in_delta(1.0 / 3, step, 1e-9) }
     end
   end
 
@@ -115,7 +130,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         aligned_frequency: nil, manager_rated_frequency: "occasional",
         self_rated_frequency: "consistent")
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      assert_in_delta(0.5, scorer.performance_ratio, 0.001)
+      assert_in_delta(2.0 / 3, scorer.performance_ratio, 0.001)
     end
 
     should "fall back to self_rated_frequency when no manager rating" do
@@ -123,7 +138,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         aligned_frequency: nil, manager_rated_frequency: nil,
         self_rated_frequency: "some")
       scorer = build_scorer(person_level: 3, all_levels: [ 3 ], ratings: [ r ])
-      assert_in_delta(0.25, scorer.performance_ratio, 0.001)
+      assert_in_delta(1.0 / 3, scorer.performance_ratio, 0.001)
     end
 
     should "assume consistent for unrated levels below the assessed level" do
@@ -198,13 +213,13 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       end
     end
 
-    should "read 1.5 for 'most of the time' at the next level, 1.25 for 'some'" do
-      half = build_scorer(person_level: 3, all_levels: (1..8).to_a,
+    should "read 1⅔ for 'most of the time' at the next level, 1⅓ for 'some'" do
+      most = build_scorer(person_level: 3, all_levels: (1..8).to_a,
         ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
-      quarter = build_scorer(person_level: 3, all_levels: (1..8).to_a,
+      some = build_scorer(person_level: 3, all_levels: (1..8).to_a,
         ratings: [ rated(3, "consistent"), rated(4, "some") ])
-      assert_in_delta(1.5, half.performance_ratio, 0.001)
-      assert_in_delta(1.25, quarter.performance_ratio, 0.001)
+      assert_in_delta(1 + 2.0 / 3, most.performance_ratio, 0.001)
+      assert_in_delta(1 + 1.0 / 3, some.performance_ratio, 0.001)
     end
 
     should "read 1.5 when half the capabilities are consistent at the next level" do
@@ -228,8 +243,8 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       scorer = build_pair(person_level: 1, all_levels: [ 1 ], weight_a: 2.0, weight_b: 1.0, ratings: [
         rated(1, "occasional"), rated(1, "consistent", cap: CAP_B)
       ])
-      # (2 × 0.5 + 1 × 1.0) / 3
-      assert_in_delta(2.0 / 3.0, scorer.performance_ratio, 0.001)
+      # (2 × ⅔ + 1 × 1.0) / 3
+      assert_in_delta(7.0 / 9, scorer.performance_ratio, 0.001)
     end
 
     should "pin the score at 1.0 at the top of the ladder" do
@@ -265,7 +280,33 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "expose the components the copy names" do
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
         ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
-      assert_equal({ prior: 1.0, current: 1.0, next: 0.5, score: 1.5, bands_above: 1 }, scorer.components)
+      assert_equal({ prior: 1.0, current: 1.0, next: 0.6667, score: 1.6667, bands_above: 1 },
+        scorer.components.transform_values { |value| value.round(4) })
+    end
+
+    should "land a sum of thirds on the threshold it equals, not a hair below" do
+      # Exactly 1.0, which a float sum of thirds computes as 0.9999999999999999.
+      caps = %w[cap-x cap-y cap-z]
+      ratings = [ [ "none", "none" ], [ "occasional", "consistent" ], [ "consistent", "occasional" ] ]
+        .zip(caps).flat_map { |(l3, l4), cap| [ rated(3, l3, cap: cap), rated(4, l4, cap: cap) ] }
+      bindings = caps.map do |cap|
+        BindingStub.new(capability_id: cap, weight: 1.0, deficit_threshold: 1.0,
+          capability: CapStub.new(stable_id: cap, category_id: CAT_1))
+      end
+      scorer = PersonDevelopment::Scoring.new(level_ratings: ratings, bindings: bindings,
+        categories: [ CategoryStub.new(category_id: CAT_1) ], person_level: 3, all_level_ordinals: [ 3, 4 ],
+        expectation_cells: nil, thresholds: { meeting_expectation_threshold: 1.0, mastery_threshold: 1.5 })
+
+      assert_equal 1.0, scorer.performance_ratio
+      assert_equal :performing, scorer.performance_state
+    end
+
+    should "compare a third against a threshold of exactly a third as equal" do
+      # Rounding the score but not the threshold put 0.333333333 below 0.3333333333333333.
+      scorer = scorer_with_current("some", deficit_threshold: 2.0 / 3,
+        thresholds: { underperforming_threshold: 1.0 / 3, meeting_expectation_threshold: 0.5 })
+      assert_equal :progressing, scorer.performance_state
+      assert_not_equal :blocked, scorer.capability_statuses[CAP_A], "a deficit of ⅔ is within a ⅔ tolerance"
     end
 
     should "score the assessed level identically to performance_ratio_at_level(person_level)" do
@@ -283,20 +324,20 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "discount a flexible capability's next-level credit by its current-level frequency" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
-      # 0.5 at L3 + 0.5 × 1.0 at L4
-      assert_in_delta(0.5, scorer.components[:next], 0.001)
-      assert_in_delta(1.0, scorer.performance_ratio, 0.001)
+      # ⅔ at L3 + ⅔ × 1.0 at L4
+      assert_in_delta(2.0 / 3, scorer.components[:next], 0.001)
+      assert_in_delta(4.0 / 3, scorer.performance_ratio, 0.001)
     end
 
     should "give a mandatory capability no next-level credit until it is consistent at its level" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], deficit_threshold: 0,
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       assert_in_delta(0.0, scorer.components[:next], 0.001)
-      assert_in_delta(0.5, scorer.performance_ratio, 0.001)
+      assert_in_delta(2.0 / 3, scorer.performance_ratio, 0.001)
     end
 
     should "block a mandatory capability below the bar even when consistent above it" do
-      # With a multiplicative gate this netted to zero and was never blocked.
+      # With a multiplicative gate this netted to no deficit and was never blocked.
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ], deficit_threshold: 0,
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       assert_equal :blocked, scorer.capability_statuses[CAP_A]
@@ -318,12 +359,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "still allow making up across capabilities" do
-      # A consistent at L3 and L4, B "most of the time" at L3: +1.0 − 0.5.
+      # A consistent at L3 and L4, B "most of the time" at L3: +1.0 − ⅓.
       scorer = build_pair(person_level: 3, all_levels: [ 3, 4 ], ratings: [
         rated(3, "consistent"), rated(4, "consistent"),
         rated(3, "occasional", cap: CAP_B)
       ])
-      assert_in_delta(1.25, scorer.performance_ratio, 0.001)
+      assert_in_delta(4.0 / 3, scorer.performance_ratio, 0.001)
       assert_equal :performing, scorer.performance_state
     end
   end
@@ -435,9 +476,9 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       components = scorer.capability_components(scorer.instance_variable_get(:@bindings).first)
-      assert_in_delta(0.5, components[:current], 0.001)
-      assert_in_delta(0.5, components[:next], 0.001)
-      assert_in_delta(1.0, components[:score], 0.001)
+      assert_in_delta(2.0 / 3, components[:current], 0.001)
+      assert_in_delta(2.0 / 3, components[:next], 0.001)
+      assert_in_delta(4.0 / 3, components[:score], 0.001)
       assert components[:scorable]
     end
 
@@ -487,8 +528,8 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       ])
       scores = scorer.capability_scores_at(4)
 
-      # "Some of the time" at E4 is a quarter of it; never rated there is none.
-      assert_in_delta(0.25, scores[CAP_A][:score], 0.001)
+      # "Some of the time" at E4 is a third of it; never rated there is none.
+      assert_in_delta(1.0 / 3, scores[CAP_A][:score], 0.001)
       assert_in_delta(0.0, scores[CAP_B][:score], 0.001)
     end
 
@@ -543,8 +584,8 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         rated(3, "consistent"), rated(4, "consistent"),
         rated(3, "occasional", cap: CAP_B)
       ])
-      assert_in_delta(1.25, scorer.category_components(CAT_1)[:score], 0.001)
-      assert_in_delta(1.25, scorer.performance_ratio, 0.001)
+      assert_in_delta(4.0 / 3, scorer.category_components(CAT_1)[:score], 0.001)
+      assert_in_delta(4.0 / 3, scorer.performance_ratio, 0.001)
       assert_equal :performing, scorer.category_state(CAT_1)
     end
 
@@ -591,12 +632,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   context "#mastering?" do
     should "default to the halfway waypoint (1.5)" do
-      half = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+      most = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
         ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
-      quarter = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
+      some = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
         ratings: [ rated(3, "consistent"), rated(4, "some") ])
-      assert half.mastering?
-      assert_not quarter.mastering?
+      assert most.mastering?
+      assert_not some.mastering?
     end
 
     should "honour an explicit mastery threshold" do
@@ -610,7 +651,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         rated(3, "consistent"), rated(4, "consistent"),
         rated(3, "occasional", cap: CAP_B), rated(4, "consistent", cap: CAP_B)
       ])
-      # 1.0 + 0.5 current, next = (1.0 + 0) / 2 → 1.25; B blocked
+      # (1.0 + ⅔) / 2 current, next = (1.0 + 0) / 2 → 1⅓; B blocked
       assert_not scorer.mastering?
       assert_equal :blocked, scorer.capability_statuses[CAP_B]
     end
@@ -627,12 +668,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
   context "#performance_state" do
     should "return :underperforming just below underperforming_threshold" do
-      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 0.51 })
+      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 0.67 })
       assert_equal :underperforming, scorer.performance_state
     end
 
     should "return :progressing exactly at underperforming_threshold" do
-      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 0.5 })
+      scorer = scorer_with_current("occasional", thresholds: { underperforming_threshold: 2.0 / 3 })
       assert_equal :progressing, scorer.performance_state
     end
 
@@ -642,13 +683,13 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
 
     should "return :progressing just below meeting_expectation_threshold" do
       scorer = scorer_with_current("occasional",
-        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.6 })
+        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.67 })
       assert_equal :progressing, scorer.performance_state
     end
 
     should "return :performing exactly at meeting_expectation_threshold" do
       scorer = scorer_with_current("occasional",
-        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 0.5, mastery_threshold: 0.6 })
+        thresholds: { underperforming_threshold: 0.4, meeting_expectation_threshold: 2.0 / 3, mastery_threshold: 0.8 })
       assert_equal :performing, scorer.performance_state
     end
 
@@ -657,7 +698,11 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "return :mastering at the mastery waypoint when not yet eligible" do
-      scorer = scorer_with_current("consistent", next_frequency: "occasional")
+      # Half the band consistent at the next level: no single rating lands on 1.5.
+      scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [
+        rated(3, "consistent"), rated(4, "consistent"),
+        rated(3, "consistent", cap: CAP_B), rated(4, "none", cap: CAP_B)
+      ])
       assert_in_delta(1.5, scorer.performance_ratio, 0.001)
       assert_equal :mastering, scorer.performance_state
       assert_not scorer.promotion_readiness[:eligible]
@@ -738,8 +783,8 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     should "treat the assessed level as a prior level when scoring the next one" do
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
-      # At L4: prior = 0.5 (L3), current = 1.0 → 0.5
-      assert_in_delta(0.5, scorer.performance_ratio_at_level(4), 0.001)
+      # At L4: prior = ⅔ (L3), current = 1.0 → ⅔
+      assert_in_delta(2.0 / 3, scorer.performance_ratio_at_level(4), 0.001)
     end
   end
 
@@ -801,7 +846,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         scorer = build_scorer(person_level: level, all_levels: (1..8).to_a,
           ratings: [ rated(level, "consistent"), rated(level + 1, "occasional") ])
         assert_not scorer.promotion_readiness[:eligible], "level #{level}"
-        assert_in_delta(0.5, scorer.performance_ratio_at_level(level + 1), 0.001, "level #{level}")
+        assert_in_delta(2.0 / 3, scorer.performance_ratio_at_level(level + 1), 0.001, "level #{level}")
       end
     end
 
@@ -830,7 +875,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "not block a flexible capability whose deficit at the next level is within the tolerance" do
-      # Consistent at L3, "most of the time" at L4 → deficit 0.5 ≤ 0.75.
+      # Consistent at L3, "most of the time" at L4 → deficit ⅓ ≤ 0.75.
       scorer = build_scorer(person_level: 3, all_levels: [ 1, 2, 3, 4 ],
         ratings: [ rated(3, "consistent"), rated(4, "occasional") ])
       assert_empty scorer.promotion_readiness[:blocked_at_next_level]
@@ -850,7 +895,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         deficit_threshold: 0)
       reasons = scorer.block_reasons
       assert_includes reasons.keys, CAP_A
-      assert_includes reasons[CAP_A], "Below expectations by 0.8 points"
+      assert_includes reasons[CAP_A], "Below expectations by 0.7 points"
       assert_includes reasons[CAP_A], "no deficit allowed"
     end
 
@@ -863,7 +908,7 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
     end
 
     should "let a flexible capability's gated next-level credit close its own gap" do
-      # "most of the time" at L3 (−0.5) + 0.5 × consistent at L4 (+0.5) → no deficit.
+      # "most of the time" at L3 (−⅓) + ⅔ × consistent at L4 (+⅔) → no deficit.
       scorer = build_scorer(person_level: 3, all_levels: [ 3, 4 ],
         ratings: [ rated(3, "occasional"), rated(4, "consistent") ])
       assert_empty scorer.block_reasons

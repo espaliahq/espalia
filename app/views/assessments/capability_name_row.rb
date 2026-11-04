@@ -2,9 +2,9 @@
 
 # A capability card's name row: the name, the Blocked marker, and the
 # capability's own score on the assessment's scale — always with its split
-# ("50% · +50% toward E4"), never the net alone, because under the
+# ("67% · +67% toward E4"), never the net alone, because under the
 # multiplicative gate "most of the time" at L with "consistently" at L+1
-# nets to 100% next to a pill that says "Most of the time".
+# nets to 133% next to a pill that says "Most of the time".
 #
 # Carries `id="capability-name-<stable_id>"` so the rating controllers'
 # Turbo Streams replace it in place — they render this same view, so the

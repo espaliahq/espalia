@@ -236,9 +236,9 @@ codes, and all drawing `Views::Assessments::ScoreBar` at their own size.
 Three rules, each load-bearing:
 
 - **Never the net alone.** The row shows the split beside the number
-  (`50% · +50% toward E4`, plus `−N% below` when a prior level is short),
+  (`67% · +67% toward E4`, plus `−N% below` when a prior level is short),
   because under the multiplicative gate "most of the time" at the assessed
-  level with "consistently" above it nets to 100% next to a pill that says
+  level with "consistently" above it nets to 133% next to a pill that says
   "Most of the time". The split is dropped only when it would restate the
   number — a lone `75%` beside a `75%` is noise — and hides below `sm`.
 - **Unrated is not 0%.** A capability whose assessed-level cell carries no

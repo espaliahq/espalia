@@ -58,7 +58,7 @@
 #
 # The mandatory case is a step because with a multiplicative gate a
 # mandatory capability at "most of the time" with "consistently" above nets
-# to zero, is never blocked, and the one rule written for it is defeated.
+# to no deficit, is never blocked, and the one rule written for it is defeated.
 #
 # == Over-performance cap
 #
@@ -115,7 +115,13 @@
 #   Highest level_ordinal where effective_frequency == "consistent" (1.0).
 #
 class PersonDevelopment::Scoring
-  FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
+  # Equal steps from "not yet" to "consistently" (ADR-24). Exact thirds, not
+  # 0.33 / 0.66, which would make the last step longer than the first two.
+  FREQUENCY = { "none" => 0.0, "some" => 1.0 / 3, "occasional" => 2.0 / 3, "consistent" => 1.0 }.freeze
+  # Thirds aren't exact in binary, so a sum that equals a threshold can land a
+  # hair below it. Scores, deficits and the thresholds they meet are all
+  # rounded to this many places before any comparison.
+  PRECISION = 9
   DEFAULT_MASTERY_THRESHOLD              = 1.50
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
   DEFAULT_UNDERPERFORMING_THRESHOLD      = 0.80
@@ -182,9 +188,9 @@ class PersonDevelopment::Scoring
     @all_level_ordinals = all_level_ordinals.sort
     @expectation_cells = expectation_cells&.to_set
     @perspective = perspective
-    @mastery_threshold              = thresholds[:mastery_threshold]              || DEFAULT_MASTERY_THRESHOLD
-    @meeting_expectation_threshold  = thresholds[:meeting_expectation_threshold]  || DEFAULT_MEETING_EXPECTATION_THRESHOLD
-    @underperforming_threshold      = thresholds[:underperforming_threshold]      || DEFAULT_UNDERPERFORMING_THRESHOLD
+    @mastery_threshold              = (thresholds[:mastery_threshold]             || DEFAULT_MASTERY_THRESHOLD).round(PRECISION)
+    @meeting_expectation_threshold  = (thresholds[:meeting_expectation_threshold] || DEFAULT_MEETING_EXPECTATION_THRESHOLD).round(PRECISION)
+    @underperforming_threshold      = (thresholds[:underperforming_threshold]     || DEFAULT_UNDERPERFORMING_THRESHOLD).round(PRECISION)
     @default_overperformance_cap  = thresholds[:overperformance_cap]    || DEFAULT_OVERPERFORMANCE_CAP
     @default_deficit_threshold    = thresholds[:deficit_threshold]      || DEFAULT_DEFICIT_THRESHOLD
   end
@@ -531,8 +537,8 @@ class PersonDevelopment::Scoring
     # Floored at 0: a prior-level "not yet" on top of nothing at the
     # assessed level would otherwise read as a negative share.
     score   = current.nil? ? 0.0 : [ current + nxt + (prior - 1.0), 0.0 ].max
-    { prior: prior, current: current || 0.0, next: nxt, score: score,
-      bands_above: bands_above_for(bindings, reference_level) }
+    { prior: prior.round(PRECISION), current: (current || 0.0).round(PRECISION), next: nxt.round(PRECISION),
+      score: score.round(PRECISION), bands_above: bands_above_for(bindings, reference_level) }
   end
 
   # How many bands above the reference level THIS set of bindings can
@@ -710,7 +716,7 @@ class PersonDevelopment::Scoring
   end
 
   def evidenced_deficit(binding, reference_level)
-    [ 0.0, -raw_contribution_at_level(binding, reference_level, evidenced: true) ].max
+    [ 0.0, -raw_contribution_at_level(binding, reference_level, evidenced: true) ].max.round(PRECISION)
   end
 
   # Whether a capability keeps a level from being met: blocked by its
@@ -817,7 +823,7 @@ class PersonDevelopment::Scoring
     @deficit_threshold_for[binding.capability.stable_id] ||=
       (binding.deficit_threshold ||
         @categories[binding.capability.category_id]&.deficit_threshold ||
-        @default_deficit_threshold).to_f
+        @default_deficit_threshold).to_f.round(PRECISION)
   end
 
   # ── Helpers ──

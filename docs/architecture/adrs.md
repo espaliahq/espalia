@@ -292,3 +292,20 @@ The gate exists because without one, next-level credit masks current-level gaps 
 - Every new role needs a Default value in both schemes and, once presets exist, a value in each preset.
 - Translucent fills under text become opaque mixes into the surface, because the contrast helper can't see what shows through.
 - Plan and steps: #539.
+
+## ADR-24: The four frequency ratings are equal steps
+
+**Decision:** The rating weights are `none` 0, `some` ⅓, `occasional` ⅔, `consistent` 1, written as exact fractions (`1.0 / 3`, `2.0 / 3`) in `PersonDevelopment::Scoring::FREQUENCY`. They replace 0, 0.25, 0.5, 1. The thresholds are unchanged: underperforming 0.80, meeting 0.95, mastery 1.50, deficit tolerance 0.75.
+
+**Why:** The label and the number disagreed. "Most of the time" means more than half, yet it scored exactly half, so a capability rated that way everywhere read as 50% of the level. Raters were giving a frequency, and the score read it back as a verdict they had not given. The convex curve also penalised inconsistency twice: the progression gate, the deficit tolerance, `:at_bar` and the agreed level already require "consistently". Thirds, not 0.33 / 0.66: with 0.66 the last step (0.34) is longer than the first two, and a full row of "most of the time" falls short of two-thirds.
+
+**Consequences:**
+- Every score rises where any rating is "some" or "most of the time", on every surface and in closed cycles, since nothing persists a score (ADR-21). The gate multiplies the two changes: "most of the time" at L with "some" at L+1 went from 63% to 89% on one capability.
+- **Measured on production ratings before shipping**, with the real engine, after reproducing every overall and category score exactly (method: [scoring-model.md → Checking a scoring change against production](scoring-model.md#checking-a-scoring-change-against-production)). Overall verdicts held at the 0.80 and 0.95 lines; scores rose most for people with "most of the time" ratings above their level, and several near 1.5 crossed into mastering. Category states flipped far more often, because a category holds only three or four capabilities.
+- **Mastery got easier to reach, deliberately.** Someone rated "most of the time" across the next level is more than halfway there, and now scores 167%. Raising the mastery threshold to keep the old bar was considered and declined.
+- **Weighted capabilities block less.** The deficit is the gap times the binding weight, so it shrinks with the weights. At the default 0.75, a ×2 capability rated "most of the time" at the assessed level used to block (2 × ½ = 1.0) and no longer does (2 × ⅓ = 0.67); "some" still blocks (1.33). Every weight in (1.5, 2.25] stops blocking "most of the time", and every weight in (1, 1.125] stops blocking "some". Production had this case: a ×2 capability rated "most of the time" stops blocking at least two people. A framework that wants "most of the time" on a weighted capability to keep blocking lowers that capability's tolerance below its new deficit.
+- "Some of the time" at the assessed level on a ×1 capability now leaves a deficit of 0.67 against the 0.75 tolerance, not exactly 0.75, so it no longer avoids blocking by a strict `>` alone. A tenant with a custom tolerance between 0.67 and 0.75 stops blocking "some".
+- Thirds aren't exact in binary, so the engine rounds scores, deficits and the thresholds they meet to nine places (`Scoring::PRECISION`) before comparing them; a sum of thirds that equals 1.0 would otherwise compute a hair below it.
+- The Required step gate is still needed: under a multiplicative gate, a Required capability at "most of the time" with "consistently" above now nets to a surplus (−⅓ + ⅔), and still never blocks.
+- Trend lines across cycles show a step at the deploy that is not growth. Ship between cycles, not while a calibration session is open.
+- Calibration's rater statistics keep their own 0–3 ordinal scale (`CalibrationSessions::OverviewStats`), so they don't change.
