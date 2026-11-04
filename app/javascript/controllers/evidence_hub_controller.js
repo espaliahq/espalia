@@ -50,7 +50,9 @@ export default class extends BaseController {
 
     const place = new URL(window.location.href).searchParams.get("place")
     const query = place === "org" ? "?place=org" : ""
-    window.Turbo.visit(`/evidence/${match[1]}s/${match[2]}${query}`, { action: "replace" })
+    // A full navigation, not Turbo.visit: the server answers with a redirect
+    // to the thread#message, and Turbo's fetch would drop the #message.
+    window.location.replace(`/evidence/${match[1]}s/${match[2]}${query}`)
     return true
   }
 

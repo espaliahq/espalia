@@ -334,6 +334,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       visit "#{evidence_hub_path}##{EvidenceItem.dom_id(item_id)}"
       assert_selector "[data-testid='conversation-thread'] h2", text: "Lena Lead"
       assert_current_path evidence_conversation_path(@lead.id)
+      assert_equal "##{EvidenceItem.dom_id(item_id)}", page.evaluate_script("window.location.hash")
     end
   end
 end
