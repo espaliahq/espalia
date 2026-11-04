@@ -294,8 +294,8 @@ Devise.setup do |config|
   # EAGER_LOAD_CHECK lets the CI `production_boot` job boot in RAILS_ENV=
   # production purely to verify autoloading/eager-loading (it has no decrypted
   # credentials); skip the warning when it's set — real production never sets it.
-  google_client_id = Rails.application.credentials.dig(:google, :client_id) || ENV["GOOGLE_CLIENT_ID"]
-  google_client_secret = Rails.application.credentials.dig(:google, :client_secret) || ENV["GOOGLE_CLIENT_SECRET"]
+  google_client_id = Rails.application.credentials.dig(:google, :client_id).presence || ENV["GOOGLE_CLIENT_ID"].presence
+  google_client_secret = Rails.application.credentials.dig(:google, :client_secret).presence || ENV["GOOGLE_CLIENT_SECRET"].presence
 
   # Google SSO is optional per instance: an instance without it signs in with
   # email and password. The sign-in page hides the Google button in production
