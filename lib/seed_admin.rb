@@ -18,6 +18,7 @@ class SeedAdmin
     email = ENV["SEED_ADMIN_EMAIL"].presence&.downcase&.strip
     password = ENV["SEED_ADMIN_PASSWORD"].presence
     raise ArgumentError, "SEED_ADMIN_EMAIL is set but SEED_ADMIN_PASSWORD is not." if email && password.nil?
+    raise ArgumentError, "SEED_ADMIN_PASSWORD is set but SEED_ADMIN_EMAIL is not." if password && email.nil?
 
     dev_default_password = false
     unless env.production?
@@ -31,7 +32,7 @@ class SeedAdmin
     # Production: one bootstrap, never a second admin minted (or a demoted
     # account re-promoted) by a lingering SEED_ADMIN_EMAIL. Development still
     # creates its documented dev admin beside whatever the database holds.
-    if env.production? && (existing = User.find_by(global_admin: true))
+    if env.production? && (existing = User.where(global_admin: true).order(:created_at, :id).first)
       output.puts "Admin user #{existing.email} already exists"
       return existing
     end

@@ -2,7 +2,7 @@
 
 namespace :admin do
   # The password comes from the environment so it stays out of the command
-  # line, process listings and shell history: `read -s PASSWORD && export PASSWORD`.
+  # line, process listings and shell history: `IFS= read -rs PASSWORD && export PASSWORD`.
   desc "Create or promote a global admin: EMAIL=who@example.com bin/rails admin:create (PASSWORD from the environment)"
   task create: :environment do
     email = ENV["EMAIL"].presence&.downcase&.strip or abort "Set EMAIL (and PASSWORD for a new user)."

@@ -93,8 +93,10 @@ class SeedAdminTest < ActiveSupport::TestCase
 
   should "refuse a half-set override even outside production" do
     error = assert_raises(ArgumentError) { bootstrap(env: DEV, "SEED_ADMIN_EMAIL" => "me@example.org") }
-
     assert_match(/SEED_ADMIN_PASSWORD/, error.message)
+
+    error = assert_raises(ArgumentError) { bootstrap(env: DEV, "SEED_ADMIN_PASSWORD" => "my-own-secret") }
+    assert_match(/SEED_ADMIN_EMAIL/, error.message)
   end
 
   should "never mint a second production admin from a rotated email" do
