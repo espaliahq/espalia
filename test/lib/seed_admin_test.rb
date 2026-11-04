@@ -57,6 +57,47 @@ class SeedAdminTest < ActiveSupport::TestCase
     assert_includes output, "already exists"
   end
 
+  should "promote an existing plain user with the admin email" do
+    create(:user, email: SeedAdmin::DEV_EMAIL, global_admin: false)
+
+    user, output = bootstrap(env: DEV)
+
+    assert user.reload.global_admin?
+    assert_includes output, "Promoted"
+  end
+
+  should "stay idempotent under a mixed-case padded override" do
+    first, = bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => " Ops@Example.org ", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
+    second, output = bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => " Ops@Example.org ", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
+
+    assert_equal first.id, second.id
+    assert_includes output, "already exists"
+  end
+
+  should "refuse a half-set override even outside production" do
+    error = assert_raises(ArgumentError) { bootstrap(env: DEV, "SEED_ADMIN_EMAIL" => "me@example.org") }
+
+    assert_match(/SEED_ADMIN_PASSWORD/, error.message)
+  end
+
+  should "never mint a second production admin from a rotated email" do
+    existing, = bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => "ops@example.org", "SEED_ADMIN_PASSWORD" => "s3eded-secret")
+
+    user, output = bootstrap(env: PROD, "SEED_ADMIN_EMAIL" => "other@example.org", "SEED_ADMIN_PASSWORD" => "another-secret")
+
+    assert_equal existing.id, user.id
+    assert_nil User.find_by(email: "other@example.org")
+    assert_includes output, "not creating another"
+  end
+
+  should "still create the documented dev admin beside an existing admin" do
+    create(:user, global_admin: true)
+
+    user, = bootstrap(env: DEV)
+
+    assert_equal SeedAdmin::DEV_EMAIL, user.email
+  end
+
   should "refuse a first production deploy that sets nothing" do
     error = assert_raises(ArgumentError) { bootstrap(env: PROD) }
 

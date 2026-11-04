@@ -310,7 +310,7 @@ skill (its portability rule forbids host facts in `.claude/skills/ux-quality/`):
   [the glossary](../02-glossary.md) for the product's names.
 - **App URL / login / seeded-data control**: *Reaching the app*
   (`http://rails-app:6600` in the devcontainer, `http://localhost:6600` in a
-  Claude Code cloud session), *Signing in* (the Rails-credentials admin) and the
+  Claude Code cloud session), *Signing in* (the seeded dev admin) and the
   seeded-tenant caveat under *Gotchas learned*, above.
 - **Browser driving**: the `chrome-driver` agent (`.claude/agents/chrome-driver.md`)
   — use it, not the skill's bundled dormant `ux-driver`.
