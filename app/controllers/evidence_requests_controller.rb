@@ -17,10 +17,14 @@ class EvidenceRequestsController < ApplicationController
   end
 
   # GET /assessments/:assignment_id/evidence_request_modal — the request form,
-  # rendered into the lazy #evidence-request-modal frame for a cell.
+  # rendered into the lazy #evidence-request-modal frame for a cell. Without
+  # a cell (a conversation's "Ask Jordan for feedback"), a step for choosing
+  # one comes first.
   def modal
     authorize modal_assignment, :request?, policy_class: EvidenceRequestPolicy
     cap = params[:capability_stable_id]
+    return render_cell_step if cap.blank?
+
     lvl = cell_level_ordinal or return head(:bad_request)
     render Views::Evidence::RequestForm.new(
       assignment_id: modal_assignment.id, capability_stable_id: cap, level_ordinal: lvl,
@@ -29,7 +33,8 @@ class EvidenceRequestsController < ApplicationController
       submit_url: evidence_requests_path,
       candidates_url: evidence_request_candidates_path(
         assignment_id: modal_assignment.id, capability_stable_id: cap, level_ordinal: lvl
-      )
+      ),
+      preselected: (Person.find_by(id: params[:requestee_id]) if params[:requestee_id].present?)
     ), layout: false
   end
 
@@ -104,6 +109,16 @@ class EvidenceRequestsController < ApplicationController
 
   def evidence_request
     @evidence_request ||= EvidenceRequest.find(params.expect(:id))
+  end
+
+  def render_cell_step
+    options = Evidence::FrameworkCellOptions.new(framework_id: modal_assignment.framework_id, role_id: modal_assignment.role_id)
+    render Views::Evidence::RequestCellStep.new(
+      form_url: evidence_request_modal_path(modal_assignment), capabilities: options.link_options,
+      levels: options.level_options, current_level: modal_assignment.level&.ordinal,
+      assessee: (Person.find_by(id: modal_assignment.person_id) unless modal_assignment.person_id == current_person.id),
+      requestee: (Person.find_by(id: params[:requestee_id]) if params[:requestee_id].present?)
+    ), layout: false
   end
 
   def modal_assignment

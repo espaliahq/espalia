@@ -221,6 +221,26 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_match "Critical Thinking", response.body
     end
 
+    should "open on a step for choosing the cell when none is given, keeping whom to ask" do
+      sign_in @report_user
+      get evidence_request_modal_path(assignment_id: @assignment.id, requestee_id: @peer.id)
+      assert_response :success
+      assert_select "turbo-frame#evidence-request-modal [data-testid='request-cell-step']" do
+        assert_select "h2", text: "Ask Peer for feedback"
+        assert_select "select[name='capability_stable_id'] option[value='#{@cap.stable_id}']", text: "Critical Thinking"
+        assert_select "select[name='level_ordinal'] option[selected][value='2']"
+        assert_select "input[type='hidden'][name='requestee_id'][value='#{@peer.id}']"
+      end
+    end
+
+    should "open the form with the person to ask already picked" do
+      sign_in @report_user
+      get evidence_request_modal_path(assignment_id: @assignment.id,
+        capability_stable_id: @cap.stable_id, level_ordinal: 2, requestee_id: @peer.id)
+      assert_select "[data-controller='request-evidence'][data-request-evidence-preselect-id-value='#{@peer.id}']" \
+                    "[data-request-evidence-preselect-name-value='Peer']"
+    end
+
     should "deny an unrelated user" do
       stranger = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do
