@@ -10,9 +10,10 @@ namespace :assessments do
 
     require "digest"
 
-    tenant = Tenant.find_by(slug: "meandu")
+    slug = ENV["SEED_TENANT_SLUG"] || "nullisland"
+    tenant = Tenant.find_by(slug: slug)
     unless tenant
-      puts "No meandu tenant — skipping calibration activity seed."
+      puts "No #{slug} tenant — skipping calibration activity seed."
       next
     end
 

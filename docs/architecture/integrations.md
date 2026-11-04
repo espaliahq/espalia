@@ -142,7 +142,7 @@ Retry/discard policy on `HrisSyncJob`:
 - `ApiError` (5xx) — retry with polynomial backoff, 3 attempts
 - `AuthenticationError` — discard (log and stop; needs human fix)
 
-In development, `db/seeds.rb` runs the sync synchronously after seeding the framework so the dev database is fully populated.
+The seed connects no HRIS: the demo tenant's people are synthetic. To exercise a real sync in development, enter credentials on the integrations page and press Sync now.
 
 ### Webhooks (future)
 
@@ -194,10 +194,10 @@ Evidence::SuggestPlacementsJob
   presets fill its address, a provider and a model id (Jev by default, or a
   chat model), and no adapter special-cases it. Jev writes no rationale, so
   its suggestions show a confidence alone; the wire shape and the trade-off
-  are in [evidence.md](../guidelines/assessments/evidence.md). In development
-  the seeds save the me&u tenant onto Jev with the credentials file's
-  `ai.vercel.meandu.ai_gateway_api_key`; the gateway key is never read from
-  the credentials file at request time.
+  are in [evidence.md](../guidelines/assessments/evidence.md). Every tenant,
+  development's demo tenant included, enters its gateway key on the AI model
+  card; the gateway key is never read from the credentials file at request
+  time.
 - **The address is typed by an admin and called by the server**, so it is
   https only outside development, carries no login, query or fragment, and may
   not be a private-network host. The guard is the exchange's

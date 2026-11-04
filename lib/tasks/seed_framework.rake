@@ -1,15 +1,20 @@
 # frozen_string_literal: true
 
 namespace :frameworks do
-  desc "Seed the me&u career framework from YAML via RailsEventStore events"
-  task seed_meandu: :environment do
+  # The YAML schema is db/seeds/null_island_framework.yml's shape: an instance
+  # seeds its own framework by pointing SEED_FRAMEWORK_FILE (or the task args)
+  # at a file like it. Scope entries are role names or {role:, weight:};
+  # "core"/"all"/absent binds every role.
+  desc "Seed a framework from YAML: frameworks:seed[file,slug] or SEED_FRAMEWORK_FILE/SEED_TENANT_SLUG"
+  task :seed, [ :file, :slug ] => :environment do |_t, args|
     require "yaml"
 
-    yaml_path = Rails.root.join("db/seeds/meandu_career_framework.yml")
+    yaml_path = Rails.root.join(args[:file] || ENV["SEED_FRAMEWORK_FILE"] || "db/seeds/null_island_framework.yml")
+    tenant_slug = args[:slug] || ENV["SEED_TENANT_SLUG"] || "nullisland"
     data = YAML.load_file(yaml_path)
     framework_data = data["framework"]
 
-    tenant = Tenant.find_by!(slug: "meandu")
+    tenant = Tenant.find_by!(slug: tenant_slug)
     framework_id = SecureRandom.uuid_v7
 
     ActsAsTenant.with_tenant(tenant) do
@@ -17,7 +22,7 @@ namespace :frameworks do
 
       # Check if framework already seeded
       if FrameworkState::Framework.count > 0
-        puts "Framework already seeded for me&u tenant. Skipping."
+        puts "Framework already seeded for #{tenant_slug} tenant. Skipping."
         next
       end
 
@@ -31,14 +36,11 @@ namespace :frameworks do
       pending_category_threshold_updates = [] # [[category_id, deficit_threshold], ...]
 
       # ── Role Families, Roles, Levels ──
-      role_code_to_id = {}   # "E" => uuid, "DE" => uuid
+      role_code_to_id = {}   # "E" => uuid, "PD" => uuid
       role_name_to_id = {}   # "Product Designer" => uuid (scope resolution — read
       #                        models don't exist yet inside the batch)
       level_code_to_id = {}  # "E1" => uuid
       all_role_ids = []
-      management_role_ids = []
-      finance_role_ids = []
-      finance_role_codes = %w[FC FCo CF FO]
 
       cap_count = 0
       exp_count = 0
@@ -76,8 +78,6 @@ namespace :frameworks do
             role_name_to_id[role_data["name"]] =
               role_name_to_id.key?(role_data["name"]) ? :ambiguous : rid
             all_role_ids << rid
-            management_role_ids << rid if role_data["track"] == "management"
-            finance_role_ids << rid if finance_role_codes.include?(role_data["code"])
 
             entry_ordinal = role_data["levels"]&.map { |l| l["ordinal"] }&.min
             role_data["levels"]&.each do |level_data|
@@ -112,16 +112,15 @@ namespace :frameworks do
               cap_data["name"], description: cap_data["description"])
             cap_count += 1
 
-            # Resolve scope to role IDs for bindings
-            target_role_ids = resolve_scope(cap_data["scope"], role_code_to_id, role_name_to_id,
-              all_role_ids, management_role_ids, finance_role_ids)
+            # Resolve scope to [role_id, weight] pairs for bindings
+            targets = resolve_scope(cap_data["scope"], role_name_to_id, all_role_ids)
 
             individual_tolerance = cap_data.key?("individual_tolerance") ? cap_data["individual_tolerance"] : nil
 
-            target_role_ids.each do |target_rid|
+            targets.each do |target_rid, weight|
               bid = SecureRandom.uuid_v7
               handler.create_capability_role_binding(framework_id, bid, cap_id, target_rid,
-                individual_tolerance: individual_tolerance)
+                weight: weight, individual_tolerance: individual_tolerance)
               binding_count += 1
             end
 
@@ -191,37 +190,35 @@ namespace :frameworks do
   end
 end
 
-# Resolves a YAML scope value to an array of role UUIDs.
+# Resolves a YAML scope value to [role_id, weight] pairs.
+#
+# A scope is "core"/"all"/absent (every role, weight 1), a role name, or an
+# array whose entries are role names or {"role" => name, "weight" => w}.
+# Names resolve from the YAML-built map, NOT the read model: inside the seed
+# batch the projections haven't run yet, so FrameworkState::Role rows don't
+# exist.
 #
 # @param scope [String, Array, nil] the scope value from YAML
-# @param role_code_to_id [Hash] mapping of role codes to UUIDs
-# @param role_name_to_id [Hash] mapping of role names to UUIDs
+# @param role_name_to_id [Hash] mapping of role names to UUIDs (or :ambiguous)
 # @param all_role_ids [Array] all role UUIDs
-# @param management_role_ids [Array] management-track role UUIDs
-# @param finance_role_ids [Array] finance role UUIDs
-# @return [Array<String>] target role UUIDs
-def resolve_scope(scope, role_code_to_id, role_name_to_id, all_role_ids, management_role_ids, finance_role_ids)
+# @return [Array<Array(String, Numeric)>] [role_id, weight] pairs
+def resolve_scope(scope, role_name_to_id, all_role_ids)
   case scope
-  when "core"
-    all_role_ids
-  when "leadership"
-    management_role_ids
-  when "stream_leadership"
-    # EM (Engineering Manager) — stream-level engineering leadership
-    [ role_code_to_id["EM"] ].compact
-  when "finance"
-    finance_role_ids
-  when "finance_leadership"
-    finance_role_ids
+  when "core", "all", nil
+    all_role_ids.map { |rid| [ rid, 1.0 ] }
   when String
-    # Specific role name — resolved from the YAML-built map, NOT the read
-    # model: inside the seed batch the projections haven't run yet, so
-    # FrameworkState::Role rows don't exist.
-    resolve_role_names([ scope ], role_name_to_id)
+    resolve_role_names([ scope ], role_name_to_id).map { |rid| [ rid, 1.0 ] }
   when Array
-    resolve_role_names(scope, role_name_to_id)
+    scope.flat_map do |entry|
+      if entry.is_a?(Hash)
+        resolve_role_names([ entry.fetch("role") ], role_name_to_id)
+          .map { |rid| [ rid, entry.fetch("weight", 1.0) ] }
+      else
+        resolve_role_names([ entry ], role_name_to_id).map { |rid| [ rid, 1.0 ] }
+      end
+    end
   else
-    all_role_ids # default to all if no scope
+    raise ArgumentError, "Unsupported capability scope: #{scope.inspect}"
   end
 end
 

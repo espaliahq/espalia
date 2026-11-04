@@ -32,10 +32,9 @@ the chromedriver there.
 **The environment provides three things.** Network access to the hosts the script downloads
 from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
 (gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
-Ruby reads files as US-ASCII. And `GROWTHOS_MASTER_KEY`, which the script writes to the gitignored `config/master.key` before
-`db:prepare` seeds development. Tests never need it. The seed signs in the admin from
-credentials and runs a live HiBob sync, so the cloud database holds real emails, as a local one
-does (names are whimsified).
+Ruby reads files as US-ASCII. `GROWTHOS_MASTER_KEY` is optional: `db:prepare` seeds the Null Island demo tenant with no
+secrets at all (synthetic people on @nullisland.example). With the key set, the credentials
+file's other entries decrypt as usual; the seed itself no longer reads it.
 
 **A cloud session's Chromium never settles `navigator.clipboard.writeText` without a user
 gesture**, so a system test that copies must click for real — see

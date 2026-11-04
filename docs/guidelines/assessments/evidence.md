@@ -429,11 +429,10 @@ Rules, all deliberate:
   only `choice` and `probabilities`. Errors are `{ "error": { "message", "type" } }` with the
   usual statuses (an unauthenticated call answers 401), mapped to `Ai::Errors`
   like the OpenAI-compatible adapter's, whose HTTP half (`Ai::JsonEndpoint`)
-  it shares. **Development key:** seeded, not a fallback. In development,
-  `db/seeds.rb` saves the me&u tenant onto Jev on the gateway with the key at
-  `credentials.dig(:ai, :vercel, :meandu, :ai_gateway_api_key)`, through
-  `Tenant#update_ai_model!` like the card; nothing reads the gateway key from
-  the credentials file at request time. Every other tenant, and every production one, enters its
+  it shares. **Development key:** entered, not seeded. The seed configures no
+  AI model; a development tenant that wants suggestions enters a gateway key
+  on the AI model card like any other, and nothing reads the gateway key from
+  the credentials file at request time. Every tenant, production included, enters its
   key on the card.
 - **Names are always replaced.** `Ai::NamePseudonymiser` swaps every person
   in the tenant for `Person N` in both texts before they leave, and swaps them

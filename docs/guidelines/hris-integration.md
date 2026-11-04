@@ -71,7 +71,7 @@ database. Key properties:
 
 **Tenant admins edit them on the HRIS integration page** (`/tenant/integrations/hris`): an "Unmapped titles" card lists every title active HRIS people hold that no mapping covers, and a shared modal maps, remaps or removes one title at a time. MCP clients use the same three Operations: `integrations_hris_titles` (read), `integrations_map_hris_title` and `integrations_unmap_hris_title` (both `:in_app`). Nothing is reassigned when a mapping changes — the next sync applies it, and each write previews what that sync will do.
 
-Edits are **title-centric**: `HrisConfig#map_title` moves one title out of whichever mapping held it and into the group for its `(role code, level_ordinal)`, creating it if needed; `#unmap_title` removes it and drops a group it empties. So the stored shape is unchanged and a title can never be listed twice. `db/seeds.rb` still writes the me&u mappings for a fresh dev database — production never re-seeds (pre-deploy's `db:prepare` only seeds a brand-new database), so a change there does not reach production.
+Edits are **title-centric**: `HrisConfig#map_title` moves one title out of whichever mapping held it and into the group for its `(role code, level_ordinal)`, creating it if needed; `#unmap_title` removes it and drops a group it empties. So the stored shape is unchanged and a title can never be listed twice. Mappings are tenant data, entered on the integrations page — the seed writes none.
 
 ### Mode 1 — title carries the level
 
@@ -89,11 +89,11 @@ No `level_field_id` needed. The mapping's fixed `level_ordinal` wins even if the
 
 ### Mode 2 — level from a separate HRIS custom column
 
-Use when the HRIS has a "Level" custom column populated with the ordinal (e.g. me&u's HiBob `work.customColumns.column_0000000000000` containing values `"1"` through `"10"`):
+Use when the HRIS has a "Level" custom column populated with the ordinal (e.g. a HiBob custom column `work.customColumns.column_1234567890123` containing values `"1"` through `"10"`):
 
 ```ruby
 # On HrisConfig:
-level_field_id: "column_0000000000000"
+level_field_id: "column_1234567890123"
 
 # In role_mappings — no level_ordinal:
 HrisRoleMapping.new(
@@ -244,9 +244,7 @@ end
 
 ## Dev seeding
 
-`db/seeds.rb` seeds the framework **before** configuring the HRIS integration, then runs an initial sync synchronously in `Rails.env.development?`. This order matters — Pass 5 needs the framework to exist or it silently skips.
-
-The seed reads credentials from `Rails.application.credentials.dig(:hris, :hibob, :<tenant_slug>)` so real HiBob API calls can happen in dev without hardcoding secrets.
+`db/seeds.rb` seeds the Null Island demo tenant with synthetic people and no HRIS connection. To exercise a real HiBob sync in development, enter the credentials and mappings on `/tenant/integrations/hris` (they live encrypted on the tenant) and press Sync now — the framework must exist first, or Pass 5 silently skips.
 
 ## Anti-patterns
 

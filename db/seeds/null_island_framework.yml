@@ -1,0 +1,288 @@
+# The example capability framework for Null Island Systems — the fictional
+# geospatial company (headquartered at 0°N 0°E) that ships this repo's demo
+# data. Loaded by `frameworks:seed` (lib/tasks/seed_framework.rake); the
+# schema is documented there. An instance seeds its own framework by pointing
+# SEED_FRAMEWORK_FILE at a file shaped like this one — or, better, imports it
+# through the MCP tools (docs/import-your-framework.md).
+#
+# Scope entries may be a role name or {role:, weight:}; weight defaults to 1.
+# individual_tolerance: 0 marks a capability Required for every bound role.
+framework:
+  name: Null Island Capability Framework
+  role_families:
+  - name: Engineering
+    department: Product & Engineering
+    roles:
+    - name: Software Engineer
+      code: E
+      track: ic
+      levels:
+      - ordinal: 1
+        title: Engineer I
+        code: E1
+      - ordinal: 2
+        title: Engineer II
+        code: E2
+      - ordinal: 3
+        title: Senior Engineer
+        code: E3
+      - ordinal: 4
+        title: Staff Engineer
+        code: E4
+    - name: Engineering Manager
+      code: EM
+      track: management
+      levels:
+      - ordinal: 3
+        title: Engineering Manager
+        code: EM3
+      - ordinal: 4
+        title: Senior Engineering Manager
+        code: EM4
+  - name: Product
+    department: Product & Engineering
+    roles:
+    - name: Product Manager
+      code: PM
+      track: ic
+      levels:
+      - ordinal: 1
+        title: Associate Product Manager
+        code: PM1
+      - ordinal: 2
+        title: Product Manager
+        code: PM2
+      - ordinal: 3
+        title: Senior Product Manager
+        code: PM3
+      - ordinal: 4
+        title: Group Product Manager
+        code: PM4
+    - name: Product Designer
+      code: PD
+      track: ic
+      levels:
+      - ordinal: 1
+        title: Designer I
+        code: PD1
+      - ordinal: 2
+        title: Designer II
+        code: PD2
+      - ordinal: 3
+        title: Senior Designer
+        code: PD3
+      - ordinal: 4
+        title: Staff Designer
+        code: PD4
+  capability_categories:
+  - name: Craft
+    description: How we build — the quality bar for the work itself, whatever the discipline.
+    deficit_threshold: 1
+    capabilities:
+    - name: Code & Systems Quality
+      description: Writes code and designs systems that stay correct, observable and changeable as the platform grows.
+      scope:
+      - role: Software Engineer
+        weight: 2
+      - role: Engineering Manager
+      expectations:
+      - level: 1
+        description: Writes small, tested changes that follow the team's conventions, and asks for review early.
+        illustrations:
+        - role_code: E
+          description: Ships a fix to the geocoder's house-number parsing with a regression test covering the case that broke.
+      - level: 2
+        description: Owns features end to end, leaves code healthier than found, and writes tests that catch real failure modes.
+        illustrations:
+        - role_code: E
+          description: Refactors the tile cache's eviction path while adding vector tile support, with load-shaped tests.
+      - level: 3
+        description: Designs components others build on, anticipates failure modes, and sets the quality bar in review.
+        illustrations:
+        - role_code: E
+          description: Designs the geocoder's fallback chain so a provider outage degrades accuracy instead of availability.
+      - level: 4
+        description: Shapes the architecture across teams, and turns recurring classes of defects into platform guarantees.
+        illustrations:
+        - role_code: E
+          description: Introduces contract tests between the route planner and the turn-by-turn client that end a year of drift bugs.
+        - role_code: EM
+          description: Makes post-incident reviews produce platform fixes, not action-item lists that expire.
+    - name: Design Craft
+      description: Produces interface and interaction work that is clear, considered and consistent with the design system.
+      scope:
+      - role: Product Designer
+        weight: 2
+      expectations:
+      - level: 1
+        description: Produces clean screens from an established pattern library with guidance on the harder calls.
+      - level: 2
+        description: Designs complete flows independently, with states, edge cases and accessibility thought through.
+        illustrations:
+        - role_code: PD
+          description: Redesigns the route planner's waypoint editing so reordering works by drag and by keyboard alike.
+      - level: 3
+        description: Raises the quality of the system, not just the screen — contributes patterns others reuse.
+        illustrations:
+        - role_code: PD
+          description: Extracts the map-overlay legend into a system component now used by three product areas.
+      - level: 4
+        description: Sets design direction for a product area and mentors the craft across the team.
+    - name: Shipping & Iteration
+      description: Gets work in front of users in small steps, learns from what lands, and keeps momentum without cutting corners.
+      scope:
+      - Software Engineer
+      - Engineering Manager
+      - Product Manager
+      - Product Designer
+      expectations:
+      - level: 1
+        description: Breaks work into reviewable pieces and ships them steadily with support.
+      - level: 2
+        description: Scopes own work to ship value early, flags risks before they become slips.
+        illustrations:
+        - role_code: PM
+          description: Splits offline maps into a downloads-only first release, shipping six weeks before the full feature.
+      - level: 3
+        description: Shapes the team's slicing — the increments ship in an order that answers the riskiest question first.
+      - level: 4
+        description: Builds a shipping culture — the team's default is small, reversible, measured releases.
+        illustrations:
+        - role_code: EM
+          description: Moves the tile renderer team from quarterly releases to weekly ones behind flags, with rollback drills.
+  - name: Navigation
+    description: How we decide where to go — customers, data, and the route that gets us there.
+    capabilities:
+    - name: Customer Insight
+      description: Knows who uses the platform and why, and lets real usage reshape plans.
+      scope:
+      - role: Product Manager
+        weight: 2
+      - role: Product Designer
+      - role: Software Engineer
+      - role: Engineering Manager
+      expectations:
+      - level: 1
+        description: Joins customer conversations and research sessions, and brings observations back to the team.
+      - level: 2
+        description: Seeks out customer evidence for own work and can say who a change is for and what it fixes for them.
+        illustrations:
+        - role_code: PD
+          description: Watches five courier sessions and finds that turn-by-turn re-routing announces too late to act on.
+      - level: 3
+        description: Builds a continuous picture of customer needs the team plans against, not one-off findings.
+        illustrations:
+        - role_code: PM
+          description: Runs a quarterly ride-along programme with delivery fleets that feeds the route planner roadmap.
+      - level: 4
+        description: Represents the customer at the strategy table, changing what the company builds, not just how.
+    - name: Prioritisation & Roadmapping
+      description: Sequences the most valuable work, says no clearly, and keeps the roadmap honest.
+      scope:
+      - role: Product Manager
+        weight: 2
+      - role: Engineering Manager
+      expectations:
+      - level: 1
+        description: Keeps the backlog current and can explain why the next item is next.
+      - level: 2
+        description: Prioritises a feature area with a clear rationale, and renegotiates scope when facts change.
+      - level: 3
+        description: Owns a product-area roadmap, trades across competing asks, and communicates the cost of yes.
+        illustrations:
+        - role_code: PM
+          description: Defers the SDK partner portal a quarter to fund geocoder accuracy, with the trade-off written up for both sets of stakeholders.
+      - level: 4
+        description: Shapes portfolio-level bets and makes sequencing decisions the company understands and backs.
+    - name: Data-Informed Decisions
+      description: Instruments what matters, reads results honestly, and lets evidence beat opinion.
+      scope:
+      - Product Manager
+      - Software Engineer
+      - Engineering Manager
+      expectations:
+      - level: 1
+        description: Reads the team's dashboards and asks when a number looks off.
+      - level: 2
+        description: Instruments own features and checks outcomes after launch, not just delivery.
+        illustrations:
+        - role_code: E
+          description: Adds latency percentiles per tile zoom level and finds the p99 regression hiding under a flat average.
+      - level: 3
+        description: Designs the measures for an area, knows their failure modes, and kills work the data does not support.
+      - level: 4
+        description: Builds the team's decision discipline — experiments, baselines and honest post-launch reviews are the norm.
+        illustrations:
+        - role_code: PM
+          description: Retires a year-old personalisation bet after the holdout shows no retention effect, and documents why.
+  - name: Crew
+    description: How we work as one crew — communication, growing others, and being reliable at sea.
+    capabilities:
+    - name: Collaboration & Communication
+      description: Keeps the people who depend on the work informed, writes clearly, and disagrees constructively.
+      individual_tolerance: 0
+      scope:
+      - Software Engineer
+      - Engineering Manager
+      - Product Manager
+      - Product Designer
+      expectations:
+      - level: 1
+        description: Communicates progress and blockers without being asked, and writes things down where the team will find them.
+      - level: 2
+        description: Writes proposals peers can act on, and keeps stakeholders ahead of surprises.
+        illustrations:
+        - role_code: E
+          description: Writes the one-pager on the tile-cache migration that lets two dependent teams plan their quarter.
+      - level: 3
+        description: Runs the hard conversations — cross-team trade-offs, bad news, disagree-and-commit — and leaves relationships stronger.
+        illustrations:
+        - role_code: EM
+          description: Lands the decision to sunset the legacy embed API, keeping the two most affected partners onside.
+      - level: 4
+        description: Sets the communication standard for the group; ambiguity goes down wherever they are involved.
+    - name: Mentoring & Multiplying
+      description: Grows the people around them — feedback, coaching, and making the team more capable than the sum of its hires.
+      scope:
+      - role: Engineering Manager
+        weight: 2
+      - role: Software Engineer
+      - role: Product Manager
+      - role: Product Designer
+      expectations:
+      - level: 1
+        description: Asks for feedback, acts on it, and helps peers when asked.
+      - level: 2
+        description: Gives specific, timely feedback and supports onboarding without being assigned to.
+      - level: 3
+        description: Mentors deliberately — someone is measurably better at their job because of them this cycle.
+        illustrations:
+        - role_code: E
+          description: Coaches an Engineer I through their first on-call rotation until they run a geocoder incident unaided.
+        - role_code: EM
+          description: Builds a promotion case with evidence gathered across the cycle, not assembled the week before.
+      - level: 4
+        description: Builds capability systematically — practices, pairing norms and growth paths that outlast any one person.
+    - name: Ownership & Reliability
+      description: Takes end-to-end responsibility — for outcomes, for production, and for the unglamorous follow-through.
+      scope:
+      - role: Software Engineer
+        weight: 2
+      - role: Engineering Manager
+      - role: Product Manager
+      - role: Product Designer
+      expectations:
+      - level: 1
+        description: Finishes what they start, including the tests, the docs and the cleanup.
+      - level: 2
+        description: Owns their changes in production and follows incidents through to the fix, not the mitigation.
+        illustrations:
+        - role_code: E
+          description: Traces a buoy status-page outage to a leaked connection in the SDK sample code and fixes both.
+      - level: 3
+        description: Owns a service or area end to end; its health, pager load and debt trajectory are visibly theirs.
+      - level: 4
+        description: Takes ownership of the gaps between teams — the problems that are nobody's become theirs until they are somebody's.
+        illustrations:
+        - role_code: PM
+          description: Adopts the orphaned data-licensing renewals nobody owned and turns them into a tracked, boring process.

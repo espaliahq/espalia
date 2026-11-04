@@ -12,7 +12,7 @@ namespace :bench do
     warmup = Integer(ENV.fetch("WARMUP", "3"))
     framework_id_override = ENV["FRAMEWORK_ID"].presence
 
-    tenant = Tenant.find_by!(slug: "meandu")
+    tenant = Tenant.find_by!(slug: ENV["SEED_TENANT_SLUG"] || "nullisland")
     ActsAsTenant.with_tenant(tenant) do
       framework =
         if framework_id_override
@@ -58,7 +58,7 @@ namespace :bench do
     warmup = Integer(ENV.fetch("WARMUP", "5"))
     framework_id_override = ENV["FRAMEWORK_ID"].presence
 
-    tenant = Tenant.find_by!(slug: "meandu")
+    tenant = Tenant.find_by!(slug: ENV["SEED_TENANT_SLUG"] || "nullisland")
     ActsAsTenant.with_tenant(tenant) do
       framework =
         if framework_id_override
@@ -106,7 +106,7 @@ namespace :bench do
     else raise "Unknown SIZE=#{size}"
     end
 
-    tenant = Tenant.find_by!(slug: "meandu")
+    tenant = Tenant.find_by!(slug: ENV["SEED_TENANT_SLUG"] || "nullisland")
     framework_id = SecureRandom.uuid_v7
     rfid = SecureRandom.uuid_v7
 

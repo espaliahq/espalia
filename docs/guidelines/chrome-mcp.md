@@ -125,7 +125,9 @@ The seeded dev admin is **`admin@example.com` / `password123`** (created by
 `SeedAdmin`, no credentials file involved; see
 [dev-environment.md](dev-environment.md#a-checkout-without-configmasterkey)).
 Fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
-global admin in the `me&u` tenant, so it can reach every surface. Two caveats:
+global admin in the Null Island Systems demo tenant, so it can reach every
+surface; `theo@` and `marisol@nullisland.example` (same password) are member
+logins for IC and manager perspectives. Two caveats:
 `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` make the seed create that account
 instead, and re-seeding never resets an existing user's password — a dev
 database whose admin predates this login keeps its old password.
@@ -255,11 +257,11 @@ from `tmp/screenshots/...`, which the `SCREENSHOTS=1` system-test path owns.
   that helper does: `evaluate_script` `window.confirm = () => true`, then
   dispatch the button's own `.click()`, and prove the write landed (the
   live-status region, a status pill, or the network log) before screenshotting.
-- **Seeded tenant state persists across sessions.** The `me&u` seed tenant
-  accumulates assessment state (cycles, ratings, evidence, alignment) as you
-  drive flows. A verification run that assumes a clean slate (an unrated
-  assessment, no open cycle) must reset first, e.g.:
-  `bin/rails runner 'ActsAsTenant.with_tenant(Tenant.find_by(slug: "meandu")) { ... }'`
+- **Seeded tenant state persists across sessions.** The Null Island Systems
+  seed tenant accumulates assessment state (cycles, ratings, evidence,
+  alignment) as you drive flows. A verification run that assumes a clean
+  slate (an unrated assessment, no open cycle) must reset first, e.g.:
+  `bin/rails runner 'ActsAsTenant.with_tenant(Tenant.find_by(slug: "nullisland")) { ... }'`
   scoped to the person/framework under test. Don't assert "fresh" UI against a
   tenant another session already mutated.
 

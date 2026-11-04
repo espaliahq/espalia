@@ -33,7 +33,7 @@ bin/rails db:seed
 ```
 
 Then fill the Devise form (`Email`, `Password` fields) with `fill_form` and
-submit. The seeded admin is a global admin in the `me&u` tenant.
+submit. The seeded admin is a global admin in the Null Island Systems demo tenant; theo@/marisol@nullisland.example (same password) give IC and manager views.
 
 If the caller names a different user/tenant, follow their instructions instead.
 
