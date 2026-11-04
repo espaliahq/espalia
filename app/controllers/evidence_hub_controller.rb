@@ -181,7 +181,7 @@ class EvidenceHubController < ApplicationController
     decidable = can_regenerate || EvidencePlacementSuggestion.pending.exists? ? linkable : []
 
     {
-      messages: shown, hidden_count: hidden_count,
+      messages: shown, hidden_count: hidden_count, shown_ids: shown.to_set(&:dom_id),
       owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),

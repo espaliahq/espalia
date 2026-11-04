@@ -110,7 +110,7 @@ class Views::Evidence::ConversationMessage < Views::Base
       chip(STATUS_LABEL.fetch(status, status.capitalize), tone: STATUS_TONE.fetch(status, :neutral))
       answer_id = status == "responded" && @request.evidence_id ? EvidenceItem.dom_id(@request.evidence_id) : nil
       answer_id ||= "#{@request.dom_id}-declined" if status == "declined"
-      a(href: "##{answer_id}", class: LINK) { "See the answer ↓" } if answer_id
+      a(href: "##{answer_id}", class: LINK) { "See the answer ↓" } if answer_id && shown?(answer_id)
     end
   end
 
@@ -166,15 +166,21 @@ class Views::Evidence::ConversationMessage < Views::Base
     render Components::Kit::Prose.new(@request.decline_reason, class: "text-sm text-default") if @request.decline_reason.present?
   end
 
-  # A reply's link back to the request it answers, which may sit far above.
+  # A reply's link back to the request it answers, which may sit far above,
+  # or past the part of the thread that shows, where it stays plain text.
   def reply_quote
     excerpt = @request.message.present? ? " · “#{Prose.to_plain(@request.message).truncate(70)}”" : ""
-    a(href: "##{@request.dom_id}", data: { testid: "reply-quote" },
-      class: "block truncate rounded-md border-l-4 border-default bg-neutral-subtle px-2 py-1 text-xs text-muted hover:text-default") do
-      "↩ #{who(@request.requested_by_id, @request.requester)} asked on #{short_date(@request.requested_at)}: " \
-        "#{cell_label(@details[:cells][@request.id], @request.level_ordinal)}#{excerpt}"
+    text = "↩ #{who(@request.requested_by_id, @request.requester)} asked on #{short_date(@request.requested_at)}: " \
+           "#{cell_label(@details[:cells][@request.id], @request.level_ordinal)}#{excerpt}"
+    classes = "block truncate rounded-md border-l-4 border-default bg-neutral-subtle px-2 py-1 text-xs text-muted"
+    if shown?(@request.dom_id)
+      a(href: "##{@request.dom_id}", data: { testid: "reply-quote" }, class: "#{classes} hover:text-default") { text }
+    else
+      p(data: { testid: "reply-quote" }, class: classes) { text }
     end
   end
+
+  def shown?(dom_id) = @details[:shown_ids].include?(dom_id)
 
   # ── Feedback and replies ──
 

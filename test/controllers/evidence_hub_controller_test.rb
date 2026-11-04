@@ -160,6 +160,24 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "button[data-request-evidence-assignment-id-param='#{newer.id}']", text: "Ask someone about Alex"
     end
 
+    should "link an answered request to its answer only while the answer shows" do
+      answer = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_item, tenant: @tenant, author: @peer, person_id: @assessee.id, framework_id: @framework_id, source: "peer")
+      end
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @assessee, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id, status: "responded", evidence_id: answer.id,
+                                  requested_at: 2.days.ago)
+      end
+      sign_in @assessee_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "a[href='##{EvidenceItem.dom_id(answer.id)}']", text: "See the answer ↓"
+
+      ActsAsTenant.with_tenant(@tenant) { answer.update!(link_status: "withdrawn") }
+      get evidence_conversation_path(@peer.id)
+      assert_select "a", text: "See the answer ↓", count: 0
+    end
+
     should "answer 404 for a person outside the workspace" do
       sign_in @assessee_user
       get evidence_conversation_path(SecureRandom.uuid_v7)
