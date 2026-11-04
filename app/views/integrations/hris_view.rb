@@ -23,7 +23,8 @@ class Views::Integrations::HrisView < Views::Base
                  "bg-neutral-subtle text-muted"
 
   # @param hris_config [HrisConfig]
-  # @param hris_credentials_present [Boolean]
+  # @param hris_secrets_stored [Hash{String => Boolean}] which credentials are
+  #   set — see {HrisCredentials#stored}
   # @param person_rows [Array<Integrations::HrisPersonRow>]
   # @param role_mapping_rows [Array<Hash>] each entry: { mapping:, role:, status_label:, status_variant: }
   # @param unmapped_titles [Array<Integrations::HrisTitleResolution::Title>]
@@ -34,11 +35,11 @@ class Views::Integrations::HrisView < Views::Base
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
-  def initialize(hris_config:, hris_credentials_present:, person_rows:, role_mapping_rows:,
+  def initialize(hris_config:, hris_secrets_stored:, person_rows:, role_mapping_rows:,
                  unmapped_titles: [], mapping_options: {}, can_edit_mappings: false,
                  user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
-    @hris_credentials_present = hris_credentials_present
+    @hris_secrets_stored = hris_secrets_stored
     @person_rows = person_rows
     @role_mapping_rows = role_mapping_rows
     @unmapped_titles = unmapped_titles
@@ -110,9 +111,9 @@ class Views::Integrations::HrisView < Views::Base
       { term: "Provider", detail: provider_label },
       { term: "Sync enabled", detail: yes_no(@hris_config.sync_enabled?) },
       { term: "Last synced", detail: last_synced_label },
-      { term: "Credentials", detail: yes_no(@hris_credentials_present) },
+      { term: "Credentials", detail: yes_no(@hris_secrets_stored["service_user_id"] && @hris_secrets_stored["api_token"]) },
       { term: "Level column id", detail: @hris_config.level_field_id.presence || "\u2014" },
-      { term: "Webhook secret", detail: yes_no(@hris_config.webhook_secret.present?) }
+      { term: "Webhook secret", detail: yes_no(@hris_secrets_stored["webhook_secret"]) }
     ]
   end
 

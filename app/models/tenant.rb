@@ -17,6 +17,8 @@ class Tenant < ApplicationRecord
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
 
+  # The HRIS integration. The config is plain settings; the credentials are
+  # encrypted JSON: { service_user_id:, api_token:, webhook_secret: }.
   attribute :hris_config, HrisConfig.to_type, default: -> { HrisConfig.new }
   serialize :hris_credentials, coder: JSON
   encrypts :hris_credentials
@@ -205,6 +207,44 @@ class Tenant < ApplicationRecord
       assign_attributes(
         feedback_exchange_config: FeedbackExchangeConfig.new(feedback_exchange_config.attributes.merge(settings.stringify_keys)),
         feedback_exchange_credentials: credentials.presence
+      )
+      save!
+    end
+  end
+
+  # The HRIS API credentials, wrapped so no accessor can print a value.
+  #
+  # @return [HrisCredentials]
+  def hris_secrets
+    HrisCredentials.new(hris_credentials)
+  end
+
+  # Save the HRIS settings and credentials in one write. Unlisted settings keep
+  # their value, and a blank credential keeps the stored one, so a form that
+  # never echoes a secret can be saved without retyping it.
+  #
+  # The row is locked and reloaded first, so sync state the sync job wrote since
+  # this tenant was loaded (`last_synced_at`, mapping edits) is kept, not
+  # overwritten.
+  #
+  # @param settings [Hash] HrisConfig attributes to change
+  # @param service_user_id [String, nil]
+  # @param api_token [String, nil]
+  # @param webhook_secret [String, nil]
+  # @raise [ActiveRecord::RecordInvalid] when the settings do not validate
+  # @return [Boolean]
+  def update_hris!(settings: {}, service_user_id: nil, api_token: nil, webhook_secret: nil)
+    # A save that failed validation leaves its assignments behind, and a locked
+    # reload refuses unsaved changes: start from what is stored.
+    restore_attributes(%w[hris_config hris_credentials])
+    with_lock do
+      credentials = (hris_credentials.is_a?(Hash) ? hris_credentials : {}).dup
+      { "service_user_id" => service_user_id, "api_token" => api_token, "webhook_secret" => webhook_secret }
+        .each { |key, value| credentials[key] = value.strip if value.present? }
+
+      assign_attributes(
+        hris_config: HrisConfig.new(hris_config.attributes.merge(settings.stringify_keys)),
+        hris_credentials: credentials.presence
       )
       save!
     end

@@ -24,7 +24,7 @@ class Tenant::IntegrationsController < ApplicationController
 
     render Views::Integrations::IndexView.new(
       hris_config: current_tenant.hris_config,
-      hris_credentials_present: current_tenant.hris_credentials.present?,
+      hris_credentials_present: current_tenant.hris_secrets.complete?,
       slack_connected: current_tenant.slack_connected?,
       slack_team_name: current_tenant.slack_team_name,
       slack_available: Slack.configured?,
@@ -74,7 +74,7 @@ class Tenant::IntegrationsController < ApplicationController
 
     render Views::Integrations::HrisView.new(
       hris_config: current_tenant.hris_config,
-      hris_credentials_present: current_tenant.hris_credentials.present?,
+      hris_secrets_stored: current_tenant.hris_secrets.stored,
       person_rows: resolution.rows,
       role_mapping_rows: build_role_mapping_rows,
       unmapped_titles: unmapped_titles(resolution),

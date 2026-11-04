@@ -22,7 +22,6 @@ class HrisConfig
   attribute :level_field_id, :string
   attribute :sync_enabled, :boolean, default: false
   attribute :last_synced_at, :datetime
-  attribute :webhook_secret, :string
 
   validates :provider, inclusion: { in: PROVIDERS }, allow_blank: true
   validate :role_mappings_have_unique_titles
@@ -37,7 +36,7 @@ class HrisConfig
   def configured?(tenant)
     provider.present? &&
       sync_enabled? &&
-      tenant.hris_credentials.present?
+      tenant.hris_secrets.complete?
   end
 
   # The mapping a title resolves to, or nil when no mapping lists it.
