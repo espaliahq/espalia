@@ -58,8 +58,7 @@ class Views::Evidence::ConversationList < Views::Base
   end
 
   def attention_dot
-    span(class: "ml-1 text-xs text-default", aria: { hidden: "true" }) { "●" }
-    span(class: "sr-only") { " (needs your attention)" }
+    render Components::Kit::AttentionDot.new("needs your attention", class: "ml-1.5 align-middle")
   end
 
   def rows

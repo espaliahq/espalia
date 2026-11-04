@@ -42,6 +42,7 @@ Look a job up here, then check its states in Lookbook (`/lookbook`) before writi
 | One choice from a few, on a shared track | `Kit::SegmentedControl` |
 | A menu, or one row in it | `Kit::Dropdown`; `Kit::Dropdown.item_classes(tone:, size:)` for a `button_to` row |
 | A status or count (square) | `Kit::Badge.new(label, tone:)` |
+| A dot saying something needs the viewer | `Kit::AttentionDot.new(label)`; on a segment, `SegmentedControl#segment(marked:)` |
 | A level, role family or category (rounded) | `Kit::Tag.new(label, category:)` |
 | A text field, select, textarea, checkbox or radio | `class: Kit::Field::INPUT`, `SELECT`, `TEXTAREA`, `CHECKBOX` or `RADIO`, with layout classes beside it |
 | A panel, or a card that links | `Kit::Card` (`variant: :inset`, `href:`) |
