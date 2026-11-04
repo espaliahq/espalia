@@ -105,9 +105,13 @@ class Evidence::Conversations
   # @param group [String]
   # @return [Conversation, nil]
   def containing(request_id: nil, item_id: nil, group: @group)
-    all(group: group).find do |c|
-      c.messages.any? { |m| (request_id && m.request&.id == request_id) || (item_id && m.item&.id == item_id) }
+    index = (@index ||= {})[group] ||= all(group: group).each_with_object({}) do |c, acc|
+      c.messages.each do |m|
+        acc["request:#{m.request.id}"] ||= c if m.request
+        acc["item:#{m.item.id}"] ||= c if m.item
+      end
     end
+    (item_id && index["item:#{item_id}"]) || (request_id && index["request:#{request_id}"])
   end
 
   # Whether the viewer has anyone in their team or org.
