@@ -21,7 +21,7 @@ module HrisPage
   def render_hris_page(errors: [], status: :ok)
     tenant = ActsAsTenant.current_tenant
     saved = errors.empty? ? tenant : Tenant.find(tenant.id)
-    resolution = Integrations::HrisTitleResolution.new(tenant)
+    resolution = Integrations::HrisTitleResolution.new(saved)
 
     render Views::Integrations::HrisView.new(
       hris_config: saved.hris_config,
@@ -30,12 +30,12 @@ module HrisPage
       person_rows: resolution.rows,
       role_mapping_rows: build_role_mapping_rows(saved),
       unmapped_titles: unmapped_titles(resolution),
-      mapping_options: mapping_options(resolution),
+      mapping_options: mapping_options(resolution, saved),
       can_edit_mappings: policy(:integrations).update_role_mappings?,
       can_edit_connection: policy(:integrations).update_hris_connection?,
       errors: errors,
       user: current_user,
-      current_tenant: tenant,
+      current_tenant: saved,
       tenants: tenants_for_user
     ), status: status
   end
@@ -73,12 +73,12 @@ module HrisPage
   # suggestions).
   #
   # @return [Hash]
-  def mapping_options(resolution)
+  def mapping_options(resolution, tenant)
     {
       roles: resolution.roles,
       level_ordinals_by_role_code: resolution.level_ordinals_by_role_code,
       hris_titles: resolution.titles.map(&:title),
-      level_column_configured: ActsAsTenant.current_tenant.hris_config.level_field_id.present?
+      level_column_configured: tenant.hris_config.level_field_id.present?
     }
   end
 end
