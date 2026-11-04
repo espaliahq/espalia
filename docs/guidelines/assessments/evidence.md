@@ -334,7 +334,8 @@ recently active first, beside the open thread. It replaced a single scroll of
 - **Links land on the thread.** `EvidenceItem.hub_path` and
   `EvidenceRequest.hub_path` are `/evidence/items/<id>` and
   `/evidence/requests/<id>`, which redirect to the thread holding the message
-  with its anchor. Links sent before conversations (`/evidence#evidence-item-…`
+  with its anchor: a report's thread before a person's, and the team view
+  before the org view. Links sent before conversations (`/evidence#evidence-item-…`
   in Slack) are found by the `evidence-hub` controller: the browser never
   sends the anchor, so the page asks the server when it names a message that
   isn't on screen. Writes started on the page come back to the thread they
