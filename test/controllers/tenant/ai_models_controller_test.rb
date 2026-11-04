@@ -333,8 +333,33 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "DELETE /integrations/ai-model as a tenant admin" do
+    setup { sign_in @admin_user }
+
+    should "remove the key and switch suggestions off" do
+      configure_gateway
+
+      delete tenant_ai_model_path
+
+      assert_redirected_to tenant_integration_path("ai-model")
+      @tenant.reload
+      assert_nil @tenant.ai_credentials
+      assert_not @tenant.ai_config.suggestions_enabled?
+      assert_equal "openai_compatible", @tenant.ai_config.provider, "the settings survive"
+    end
+  end
+
   context "as a non-admin member" do
     setup { sign_in @member_user }
+
+    should "be refused the key removal, and change nothing" do
+      @tenant.update_ai_model!(settings: { provider: "openai_compatible", base_url: GATEWAY, model: "a/b" }, api_key: KEY)
+
+      delete tenant_ai_model_path
+
+      assert_redirected_to root_path
+      assert @tenant.reload.ai_secrets.api_key?
+    end
 
     should "be redirected away from the page" do
       get tenant_integration_path("ai-model")

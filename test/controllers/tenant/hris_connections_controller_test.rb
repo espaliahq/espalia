@@ -69,6 +69,23 @@ class Tenant::HrisConnectionsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  context "DELETE as a tenant admin" do
+    setup { sign_in @admin_user }
+
+    should "disconnect: credentials gone, sync off, mappings kept" do
+      @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true },
+                           service_user_id: "svc-1", api_token: "tok-secret")
+
+      delete tenant_hris_connection_path
+
+      assert_redirected_to tenant_integration_path("hris")
+      @tenant.reload
+      assert_nil @tenant.hris_credentials
+      assert_not @tenant.hris_config.sync_enabled?
+      assert_equal "hibob", @tenant.hris_config.provider
+    end
+  end
+
   context "as a tenant member" do
     should "be denied" do
       sign_in @member_user
@@ -78,6 +95,16 @@ class Tenant::HrisConnectionsControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to root_path
       assert_equal "You are not authorized to perform this action.", flash[:alert]
       assert_nil @tenant.reload.hris_config.provider
+    end
+
+    should "be denied the disconnect" do
+      sign_in @member_user
+      @tenant.update_hris!(service_user_id: "svc-1", api_token: "tok-secret")
+
+      delete tenant_hris_connection_path
+
+      assert_redirected_to root_path
+      assert @tenant.reload.hris_secrets.complete?
     end
   end
 

@@ -22,6 +22,15 @@ class Tenant::AiModelsController < ApplicationController
     render_ai_model_page(errors: setting_errors(e.record), status: :unprocessable_content)
   end
 
+  # DELETE /tenant/integrations/ai-model
+  def destroy
+    authorize :integrations, :remove_ai_key?
+
+    current_tenant.remove_ai_api_key!
+    redirect_to tenant_integration_path("ai-model"), status: :see_other,
+                notice: "API key removed. Suggestions are off until a new key is saved."
+  end
+
   # POST /tenant/integrations/ai-model/test_connection
   def test_connection
     authorize :integrations, :test_ai_model?
