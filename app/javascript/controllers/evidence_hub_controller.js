@@ -2,6 +2,11 @@
 // it (`?give=1` from the Home card's "Give feedback" link). It clicks the same
 // trigger a person would, so there is one open-and-load path, not two.
 //
+// It also follows links sent before the page had conversations
+// (`/evidence#evidence-item-<id>` in a Slack message): when the anchor names a
+// message that isn't on this page, it asks the server which thread holds it.
+// The browser never sends the anchor, so only the page can do this.
+//
 // Example usage:
 // <div data-controller="evidence-hub" data-evidence-hub-auto-open-value="true">
 //   <button data-evidence-hub-target="autoTrigger"
@@ -11,6 +16,7 @@
 import BaseController from "controllers/base_controller"
 
 const CONNECT_TIMEOUT_MS = 10000
+const OLD_ANCHOR = /^#evidence-(item|request)-([0-9a-f-]{36})$/
 
 export default class extends BaseController {
   static targets = ["autoTrigger"]
@@ -18,6 +24,7 @@ export default class extends BaseController {
 
   connect() {
     super.connect()
+    if (this.#followOldAnchor()) return
     if (!this.autoOpenValue || !this.hasAutoTriggerTarget) return
     // A Turbo cache preview is replaced by the real render a moment later;
     // opening from it would fetch the form twice.
@@ -35,6 +42,16 @@ export default class extends BaseController {
   disconnect() {
     cancelAnimationFrame(this.pendingFrame)
     super.disconnect()
+  }
+
+  #followOldAnchor() {
+    const match = window.location.hash.match(OLD_ANCHOR)
+    if (!match || document.getElementById(window.location.hash.slice(1))) return false
+
+    const place = new URL(window.location.href).searchParams.get("place")
+    const query = place === "org" ? "?place=org" : ""
+    window.Turbo.visit(`/evidence/${match[1]}s/${match[2]}${query}`, { action: "replace" })
+    return true
   }
 
   // Each controller registers when its own module loads, in no set order. A

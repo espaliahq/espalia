@@ -6,14 +6,15 @@
 # cancel are driven from the evidence hub.
 class EvidenceRequestsController < ApplicationController
   include EvidenceDiffSubmit
+  include EvidenceHubReturn
 
   before_action :require_person
 
   # respond / decline / nudge / destroy all surface domain rejections the same
-  # way: back to the hub with the message as a flash alert.
+  # way: back to the conversation with the message as a flash alert.
   rescue_from Operations::Base::ParameterError,
               PersonDevelopment::Aggregate::CommandError do |e|
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+    redirect_to hub_return_path, alert: e.message, status: :see_other
   end
 
   # GET /assessments/:assignment_id/evidence_request_modal — the request form,
@@ -67,7 +68,7 @@ class EvidenceRequestsController < ApplicationController
     authorize evidence_request, :respond?, policy_class: EvidenceRequestPolicy
 
     apply_evidence_diff
-    redirect_to evidence_hub_path, notice: "Feedback provided. Thank you!"
+    redirect_to hub_return_path, notice: "Feedback provided. Thank you!"
   end
 
   # POST /evidence_requests/:id/decline
@@ -78,7 +79,7 @@ class EvidenceRequestsController < ApplicationController
       context: pundit_user,
       params: { request_id: evidence_request.id, reason: params.dig(:evidence_request, :reason) }
     )
-    redirect_to evidence_hub_path, notice: "Request declined."
+    redirect_to hub_return_path, notice: "Request declined."
   end
 
   # POST /evidence_requests/:id/nudge — manual reminder from the requester
@@ -88,7 +89,7 @@ class EvidenceRequestsController < ApplicationController
     Operations::Assessments::NudgeEvidenceRequest.call(
       context: pundit_user, params: { request_id: evidence_request.id }
     )
-    redirect_to evidence_hub_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
+    redirect_to hub_return_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
   end
 
   # DELETE /evidence_requests/:id — cancel
@@ -98,7 +99,7 @@ class EvidenceRequestsController < ApplicationController
     Operations::Assessments::CancelEvidenceRequest.call(
       context: pundit_user, params: { request_id: evidence_request.id }
     )
-    redirect_to evidence_hub_path, notice: "Request cancelled.", status: :see_other
+    redirect_to hub_return_path, notice: "Request cancelled.", status: :see_other
   end
 
   private

@@ -50,9 +50,9 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_match "Rep asked you for feedback", response.body
       assert_match "Critical Thinking", response.body
-      # Compact context — role + level code; the full expectation/examples live
-      # in the modal you open to respond, not on the card.
-      assert_match "SWE · E2", response.body
+      # Compact context — capability and level code; the full expectation and
+      # examples live in the modal you open to respond, not on the card.
+      assert_match "Critical Thinking · E2", response.body
       assert_no_match "Synthesises competing trade-offs", response.body
     end
 
@@ -70,9 +70,9 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
         get evidence_hub_path
       end
 
-      should "offer a secondary Decline request button that opens a hidden reason dialog" do
-        trigger = css_select("button.border-tone[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline request" }
-        assert trigger, "expected a secondary Decline request button"
+      should "offer a secondary Decline button that opens a hidden reason dialog" do
+        trigger = css_select("button.border-tone[data-action~='click->modal#open']").find { |b| b.text.strip == "Decline" }
+        assert trigger, "expected a secondary Decline button"
         assert_select "[role='dialog'].hidden##{trigger["data-modal-target-id"]}" do
           assert_select "textarea[name='evidence_request[reason]']"
         end
@@ -94,7 +94,8 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
       sign_in @report_user
       get evidence_hub_path
-      assert_no_match(/workspace admins/, response.body)
+      assert_select "[data-kind='request']"
+      assert_select "[data-testid='visibility-note']", count: 0
     end
 
     should "show outgoing requests to the requester" do
@@ -102,10 +103,10 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       sign_in @report_user
       get evidence_hub_path
       assert_response :success
-      assert_match "To Peer", response.body
+      assert_match "You asked Peer for feedback", response.body
     end
 
-    should "name the assessee with 'regarding' when a manager asks on a report's behalf" do
+    should "say whom a request is about when a manager asks on a report's behalf" do
       manager_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do
         manager = create(:person, tenant: @tenant, email: manager_user.email, name: "Boss")
@@ -115,21 +116,23 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
           requested_by_id: manager.id, requestee_person_id: @peer.id,
           capability_stable_id: @cap.stable_id, level_ordinal: 2, message: "Saw them pair?")
       end
-      # Incoming (the peer) names who it's regarding…
+      # Incoming (the peer) says whom it's about…
       sign_in @peer_user
       get evidence_hub_path
-      assert_match "Boss asked you for feedback, regarding Rep", response.body
+      assert_match "Boss asked you for feedback", response.body
+      assert_match "About Rep", response.body
       # …and the requester's outgoing card does too.
       sign_in manager_user
-      get evidence_hub_path
-      assert_match "To Peer, regarding Rep", response.body
+      get evidence_hub_path(view: "person")
+      assert_match "You asked Peer for feedback", response.body
+      assert_match "About Rep", response.body
     end
 
-    should "omit 'regarding' when the requester asks about their own assessment" do
+    should "say a request about the asker is about them" do
       make_request! # requested_by == assessee (@report)
-      sign_in @peer_user
+      sign_in @report_user
       get evidence_hub_path
-      assert_no_match(/regarding/, response.body)
+      assert_match "About you", response.body
     end
 
     should "embed the provided evidence on a responded outgoing request" do
@@ -144,10 +147,8 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
       sign_in @report_user
       get evidence_hub_path
-      assert_match "Response from Peer", response.body
-      assert_match "Solid pairing partner.", response.body
-      assert_match "Applies to:", response.body
-      assert_match "Critical Thinking E2", response.body
+      assert_select "[data-kind='reply']", text: /Solid pairing partner\./
+      assert_select "[data-kind='reply'] [data-testid='reply-quote']", text: /You asked on .*: Critical Thinking · E2/
       # The link chip carries its valence badge.
       assert_match "data-valence=\"demonstrated\"", response.body
       assert_select "button[data-evidence-modal-mode-param='edit']", text: "Edit links"
@@ -299,11 +300,11 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       end
     end
 
-    should "render a Provide feedback / evidence modal trigger on the incoming card" do
+    should "render a Respond modal trigger on the incoming card" do
       make_request!
       sign_in @peer_user
       get evidence_hub_path
-      assert_select "button[data-evidence-modal-mode-param='respond']", text: "Provide feedback / evidence"
+      assert_select "[data-kind='request'] button[data-evidence-modal-mode-param='respond']", text: "Respond"
     end
 
     should "deny a non-requestee" do

@@ -102,7 +102,7 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
       mine = @assessee_user.notifications.reload
       assert_equal "Jordan gave you feedback to place", mine.first.inbox_title
       assert_match(/Not yet placed on a capability/, mine.first.inbox_body)
-      assert_equal "/evidence#evidence-item-#{id}", mine.first.inbox_url
+      assert_equal "/evidence/items/#{id}", mine.first.inbox_url
       assert_equal "Jordan gave Alex feedback to place", @manager_user.notifications.reload.first.inbox_title
     end
   end
@@ -119,9 +119,9 @@ class PersonDevelopment::AsyncHandlers::FeedbackNotifierTest < ActiveSupport::Te
       id = nil
       perform_enqueued_jobs { id = record!(author: @peer, source: "peer", placed: false) }
 
-      assert_equal "/evidence?place=org#evidence-item-#{id}", @manager_user.notifications.reload.first.inbox_url
-      assert_equal "/evidence#evidence-item-#{id}", lead_user.notifications.reload.first.inbox_url
-      assert_equal "/evidence#evidence-item-#{id}", @assessee_user.notifications.reload.first.inbox_url
+      assert_equal "/evidence/items/#{id}?place=org", @manager_user.notifications.reload.first.inbox_url
+      assert_equal "/evidence/items/#{id}", lead_user.notifications.reload.first.inbox_url
+      assert_equal "/evidence/items/#{id}", @assessee_user.notifications.reload.first.inbox_url
     end
   end
 

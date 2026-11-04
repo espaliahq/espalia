@@ -45,19 +45,19 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
 
   def switch_between_team_and_org
     visit evidence_hub_path
-    assert_text "Feedback to place"
-    assert_selector "##{EvidenceItem.dom_id(@lead_item)}", text: "Chaired the planning session well."
-    assert_no_selector "##{EvidenceItem.dom_id(@engineer_item)}"
+    assert_text "Needs you"
+    assert_selector "#needs-you [data-testid='needs-you-place']", text: "Place Jordan's feedback about Alex"
+    assert_no_selector "#needs-you [data-testid='needs-you-place']", text: "about Sky"
     assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My team · 1"
 
-    click_link_with_js_fallback("My whole org · 2", expect_text: "Wrote the on-call runbook.")
-    assert_selector "##{EvidenceItem.dom_id(@lead_item)}"
+    click_link_with_js_fallback("My whole org · 2", expect_text: "Place Jordan's feedback about Sky")
+    assert_selector "#needs-you [data-testid='needs-you-place']", count: 2
     assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My whole org · 2"
     assert_current_path evidence_hub_path(place: "org")
 
     click_link_with_js_fallback("My team · 1",
-      expect_selector: "nav[aria-label='Whose feedback to place'] a[aria-current='page'][href='#{evidence_hub_path(anchor: "feedback-to-place")}']")
-    assert_no_text "Wrote the on-call runbook."
+      expect_selector: "nav[aria-label='Whose feedback to place'] a[aria-current='page'][href='#{evidence_hub_path(anchor: "needs-you")}']")
+    assert_no_text "Place Jordan's feedback about Sky"
     assert_current_path evidence_hub_path
   end
 
@@ -78,7 +78,7 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
     visit assessment_path(@engineer_assignment)
     assert_selector "[data-testid='unplaced-feedback-notice']", text: "1 piece of feedback about Sky Okafor is waiting"
 
-    click_link_with_js_fallback("Place it →", expect_text: "Wrote the on-call runbook.")
+    click_link_with_js_fallback("Place it →", expect_text: "Place Jordan's feedback about Sky")
     assert_current_path evidence_hub_path(place: "org")
     assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My whole org · 2"
   end

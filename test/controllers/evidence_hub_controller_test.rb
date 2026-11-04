@@ -2,9 +2,8 @@
 
 require "test_helper"
 
-# The hub's proactive-feedback surfaces: the "Give feedback" entry (and its
-# auto-open from ?give=1), and the "Feedback to place" lists for the
-# recipient and the manager side — never for a peer.
+# The Feedback / Evidence page (#647): "Needs you", the conversations and the
+# open thread, read marking, and the links notifications send.
 class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
@@ -15,9 +14,9 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
     @peer_user = create(:user, password: "password123")
 
     ActsAsTenant.with_tenant(@tenant) do
-      @manager = create(:person, tenant: @tenant, email: @manager_user.email, name: "Morgan")
-      @assessee = create(:person, tenant: @tenant, email: @assessee_user.email, name: "Alex", manager: @manager)
-      @peer = create(:person, tenant: @tenant, email: @peer_user.email, name: "Jordan")
+      @manager = create(:person, tenant: @tenant, email: @manager_user.email, name: "Morgan Manager")
+      @assessee = create(:person, tenant: @tenant, email: @assessee_user.email, name: "Alex Assessee", manager: @manager)
+      @peer = create(:person, tenant: @tenant, email: @peer_user.email, name: "Jordan Peer")
       create(:tenant_user, tenant: @tenant, user: @assessee_user, person: @assessee, role: :member)
       create(:tenant_user, tenant: @tenant, user: @manager_user, person: @manager, role: :member)
       create(:tenant_user, tenant: @tenant, user: @peer_user, person: @peer, role: :member)
@@ -25,13 +24,28 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       @framework_id = SecureRandom.uuid_v7
       create(:framework_state, framework_id: @framework_id, name: "Eng")
       rf = create(:framework_role_family, framework_id: @framework_id, name: "Eng")
-      role = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
-      level = create(:framework_level, role_id: role.role_id, ordinal: 2, title: "Mid", code: "E2")
-      handler = PersonDevelopment::CommandHandler.new
-      handler.assign_to_framework(@assessee.id, @framework_id, role.role_id, level.level_id)
+      @role = create(:framework_role, role_family_id: rf.role_family_id, name: "SWE", code: "E", track: "ic")
+      @level = create(:framework_level, role_id: @role.role_id, ordinal: 2, title: "Mid", code: "E2")
+      @handler = PersonDevelopment::CommandHandler.new
+      @handler.assign_to_framework(@assessee.id, @framework_id, @role.role_id, @level.level_id)
       @unplaced_id = SecureRandom.uuid_v7
-      handler.record_evidence(@assessee.id, @framework_id, @unplaced_id,
+      @handler.record_evidence(@assessee.id, @framework_id, @unplaced_id,
         source: "peer", evidence_type: "peer_feedback", content: "Ran the incident call calmly.", author_id: @peer.id)
+    end
+  end
+
+  def notify!(user, record:)
+    event = Noticed::Event.create!(type: "FeedbackReceivedNotifier", record: record, params: { tenant_id: @tenant.id })
+    Noticed::Notification.create!(type: "FeedbackReceivedNotifier::Notification", event: event, recipient: user)
+  end
+
+  def unplaced_item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find(@unplaced_id) }
+
+  context "without a person record" do
+    should "refuse the page" do
+      sign_in create(:user)
+      get evidence_hub_path
+      assert_response :forbidden
     end
   end
 
@@ -41,174 +55,177 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       get evidence_hub_path
       assert_response :success
       assert_select "button[data-evidence-modal-mode-param='give']", text: "Give feedback"
-      assert_select "[data-controller~='evidence-hub'][data-evidence-hub-auto-open-value='true']", count: 0
+      assert_select "[data-controller~='evidence-hub'][data-evidence-hub-auto-open-value='false']"
     end
 
     should "open the give step on arrival when asked to" do
       sign_in @peer_user
       get evidence_hub_path(give: 1)
-      assert_select "[data-controller~='evidence-hub'][data-evidence-hub-auto-open-value='true']"
-      assert_select "button[data-evidence-hub-target='autoTrigger'][data-evidence-modal-mode-param='give']"
+      assert_select "[data-evidence-hub-auto-open-value='true']"
     end
   end
 
-  context "feedback to place" do
-    should "list an unplaced item about the viewer, with a Place action on its anchored card" do
+  context "needs you" do
+    should "ask the assessee to place feedback about them" do
       sign_in @assessee_user
       get evidence_hub_path
-      assert_select "section#feedback-to-place" do
-        assert_select "h3", text: /About you/
-        assert_select "##{EvidenceItem.dom_id(@unplaced_id)}" do
-          assert_select "button[data-evidence-modal-mode-param='edit'][data-evidence-modal-evidence-id-param='#{@unplaced_id}']",
-            text: "Place on a capability"
-        end
+      assert_select "#needs-you [data-testid='needs-you-place']", text: /Place Jordan's feedback about you/ do
+        assert_select "button[data-evidence-modal-mode-param='edit'][data-evidence-modal-evidence-id-param='#{@unplaced_id}']"
       end
-      assert_select "p", text: /From Jordan/
-      assert_select "p", text: /on Alex's assessment/, count: 0
     end
 
-    should "list a report's unplaced item for their manager, naming the report" do
+    should "ask the manager to place a report's feedback, linking to the report's thread" do
       sign_in @manager_user
       get evidence_hub_path
-      assert_select "section#feedback-to-place" do
-        assert_select "h3", text: /About your reports/
-        assert_select "p", text: /on Alex's assessment/
+      assert_select "#needs-you [data-testid='needs-you-place']", text: /about Alex/ do
+        assert_select "a[href=?]", evidence_report_conversation_path(@assessee.id, anchor: EvidenceItem.dom_id(@unplaced_id))
       end
     end
 
-    should "show a peer nothing to place, only what they gave" do
+    should "ask a peer to place nothing" do
       sign_in @peer_user
       get evidence_hub_path
-      assert_select "section#feedback-to-place", count: 0
-      assert_select "p", text: "Feedback, not yet placed on a capability"
+      assert_select "#needs-you [data-testid='needs-you-place']", count: 0
+      assert_select "#needs-you", text: /Nothing needs you/
     end
 
-    should "list a report's item for an active rating delegate on that framework" do
-      delegate_user = create(:user, password: "password123")
-      ActsAsTenant.with_tenant(@tenant) do
-        delegate = create(:person, tenant: @tenant, email: delegate_user.email, name: "Devon")
-        create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate, role: :member)
-        PersonDevelopment::CommandHandler.new.delegate_manager_rating(@assessee.id, @framework_id, delegate.id,
-          granted_by_id: @manager.id)
+    should "list a request to answer with a Respond button" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id)
       end
-      sign_in delegate_user
+      sign_in @peer_user
       get evidence_hub_path
-      assert_select "section#feedback-to-place h3", text: /About your reports/
-    end
-
-    should "list a manager's own unplaced item about a report once, under what they gave" do
-      own = SecureRandom.uuid_v7
-      ActsAsTenant.with_tenant(@tenant) do
-        PersonDevelopment::CommandHandler.new.record_evidence(@assessee.id, @framework_id, own,
-          source: "manager", evidence_type: "observation", content: "Calm under pressure", author_id: @manager.id)
-      end
-      sign_in @manager_user
-      get evidence_hub_path
-      assert_select "##{EvidenceItem.dom_id(own)}", count: 1
-      assert_select "section#feedback-to-place ##{EvidenceItem.dom_id(own)}", count: 0
-      assert_select "p", text: "Feedback, not yet placed on a capability"
-    end
-
-    should "show no team/org toggle to a manager with no one beyond their team" do
-      sign_in @manager_user
-      get evidence_hub_path
-      assert_select "nav[aria-label='Whose feedback to place']", count: 0
-    end
-
-    context "with a skip-level report" do
-      setup do
-        ActsAsTenant.with_tenant(@tenant) do
-          @deep = create(:person, tenant: @tenant, name: "Sky", manager: @assessee)
-          handler = PersonDevelopment::CommandHandler.new
-          assignment = PersonFrameworkAssignment.find_by!(person_id: @assessee.id)
-          handler.assign_to_framework(@deep.id, @framework_id, assignment.role_id, assignment.level_id)
-          @deep_item = SecureRandom.uuid_v7
-          handler.record_evidence(@deep.id, @framework_id, @deep_item,
-            source: "peer", evidence_type: "peer_feedback", content: "Wrote the runbook.", author_id: @peer.id)
-        end
-        sign_in @manager_user
-      end
-
-      should "list only the team by default, with both counts on the toggle" do
-        get evidence_hub_path
-        assert_select "##{EvidenceItem.dom_id(@unplaced_id)}"
-        assert_select "##{EvidenceItem.dom_id(@deep_item)}", count: 0
-        assert_select "nav[aria-label='Whose feedback to place']" do
-          assert_select "a[href='#{evidence_hub_path(anchor: "feedback-to-place")}'][aria-current='page']", text: "My team · 1"
-          assert_select "a[href='#{evidence_hub_path(place: "org", anchor: "feedback-to-place")}']:not([aria-current])",
-            text: "My whole org · 2"
-        end
-      end
-
-      should "list the whole org for ?place=org" do
-        get evidence_hub_path(place: "org")
-        assert_select "##{EvidenceItem.dom_id(@unplaced_id)}"
-        assert_select "##{EvidenceItem.dom_id(@deep_item)}"
-        assert_select "nav a[aria-current='page']", text: "My whole org · 2"
-      end
-
-      should "keep the rest of the hub's view on the toggle" do
-        get evidence_hub_path(elsewhere: "all", give: "1")
-        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", anchor: "feedback-to-place")}']", text: "My team · 1"
-        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", place: "org", anchor: "feedback-to-place")}']"
-      end
-
-      should "carry only the view keys into its links, never a reserved URL option" do
-        get "/evidence?elsewhere=all&script_name=%2F%2Fattacker.example&host=attacker.example&give=1"
-        assert_select "nav a[href='#{evidence_hub_path(elsewhere: "all", place: "org", anchor: "feedback-to-place")}']"
-        assert_select "a[href*='attacker']", count: 0
-      end
-
-      should "treat an unknown view as the team" do
-        get evidence_hub_path(place: "tenant")
-        assert_select "##{EvidenceItem.dom_id(@deep_item)}", count: 0
-        assert_select "nav a[aria-current='page']", text: "My team · 1"
-      end
-
-      should "keep the section and its toggle when only the org has feedback to place" do
-        ActsAsTenant.with_tenant(@tenant) do
-          cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
-          cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
-          PersonDevelopment::CommandHandler.new.add_evidence_link(@assessee.id, @framework_id, @unplaced_id,
-            capability_stable_id: cap.stable_id, level_ordinal: 2, linked_by_id: @manager.id, valence: "demonstrated")
-        end
-        get evidence_hub_path
-        assert_select "section#feedback-to-place" do
-          assert_select "p", text: "Nothing about your team is waiting to be placed."
-          assert_select "nav a", text: "My whole org · 1"
-        end
-      end
-
-      should "scope suggestions on placed items the same way" do
-        placed = SecureRandom.uuid_v7
-        ActsAsTenant.with_tenant(@tenant) do
-          cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
-          cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
-          other = create(:framework_capability, category_id: cat.category_id, name: "Systems Design")
-          PersonDevelopment::CommandHandler.new.record_evidence(@deep.id, @framework_id, placed,
-            source: "peer", evidence_type: "peer_feedback", content: "Mapped the dependencies.", author_id: @peer.id,
-            capability_stable_id: cap.stable_id, level_ordinal: 2, valence: "demonstrated")
-          create(:evidence_placement_suggestion, tenant: @tenant, item: EvidenceItem.find(placed),
-            capability_stable_id: other.stable_id, level_ordinal: 2)
-        end
-
-        get evidence_hub_path
-        assert_select "##{EvidenceItem.dom_id(placed)}", count: 0
-        get evidence_hub_path(place: "org")
-        assert_select "section#suggested-placements ##{EvidenceItem.dom_id(placed)}"
+      assert_select "#needs-you [data-testid='needs-you-request']", text: /Morgan asked you for feedback/ do
+        assert_select "button[data-evidence-modal-request-id-param='#{request.id}']", text: "Respond"
       end
     end
+  end
 
-    should "drop a placed item from the list" do
-      ActsAsTenant.with_tenant(@tenant) do
-        cat = create(:framework_capability_category, framework_id: @framework_id, name: "Thinking", ordinal: 1)
-        cap = create(:framework_capability, category_id: cat.category_id, name: "Critical Thinking")
-        PersonDevelopment::CommandHandler.new.add_evidence_link(@assessee.id, @framework_id, @unplaced_id,
-          capability_stable_id: cap.stable_id, level_ordinal: 2, linked_by_id: @assessee.id, valence: "demonstrated")
-      end
+  context "conversations" do
+    should "show the assessee a thread with the author" do
       sign_in @assessee_user
       get evidence_hub_path
-      assert_select "section#feedback-to-place", count: 0
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']"
+      assert_select "[data-testid='group-report']", count: 0
+    end
+
+    should "show the author a thread with the person it's about" do
+      sign_in @peer_user
+      get evidence_hub_path
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@assessee.id}']"
+    end
+
+    should "show a manager their reports first, and people on ?view=person" do
+      sign_in @manager_user
+      get evidence_hub_path
+      assert_select "[data-testid='group-report'][aria-current='page']"
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@assessee.id}']"
+
+      get evidence_hub_path(view: "person")
+      assert_select "[data-testid='group-person'][aria-current='page']"
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']"
+    end
+
+    should "mark a switch that holds something needing attention" do
+      sign_in @manager_user
+      get evidence_hub_path
+      assert_select "[data-testid='group-report'][data-attention='true']"
+    end
+
+    should "open a thread with a place action on owed feedback" do
+      sign_in @assessee_user
+      get evidence_conversation_path(@peer.id)
+      assert_select "[data-testid='conversation-thread']" do
+        assert_select "h2", text: "Jordan Peer"
+        assert_select "##{EvidenceItem.dom_id(@unplaced_id)}" do
+          assert_select "button", text: "Place on a capability"
+        end
+      end
+    end
+
+    should "open an empty thread with someone the viewer hasn't talked to" do
+      sign_in @assessee_user
+      get evidence_conversation_path(@manager.id)
+      assert_response :success
+      assert_select "[data-testid='conversation-thread']", text: /No feedback with Morgan Manager yet/
+    end
+
+    should "answer 404 for a person outside the workspace" do
+      sign_in @assessee_user
+      get evidence_conversation_path(SecureRandom.uuid_v7)
+      assert_response :not_found
+    end
+  end
+
+  context "read state" do
+    should "mark a thread's notifications read when it is opened by its URL" do
+      notification = notify!(@assessee_user, record: unplaced_item)
+      sign_in @assessee_user
+
+      get evidence_hub_path
+      assert_nil notification.reload.read_at, "the page's own pick of the newest thread doesn't count as reading it"
+      assert_select "[data-testid='conversation-row'][data-attention='true']"
+
+      get evidence_conversation_path(@peer.id)
+      assert notification.reload.read_at
+      assert_select "[data-testid='new-messages']"
+    end
+  end
+
+  context "links from notifications" do
+    should "land an item link on the thread that holds it" do
+      sign_in @assessee_user
+      get evidence_hub_item_path(@unplaced_id)
+      assert_redirected_to evidence_conversation_path(@peer.id, anchor: EvidenceItem.dom_id(@unplaced_id))
+    end
+
+    should "land a manager's link on the report's thread, keeping the org view" do
+      sign_in @manager_user
+      get evidence_hub_item_path(@unplaced_id, place: "org")
+      assert_redirected_to evidence_report_conversation_path(@assessee.id, place: "org", anchor: EvidenceItem.dom_id(@unplaced_id))
+    end
+
+    should "land a request link on its thread" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @assessee, requestee: @peer, person_id: @assessee.id,
+                                  framework_id: @framework_id)
+      end
+      sign_in @peer_user
+      get evidence_hub_request_path(request.id)
+      assert_redirected_to evidence_conversation_path(@assessee.id, anchor: request.dom_id)
+    end
+
+    should "send a link to something the viewer can't see to the page" do
+      sign_in @peer_user
+      get evidence_hub_item_path(SecureRandom.uuid_v7)
+      assert_redirected_to evidence_hub_path
+    end
+  end
+
+  context "with a skip-level report" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @lead = create(:person, tenant: @tenant, name: "Lee Lead", manager: @manager)
+        @deep = create(:person, tenant: @tenant, name: "Sky Skiplevel", manager: @lead)
+        @handler.assign_to_framework(@deep.id, @framework_id, @role.role_id, @level.level_id)
+        @deep_item = SecureRandom.uuid_v7
+        @handler.record_evidence(@deep.id, @framework_id, @deep_item,
+          source: "peer", evidence_type: "peer_feedback", content: "Found the pool limit.", author_id: @peer.id)
+      end
+      sign_in @manager_user
+    end
+
+    should "list only the team by default, with both counts on the toggle" do
+      get evidence_hub_path
+      assert_select "#needs-you [data-testid='needs-you-place']", count: 1
+      assert_select "#needs-you nav a", text: "My team · 1"
+      assert_select "#needs-you nav a", text: "My whole org · 2"
+    end
+
+    should "list the whole org for ?place=org" do
+      get evidence_hub_path(place: "org")
+      assert_select "#needs-you [data-testid='needs-you-place']", count: 2
     end
   end
 end

@@ -1,80 +1,53 @@
 # frozen_string_literal: true
 
-# The current person's feedback hub: requests addressed to them (incoming —
-# respond / decline), requests they made (outgoing — cancel), feedback waiting
-# to be placed on a capability (about them, and about their reports), the
-# feedback they've given, and the way to give more. This is the surface
-# notifications deep-link to.
+# The Feedback / Evidence page (#647): what needs the current person (requests
+# to answer, feedback to place), then their conversations — one per person,
+# or for a manager one per report — with the selected one open beside the
+# list. This is the surface notifications link to: `item` and
+# `evidence_request` find the conversation holding what a link names.
 class EvidenceHubController < ApplicationController
+  # A thread shows its latest messages; `?all=1` shows the rest.
+  THREAD_LIMIT = 40
+
   before_action :require_person
 
   # GET /evidence
+  # GET /evidence/with/:person_id
+  # GET /evidence/about/:person_id
   def show
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
     @page_title = "Feedback / Evidence"
 
-    incoming = EvidenceRequest.incoming_for(current_person.id).includes(:requester, :assessee)
-    outgoing = EvidenceRequest.outgoing_for(current_person.id).includes(:requestee, :assessee)
-
-    # Open lists lead with the stalest request (least recently requested or
-    # reminded); completed lists read as recent history.
-    open_incoming = incoming.pending.least_recently_touched.to_a
-    open_outgoing = outgoing.pending.least_recently_touched.to_a
-    completed_incoming = incoming.resolved.recent_first.to_a
-    completed_outgoing = outgoing.resolved.recent_first.to_a
-
-    authored = EvidenceItem.active.where(author_id: current_person.id).order(recorded_at: :desc).limit(50).to_a
-    placing = Operations::Assessments::FeedbackToPlace.call(context: pundit_user, params: { scope: place_param })
-    to_place_about_me, to_place_for_team = to_place_records(placing)
-    responses = responses_for(completed_outgoing)
-    shown = authored + to_place_about_me + to_place_for_team
-    responded_items = responses.values.map { |r| r[:item] }
-    # A suggestion block's id is the item's, so an item whose block shows
-    # elsewhere on the page must not be listed again under "May fit elsewhere
-    # too". The viewer's own self feedback is the exception: its suggestions
-    # show there, and its card under "Feedback you've provided" leaves them out.
-    # Suggestion work only when something could show: a pending row somewhere,
-    # or a tenant that can ask for one. Off is the default.
-    can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
-    suggestions_live = can_regenerate || EvidencePlacementSuggestion.pending.exists?
-    listed_elsewhere = shown.reject { |item| item.source == "self" && item.author_id == current_person.id } + responded_items
-    all_with_suggestions = suggestions_live ? placed_with_suggestions(exclude: listed_elsewhere.map(&:id)) : []
-    with_suggestions = elsewhere_all? ? all_with_suggestions : all_with_suggestions.first(Views::Evidence::HubView::ELSEWHERE_LIMIT)
-    decidable = suggestions_live ? decidable_items(shown + with_suggestions, responded_items) : []
-
-    all_requests = open_incoming + open_outgoing + completed_incoming + completed_outgoing
-    # One combined context lookup for every cell on the page — request ids and
-    # evidence ids are all distinct UUIDs, so a single id-keyed hash serves both.
-    details = Evidence::CellContextResolver.new(all_requests + shown + with_suggestions).by_id
+    conversations = Evidence::Conversations.new(current_person)
+    conversations.group = group_for(conversations)
+    reads = Evidence::ConversationReads.new(current_user)
+    selected, partner = selected_conversation(conversations)
+    new_keys = Set.new
+    if params[:person_id] && selected
+      new_keys = selected.messages.select { |m| reads.unread?(m) }.flat_map(&:read_keys).to_set
+      reads.mark_read!(selected.messages) unless impersonating?
+    end
 
     render Views::Evidence::HubView.new(
-      open_incoming: open_incoming,
-      open_outgoing: open_outgoing,
-      completed_incoming: completed_incoming,
-      completed_outgoing: completed_outgoing,
-      authored: authored,
-      to_place_about_me: to_place_about_me,
-      to_place_for_team: to_place_for_team,
-      place_scope: placing[:scope],
-      place_counts: (placing[:counts] if placing[:beyond_team]),
-      open_give_step: params[:give].present? || draft.present?,
-      draft: draft,
-      cell_details: details,
-      authored_details: details,
-      responses: responses,
-      in_situ_paths: in_situ_paths_for(authored + responses.values.map { |r| r[:item] }),
-      with_suggestions: with_suggestions,
-      elsewhere_ids: all_with_suggestions.to_set(&:id),
-      elsewhere_all: elsewhere_all?,
-      hub_params: hub_params,
-      suggestions: Evidence::PlacementSuggestionRows.for(decidable),
-      decidable_ids: decidable.to_set(&:id),
-      can_regenerate: can_regenerate,
-      viewer_person_id: current_person.id,
-      user: current_user,
-      current_tenant: ActsAsTenant.current_tenant,
-      tenants: current_user_tenants
+      conversations: conversations, reads: reads, selected: selected, partner: partner,
+      explicit: params[:person_id].present?, new_keys: new_keys,
+      thread: thread_details(conversations, selected, partner),
+      needs: needs_you(conversations),
+      open_give_step: params[:give].present? || draft.present?, draft: draft,
+      user: current_user, current_tenant: ActsAsTenant.current_tenant, tenants: current_user_tenants
     )
+  end
+
+  # GET /evidence/items/:id — a notification's link to one item
+  def item
+    authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
+    redirect_to located_path(item_id: params[:id], anchor: EvidenceItem.dom_id(params[:id]))
+  end
+
+  # GET /evidence/requests/:id — a notification's link to one request
+  def evidence_request
+    authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
+    redirect_to located_path(request_id: params[:id], anchor: EvidenceRequest.dom_id(params[:id]))
   end
 
   private
@@ -83,23 +56,85 @@ class EvidenceHubController < ApplicationController
     head :forbidden unless current_person
   end
 
-  # A Slack draft the author arrived with (Evidence::DraftsController): the
-  # modal opens on arrival, filled from it. Theirs only, and only while open.
-  def draft
-    return @draft if defined?(@draft)
-
-    @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
+  # The route's group for a thread, or `?view=` on the page itself; reports
+  # unless the URL asks for people, and only when there are reports.
+  def group_for(conversations)
+    asked = params[:group] || params[:view]
+    asked == "person" || !conversations.reports? ? "person" : "report"
   end
 
-  def elsewhere_all? = params[:elsewhere] == "all"
+  # The conversation the URL names, or the most recent one. A person with no
+  # conversation yet still opens, so "Give feedback" has somewhere to land.
+  #
+  # @return [Array(Evidence::Conversations::Conversation, Person)]
+  def selected_conversation(conversations)
+    if params[:person_id]
+      convo = conversations.find(params[:person_id])
+      person = conversations.people[params[:person_id]] || Person.find_by(id: params[:person_id])
+      raise ActiveRecord::RecordNotFound, "No such person" if person.nil?
 
-  # The hub's view state, for links that change one part of it. Only the two
-  # view keys travel: anything else would reach the URL helper, where a
-  # reserved option such as script_name rewrites the link's host.
-  HUB_VIEW_PARAMS = %w[place elsewhere].freeze
+      [ convo, person ]
+    else
+      convo = conversations.all.first
+      [ convo, convo && conversations.people[convo.person_id] ]
+    end
+  end
 
-  def hub_params
-    request.query_parameters.slice(*HUB_VIEW_PARAMS).symbolize_keys
+  def located_path(anchor:, item_id: nil, request_id: nil)
+    conversations = Evidence::Conversations.new(current_person)
+    groups = conversations.reports? ? %w[report person] : %w[person]
+    groups.each do |group|
+      convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
+      next if convo.nil?
+
+      return conversation_path(convo.person_id, group, anchor: anchor)
+    end
+    evidence_hub_path
+  end
+
+  def conversation_path(person_id, group, anchor: nil)
+    place = params[:place] == "org" ? "org" : nil
+    if group == "report"
+      evidence_report_conversation_path(person_id, place: place, anchor: anchor)
+    else
+      evidence_conversation_path(person_id, place: place, anchor: anchor)
+    end
+  end
+
+  # A link to a message: its thread in the group on screen, or its person
+  # thread when the group on screen doesn't list it.
+  def message_path(conversations, item_id: nil, request_id: nil, anchor:)
+    [ conversations.group, "person" ].uniq.each do |group|
+      convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
+      return conversation_path(convo.person_id, group, anchor: anchor) if convo
+    end
+    nil
+  end
+
+  # ── Needs you ──
+
+  def needs_you(conversations)
+    placing = Operations::Assessments::FeedbackToPlace.call(context: pundit_user, params: { scope: place_param })
+    about_you, for_team = to_place_records(placing)
+    incoming = EvidenceRequest.incoming_for(current_person.id).pending.least_recently_touched
+      .includes(:requester, :assessee).to_a
+    waiting = EvidenceRequest.outgoing_for(current_person.id).pending.least_recently_touched.includes(:requestee).to_a
+    paths = {}
+    incoming.each do |r|
+      paths[r.id] = message_path(conversations, request_id: r.id, anchor: r.dom_id)
+    end
+    waiting.each { |r| paths[r.id] = message_path(conversations, request_id: r.id, anchor: r.dom_id) }
+    (about_you + for_team).each do |item|
+      paths[item.id] = message_path(conversations, item_id: item.id, anchor: EvidenceItem.dom_id(item.id))
+    end
+
+    {
+      incoming: incoming, about_you: about_you, for_team: for_team, waiting: waiting, paths: paths,
+      people: Person.where(id: for_team.map(&:person_id).uniq).index_by(&:id),
+      place_scope: placing[:scope], place_counts: (placing[:counts] if placing[:beyond_team]),
+      suggestion_counts: EvidencePlacementSuggestion.pending.where(evidence_id: (about_you + for_team).map(&:id))
+        .group(:evidence_id).count
+    }
   end
 
   # "My team" unless the URL asks for the whole org.
@@ -107,84 +142,89 @@ class EvidenceHubController < ApplicationController
     params[:place] == "org" ? "org" : ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
   end
 
-  # The cards render records; the Operation decides which, in its order.
+  # The Operation decides which items and in what order; the rows render records.
   def to_place_records(placing)
     ids = (placing[:about_you] + placing[:items]).map { |row| row[:evidence_id] }
     items = EvidenceItem.where(id: ids).includes(:author).index_by(&:id)
     [ placing[:about_you], placing[:items] ].map { |rows| rows.filter_map { |row| items[row[:evidence_id]] } }
   end
 
-  # Placed items about the viewer, or about the assessments in the chosen
-  # view, with pending placement suggestions — the extra cells the model sees.
-  # Feedback the viewer gave someone else stays under "Feedback you've
-  # provided"; their self feedback is about them, so it is listed here.
-  def placed_with_suggestions(exclude:)
-    keys = ::Assessments::FeedbackToPlace.new(current_person).assignments(place_param).keys.to_set
-    person_ids = [ current_person.id, *keys.map(&:first) ].uniq
-    pending = EvidencePlacementSuggestion.pending.where(person_id: person_ids)
-    items = EvidenceItem.arel_table
+  # ── The open thread ──
 
-    EvidenceItem.active.where(id: pending.select(:evidence_id)).where.not(id: exclude)
-      .where(items[:author_id].not_eq(current_person.id).or(items[:source].eq("self")))
-      .where.not(capability_stable_id: nil)
-      .includes(:author).order(recorded_at: :desc).to_a
-      .select { |item| item.person_id == current_person.id || keys.include?([ item.person_id, item.framework_id ]) }
+  def thread_details(conversations, selected, partner)
+    return {} if partner.nil?
+
+    messages = selected&.messages || []
+    shown = params[:all].present? ? messages : messages.last(THREAD_LIMIT)
+    items = shown.filter_map(&:item)
+    requests = shown.filter_map(&:request).uniq
+    can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
+    linkable = linkable_items(conversations, shown)
+    decidable = can_regenerate || EvidencePlacementSuggestion.pending.exists? ? linkable : []
+
+    {
+      messages: shown, hidden_count: messages.size - shown.size,
+      owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
+      cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
+      links: links_for(items),
+      in_situ_paths: in_situ_paths_for(items),
+      people: Person.where(id: items.map(&:person_id).uniq).index_by(&:id),
+      answering: answering(shown),
+      suggestions: Evidence::PlacementSuggestionRows.for(decidable), decidable_ids: decidable.to_set(&:id),
+      linkable_ids: linkable.to_set(&:id),
+      can_regenerate: can_regenerate,
+      composer: composer_for(conversations, partner)
+    }
   end
 
-  # Items whose suggestions the viewer may decide. Everything the hub already
-  # lists for placing qualifies by construction; a response the viewer asked
-  # for depends on who they are to the assessee, so the policy decides. A
-  # withdrawn response can no longer be linked anywhere.
-  def decidable_items(placeable, responded)
-    placeable + responded.select { |item| !item.withdrawn? && EvidencePolicy.new(pundit_user, item).add_link? }
+  # Items the viewer may place or link: what they're asked to place, plus
+  # anything else the policy lets them link. The same items' suggestions are
+  # theirs to decide.
+  def linkable_items(conversations, shown)
+    shown.select(&:item).select do |m|
+      conversations.owes?(m) || EvidencePolicy.new(pundit_user, m.item).add_link?
+    end.map(&:item)
   end
 
-  # For responded outgoing requests, load the evidence the requestee provided
-  # plus the cells it's linked to (so the requester sees the full response, and
-  # can edit its linkage).
+  # Who asked for each piece of feedback that answers a request the viewer
+  # can't see: Alex reads Jordan's answer to Maya as "answering Maya's request".
   #
-  # @return [Hash{String => Hash}] request_id => { item:, links: [{ capability_name:, level_code:, level_ordinal: }] }
-  def responses_for(requests)
-    responded = requests.select { |r| r.status == "responded" && r.evidence_id.present? }
-    return {} if responded.empty?
+  # @return [Hash{String => Person}] evidence_id => requester
+  def answering(shown)
+    ids = shown.select { |m| m.kind == :feedback }.map { |m| m.item.id }
+    return {} if ids.empty?
 
-    items = EvidenceItem.where(id: responded.map(&:evidence_id)).includes(:author).index_by(&:id)
-    link_rows = EvidenceLink.active.where(evidence_id: items.keys)
+    EvidenceRequest.where(evidence_id: ids).includes(:requester).to_h { |r| [ r.evidence_id, r.requester ] }
+  end
+
+  # Every active link of each item, named: "Applies to: Ownership E3".
+  #
+  # @return [Hash{String => Array<Hash>}] evidence_id => [{ capability_name:, level_code:, valence: }]
+  def links_for(items)
+    return {} if items.empty?
+
+    by_id = items.index_by(&:id)
+    rows = EvidenceLink.active.where(evidence_id: by_id.keys).order(:linked_at, :id)
       .pluck(:evidence_id, :capability_stable_id, :level_ordinal, :valence)
-
-    cells = link_rows.map do |evidence_id, capability_stable_id, level_ordinal, _valence|
-      item = items[evidence_id]
+    cells = rows.map do |evidence_id, capability_stable_id, level_ordinal, _valence|
+      item = by_id[evidence_id]
       Evidence::CellContextResolver::Cell.new(
         id: [ evidence_id, capability_stable_id, level_ordinal ], framework_id: item.framework_id,
         person_id: item.person_id, capability_stable_id: capability_stable_id, level_ordinal: level_ordinal
       )
     end
-    link_ctx = Evidence::CellContextResolver.new(cells).by_id
-
-    responded.each_with_object({}) do |req, acc|
-      item = items[req.evidence_id]
-      next unless item
-
-      links = link_rows.select { |evidence_id, _, _, _| evidence_id == item.id }
-        .map do |_, capability_stable_id, level_ordinal, valence|
-          ctx = link_ctx[[ item.id, capability_stable_id, level_ordinal ]] || {}
-          { capability_name: ctx[:name], level_code: ctx[:level_code],
-            level_ordinal: level_ordinal, valence: valence }
-        end
-      acc[req.id] = { item: item, links: links }
+    context = Evidence::CellContextResolver.new(cells).by_id
+    rows.each_with_object(Hash.new { |h, k| h[k] = [] }) do |(evidence_id, capability_stable_id, level_ordinal, valence), acc|
+      cell = context[[ evidence_id, capability_stable_id, level_ordinal ]] || {}
+      acc[evidence_id] << { capability_name: cell[:name], level_code: cell[:level_code] || "L#{level_ordinal}", valence: valence }
     end
   end
 
-  # For each evidence item on the page, a deep link to its FIRST active linkage
-  # on the assessment (`?capability=` + `?level_ordinal=` focus + scroll the
-  # capability card), so the item can be seen in situ. Rendered only when the
-  # viewer may see that assessment (AssessmentPolicy#show?) — a peer who
-  # provided feedback on a colleague's assessment gets no dead link.
+  # A deep link to each item's first linkage on its assessment, only where
+  # the viewer may open that assessment, so a peer never gets a dead link.
   #
-  # @param items [Array<EvidenceItem>]
   # @return [Hash{String => String}] evidence_id => assessment path
   def in_situ_paths_for(items)
-    items = items.compact.uniq
     return {} if items.empty?
 
     first_links = EvidenceLink.active.where(evidence_id: items.map(&:id))
@@ -201,6 +241,34 @@ class EvidenceHubController < ApplicationController
       acc[item.id] = assessment_path(assignment,
         capability: link.capability_stable_id, level_ordinal: link.level_ordinal)
     end
+  end
+
+  # What the composer under a thread can do: give the other person feedback,
+  # and ask for some — of them about the viewer, or of anyone about a report.
+  def composer_for(conversations, partner)
+    report_thread = conversations.group == "report"
+    own = PersonFrameworkAssignment.where(person_id: current_person.id).order(:created_at, :id).first
+    return { self_thread: true, own_assessment_path: own && assessment_path(own) } if partner.id == current_person.id
+
+    partner_assignments = PersonFrameworkAssignment.where(person_id: partner.id).order(:created_at, :id).to_a
+    ask_assignment = report_thread ? partner_assignments.first : own
+    can_ask = ask_assignment.present? && EvidenceRequestPolicy.new(pundit_user, ask_assignment).request?
+
+    {
+      report_thread: report_thread,
+      give_assignment_id: (partner_assignments.first.id if partner_assignments.one?),
+      can_give: partner_assignments.any?,
+      ask_assignment_id: (ask_assignment.id if can_ask),
+      ask_requestee_id: (partner.id unless report_thread)
+    }
+  end
+
+  # A Slack draft the author arrived with (Evidence::DraftsController): the
+  # modal opens on arrival, filled from it. Theirs only, and only while open.
+  def draft
+    return @draft if defined?(@draft)
+
+    @draft = FeedbackDraft.open_for(token: params[:draft], email: current_user.email)
   end
 
   def current_user_tenants

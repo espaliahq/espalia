@@ -3,8 +3,9 @@
 require "application_system_test_case"
 require_relative "../support/feedback_exchange_records"
 
-# Feedback given in Chip lands on the hub as feedback to place, says where it
-# came from, dates itself by when it was given, and opens the original.
+# Feedback given in Chip waits under "Needs you" to be placed, and in the
+# report's thread says where it came from, dates itself by when it was given,
+# and opens the original.
 class FeedbackExchangeImportSystemTest < ApplicationSystemTestCase
   include FeedbackExchangeRecords
 
@@ -29,9 +30,11 @@ class FeedbackExchangeImportSystemTest < ApplicationSystemTestCase
 
   def assert_imported_card
     visit evidence_hub_path
-    assert_text "Feedback to place"
+    assert_selector "#needs-you [data-testid='needs-you-place']", text: /Place Priya's feedback about Alex.*imported/m
+    visit evidence_report_conversation_path(@alex.id)
     within("##{EvidenceItem.dom_id(@result.evidence_id)}") do
-      assert_text "From Priya Nair · 18 Oct 2026 · on Alex Rivera's assessment"
+      assert_text(/Priya · 18 Oct/)
+      assert_text "About Alex"
       assert_text "Great work on the incident call, calm and clear."
       assert_selector "strong", text: "Great"
       badge = find("a[data-origin='chip']", text: "via Chip")

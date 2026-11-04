@@ -23,7 +23,7 @@ class Views::Assessments::UnplacedFeedbackNotice < Views::Base
                                       data: { testid: "unplaced-feedback-notice" }) do
       div(class: "flex flex-wrap items-center justify-between gap-2") do
         p { sentence }
-        a(href: evidence_hub_path(place: @place, anchor: "feedback-to-place"),
+        a(href: evidence_hub_path(place: @place, anchor: "needs-you"),
           class: "inline-flex items-center min-h-11 font-medium hover:underline") do
           @count == 1 ? "Place it →" : "Place them →"
         end

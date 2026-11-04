@@ -74,29 +74,38 @@ class Evidence::Conversations
     @group = group == "report" ? "report" : "person"
   end
 
-  attr_reader :group
+  attr_reader :viewer, :group
 
+  # @param group [String] the group the finders default to
+  def group=(group)
+    @group = group == "report" ? "report" : "person"
+  end
+
+  # @param group [String] defaults to the group this query was built for
   # @return [Array<Conversation>] the most recently active first
-  def all
-    @all ||= begin
-      buckets = messages.group_by { |message| key_for(message) }
+  def all(group: @group)
+    group = group == "report" ? "report" : "person"
+    (@all ||= {})[group] ||= begin
+      buckets = messages.group_by { |message| key_for(message, group) }
       buckets.delete(nil)
       buckets.map { |person_id, list| conversation(person_id, list) }.sort_by { |c| [ -c.last_at.to_f, c.person_id ] }
     end
   end
 
   # @param person_id [String]
+  # @param group [String]
   # @return [Conversation, nil]
-  def find(person_id) = all.find { |c| c.person_id == person_id }
+  def find(person_id, group: @group) = all(group: group).find { |c| c.person_id == person_id }
 
   # The conversation holding a request or an item, so a link to one can land
   # on its thread.
   #
   # @param request_id [String, nil]
   # @param item_id [String, nil]
+  # @param group [String]
   # @return [Conversation, nil]
-  def containing(request_id: nil, item_id: nil)
-    all.find do |c|
+  def containing(request_id: nil, item_id: nil, group: @group)
+    all(group: group).find do |c|
       c.messages.any? { |m| (request_id && m.request&.id == request_id) || (item_id && m.item&.id == item_id) }
     end
   end
@@ -123,9 +132,10 @@ class Evidence::Conversations
     end
   end
 
-  # @return [Hash{String => Person}] the other party of each conversation
+  # @return [Hash{String => Person}] the other party of each conversation, in
+  #   either group
   def people
-    @people ||= Person.where(id: all.map(&:person_id)).index_by(&:id)
+    @people ||= Person.where(id: (all(group: "person") + all(group: "report")).map(&:person_id).uniq).index_by(&:id)
   end
 
   private
@@ -141,8 +151,8 @@ class Evidence::Conversations
     )
   end
 
-  def key_for(message)
-    return (report?(message.about_id) ? message.about_id : nil) if @group == "report"
+  def key_for(message, group)
+    return (report?(message.about_id) ? message.about_id : nil) if group == "report"
     return other_party(message.request) if message.request
 
     message.item.author_id == viewer_id ? message.item.person_id : message.item.author_id

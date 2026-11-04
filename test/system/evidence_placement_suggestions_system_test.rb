@@ -28,9 +28,10 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
 
   def row(suggestion) = "li[data-suggestion-id='#{suggestion.id}']"
 
-  def open_hub
+  # The thread holding the item, through the link a notification sends.
+  def open_hub(path = evidence_hub_item_path(@item.id))
     sign_in_as(@alex_user)
-    visit evidence_hub_path
+    visit path
     assert_text "Adjust in the editor"
     page.execute_script("window.__hubNotReloaded = true")
   end
@@ -95,7 +96,7 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   end
 
   { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
-    should "let the assessee accept a May fit elsewhere too suggestion on their own self feedback, on #{name}" do
+    should "let the assessee accept a suggestion on their own note to self, on #{name}" do
       page.driver.browser.manage.window.resize_to(*size)
       self_item = record_self_feedback
       self_suggestion = ActsAsTenant.with_tenant(@tenant) do
@@ -103,14 +104,14 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
           capability_stable_id: @ownership.stable_id, level_ordinal: 3, valence: "demonstrated", confidence: 0.74,
           rationale: "“walked the team through every step” shows ownership of the rollout.")
       end
-      open_hub
+      open_hub(evidence_hub_item_path(self_item.id))
 
-      within("#suggested-placements ##{EvidenceItem.dom_id(self_item.id)}") do
-        assert_text "From you"
+      within("##{EvidenceItem.dom_id(self_item.id)}") do
+        assert_text(/note to self/i)
         assert_selector row(self_suggestion), text: "74% confident"
       end
       assert_no_sideways_overflow("the self feedback's suggestions must fit the #{name} viewport")
-      screenshot("#{name}_self_feedback_may_fit_elsewhere")
+      screenshot("#{name}_self_feedback_suggestions")
 
       click_selector_with_js_fallback("#{row(self_suggestion)} form[action$='/accept'] button",
                                       expect_text: "Placed on Ownership · E3 as Demonstrates.")
@@ -125,7 +126,7 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
   end
 
   { "desktop" => DESKTOP_SIZE, "mobile" => MOBILE_SIZE }.each do |name, size|
-    should "cap May fit elsewhere too at five, reveal the rest and accept one in place, on #{name}" do
+    should "show every note's suggestions in the notes to self and accept one in place, on #{name}" do
       page.driver.browser.manage.window.resize_to(*size)
       items = (1..7).map do |n|
         item = travel_to(n.hours.ago) { record_self_feedback(content: "Self example #{n}: led the rollout review.") }
@@ -136,29 +137,18 @@ class EvidencePlacementSuggestionsSystemTest < ApplicationSystemTestCase
         item
       end
       oldest = items.last
-      revealed = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find_by!(evidence_id: oldest.id) }
-      cards = "#suggested-placements [id^='evidence-item-']"
+      suggestion = ActsAsTenant.with_tenant(@tenant) { EvidencePlacementSuggestion.find_by!(evidence_id: oldest.id) }
 
-      open_hub
-      assert_selector cards, count: 5
-      assert_no_selector "#suggested-placements ##{EvidenceItem.dom_id(oldest.id)}"
-      assert_selector "#suggested-placements", text: "Showing 5 of 7"
-      assert_no_sideways_overflow("the capped section must fit the #{name} viewport")
-      screenshot("#{name}_may_fit_elsewhere_capped")
+      open_hub(evidence_conversation_path(@alex.id))
+      assert_selector "[data-testid='conversation-thread'] [data-testid='placement-suggestions']", count: 7
+      assert_no_sideways_overflow("the notes must fit the #{name} viewport")
 
-      click_selector_with_js_fallback("a[data-testid='elsewhere-toggle']", expect_text: "Show fewer")
-      assert_selector cards, count: 7
-      assert_current_path evidence_hub_path(elsewhere: "all")
-      page.execute_script("window.__hubNotReloaded = true")
-
-      click_selector_with_js_fallback("#{row(revealed)} form[action$='/accept'] button",
+      click_selector_with_js_fallback("#{row(suggestion)} form[action$='/accept'] button",
                                       expect_text: "Placed on Ownership · E3 as Demonstrates.")
-      assert_no_selector row(revealed)
-      assert_selector cards, count: 7
-      assert page.evaluate_script("window.__hubNotReloaded"), "deciding a suggestion must not reload the hub"
-      assert_no_sideways_overflow("the expanded section must fit the #{name} viewport")
-      screenshot("#{name}_may_fit_elsewhere_all_after_accept")
-      ActsAsTenant.with_tenant(@tenant) { assert_equal "accepted", revealed.reload.status }
+      assert_no_selector row(suggestion)
+      assert page.evaluate_script("window.__hubNotReloaded"), "deciding a suggestion must not reload the page"
+      screenshot("#{name}_notes_to_self_after_accept")
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "accepted", suggestion.reload.status }
     end
   end
 

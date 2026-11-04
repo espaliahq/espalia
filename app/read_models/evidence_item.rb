@@ -172,8 +172,9 @@ class EvidenceItem < ApplicationRecord
     items.each { |item| item.exchange_acks = acks.fetch(item.id, []) }
   end
 
-  # The hub anchor for one item — where an unplaced item is placed, and
-  # where a notification about one lands.
+  # Where a notification about one item lands: the hub finds the
+  # conversation that holds it. Links sent before conversations
+  # (`/evidence#evidence-item-…`) are found the same way by the page.
   #
   # @param id [String]
   # @param place [String, nil] "org" when only the hub's org view lists the
@@ -181,7 +182,7 @@ class EvidenceItem < ApplicationRecord
   # @return [String]
   def self.hub_path(id, place: nil)
     query = place == "org" ? "?place=org" : ""
-    "/evidence#{query}##{dom_id(id)}"
+    "/evidence/items/#{id}#{query}"
   end
 
   # @param id [String]
