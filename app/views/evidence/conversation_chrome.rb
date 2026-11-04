@@ -26,7 +26,7 @@ module Views::Evidence::ConversationChrome
   def avatar(person, size: :md)
     box = size == :sm ? "size-8 text-xs" : "size-10 text-sm"
     if person&.id == @viewer_id
-      span(class: "#{box} shrink-0 rounded-full grid place-items-center font-semibold bg-neutral-strong text-neutral-content-inverse",
+      span(class: "#{box} shrink-0 rounded-full grid place-items-center font-bold bg-neutral-muted text-default",
            aria: { hidden: "true" }) { "You" }
     else
       initials = person&.name.to_s.split.first(2).map { |w| w[0] }.join.upcase.presence || "?"

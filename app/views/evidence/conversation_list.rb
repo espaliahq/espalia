@@ -55,7 +55,7 @@ class Views::Evidence::ConversationList < Views::Base
   end
 
   def attention_dot
-    span(class: "ml-1.5 inline-block size-2 rounded-full bg-neutral-strong align-middle", aria: { hidden: "true" })
+    span(class: "ml-1 text-xs text-default", aria: { hidden: "true" }) { "●" }
     span(class: "sr-only") { " (needs your attention)" }
   end
 
