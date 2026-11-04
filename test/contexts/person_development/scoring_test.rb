@@ -278,6 +278,23 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
         scorer.components.transform_values { |value| value.round(4) })
     end
 
+    should "land a sum of thirds on the threshold it equals, not a hair below" do
+      # Exactly 1.0, which a float sum of thirds computes as 0.9999999999999999.
+      caps = %w[cap-x cap-y cap-z]
+      ratings = [ [ "none", "none" ], [ "occasional", "consistent" ], [ "consistent", "occasional" ] ]
+        .zip(caps).flat_map { |(l3, l4), cap| [ rated(3, l3, cap: cap), rated(4, l4, cap: cap) ] }
+      bindings = caps.map do |cap|
+        BindingStub.new(capability_id: cap, weight: 1.0, deficit_threshold: 1.0,
+          capability: CapStub.new(stable_id: cap, category_id: CAT_1))
+      end
+      scorer = PersonDevelopment::Scoring.new(level_ratings: ratings, bindings: bindings,
+        categories: [ CategoryStub.new(category_id: CAT_1) ], person_level: 3, all_level_ordinals: [ 3, 4 ],
+        expectation_cells: nil, thresholds: { meeting_expectation_threshold: 1.0, mastery_threshold: 1.5 })
+
+      assert_equal 1.0, scorer.performance_ratio
+      assert_equal :performing, scorer.performance_state
+    end
+
     should "score the assessed level identically to performance_ratio_at_level(person_level)" do
       scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [
         rated(2, "some"), rated(3, "occasional"), rated(4, "consistent"),
