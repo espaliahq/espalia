@@ -49,7 +49,11 @@ class ExampleSeed
 
     tenant = upsert_tenants
     ActsAsTenant.with_tenant(tenant) do
-      Rake::Task["frameworks:seed"].execute
+      # Explicit args pin the demo to its own file and tenant — a stray
+      # SEED_TENANT_SLUG / SEED_FRAMEWORK_FILE export must not redirect it.
+      Rake::Task["frameworks:seed"].execute(
+        Rake::TaskArguments.new(%i[file slug], [ "db/seeds/null_island_framework.yml", TENANT[:slug] ])
+      )
       @framework = FrameworkState::Framework.first or raise "frameworks:seed left no framework"
       upsert_people
       upsert_logins(tenant)
@@ -299,10 +303,12 @@ class ExampleSeed
     framework_id = @framework.framework_id
     return if FrameworkState::SuggestedEdit.where(framework_id: framework_id).any?
 
-    illustration = FrameworkState::RoleIllustration.first
-    capability = FrameworkState::Capability.find_by(name: "Customer Insight")
+    # These names couple to db/seeds/null_island_framework.yml — a rename
+    # there must land here too, and the bang finders say which name broke.
+    illustration = FrameworkState::RoleIllustration.first!
+    capability = FrameworkState::Capability.find_by!(name: "Customer Insight")
     expectation = FrameworkState::BehaviouralExpectation.joins(:capability)
-      .find_by(framework_capabilities: { name: "Shipping & Iteration" }, level_ordinal: 2)
+      .find_by!(framework_capabilities: { name: "Shipping & Iteration" }, level_ordinal: 2)
 
     @frameworks.suggest_edit(framework_id, SecureRandom.uuid_v7, "role_illustration", illustration.illustration_id,
       "description", "#{illustration.description} Names the follow-up owner, too.",
