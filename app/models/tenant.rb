@@ -53,9 +53,8 @@ class Tenant < ApplicationRecord
   end
 
   # One-release reader for the switch and model id that placement suggestions
-  # kept in `settings` before the AI model card existed. Remove with the
-  # Anthropic key fallback in {#ai_api_key} once every tenant has been saved
-  # through the card.
+  # kept in `settings` before the AI model card existed. Remove once every
+  # tenant has been saved through the card.
   #
   # @return [Boolean]
   def legacy_evidence_suggestions_enabled?
@@ -85,13 +84,13 @@ class Tenant < ApplicationRecord
     AiModelCredentials.new(ai_credentials)
   end
 
-  # The key requests are made with: the one stored through the AI model card,
-  # else, for a tenant still on the legacy switch, the deployment's Anthropic
-  # key from the credentials file as before.
+  # The key requests are made with: the one stored through the AI model card.
+  # There is no fallback — a tenant still on the legacy switch has no key until
+  # its admin saves one through the card.
   #
   # @return [String, nil]
   def ai_api_key
-    ai_secrets.api_key || legacy_deployment_key
+    ai_secrets.api_key
   end
 
   # Save the AI model settings and key in one write. Unlisted settings keep
@@ -340,17 +339,6 @@ class Tenant < ApplicationRecord
 
       public_send(:"#{attribute}=", value.strip)
     end
-  end
-
-  # The deployment's Anthropic key goes only to the Anthropic API itself: a
-  # tenant-chosen address must never receive a key its owner did not give.
-  #
-  # @return [String, nil]
-  def legacy_deployment_key
-    return unless legacy_evidence_suggestions_enabled?
-    return unless ai_config.anthropic? && ai_config.normalized_base_url.nil?
-
-    Rails.application.credentials.dig(:anthropic, :api_key).presence
   end
 
   # @raise [ActiveRecord::RecordInvalid]
