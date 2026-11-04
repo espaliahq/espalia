@@ -56,11 +56,13 @@ is missing:
   calls. That is fine: everything lands in the v1 draft, invisible until
   publish.
 - **Interruptions are recoverable, but resume by reading, not re-adding.**
-  The draft keeps everything built so far. Levels and expectations reject
-  duplicates; roles, categories, capabilities and bindings do **not** — each
-  re-add mints a new entity. Have the agent re-read the built structure
-  (`frameworks_get`, `frameworks_draft_changes`) and add only what is
-  missing.
+  The draft keeps everything built so far. Levels reject duplicates, and
+  re-setting an existing expectation cell rejects too (though while the same
+  author has a pending create for that cell, the call amends it and returns
+  `amended: true`). Roles, categories, capabilities and bindings do **not**
+  dedupe — each re-add mints a new entity. Have the agent re-read the built
+  structure (`frameworks_get`, `frameworks_draft_changes`) and add only what
+  is missing.
 - **Nothing publishes by accident.** Structure-changing work accumulates in
   the draft; `publish_version` requires in-app confirmation.
 - **Verify as you go.** `frameworks_get` and `frameworks_draft_changes` let
