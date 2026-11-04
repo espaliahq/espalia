@@ -337,6 +337,20 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "#needs-you nav a[href=?]", "#{evidence_hub_path(view: "report")}#needs-you", text: "My team · 1"
     end
 
+    should "keep a person with no thread yet open when switching to the team view" do
+      get evidence_conversation_path(@lead.id, place: "org")
+      assert_select "#needs-you nav a[href=?]", "#{evidence_conversation_path(@lead.id)}#needs-you"
+    end
+
+    should "land the answer to a request about a skip-level report on that report's thread" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @deep.id,
+                                  framework_id: @framework_id, status: "responded", evidence_id: @deep_item)
+      end
+      get evidence_hub_request_path(request.id)
+      assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org", anchor: request.dom_id)
+    end
+
     should "land a link to a message only the org lists in the org view" do
       get evidence_hub_item_path(@deep_item)
       assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org", anchor: EvidenceItem.dom_id(@deep_item))
