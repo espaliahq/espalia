@@ -8,9 +8,12 @@ class Kit::SegmentedControlPreview < Lookbook::Preview
   # @param fill toggle
   # @param selected select { choices: [Auto, Light, Dark] }
   # @param disabled toggle
-  def playground(size: :md, fill: false, selected: "Light", disabled: false)
+  # @param short toggle "Shorter labels below the sm breakpoint"
+  def playground(size: :md, fill: false, selected: "Light", disabled: false, short: false)
     render SegmentedControl.new(label: "Appearance", size: size.to_sym, fill: fill) do |control|
-      %w[Auto Light Dark].each { |label| control.segment(label, selected: label == selected, disabled: disabled) }
+      %w[Auto Light Dark].each do |label|
+        control.segment(label, selected: label == selected, disabled: disabled, short: (label[0] if short))
+      end
     end
   end
 
@@ -42,6 +45,15 @@ class Kit::SegmentedControlPreview < Lookbook::Preview
     render SegmentedControl.new(label: "Group conversations", size: :sm) do |control|
       control.segment("By report", selected: true, href: "#by-report")
       control.segment("By person", href: "#by-person", marked: "needs your attention")
+    end
+  end
+
+  # Shorter labels below the sm breakpoint, as the Feedback / Evidence page's scope switch has them
+  def short_labels
+    render SegmentedControl.new(label: "Whose feedback to show", size: :sm) do |control|
+      control.segment("My feedback · 1", short: "Mine · 1", href: "#mine", selected: true)
+      control.segment("My team · 2", short: "Team · 2", href: "#team")
+      control.segment("My whole org · 3", short: "Whole org · 3", href: "#org")
     end
   end
 

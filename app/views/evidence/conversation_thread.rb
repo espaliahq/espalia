@@ -13,7 +13,8 @@ class Views::Evidence::ConversationThread < Views::Base
   # @param new_keys [Set<String>] read keys that were unread when the thread opened
   # @param explicit [Boolean] whether the URL named this thread (false when
   #   the page opened the newest one itself)
-  # @param place [String, nil] "org" while "Needs you" shows the whole org
+  # @param place [String, nil] "mine" or "org" while the switch shows My
+  #   feedback or the whole org
   def initialize(partner:, viewer_id:, group:, details:, new_keys:, explicit:, place: nil)
     @partner = partner
     @viewer_id = viewer_id
@@ -54,9 +55,16 @@ class Views::Evidence::ConversationThread < Views::Base
     end
   end
 
-  def title = self_thread? ? "You" : @partner.name
+  def about_me? = self_thread? && report_thread?
+
+  def title
+    return "About you" if about_me?
+
+    self_thread? ? "You" : @partner.name
+  end
 
   def subtitle
+    return "Everything people have said about you" if about_me?
     return "Notes about your own work" if self_thread?
     return "Everything about #{first_name(@partner)}" if report_thread?
 
@@ -68,7 +76,7 @@ class Views::Evidence::ConversationThread < Views::Base
     div(class: "flex-1 min-h-0 lg:overflow-y-auto bg-page px-4 py-4 flex flex-col gap-4",
         data: { conversation_thread_target: "body" }) do
       if messages.empty?
-        render Components::Kit::EmptyState.new(title: "No feedback with #{title} yet. Start below.")
+        render Components::Kit::EmptyState.new(title: empty_title)
       else
         # A short thread sits at the bottom, next to the composer, as in a
         # messaging app; a long one still scrolls from its top.
@@ -82,6 +90,12 @@ class Views::Evidence::ConversationThread < Views::Base
         end
       end
     end
+  end
+
+  def empty_title
+    return "No feedback with #{title} yet. Start below." unless about_me?
+
+    @details.dig(:composer, :ask_assignment_id) ? "No feedback about you yet. Ask for some below." : "No feedback about you yet."
   end
 
   def earlier_link
@@ -108,7 +122,10 @@ class Views::Evidence::ConversationThread < Views::Base
         "Not a private chat. Feedback is visible to the person it's about, their managers and workspace admins."
       end
       div(class: "flex flex-wrap gap-2") do
-        c[:self_thread] ? self_actions(c) : partner_actions(c)
+        if c[:about_me] then about_me_actions(c)
+        elsif c[:self_thread] then self_actions(c)
+        else partner_actions(c)
+        end
       end
     end
   end
@@ -119,6 +136,19 @@ class Views::Evidence::ConversationThread < Views::Base
     render Components::Kit::Button.new(tone: :brand, touch: true, href: c[:own_assessment_path]) { "Add a note on your assessment" }
   end
 
+  def about_me_actions(c)
+    return unless c[:ask_assignment_id]
+
+    render Components::Kit::Button.new(tone: :brand, touch: true, data: ask_data(c[:ask_assignment_id])) do
+      "Ask someone for feedback about you"
+    end
+  end
+
+  def ask_data(assignment_id, requestee_id = nil)
+    { action: "request-evidence#load click->modal#open", modal_target_id: "evidence-request-modal-overlay",
+      request_evidence_assignment_id_param: assignment_id, request_evidence_requestee_id_param: requestee_id }.compact
+  end
+
   def partner_actions(c)
     if c[:can_give]
       data = c[:give_assignment_id] ? modal_trigger_data(mode: "new", assignment_id: c[:give_assignment_id]) : modal_trigger_data(mode: "give")
@@ -126,11 +156,8 @@ class Views::Evidence::ConversationThread < Views::Base
     end
     return unless c[:ask_assignment_id]
 
-    render Components::Kit::Button.new(
-      variant: :outline, touch: true,
-      data: { action: "request-evidence#load click->modal#open", modal_target_id: "evidence-request-modal-overlay",
-              request_evidence_assignment_id_param: c[:ask_assignment_id],
-              request_evidence_requestee_id_param: c[:ask_requestee_id] }.compact
-    ) { report_thread? ? "Ask someone about #{first_name(@partner)}" : "Ask #{first_name(@partner)} for feedback" }
+    render Components::Kit::Button.new(variant: :outline, touch: true, data: ask_data(c[:ask_assignment_id], c[:ask_requestee_id])) do
+      report_thread? ? "Ask someone about #{first_name(@partner)}" : "Ask #{first_name(@partner)} for feedback"
+    end
   end
 end

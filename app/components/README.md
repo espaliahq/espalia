@@ -60,7 +60,7 @@ render Components::Kit::SegmentedControl.new(label: "Activity feed focus mode", 
 end
 ```
 
-A segment given `href:` is a link to that view of the page. Inside a menu, pass `item_role: :menuitemradio`. `marked: "needs your attention"` puts a dot after a segment's label for a view that holds something to look at; the string is read to a screen reader.
+A segment given `href:` is a link to that view of the page. Inside a menu, pass `item_role: :menuitemradio`. `marked: "needs your attention"` puts a dot after a segment's label for a view that holds something to look at; the string is read to a screen reader. `short: "Team"` swaps in a shorter label below the `sm` breakpoint, for a track too wide for a phone.
 
 **`Kit::AttentionDot`**: a brand dot saying something needs the viewer, as on a conversation row. The label is read to a screen reader.
 

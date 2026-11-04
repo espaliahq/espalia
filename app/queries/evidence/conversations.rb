@@ -6,12 +6,11 @@
 #
 # What the viewer sees: requests they made or were sent, feedback they wrote,
 # feedback about them, the answers to their requests, and feedback about
-# their reports from someone other than that person. Their reports are their
-# team (direct reports and rating delegations), or with the "org" scope the
-# whole subtree below them too, as the page's My team / My whole org switch
-# sets it. A report's own notes
-# appear only while they carry pending placement suggestions, as the old hub
-# listed them.
+# their reports from someone other than that person. Their reports follow the
+# page's My feedback / My team / My whole org switch: none ("mine"), their
+# team (direct reports and rating delegations), or the whole subtree below
+# them too ("org"). A report's own notes appear only while they carry pending
+# placement suggestions, as the old hub listed them.
 #
 # Which conversation a message belongs to, for the "person" group:
 #
@@ -22,9 +21,12 @@
 # 4. Any other feedback sits with its author.
 #
 # The "report" group keys every message about one of the viewer's reports by
-# that report, and leaves the rest out.
+# that report, and leaves the rest out. With no reports in view (the "mine"
+# scope, or nobody reporting to the viewer) it is About me: one thread of
+# every message about the viewer.
 class Evidence::Conversations
   GROUPS = %w[report person].freeze
+  SCOPES = %w[mine team org].freeze
 
   # One entry in a conversation. `kind` is :request (the ask), :reply (the
   # item answering it), :declined or :feedback (an item with no visible ask).
@@ -63,19 +65,16 @@ class Evidence::Conversations
     def latest = messages.last
   end
 
-  # The group a viewer sees first: their reports when they have any.
-  #
-  # @param viewer [Person]
-  # @return [String]
-  def self.default_group(viewer) = new(viewer).reports? ? "report" : "person"
-
   # @param viewer [Person]
   # @param group [String] "report" or "person"; anything else reads as "person"
-  # @param scope [String] "team" or "org"; anything else reads as "team"
-  def initialize(viewer, group: "person", scope: "team")
+  # @param scope [String] "mine", "team" or "org"; anything else reads as "team"
+  # @param placing [Assessments::FeedbackToPlace, nil] the viewer's team / org
+  #   split, shared between the scopes of one page
+  def initialize(viewer, group: "person", scope: "team", placing: nil)
     @viewer = viewer
     @group = group == "report" ? "report" : "person"
-    @scope = scope == "org" ? "org" : "team"
+    @scope = SCOPES.include?(scope) ? scope : "team"
+    @placing = placing
   end
 
   attr_reader :viewer, :group, :scope
@@ -123,6 +122,30 @@ class Evidence::Conversations
   # @return [Boolean]
   def reports? = report_ids.any?
 
+  # The group a viewer sees first: a manager's reports, or About me under My
+  # feedback; their conversations for anyone else, and for a manager with
+  # nobody in this scope.
+  #
+  # @return [String]
+  def default_group = manager? && (reports? || about_me?) ? "report" : "person"
+
+  # Whether anyone reports to the viewer, in their team or deeper.
+  #
+  # @return [Boolean]
+  def manager? = placing.assignments("org").any?
+
+  # Whether the report group is About me: under My feedback, or for someone
+  # nobody reports to.
+  #
+  # @return [Boolean]
+  def about_me? = @scope == "mine" || !manager?
+
+  # Whether a person has a thread of their own in the report group.
+  #
+  # @param person_id [String]
+  # @return [Boolean]
+  def subject?(person_id) = about_me? ? person_id == viewer_id : report?(person_id)
+
   # Whether the org scope reaches anyone the team scope doesn't.
   #
   # @return [Boolean]
@@ -165,7 +188,7 @@ class Evidence::Conversations
   end
 
   def key_for(message, group)
-    return (report?(message.about_id) ? message.about_id : nil) if group == "report"
+    return (subject?(message.about_id) ? message.about_id : nil) if group == "report"
     return other_party(message.request) if message.request
 
     message.item.author_id == viewer_id ? message.item.person_id : message.item.author_id
@@ -232,7 +255,7 @@ class Evidence::Conversations
 
   # The switch's split, from the query that counts the feedback to place.
   def report_keys
-    @report_keys ||= placing.assignments(@scope).keys.to_set
+    @report_keys ||= @scope == "mine" ? Set.new : placing.assignments(@scope).keys.to_set
   end
 
   def placing

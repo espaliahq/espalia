@@ -57,20 +57,27 @@ class Components::Kit::SegmentedControl < Components::Base
   # @param disabled [Boolean] buttons only
   # @param marked [String, nil] puts a dot after the label, saying something
   #   in that view needs attention; the string is what a screen reader hears
+  # @param short [String, nil] the label below the `sm` breakpoint, for a
+  #   track too wide for a phone
   # @param attrs [Hash] passed through to the segment's button or link
-  def segment(label, selected: false, href: nil, disabled: false, marked: nil, **attrs)
+  def segment(label, selected: false, href: nil, disabled: false, marked: nil, short: nil, **attrs)
     classes = { class: "#{SEGMENT} #{@size}#{" flex-1" if @fill}" }
     if href
-      a(**mix(classes, { href: href, aria: { current: ("page" if selected) }.compact }, attrs)) { segment_label(label, marked) }
+      a(**mix(classes, { href: href, aria: { current: ("page" if selected) }.compact }, attrs)) { segment_label(label, marked, short) }
     else
-      button(**mix(classes, { type: "button", disabled: disabled }, state(selected), attrs)) { segment_label(label, marked) }
+      button(**mix(classes, { type: "button", disabled: disabled }, state(selected), attrs)) { segment_label(label, marked, short) }
     end
   end
 
   private
 
-  def segment_label(label, marked)
-    plain label
+  def segment_label(label, marked, short)
+    if short
+      span(class: "sm:hidden") { short }
+      span(class: "max-sm:hidden") { label }
+    else
+      plain label
+    end
     return if marked.nil?
 
     render Components::Kit::AttentionDot.new(marked, class: "ml-1.5")

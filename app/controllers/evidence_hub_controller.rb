@@ -18,9 +18,11 @@ class EvidenceHubController < ApplicationController
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
     @page_title = "Feedback / Evidence"
 
-    conversations = Evidence::Conversations.new(current_person, scope: place_param)
+    conversations = conversations_in(place_param)
     conversations.group = group_for(conversations)
-    return redirect_to(org_thread_path) if org_only_thread?(conversations)
+    if (path = misplaced_thread_path(conversations))
+      return redirect_to(path)
+    end
 
     reads = Evidence::ConversationReads.new(current_user)
     selected, partner = selected_conversation(conversations)
@@ -64,11 +66,17 @@ class EvidenceHubController < ApplicationController
     request.headers["X-Sec-Purpose"] == "prefetch"
   end
 
-  # The route's group for a thread, or `?view=` on the page itself; reports
-  # unless the URL asks for people, and only when there are reports.
+  # The route's group for a thread, or `?view=` on the page itself; else a
+  # manager's reports (About me under My feedback), anyone else's people.
   def group_for(conversations)
     asked = params[:group] || params[:view]
-    asked == "person" || !conversations.reports? ? "person" : "report"
+    Evidence::Conversations::GROUPS.include?(asked) ? asked : conversations.default_group
+  end
+
+  # One query per scope, sharing the viewer's team / org split.
+  def conversations_in(scope)
+    @placing ||= Assessments::FeedbackToPlace.new(current_person)
+    (@conversations_in ||= {})[scope] ||= Evidence::Conversations.new(current_person, scope: scope, placing: @placing)
   end
 
   # The conversation the URL names, or the most recent one. A person with no
@@ -84,19 +92,18 @@ class EvidenceHubController < ApplicationController
       [ convo, person ]
     else
       convo = conversations.all.first
+      return [ nil, current_person ] if convo.nil? && conversations.group == "report" && conversations.about_me?
+
       [ convo, convo && conversations.people[convo.person_id] ]
     end
   end
 
-  # The thread holding a message: a report's thread before a person's, and
-  # the team view before the org view. The org view lists everything the team
-  # view does, so a link already in the org view looks nowhere else.
+  # The thread holding a message: a report's thread, or About me, before a
+  # person's; the scope the link asked for before the others.
   def located_path(anchor:, item_id: nil, request_id: nil)
-    views = (place_param == "org" ? %w[org] : %w[team org]).map { |scope| Evidence::Conversations.new(current_person, scope: scope) }
+    views = located_views
     %w[report person].each do |group|
       views.each do |conversations|
-        next if group == "report" && !conversations.reports?
-
         convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
         next if convo.nil?
 
@@ -107,21 +114,38 @@ class EvidenceHubController < ApplicationController
     evidence_hub_path
   end
 
-  # A thread only the org view lists, opened in the team view (a bookmark, a
-  # link from before the switch scoped the conversations). The route names
-  # the group: without reports in the team view, the page itself falls back
-  # to people.
-  def org_only_thread?(conversations)
-    return false unless params[:person_id].present? && conversations.scope == "team" && conversations.beyond_team?
-    return false if conversations.find(params[:person_id], group: params[:group])
+  def located_views
+    asked = conversations_in(place_param)
+    return [ asked ] unless asked.manager?
 
-    Evidence::Conversations.new(current_person, scope: "org").find(params[:person_id], group: params[:group]).present?
+    [ asked, *(%w[team org mine] - [ place_param ]).map { |scope| conversations_in(scope) } ]
   end
 
-  def org_thread_path = page_path(request.path, **request.query_parameters.symbolize_keys, place: "org")
+  # Where a thread URL its scope can't show belongs: a bookmark, a link from
+  # before the switch, About me opened under My team. A report thread moves to
+  # a scope it is a subject in, else to the person's thread; a person thread
+  # to a scope that lists it.
+  def misplaced_thread_path(conversations)
+    person_id = params[:person_id]
+    return if person_id.blank?
+
+    query = request.query_parameters.symbolize_keys
+    if conversations.group == "report"
+      return if conversations.subject?(person_id)
+
+      scope = (Evidence::Conversations::SCOPES - [ conversations.scope ]).find { |s| conversations_in(s).subject?(person_id) }
+      return page_path(request.path, **query, place: place_for(scope)) if scope
+
+      return page_path(evidence_conversation_path(person_id), **query)
+    end
+    return if !conversations.manager? || conversations.find(person_id)
+
+    scope = (Evidence::Conversations::SCOPES - [ conversations.scope ]).find { |s| conversations_in(s).find(person_id) }
+    page_path(request.path, **query, place: place_for(scope)) if scope
+  end
 
   def conversation_path(person_id, group, anchor: nil, all: false, scope: place_param)
-    query = { place: (scope == "org" ? "org" : nil), all: (1 if all), anchor: anchor }
+    query = { place: place_for(scope), all: (1 if all), anchor: anchor }
     if group == "report"
       evidence_report_conversation_path(person_id, **query)
     else
@@ -149,8 +173,10 @@ class EvidenceHubController < ApplicationController
   # ── Needs you ──
 
   def needs_you(conversations)
-    placing = Operations::Assessments::FeedbackToPlace.call(context: pundit_user, params: { scope: place_param })
+    placing = Operations::Assessments::FeedbackToPlace.call(context: pundit_user,
+                                                            params: { scope: place_param == "org" ? "org" : "team" })
     about_you, for_team = to_place_records(placing)
+    for_team = [] if place_param == "mine"
     incoming = EvidenceRequest.incoming_for(current_person.id).pending.least_recently_touched
       .includes(:requester, :assessee).to_a
     waiting = EvidenceRequest.outgoing_for(current_person.id).pending.least_recently_touched.includes(:requestee).to_a
@@ -166,29 +192,56 @@ class EvidenceHubController < ApplicationController
     {
       incoming: incoming, about_you: about_you, for_team: for_team, waiting: waiting, paths: paths,
       people: Person.where(id: for_team.map(&:person_id).uniq).index_by(&:id),
-      place_scope: placing[:scope], place_counts: (placing[:counts] if conversations.beyond_team?),
+      place_scope: place_param, scopes: switch_scopes(conversations),
+      place_counts: { "mine" => about_you.size, "team" => about_you.size + placing[:counts][:team],
+                      "org" => about_you.size + placing[:counts][:org] },
       scope_paths: scope_paths(conversations),
       suggestion_counts: EvidencePlacementSuggestion.pending.where(evidence_id: (about_you + for_team).map(&:id))
         .group(:evidence_id).count
     }
   end
 
-  # The page in each scope. Every thread the team view lists is in the org
-  # view, but not the other way round: a thread only the org view lists
-  # gives way to the list. A person with no thread yet opens in either.
+  # The switch's segments: a manager's own feedback and team, and the whole
+  # org when it reaches further. Nobody reporting to the viewer, no switch.
+  def switch_scopes(conversations)
+    return [] unless conversations.manager?
+
+    [ "mine", "team", ("org" if conversations.beyond_team?) ].compact
+  end
+
+  # The page in each scope, the open thread kept where that scope lists it,
+  # else the list.
   def scope_paths(conversations)
-    in_team = params[:person_id].blank? || conversations.scope == "team" || conversations.find(params[:person_id]).nil? ||
-      Evidence::Conversations.new(current_person, scope: "team").find(params[:person_id], group: conversations.group)
-    team = in_team ? page_path(request.path, view: params[:view]) : page_path(evidence_hub_path, view: conversations.group)
-    { "team" => team, "org" => page_path(request.path, view: params[:view], place: "org") }
+    Evidence::Conversations::SCOPES.index_with do |scope|
+      if keeps_thread?(conversations, scope)
+        page_path(request.path, view: params[:view], place: place_for(scope))
+      else
+        page_path(evidence_hub_path, view: conversations.group, place: place_for(scope))
+      end
+    end
+  end
+
+  # The report group's threads are its subjects in each scope. The person
+  # group only gains threads as the scope widens, and a person with no thread
+  # yet opens anywhere.
+  def keeps_thread?(conversations, scope)
+    person_id = params[:person_id]
+    return true if person_id.blank? || scope == conversations.scope
+
+    other = conversations_in(scope)
+    return other.subject?(person_id) if conversations.group == "report"
+    return true if conversations.find(person_id).nil?
+
+    widens = Evidence::Conversations::SCOPES.index(scope) > Evidence::Conversations::SCOPES.index(conversations.scope)
+    widens || other.find(person_id, group: "person").present?
   end
 
   def page_path(path, **query) = [ path, query.compact_blank.to_query.presence ].compact.join("?")
 
-  # "My team" unless the URL asks for the whole org.
-  def place_param
-    params[:place] == "org" ? "org" : ::Assessments::FeedbackToPlace::DEFAULT_SCOPE
-  end
+  # "My team" unless the URL asks for My feedback or the whole org.
+  def place_param = Evidence::Conversations::SCOPES.include?(params[:place]) ? params[:place] : "team"
+
+  def place_for(scope) = (scope unless scope == "team")
 
   # The Operation decides which items and in what order; the rows render records.
   def to_place_records(placing)
@@ -300,7 +353,11 @@ class EvidenceHubController < ApplicationController
   def composer_for(conversations, partner)
     report_thread = conversations.group == "report"
     own = PersonFrameworkAssignment.where(person_id: current_person.id).order(:created_at, :id).last
-    return { self_thread: true, own_assessment_path: own && assessment_path(own) } if partner.id == current_person.id
+    if partner.id == current_person.id
+      return { about_me: true, ask_assignment_id: (own.id if own && EvidenceRequestPolicy.new(pundit_user, own).request?) } if report_thread
+
+      return { self_thread: true, own_assessment_path: own && assessment_path(own) }
+    end
 
     partner_assignments = PersonFrameworkAssignment.where(person_id: partner.id).order(:created_at, :id).to_a
     # A request is about one assessment; with several, the newest is the one in use.

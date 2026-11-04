@@ -224,16 +224,23 @@ shared by web, MCP and Slack:
 - **"Needs you"** at the top of the Feedback / Evidence page lists feedback to
   place: items about the viewer and, for the manager side, about their
   reports, each with "Place" — the edit modal with an empty block, content
-  disabled for a non-author. The reports' list has two views
-  ([#620](https://github.com/mr-yum/growth-os/issues/620)): **My team**, the
+  disabled for a non-author. A manager's switch has three views
+  ([#620](https://github.com/mr-yum/growth-os/issues/620),
+  [#652](https://github.com/mr-yum/growth-os/issues/652)): **My feedback**,
+  below; **My team**, the
   default — direct reports plus active rating delegations, exactly
   `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
   everyone deeper in the subtree (`#skip_level`). The view is in the URL
   (`?place=org`; absent is the team), switched by plain links that carry both
-  counts ("My team · 3", "My whole org · 41"), and the toggle renders whenever
-  the org view reaches someone the team view doesn't, even with nothing to
-  place there. The same switch scopes the conversations
-  ([#650](https://github.com/mr-yum/growth-os/issues/650)). It is a view filter, not
+  counts ("My team · 3", "My whole org · 41"). The switch renders for anyone
+  with reports, and offers My whole org only when the org reaches someone
+  the team doesn't. It scopes the conversations too
+  ([#650](https://github.com/mr-yum/growth-os/issues/650)). **My feedback**
+  (`?place=mine`) holds only what is about the viewer, and their own
+  exchanges. Each segment's count
+  is what that view lists to place, shown only where some waits; below `sm`
+  the segments take short labels (Mine, Team, Whole org) through
+  `Kit::SegmentedControl#segment(short:)`. It is a view filter, not
   authority: `EvidencePolicy#add_link?` still lets an ancestor place anything
   in their subtree. `Operations::Assessments::FeedbackToPlace`
   (`assessments_feedback_to_place`) builds the list over
@@ -299,20 +306,26 @@ recently active first, beside the open thread. It replaced a single scroll of
 - **Managers see By report first** (`/evidence/about/<person_id>`), one thread
   per report with everything about that person; **By person**
   (`/evidence/with/<person_id>`) holds everything, including their own
-  feedback. People without reports see only By person. `?view=` picks the
-  group on `/evidence`.
+  feedback. `?view=` picks the group on `/evidence`.
+- **About me** is the report group with nobody else in it: under My feedback,
+  and always for someone nobody reports to (`Evidence::Conversations#about_me?`).
+  One thread, `/evidence/about/<own id>`, holds every message about the
+  viewer: feedback given them, requests about them and their answers, their
+  own notes. Its composer asks someone for feedback about them. People
+  without reports see About me / By person, By person first, and no scope
+  switch. A link to a message about the viewer lands on About me, under My
+  feedback for a manager.
 - **What a viewer sees** is the old hub's reach plus placed feedback about them
   and their reports: requests they made or were sent, what they wrote, what is
   about them, the answers to their requests, and feedback about their reports
   from someone else. A report's own notes appear only while they carry a
   pending suggestion, so a manager's report thread isn't a copy of the
   assessment.
-- **"Their reports" follow the My team / My whole org switch** in "Needs you"
-  (`Evidence::Conversations` `scope:`), in both groups; what the viewer wrote
-  or asked shows in either. A thread URL that only the org view lists
-  redirects to `?place=org`, as do message links whose message only it lists.
-  Switching an org-only thread to My team lands on the team's list, since the
-  thread isn't in it.
+- **"Their reports" follow the My feedback / My team / My whole org switch**
+  in "Needs you" (`Evidence::Conversations` `scope:`), in both groups; what
+  the viewer wrote or asked shows in each. A thread URL that its scope doesn't
+  list redirects to a scope that does, as do message links. Switching to a
+  scope that doesn't list the open thread lands on that scope's list.
 - **Threads read oldest to newest** and open on the newest message
   (`conversation-thread` controller); a reply sits at the time it was sent and
   quotes its request, which links back up. A thread shows its latest
