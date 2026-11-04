@@ -119,8 +119,8 @@ class PersonDevelopment::Scoring
   # 0.33 / 0.66, which would make the last step longer than the first two.
   FREQUENCY = { "none" => 0.0, "some" => 1.0 / 3, "occasional" => 2.0 / 3, "consistent" => 1.0 }.freeze
   # Thirds aren't exact in binary, so a sum that equals a threshold can land a
-  # hair below it. Scores and deficits are rounded to this many places before
-  # any comparison.
+  # hair below it. Scores, deficits and the thresholds they meet are all
+  # rounded to this many places before any comparison.
   PRECISION = 9
   DEFAULT_MASTERY_THRESHOLD              = 1.50
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
@@ -188,9 +188,9 @@ class PersonDevelopment::Scoring
     @all_level_ordinals = all_level_ordinals.sort
     @expectation_cells = expectation_cells&.to_set
     @perspective = perspective
-    @mastery_threshold              = thresholds[:mastery_threshold]              || DEFAULT_MASTERY_THRESHOLD
-    @meeting_expectation_threshold  = thresholds[:meeting_expectation_threshold]  || DEFAULT_MEETING_EXPECTATION_THRESHOLD
-    @underperforming_threshold      = thresholds[:underperforming_threshold]      || DEFAULT_UNDERPERFORMING_THRESHOLD
+    @mastery_threshold              = (thresholds[:mastery_threshold]             || DEFAULT_MASTERY_THRESHOLD).round(PRECISION)
+    @meeting_expectation_threshold  = (thresholds[:meeting_expectation_threshold] || DEFAULT_MEETING_EXPECTATION_THRESHOLD).round(PRECISION)
+    @underperforming_threshold      = (thresholds[:underperforming_threshold]     || DEFAULT_UNDERPERFORMING_THRESHOLD).round(PRECISION)
     @default_overperformance_cap  = thresholds[:overperformance_cap]    || DEFAULT_OVERPERFORMANCE_CAP
     @default_deficit_threshold    = thresholds[:deficit_threshold]      || DEFAULT_DEFICIT_THRESHOLD
   end
@@ -823,7 +823,7 @@ class PersonDevelopment::Scoring
     @deficit_threshold_for[binding.capability.stable_id] ||=
       (binding.deficit_threshold ||
         @categories[binding.capability.category_id]&.deficit_threshold ||
-        @default_deficit_threshold).to_f
+        @default_deficit_threshold).to_f.round(PRECISION)
   end
 
   # ── Helpers ──

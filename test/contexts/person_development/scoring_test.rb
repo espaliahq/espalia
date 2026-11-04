@@ -301,6 +301,14 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_equal :performing, scorer.performance_state
     end
 
+    should "compare a third against a threshold of exactly a third as equal" do
+      # Rounding the score but not the threshold put 0.333333333 below 0.3333333333333333.
+      scorer = scorer_with_current("some", deficit_threshold: 2.0 / 3,
+        thresholds: { underperforming_threshold: 1.0 / 3, meeting_expectation_threshold: 0.5 })
+      assert_equal :progressing, scorer.performance_state
+      assert_not_equal :blocked, scorer.capability_statuses[CAP_A], "a deficit of ⅔ is within a ⅔ tolerance"
+    end
+
     should "score the assessed level identically to performance_ratio_at_level(person_level)" do
       scorer = build_pair(person_level: 3, all_levels: [ 1, 2, 3, 4 ], ratings: [
         rated(2, "some"), rated(3, "occasional"), rated(4, "consistent"),
