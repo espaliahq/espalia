@@ -325,4 +325,4 @@ Nothing persists a score, so a change to a weight, the gate or a default thresho
 3. **Reproduce prod before trusting the new numbers.** Run the current constants first and match every overall and category score exactly. The MCP serves an admin the `aligned_only` perspective once a cell is agreed and `manager_only` before, so score each perspective and use the one that matches. A miss means the extract or an assumption is wrong. For example, `capability_get` does not expose a binding's tolerance or cap override, so the defaults are assumed.
 4. **Swap the constant and rescore.** Count the state flips at the 80, 95 and 150 lines, and for categories, which flip far more often because they hold only three or four capabilities.
 
-ADR-24's equal-step weights were checked this way: 14 people reproduced exactly, then three of them moved from performing to mastering.
+ADR-24's equal-step weights were checked this way. The rescore found the verdict flips near 1.5; a second pass over one weighted capability found the blocks it lifts, which a sample of ×1 capabilities can't show. Check every binding weight other than 1 separately: the deficit scales with it.

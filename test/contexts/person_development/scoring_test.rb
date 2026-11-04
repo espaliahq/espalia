@@ -100,6 +100,12 @@ class PersonDevelopment::ScoringTest < ActiveSupport::TestCase
       assert_not_equal :blocked, scorer_with_current("some").capability_statuses[CAP_A]
     end
 
+    should "block a ×2 capability on 'some of the time' but not on 'most of the time'" do
+      # The deficit is the gap times the weight: 2 × ⅔ = 1.33 blocks, 2 × ⅓ = 0.67 doesn't (ADR-24).
+      assert_equal :blocked, scorer_with_current("some", weight: 2.0).capability_statuses[CAP_A]
+      assert_not_equal :blocked, scorer_with_current("occasional", weight: 2.0).capability_statuses[CAP_A]
+    end
+
     should "space the four ratings in equal steps from 0 to 1" do
       values = PersonDevelopment::Scoring::FREQUENCY.values_at("none", "some", "occasional", "consistent")
       steps = values.each_cons(2).map { |low, high| high - low }
