@@ -51,7 +51,7 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       screenshot("integrations_index")
 
       assert_text "HRIS"
-      assert_text "Hibob"
+      assert_text "HiBob"
       assert_text "Active"
     end
 
@@ -68,7 +68,7 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       # Configuration values — DescriptionList terms are CSS-uppercased
       assert_text "PROVIDER"
       assert_text "SYNC ENABLED"
-      assert_text "Hibob"
+      assert_text "HiBob"
 
       # Mapping table — seeded with Software Engineer → E
       assert_text "Software Engineer"
@@ -89,6 +89,40 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       visit tenant_integration_path("hris")
 
       assert_button "Sync now"
+    end
+
+    should "save the HRIS connection through the form without echoing the token" do
+      sign_in @admin_user
+      visit tenant_integration_path("hris")
+      assert_text "Connection settings"
+      screenshot("hris_connection_form")
+
+      select "BambooHR", from: "Provider"
+      js_fill_in "API token", with: "tok-system-test-secret"
+      click_button_with_js_fallback "Save connection", expect_text: "HRIS connection saved."
+
+      assert_text "BambooHR"
+      screenshot("hris_connection_saved")
+      within("form[action='#{tenant_hris_connection_path}']") do
+        assert_text "Stored"
+      end
+      assert_equal "", find_field("API token").value
+      assert_no_text "tok-system-test-secret"
+    end
+
+    should "show the message when the connection does not validate" do
+      sign_in @admin_user
+      visit tenant_integration_path("hris")
+      assert_text "Connection settings"
+
+      js_fill_in "Level column id", with: " "
+      page.execute_script(<<~JS)
+        document.getElementById("hris_connection_provider")
+          .insertAdjacentHTML("beforeend", "<option value='workday' selected>Workday</option>")
+      JS
+      click_button_with_js_fallback "Save connection", expect_text: "The connection could not be saved."
+
+      assert_text "Provider is not included in the list"
     end
   end
 
@@ -132,6 +166,17 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       screenshot("mobile_sidebar_member")
 
       assert_no_link "Admin"
+    end
+
+    should "save the HRIS connection form at phone width" do
+      sign_in @admin_user
+      visit tenant_integration_path("hris")
+      assert_text "Connection settings"
+      assert_no_sideways_overflow
+      screenshot("mobile_hris_connection_form")
+
+      js_fill_in "Service user id", with: "svc-mobile"
+      click_button_with_js_fallback "Save connection", expect_text: "HRIS connection saved."
     end
   end
 

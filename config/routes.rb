@@ -126,6 +126,11 @@ Rails.application.routes.draw do
       post :test_connection
     end
 
+    # HRIS connection: save provider, sync settings and credentials. The page
+    # itself is integrations#show with id "hris".
+    resource :hris_connection, only: [ :update ],
+      path: "integrations/hris/connection", controller: "hris_connections"
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],
