@@ -76,7 +76,7 @@ class Views::Evidence::ConversationThread < Views::Base
     div(class: "flex-1 min-h-0 lg:overflow-y-auto bg-page px-4 py-4 flex flex-col gap-4",
         data: { conversation_thread_target: "body" }) do
       if messages.empty?
-        render Components::Kit::EmptyState.new(title: about_me? ? "No feedback about you yet. Ask for some below." : "No feedback with #{title} yet. Start below.")
+        render Components::Kit::EmptyState.new(title: empty_title)
       else
         # A short thread sits at the bottom, next to the composer, as in a
         # messaging app; a long one still scrolls from its top.
@@ -90,6 +90,12 @@ class Views::Evidence::ConversationThread < Views::Base
         end
       end
     end
+  end
+
+  def empty_title
+    return "No feedback with #{title} yet. Start below." unless about_me?
+
+    @details.dig(:composer, :ask_assignment_id) ? "No feedback about you yet. Ask for some below." : "No feedback about you yet."
   end
 
   def earlier_link

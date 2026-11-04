@@ -128,11 +128,21 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to evidence_conversation_path(@peer.id)
     end
 
-    should "offer an empty About me with its ask" do
+    should "offer an empty About me, promising the ask only when there is one" do
       sign_in @peer_user
       get evidence_hub_path(view: "report")
       assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']", text: /About you/
       assert_select "#conversation-title", text: "About you"
+      assert_select "[data-testid='conversation-thread']", text: /No feedback about you yet\./
+      assert_select "[data-testid='conversation-thread']", text: /Ask for some below/, count: 0
+
+      sign_in @assessee_user
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.withdraw_evidence(@assessee.id, @framework_id, @unplaced_id, withdrawn_by_id: @peer.id)
+      end
+      get evidence_hub_path(view: "report")
+      assert_select "[data-testid='conversation-thread']", text: /Ask for some below/
+      assert_select "button", text: "Ask someone for feedback about you"
     end
 
     should "gather what's about the assessee into About me" do

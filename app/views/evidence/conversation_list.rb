@@ -84,7 +84,7 @@ class Views::Evidence::ConversationList < Views::Base
                "hover:bg-default-hover aria-[current=page]:bg-neutral-muted") do
         span(class: "row-span-2") { avatar(@conversations.viewer, size: :sm) }
         span(class: "truncate text-sm font-semibold text-default") { "About you" }
-        span(class: "truncate text-xs text-muted") { "Nothing yet. Ask someone for feedback." }
+        span(class: "truncate text-xs text-muted") { "Nothing about you yet" }
       end
     end
   end
