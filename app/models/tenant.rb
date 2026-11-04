@@ -239,7 +239,10 @@ class Tenant < ApplicationRecord
     with_lock do
       credentials = (hris_credentials.is_a?(Hash) ? hris_credentials : {}).dup
       { "service_user_id" => service_user_id, "api_token" => api_token, "webhook_secret" => webhook_secret }
-        .each { |key, value| credentials[key] = value.strip if value.present? }
+        .each do |key, value|
+          value = value.to_s.strip
+          credentials[key] = value if value.present?
+        end
 
       assign_attributes(
         hris_config: HrisConfig.new(hris_config.attributes.merge(settings.stringify_keys)),
