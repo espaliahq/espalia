@@ -231,13 +231,19 @@ class ExampleSeed
     titles = EvidenceItem.for_person(theo.id).for_framework(framework_id).pluck(:title).to_set
 
     [
-      [ "Shipped the tile cache eviction fix", "self", "project_outcome", "marisol", "demonstrated", 0 ],
-      [ "Geocoder fallback incident writeup", "manager", "incident_response", "marisol", "demonstrated", 1 ],
-      [ "Code review on the route planner refactor", "peer", "code_review", "june", "growth_area", 2 ],
-      [ "Paired Anders through his first release", "peer", "mentoring", "beatrix", "demonstrated", 3 ],
-      [ "Demo day talk on vector tiles", "self", "presentation", "marisol", "demonstrated", 4 ],
-      [ "Buoy status page postmortem notes", "manager", "observation", "marisol", nil, nil ]
-    ].each do |title, source, type, author_key, valence, cell_index|
+      [ "Shipped the tile cache eviction fix", "self", "project_outcome", "marisol", "demonstrated", 0,
+        "Found the leak under zoom-level churn, added load-shaped tests, and the p99 dropped 40ms." ],
+      [ "Geocoder fallback incident writeup", "manager", "incident_response", "marisol", "demonstrated", 1,
+        "Theo ran the sev-2 end to end: calm triage, clear comms every 30 minutes, and a review that produced two platform fixes." ],
+      [ "Code review on the route planner refactor", "peer", "code_review", "june", "growth_area", 2,
+        "Solid catch on the waypoint ordering bug, but the review landed three days after the PR opened — the team was blocked meanwhile." ],
+      [ "Paired Anders through his first release", "peer", "mentoring", "beatrix", "demonstrated", 3,
+        "Watched Theo pair Anders through the release checklist without taking the keyboard once." ],
+      [ "Demo day talk on vector tiles", "self", "presentation", "marisol", "demonstrated", 4,
+        "Fifteen minutes on why vector tiles halve our bandwidth, pitched so the support team followed it too." ],
+      [ "Buoy status page postmortem notes", "manager", "observation", "marisol", nil, nil,
+        "Raw notes from the buoy outage — worth placing once we agree which capability it speaks to." ]
+    ].each do |title, source, type, author_key, valence, cell_index, content|
       next if titles.include?(title)
 
       author = source == "self" ? theo : person(author_key)
@@ -246,7 +252,7 @@ class ExampleSeed
       @development.record_evidence(theo.id, framework_id, SecureRandom.uuid_v7,
         source: source, evidence_type: type == "observation" ? "other" : type,
         custom_type_label: type == "observation" ? "Observation" : nil,
-        title: title, content: "Seen at Null Island this quarter — details in the linked thread.",
+        title: title, content: content,
         author_id: author.id, cycle_id: @cycle.cycle_id, **placement)
     end
 
