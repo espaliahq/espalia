@@ -94,6 +94,17 @@ decrypted (`config/environments/development.rb`). Two consequences:
   the last seed. A checkout **with** `master.key` is immune: its keys come
   from the credentials file.
 
+## Stopping `bin/dev` or a test run from a script
+
+`pkill -f "bin/dev"` (or any `pkill -f` whose pattern appears in your own
+command line) matches the shell that runs it and kills itself — exit 144,
+work half done. Kill by PID instead: `pgrep -x overmind`, check the state,
+`kill <pid>`. A `Z`/`<defunct>` result is already dead and unkillable;
+ignore it. After killing a test run, clear stale `growth_os_test` backends
+before the next one (see the killed-test-run note in testing lore): a
+leftover `idle in transaction` backend makes the next run hang before it
+prints anything.
+
 ## The macOS host
 
 **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
