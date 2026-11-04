@@ -39,6 +39,7 @@ An admin edits `base_url`, `peer_name`, `enabled` and the secrets on **Integrati
 - **An inbound secret belongs to one workspace.** Saving an inbound secret whose key id another tenant holds, current or previous, is refused, since the secret is what tells the verifier whose request it is.
 - The settings form never echoes a secret. A blank field keeps the stored value.
 - **Rotation.** Saving a different inbound secret moves the old one to `previous_inbound_secret` and stamps `previous_rotated_at`. The verifier accepts the previous secret for 24 hours, so the two sides rotate without a coordinated deploy. Rotating the *outbound* secret has no window: change the peer's inbound value first, then ours.
+- **Disconnect** on the settings page (`Tenant#disconnect_feedback_exchange!`) removes both secrets and their key ids and disables the exchange, keeping peer, kinds and cursors; the peer still holds its copies of the shared secrets, which only its admin can discard.
 - Each secret is at least 32 characters and the two differ (one secret per direction, protocol §6); `Tenant` refuses a save that breaks either, with a message on the form. Generate one with `openssl rand -hex 32` or `SecureRandom.hex(32)`.
 
 ## Signing (protocol §6)
