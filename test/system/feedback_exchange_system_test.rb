@@ -181,9 +181,8 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback "Disconnect\u2026", expect_text: "only its admin can discard them"
       screenshot("fx_disconnect_modal")
-      click_button "Disconnect exchange"
+      click_button_with_js_fallback "Disconnect exchange", expect_text: "Feedback exchange disconnected."
 
-      assert_text "Feedback exchange disconnected."
       assert_selector "label[for='feedback_exchange_outbound_secret']", text: /Not set/
       assert_no_button "Disconnect\u2026"
     end

@@ -148,9 +148,8 @@ class AiModelSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback "Remove key\u2026", expect_text: "save a new key to switch suggestions back on"
       screenshot("remove_key_modal")
-      click_button "Remove API key"
+      click_button_with_js_fallback "Remove API key", expect_text: "API key removed."
 
-      assert_text "API key removed."
       assert_selector "label[for='ai_model_api_key']", text: /Not set/
       assert_no_button "Remove key\u2026"
       assert_text "Not configured" # no key, so suggestions are off and the model is unusable

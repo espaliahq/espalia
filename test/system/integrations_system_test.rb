@@ -118,9 +118,8 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
 
       click_button_with_js_fallback "Disconnect\u2026", expect_text: "a reconnect only needs new credentials"
       screenshot("hris_disconnect_modal")
-      click_button "Disconnect HRIS"
+      click_button_with_js_fallback "Disconnect HRIS", expect_text: "HRIS disconnected."
 
-      assert_text "HRIS disconnected."
       assert_selector "label[for='hris_connection_api_token']", text: /Not set/
       assert_no_button "Disconnect\u2026"
       assert_text "Software Engineer" # the mappings survive
