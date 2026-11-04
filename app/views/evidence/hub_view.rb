@@ -81,17 +81,19 @@ class Views::Evidence::HubView < Views::Base
     end
   end
 
+  def place = ("org" if @needs[:place_scope] == "org")
+
   def conversations
     div(class: "lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:h-[min(80vh,52rem)] " \
                "rounded-2xl border border-default bg-default shadow-raised overflow-clip") do
       render Views::Evidence::ConversationList.new(
         conversations: @conversations, reads: @reads, viewer_id: @viewer_id,
-        selected_id: @partner&.id, explicit: @explicit
+        selected_id: @partner&.id, explicit: @explicit, place: place
       )
       if @partner
         render Views::Evidence::ConversationThread.new(
           partner: @partner, viewer_id: @viewer_id, group: @conversations.group,
-          details: @thread, new_keys: @new_keys, explicit: @explicit
+          details: @thread, new_keys: @new_keys, explicit: @explicit, place: place
         )
       else
         div(class: "max-lg:hidden grid place-items-center p-8") do

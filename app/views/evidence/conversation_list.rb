@@ -12,12 +12,15 @@ class Views::Evidence::ConversationList < Views::Base
   # @param selected_id [String, nil] the person whose thread is open
   # @param explicit [Boolean] whether a thread is open on its own URL (the
   #   list then gives the screen to it on a phone)
-  def initialize(conversations:, reads:, viewer_id:, selected_id:, explicit:)
+  # @param place [String, nil] "org" while "Needs you" shows the whole org,
+  #   carried by every link so it stays that way
+  def initialize(conversations:, reads:, viewer_id:, selected_id:, explicit:, place: nil)
     @conversations = conversations
     @reads = reads
     @viewer_id = viewer_id
     @selected_id = selected_id
     @explicit = explicit
+    @place = place
     @group = conversations.group
   end
 
@@ -39,7 +42,7 @@ class Views::Evidence::ConversationList < Views::Base
   def group_switch
     render Components::Kit::SegmentedControl.new(label: "Group conversations", size: :sm, touch: true) do |control|
       [ [ "report", "By report" ], [ "person", "By person" ] ].each do |group, label|
-        control.segment(label, selected: @group == group, href: evidence_hub_path(view: group),
+        control.segment(label, selected: @group == group, href: evidence_hub_path(view: group, place: @place),
                                marked: ("needs your attention" if attention_in?(group)),
                                data: { testid: "group-#{group}", attention: attention_in?(group).to_s })
       end
@@ -75,7 +78,7 @@ class Views::Evidence::ConversationList < Views::Base
     name = conversation.person_id == @viewer_id ? "You" : person&.name.to_s
     current = conversation.person_id == @selected_id
     li(data: { conversation_search_target: "row", name: name.downcase }) do
-      a(href: conversation_href(conversation.person_id, @group),
+      a(href: conversation_href(conversation.person_id, @group, place: @place),
         aria: { current: (current ? "page" : nil) },
         data: { testid: "conversation-row", person_id: conversation.person_id, attention: attention?(conversation).to_s,
                 turbo_prefetch: "false" },

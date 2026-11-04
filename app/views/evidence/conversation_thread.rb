@@ -13,13 +13,15 @@ class Views::Evidence::ConversationThread < Views::Base
   # @param new_keys [Set<String>] read keys that were unread when the thread opened
   # @param explicit [Boolean] whether the URL named this thread (false when
   #   the page opened the newest one itself)
-  def initialize(partner:, viewer_id:, group:, details:, new_keys:, explicit:)
+  # @param place [String, nil] "org" while "Needs you" shows the whole org
+  def initialize(partner:, viewer_id:, group:, details:, new_keys:, explicit:, place: nil)
     @partner = partner
     @viewer_id = viewer_id
     @group = group
     @details = details
     @new_keys = new_keys
     @explicit = explicit
+    @place = place
   end
 
   def view_template
@@ -40,7 +42,7 @@ class Views::Evidence::ConversationThread < Views::Base
   def header
     div(class: "max-lg:sticky max-lg:top-0 max-lg:z-10 flex items-center gap-3 px-4 py-3 border-b border-subtle bg-default",
         data: { testid: "conversation-header" }) do
-      a(href: evidence_hub_path(view: @group), class: "lg:hidden inline-flex items-center gap-1 min-h-11 pr-1 text-sm font-medium text-brand") do
+      a(href: evidence_hub_path(view: @group, place: @place), class: "lg:hidden inline-flex items-center gap-1 min-h-11 pr-1 text-sm font-medium text-brand") do
         span(aria: { hidden: "true" }) { "←" }
         plain "Conversations"
       end
@@ -86,7 +88,7 @@ class Views::Evidence::ConversationThread < Views::Base
     hidden = @details[:hidden_count].to_i
     return unless hidden.positive?
 
-    a(href: conversation_href(@partner.id, @group, all: 1), class: "self-center inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline") do
+    a(href: conversation_href(@partner.id, @group, all: 1, place: @place), class: "self-center inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline") do
       "Show #{hidden} earlier #{hidden == 1 ? "message" : "messages"}"
     end
   end

@@ -145,6 +145,7 @@ class EvidenceHubController < ApplicationController
       incoming: incoming, about_you: about_you, for_team: for_team, waiting: waiting, paths: paths,
       people: Person.where(id: for_team.map(&:person_id).uniq).index_by(&:id),
       place_scope: placing[:scope], place_counts: (placing[:counts] if placing[:beyond_team]),
+      base_path: request.path, view: params[:view].presence,
       suggestion_counts: EvidencePlacementSuggestion.pending.where(evidence_id: (about_you + for_team).map(&:id))
         .group(:evidence_id).count
     }

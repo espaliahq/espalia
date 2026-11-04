@@ -281,5 +281,12 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       get evidence_hub_path(place: "org")
       assert_select "#needs-you [data-testid='needs-you-place']", count: 2
     end
+
+    should "keep the open thread on the toggle, and the org view on every other link" do
+      get evidence_report_conversation_path(@assessee.id, place: "org")
+      assert_select "#needs-you nav a[href=?]", "#{evidence_report_conversation_path(@assessee.id)}#needs-you", text: "My team · 1"
+      assert_select "[data-testid='conversation-row'][href=?]", evidence_report_conversation_path(@assessee.id, place: "org")
+      assert_select "[data-testid='group-person'][href=?]", evidence_hub_path(view: "person", place: "org")
+    end
   end
 end
