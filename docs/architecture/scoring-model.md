@@ -23,7 +23,7 @@ Below 1.0 the number is the share of the assessed level demonstrated. The hero r
 ## Core Formulae
 
 ```
-FREQUENCY = { "none" => 0.0, "some" => 1/3, "occasional" => 2/3, "consistent" => 1.0 }   # equal steps (ADR-24)
+FREQUENCY = { "none" => 0.0, "some" => 1.0 / 3, "occasional" => 2.0 / 3, "consistent" => 1.0 }   # equal steps (ADR-24)
 DEFAULT_MASTERY_THRESHOLD             = 1.50   # halfway to the next level
 DEFAULT_MEETING_EXPECTATION_THRESHOLD = 0.95
 DEFAULT_UNDERPERFORMING_THRESHOLD     = 0.80
