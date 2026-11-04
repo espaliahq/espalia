@@ -212,6 +212,35 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to evidence_conversation_path(@assessee.id, anchor: request.dom_id)
     end
 
+    should "ask for the whole thread when the message is older than the part that shows" do
+      ActsAsTenant.with_tenant(@tenant) do
+        EvidenceHubController::THREAD_LIMIT.times do |n|
+          create(:evidence_item, tenant: @tenant, author: @peer, person_id: @assessee.id, framework_id: @framework_id,
+                                 source: "peer", recorded_at: (n + 1).minutes.from_now)
+        end
+      end
+      sign_in @assessee_user
+      get evidence_hub_item_path(@unplaced_id)
+      assert_redirected_to evidence_conversation_path(@peer.id, all: 1, anchor: EvidenceItem.dom_id(@unplaced_id))
+
+      follow_redirect!
+      assert_select "##{EvidenceItem.dom_id(@unplaced_id)}"
+    end
+
+    should "mark only the messages a thread shows as read" do
+      old = notify!(@assessee_user, record: unplaced_item)
+      ActsAsTenant.with_tenant(@tenant) do
+        EvidenceHubController::THREAD_LIMIT.times do |n|
+          create(:evidence_item, tenant: @tenant, author: @peer, person_id: @assessee.id, framework_id: @framework_id,
+                                 source: "peer", recorded_at: (n + 1).minutes.from_now)
+        end
+      end
+      sign_in @assessee_user
+      get evidence_conversation_path(@peer.id)
+      assert_nil old.reload.read_at, "a message the thread doesn't show stays unread"
+      assert_select "a", text: "Show 1 earlier message"
+    end
+
     should "send a link to something the viewer can't see to the page" do
       sign_in @peer_user
       get evidence_hub_item_path(SecureRandom.uuid_v7)

@@ -22,16 +22,17 @@ class EvidenceHubController < ApplicationController
     conversations.group = group_for(conversations)
     reads = Evidence::ConversationReads.new(current_user)
     selected, partner = selected_conversation(conversations)
+    shown = shown_messages(selected)
     new_keys = Set.new
     if params[:person_id] && selected
-      new_keys = selected.messages.select { |m| reads.unread?(m) }.flat_map(&:read_keys).to_set
-      reads.mark_read!(selected.messages) unless impersonating? || prefetch?
+      new_keys = shown.select { |m| reads.unread?(m) }.flat_map(&:read_keys).to_set
+      reads.mark_read!(shown) unless impersonating? || prefetch?
     end
 
     render Views::Evidence::HubView.new(
       conversations: conversations, reads: reads, selected: selected, partner: partner,
       explicit: params[:person_id].present?, new_keys: new_keys,
-      thread: thread_details(conversations, selected, partner),
+      thread: thread_details(conversations, shown, (selected&.messages&.size || 0) - shown.size, partner),
       needs: needs_you(conversations),
       open_give_step: params[:give].present? || draft.present?, draft: draft,
       user: current_user, current_tenant: ActsAsTenant.current_tenant, tenants: current_user_tenants
@@ -92,18 +93,25 @@ class EvidenceHubController < ApplicationController
       convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
       next if convo.nil?
 
-      return conversation_path(convo.person_id, group, anchor: anchor)
+      return conversation_path(convo.person_id, group, anchor: anchor, all: beyond_shown?(convo, item_id, request_id))
     end
     evidence_hub_path
   end
 
-  def conversation_path(person_id, group, anchor: nil)
-    place = params[:place] == "org" ? "org" : nil
+  def conversation_path(person_id, group, anchor: nil, all: false)
+    query = { place: (params[:place] == "org" ? "org" : nil), all: (1 if all), anchor: anchor }
     if group == "report"
-      evidence_report_conversation_path(person_id, place: place, anchor: anchor)
+      evidence_report_conversation_path(person_id, **query)
     else
-      evidence_conversation_path(person_id, place: place, anchor: anchor)
+      evidence_conversation_path(person_id, **query)
     end
+  end
+
+  # Whether a message is older than the part of its thread that shows, so a
+  # link to it has to ask for the whole thread.
+  def beyond_shown?(convo, item_id, request_id)
+    index = convo.messages.index { |m| (item_id && m.item&.id == item_id) || (request_id && m.request&.id == request_id) }
+    index.present? && index < convo.messages.size - THREAD_LIMIT
   end
 
   # A link to a message: its thread in the group on screen, or its person
@@ -111,7 +119,7 @@ class EvidenceHubController < ApplicationController
   def message_path(conversations, item_id: nil, request_id: nil, anchor:)
     [ conversations.group, "person" ].uniq.each do |group|
       convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
-      return conversation_path(convo.person_id, group, anchor: anchor) if convo
+      return conversation_path(convo.person_id, group, anchor: anchor, all: beyond_shown?(convo, item_id, request_id)) if convo
     end
     nil
   end
@@ -156,11 +164,15 @@ class EvidenceHubController < ApplicationController
 
   # ── The open thread ──
 
-  def thread_details(conversations, selected, partner)
+  # The thread's latest messages, or all of them for `?all=1`.
+  def shown_messages(selected)
+    messages = selected&.messages || []
+    params[:all].present? ? messages : messages.last(THREAD_LIMIT)
+  end
+
+  def thread_details(conversations, shown, hidden_count, partner)
     return {} if partner.nil?
 
-    messages = selected&.messages || []
-    shown = params[:all].present? ? messages : messages.last(THREAD_LIMIT)
     items = shown.filter_map(&:item)
     requests = shown.filter_map(&:request).uniq
     can_regenerate = Evidence::PlacementSuggestionRows.regenerable?(ActsAsTenant.current_tenant)
@@ -168,7 +180,7 @@ class EvidenceHubController < ApplicationController
     decidable = can_regenerate || EvidencePlacementSuggestion.pending.exists? ? linkable : []
 
     {
-      messages: shown, hidden_count: messages.size - shown.size,
+      messages: shown, hidden_count: hidden_count,
       owed_ids: shown.select { |m| conversations.owes?(m) }.map(&:dom_id).to_set,
       cells: Evidence::CellContextResolver.new(requests + items.select(&:capability_stable_id)).by_id,
       links: links_for(items),
