@@ -10,10 +10,15 @@ class HrisConfigTest < ActiveSupport::TestCase
       assert_empty config.errors[:provider]
     end
 
-    should "accept bamboohr provider" do
+    should "reject a provider no adapter dispatches to" do
       config = HrisConfig.new(provider: "bamboohr")
-      config.valid?
-      assert_empty config.errors[:provider]
+      assert_not config.valid?
+      assert_not_empty config.errors[:provider]
+    end
+
+    should "name a provider for people" do
+      assert_equal "HiBob", HrisConfig.provider_label("hibob")
+      assert_equal "Not configured", HrisConfig.provider_label(nil)
     end
 
     should "reject unknown providers" do

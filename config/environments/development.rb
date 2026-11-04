@@ -89,6 +89,18 @@ Rails.application.configure do
   # applies in development.
   config.hosts << "rails-app"
 
+  # A fresh clone has no master.key, so the credentials file (which normally
+  # carries active_record_encryption) is unreadable — yet the encrypted
+  # tenant-credential columns still need keys. Derive stable, local-only keys
+  # from the development secret_key_base (tmp/local_secret.txt) so bin/setup
+  # and the app work with no secrets at all. A checkout WITH the key keeps the
+  # shared keys, so an existing dev database stays readable.
+  if Rails.application.credentials.active_record_encryption.blank?
+    config.active_record.encryption.primary_key = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-primary")
+    config.active_record.encryption.deterministic_key = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-deterministic")
+    config.active_record.encryption.key_derivation_salt = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-salt")
+  end
+
   config.lookbook.project_name = "GrowthOS"
   config.lookbook.component_paths << Rails.root.join("app/components")
   config.lookbook.preview_layout = "component_preview"

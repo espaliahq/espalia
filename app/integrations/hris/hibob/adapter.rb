@@ -121,10 +121,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @return [Hris::Hibob::Client]
   def client
     @client ||= begin
-      creds = tenant.hris_credentials
+      creds = tenant.hris_secrets
       Hris::Hibob::Client.new(
-        service_user_id: creds["service_user_id"],
-        api_token: creds["api_token"],
+        service_user_id: creds.service_user_id,
+        api_token: creds.api_token,
         level_field_id: config.level_field_id
       )
     end

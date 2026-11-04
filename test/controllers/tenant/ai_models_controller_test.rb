@@ -100,16 +100,14 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         assert_select "select#ai_model_preset option[selected]", text: "Vercel AI Gateway: a chat model"
       end
 
-      should "not offer to keep a key the form never stored, while the status card still reports the deployment's" do
+      should "report no key for a legacy tenant until one is saved through the card" do
         @tenant.update!(settings: { "evidence_suggestions_enabled" => true })
-        Rails.application.credentials.stub(:dig, ->(*path) { path == [ :anthropic, :api_key ] ? "sk-deployment" : nil }) do
-          get tenant_integration_path("ai-model")
-        end
+        get tenant_integration_path("ai-model")
 
         assert_response :success
         assert_not_includes response.body, "Leave blank to keep it"
         assert_select "input[type=password][name='ai_model[api_key]'][placeholder^='Paste']"
-        assert_select "dl", text: /API key\s*Stored/, message: "the status card says a key is in use"
+        assert_select "dl", text: /API key\s*Not set/, message: "there is no deployment key to fall back to"
       end
 
       should "start the form from the legacy switch for a tenant that has not been saved through the card" do

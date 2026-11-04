@@ -286,23 +286,32 @@ Devise.setup do |config|
   # docs/guidelines/chrome-mcp.md.
   #
   # Always register the strategy so the OmniAuth middleware is installed
-  # (Devise wires it up only when `config.omniauth` runs). In production a
-  # missing credential is a misconfiguration we want to surface at boot, not
-  # at the first user click — so we raise. In test and development a missing
-  # credential is normal (fresh checkouts, CI), and OmniAuth.config.test_mode
-  # bypasses the real provider call.
+  # (Devise wires it up only when `config.omniauth` runs) and the route
+  # helpers exist whether or not the instance uses Google. In test and
+  # development a missing credential is normal (fresh checkouts, CI), and
+  # OmniAuth.config.test_mode bypasses the real provider call.
   #
   # EAGER_LOAD_CHECK lets the CI `production_boot` job boot in RAILS_ENV=
   # production purely to verify autoloading/eager-loading (it has no decrypted
-  # credentials). That smoke test isn't validating runtime secrets, so skip the
-  # credential fail-fast when it's set — real production never sets it.
-  google_client_id = Rails.application.credentials.dig(:google, :client_id)
-  google_client_secret = Rails.application.credentials.dig(:google, :client_secret)
+  # credentials); skip the warning when it's set — real production never sets it.
+  google_client_id = Rails.application.credentials.dig(:google, :client_id).presence || ENV["GOOGLE_CLIENT_ID"].presence
+  google_client_secret = Rails.application.credentials.dig(:google, :client_secret).presence || ENV["GOOGLE_CLIENT_SECRET"].presence
 
-  eager_load_check = ENV["EAGER_LOAD_CHECK"] == "1"
-  if Rails.env.production? && !eager_load_check &&
-      (google_client_id.blank? || google_client_secret.blank?)
-    raise "Missing Google OAuth credentials: set credentials.google.client_id and credentials.google.client_secret"
+  # Google SSO is optional per instance: an instance without it signs in with
+  # email and password. The sign-in page hides the Google button in production
+  # when no credentials are set; outside production it stays, because tests and
+  # development drive it through OmniAuth's test mode.
+  google_configured = google_client_id.present? && google_client_secret.present?
+  Rails.application.config.x.google_sso_available = google_configured || !Rails.env.production?
+  if Rails.env.production? && !google_configured && ENV["EAGER_LOAD_CHECK"] != "1"
+    # Half a configuration is a misconfiguration (a lost key, a credentials
+    # regression), not an instance that opted out — fail the boot so SSO users
+    # aren't silently locked out. Neither value set means no SSO on purpose.
+    if google_client_id.present? || google_client_secret.present?
+      raise "Google OAuth is half-configured: set both client_id and client_secret (credentials.google or GOOGLE_CLIENT_ID/SECRET), or neither."
+    end
+
+    warn "Google SSO is not configured (credentials.google or GOOGLE_CLIENT_ID/SECRET): the sign-in page offers email and password only."
   end
 
   config.omniauth :google_oauth2,

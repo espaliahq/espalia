@@ -23,9 +23,11 @@ class Views::Users::Sessions::NewView < Views::Base
 
   # @param resource [User] the Devise resource (an unsaved User instance)
   # @param flash [ActionDispatch::Flash::FlashHash] the current request flash
-  def initialize(resource:, flash:)
+  # @param google_sso [Boolean] whether to offer "Continue with Google"
+  def initialize(resource:, flash:, google_sso: true)
     @resource = resource
     @flash = flash
+    @google_sso = google_sso
   end
 
   def view_template
@@ -78,8 +80,10 @@ class Views::Users::Sessions::NewView < Views::Base
     ) do
       h2(id: "sign-in-title", class: "text-lg/5 font-bold") { "Sign in to your account" }
       flash_alert
-      google_button
-      divider
+      if @google_sso
+        google_button
+        divider
+      end
       sign_in_form
       footer_links
     end

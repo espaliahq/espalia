@@ -6,7 +6,7 @@
 #   valid = Hris::Hibob::WebhookValidator.valid?(
 #     payload: request.raw_post,
 #     signature: request.headers["X-Bob-Signature"],
-#     secret: tenant.hris_config.webhook_secret
+#     secret: tenant.hris_secrets.webhook_secret
 #   )
 #
 class Hris::Hibob::WebhookValidator

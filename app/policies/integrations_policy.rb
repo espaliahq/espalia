@@ -23,6 +23,10 @@ class IntegrationsPolicy < ApplicationPolicy
   # @return [Boolean]
   def update_role_mappings? = tenant_admin?
 
+  # Save the HRIS connection settings and credentials.
+  # @return [Boolean]
+  def update_hris_connection? = tenant_admin?
+
   # Save the AI model settings and key.
   # @return [Boolean]
   def update_ai_model? = tenant_admin?

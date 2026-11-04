@@ -27,6 +27,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
     should "deny sync" do
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
+      assert_not policy.update_hris_connection?
     end
 
     should "deny the AI model" do
@@ -60,6 +61,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
     should "allow sync" do
       assert policy.sync?
       assert policy.update_role_mappings?
+      assert policy.update_hris_connection?
     end
 
     should "allow the AI model" do
@@ -90,6 +92,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
     should "allow sync" do
       assert policy.sync?
       assert policy.update_role_mappings?
+      assert policy.update_hris_connection?
     end
 
     should "allow the feedback exchange" do
@@ -109,6 +112,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.sync?
       assert_not policy.update_role_mappings?
+      assert_not policy.update_hris_connection?
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
       assert_not policy.update_feedback_exchange?

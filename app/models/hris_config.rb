@@ -14,7 +14,22 @@
 class HrisConfig
   include StoreModel::Model
 
-  PROVIDERS = %w[hibob bamboohr].freeze
+  # Only providers HrisSyncJob#resolve_adapter can dispatch to: a provider
+  # listed here but not there would save fine and then crash every sync.
+  # A new provider joins this list, PROVIDER_LABELS and the job together.
+  PROVIDERS = %w[hibob].freeze
+
+  # Display names for {PROVIDERS}, the one place a provider is spelled for
+  # people. Views read it through {.provider_label}.
+  PROVIDER_LABELS = { "hibob" => "HiBob" }.freeze
+
+  # @param provider [String, nil]
+  # @return [String] the provider's display name
+  def self.provider_label(provider)
+    return "Not configured" if provider.blank?
+
+    PROVIDER_LABELS[provider] || provider.humanize
+  end
 
   attribute :provider, :string
   attribute :field_mappings, HrisFieldMapping.to_array_type, default: -> { [] }
@@ -22,7 +37,6 @@ class HrisConfig
   attribute :level_field_id, :string
   attribute :sync_enabled, :boolean, default: false
   attribute :last_synced_at, :datetime
-  attribute :webhook_secret, :string
 
   validates :provider, inclusion: { in: PROVIDERS }, allow_blank: true
   validate :role_mappings_have_unique_titles
@@ -37,7 +51,7 @@ class HrisConfig
   def configured?(tenant)
     provider.present? &&
       sync_enabled? &&
-      tenant.hris_credentials.present?
+      tenant.hris_secrets.complete?
   end
 
   # The mapping a title resolves to, or nil when no mapping lists it.
