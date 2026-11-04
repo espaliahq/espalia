@@ -28,7 +28,8 @@ app/
 
 ## Key conventions
 
-- **No global state.** Every `Client` instance takes `service_user_id`, `api_token`, and optional `level_field_id` in the constructor. Adapters read `tenant.hris_credentials` per sync. Never use class-level config.
+- **No global state.** Every `Client` instance takes `service_user_id`, `api_token`, and optional `level_field_id` in the constructor. Adapters read `tenant.hris_secrets` (an `HrisCredentials` — its `inspect` never prints a value) per sync. Never use class-level config.
+- **Credentials are set on the integrations page.** Provider, sync options and the write-only credential fields (service user id, API token, webhook secret) save through `Tenant#update_hris!` on `/tenant/integrations/hris` — a blank field keeps the stored value, and nothing echoes one. Secret writes are web-only (the feedback-exchange precedent): MCP keeps read-only status.
 - **Namespace style.** Use `class Hris::Hibob::X` not nested modules (per [rails-controllers.md](rails-controllers.md) style). The `app/integrations/` directory is a Zeitwerk root — files map to `Hris::*` directly (no `Integrations::` prefix).
 - **Errors namespaced under `Errors` module.** Zeitwerk expects one constant per file; the errors module holds all error classes in a single `errors.rb`: `Hris::Hibob::Errors::AuthenticationError`.
 - **Tenant metadata on RES commands.** When dispatching PersonDevelopment commands (assign/change role/change level) from an adapter, wrap the loop in `Rails.configuration.event_store.with_metadata(tenant_id: tenant.id)`. The projection reads this to set `ActsAsTenant` context.
@@ -158,14 +159,14 @@ class Hris::Bamboohr::Adapter < Hris::BaseAdapter
 
   def client
     @client ||= Hris::Bamboohr::Client.new(
-      api_key: tenant.hris_credentials["api_key"],
-      subdomain: tenant.hris_credentials["subdomain"]
+      service_user_id: tenant.hris_secrets.service_user_id,
+      api_token: tenant.hris_secrets.api_token
     )
   end
 end
 ```
 
-Then register the provider in `HrisConfig::PROVIDERS` and add a branch in `HrisSyncJob#resolve_adapter`.
+Then register the provider in `HrisConfig::PROVIDERS` and add a branch in `HrisSyncJob#resolve_adapter`. A provider that needs credential fields beyond `HrisCredentials::KEYS` extends that list, the connection form and `Tenant#update_hris!` together.
 
 Each provider has its own Client, ResponseMapper, errors, and webhook validator. Do NOT try to abstract across providers — their APIs differ too much. Share conventions, not code.
 

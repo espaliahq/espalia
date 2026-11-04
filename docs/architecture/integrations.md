@@ -29,7 +29,7 @@ HrisSyncAllTenantsJob (recurring, every 6h)
 ### Per-tenant credential storage
 
 - `Tenant.hris_config` (JSONB) — typed via `HrisConfig` StoreModel: provider, `role_mappings`, `level_field_id`, `sync_enabled`, `last_synced_at`, webhook secret
-- `Tenant.hris_credentials` (encrypted string) — `{"service_user_id", "api_token"}` JSON, encrypted via Rails ActiveRecord Encryption (keys in `Rails.application.credentials.active_record_encryption`)
+- `Tenant.hris_credentials` (encrypted string) — `{"service_user_id", "api_token", "webhook_secret"}` JSON, encrypted via Rails ActiveRecord Encryption (keys in `Rails.application.credentials.active_record_encryption`; development derives local keys when the credentials file is absent). Read through `Tenant#hris_secrets` (`HrisCredentials`), never the raw column; set on **Integrations → HRIS → Connection settings** (write-only fields)
 
 No global singleton. The adapter reads both fields per tenant and constructs a fresh client each time.
 
@@ -146,7 +146,7 @@ In development, `db/seeds.rb` runs the sync synchronously after seeding the fram
 
 ### Webhooks (future)
 
-`Hris::Hibob::WebhookValidator.valid?(payload:, signature:, secret:)` verifies HMAC-SHA512 signatures using `tenant.hris_config.webhook_secret`. No webhook controller exists yet — incremental sync is polling-only for V1.
+`Hris::Hibob::WebhookValidator.valid?(payload:, signature:, secret:)` verifies HMAC-SHA512 signatures using `tenant.hris_secrets.webhook_secret`. No webhook controller exists yet — incremental sync is polling-only for V1.
 
 ---
 
