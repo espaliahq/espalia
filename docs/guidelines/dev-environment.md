@@ -82,10 +82,11 @@ decrypted (`config/environments/development.rb`). Two consequences:
 - **Those keys live in `tmp/`.** Wiping it (`git clean -dfx`, a rebuilt
   volume) while keeping the database makes every encrypted tenant column
   (`hris_credentials`, `ai_credentials`, …) raise
-  `ActiveRecord::Encryption::Errors::Decryption` on read. The remedy is
-  `bin/rails db:reset` (dev data is seeded, nothing is lost), or restoring
-  the old `tmp/local_secret.txt`. A checkout **with** `master.key` is immune:
-  its keys come from the credentials file.
+  `ActiveRecord::Encryption::Errors::Decryption` on read. Restore the old
+  `tmp/local_secret.txt` if you have it — that keeps everything readable.
+  Otherwise `bin/rails db:reset` re-seeds, losing whatever was created after
+  the last seed. A checkout **with** `master.key` is immune: its keys come
+  from the credentials file.
 
 ## The macOS host
 
