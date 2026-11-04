@@ -17,6 +17,8 @@ touching anything under `app/operations/`, `app/services/mcp/`,
 > Operations interact with the event store; [authorization.md](authorization.md)
 > for the `AuthorizationContext` chain Operations reuse.
 
+> End-user path for building a framework through these tools: [docs/import-your-framework.md](../import-your-framework.md).
+
 ## Overview
 
 GrowthOS exposes a single MCP endpoint at `POST /mcp` that speaks
