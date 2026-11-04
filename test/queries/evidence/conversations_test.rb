@@ -170,6 +170,50 @@ class Evidence::ConversationsTest < ActiveSupport::TestCase
     end
   end
 
+  context "My feedback and About me" do
+    should "gather everything about the viewer into one About me thread, and nothing else" do
+      from_jordan = item(author: @jordan, about: @maya, at: 3.days.ago)
+      note = item(author: @maya, about: @maya, at: 2.days.ago)
+      answer = item(author: @priya, about: @maya, at: 1.hour.ago)
+      asked = request(from: @maya, to: @priya, about: @maya, at: 1.day.ago, status: "responded", evidence_id: answer.id)
+      item(author: @maya, about: @jordan)
+      request(from: @priya, to: @maya, about: @priya)
+      item(author: @jordan, about: @alex)
+
+      about_me = conversations(@maya, group: "report", scope: "mine")
+      assert about_me.about_me?
+      assert_equal [ @maya.id ], thread_ids(about_me)
+      thread = about_me.find(@maya.id)
+      assert_equal [ from_jordan.id, note.id, answer.id ], thread.messages.filter_map { |m| m.item&.id }
+      assert_equal [ asked.id ], thread.messages.select { |m| m.kind == :request }.map { |m| m.request.id }
+    end
+
+    should "leave feedback about reports out of the viewer's own conversations" do
+      item(author: @jordan, about: @alex)
+      item(author: @priya, about: @maya)
+
+      assert_equal [ @priya.id ], thread_ids(conversations(@maya, scope: "mine"))
+    end
+
+    should "make the report group About me for someone nobody reports to, in any scope" do
+      mine = item(author: @maya, about: @jordan)
+
+      jordan = conversations(@jordan, group: "report")
+      assert jordan.about_me?
+      assert_not jordan.manager?
+      assert_equal [ mine.id ], jordan.find(@jordan.id).messages.map { |m| m.item.id }
+    end
+
+    should "owe placing feedback about the viewer in My feedback, never a report's" do
+      about_me = unplaced(author: @jordan, about: @maya)
+      unplaced(author: @jordan, about: @alex)
+
+      mine = conversations(@maya, scope: "mine")
+      assert mine.find(@jordan.id).owes
+      assert_equal [ about_me.id ], mine.find(@jordan.id).messages.map { |m| m.item.id }
+    end
+  end
+
   context "ordering" do
     should "list the most recently active conversation first, each oldest to newest" do
       item(author: @priya, about: @maya, at: 5.days.ago)

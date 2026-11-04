@@ -28,7 +28,7 @@ class Views::Evidence::NeedsYou < Views::Base
               plain "Needs you"
               span(class: "ml-2 align-middle") { render Components::Kit::Badge.new(rows.size.to_s, tone: rows.any? ? :brand : :neutral) }
             end
-            place_toggle if @needs[:place_counts]
+            place_toggle if @needs[:scopes].any?
           end
           if rows.empty?
             p(class: "mt-2 text-sm text-muted") { "Nothing needs you. Requests and feedback to place show up here." }
@@ -115,21 +115,23 @@ class Views::Evidence::NeedsYou < Views::Base
     end
   end
 
-  # Plain links, so the view is in the URL (?place=org) and works without
-  # JavaScript. The switch scopes the conversations too, so its counts of
-  # feedback to place show only while some waits: "My team · 0" above a list
-  # of four people reads as a head count.
+  SCOPE_LABELS = { "mine" => "My feedback", "team" => "My team", "org" => "My whole org" }.freeze
+  SHORT_LABELS = { "mine" => "Mine", "team" => "Team", "org" => "Whole org" }.freeze
+
+  # Plain links, so the view is in the URL (?place=mine, ?place=org) and works
+  # without JavaScript. The switch scopes the conversations too, so a count of
+  # feedback to place shows only on a segment where some waits: "My team · 0"
+  # above a list of four people reads as a head count.
   def place_toggle
     counts = @needs[:place_counts]
     nav(aria: { label: "Whose feedback to show" }) do
       render Components::Kit::SegmentedControl.new(size: :sm, touch: true) do |control|
-        control.segment(scope_label("My team", counts[:team], counts), href: "#{@needs[:scope_paths]["team"]}#needs-you",
-                                                                       selected: @needs[:place_scope] != "org")
-        control.segment(scope_label("My whole org", counts[:org], counts), href: "#{@needs[:scope_paths]["org"]}#needs-you",
-                                                                           selected: @needs[:place_scope] == "org")
+        @needs[:scopes].each do |scope|
+          count = " · #{counts[scope]}" if counts[scope].positive?
+          control.segment("#{SCOPE_LABELS[scope]}#{count}", short: "#{SHORT_LABELS[scope]}#{count}",
+                          href: "#{@needs[:scope_paths][scope]}#needs-you", selected: @needs[:place_scope] == scope)
+        end
       end
     end
   end
-
-  def scope_label(label, count, counts) = counts[:org].positive? ? "#{label} · #{count}" : label
 end

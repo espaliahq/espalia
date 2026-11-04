@@ -31,7 +31,7 @@ class Views::Evidence::ConversationList < Views::Base
         input(type: "search", id: "conversation-search", placeholder: "Search people", autocomplete: "off",
               aria: { label: "Search people" }, class: "#{Components::Kit::Field::INPUT} w-full",
               data: { action: "input->conversation-search#filter", conversation_search_target: "input" })
-        group_switch if @conversations.reports?
+        group_switch
       end
       rows
     end
@@ -41,7 +41,7 @@ class Views::Evidence::ConversationList < Views::Base
 
   def group_switch
     render Components::Kit::SegmentedControl.new(label: "Group conversations", size: :sm, touch: true) do |control|
-      [ [ "report", "By report" ], [ "person", "By person" ] ].each do |group, label|
+      [ [ "report", @conversations.about_me? ? "About me" : "By report" ], [ "person", "By person" ] ].each do |group, label|
         control.segment(label, selected: @group == group, href: evidence_hub_path(view: group, place: @place),
                                marked: ("needs your attention" if attention_in?(group)),
                                data: { testid: "group-#{group}", attention: attention_in?(group).to_s })
@@ -74,7 +74,10 @@ class Views::Evidence::ConversationList < Views::Base
 
   def row(conversation)
     person = @conversations.people[conversation.person_id]
-    name = conversation.person_id == @viewer_id ? "You" : person&.name.to_s
+    name = if conversation.person_id != @viewer_id then person&.name.to_s
+    elsif @group == "report" then "About you"
+    else "You"
+    end
     current = conversation.person_id == @selected_id
     li(data: { conversation_search_target: "row", name: name.downcase }) do
       a(href: conversation_href(conversation.person_id, @group, place: @place),

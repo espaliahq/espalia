@@ -81,7 +81,7 @@ class Views::Evidence::HubView < Views::Base
     end
   end
 
-  def place = ("org" if @needs[:place_scope] == "org")
+  def place = (@needs[:place_scope] unless @needs[:place_scope] == "team")
 
   def conversations
     div(class: "lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:h-[min(80vh,52rem)] " \

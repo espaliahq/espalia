@@ -328,12 +328,37 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
       assert_operator header_top, :>=, 0, "the header, with its way back, should stay on screen"
     end
 
+    should "gather what's about the viewer under About me, on desktop" do
+      sign_in_as(@report_user)
+      visit evidence_hub_path
+      assert_selector "[data-testid='group-person'][aria-current='page']"
+
+      click_link_with_js_fallback "About me", expect_selector: "[data-testid='group-report'][aria-current='page']"
+      assert_selector "[data-testid='conversation-row']", count: 1, text: "About you"
+      assert_selector "[data-testid='conversation-thread'] h2", text: "About you"
+      assert_selector "[data-testid='conversation-thread']", text: "From Lena."
+      assert_selector "[data-testid='conversation-thread']", text: "Pairing note 12."
+    end
+
+    should "open About me on its own screen, on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@report_user)
+      visit evidence_hub_path(view: "report")
+      assert_selector "[data-testid='conversation-list']", visible: true
+
+      click_selector_with_js_fallback("[data-testid='conversation-row'][data-person-id='#{@report.id}']",
+                                      expect_selector: "[data-testid='conversation-thread'] h2")
+      assert_selector "[data-testid='conversation-thread'] h2", text: "About you", visible: true
+      assert_text "Ask someone for feedback about you"
+      assert_no_sideways_overflow
+    end
+
     should "follow an old notification anchor to the thread that holds the item" do
       item_id = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find_by!(content: "From Lena.").id }
       sign_in_as(@report_user)
       visit "#{evidence_hub_path}##{EvidenceItem.dom_id(item_id)}"
-      assert_selector "[data-testid='conversation-thread'] h2", text: "Lena Lead"
-      assert_current_path evidence_conversation_path(@lead.id)
+      assert_selector "[data-testid='conversation-thread'] h2", text: "About you"
+      assert_current_path evidence_report_conversation_path(@report.id)
       assert_equal "##{EvidenceItem.dom_id(item_id)}", page.evaluate_script("window.location.hash")
     end
   end
