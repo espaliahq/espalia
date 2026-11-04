@@ -116,17 +116,20 @@ class Views::Evidence::NeedsYou < Views::Base
   end
 
   # Plain links, so the view is in the URL (?place=org) and works without
-  # JavaScript; the counts of feedback to place say there is more without
-  # switching. The switch scopes the conversations too.
+  # JavaScript. The switch scopes the conversations too, so its counts of
+  # feedback to place show only while some waits: "My team · 0" above a list
+  # of four people reads as a head count.
   def place_toggle
     counts = @needs[:place_counts]
     nav(aria: { label: "Whose feedback to show" }) do
       render Components::Kit::SegmentedControl.new(size: :sm, touch: true) do |control|
-        control.segment("My team · #{counts[:team]}", href: "#{@needs[:scope_paths]["team"]}#needs-you",
-                                                      selected: @needs[:place_scope] != "org")
-        control.segment("My whole org · #{counts[:org]}", href: "#{@needs[:scope_paths]["org"]}#needs-you",
-                                                          selected: @needs[:place_scope] == "org")
+        control.segment(scope_label("My team", counts[:team], counts), href: "#{@needs[:scope_paths]["team"]}#needs-you",
+                                                                       selected: @needs[:place_scope] != "org")
+        control.segment(scope_label("My whole org", counts[:org], counts), href: "#{@needs[:scope_paths]["org"]}#needs-you",
+                                                                           selected: @needs[:place_scope] == "org")
       end
     end
   end
+
+  def scope_label(label, count, counts) = counts[:org].positive? ? "#{label} · #{count}" : label
 end

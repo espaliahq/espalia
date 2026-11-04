@@ -317,6 +317,16 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "#needs-you nav a", text: "My whole org · 1"
     end
 
+    should "leave the counts off the switch while nothing waits to be placed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.withdraw_evidence(@deep.id, @framework_id, @deep_item, withdrawn_by_id: @peer.id)
+        @handler.withdraw_evidence(@assessee.id, @framework_id, @unplaced_id, withdrawn_by_id: @peer.id)
+      end
+      get evidence_hub_path
+      assert_select "#needs-you nav a", text: "My team"
+      assert_select "#needs-you nav a", text: "My whole org"
+    end
+
     should "open a thread only the org lists in the org view" do
       get evidence_report_conversation_path(@deep.id)
       assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org")
