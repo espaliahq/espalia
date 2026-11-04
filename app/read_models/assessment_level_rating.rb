@@ -8,7 +8,8 @@
 # cycles and supports both "latest rating" and "rating in cycle X"
 # queries directly on the read model.
 #
-# Frequency values: "some" (0.25x), "occasional" (0.5x), "consistent" (1.0x)
+# Frequency values: "none", "some", "occasional", "consistent"; their scoring
+# weights are PersonDevelopment::Scoring::FREQUENCY.
 #
 # Fallback chain for effective_frequency used in scoring:
 #   aligned_frequency → manager_rated_frequency → self_rated_frequency → default

@@ -38,9 +38,9 @@
 class CalibrationSessions::OverviewStats
   # Equal-interval band values (0–3) derived from the canonical frequency
   # vocabulary, so a rename/addition can't silently skew the calibration
-  # stats. Deliberately NOT PersonDevelopment::Scoring's weights
-  # (0/0.25/0.5/1.0) — calibration compares raters on an ordinal scale,
-  # not scoring contribution.
+  # stats. Deliberately NOT PersonDevelopment::Scoring::FREQUENCY —
+  # calibration compares raters on an ordinal scale, not scoring
+  # contribution.
   FREQUENCY_VALUES = AssessmentLevelRating::FREQUENCIES
     .each_with_index.to_h { |frequency, index| [ frequency, index.to_f ] }.freeze
 

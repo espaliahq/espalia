@@ -58,7 +58,7 @@
 #
 # The mandatory case is a step because with a multiplicative gate a
 # mandatory capability at "most of the time" with "consistently" above nets
-# to zero, is never blocked, and the one rule written for it is defeated.
+# to no deficit, is never blocked, and the one rule written for it is defeated.
 #
 # == Over-performance cap
 #
@@ -115,7 +115,9 @@
 #   Highest level_ordinal where effective_frequency == "consistent" (1.0).
 #
 class PersonDevelopment::Scoring
-  FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }.freeze
+  # Equal steps from "not yet" to "consistently" (ADR-24). Exact thirds, not
+  # 0.33 / 0.66, so the steps are equal and a full row sums to the third.
+  FREQUENCY = { "none" => 0.0, "some" => 1.0 / 3, "occasional" => 2.0 / 3, "consistent" => 1.0 }.freeze
   DEFAULT_MASTERY_THRESHOLD              = 1.50
   DEFAULT_MEETING_EXPECTATION_THRESHOLD  = 0.95
   DEFAULT_UNDERPERFORMING_THRESHOLD      = 0.80
