@@ -192,13 +192,10 @@ class Views::Integrations::HrisView < Views::Base
   end
 
   def provider_field
-    div do
-      label(for: field_id(:provider), class: LABEL_CLASSES) { "Provider" }
-      select(id: field_id(:provider), name: field_name(:provider), class: SELECT_CLASSES, autocomplete: "off") do
-        option(value: "", selected: @form_config.provider.blank?) { "Not configured" }
-        HrisConfig::PROVIDER_LABELS.each do |value, label_text|
-          option(value: value, selected: value == @form_config.provider) { label_text }
-        end
+    select_field(:provider, "Provider") do
+      option(value: "", selected: @form_config.provider.blank?) { "Not configured" }
+      HrisConfig::PROVIDER_LABELS.each do |value, label_text|
+        option(value: value, selected: value == @form_config.provider) { label_text }
       end
     end
   end

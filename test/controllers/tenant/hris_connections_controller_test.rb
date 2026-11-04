@@ -62,6 +62,7 @@ class Tenant::HrisConnectionsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_includes response.body, "Stored"
+      assert_includes response.body, "Leave blank to keep the stored value."
       assert_not_includes response.body, "tok-secret"
       assert_not_includes response.body, "hook-secret"
       assert_not_includes response.body, "svc-1"

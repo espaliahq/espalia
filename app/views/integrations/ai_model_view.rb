@@ -200,13 +200,10 @@ class Views::Integrations::AiModelView < Views::Base
   end
 
   def provider_field
-    div do
-      label(for: field_id(:provider), class: LABEL_CLASSES) { "Provider" }
-      select(id: field_id(:provider), name: field_name(:provider), class: SELECT_CLASSES, autocomplete: "off",
-             data: { ai_model_preset_target: "provider", action: "change->ai-model-preset#providerChanged" }) do
-        PROVIDER_LABELS.each do |value, label_text|
-          option(value: value, selected: value == @form_config.provider) { label_text }
-        end
+    select_field(:provider, "Provider",
+                 data: { ai_model_preset_target: "provider", action: "change->ai-model-preset#providerChanged" }) do
+      PROVIDER_LABELS.each do |value, label_text|
+        option(value: value, selected: value == @form_config.provider) { label_text }
       end
     end
   end

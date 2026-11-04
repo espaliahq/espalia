@@ -159,7 +159,8 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
                         hint: "Which types of the peer's feedback we take, matched against the type the peer sends. " \
                               "All types takes whatever it sends. With no box ticked, nothing is imported. " \
                               "\"Any feedback\" matches a peer that sends no finer type.")
-            enabled_field
+            switch_field(:enabled, "Exchange enabled", @form_config.enabled?,
+                         hint: "While off, the peer's requests to us are answered 404 and nothing is pulled.")
             inbound_address
 
             div(class: "flex justify-end") do
@@ -204,20 +205,6 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   def kind_label(kind)
     kind == FeedbackExchangeConfig::GENERIC_KIND ? "Any feedback (generic)" : kind.humanize
-  end
-
-  def enabled_field
-    div do
-      input(type: "hidden", name: field_name(:enabled), value: "0")
-      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-default cursor-pointer") do
-        input(type: "checkbox", id: field_id(:enabled), name: field_name(:enabled), value: "1", checked: @form_config.enabled?,
-              class: Components::Kit::Field::CHECKBOX, aria: { describedby: "#{field_id(:enabled)}-hint" })
-        plain "Exchange enabled"
-      end
-      p(id: "#{field_id(:enabled)}-hint", class: HINT_CLASSES) do
-        plain "While off, the peer's requests to us are answered 404 and nothing is pulled."
-      end
-    end
   end
 
   def inbound_address
@@ -324,5 +311,4 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   def field_prefix = "feedback_exchange"
   def yes_no(value) = value ? "Yes" : "No"
-  def stored_label(value) = value ? "Stored" : "Not set"
 end

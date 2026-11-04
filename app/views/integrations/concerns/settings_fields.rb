@@ -21,11 +21,6 @@ module Views::Integrations::Concerns::SettingsFields
 
   private
 
-  # @return [String] the form's param namespace, e.g. "ai_model"
-  def field_prefix
-    raise NotImplementedError, "#{self.class.name} must define field_prefix"
-  end
-
   def field_id(name) = "#{field_prefix}_#{name}"
   def field_name(name) = "#{field_prefix}[#{name}]"
 
@@ -47,13 +42,25 @@ module Views::Integrations::Concerns::SettingsFields
     end
   end
 
+  def select_field(name, label_text, hint: nil, data: nil, &options)
+    div do
+      label(for: field_id(name), class: LABEL_CLASSES) { label_text }
+      select(id: field_id(name), name: field_name(name), class: SELECT_CLASSES, autocomplete: "off", data: data,
+             aria: (hint ? { describedby: "#{field_id(name)}-hint" } : {}), &options)
+      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint } if hint
+    end
+  end
+
+  # @return [String] the one spelling of a secret's presence
+  def stored_label(stored) = stored ? "Stored" : "Not set"
+
   # The "Stored" label stays beside the placeholder because a placeholder is
   # not reliably announced by screen readers.
   def secret_field(name, label_text, stored:, hint:, empty_placeholder:)
     div do
       label(for: field_id(name), class: LABEL_CLASSES) do
         plain label_text
-        span(class: "ml-2 text-xs font-normal text-muted") { stored ? "Stored" : "Not set" }
+        span(class: "ml-2 text-xs font-normal text-muted") { stored_label(stored) }
       end
       input(type: "password", id: field_id(name), name: field_name(name), value: "", autocomplete: "new-password",
             placeholder: stored ? SECRET_PLACEHOLDER : empty_placeholder,
