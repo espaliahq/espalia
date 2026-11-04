@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Which feedback messages a user hasn't read, read from the in-app
-# notifications we already send for them (#647). A message is unread while
+# notifications we already send for them. A message is unread while
 # its notification is; opening its conversation marks the notification read,
 # which clears the navbar bell too. Messages that never notified anyone
 # (anything before notifications existed, self feedback, imports) read as

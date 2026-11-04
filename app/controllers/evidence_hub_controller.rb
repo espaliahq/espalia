@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The Feedback / Evidence page (#647): what needs the current person (requests
+# The Feedback / Evidence page: what needs the current person (requests
 # to answer, feedback to place), then their conversations — one per person,
 # or for a manager one per report — with the selected one open beside the
 # list. This is the surface notifications link to: `item` and

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The feedback a person has exchanged, grouped into conversations the way the
-# Feedback / Evidence page lists them (#647): one per person, the most
+# Feedback / Evidence page lists them: one per person, the most
 # recently active first, each reading oldest to newest.
 #
 # What the viewer sees: requests they made or were sent, feedback they wrote,

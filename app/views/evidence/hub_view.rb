@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The Feedback / Evidence page (#647): "Needs you" on top, then the
+# The Feedback / Evidence page: "Needs you" on top, then the
 # conversations beside the open thread. On a phone the list and the thread
 # are separate screens: the page shows the list, a thread's own URL shows
 # the thread.
