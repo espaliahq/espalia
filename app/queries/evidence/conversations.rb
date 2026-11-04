@@ -6,8 +6,10 @@
 #
 # What the viewer sees: requests they made or were sent, feedback they wrote,
 # feedback about them, the answers to their requests, and feedback about
-# anyone in their team or org (direct reports, rating delegations and the
-# subtree below) from someone other than that person. A report's own notes
+# their reports from someone other than that person. Their reports are their
+# team (direct reports and rating delegations), or with the "org" scope the
+# whole subtree below them too, as the page's My team / My whole org switch
+# sets it. A report's own notes
 # appear only while they carry pending placement suggestions, as the old hub
 # listed them.
 #
@@ -23,6 +25,7 @@
 # that report, and leaves the rest out.
 class Evidence::Conversations
   GROUPS = %w[report person].freeze
+  SCOPES = ::Assessments::FeedbackToPlace::SCOPES
 
   # One entry in a conversation. `kind` is :request (the ask), :reply (the
   # item answering it), :declined or :feedback (an item with no visible ask).
@@ -69,12 +72,14 @@ class Evidence::Conversations
 
   # @param viewer [Person]
   # @param group [String] "report" or "person"; anything else reads as "person"
-  def initialize(viewer, group: "person")
+  # @param scope [String] "team" or "org"; anything else reads as "team"
+  def initialize(viewer, group: "person", scope: "team")
     @viewer = viewer
     @group = group == "report" ? "report" : "person"
+    @scope = scope == "org" ? "org" : "team"
   end
 
-  attr_reader :viewer, :group
+  attr_reader :viewer, :group, :scope
 
   # @param group [String] the group the finders default to
   def group=(group)
@@ -114,10 +119,15 @@ class Evidence::Conversations
     (item_id && index["item:#{item_id}"]) || (request_id && index["request:#{request_id}"])
   end
 
-  # Whether the viewer has anyone in their team or org.
+  # Whether the viewer has anyone in the scope's reports.
   #
   # @return [Boolean]
   def reports? = report_ids.any?
+
+  # Whether the org scope reaches anyone the team scope doesn't.
+  #
+  # @return [Boolean]
+  def beyond_team? = skip_level_keys.any?
 
   # @param person_id [String]
   # @return [Boolean]
@@ -222,12 +232,23 @@ class Evidence::Conversations
   end
 
   def report_keys
-    @report_keys ||= begin
-      reviewable = Assessments::ReviewableAssignments.new(@viewer)
-      (reviewable.team.to_a + reviewable.skip_level.to_a)
-        .reject { |a| a.person_id == viewer_id }
-        .to_set { |a| [ a.person_id, a.framework_id ] }
-    end
+    @report_keys ||= @scope == "org" ? team_keys | skip_level_keys : team_keys
+  end
+
+  def team_keys
+    @team_keys ||= keys_of(reviewable.team)
+  end
+
+  def skip_level_keys
+    @skip_level_keys ||= keys_of(reviewable.skip_level) - team_keys
+  end
+
+  def keys_of(assignments)
+    assignments.reject { |a| a.person_id == viewer_id }.to_set { |a| [ a.person_id, a.framework_id ] }
+  end
+
+  def reviewable
+    @reviewable ||= Assessments::ReviewableAssignments.new(@viewer)
   end
 
   def report_ids

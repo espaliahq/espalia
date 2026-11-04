@@ -230,8 +230,10 @@ shared by web, MCP and Slack:
   `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
   everyone deeper in the subtree (`#skip_level`). The view is in the URL
   (`?place=org`; absent is the team), switched by plain links that carry both
-  counts ("My team · 3", "My whole org · 41"), and the toggle renders only when
-  the org view reaches someone the team view doesn't. It is a view filter, not
+  counts ("My team · 3", "My whole org · 41"), and the toggle renders whenever
+  the org view reaches someone the team view doesn't, even with nothing to
+  place there. The same switch scopes the conversations
+  ([#650](https://github.com/mr-yum/growth-os/issues/650)). It is a view filter, not
   authority: `EvidencePolicy#add_link?` still lets an ancestor place anything
   in their subtree. `Operations::Assessments::FeedbackToPlace`
   (`assessments_feedback_to_place`) builds the list over
@@ -301,10 +303,16 @@ recently active first, beside the open thread. It replaced a single scroll of
   group on `/evidence`.
 - **What a viewer sees** is the old hub's reach plus placed feedback about them
   and their reports: requests they made or were sent, what they wrote, what is
-  about them, the answers to their requests, and feedback about their team and
-  org from someone else. A report's own notes appear only while they carry a
+  about them, the answers to their requests, and feedback about their reports
+  from someone else. A report's own notes appear only while they carry a
   pending suggestion, so a manager's report thread isn't a copy of the
   assessment.
+- **"Their reports" follow the My team / My whole org switch** in "Needs you"
+  (`Evidence::Conversations` `scope:`), in both groups; what the viewer wrote
+  or asked shows in either. A thread URL that only the org view lists
+  redirects to `?place=org`, as do message links whose message only it lists.
+  Switching an org-only thread to My team lands on the team's list, since the
+  thread isn't in it.
 - **Threads read oldest to newest** and open on the newest message
   (`conversation-thread` controller); a reply sits at the time it was sent and
   quotes its request, which links back up. A thread shows its latest

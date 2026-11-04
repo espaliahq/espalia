@@ -115,20 +115,17 @@ class Views::Evidence::NeedsYou < Views::Base
     end
   end
 
-  # The page as it is, open thread and group included, in the other scope.
-  def toggle_href(place)
-    query = { view: @needs[:view], place: place }.compact.to_query
-    "#{@needs[:base_path]}#{"?#{query}" if query.present?}#needs-you"
-  end
-
   # Plain links, so the view is in the URL (?place=org) and works without
-  # JavaScript; the counts say there is more without switching.
+  # JavaScript; the counts of feedback to place say there is more without
+  # switching. The switch scopes the conversations too.
   def place_toggle
     counts = @needs[:place_counts]
-    nav(aria: { label: "Whose feedback to place" }) do
+    nav(aria: { label: "Whose feedback to show" }) do
       render Components::Kit::SegmentedControl.new(size: :sm, touch: true) do |control|
-        control.segment("My team · #{counts[:team]}", href: toggle_href(nil), selected: @needs[:place_scope] != "org")
-        control.segment("My whole org · #{counts[:org]}", href: toggle_href("org"), selected: @needs[:place_scope] == "org")
+        control.segment("My team · #{counts[:team]}", href: "#{@needs[:scope_paths]["team"]}#needs-you",
+                                                      selected: @needs[:place_scope] != "org")
+        control.segment("My whole org · #{counts[:org]}", href: "#{@needs[:scope_paths]["org"]}#needs-you",
+                                                          selected: @needs[:place_scope] == "org")
       end
     end
   end
