@@ -171,6 +171,22 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert notification.reload.read_at
       assert_select "[data-testid='new-messages']"
     end
+
+    should "not mark a thread read when Turbo only prefetches it" do
+      notification = notify!(@assessee_user, record: unplaced_item)
+      sign_in @assessee_user
+
+      get evidence_conversation_path(@peer.id), headers: { "X-Sec-Purpose" => "prefetch" }
+      assert_response :success
+      assert_nil notification.reload.read_at
+    end
+
+    should "keep its links out of Turbo's prefetch" do
+      sign_in @assessee_user
+      get evidence_hub_path
+      assert_select "[data-testid='conversation-row'][data-turbo-prefetch='false']"
+      assert_select "#needs-you a[data-turbo-prefetch='false']"
+    end
   end
 
   context "links from notifications" do

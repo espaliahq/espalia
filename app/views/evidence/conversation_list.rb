@@ -77,7 +77,8 @@ class Views::Evidence::ConversationList < Views::Base
     li(data: { conversation_search_target: "row", name: name.downcase }) do
       a(href: conversation_href(conversation.person_id, @group),
         aria: { current: (current ? "page" : nil) },
-        data: { testid: "conversation-row", person_id: conversation.person_id, attention: attention?(conversation).to_s },
+        data: { testid: "conversation-row", person_id: conversation.person_id, attention: attention?(conversation).to_s,
+                turbo_prefetch: "false" },
         class: "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl px-2 py-2 min-h-11 " \
                "hover:bg-default-hover aria-[current=page]:bg-neutral-muted") do
         span(class: "row-span-2") { avatar(person, size: :sm) }

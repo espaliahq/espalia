@@ -88,7 +88,7 @@ class Views::Evidence::NeedsYou < Views::Base
   def row_link(href, person, &)
     classes = "flex flex-1 min-w-64 items-center gap-3 rounded-lg p-1 min-h-11"
     if href
-      a(href: href, class: "#{classes} hover:bg-default-hover") do
+      a(href: href, class: "#{classes} hover:bg-default-hover", data: { turbo_prefetch: "false" }) do
         avatar(person, size: :sm)
         span(class: "min-w-0", &)
       end
@@ -107,7 +107,8 @@ class Views::Evidence::NeedsYou < Views::Base
     div(class: "mt-3 flex flex-wrap items-center gap-x-3 text-xs text-muted", data: { testid: "waiting-on" }) do
       span { "Waiting on others:" }
       waiting.each do |request|
-        a(href: @needs[:paths][request.id] || "#", class: "inline-flex items-center min-h-6 font-medium text-brand hover:underline") do
+        a(href: @needs[:paths][request.id] || "#", class: "inline-flex items-center min-h-6 font-medium text-brand hover:underline",
+          data: { turbo_prefetch: "false" }) do
           "#{first_name(request.requestee)} · #{time_ago_in_words(request.requested_at)}"
         end
       end

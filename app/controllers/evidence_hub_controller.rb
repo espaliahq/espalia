@@ -25,7 +25,7 @@ class EvidenceHubController < ApplicationController
     new_keys = Set.new
     if params[:person_id] && selected
       new_keys = selected.messages.select { |m| reads.unread?(m) }.flat_map(&:read_keys).to_set
-      reads.mark_read!(selected.messages) unless impersonating?
+      reads.mark_read!(selected.messages) unless impersonating? || prefetch?
     end
 
     render Views::Evidence::HubView.new(
@@ -54,6 +54,11 @@ class EvidenceHubController < ApplicationController
 
   def require_person
     head :forbidden unless current_person
+  end
+
+  # Turbo fetches a link when the pointer rests on it; that isn't reading.
+  def prefetch?
+    request.headers["X-Sec-Purpose"] == "prefetch"
   end
 
   # The route's group for a thread, or `?view=` on the page itself; reports
