@@ -103,6 +103,8 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
 
       screenshot("hris_connection_saved")
       assert_selector "label[for='hris_connection_webhook_secret']", text: /Stored/
+      assert_equal Views::Integrations::Concerns::SettingsFields::SECRET_PLACEHOLDER,
+                   find_field("Webhook secret")[:placeholder]
       assert_equal "", find_field("API token").value
       assert_equal "", find_field("Webhook secret").value
       assert_no_text "tok-system-test-secret"

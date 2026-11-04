@@ -7,6 +7,7 @@
 # stored. A blank key on save keeps the stored one.
 class Views::Integrations::AiModelView < Views::Base
   include Phlex::Rails::Helpers::FormAuthenticityToken
+  include Views::Integrations::Concerns::SettingsFields
 
   # state => [label, Kit::Badge tone]
   STATE_BADGES = {
@@ -20,11 +21,6 @@ class Views::Integrations::AiModelView < Views::Base
     "openai_compatible" => "OpenAI-compatible",
     "typesafe_jev" => "Jev (TypeSafe AI)"
   }.freeze
-
-  INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
-  SELECT_CLASSES = "#{Components::Kit::Field::SELECT} min-h-11 mt-1"
-  LABEL_CLASSES = "block text-sm font-medium text-default"
-  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param config [AiModelConfig] what is saved; drives the status
   # @param form_config [AiModelConfig, nil] what the form shows; defaults to
@@ -136,7 +132,7 @@ class Views::Integrations::AiModelView < Views::Base
 
       render Components::Kit::Card.new do |card|
         card.body do
-          error_summary
+          error_summary(title: "The settings could not be saved.")
           form(action: tenant_ai_model_path, method: "post", class: "space-y-6",
                data: { controller: "ai-model-preset", ai_model_preset_presets_value: presets_json }) do
             input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
@@ -144,14 +140,18 @@ class Views::Integrations::AiModelView < Views::Base
 
             preset_field
             provider_field
-            text_field(:base_url, "Address", value: @form_config.base_url, type: "url", target: "baseUrl",
+            text_field(:base_url, "Address", value: @form_config.base_url, type: "url",
+                       data: { ai_model_preset_target: "baseUrl" },
                        placeholder: "https://ai-gateway.vercel.sh/v1",
                        hint: "Required for an OpenAI-compatible endpoint, the address that serves /chat/completions, " \
                              "and for Jev, the address that serves /evaluate. Optional for Anthropic, where it points " \
                              "the API at a compatible endpoint, without /v1. It must start with https://.")
-            text_field(:model, "Model", value: @form_config.model, target: "model", placeholder: AiModelConfig::DEFAULT_ANTHROPIC_MODEL,
+            text_field(:model, "Model", value: @form_config.model, data: { ai_model_preset_target: "model" },
+                       placeholder: AiModelConfig::DEFAULT_ANTHROPIC_MODEL,
                        hint: "The provider's or gateway's model id, such as claude-opus-5-5, or #{AiModelConfig::JEV_MODEL} on the gateway.")
-            key_field
+            secret_field(:api_key, "API key", stored: @key_field_stored,
+                         empty_placeholder: "Paste the provider's or gateway's key",
+                         hint: "Stored encrypted and only ever sent to the address above. It is never shown again.")
             effort_field
             switch_field(:suggestions_enabled, "Suggest where feedback belongs", @form_config.suggestions_enabled?,
                          hint: "While on, feedback goes to this model when it is recorded or edited, self feedback included, " \
@@ -165,14 +165,6 @@ class Views::Integrations::AiModelView < Views::Base
           end
         end
       end
-    end
-  end
-
-  def error_summary
-    return if @errors.empty?
-
-    render Components::Kit::Alert.new(tone: :danger, title: "The settings could not be saved.", class: "mb-6") do
-      ul(class: "mt-1 list-disc pl-5") { @errors.each { |message| li { message } } }
     end
   end
 
@@ -219,31 +211,6 @@ class Views::Integrations::AiModelView < Views::Base
     end
   end
 
-  def text_field(name, label_text, value:, hint:, target:, type: "text", placeholder: nil)
-    div do
-      label(for: field_id(name), class: LABEL_CLASSES) { label_text }
-      input(type: type, id: field_id(name), name: field_name(name), value: value.to_s, placeholder: placeholder,
-            autocomplete: "off", class: INPUT_CLASSES, data: { ai_model_preset_target: target },
-            aria: { describedby: "#{field_id(name)}-hint" })
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
-  def key_field
-    div do
-      label(for: field_id(:api_key), class: LABEL_CLASSES) do
-        plain "API key"
-        span(class: "ml-2 text-xs font-normal text-muted") { @key_field_stored ? "Stored" : "Not set" }
-      end
-      input(type: "password", id: field_id(:api_key), name: field_name(:api_key), value: "", autocomplete: "new-password",
-            placeholder: @key_field_stored ? "Leave blank to keep it" : "Paste the provider's or gateway's key",
-            class: INPUT_CLASSES, aria: { describedby: "#{field_id(:api_key)}-hint" })
-      p(id: "#{field_id(:api_key)}-hint", class: HINT_CLASSES) do
-        plain "Stored encrypted and only ever sent to the address above. It is never shown again."
-      end
-    end
-  end
-
   def effort_field
     div(data: { ai_model_preset_target: "effortRow" }, hidden: !@form_config.anthropic?) do
       label(for: field_id(:effort), class: LABEL_CLASSES) { "Effort" }
@@ -259,20 +226,7 @@ class Views::Integrations::AiModelView < Views::Base
     end
   end
 
-  def switch_field(name, label_text, checked, hint:)
-    div do
-      input(type: "hidden", name: field_name(name), value: "0")
-      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-default cursor-pointer") do
-        input(type: "checkbox", id: field_id(name), name: field_name(name), value: "1", checked: checked,
-              class: Components::Kit::Field::CHECKBOX, aria: { describedby: "#{field_id(name)}-hint" })
-        plain label_text
-      end
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
   # ── Helpers ──
 
-  def field_id(name) = "ai_model_#{name}"
-  def field_name(name) = "ai_model[#{name}]"
+  def field_prefix = "ai_model"
 end

@@ -7,6 +7,7 @@
 # stored. A blank secret on save keeps the stored one.
 class Views::Integrations::FeedbackExchangeView < Views::Base
   include Phlex::Rails::Helpers::FormAuthenticityToken
+  include Views::Integrations::Concerns::SettingsFields
 
   # state => [label, Kit::Badge tone]
   STATE_BADGES = {
@@ -15,10 +16,6 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     disabled: [ "Disabled", :neutral ],
     active: [ "Active", :success ]
   }.freeze
-
-  INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
-  LABEL_CLASSES = "block text-sm font-medium text-default"
-  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param config [FeedbackExchangeConfig] what is saved; drives the status
   # @param form_config [FeedbackExchangeConfig, nil] what the form shows; defaults
@@ -139,7 +136,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
       render Components::Kit::Card.new do |card|
         card.body do
-          error_summary
+          error_summary(title: "The settings could not be saved.")
           form(action: tenant_feedback_exchange_path, method: "post", class: "space-y-6") do
             input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
             input(type: "hidden", name: "_method", value: "patch")
@@ -149,9 +146,11 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
             text_field(:base_url, "Peer address", value: @form_config.base_url, type: "url",
                        placeholder: "https://chip.example.com/api/feedback-exchange",
                        hint: "The peer's exchange address, including its path prefix. It must start with https://.")
-            secret_field(:outbound_secret, "Outbound secret",
+            secret_field(:outbound_secret, "Outbound secret", stored: @secrets_present["outbound_secret"],
+                         empty_placeholder: "Paste a secret of 32 or more characters",
                          hint: "Signs the requests we send. The peer holds the same value as its inbound secret. At least 32 characters; `openssl rand -hex 32` makes one.")
-            secret_field(:inbound_secret, "Inbound secret",
+            secret_field(:inbound_secret, "Inbound secret", stored: @secrets_present["inbound_secret"],
+                         empty_placeholder: "Paste a secret of 32 or more characters",
                          hint: "Verifies the requests the peer sends, so it must differ from the outbound secret. At least 32 characters. Replacing it keeps the old value working for 24 hours.")
             kinds_field(:export_kinds, "Types to send", @form_config.export_kinds, FeedbackExchangeConfig::EXPORT_KINDS,
                         hint: "Which types of our feedback the peer may pull. All types includes any type added later. " \
@@ -169,37 +168,6 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
           end
         end
       end
-    end
-  end
-
-  def error_summary
-    return if @errors.empty?
-
-    render Components::Kit::Alert.new(tone: :danger, title: "The settings could not be saved.", class: "mb-6") do
-      ul(class: "mt-1 list-disc pl-5") { @errors.each { |message| li { message } } }
-    end
-  end
-
-  def text_field(name, label_text, value:, hint:, type: "text", placeholder: nil)
-    div do
-      label(for: field_id(name), class: LABEL_CLASSES) { label_text }
-      input(type: type, id: field_id(name), name: field_name(name), value: value.to_s, placeholder: placeholder,
-            autocomplete: "off", class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
-  def secret_field(name, label_text, hint:)
-    stored = @secrets_present[name.to_s]
-    div do
-      label(for: field_id(name), class: LABEL_CLASSES) do
-        plain label_text
-        span(class: "ml-2 text-xs font-normal text-muted") { stored ? "Stored" : "Not set" }
-      end
-      input(type: "password", id: field_id(name), name: field_name(name), value: "", autocomplete: "new-password",
-            placeholder: stored ? "Leave blank to keep the stored value" : "Paste a secret of 32 or more characters",
-            class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
     end
   end
 
@@ -354,8 +322,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   # ── Helpers ──
 
-  def field_id(name) = "feedback_exchange_#{name}"
-  def field_name(name) = "feedback_exchange[#{name}]"
+  def field_prefix = "feedback_exchange"
   def yes_no(value) = value ? "Yes" : "No"
   def stored_label(value) = value ? "Stored" : "Not set"
 end

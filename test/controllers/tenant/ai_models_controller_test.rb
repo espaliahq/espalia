@@ -105,7 +105,7 @@ class Tenant::AiModelsControllerTest < ActionDispatch::IntegrationTest
         get tenant_integration_path("ai-model")
 
         assert_response :success
-        assert_not_includes response.body, "Leave blank to keep it"
+        assert_not_includes response.body, Views::Integrations::Concerns::SettingsFields::SECRET_PLACEHOLDER
         assert_select "input[type=password][name='ai_model[api_key]'][placeholder^='Paste']"
         assert_select "dl", text: /API key\s*Not set/, message: "there is no deployment key to fall back to"
       end

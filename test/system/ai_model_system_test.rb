@@ -50,7 +50,7 @@ class AiModelSystemTest < ApplicationSystemTestCase
         assert_text "Active"
         assert_no_text KEY
         assert_equal "", find_by_id("ai_model_api_key").value
-        assert_equal "Leave blank to keep it", find_by_id("ai_model_api_key")[:placeholder]
+        assert_equal Views::Integrations::Concerns::SettingsFields::SECRET_PLACEHOLDER, find_by_id("ai_model_api_key")[:placeholder]
         assert_equal "vercel_ai_gateway", find_by_id("ai_model_preset").value
         assert_no_horizontal_overflow
         screenshot("#{name}_page_active")
