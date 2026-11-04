@@ -2,8 +2,9 @@
 
 require "application_system_test_case"
 
-# A manager of managers sees their own team's feedback to place first, and
-# switches to their whole org with plain links that keep the view in the URL.
+# A manager of managers sees their own team's feedback to place and
+# conversations first, and switches to their whole org with plain links that
+# keep the view in the URL.
 class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE = [ 375, 812 ].freeze
@@ -48,17 +49,21 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
     assert_text "Needs you"
     assert_selector "#needs-you [data-testid='needs-you-place']", text: "Place Jordan's feedback about Alex"
     assert_no_selector "#needs-you [data-testid='needs-you-place']", text: "about Sky"
-    assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My team · 1"
+    assert_selector "nav[aria-label='Whose feedback to show'] a[aria-current='page']", text: "My team · 1"
+    assert_selector "[data-testid='conversation-row'][data-person-id='#{@lead.id}']"
+    assert_no_selector "[data-testid='conversation-row'][data-person-id='#{@engineer.id}']"
 
     click_link_with_js_fallback("My whole org · 2", expect_text: "Place Jordan's feedback about Sky")
     assert_selector "#needs-you [data-testid='needs-you-place']", count: 2
-    assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My whole org · 2"
+    assert_selector "nav[aria-label='Whose feedback to show'] a[aria-current='page']", text: "My whole org · 2"
     assert_current_path evidence_hub_path(place: "org")
+    assert_selector "[data-testid='conversation-row'][data-person-id='#{@engineer.id}']"
 
     click_link_with_js_fallback("My team · 1",
-      expect_selector: "nav[aria-label='Whose feedback to place'] a[aria-current='page'][href='#{evidence_hub_path(anchor: "needs-you")}']")
+      expect_selector: "nav[aria-label='Whose feedback to show'] a[aria-current='page'][href='#{evidence_hub_path(anchor: "needs-you")}']")
     assert_no_text "Place Jordan's feedback about Sky"
     assert_current_path evidence_hub_path
+    assert_no_selector "[data-testid='conversation-row'][data-person-id='#{@engineer.id}']"
   end
 
   should "switch between my team and my whole org on desktop" do
@@ -80,6 +85,6 @@ class FeedbackToPlaceScopeSystemTest < ApplicationSystemTestCase
 
     click_link_with_js_fallback("Place it →", expect_text: "Place Jordan's feedback about Sky")
     assert_current_path evidence_hub_path(place: "org")
-    assert_selector "nav[aria-label='Whose feedback to place'] a[aria-current='page']", text: "My whole org · 2"
+    assert_selector "nav[aria-label='Whose feedback to show'] a[aria-current='page']", text: "My whole org · 2"
   end
 end

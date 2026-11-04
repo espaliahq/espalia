@@ -906,6 +906,12 @@ tr[data-matrix-target="categoryHeader"][data-focused="true"] > td {
   }
 }
 
+/* Without a root background, a scroll that bounces past either end of a page
+ * (macOS, iOS) shows the browser's white canvas, even in dark mode. */
+html {
+  background-color: var(--gos-surface-page);
+}
+
 /* The sign-in page (#514) renders with the Bento preset (data-theme="bento").
  * The root takes the page's surface so overscroll and first paint match it. */
 html:has(.auth-page) {

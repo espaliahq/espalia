@@ -73,8 +73,7 @@ class Components::Kit::SegmentedControl < Components::Base
     plain label
     return if marked.nil?
 
-    span(class: "ml-1.5 size-2 shrink-0 rounded-full bg-neutral-strong", aria: { hidden: "true" }, data: { mark: true })
-    span(class: "sr-only") { " (#{marked})" }
+    render Components::Kit::AttentionDot.new(marked, class: "ml-1.5")
   end
 
   def state(selected)

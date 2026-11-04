@@ -57,6 +57,30 @@ class TenantThemeRenderingSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "the root" do
+    should "paint the page surface, so a scroll bouncing past the page shows it in either scheme" do
+      user = FactoryBot.create(:user, password: "password123")
+      tenant = FactoryBot.create(:tenant)
+      ActsAsTenant.with_tenant(tenant) { FactoryBot.create(:tenant_user, tenant: tenant, user: user) }
+      sign_in_as(user)
+
+      { "desktop" => DESKTOP_SIZE, "phone" => MOBILE_SIZE }.each do |width, size|
+        page.driver.browser.manage.window.resize_to(*size)
+        visit root_path
+        assert_selector "body > .bg-page"
+
+        %w[light dark].each do |scheme|
+          set_scheme(scheme)
+          root, page_surface = evaluate_script(<<~JS)
+            [ document.documentElement, document.querySelector("body > .bg-page") ]
+              .map((el) => getComputedStyle(el).backgroundColor)
+          JS
+          assert_equal page_surface, root, "the root should match the page in #{scheme} on a #{width}"
+        end
+      end
+    end
+  end
+
   private
 
   def set_scheme(scheme)

@@ -300,6 +300,62 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "#needs-you [data-testid='needs-you-place']", count: 2
     end
 
+    should "list the team's conversations by default, and the whole org's for ?place=org" do
+      get evidence_hub_path
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@assessee.id}']"
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@deep.id}']", count: 0
+
+      get evidence_hub_path(place: "org")
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@deep.id}']"
+    end
+
+    should "offer the switch while nothing beyond the team waits to be placed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.withdraw_evidence(@deep.id, @framework_id, @deep_item, withdrawn_by_id: @peer.id)
+      end
+      get evidence_hub_path
+      assert_select "#needs-you nav a", text: "My whole org · 1"
+    end
+
+    should "leave the counts off the switch while nothing waits to be placed" do
+      ActsAsTenant.with_tenant(@tenant) do
+        @handler.withdraw_evidence(@deep.id, @framework_id, @deep_item, withdrawn_by_id: @peer.id)
+        @handler.withdraw_evidence(@assessee.id, @framework_id, @unplaced_id, withdrawn_by_id: @peer.id)
+      end
+      get evidence_hub_path
+      assert_select "#needs-you nav a", text: "My team"
+      assert_select "#needs-you nav a", text: "My whole org"
+    end
+
+    should "open a thread only the org lists in the org view" do
+      get evidence_report_conversation_path(@deep.id)
+      assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org")
+    end
+
+    should "send the switch from a thread only the org lists to the team's list" do
+      get evidence_report_conversation_path(@deep.id, place: "org")
+      assert_select "#needs-you nav a[href=?]", "#{evidence_hub_path(view: "report")}#needs-you", text: "My team · 1"
+    end
+
+    should "keep a person with no thread yet open when switching to the team view" do
+      get evidence_conversation_path(@lead.id, place: "org")
+      assert_select "#needs-you nav a[href=?]", "#{evidence_conversation_path(@lead.id)}#needs-you"
+    end
+
+    should "land the answer to a request about a skip-level report on that report's thread" do
+      request = ActsAsTenant.with_tenant(@tenant) do
+        create(:evidence_request, tenant: @tenant, requester: @manager, requestee: @peer, person_id: @deep.id,
+                                  framework_id: @framework_id, status: "responded", evidence_id: @deep_item)
+      end
+      get evidence_hub_request_path(request.id)
+      assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org", anchor: request.dom_id)
+    end
+
+    should "land a link to a message only the org lists in the org view" do
+      get evidence_hub_item_path(@deep_item)
+      assert_redirected_to evidence_report_conversation_path(@deep.id, place: "org", anchor: EvidenceItem.dom_id(@deep_item))
+    end
+
     should "keep the open thread on the toggle, and the org view on every other link" do
       get evidence_report_conversation_path(@assessee.id, place: "org")
       assert_select "#needs-you nav a[href=?]", "#{evidence_report_conversation_path(@assessee.id)}#needs-you", text: "My team · 1"

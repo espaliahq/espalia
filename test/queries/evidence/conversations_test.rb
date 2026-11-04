@@ -17,8 +17,8 @@ class Evidence::ConversationsTest < ActiveSupport::TestCase
     end
   end
 
-  def conversations(viewer, group: "person")
-    ActsAsTenant.with_tenant(@tenant) { Evidence::Conversations.new(viewer, group: group).tap(&:all) }
+  def conversations(viewer, group: "person", scope: "team")
+    ActsAsTenant.with_tenant(@tenant) { Evidence::Conversations.new(viewer, group: group, scope: scope).tap(&:all) }
   end
 
   def item(author:, about:, at: 1.day.ago, **attrs)
@@ -134,6 +134,39 @@ class Evidence::ConversationsTest < ActiveSupport::TestCase
         assert_equal "report", Evidence::Conversations.default_group(@maya)
         assert_equal "person", Evidence::Conversations.default_group(@jordan)
       end
+    end
+  end
+
+  context "the team and org scopes" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @sky = create(:person, tenant: @tenant, name: "Sky Skiplevel", manager: @alex)
+        create(:person_framework_assignment, tenant: @tenant, person_id: @sky.id, framework_id: @framework_id)
+      end
+    end
+
+    should "list only direct reports in the team scope, and the subtree in the org scope" do
+      item(author: @jordan, about: @alex)
+      item(author: @priya, about: @sky)
+
+      assert_equal [ @alex.id ], thread_ids(conversations(@maya, group: "report"))
+      assert_equal [ @jordan.id ], thread_ids(conversations(@maya))
+      assert_equal [ @alex.id, @sky.id ].sort, thread_ids(conversations(@maya, group: "report", scope: "org")).sort
+      assert_equal [ @jordan.id, @priya.id ].sort, thread_ids(conversations(@maya, scope: "org")).sort
+    end
+
+    should "keep the viewer's own feedback and requests in both scopes" do
+      mine = item(author: @maya, about: @sky)
+      ask = request(from: @maya, to: @priya, about: @sky)
+
+      team = conversations(@maya)
+      assert_equal [ mine.id ], team.find(@sky.id).messages.map { |m| m.item.id }
+      assert_equal [ ask.id ], team.find(@priya.id).messages.map { |m| m.request.id }
+    end
+
+    should "say whether the org reaches beyond the team" do
+      assert conversations(@maya).beyond_team?
+      assert_not conversations(@alex).beyond_team?
     end
   end
 

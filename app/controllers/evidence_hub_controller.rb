@@ -18,8 +18,10 @@ class EvidenceHubController < ApplicationController
     authorize EvidenceRequest, :index?, policy_class: EvidenceRequestPolicy
     @page_title = "Feedback / Evidence"
 
-    conversations = Evidence::Conversations.new(current_person)
+    conversations = Evidence::Conversations.new(current_person, scope: place_param)
     conversations.group = group_for(conversations)
+    return redirect_to(org_thread_path) if org_only_thread?(conversations)
+
     reads = Evidence::ConversationReads.new(current_user)
     selected, partner = selected_conversation(conversations)
     shown = shown_messages(selected)
@@ -86,20 +88,40 @@ class EvidenceHubController < ApplicationController
     end
   end
 
+  # The thread holding a message: a report's thread before a person's, and
+  # the team view before the org view. The org view lists everything the team
+  # view does, so a link already in the org view looks nowhere else.
   def located_path(anchor:, item_id: nil, request_id: nil)
-    conversations = Evidence::Conversations.new(current_person)
-    groups = conversations.reports? ? %w[report person] : %w[person]
-    groups.each do |group|
-      convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
-      next if convo.nil?
+    views = (place_param == "org" ? %w[org] : %w[team org]).map { |scope| Evidence::Conversations.new(current_person, scope: scope) }
+    %w[report person].each do |group|
+      views.each do |conversations|
+        next if group == "report" && !conversations.reports?
 
-      return conversation_path(convo.person_id, group, anchor: anchor, all: beyond_shown?(convo, item_id, request_id))
+        convo = conversations.containing(item_id: item_id, request_id: request_id, group: group)
+        next if convo.nil?
+
+        return conversation_path(convo.person_id, group, anchor: anchor, all: beyond_shown?(convo, item_id, request_id),
+                                                         scope: conversations.scope)
+      end
     end
     evidence_hub_path
   end
 
-  def conversation_path(person_id, group, anchor: nil, all: false)
-    query = { place: (params[:place] == "org" ? "org" : nil), all: (1 if all), anchor: anchor }
+  # A thread only the org view lists, opened in the team view (a bookmark, a
+  # link from before the switch scoped the conversations). The route names
+  # the group: without reports in the team view, the page itself falls back
+  # to people.
+  def org_only_thread?(conversations)
+    return false unless params[:person_id].present? && conversations.scope == "team" && conversations.beyond_team?
+    return false if conversations.find(params[:person_id], group: params[:group])
+
+    Evidence::Conversations.new(current_person, scope: "org").find(params[:person_id], group: params[:group]).present?
+  end
+
+  def org_thread_path = page_path(request.path, **request.query_parameters.symbolize_keys, place: "org")
+
+  def conversation_path(person_id, group, anchor: nil, all: false, scope: place_param)
+    query = { place: (scope == "org" ? "org" : nil), all: (1 if all), anchor: anchor }
     if group == "report"
       evidence_report_conversation_path(person_id, **query)
     else
@@ -144,12 +166,24 @@ class EvidenceHubController < ApplicationController
     {
       incoming: incoming, about_you: about_you, for_team: for_team, waiting: waiting, paths: paths,
       people: Person.where(id: for_team.map(&:person_id).uniq).index_by(&:id),
-      place_scope: placing[:scope], place_counts: (placing[:counts] if placing[:beyond_team]),
-      base_path: request.path, view: params[:view].presence,
+      place_scope: placing[:scope], place_counts: (placing[:counts] if conversations.beyond_team?),
+      scope_paths: scope_paths(conversations),
       suggestion_counts: EvidencePlacementSuggestion.pending.where(evidence_id: (about_you + for_team).map(&:id))
         .group(:evidence_id).count
     }
   end
+
+  # The page in each scope. Every thread the team view lists is in the org
+  # view, but not the other way round: a thread only the org view lists
+  # gives way to the list. A person with no thread yet opens in either.
+  def scope_paths(conversations)
+    in_team = params[:person_id].blank? || conversations.scope == "team" || conversations.find(params[:person_id]).nil? ||
+      Evidence::Conversations.new(current_person, scope: "team").find(params[:person_id], group: conversations.group)
+    team = in_team ? page_path(request.path, view: params[:view]) : page_path(evidence_hub_path, view: conversations.group)
+    { "team" => team, "org" => page_path(request.path, view: params[:view], place: "org") }
+  end
+
+  def page_path(path, **query) = [ path, query.compact_blank.to_query.presence ].compact.join("?")
 
   # "My team" unless the URL asks for the whole org.
   def place_param
