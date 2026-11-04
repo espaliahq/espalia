@@ -6,18 +6,18 @@ require "rake"
 class SeedFrameworkTaskTest < ActiveSupport::TestCase
   setup do
     Rails.application.load_tasks if Rake::Task.tasks.empty?
-    Rake::Task["frameworks:seed_meandu"].reenable
-    create(:tenant, slug: "meandu")
+    Rake::Task["frameworks:seed"].reenable
+    create(:tenant, slug: "nullisland")
   end
 
   teardown do
     # Tests in this file use a real tenant + framework; wipe between runs.
     FrameworkState::Framework.destroy_all
-    Tenant.where(slug: "meandu").destroy_all
+    Tenant.where(slug: "nullisland").destroy_all
   end
 
   should "publish v1 and apply deferred read-model updates" do
-    Rake::Task["frameworks:seed_meandu"].invoke
+    Rake::Task["frameworks:seed"].invoke
 
     framework = FrameworkState::Framework.first
     assert_not_nil framework
@@ -26,8 +26,8 @@ class SeedFrameworkTaskTest < ActiveSupport::TestCase
 
     # Department is event-sourced on add_role_family, so it reaches the read
     # model via the normal projection path. deficit_threshold is still a
-    # deferred post-publish read-model mutation (at least one seeded category —
-    # Finance Core — has one).
+    # deferred post-publish read-model mutation (the Craft category carries
+    # one in the Null Island YAML).
     assert FrameworkState::RoleFamily.where.not(department: nil).exists?
     assert FrameworkState::CapabilityCategory.where.not(deficit_threshold: nil).exists?
   end
