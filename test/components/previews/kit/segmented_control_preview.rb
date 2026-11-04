@@ -45,6 +45,15 @@ class Kit::SegmentedControlPreview < Lookbook::Preview
     end
   end
 
+  # Shorter labels below the sm breakpoint, as the Feedback / Evidence page's scope switch has them
+  def short_labels
+    render SegmentedControl.new(label: "Whose feedback to show", size: :sm) do |control|
+      control.segment("My feedback · 1", short: "Mine · 1", href: "#mine", selected: true)
+      control.segment("My team · 2", short: "Team · 2", href: "#team")
+      control.segment("My whole org · 3", short: "Whole org · 3", href: "#org")
+    end
+  end
+
   # One segment unavailable
   def disabled_segment
     render SegmentedControl.new(label: "Period") do |control|

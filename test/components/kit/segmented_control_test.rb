@@ -45,6 +45,16 @@ class Components::Kit::SegmentedControlTest < ActiveSupport::TestCase
       assert_equal "By person (needs your attention)", marked.text
     end
 
+    should "swap in the short label below the sm breakpoint" do
+      html = SegmentedControl.new(label: "Scope").call do |control|
+        control.segment("My whole org", short: "Whole org")
+      end
+      segment = Nokogiri::HTML5.fragment(html).at_css("button")
+
+      assert_equal "Whole org", segment.at_css("span.sm\\:hidden").text
+      assert_equal "My whole org", segment.at_css("span.max-sm\\:hidden").text
+    end
+
     should "share the width between segments only when filled" do
       assert render_control(fill: true).css("button").all? { _1["class"].split.include?("flex-1") }
       assert render_control.css("button").none? { _1["class"].split.include?("flex-1") }
