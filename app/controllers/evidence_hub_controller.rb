@@ -264,11 +264,12 @@ class EvidenceHubController < ApplicationController
   # and ask for some — of them about the viewer, or of anyone about a report.
   def composer_for(conversations, partner)
     report_thread = conversations.group == "report"
-    own = PersonFrameworkAssignment.where(person_id: current_person.id).order(:created_at, :id).first
+    own = PersonFrameworkAssignment.where(person_id: current_person.id).order(:created_at, :id).last
     return { self_thread: true, own_assessment_path: own && assessment_path(own) } if partner.id == current_person.id
 
     partner_assignments = PersonFrameworkAssignment.where(person_id: partner.id).order(:created_at, :id).to_a
-    ask_assignment = report_thread ? partner_assignments.first : own
+    # A request is about one assessment; with several, the newest is the one in use.
+    ask_assignment = report_thread ? partner_assignments.last : own
     can_ask = ask_assignment.present? && EvidenceRequestPolicy.new(pundit_user, ask_assignment).request?
 
     {

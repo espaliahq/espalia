@@ -151,6 +151,15 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid='conversation-thread']", text: /No feedback with Morgan Manager yet/
     end
 
+    should "ask about a report's newest assessment when they have several" do
+      newer = ActsAsTenant.with_tenant(@tenant) do
+        create(:person_framework_assignment, tenant: @tenant, person_id: @assessee.id, created_at: 1.minute.from_now)
+      end
+      sign_in @manager_user
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "button[data-request-evidence-assignment-id-param='#{newer.id}']", text: "Ask someone about Alex"
+    end
+
     should "answer 404 for a person outside the workspace" do
       sign_in @assessee_user
       get evidence_conversation_path(SecureRandom.uuid_v7)
