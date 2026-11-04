@@ -304,6 +304,13 @@ Devise.setup do |config|
   google_configured = google_client_id.present? && google_client_secret.present?
   Rails.application.config.x.google_sso_available = google_configured || !Rails.env.production?
   if Rails.env.production? && !google_configured && ENV["EAGER_LOAD_CHECK"] != "1"
+    # Half a configuration is a misconfiguration (a lost key, a credentials
+    # regression), not an instance that opted out — fail the boot so SSO users
+    # aren't silently locked out. Neither value set means no SSO on purpose.
+    if google_client_id.present? || google_client_secret.present?
+      raise "Google OAuth is half-configured: set both client_id and client_secret (credentials.google or GOOGLE_CLIENT_ID/SECRET), or neither."
+    end
+
     warn "Google SSO is not configured (credentials.google or GOOGLE_CLIENT_ID/SECRET): the sign-in page offers email and password only."
   end
 
