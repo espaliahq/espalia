@@ -186,7 +186,22 @@ class Views::Integrations::HrisView < Views::Base
               render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save connection" }
             end
           end
+          disconnect_action if @hris_secrets_stored.values.any?
         end
+      end
+    end
+  end
+
+  def disconnect_action
+    danger_action(
+      modal_id: "hris-disconnect-modal", title: "Disconnect HRIS",
+      button_label: "Disconnect…", confirm_label: "Disconnect HRIS",
+      action_path: tenant_hris_connection_path,
+      description: "Removes the stored credentials and turns the sync off. Role mappings are kept."
+    ) do
+      p do
+        plain "The stored credentials are removed and the sync stops. " \
+              "The provider, role mappings and level column stay, so a reconnect only needs new credentials."
       end
     end
   end

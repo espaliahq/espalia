@@ -167,7 +167,25 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
               render Components::Kit::Button.new(tone: :brand, type: :submit, touch: true) { "Save settings" }
             end
           end
+          disconnect_action if @secrets_present.values.any?
         end
+      end
+    end
+  end
+
+  def disconnect_action
+    danger_action(
+      modal_id: "feedback-exchange-disconnect-modal", title: "Disconnect the exchange",
+      button_label: "Disconnect…", confirm_label: "Disconnect exchange",
+      action_path: tenant_feedback_exchange_path,
+      description: "Removes both signing secrets and disables the exchange. The peer settings are kept."
+    ) do
+      p do
+        plain "Both signing secrets are removed and the exchange is disabled: the peer's requests are answered 404 " \
+              "and nothing is pulled. The peer, address, type lists and cursors stay for a reconnect."
+      end
+      p do
+        plain "The peer still holds its copies of the shared secrets — only its admin can discard them, so tell them."
       end
     end
   end
