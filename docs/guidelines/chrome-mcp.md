@@ -121,14 +121,10 @@ app with `bin/rails server -p 6600`. What `bin/cloud-setup` installs, and why, i
 
 ## Signing in
 
-Credentials live in Rails credentials — never hardcode them. Fetch the seeded
-global admin:
-
-```bash
-bin/rails runner 'a = Rails.application.credentials.dig(:admin, :user_1); puts a.email; puts a.password'
-```
-
-Then fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
+The seeded dev admin is **`admin@example.com` / `password123`** (created by
+`SeedAdmin`, no credentials file involved; see
+[dev-environment.md](dev-environment.md#a-checkout-without-configmasterkey)).
+Fill the Devise form (`Email`, `Password`) and submit. The seeded admin is a
 global admin in the `me&u` tenant, so it can reach every surface.
 
 ## Standard viewports

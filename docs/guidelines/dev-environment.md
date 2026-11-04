@@ -73,6 +73,12 @@ immune. When you change a custom cop in a nested worktree, lint with
 
 ## A checkout without `config/master.key`
 
+**The seeded dev admin is `admin@example.com` / `password123`** — created by
+`SeedAdmin` with no credentials file involved. `SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD` override it in any environment (that pair is also how a
+production first deploy bootstraps its admin; `bin/rails admin:create
+EMAIL=… PASSWORD=…` does it after the fact).
+
 Development derives its ActiveRecord encryption keys from the local
 `secret_key_base` (`tmp/local_secret.txt`) when the credentials file can't be
 decrypted (`config/environments/development.rb`). Two consequences:
