@@ -65,20 +65,16 @@ class Evidence::Conversations
     def latest = messages.last
   end
 
-  # The group a viewer sees first: their reports, or About me under My
-  # feedback, for a manager; their conversations for anyone else.
-  #
-  # @param viewer [Person]
-  # @return [String]
-  def self.default_group(viewer) = new(viewer).manager? ? "report" : "person"
-
   # @param viewer [Person]
   # @param group [String] "report" or "person"; anything else reads as "person"
   # @param scope [String] "mine", "team" or "org"; anything else reads as "team"
-  def initialize(viewer, group: "person", scope: "team")
+  # @param placing [Assessments::FeedbackToPlace, nil] the viewer's team / org
+  #   split, shared between the scopes of one page
+  def initialize(viewer, group: "person", scope: "team", placing: nil)
     @viewer = viewer
     @group = group == "report" ? "report" : "person"
     @scope = SCOPES.include?(scope) ? scope : "team"
+    @placing = placing
   end
 
   attr_reader :viewer, :group, :scope
@@ -125,6 +121,13 @@ class Evidence::Conversations
   #
   # @return [Boolean]
   def reports? = report_ids.any?
+
+  # The group a viewer sees first: a manager's reports, or About me under My
+  # feedback; their conversations for anyone else, and for a manager with
+  # nobody in this scope.
+  #
+  # @return [String]
+  def default_group = manager? && (reports? || about_me?) ? "report" : "person"
 
   # Whether anyone reports to the viewer, in their team or deeper.
   #

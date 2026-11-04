@@ -122,6 +122,19 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       assert_select "#needs-you nav", count: 0
     end
 
+    should "send another person's report thread to their conversation when nobody reports to the viewer" do
+      sign_in @assessee_user
+      get evidence_report_conversation_path(@peer.id)
+      assert_redirected_to evidence_conversation_path(@peer.id)
+    end
+
+    should "offer an empty About me with its ask" do
+      sign_in @peer_user
+      get evidence_hub_path(view: "report")
+      assert_select "[data-testid='conversation-row'][data-person-id='#{@peer.id}']", text: /About you/
+      assert_select "#conversation-title", text: "About you"
+    end
+
     should "gather what's about the assessee into About me" do
       sign_in @assessee_user
       get evidence_report_conversation_path(@assessee.id)
@@ -354,6 +367,11 @@ class EvidenceHubControllerTest < ActionDispatch::IntegrationTest
       about_me = feedback_about_manager!
       get evidence_hub_item_path(about_me)
       assert_redirected_to evidence_report_conversation_path(@manager.id, place: "mine", anchor: EvidenceItem.dom_id(about_me))
+    end
+
+    should "send the switch from a report's thread to My feedback's list" do
+      get evidence_report_conversation_path(@assessee.id)
+      assert_select "#needs-you nav a[href=?]", "#{evidence_hub_path(view: "report", place: "mine")}#needs-you"
     end
 
     should "send the switch from About me to the team's list" do

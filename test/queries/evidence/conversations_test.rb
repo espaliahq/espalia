@@ -129,11 +129,10 @@ class Evidence::ConversationsTest < ActiveSupport::TestCase
       assert_equal 3, reports.find(@alex.id).messages.size
     end
 
-    should "be the default only for someone with reports" do
-      ActsAsTenant.with_tenant(@tenant) do
-        assert_equal "report", Evidence::Conversations.default_group(@maya)
-        assert_equal "person", Evidence::Conversations.default_group(@jordan)
-      end
+    should "be the default only for someone with reports in view" do
+      assert_equal "report", conversations(@maya).default_group
+      assert_equal "report", conversations(@maya, scope: "mine").default_group
+      assert_equal "person", conversations(@jordan).default_group
     end
   end
 

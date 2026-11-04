@@ -12,8 +12,8 @@ class Views::Evidence::ConversationList < Views::Base
   # @param selected_id [String, nil] the person whose thread is open
   # @param explicit [Boolean] whether a thread is open on its own URL (the
   #   list then gives the screen to it on a phone)
-  # @param place [String, nil] "org" while "Needs you" shows the whole org,
-  #   carried by every link so it stays that way
+  # @param place [String, nil] "mine" or "org" while the switch shows My
+  #   feedback or the whole org, carried by every link so it stays that way
   def initialize(conversations:, reads:, viewer_id:, selected_id:, explicit:, place: nil)
     @conversations = conversations
     @reads = reads
@@ -64,11 +64,28 @@ class Views::Evidence::ConversationList < Views::Base
   def rows
     list = @conversations.all
     ul(class: "flex-1 min-h-0 overflow-y-auto p-2 space-y-1") do
-      if list.empty?
+      if list.empty? && @group == "report" && @conversations.about_me?
+        empty_about_me
+      elsif list.empty?
         li(class: "p-4 text-sm text-muted") { "No conversations yet. Feedback you give, ask for or receive shows up here." }
       end
       list.each { |c| row(c) }
       li(class: "p-4 text-sm text-muted", hidden: true, data: { conversation_search_target: "empty" }) { "No one matches that name." }
+    end
+  end
+
+  # About me before anyone has said anything, so its composer is a tap away.
+  def empty_about_me
+    li(data: { conversation_search_target: "row", name: "about you" }) do
+      a(href: conversation_href(@viewer_id, "report", place: @place),
+        aria: { current: ("page" if @selected_id == @viewer_id) },
+        data: { testid: "conversation-row", person_id: @viewer_id, attention: "false", turbo_prefetch: "false" },
+        class: "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 rounded-xl px-2 py-2 min-h-11 " \
+               "hover:bg-default-hover aria-[current=page]:bg-neutral-muted") do
+        span(class: "row-span-2") { avatar(@conversations.viewer, size: :sm) }
+        span(class: "truncate text-sm font-semibold text-default") { "About you" }
+        span(class: "truncate text-xs text-muted") { "Nothing yet. Ask someone for feedback." }
+      end
     end
   end
 
