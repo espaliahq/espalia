@@ -63,7 +63,7 @@ class FeedbackExchangeSystemTest < ApplicationSystemTestCase
         assert_equal EvidenceItem::EVIDENCE_TYPES - %w[impact], @tenant.reload.feedback_exchange_config.export_kinds
         assert_equal %w[all], @tenant.feedback_exchange_config.import_kinds
         assert_equal "", find_by_id("feedback_exchange_outbound_secret").value
-        assert_equal "Leave blank to keep the stored value", find_by_id("feedback_exchange_outbound_secret")[:placeholder]
+        assert_equal Views::Integrations::Concerns::SettingsFields::SECRET_PLACEHOLDER, find_by_id("feedback_exchange_outbound_secret")[:placeholder]
         assert_no_horizontal_overflow
         screenshot("#{name}_page_active")
 

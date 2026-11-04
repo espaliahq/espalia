@@ -18,16 +18,12 @@
 #
 class Views::Integrations::HrisView < Views::Base
   include Phlex::Rails::Helpers::FormAuthenticityToken
+  include Views::Integrations::Concerns::SettingsFields
 
   SECONDARY_BUTTON_CLASSES = Components::Kit::Button.classes(variant: :outline, size: :sm, touch: true)
 
   CHIP_CLASSES = "inline-flex items-center rounded-sm text-xs " \
                  "bg-neutral-subtle text-muted"
-
-  INPUT_CLASSES = "#{Components::Kit::Field::INPUT} min-h-11 mt-1"
-  SELECT_CLASSES = "#{Components::Kit::Field::SELECT} min-h-11 mt-1"
-  LABEL_CLASSES = "block text-sm font-medium text-default"
-  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param hris_config [HrisConfig] what is saved; drives the status
   # @param hris_secrets_stored [Hash{String => Boolean}] which credentials are
@@ -164,18 +160,21 @@ class Views::Integrations::HrisView < Views::Base
 
       render Components::Kit::Card.new do |card|
         card.body do
-          error_summary
+          error_summary(title: "The connection could not be saved.")
           form(action: tenant_hris_connection_path, method: "post", class: "space-y-6") do
             input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
             input(type: "hidden", name: "_method", value: "patch")
 
             provider_field
-            secret_field(:service_user_id, "Service user id",
+            secret_field(:service_user_id, "Service user id", stored: @hris_secrets_stored["service_user_id"],
+                         empty_placeholder: "Paste the value from the HRIS",
                          hint: "The HRIS service account the sync authenticates as.")
-            secret_field(:api_token, "API token",
+            secret_field(:api_token, "API token", stored: @hris_secrets_stored["api_token"],
+                         empty_placeholder: "Paste the value from the HRIS",
                          hint: "Stored encrypted and only ever sent to the HRIS. It is never shown again.")
-            secret_field(:webhook_secret, "Webhook secret",
-                         hint: "Verifies inbound HRIS webhooks. Leave blank unless the HRIS sends them.")
+            secret_field(:webhook_secret, "Webhook secret", stored: @hris_secrets_stored["webhook_secret"],
+                         empty_placeholder: "Paste the value from the HRIS",
+                         hint: "Verifies inbound HRIS webhooks. Only needed when the HRIS sends them.")
             text_field(:level_field_id, "Level column id", value: @form_config.level_field_id,
                        placeholder: "column_1234567890123",
                        hint: "The HRIS custom column holding each person's level ordinal. " \
@@ -192,63 +191,16 @@ class Views::Integrations::HrisView < Views::Base
     end
   end
 
-  def error_summary
-    return if @errors.empty?
-
-    render Components::Kit::Alert.new(tone: :danger, title: "The connection could not be saved.", class: "mb-6") do
-      ul(class: "mt-1 list-disc pl-5") { @errors.each { |message| li { message } } }
-    end
-  end
-
   def provider_field
-    div do
-      label(for: field_id(:provider), class: LABEL_CLASSES) { "Provider" }
-      select(id: field_id(:provider), name: field_name(:provider), class: SELECT_CLASSES, autocomplete: "off") do
-        option(value: "", selected: @form_config.provider.blank?) { "Not configured" }
-        HrisConfig::PROVIDER_LABELS.each do |value, label_text|
-          option(value: value, selected: value == @form_config.provider) { label_text }
-        end
+    select_field(:provider, "Provider") do
+      option(value: "", selected: @form_config.provider.blank?) { "Not configured" }
+      HrisConfig::PROVIDER_LABELS.each do |value, label_text|
+        option(value: value, selected: value == @form_config.provider) { label_text }
       end
     end
   end
 
-  def text_field(name, label_text, value:, hint:, placeholder: nil)
-    div do
-      label(for: field_id(name), class: LABEL_CLASSES) { label_text }
-      input(type: "text", id: field_id(name), name: field_name(name), value: value.to_s, placeholder: placeholder,
-            autocomplete: "off", class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
-  def secret_field(name, label_text, hint:)
-    stored = @hris_secrets_stored[name.to_s]
-    div do
-      label(for: field_id(name), class: LABEL_CLASSES) do
-        plain label_text
-        span(class: "ml-2 text-xs font-normal text-muted") { stored ? "Stored" : "Not set" }
-      end
-      input(type: "password", id: field_id(name), name: field_name(name), value: "", autocomplete: "new-password",
-            placeholder: stored ? "Leave blank to keep it" : "Paste the value from the HRIS",
-            class: INPUT_CLASSES, aria: { describedby: "#{field_id(name)}-hint" })
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
-  def switch_field(name, label_text, checked, hint:)
-    div do
-      input(type: "hidden", name: field_name(name), value: "0")
-      label(class: "inline-flex items-center gap-3 min-h-11 text-sm font-medium text-default cursor-pointer") do
-        input(type: "checkbox", id: field_id(name), name: field_name(name), value: "1", checked: checked,
-              class: Components::Kit::Field::CHECKBOX, aria: { describedby: "#{field_id(name)}-hint" })
-        plain label_text
-      end
-      p(id: "#{field_id(name)}-hint", class: HINT_CLASSES) { hint }
-    end
-  end
-
-  def field_id(name) = "hris_connection_#{name}"
-  def field_name(name) = "hris_connection[#{name}]"
+  def field_prefix = "hris_connection"
 
   # ── Unmapped titles ──
 

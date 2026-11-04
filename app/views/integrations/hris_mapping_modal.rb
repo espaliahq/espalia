@@ -10,7 +10,7 @@ class Views::Integrations::HrisMappingModal < Views::Base
 
   FIELD_CLASSES = "#{Components::Kit::Field::INPUT} read-only:bg-subtle"
   LABEL_CLASSES = "block text-sm font-medium text-default mb-1"
-  HINT_CLASSES = "mt-1 text-xs text-muted"
+  HINT_CLASSES = "mt-1 text-xs text-muted [overflow-wrap:anywhere]"
 
   # @param roles [Array<FrameworkState::Role>]
   # @param level_ordinals_by_role_code [Hash{String => Array<Integer>}]
