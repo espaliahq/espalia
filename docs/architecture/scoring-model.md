@@ -23,7 +23,7 @@ Below 1.0 the number is the share of the assessed level demonstrated. The hero r
 ## Core Formulae
 
 ```
-FREQUENCY = { "none" => 0.0, "some" => 0.25, "occasional" => 0.5, "consistent" => 1.0 }
+FREQUENCY = { "none" => 0.0, "some" => 1/3, "occasional" => 2/3, "consistent" => 1.0 }   # equal steps (ADR-24)
 DEFAULT_MASTERY_THRESHOLD             = 1.50   # halfway to the next level
 DEFAULT_MEETING_EXPECTATION_THRESHOLD = 0.95
 DEFAULT_UNDERPERFORMING_THRESHOLD     = 0.80
@@ -69,12 +69,12 @@ Credit above the assessed level is discounted **per capability** by how consiste
 
 | Binding | Gate | Effect |
 |---|---|---|
-| flexible (resolved tolerance > 0) | `f(b, L)` — multiplicative | "most of the time" at L with "consistently" at L+1 earns half the next-level credit |
+| flexible (resolved tolerance > 0) | `f(b, L)` — multiplicative | "most of the time" at L with "consistently" at L+1 earns two-thirds of the next-level credit |
 | mandatory (resolved tolerance 0 — the "Required" badge) | `1 if f(b, L) ≥ 1.0 else 0` — step | nothing above the level counts until the level itself is consistent |
 
 For a cap of 2 or more the factor chains along the levels (credit at L+2 is gated by L and by L+1).
 
-Making up **across** capabilities stays allowed — that is what the weighted average is — bounded by the per-capability deficit threshold (blocking) and the category gates. The mandatory case is a step because with a multiplicative gate a mandatory capability at "most of the time" with "consistently" above nets to zero, is never blocked, and the one rule written for it is defeated.
+Making up **across** capabilities stays allowed — that is what the weighted average is — bounded by the per-capability deficit threshold (blocking) and the category gates. The mandatory case is a step because with a multiplicative gate a mandatory capability at "most of the time" with "consistently" above nets to no deficit, is never blocked, and the one rule written for it is defeated.
 
 ---
 
@@ -313,3 +313,16 @@ All other scoring logic (components, gate, deficit, blocking, verdicts) is ident
 | `:alignment` | `aligned_scoring` | "Alex is …" |
 
 In `:self` context the data layer scrubs manager + aligned fields entirely before any view sees them; see [assessments.md — Self-assessment privacy](../guidelines/assessments.md#self-assessment-privacy).
+
+---
+
+## Checking a scoring change against production
+
+Nothing persists a score, so a change to a weight, the gate or a default threshold rescores every assessment, closed cycles included, the moment it deploys. Before shipping one, measure it on production ratings.
+
+1. **Pull the ratings read-only over the MCP server.** `assessments_capability_get` returns one capability's per-level self, manager and aligned ratings, its `weight`, whether it is `required`, and its prod score. `assessments_get` returns the overall and per-category scores. Each `capability_get` call is 7–20k tokens, because it carries every expectation and illustration, so a cohort means hundreds of calls: split them across subagents, each writing compact JSON to a scratch folder.
+2. **Feed the extract into the real engine.** `PersonDevelopment::Scoring` is pure Ruby and takes duck-typed structs (`bin/rails runner`). Map `required: true` to a binding tolerance of 0, and pass every expectation level as an expectation cell.
+3. **Reproduce prod before trusting the new numbers.** Run the current constants first and match every overall and category score exactly. The MCP serves an admin the `aligned_only` perspective once a cell is agreed and `manager_only` before, so score each perspective and use the one that matches. A miss means the extract or an assumption is wrong. For example, `capability_get` does not expose a binding's tolerance or cap override, so the defaults are assumed.
+4. **Swap the constant and rescore.** Count the state flips at the 80, 95 and 150 lines, and for categories, which flip far more often because they hold only three or four capabilities.
+
+ADR-24's equal-step weights were checked this way: 14 people reproduced exactly, then three of them moved from performing to mastering.
