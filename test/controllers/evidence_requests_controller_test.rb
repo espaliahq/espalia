@@ -332,6 +332,21 @@ class EvidenceRequestsControllerTest < ActionDispatch::IntegrationTest
       assert_redirected_to evidence_hub_path
       ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.find(id).status }
     end
+
+    should "return to the conversation it came from, keeping its view" do
+      id = make_request!
+      sign_in @peer_user
+      thread = evidence_conversation_path(@report.id)
+      post decline_evidence_request_path(id), headers: { "Referer" => "http://www.example.com#{thread}?place=org&give=1" }
+      assert_redirected_to "#{thread}?place=org"
+    end
+
+    should "return to the page, not to an endpoint that only shares its prefix" do
+      id = make_request!
+      sign_in @peer_user
+      post decline_evidence_request_path(id), headers: { "Referer" => "http://www.example.com/evidence_modal?mode=respond" }
+      assert_redirected_to evidence_hub_path
+    end
   end
 
   context "POST nudge" do
