@@ -6,21 +6,26 @@
 # cancel are driven from the evidence hub.
 class EvidenceRequestsController < ApplicationController
   include EvidenceDiffSubmit
+  include EvidenceHubReturn
 
   before_action :require_person
 
   # respond / decline / nudge / destroy all surface domain rejections the same
-  # way: back to the hub with the message as a flash alert.
+  # way: back to the conversation with the message as a flash alert.
   rescue_from Operations::Base::ParameterError,
               PersonDevelopment::Aggregate::CommandError do |e|
-    redirect_to evidence_hub_path, alert: e.message, status: :see_other
+    redirect_to hub_return_path, alert: e.message, status: :see_other
   end
 
   # GET /assessments/:assignment_id/evidence_request_modal — the request form,
-  # rendered into the lazy #evidence-request-modal frame for a cell.
+  # rendered into the lazy #evidence-request-modal frame for a cell. Without
+  # a cell (a conversation's "Ask Jordan for feedback"), a step for choosing
+  # one comes first.
   def modal
     authorize modal_assignment, :request?, policy_class: EvidenceRequestPolicy
     cap = params[:capability_stable_id]
+    return render_cell_step if cap.blank?
+
     lvl = cell_level_ordinal or return head(:bad_request)
     render Views::Evidence::RequestForm.new(
       assignment_id: modal_assignment.id, capability_stable_id: cap, level_ordinal: lvl,
@@ -29,7 +34,8 @@ class EvidenceRequestsController < ApplicationController
       submit_url: evidence_requests_path,
       candidates_url: evidence_request_candidates_path(
         assignment_id: modal_assignment.id, capability_stable_id: cap, level_ordinal: lvl
-      )
+      ),
+      preselected: (Person.find_by(id: params[:requestee_id]) if params[:requestee_id].present?)
     ), layout: false
   end
 
@@ -62,7 +68,7 @@ class EvidenceRequestsController < ApplicationController
     authorize evidence_request, :respond?, policy_class: EvidenceRequestPolicy
 
     apply_evidence_diff
-    redirect_to evidence_hub_path, notice: "Feedback provided. Thank you!"
+    redirect_to hub_return_path, notice: "Feedback provided. Thank you!"
   end
 
   # POST /evidence_requests/:id/decline
@@ -73,7 +79,7 @@ class EvidenceRequestsController < ApplicationController
       context: pundit_user,
       params: { request_id: evidence_request.id, reason: params.dig(:evidence_request, :reason) }
     )
-    redirect_to evidence_hub_path, notice: "Request declined."
+    redirect_to hub_return_path, notice: "Request declined."
   end
 
   # POST /evidence_requests/:id/nudge — manual reminder from the requester
@@ -83,7 +89,7 @@ class EvidenceRequestsController < ApplicationController
     Operations::Assessments::NudgeEvidenceRequest.call(
       context: pundit_user, params: { request_id: evidence_request.id }
     )
-    redirect_to evidence_hub_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
+    redirect_to hub_return_path, notice: "Nudge sent to #{evidence_request.requestee&.name || "the requestee"}."
   end
 
   # DELETE /evidence_requests/:id — cancel
@@ -93,7 +99,7 @@ class EvidenceRequestsController < ApplicationController
     Operations::Assessments::CancelEvidenceRequest.call(
       context: pundit_user, params: { request_id: evidence_request.id }
     )
-    redirect_to evidence_hub_path, notice: "Request cancelled.", status: :see_other
+    redirect_to hub_return_path, notice: "Request cancelled.", status: :see_other
   end
 
   private
@@ -104,6 +110,16 @@ class EvidenceRequestsController < ApplicationController
 
   def evidence_request
     @evidence_request ||= EvidenceRequest.find(params.expect(:id))
+  end
+
+  def render_cell_step
+    options = Evidence::FrameworkCellOptions.new(framework_id: modal_assignment.framework_id, role_id: modal_assignment.role_id)
+    render Views::Evidence::RequestCellStep.new(
+      form_url: evidence_request_modal_path(modal_assignment), capabilities: options.link_options,
+      levels: options.level_options, current_level: modal_assignment.level&.ordinal,
+      assessee: (Person.find_by(id: modal_assignment.person_id) unless modal_assignment.person_id == current_person.id),
+      requestee: (Person.find_by(id: params[:requestee_id]) if params[:requestee_id].present?)
+    ), layout: false
   end
 
   def modal_assignment

@@ -163,7 +163,7 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       end
       get assessment_path(@assignment)
       assert_select "[data-testid='unplaced-feedback-notice']", text: /1 piece of feedback about you is waiting/ do
-        assert_select "a[href='#{evidence_hub_path(anchor: "feedback-to-place")}']", text: "Place it →"
+        assert_select "a[href='#{evidence_hub_path(anchor: "needs-you")}']", text: "Place it →"
       end
     end
 
@@ -353,14 +353,14 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       should "point the direct manager's notice at the hub's default team view" do
         sign_in @manager_user
         get assessment_path(@assignment)
-        assert_select "[data-testid='unplaced-feedback-notice'] a[href='#{evidence_hub_path(anchor: "feedback-to-place")}']"
+        assert_select "[data-testid='unplaced-feedback-notice'] a[href='#{evidence_hub_path(anchor: "needs-you")}']"
       end
 
       should "point a skip-level manager's notice at the hub's whole-org view, where the item is listed" do
         sign_in @skip_user
         get assessment_path(@assignment)
         assert_select "[data-testid='unplaced-feedback-notice'] " \
-                      "a[href='#{evidence_hub_path(place: "org", anchor: "feedback-to-place")}']", text: "Place it →"
+                      "a[href='#{evidence_hub_path(place: "org", anchor: "needs-you")}']", text: "Place it →"
       end
     end
 

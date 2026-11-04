@@ -118,8 +118,16 @@
 | **Unified evidence modal** (one modal for new/edit/respond, assessment + hub) | |
 | `app/views/evidence/modal_form.rb` | The form rendered into the `#evidence-modal` frame — writing-prompt card (:new/:respond only; role/level line only off the hub), content fields (disabled for a non-author link), and the unified **"Applies to" block**: uniform per-link rows (expectation + required-on-new valence + collapsible examples; entry-point row first + highlighted; last-row remove lock, lifted when the item may stay unplaced) + the capability/level picker (see [*The unified "Applies to" block*](evidence.md)) |
 | `app/views/evidence/recipient_picker_form.rb` / `recipient_row.rb` / `recipient_candidates_frame.rb` | The "Give feedback" step: who is it for? Suggestions + typeahead over the recipient directory; each row navigates the `evidence-modal` frame to the `:new` form (see [*Proactive feedback*](evidence.md)) |
-| `app/views/assessments/unplaced_feedback_notice.rb` | "N pieces of feedback about you are waiting to be placed" on the assessment, linking to the hub's "Feedback to place" |
-| `app/javascript/controllers/evidence_hub_controller.js` | Clicks the hub's "Give feedback" trigger on arrival when the URL carries `?give=1` |
+| `app/views/assessments/unplaced_feedback_notice.rb` | "N pieces of feedback about you are waiting to be placed" on the assessment, linking to the page's "Needs you" |
+| **The Feedback / Evidence page** (`/evidence`, conversations — see [*The Feedback / Evidence page*](evidence.md)) | |
+| `app/queries/evidence/conversations.rb` | What the viewer sees, grouped into conversations by the four-clause rule, per person or per report; what each message owes |
+| `app/models/evidence/conversation_reads.rb` | Unread messages, read from the notifications we already send; marks a thread's read |
+| `app/controllers/evidence_hub_controller.rb` | The page, a thread by its URL (`/evidence/with/…`, `/evidence/about/…`), and the `/evidence/items/…` / `/evidence/requests/…` links that land on a message's thread |
+| `app/controllers/concerns/evidence_hub_return.rb` | Sends a write started on the page back to the thread it came from |
+| `app/views/evidence/hub_view.rb` / `needs_you.rb` / `conversation_list.rb` / `conversation_thread.rb` / `conversation_message.rb` / `conversation_chrome.rb` | The page, "Needs you", the list with its attention dots, the open thread and composer, one message (every respond / decline / nudge / cancel / place / edit / withdraw action), and their shared helpers |
+| `app/views/evidence/request_cell_step.rb` | The request modal's first step when it opens without a cell: pick the capability and level |
+| `app/javascript/controllers/conversation_thread_controller.js` / `conversation_search_controller.js` | Opens a thread on its newest message; filters the list by name |
+| `app/javascript/controllers/evidence_hub_controller.js` | Clicks "Give feedback" on arrival when the URL carries `?give=1`, and follows an old `#evidence-item-…` anchor to its thread |
 | `app/views/evidence/valence.rb` | Shared valence surface vocabulary — UI labels + badge styling for `EvidenceLink::VALENCES` (see [*Evidence-link valence*](evidence.md)) |
 | `app/views/assessments/evidence/link_thread_frame.rb` | One linkage's discussion thread (lazy frame in the evidence card's disclosure) — lifecycle rows + comment cards + composer + removed/withdrawn notices (see [*Evidence-linkage discussion threads*](evidence.md)) |
 | `app/queries/assessments/evidence_link_thread_query.rb` | Assembles a linkage thread — comments + stream-read lifecycle entries (linked / revalenced / removed / withdrawn) |
@@ -140,7 +148,7 @@
 | `app/controllers/tenant/ai_models_controller.rb` / `app/views/integrations/ai_model_view.rb` / `app/javascript/controllers/ai_model_preset_controller.js` | The Integrations → AI model card: settings, key, test connection, preset fill |
 | `app/jobs/evidence/suggest_placements_job.rb` | Generates a set: supersedes the pending one, re-validates every cell, stores the rest; `after_generate` is the notification hook |
 | `app/contexts/person_development/async_handlers/placement_suggester.rb` | Async handler on `EvidenceRecorded` / `EvidenceUpdated` that enqueues the job for human-authored feedback, self feedback included, when the tenant switch is on |
-| `app/views/evidence/placement_suggestions.rb` / `placement_suggestion_status.rb` | The hub block under an item (rows, Accept, Dismiss…, Adjust, Suggest again) and the status line its responses write into |
+| `app/views/evidence/placement_suggestions.rb` / `placement_suggestion_status.rb` | The block under an item in a conversation (rows, Accept, Dismiss…, Adjust, Suggest again) and the status line its responses write into |
 | `app/models/evidence/self_feedback_backfill.rb` / `lib/tasks/evidence_suggestions.rake` (`backfill_self`) | The manual backfill for self feedback recorded before it got suggestions: a dry run unless `CONFIRM=1`, paced `PER_MINUTE` |
 | `app/controllers/evidence_placement_suggestions_controller.rb` | Accept / dismiss / suggest again → Turbo Stream replacing the block |
 | `app/models/evidence/placement_suggestion_rows.rb` | Loads the pending rows and their cell context for a set of hub items |

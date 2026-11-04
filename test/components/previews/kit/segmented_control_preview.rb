@@ -37,6 +37,14 @@ class Kit::SegmentedControlPreview < Lookbook::Preview
     render_with_template
   end
 
+  # A dot on a view that holds something needing attention, as the Feedback / Evidence page's grouping does
+  def marked_segment
+    render SegmentedControl.new(label: "Group conversations", size: :sm) do |control|
+      control.segment("By report", selected: true, href: "#by-report")
+      control.segment("By person", href: "#by-person", marked: "needs your attention")
+    end
+  end
+
   # One segment unavailable
   def disabled_segment
     render SegmentedControl.new(label: "Period") do |control|

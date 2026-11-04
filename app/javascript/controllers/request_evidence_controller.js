@@ -15,6 +15,9 @@
 //           data-request-evidence-assignment-id-param="…"
 //           data-request-evidence-capability-stable-id-param="…"
 //           data-request-evidence-level-ordinal-param="3">Request evidence</button>
+//
+// Without a cell the form opens on a step for choosing one; a
+// `requestee-id` param names the person to ask, already picked.
 
 import PersonPickerController from "controllers/person_picker_controller"
 
@@ -23,7 +26,17 @@ export default class extends PersonPickerController {
   static values = {
     candidatesUrl: String,
     fieldName: String,
-    frameId: { type: String, default: "request-candidates" }
+    frameId: { type: String, default: "request-candidates" },
+    preselectId: String,
+    preselectName: String
+  }
+
+  // IN-FRAME: a thread's "Ask Jordan for feedback" arrives with Jordan picked.
+  connect() {
+    super.connect()
+    if (this.preselectIdValue && this.hasIdsTarget) {
+      this.add({ params: { personId: this.preselectIdValue, name: this.preselectNameValue } })
+    }
   }
 
   // PAGE: point the lazy frame at the assignment-scoped modal render endpoint.
@@ -34,6 +47,7 @@ export default class extends PersonPickerController {
     const q = new URLSearchParams()
     if (p.capabilityStableId) q.set("capability_stable_id", p.capabilityStableId)
     if (p.levelOrdinal != null && p.levelOrdinal !== "") q.set("level_ordinal", p.levelOrdinal)
+    if (p.requesteeId) q.set("requestee_id", p.requesteeId)
     this.frameTarget.src = `/assessments/${p.assignmentId}/evidence_request_modal?${q.toString()}`
   }
 

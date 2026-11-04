@@ -7,6 +7,7 @@
 # {EvidencePolicy}.
 class EvidenceItemsController < ApplicationController
   include EvidenceDiffSubmit
+  include EvidenceHubReturn
 
   before_action :require_person
 
@@ -55,14 +56,6 @@ class EvidenceItemsController < ApplicationController
 
   def require_person
     head :forbidden unless current_person
-  end
-
-  # Back to the hub view the modal was opened from: placing one item from
-  # the whole-org view must not drop the manager into the team view.
-  def hub_return_path
-    from = URI.parse(request.referer.to_s) rescue nil
-    place = from&.query && Rack::Utils.parse_query(from.query)["place"]
-    evidence_hub_path(place: place == "org" ? "org" : nil)
   end
 
   def evidence_item

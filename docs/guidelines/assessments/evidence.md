@@ -1,6 +1,6 @@
 # Assessments — Feedback / Evidence
 
-> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, placement suggestions, requesting evidence, or comment notifications.
+> Part of the [assessments.md](../assessments.md) guide set. Read this when: changing evidence recording, linking, valence, linkage threads, the evidence modal, proactive feedback, the Feedback / Evidence page, placement suggestions, requesting evidence, or comment notifications.
 
 ## Evidence-link valence — "what does this say about the behaviour?"
 
@@ -221,31 +221,26 @@ shared by web, MCP and Slack:
   (`data-evidence-modal-allow-unplaced-value`, which also lifts the
   last-row lock). `EvidenceItemsController#create` runs the usual diff; the
   first staged row leads, or the item is recorded unplaced.
-- **"Feedback to place"** on the hub: items about the viewer and, for the
-  manager side, about their reports, each with "Place on a capability" — the
-  edit modal with an empty block, content disabled for a non-author. The
-  reports' list has two views
+- **"Needs you"** at the top of the Feedback / Evidence page lists feedback to
+  place: items about the viewer and, for the manager side, about their
+  reports, each with "Place" — the edit modal with an empty block, content
+  disabled for a non-author. The reports' list has two views
   ([#620](https://github.com/mr-yum/growth-os/issues/620)): **My team**, the
   default — direct reports plus active rating delegations, exactly
   `Assessments::ReviewableAssignments#team` — and **My whole org**, which adds
-  everyone deeper in the subtree (`#skip_level`). A manager of managers would
-  otherwise see every item their reports' reports received ahead of their
-  own. The view is in the URL (`?place=org`; absent is the team), switched by
-  plain links that carry both counts ("My team · 3", "My whole org · 41"),
-  and the toggle renders only when the org view reaches someone the team
-  view doesn't. "May fit elsewhere too" follows the same view. It is a view
-  filter, not authority: `EvidencePolicy#add_link?` still lets an ancestor
-  place anything in their subtree. `Operations::Assessments::FeedbackToPlace`
+  everyone deeper in the subtree (`#skip_level`). The view is in the URL
+  (`?place=org`; absent is the team), switched by plain links that carry both
+  counts ("My team · 3", "My whole org · 41"), and the toggle renders only when
+  the org view reaches someone the team view doesn't. It is a view filter, not
+  authority: `EvidencePolicy#add_link?` still lets an ancestor place anything
+  in their subtree. `Operations::Assessments::FeedbackToPlace`
   (`assessments_feedback_to_place`) builds the list over
-  `Assessments::FeedbackToPlace`, and the hub renders from it. Cards are
-  anchored `evidence-item-<id>` (`EvidenceItem.hub_path`), where the unplaced
-  notification lands. The assessment page shows
+  `Assessments::FeedbackToPlace`, and the page renders from it. The unplaced
+  notification links to `EvidenceItem.hub_path` (`/evidence/items/<id>`),
+  which lands on the thread that holds the item. The assessment page shows
   `Views::Assessments::UnplacedFeedbackNotice` to viewers who see all its
-  evidence, linking to that section. A link that may reach a skip-level
-  viewer — the notice, and a notification to a recorded reporting manager who
-  is no longer the direct one — carries `?place=org` when only the org view
-  lists the item (`Assessments::FeedbackToPlace#scope_for` / `#hub_path`), so
-  the card it points at exists.
+  evidence, linking to `#needs-you`, with `?place=org` when only the org
+  view lists the item (`Assessments::FeedbackToPlace#scope_for` / `#hub_path`).
 
 **From another feedback system** ([#534](https://github.com/mr-yum/growth-os/issues/534)):
 feedback given in a peer such as Chip arrives through the feedback exchange
@@ -253,7 +248,7 @@ feedback given in a peer such as Chip arrives through the feedback exchange
 as its real author, dated by when it was given.
 
 - **"via Chip" says where it came from.** `Views::Evidence::OriginBadge`
-  renders on the evidence card, the hub card and the activity entry for an
+  renders on the evidence card, the conversation's card and the activity entry for an
   item whose `external_reference.imported?` (the importer is the only writer
   of `metadata.given_at`), named through `Reporting::OriginLabels` and linking
   to the original. It replaces the plain reference chip on those items. It is
@@ -265,8 +260,8 @@ as its real author, dated by when it was given.
   every `acting_via: feedback_exchange` event, whatever the record's
   `notified` says (that list stays in `external_reference.metadata` as part
   of the record).
-- **The hub is where it surfaces.** An imported item is unplaced, so it waits
-  under "Feedback to place" for the recipient and the manager side, and the
+- **"Needs you" is where it surfaces.** An imported item is unplaced, so it waits
+  there for the recipient and the manager side, and the
   assessment shows `UnplacedFeedbackNotice`. Placement suggestions
   ([#558](https://github.com/mr-yum/growth-os/pull/558)), once enabled, appear
   on the same cards.
@@ -280,6 +275,74 @@ modal that records through the same Operation, placed at the recipient's
 current level or unplaced; a giver who has never signed in gets a draft link
 that opens the hub's modal prefilled after sign-in. See
 [slack-integration.md](../slack-integration.md).
+
+## The Feedback / Evidence page: conversations
+
+`/evidence` ([#647](https://github.com/mr-yum/growth-os/issues/647)) reads like
+a messaging app: "Needs you" on top, then one conversation per person, the most
+recently active first, beside the open thread. It replaced a single scroll of
+"to place", open, suggested and completed groups that grew without limit.
+
+- **Which conversation a message sits in** (`Evidence::Conversations`):
+  1. a request sits with the other party: whoever asked, or whoever was asked;
+  2. a reply stays with its request;
+  3. feedback the viewer wrote sits with the person it is about, and notes
+     about themselves sit with the viewer ("You");
+  4. any other feedback sits with its author.
+
+  Rule 2 matters: without it, Jordan's answer to Maya's request about Alex
+  lands in Jordan's thread with Alex. When the viewer can't see the request
+  (Alex reading Jordan's answer to Maya), the card reads "answering Maya's
+  request". Every card says whom it is about ("About Alex").
+- **Managers see By report first** (`/evidence/about/<person_id>`), one thread
+  per report with everything about that person; **By person**
+  (`/evidence/with/<person_id>`) holds everything, including their own
+  feedback. People without reports see only By person. `?view=` picks the
+  group on `/evidence`.
+- **What a viewer sees** is the old hub's reach plus placed feedback about them
+  and their reports: requests they made or were sent, what they wrote, what is
+  about them, the answers to their requests, and feedback about their team and
+  org from someone else. A report's own notes appear only while they carry a
+  pending suggestion, so a manager's report thread isn't a copy of the
+  assessment.
+- **Threads read oldest to newest** and open on the newest message
+  (`conversation-thread` controller); a reply sits at the time it was sent and
+  quotes its request, which links back up. A thread shows its latest
+  `EvidenceHubController::THREAD_LIMIT` (40) messages, with a link to the rest.
+- **One attention state.** A dot on a row, and on the By report / By person
+  switch (`Kit::SegmentedControl` `marked:`), means the conversation holds
+  something to answer or place, or a message the viewer hasn't read. "Needs
+  you" lists only things to act on; an unread message marks its thread
+  instead.
+- **Read state is the notifications'** (`Evidence::ConversationReads`), not
+  the event stream's: it belongs to the reader, would slow every later write
+  on the stream, and couldn't be deleted. A message is unread while its
+  notification is. Item notifications carry the item as `record`; request
+  notifications carry only `request_id` in their params, so they match on
+  `noticed_events.params->>'request_id'`. Opening a thread on its own URL
+  marks its notifications read (which clears the bell); the newest thread the
+  page opens by itself on desktop is not marked, and neither is anything
+  while impersonating. Anything that never notified anyone counts as read.
+- **Links land on the thread.** `EvidenceItem.hub_path` and
+  `EvidenceRequest.hub_path` are `/evidence/items/<id>` and
+  `/evidence/requests/<id>`, which redirect to the thread holding the message
+  with its anchor. Links sent before conversations (`/evidence#evidence-item-…`
+  in Slack) are found by the `evidence-hub` controller: the browser never
+  sends the anchor, so the page asks the server when it names a message that
+  isn't on screen. Writes started on the page come back to the thread they
+  came from (`EvidenceHubReturn`).
+- **A phone shows the list or the thread.** `/evidence` is the list; a thread's
+  own URL is the thread, with a link back. "Needs you" is hidden while a
+  thread has the screen.
+- **The composer** offers "Give Jordan feedback" (the evidence modal, on their
+  assignment) and "Ask Jordan for feedback" (the request modal, on the
+  viewer's assignment, with Jordan picked); a report's thread asks "Ask
+  someone about Alex". Requests are cell-scoped, so the request modal opens on
+  a step for choosing the capability and level when no cell is given
+  (`Views::Evidence::RequestCellStep`). There is no free-text reply.
+- **No MCP surface of its own.** The page is a view over data MCP already
+  serves (`assessments_evidence_requests_list`, `assessments_evidence_list`,
+  `assessments_feedback_to_place`); read state is web-only.
 
 ## Suggested placement and valence
 
@@ -486,35 +549,19 @@ Rules, all deliberate:
   chain, a rating delegate and the author. For self feedback the author is
   the recipient, so the person decides on their own words. Plan decision D5 may narrow it to
   the manager side.
-- **On the hub, in place.** Each item the viewer may place shows its pending
-  suggestions — capability · level, the valence badge, "82% confident" as
-  text, the expectation and the quoted rationale when the model wrote one — on "Feedback to place",
-  "Feedback you've provided", the responses you asked for, and a "May fit
-  elsewhere too" group for placed items about you or your reports with more
-  cells to go (a different name from the block's own "Suggested placements"
-  heading, so the page doesn't say it twice). Your own self feedback is
-  listed there too, "From you", and its card under "Feedback you've
-  provided" then leaves out the block and the anchor, which must be unique
-  on the page. A manager sees a report's self feedback there like any other
-  item; a peer never does, as they see no one else's self feedback.
-  The hub runs from what someone is owed to what is optional to history:
-  "Feedback to place" (placement work the viewer owes), "Open requests"
-  (someone is waiting), then "May fit elsewhere too" (optional tidy-ups),
-  then the completed requests and "Feedback you've provided". Above the
-  requests, even five suggestion cards pushed them about 1.5 screens down
-  on a desktop and 4 on a phone. Once self feedback carries suggestions the
-  group can hold dozens of items, so it also shows the five most recent
-  (`HubView::ELSEWHERE_LIMIT`) with "Showing 5 of N" and a plain "Show all
-  (N)" link to `?elsewhere=all`, which works without JavaScript; "Show
-  fewer" goes back. Both links carry only the hub's two view keys, `place`
-  and `elsewhere` (`EvidenceHubController::HUB_VIEW_PARAMS`): any other key
-  would reach the URL helper, where a reserved option such as `script_name`
-  rewrites the link's host, and `give` or `draft` would reopen the modal. An item past the
-  cap waits for "Show all": its card under "Feedback you've provided" still
-  leaves its suggestions out, but keeps the anchor while the item is not
-  listed above. A decided row leaves its card, and the last one leaves the
-  card with its status line until the next load: the card stays put, only
-  what is below it rises by the row's height, and no capped item slides in. Accept and Dismiss answer with a Turbo Stream that replaces
+- **In the conversation, in place.** Each item the viewer may place shows its
+  pending suggestions in the thread that holds it — capability · level, the
+  valence badge, "82% confident" as text, the expectation and the quoted
+  rationale when the model wrote one. That covers feedback to place, feedback
+  the viewer wrote, the answers to their requests, and placed items about
+  them or their reports with more cells to go. An item appears once per
+  thread, so its block's id is unique on the page. Self feedback with
+  suggestions sits in the person's notes to self; a manager sees a report's
+  in that report's thread (`Evidence::Conversations#report_items` lists a
+  report's own notes only while they carry a pending suggestion); a peer
+  never does, as they see no one else's self feedback. A decided row leaves
+  its card, and the last one leaves the card with its status line until the
+  next load. Accept and Dismiss answer with a Turbo Stream that replaces
   `evidence-suggestions-<id>` and writes the outcome into the persistent
   `role="status"` line beside it; nothing reloads. "Adjust in the editor"
   opens the evidence modal with every pending suggestion staged as an
@@ -585,10 +632,10 @@ the response lands pre-linked to it.
   message + due), flashing a per-batch summary ("Sent to N people · Skipped M"). MCP
   parity is preserved — the op is unchanged; multi-send is a web convenience.
 - **Visibility is disclosed to the requestee** before they write a word: the open
-  incoming hub card and the respond modal both state the response will be visible
+  incoming request in its thread and the respond modal both state the response will be visible
   to the assessee, their managers, and workspace admins (the `EvidencePolicy` view
   rules). Skipped when the requestee IS the assessee. Keep the copy in the two
-  surfaces (`HubView#response_visibility_note` / `ModalForm#visibility_note`) in
+  surfaces (`ConversationMessage#respond_actions` / `ModalForm#visibility_note`) in
   step with the policy if view rules ever change.
 
 **Two modal overlays, one `modal` controller.** The assessment screen now hosts both
@@ -621,15 +668,16 @@ An unanswered request doesn't rely on the requestee's memory:
   request resolved before the job ran.
 - **History** — every reminder is appended to the projected
   `reminder_history` (kind, at, by_id) and stamps `last_reminded_at`, both
-  replay-safe. The hub renders the history on every open card and sorts open
-  lists stalest-first (`least_recently_touched`).
+  replay-safe. Every open request in a thread shows its history, and "Needs you"
+  and "Waiting on others" sort stalest first (`least_recently_touched`).
 
 **Resolution notifications carry the response.** The requester's "answered" /
 "declined" notification (in-app + Slack) quotes the response itself — the
 evidence content, or the decline reason — excerpted at
 `ApplicationNotifier::EXCERPT_LIMIT` (280 chars, shared `quoted_excerpt`
-helper) so the Slack DM reads the feedback without a round trip to the hub;
-the deep link still lands on the hub card for the full text.
+helper) so the Slack DM reads the feedback without a round trip to the page;
+the deep link (`EvidenceRequest.hub_path`, `/evidence/requests/<id>`) still
+lands on the request in its thread for the full text.
 
 ### Assessment-cycle feedback reporting
 
@@ -686,23 +734,14 @@ UTC (`Time.zone`) until tenants carry a zone. `Reporting::CycleMonth` owns the
 key format, the label, and the months list that both the select and the MCP
 payload's `available_months` render.
 
-**Hub layout** ([hub_view.rb](../../../app/views/evidence/hub_view.rb)): the
-"Give feedback" entry in the header → "Feedback to place" (see *Proactive
-feedback*) → "May fit elsewhere too" (see *Suggested placement and valence*) → "Open
-requests" (subsections *Asked of you* / *Your requests*, stalest first, with
-history + respond/decline or nudge/cancel actions) → "Completed requests"
-(subsections *Asked of you* / *Your requests* / *Feedback / Evidence you've
-provided* — the viewer's authored evidence, edit/withdraw). Every evidence
-item on the hub (authored cards + embedded responses) carries a **"View in
-assessment"** deep link to its **first active linkage**
-(`?capability=` + `?level_ordinal=` — focuses and scrolls the card) so the
-feedback can be read in situ; the controller renders it only when
-`AssessmentPolicy#show?` admits the viewer, so a peer who provided feedback on
-a colleague's assessment gets no dead link.
+**"View in assessment"**: every placed item in a thread deep-links to its
+**first active linkage** (`?capability=` + `?level_ordinal=`, which focuses and
+scrolls the card), so the feedback can be read in situ. The controller renders
+it only when `AssessmentPolicy#show?` admits the viewer, so a peer who gave
+feedback on a colleague's assessment gets no dead link.
 
-**Decline stays out of the way of the reply.** On an incoming card, "Decline
-request" is a secondary button beside the primary "Provide feedback / evidence"
-button, and it opens its own modal with a labelled, multi-line reason field and
+**Decline stays out of the way of the reply.** On an incoming request, "Decline"
+is a secondary button beside the primary "Respond" button, and it opens its own modal with a labelled, multi-line reason field and
 a note that the requester will see it. An always-open reason box under the
 reply button read as the reply box: a requestee wrote their feedback into it
 ([#476](https://github.com/mr-yum/growth-os/issues/476)). The reply itself is

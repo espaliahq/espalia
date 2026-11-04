@@ -33,6 +33,18 @@ class Components::Kit::SegmentedControlTest < ActiveSupport::TestCase
       assert segments.none? { _1.key?("aria-pressed") }
     end
 
+    should "mark a segment with a dot and say why only to a screen reader" do
+      html = SegmentedControl.new(label: "Group").call do |control|
+        control.segment("By report")
+        control.segment("By person", marked: "needs your attention")
+      end
+      plain, marked = Nokogiri::HTML5.fragment(html).css("button")
+
+      assert_nil plain.at_css("[data-mark]")
+      assert_equal "true", marked.at_css("[data-mark]")["aria-hidden"]
+      assert_equal "By person (needs your attention)", marked.text
+    end
+
     should "share the width between segments only when filled" do
       assert render_control(fill: true).css("button").all? { _1["class"].split.include?("flex-1") }
       assert render_control.css("button").none? { _1["class"].split.include?("flex-1") }

@@ -56,7 +56,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     # Assessee asked about their own assessment — no redundant "regarding".
     assert_equal "Alex asked you for feedback", notifications.first.inbox_title
     assert_match "The request is for behavioural feedback", notifications.first.inbox_body
-    assert_equal "/evidence#evidence-request-#{request_id}", notifications.first.inbox_url
+    assert_equal "/evidence/requests/#{request_id}", notifications.first.inbox_url
   end
 
   should "name the assessee with 'regarding' when a manager asks on a report's behalf" do
@@ -152,7 +152,7 @@ class PersonDevelopment::AsyncHandlers::EvidenceRequestNotifierTest < ActiveSupp
     notification = @peer_user.notifications.reload.max_by(&:created_at)
     assert_equal "Reminder: Alex is still waiting on your feedback", notification.inbox_title
     assert_match "The request is for behavioural feedback", notification.inbox_body
-    assert_equal "/evidence#evidence-request-#{id}", notification.inbox_url
+    assert_equal "/evidence/requests/#{id}", notification.inbox_url
   end
 
   should "name the due date on a due_soon reminder" do

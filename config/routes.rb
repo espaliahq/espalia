@@ -162,9 +162,14 @@ Rails.application.routes.draw do
     end
   end
 
-  # Evidence-request hub — incoming (respond/decline) and outgoing (cancel),
-  # plus edit/withdraw of evidence you've authored.
+  # The Feedback / Evidence page: what needs you, then a conversation per
+  # person (`with`) or, for a manager, per report (`about`). Notification
+  # links name an item or a request, and land on the thread that holds it.
   get "evidence", to: "evidence_hub#show", as: :evidence_hub
+  get "evidence/with/:person_id", to: "evidence_hub#show", defaults: { group: "person" }, as: :evidence_conversation
+  get "evidence/about/:person_id", to: "evidence_hub#show", defaults: { group: "report" }, as: :evidence_report_conversation
+  get "evidence/items/:id", to: "evidence_hub#item", as: :evidence_hub_item
+  get "evidence/requests/:id", to: "evidence_hub#evidence_request", as: :evidence_hub_request
   # A Slack feedback draft's link: sign in, then the hub with the modal filled.
   get "evidence/drafts/:token", to: "evidence/drafts#show", as: :evidence_draft
   # Request-creation modal (assignment-scoped, read-only renders): the form

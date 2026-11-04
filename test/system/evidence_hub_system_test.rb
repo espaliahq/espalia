@@ -5,7 +5,11 @@ require "application_system_test_case"
 class EvidenceHubSystemTest < ApplicationSystemTestCase
   include ContrastHelpers
 
+  DESKTOP_SIZE = [ 1400, 1400 ].freeze
+  MOBILE_SIZE = [ 375, 812 ].freeze
+
   setup do
+    page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     @tenant = create(:tenant)
     @report_user = create(:user, password: "password123")
     @peer_user = create(:user, password: "password123")
@@ -119,7 +123,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     make_request!
     sign_in_as(@report_user)
     visit evidence_hub_path
-    assert_text "To Peer"
+    assert_text "You asked Peer for feedback"
 
     auto_confirm { click_link "Cancel request" }
     assert_text "Request cancelled"
@@ -137,14 +141,14 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
 
     sign_in_as(@report_user)
     visit evidence_hub_path
-    assert_text "To Peer"
+    assert_text "You asked Peer for feedback"
     within "[data-testid='request-history']" do
       assert_text(/Requested .* ago/)
       assert_text(/Reminder sent .* ago/)
     end
   end
 
-  should "group requests into open and completed, incoming and outgoing" do
+  should "keep both requests in one thread, each answer after its ask" do
     make_request!
     declined = make_request!
     ActsAsTenant.with_tenant(@tenant) do
@@ -155,12 +159,10 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
 
     sign_in_as(@report_user)
     visit evidence_hub_path
-    assert_text "Open requests"
-    assert_text "Completed requests"
-    # One "Your requests" subsection under each group: the pending outgoing
-    # card sits under Open, the declined one under Completed with its badge.
-    assert_selector "h3", text: /Your requests/i, count: 2
-    assert_text "Declined"
+    assert_selector "[data-testid='conversation-row']", count: 1
+    kinds = all("[data-testid='conversation-thread'] [data-testid='conversation-message']").map { |m| m["data-kind"] }
+    assert_equal %w[request request declined], kinds
+    assert_selector "[data-kind='declined'] [data-testid='reply-quote']", text: /You asked on/
   end
 
   should "let the requestee decline with a reason the requester can read" do
@@ -173,11 +175,11 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     within("##{decline_modal_id(request_id)}") { assert_text "Rep will see your reason." }
     js_fill_in "Reason for declining (optional)", with: "Haven't worked with Rep this quarter"
     click_selector_with_js_fallback("##{decline_modal_id(request_id)} input[type='submit']",
-                                    expect_text: "No one is waiting on you.")
+                                    expect_text: "Request declined.")
 
     sign_in_as(@report_user)
     visit evidence_hub_path
-    assert_text "Declined: Haven't worked with Rep this quarter"
+    within("[data-kind='declined']") { assert_text "Haven't worked with Rep this quarter" }
   end
 
   should "keep a typed decline reason readable in dark mode" do
@@ -205,8 +207,10 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     end
     sign_in_as(@peer_user)
     visit evidence_hub_path
-    assert_text "Feedback, not yet placed on a capability"
-    assert_text "SWE · on Rep's assessment"
+    within("[data-kind='feedback'][data-mine='true']") do
+      assert_text "Not placed yet"
+      assert_text "About Rep"
+    end
     assert_no_text "Lnil"
   end
 
@@ -236,13 +240,101 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
 
     sign_in_as(@report_user)
     visit evidence_hub_path
-    assert_text "To Peer"
+    assert_text "You asked Peer for feedback"
     click_button_with_js_fallback "Send a nudge", expect_text: "Nudge sent to Peer"
     within "[data-testid='request-history']" do
-      assert_text(/Nudged by Rep .* ago/)
+      assert_text(/Nudged by you .* ago/)
     end
     ActsAsTenant.with_tenant(@tenant) do
       assert_equal "manual", EvidenceRequest.last.reminder_history.sole["kind"]
+    end
+  end
+
+  context "conversations" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @lead = create(:person, tenant: @tenant, name: "Lena Lead")
+        handler = PersonDevelopment::CommandHandler.new
+        (1..12).each do |n|
+          travel_to(n.hours.ago) do
+            handler.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+              capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", valence: "demonstrated",
+              evidence_type: "peer_feedback", content: "Pairing note #{13 - n}.", author_id: @peer.id)
+          end
+        end
+        travel_to(2.days.ago) do
+          handler.record_evidence(@report.id, @framework_id, SecureRandom.uuid_v7,
+            capability_stable_id: @cap.stable_id, level_ordinal: 2, source: "peer", valence: "demonstrated",
+            evidence_type: "peer_feedback", content: "From Lena.", author_id: @lead.id)
+        end
+      end
+    end
+
+    should "open the newest thread on its newest message, on desktop" do
+      sign_in_as(@report_user)
+      visit evidence_hub_path
+      assert_selector "[data-testid='conversation-row']", count: 2
+      assert_equal [ @peer.id, @lead.id ], all("[data-testid='conversation-row']").map { |r| r["data-person-id"] }
+      wait_for_stimulus "conversation-thread"
+      at_bottom = page.evaluate_script(<<~JS)
+        (() => {
+          const body = document.querySelector("[data-conversation-thread-target='body']");
+          return body.scrollHeight > body.clientHeight && body.scrollTop + body.clientHeight >= body.scrollHeight - 2;
+        })()
+      JS
+      assert at_bottom, "the thread should open scrolled to its newest message"
+    end
+
+    should "narrow the list to the names typed" do
+      sign_in_as(@report_user)
+      visit evidence_hub_path
+      wait_for_stimulus "conversation-search"
+      js_fill_in "Search people", with: "len"
+      assert_selector "[data-testid='conversation-row']", count: 1
+      assert_selector "[data-testid='conversation-row'][data-person-id='#{@lead.id}']"
+      js_fill_in "Search people", with: "zzz"
+      assert_text "No one matches that name."
+    end
+
+    should "show the list, then the thread on its own screen, on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@report_user)
+      visit evidence_hub_path
+      assert_selector "[data-testid='conversation-list']", visible: true
+      assert_no_selector "[data-testid='conversation-thread']", visible: true
+
+      click_selector_with_js_fallback("[data-testid='conversation-row'][data-person-id='#{@lead.id}']",
+                                      expect_selector: "[data-testid='conversation-thread'] h2")
+      assert_selector "[data-testid='conversation-thread'] h2", text: "Lena Lead", visible: true
+      assert_no_selector "[data-testid='conversation-list']", visible: true
+      assert_no_selector "#needs-you", visible: true
+      assert_no_sideways_overflow
+
+      click_link_with_js_fallback "Conversations", expect_text: "What needs you"
+      assert_selector "[data-testid='conversation-list']", visible: true
+    end
+
+    should "keep a long thread's header on screen as it scrolls, on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      sign_in_as(@report_user)
+      visit evidence_conversation_path(@peer.id)
+      assert_selector "[data-testid='conversation-header']", text: "Peer", visible: true
+      assert page.evaluate_script("document.documentElement.scrollHeight > window.innerHeight * 2"), "the thread should be long"
+
+      page.execute_script("window.scrollTo(0, document.documentElement.scrollHeight / 2)")
+      header_top = page.evaluate_script(
+        "document.querySelector(\"[data-testid='conversation-header']\").getBoundingClientRect().top"
+      )
+      assert_operator header_top, :>=, 0, "the header, with its way back, should stay on screen"
+    end
+
+    should "follow an old notification anchor to the thread that holds the item" do
+      item_id = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find_by!(content: "From Lena.").id }
+      sign_in_as(@report_user)
+      visit "#{evidence_hub_path}##{EvidenceItem.dom_id(item_id)}"
+      assert_selector "[data-testid='conversation-thread'] h2", text: "Lena Lead"
+      assert_current_path evidence_conversation_path(@lead.id)
+      assert_equal "##{EvidenceItem.dom_id(item_id)}", page.evaluate_script("window.location.hash")
     end
   end
 end

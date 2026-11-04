@@ -103,13 +103,13 @@ class EvidenceRequest < ApplicationRecord
     "evidence-request-#{id}"
   end
 
-  # Path to a request's card on the evidence hub (the notification deep-link
-  # target), falling back to the hub itself when no id is given.
+  # Where a notification about a request lands: the hub finds the
+  # conversation that holds it. Falls back to the hub when no id is given.
   #
   # @param id [String, nil]
   # @return [String]
   def self.hub_path(id)
-    id.present? ? "/evidence##{dom_id(id)}" : "/evidence"
+    id.present? ? "/evidence/requests/#{id}" : "/evidence"
   end
 
   # @return [String]

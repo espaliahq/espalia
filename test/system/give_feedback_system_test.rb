@@ -67,7 +67,7 @@ class GiveFeedbackSystemTest < ApplicationSystemTestCase
   should "let a peer give unplaced feedback from the hub, on desktop" do
     sign_in_as(@peer_user)
     give_feedback_from_hub
-    assert_text "Feedback, not yet placed on a capability"
+    within("[data-testid='conversation-thread']") { assert_text "Not placed yet" }
 
     item = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.unplaced.for_person(@recipient.id).first }
     assert_not_nil item
@@ -79,7 +79,7 @@ class GiveFeedbackSystemTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
     sign_in_as(@peer_user)
     give_feedback_from_hub
-    assert_text "Feedback, not yet placed on a capability"
+    assert_selector "[data-testid='conversation-row']", text: /You: Ran the incident call calmly/, visible: true
   end
 
   should "tell the recipient on the assessment and let them place it from the hub" do
@@ -91,10 +91,11 @@ class GiveFeedbackSystemTest < ApplicationSystemTestCase
 
     visit assessment_path(@assignment)
     assert_selector "[data-testid='unplaced-feedback-notice']", text: "1 piece of feedback about you is waiting"
-    click_link_with_js_fallback("Place it →", expect_text: "Feedback to place")
-    assert_text "From Jordan Lee"
+    click_link_with_js_fallback("Place it →", expect_text: "Needs you")
+    assert_text "Place Jordan's feedback about you"
 
-    click_button_with_js_fallback("Place on a capability", expect_text: "Edit feedback / evidence")
+    click_selector_with_js_fallback("#needs-you button[data-evidence-modal-mode-param='edit']",
+                                    expect_text: "Edit feedback / evidence")
     assert_no_selector "[data-link-row]"
     # The picker's selects carry aria-labels, which Capybara's `select` does
     # not match here; address them directly.
@@ -104,7 +105,7 @@ class GiveFeedbackSystemTest < ApplicationSystemTestCase
     assert_selector "[data-link-row]", count: 1
     find("[data-link-row] select[aria-label='Evidence valence']").select("Demonstrates")
     click_button_with_js_fallback("Save changes", expect_text: "Feedback updated.")
-    assert_no_selector "section#feedback-to-place"
+    assert_no_selector "#needs-you [data-testid='needs-you-place']"
 
     visit assessment_path(@assignment, capability: @cap.stable_id, level_ordinal: 2)
     assert_no_selector "[data-testid='unplaced-feedback-notice']"

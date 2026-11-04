@@ -21,8 +21,9 @@ class Views::Evidence::RequestForm < Views::Base
   # @param suggestions [Array<Assessments::RequestCandidates::Candidate>]
   # @param submit_url [String] POST target (evidence_requests_path)
   # @param candidates_url [String] GET base for the search frame (carries assignment + cell params)
+  # @param preselected [Person, nil] already picked when the form opens
   def initialize(assignment_id:, capability_stable_id:, level_ordinal:, context_block:,
-                 suggestions:, submit_url:, candidates_url:)
+                 suggestions:, submit_url:, candidates_url:, preselected: nil)
     @assignment_id = assignment_id
     @capability_stable_id = capability_stable_id
     @level_ordinal = level_ordinal
@@ -30,11 +31,14 @@ class Views::Evidence::RequestForm < Views::Base
     @suggestions = suggestions
     @submit_url = submit_url
     @candidates_url = candidates_url
+    @preselected = preselected
   end
 
   def view_template
     turbo_frame_tag("evidence-request-modal") do
-      div(class: "p-5", data: { controller: "request-evidence", request_evidence_candidates_url_value: @candidates_url }) do
+      div(class: "p-5", data: { controller: "request-evidence", request_evidence_candidates_url_value: @candidates_url,
+                                request_evidence_preselect_id_value: @preselected&.id,
+                                request_evidence_preselect_name_value: @preselected&.name }.compact) do
         header
         context_card
         # `submit-guard` blocks a re-entrant submit while one is in flight

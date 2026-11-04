@@ -1,101 +1,52 @@
 # frozen_string_literal: true
 
-# The evidence-request hub: open requests (incoming — respond / decline;
-# outgoing — nudge / cancel, stalest first, each with its reminder history),
-# completed requests, and evidence you've authored (edit / withdraw). The
-# surface notifications deep-link to.
+# The Feedback / Evidence page: "Needs you" on top, then the
+# conversations beside the open thread. On a phone the list and the thread
+# are separate screens: the page shows the list, a thread's own URL shows
+# the thread.
 class Views::Evidence::HubView < Views::Base
-  include Phlex::Rails::Helpers::FormWith
-  include Phlex::Rails::Helpers::ButtonTo
-  include Phlex::Rails::Helpers::TimeAgoInWords
-  include Views::Evidence::Valence
+  include Views::Evidence::ConversationChrome
 
-  # Once self feedback carries suggestions, "May fit elsewhere too" can hold
-  # dozens of items, so it shows the most recent few unless the URL asks for
-  # all (?elsewhere=all).
-  ELSEWHERE_LIMIT = 5
-
-  STATUS_VARIANT = {
-    "pending" => :warning, "responded" => :success, "declined" => :default, "cancelled" => :default
-  }.freeze
-
-  # @param open_incoming [Array<EvidenceRequest>] pending requests addressed to the viewer, stalest first
-  # @param open_outgoing [Array<EvidenceRequest>] pending requests the viewer made, stalest first
-  # @param completed_incoming [Array<EvidenceRequest>] resolved requests addressed to the viewer
-  # @param completed_outgoing [Array<EvidenceRequest>] resolved requests the viewer made
-  # @param authored [Array<EvidenceItem>] active evidence the viewer authored
-  # @param cell_details [Hash{String=>Hash}] request_id => { name:, role:, level_title:, expectation:, illustrations: }
-  # @param authored_details [Hash{String=>Hash}] evidence_id => { assessee_name:, capability_name:, role:, level_title:, assignment_id: }
-  # @param in_situ_paths [Hash{String=>String}] evidence_id => assessment deep link
-  #   to the item's first linkage (absent when the viewer may not see it)
-  # @param with_suggestions [Array<EvidenceItem>] placed items about the viewer
-  #   or their reports with pending placement suggestions. The viewer's own
-  #   self feedback may also be listed under "Feedback you've provided", whose
-  #   card then leaves the suggestions to this list. At most the controller's
-  #   limit unless `elsewhere_all`.
-  # @param elsewhere_ids [Set<String>] every item "May fit elsewhere too" has,
-  #   shown or not; its count goes on "Show all"
-  # @param elsewhere_all [Boolean] whether the URL asked for every item
-  # @param hub_params [Hash] the hub's query params, for links that change one
-  #   part of the view and keep the rest
-  # @param suggestions [Hash{String=>Hash}] item id => { suggestions:, cells: }
-  #   ({Evidence::PlacementSuggestionRows}), only for items the viewer may place
-  # @param decidable_ids [Set<String>] items whose suggestions the viewer may decide
-  # @param can_regenerate [Boolean] whether "Suggest again" can do anything here
-  # @param place_scope [String] the "Feedback to place" view: "team" or "org"
-  # @param place_counts [Hash, nil] `{ team:, org: }` item counts for the
-  #   toggle, nil when the org view reaches no one beyond the team
-  def initialize(open_incoming:, open_outgoing:, to_place_about_me: [], to_place_for_team: [], open_give_step: false, draft: nil,
-                 place_scope: "team", place_counts: nil,
-                 completed_incoming: [], completed_outgoing: [],
-                 authored: [], cell_details: {}, authored_details: {}, responses: {},
-                 in_situ_paths: {}, user: nil, current_tenant: nil, tenants: [],
-                 with_suggestions: [], suggestions: {}, decidable_ids: Set.new, can_regenerate: false,
-                 elsewhere_ids: nil, elsewhere_all: false, hub_params: {}, viewer_person_id: nil)
-    @open_incoming = open_incoming
-    @open_outgoing = open_outgoing
-    @completed_incoming = completed_incoming
-    @completed_outgoing = completed_outgoing
-    @authored = authored
-    @to_place_about_me = to_place_about_me
-    @to_place_for_team = to_place_for_team
-    @place_scope = place_scope
-    @place_counts = place_counts
+  # @param conversations [Evidence::Conversations]
+  # @param reads [Evidence::ConversationReads]
+  # @param selected [Evidence::Conversations::Conversation, nil] the open thread
+  # @param partner [Person, nil] whom the open thread is with or about
+  # @param explicit [Boolean] whether the URL named the thread
+  # @param new_keys [Set<String>] read keys that were unread when it opened
+  # @param thread [Hash] see EvidenceHubController#thread_details
+  # @param needs [Hash] see EvidenceHubController#needs_you
+  # @param open_give_step [Boolean] open "Give feedback" on arrival (`?give=1`, a Slack draft)
+  # @param draft [FeedbackDraft, nil]
+  def initialize(conversations:, reads:, selected:, partner:, explicit:, new_keys:, thread:, needs:,
+                 open_give_step: false, draft: nil, user: nil, current_tenant: nil, tenants: [])
+    @conversations = conversations
+    @reads = reads
+    @selected = selected
+    @partner = partner
+    @explicit = explicit
+    @new_keys = new_keys
+    @thread = thread
+    @needs = needs
     @open_give_step = open_give_step
     @draft = draft
-    @cell_details = cell_details
-    @authored_details = authored_details
-    @responses = responses
-    @in_situ_paths = in_situ_paths
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
-    @with_suggestions = with_suggestions
-    @with_suggestion_ids = elsewhere_ids || with_suggestions.to_set(&:id)
-    @listed_elsewhere_ids = with_suggestions.to_set(&:id)
-    @elsewhere_all = elsewhere_all
-    @hub_params = hub_params
-    @suggestions = suggestions
-    @decidable_ids = decidable_ids
-    @can_regenerate = can_regenerate
-    @viewer_person_id = viewer_person_id
+    @viewer_id = conversations.viewer.id
   end
 
-  # Owed before waiting before optional before history: placement work the
-  # viewer owes, requests someone is waiting on, then suggestions, then what
-  # is done.
   def view_template
     render Components::Shell::PageLayout.new(user: @user, current_tenant: @current_tenant, tenants: @tenants) do
-      div(data: { controller: "modal evidence-modal evidence-hub", evidence_hub_auto_open_value: @open_give_step.to_s,
+      div(data: { controller: "modal evidence-modal request-evidence evidence-hub",
+                  evidence_hub_auto_open_value: @open_give_step.to_s,
                   action: "keydown.esc@window->modal#escape" }) do
-        div(class: "max-w-3xl mx-auto space-y-10") do
+        div(class: "max-w-6xl mx-auto space-y-6") do
           header
-          to_place_group
-          open_requests_group
-          suggested_placements_group
-          completed_requests_group
+          render Views::Evidence::NeedsYou.new(needs: @needs, viewer_id: @viewer_id, hidden_on_phone: @explicit)
+          conversations
         end
         render Views::Evidence::ModalShell.new
+        render Views::Evidence::RequestModalShell.new
       end
     end
   end
@@ -103,16 +54,13 @@ class Views::Evidence::HubView < Views::Base
   private
 
   def header
-    div(class: "flex flex-wrap items-start justify-between gap-3") do
+    div(class: "flex flex-wrap items-start justify-between gap-3 #{@explicit ? "max-lg:hidden" : ""}") do
       div(class: "flex-1 min-w-64") do
         h1(class: "text-2xl font-bold text-default") { "Feedback / Evidence" }
-        p(class: "mt-1 text-sm text-muted") do
-          "Feedback waiting to be placed, requests addressed to you, ones you've sent, and the feedback you've given."
-        end
+        p(class: "mt-1 text-sm text-muted") { "What needs you, then every conversation, newest first." }
       end
-      # Volunteer feedback to anyone with an assessment: the modal opens on
-      # the "who is it for?" step. The hub controller clicks this same button
-      # when the page arrives with ?give=1, so the two paths can't drift.
+      # The hub controller clicks this same button when the page arrives with
+      # ?give=1 or a Slack draft, so the two paths can't drift.
       render Components::Kit::Button.new(tone: :brand, touch: true,
                                          data: give_trigger_data.merge(evidence_hub_target: "autoTrigger")) do
         "Give feedback"
@@ -133,531 +81,25 @@ class Views::Evidence::HubView < Views::Base
     end
   end
 
-  # ── Feedback to place ──
+  def place = ("org" if @needs[:place_scope] == "org")
 
-  # Items given without a capability in mind: about the viewer, and about the
-  # people they manage — their team, or their whole org. Either may place
-  # them (EvidencePolicy#add_link?); the edit modal opens with an empty
-  # "Applies to" block.
-  def to_place_group
-    return if @to_place_about_me.empty? && @to_place_for_team.empty? && !place_toggle?
-
-    section(id: "feedback-to-place", class: "scroll-mt-20") do
-      group_heading("Feedback to place")
-      p(class: "-mt-2 mb-4 text-sm text-muted") do
-        "Given without a capability in mind. Until it is placed, it shows on no card and counts nowhere."
-      end
-      div(class: "space-y-8") do
-        unless @to_place_about_me.empty?
-          subsection("About you") do
-            div(class: "space-y-4") { @to_place_about_me.each { |item| to_place_card(item, about_viewer: true) } }
-          end
-        end
-        reports_to_place if @to_place_for_team.any? || place_toggle?
-      end
-    end
-  end
-
-  def reports_to_place
-    subsection("About your reports", aside: (method(:place_toggle) if place_toggle?), testid: "reports-to-place") do
-      if @to_place_for_team.empty?
-        empty("Nothing about your team is waiting to be placed.")
+  def conversations
+    div(class: "lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:h-[min(80vh,52rem)] " \
+               "rounded-2xl border border-default bg-default shadow-raised overflow-clip") do
+      render Views::Evidence::ConversationList.new(
+        conversations: @conversations, reads: @reads, viewer_id: @viewer_id,
+        selected_id: @partner&.id, explicit: @explicit, place: place
+      )
+      if @partner
+        render Views::Evidence::ConversationThread.new(
+          partner: @partner, viewer_id: @viewer_id, group: @conversations.group,
+          details: @thread, new_keys: @new_keys, explicit: @explicit, place: place
+        )
       else
-        div(class: "space-y-4") { @to_place_for_team.each { |item| to_place_card(item, about_viewer: false) } }
-      end
-    end
-  end
-
-  def place_toggle?
-    @place_counts.present? && @place_counts[:org].positive?
-  end
-
-  # Plain links, so the view is in the URL (?place=org) and works without
-  # JavaScript; the counts say there is more without switching.
-  def place_toggle
-    nav(aria: { label: "Whose feedback to place" }) do
-      render Components::Kit::SegmentedControl.new(touch: true) do |control|
-        place_segment(control, "My team", @place_counts[:team], place: nil)
-        place_segment(control, "My whole org", @place_counts[:org], place: "org")
-      end
-    end
-  end
-
-  def place_segment(control, label, count, place:)
-    control.segment("#{label} · #{count}",
-                    href: evidence_hub_path(**@hub_params.except(:place), place: place, anchor: "feedback-to-place"),
-                    selected: (@place_scope == "org") == (place == "org"))
-  end
-
-  def to_place_card(item, about_viewer:)
-    detail = @cell_details.fetch(item.id, {})
-    card(dom_id: EvidenceItem.dom_id(item.id)) do
-      p(class: "text-xs text-muted") { to_place_scope_label(item, detail, about_viewer: about_viewer) }
-      p(class: "text-xs font-semibold uppercase tracking-wide text-muted") { authored_type_label(item) }
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
-      external_link(item)
-      suggestion_area(item, offer_when_empty: true)
-      div(class: "pt-2 border-t border-subtle") do
-        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") do
-          "Place on a capability"
+        div(class: "max-lg:hidden grid place-items-center p-8") do
+          render Components::Kit::EmptyState.new(title: "Conversations appear here once you give, ask for or receive feedback.")
         end
       end
     end
-  end
-
-  # ── Suggested placements (placed items with more places to go) ──
-
-  # Feedback already placed somewhere, about the viewer or their reports,
-  # where the model sees more cells it speaks to. Items the viewer gave
-  # someone else are left to "Feedback you've provided", which carries the
-  # same block; their own self feedback is about them, so it is listed here.
-  def suggested_placements_group
-    return if @with_suggestions.empty?
-
-    section(id: "suggested-placements", class: "scroll-mt-20") do
-      group_heading("May fit elsewhere too")
-      p(class: "-mt-2 mb-4 text-sm text-muted") do
-        "Feedback already placed, which may also speak to other capabilities."
-      end
-      div(class: "space-y-4") do
-        @with_suggestions.each do |item|
-          detail = @cell_details.fetch(item.id, {})
-          card(dom_id: EvidenceItem.dom_id(item.id)) do
-            p(class: "text-xs text-muted") do
-              to_place_scope_label(item, detail, about_viewer: item.person_id == @viewer_person_id)
-            end
-            render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
-            suggestion_area(item)
-          end
-        end
-      end
-      elsewhere_toggle
-    end
-  end
-
-  # A plain link, so it works without JavaScript and the view stays in the URL.
-  def elsewhere_toggle
-    total = @with_suggestion_ids.size
-    return if total <= ELSEWHERE_LIMIT
-
-    showing_all = @elsewhere_all
-    params = showing_all ? @hub_params.except(:elsewhere) : @hub_params.merge(elsewhere: "all")
-    div(class: "mt-4 flex flex-wrap items-center gap-x-3 text-sm text-muted") do
-      span { "Showing #{@with_suggestions.size} of #{total}" } unless showing_all
-      a(href: evidence_hub_path(**params, anchor: "suggested-placements"), data: { testid: "elsewhere-toggle" },
-        class: "inline-flex items-center min-h-11 font-medium text-brand hover:underline") do
-        showing_all ? "Show fewer" : "Show all (#{total})"
-      end
-    end
-  end
-
-  # The item's suggestion block and the status line its decisions report to.
-  # Nothing for an item the viewer may not place.
-  def suggestion_area(item, offer_when_empty: false)
-    return unless @decidable_ids.include?(item.id)
-
-    render Views::Evidence::PlacementSuggestions.new(
-      item: item, **@suggestions.fetch(item.id, Evidence::PlacementSuggestionRows::NONE),
-      can_regenerate: @can_regenerate, offer_when_empty: offer_when_empty
-    )
-    div(id: Views::Evidence::PlacementSuggestions.status_id_for(item.id), role: "status", aria: { live: "polite" })
-  end
-
-  # "From Jordan · 3 Oct 2026 · on Alex's assessment" — the assessment named
-  # only for a report's item; the "About you" subsection already says whose.
-  def to_place_scope_label(item, detail, about_viewer:)
-    whose = ("on #{detail[:assessee_name]}'s assessment" if detail[:assessee_name] && !about_viewer)
-    from = item.author_id == @viewer_person_id ? "you" : item.author&.name || "a colleague"
-    [ "From #{from}", item.recorded_at.strftime("%-d %b %Y"), whose ].compact.join(" · ")
-  end
-
-  # ── Open / completed request groups ──
-
-  def open_requests_group
-    section do
-      group_heading("Open requests")
-      div(class: "space-y-8") do
-        subsection("Asked of you") do
-          if @open_incoming.empty?
-            empty("No one is waiting on you.")
-          else
-            div(class: "space-y-4") { @open_incoming.each { |r| incoming_card(r) } }
-          end
-        end
-        subsection("Your requests") do
-          if @open_outgoing.empty?
-            empty("You have no open requests.")
-          else
-            div(class: "space-y-4") { @open_outgoing.each { |r| outgoing_card(r) } }
-          end
-        end
-      end
-    end
-  end
-
-  def completed_requests_group
-    return if @completed_incoming.empty? && @completed_outgoing.empty? && @authored.empty?
-
-    section do
-      group_heading("Completed requests")
-      div(class: "space-y-8") do
-        unless @completed_incoming.empty?
-          subsection("Asked of you") do
-            div(class: "space-y-4") { @completed_incoming.each { |r| incoming_card(r) } }
-          end
-        end
-        unless @completed_outgoing.empty?
-          subsection("Your requests") do
-            div(class: "space-y-4") { @completed_outgoing.each { |r| outgoing_card(r) } }
-          end
-        end
-        unless @authored.empty?
-          subsection("Feedback / Evidence you've provided") do
-            div(class: "space-y-4") { @authored.each { |item| authored_card(item) } }
-          end
-        end
-      end
-    end
-  end
-
-  def incoming_card(request)
-    card(dom_id: request.dom_id) do
-      div(class: "flex items-center justify-between gap-3") do
-        span(class: "text-sm text-default") do
-          "#{request.requester&.name || "A colleague"} asked you for feedback#{regarding_suffix(request)}"
-        end
-        status_badge(request) unless request.pending?
-      end
-      request_cell_line(request)
-      message_line(request)
-      history_timeline(request)
-      # No behavioural-expectation block here — the "Provide feedback / evidence"
-      # modal carries the full cell context when you actually respond.
-      if request.pending?
-        response_visibility_note(request)
-        respond_actions(request)
-      end
-    end
-  end
-
-  # Before the requestee writes anything, be explicit about who will read the
-  # response: the assessee, their manager chain, and workspace admins (the
-  # EvidencePolicy view rules). Skipped when the requestee IS the assessee.
-  def response_visibility_note(request)
-    return if request.requestee_person_id == request.person_id
-
-    name = request.assessee&.name || "the assessee"
-    p(class: "text-xs text-muted", data: { testid: "visibility-note" }) do
-      "Your response will be visible to #{name}, their managers, and workspace admins."
-    end
-  end
-
-  def outgoing_card(request)
-    card(dom_id: request.dom_id) do
-      div(class: "flex items-center justify-between gap-3") do
-        span(class: "text-sm text-default") { "To #{request.requestee&.name || "a colleague"}#{regarding_suffix(request)}" }
-        status_badge(request)
-      end
-      request_cell_line(request)
-      message_line(request)
-      history_timeline(request)
-      if request.pending?
-        outgoing_open_actions(request)
-      elsif request.status == "responded"
-        response_card(request)
-      elsif request.status == "declined" && request.decline_reason.present?
-        p(class: "text-sm text-muted") { "Declined: #{Prose.to_plain(request.decline_reason)}" }
-      end
-    end
-  end
-
-  def status_badge(request)
-    render Components::Kit::Badge.new(request.status.capitalize, variant: STATUS_VARIANT.fetch(request.status, :default))
-  end
-
-  def outgoing_open_actions(request)
-    div(class: "pt-2 border-t border-subtle flex items-center gap-4") do
-      if request.can_nudge?
-        button_to("Send a nudge", nudge_evidence_request_path(request),
-          class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline cursor-pointer")
-      end
-      a(href: evidence_request_path(request), data: { turbo_method: :delete, turbo_confirm: "Cancel this request?" },
-        class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline") { "Cancel request" }
-    end
-  end
-
-  # The evidence the requestee provided, embedded so the requester sees the full
-  # response — content, link, and the cells it applies to — and can edit its
-  # linkage (content stays read-only; they're not the author).
-  def response_card(request)
-    response = @responses.fetch(request.id, nil)
-    return if response.nil?
-
-    item = response[:item]
-    render Components::Kit::Card.new(variant: :inset, density: :compact) do |card|
-      card.body { response_card_body(item, response[:links]) }
-    end
-  end
-
-  def response_card_body(item, links)
-    div(class: "space-y-2") do
-      div(class: "flex items-center justify-between gap-2") do
-        span(class: "text-xs font-semibold uppercase tracking-wide text-muted") { "Response from #{item.author&.name || "a colleague"}" }
-        span(class: "text-xs text-muted") { response_type_label(item) }
-      end
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
-      external_link(item)
-      applies_to_line(links)
-      suggestion_area(item)
-      div(class: "flex items-center gap-4") do
-        button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") { "Edit links" }
-        view_in_assessment_link(item)
-      end
-    end
-  end
-
-  def response_type_label(item)
-    item.evidence_type == "other" ? item.custom_type_label.to_s : item.evidence_type.humanize
-  end
-
-  def applies_to_line(links)
-    return if links.blank?
-
-    entries = links.filter_map do |l|
-      label = [ l[:capability_name], l[:level_code] ].compact.join(" ")
-      [ label, l[:valence] ] if label.present?
-    end
-    return if entries.empty?
-
-    div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted") do
-      span { "Applies to:" }
-      entries.each do |label, valence|
-        span(class: "inline-flex items-center gap-1") do
-          span { label }
-          valence_badge(valence)
-        end
-      end
-    end
-  end
-
-  # ── Authored evidence (edit / withdraw) — a Completed subsection ──
-
-  # Anchored like the to-place cards: an item the viewer gave unplaced is
-  # listed only here, and its notification link lands on it. Self feedback
-  # with suggestions keeps them under "May fit elsewhere too", even past its
-  # cap; the anchor moves there only while the card is listed, since ids
-  # must be unique on the page.
-  def authored_card(item)
-    detail = @authored_details.fetch(item.id, {})
-    suggested_above = @with_suggestion_ids.include?(item.id)
-    card(dom_id: (EvidenceItem.dom_id(item.id) unless @listed_elsewhere_ids.include?(item.id))) do
-      div do
-        p(class: "text-sm font-medium text-default") { authored_cell_label(item, detail) }
-        p(class: "text-xs text-muted") { authored_scope_label(item, detail) }
-      end
-      p(class: "text-xs font-semibold uppercase tracking-wide text-muted") { authored_type_label(item) }
-      render Components::Kit::Prose.new(item.content, class: "text-sm text-muted")
-      external_link(item)
-      suggestion_area(item, offer_when_empty: item.capability_stable_id.nil?) unless suggested_above
-      authored_actions(item, detail)
-    end
-  end
-
-  # An item recorded without a cell has no capability to name; say so
-  # rather than falling back to a placeholder that reads like one.
-  def authored_cell_label(item, detail)
-    return "Feedback, not yet placed on a capability" if item.capability_stable_id.nil?
-
-    detail[:name] || "Capability"
-  end
-
-  def authored_scope_label(item, detail)
-    whose = item.person_id == item.author_id ? "your assessment" : "#{detail[:assessee_name] || "a colleague"}'s assessment"
-    level = level_short(detail, item.level_ordinal) if item.level_ordinal
-    [ detail[:role], level, "on #{whose}" ].compact.join(" · ")
-  end
-
-  def authored_type_label(item)
-    item.evidence_type == "other" ? item.custom_type_label.to_s : item.evidence_type.humanize
-  end
-
-  # Deep link to the item's first linkage on the assessment, so the feedback
-  # can be read in situ — next to the expectation, ratings, and the rest of the
-  # cell's evidence. Present only when the viewer may see that assessment (the
-  # controller applies AssessmentPolicy#show?), so a peer never gets a dead link.
-  def view_in_assessment_link(item)
-    path = @in_situ_paths[item.id]
-    return if path.blank?
-
-    a(href: path, class: "inline-flex items-center min-h-11 text-sm font-medium text-brand hover:underline") do
-      "View in assessment"
-    end
-  end
-
-  def external_link(item)
-    return render(Views::Evidence::OriginBadge.new(item.external_reference, size: :sm)) if item.external_reference&.imported?
-
-    url = item.external_reference&.url
-    return if url.blank?
-
-    a(href: url, target: "_blank", rel: "noopener",
-      class: "inline-flex items-center gap-1 text-sm text-link hover:underline break-all") do
-      plain item.external_reference&.system.presence&.humanize || "Link"
-      span(aria: { hidden: "true" }) { " ↗" }
-    end
-  end
-
-  def authored_actions(item, detail)
-    return if detail[:assignment_id].blank?
-
-    div(class: "pt-2 border-t border-subtle flex items-center gap-4") do
-      view_in_assessment_link(item)
-      button(type: "button", data: modal_trigger_data(mode: "edit", evidence_id: item.id),
-             class: "inline-flex items-center min-h-11 text-sm font-medium text-brand cursor-pointer") { "Edit" }
-      form_with(url: evidence_item_path(item), method: :delete) do
-        button(type: "submit", data: { turbo_confirm: "Withdraw this feedback? It will be hidden everywhere it appears." },
-               class: "inline-flex items-center min-h-11 text-sm font-medium text-danger hover:underline cursor-pointer") { "Withdraw" }
-      end
-    end
-  end
-
-  # ── Shared cell context (requests) ──
-
-  def request_cell_line(request)
-    detail = @cell_details.fetch(request.id, {})
-    div do
-      p(class: "text-sm font-medium text-default") { detail[:name] || "Capability" }
-      p(class: "text-xs text-muted") { request_scope_label(request, detail) }
-    end
-  end
-
-  # ", regarding <assessee>" when the request is about someone other than the
-  # person who made it (a manager asking on a report's behalf); blank when the
-  # requester is asking about their own assessment.
-  def regarding_suffix(request)
-    return "" if request.person_id == request.requested_by_id
-
-    name = request.assessee&.name
-    name.present? ? ", regarding #{name}" : ""
-  end
-
-  def request_scope_label(request, detail)
-    [ detail[:role], level_short(detail, request.level_ordinal) ].compact.join(" · ")
-  end
-
-  # Compact level: the role's level code (e.g. "E3"), falling back to "L<n>".
-  def level_short(detail, level_ordinal)
-    detail[:level_code].presence || "L#{level_ordinal}"
-  end
-
-  def message_line(request)
-    return if request.message.blank?
-
-    p(class: "text-sm text-muted italic") { "“#{Prose.to_plain(request.message)}”" }
-  end
-
-  # On every open request card: the request's life so far — when it was asked
-  # (and when it's due) plus each reminder that has gone out, so both parties
-  # see the same story without opening an activity trail.
-  def history_timeline(request)
-    return unless request.pending?
-
-    div(class: "space-y-0.5", data: { testid: "request-history" }) do
-      timeline_line("Requested #{time_ago_in_words(request.requested_at)} ago#{due_suffix(request)}")
-      request.reminder_history.each { |entry| timeline_line(reminder_entry_label(request, entry)) }
-    end
-  end
-
-  def timeline_line(text)
-    p(class: "text-xs text-muted") { text }
-  end
-
-  def due_suffix(request)
-    request.due_at.present? ? " · due #{request.due_at.strftime("%a %-d %b")}" : ""
-  end
-
-  # @param entry [Hash] { "kind" =>, "at" =>, "by_id" => (manual only) }
-  def reminder_entry_label(request, entry)
-    at = begin
-      Time.zone.parse(entry["at"].to_s)
-    rescue ArgumentError
-      nil
-    end
-    ago = at ? "#{time_ago_in_words(at)} ago" : nil
-    label = case entry["kind"]
-    when "due_soon" then "Due-date reminder sent"
-    when "manual" then "Nudged by #{nudger_name(request, entry["by_id"])}"
-    else "Reminder sent"
-    end
-    [ label, ago ].compact.join(" ")
-  end
-
-  # The nudger is almost always the requester (already loaded); anyone else
-  # with nudge rights is a tenant admin.
-  def nudger_name(request, by_id)
-    by_id == request.requested_by_id ? (request.requester&.name || "the requester") : "an admin"
-  end
-
-  # ── Respond / edit (open the unified modal) ──
-
-  def respond_actions(request)
-    div(class: "pt-3 border-t border-subtle flex flex-wrap items-center gap-2") do
-      render Components::Kit::Button.new(tone: :brand, touch: true,
-                                         data: modal_trigger_data(mode: "respond", request_id: request.id)) do
-        "Provide feedback / evidence"
-      end
-      render Components::Kit::Button.new(
-        variant: :outline, touch: true,
-        data: { action: "click->modal#open", modal_target_id: Views::Evidence::DeclineRequestModal.dom_id_for(request) }
-      ) { "Decline request" }
-    end
-    render Views::Evidence::DeclineRequestModal.new(request: request)
-  end
-
-  # Opens the unified evidence modal (return_to=hub) for a request/item.
-  def modal_trigger_data(mode:, request_id: nil, evidence_id: nil)
-    data = {
-      action: "evidence-modal#load click->modal#open",
-      modal_target_id: "evidence-modal-overlay",
-      evidence_modal_mode_param: mode,
-      evidence_modal_return_to_param: "hub"
-    }
-    data[:evidence_modal_request_id_param] = request_id if request_id
-    data[:evidence_modal_evidence_id_param] = evidence_id if evidence_id
-    data
-  end
-
-  # ── Chrome ──
-
-  def card(dom_id: nil, &block)
-    # `target:` highlights the card when reached via a notification deep link
-    # (/evidence#evidence-request-<id>).
-    div(id: dom_id, class: "scroll-mt-20 rounded-2xl target:ring-2 target:ring-(--gos-border-strong)") do
-      render Components::Kit::Card.new do |card|
-        card.body { div(class: "space-y-2", &block) }
-      end
-    end
-  end
-
-  def group_heading(text)
-    h2(class: "text-lg font-semibold text-default mb-4") { text }
-  end
-
-  # @param aside [#call, nil] rendered beside the heading, wrapping below it
-  #   when the row is too narrow
-  def subsection(title, aside: nil, testid: nil, &)
-    div(data: { testid: testid }) do
-      div(class: "mb-3 flex flex-wrap items-center justify-between gap-2") do
-        h3(class: "text-sm font-semibold uppercase tracking-wide text-muted") { title }
-        aside&.call
-      end
-      yield
-    end
-  end
-
-  def empty(text)
-    render Components::Kit::EmptyState.new(title: text)
   end
 end
