@@ -25,7 +25,6 @@
 # that report, and leaves the rest out.
 class Evidence::Conversations
   GROUPS = %w[report person].freeze
-  SCOPES = ::Assessments::FeedbackToPlace::SCOPES
 
   # One entry in a conversation. `kind` is :request (the ask), :reply (the
   # item answering it), :declined or :feedback (an item with no visible ask).
@@ -127,7 +126,7 @@ class Evidence::Conversations
   # Whether the org scope reaches anyone the team scope doesn't.
   #
   # @return [Boolean]
-  def beyond_team? = skip_level_keys.any?
+  def beyond_team? = placing.assignments("org").size > placing.assignments("team").size
 
   # @param person_id [String]
   # @return [Boolean]
@@ -231,24 +230,13 @@ class Evidence::Conversations
     @unplaced_ids ||= EvidenceItem.unplaced.where(id: items.map(&:id)).pluck(:id).to_set
   end
 
+  # The switch's split, from the query that counts the feedback to place.
   def report_keys
-    @report_keys ||= @scope == "org" ? team_keys | skip_level_keys : team_keys
+    @report_keys ||= placing.assignments(@scope).keys.to_set
   end
 
-  def team_keys
-    @team_keys ||= keys_of(reviewable.team)
-  end
-
-  def skip_level_keys
-    @skip_level_keys ||= keys_of(reviewable.skip_level) - team_keys
-  end
-
-  def keys_of(assignments)
-    assignments.reject { |a| a.person_id == viewer_id }.to_set { |a| [ a.person_id, a.framework_id ] }
-  end
-
-  def reviewable
-    @reviewable ||= Assessments::ReviewableAssignments.new(@viewer)
+  def placing
+    @placing ||= Assessments::FeedbackToPlace.new(@viewer)
   end
 
   def report_ids
