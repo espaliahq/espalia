@@ -55,17 +55,27 @@ class Components::Kit::SegmentedControl < Components::Base
   # @param selected [Boolean]
   # @param href [String, nil] makes the segment a link to that view
   # @param disabled [Boolean] buttons only
+  # @param marked [String, nil] puts a dot after the label, saying something
+  #   in that view needs attention; the string is what a screen reader hears
   # @param attrs [Hash] passed through to the segment's button or link
-  def segment(label, selected: false, href: nil, disabled: false, **attrs)
+  def segment(label, selected: false, href: nil, disabled: false, marked: nil, **attrs)
     classes = { class: "#{SEGMENT} #{@size}#{" flex-1" if @fill}" }
     if href
-      a(**mix(classes, { href: href, aria: { current: ("page" if selected) }.compact }, attrs)) { plain label }
+      a(**mix(classes, { href: href, aria: { current: ("page" if selected) }.compact }, attrs)) { segment_label(label, marked) }
     else
-      button(**mix(classes, { type: "button", disabled: disabled }, state(selected), attrs)) { plain label }
+      button(**mix(classes, { type: "button", disabled: disabled }, state(selected), attrs)) { segment_label(label, marked) }
     end
   end
 
   private
+
+  def segment_label(label, marked)
+    plain label
+    return if marked.nil?
+
+    span(class: "ml-1.5 size-2 shrink-0 rounded-full bg-neutral-strong", aria: { hidden: "true" }, data: { mark: true })
+    span(class: "sr-only") { " (#{marked})" }
+  end
 
   def state(selected)
     if @item_role == :menuitemradio
