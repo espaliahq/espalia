@@ -70,6 +70,10 @@ editor integrations; `bin/rubocop`, and so precommit, passes `--config` and is
 immune. When you change a custom cop in a nested worktree, lint with
 `bin/rubocop` or add `--ignore-parent-exclusion`.
 
+## A system run where every test errors with "tab crashed"
+
+**Hundreds of `Selenium::WebDriver::Error::WebDriverError: tab crashed` errors — from the first test, or from some test onwards — mean the Chromium nodes ran out of memory, not that the change broke anything.** The four `selenium-node-*` containers (`.devcontainer/compose.yaml`, 1 GB shm each) share the OrbStack VM with every other session's containers, and when that VM is near its limit (`free -h` showing ~13 of 15 GB used and swap full) Chromium's renderers are killed mid-run. Every later test then errors in `sign_in_as` or the first `fill_in`, and the summary reads like `720 runs, 280 assertions, 0 failures, 685 errors`. Check the grid with `curl -s http://selenium-hub:4444/status` (`ready: true`, four nodes `UP`) and memory with `free -h`, then re-run only `bin/rails test:system` once memory recovers: the rest of precommit has already passed. Seen three times on 5 Nov 2026 while several sessions ran suites at once; each re-run was clean.
+
 ## A checkout without `config/master.key`
 
 **The seeded dev admin is `admin@example.com` / `password123`** — created by
