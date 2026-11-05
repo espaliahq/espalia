@@ -16,7 +16,8 @@ class Tenant::ThemesController < ApplicationController
       tenant: ActsAsTenant.current_tenant,
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
-      tenants: tenants_for_user
+      tenants: tenants_for_user,
+      sign_in_url: tenant_sign_in_url(tenant_slug: ActsAsTenant.current_tenant.slug)
     )
   end
 

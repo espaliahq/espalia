@@ -78,6 +78,10 @@ Rails.application.routes.draw do
     resource :tenant_switch, only: [ :new, :create ],
       controller: "users/tenant_switches",
       as: :users_tenant_switch
+
+    # Tenant sign-on URL (#660): the sign-in page under the tenant's own
+    # name and theme. The slug is the only lookup key, as in a workspace URL.
+    get "t/:tenant_slug/sign-in", to: "users/sessions#new", as: :tenant_sign_in
   end
 
   # Tenant-admin "view as another user". Read-only, within-tenant. Start

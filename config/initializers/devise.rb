@@ -330,6 +330,12 @@ Devise.setup do |config|
   #   warden_config.default_strategies(scope: :user).unshift :some_external_strategy
   # end
 
+  # A failed attempt from a tenant sign-on page returns to that page (#660).
+  # The lambda defers the constant so the initializer doesn't load the class.
+  config.warden do |warden_config|
+    warden_config.failure_app = ->(env) { Users::FailureApp.call(env) }
+  end
+
   # ==> Mountable engine configurations
   # When using Devise inside an engine, let's call it `MyEngine`, and this engine
   # is mountable, there are some extra configurations to be taken into account.

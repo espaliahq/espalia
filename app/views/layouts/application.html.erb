@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<% theme_tenant = current_tenant if defined?(current_tenant) %>
+<%# @theme_tenant lets a pre-auth page (a tenant sign-on URL) carry a tenant's theme %>
+<% theme_tenant = @theme_tenant || (current_tenant if defined?(current_tenant)) %>
 <% overrides = respond_to?(:html_data_scheme) ? { theme: dev_theme_override, scheme: html_data_scheme }.compact : {} %>
 <%# A tenant-less page (sign-in) names its own theme with content_for(:html_theme) %>
 <% html_data = { theme: content_for(:html_theme).presence || theme_tenant&.theme_preset }.merge(overrides) %>

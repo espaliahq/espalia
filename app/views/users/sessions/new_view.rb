@@ -24,15 +24,22 @@ class Views::Users::Sessions::NewView < Views::Base
   # @param resource [User] the Devise resource (an unsaved User instance)
   # @param flash [ActionDispatch::Flash::FlashHash] the current request flash
   # @param google_sso [Boolean] whether to offer "Continue with Google"
-  def initialize(resource:, flash:, google_sso: true)
+  # @param tenant [Tenant, nil] the tenant whose sign-on URL this is (#660);
+  #   its name heads the page and the layout carries its theme
+  def initialize(resource:, flash:, google_sso: true, tenant: nil)
     @resource = resource
     @flash = flash
     @google_sso = google_sso
+    @tenant = tenant
   end
 
   def view_template
-    content_for(:html_theme, "bento")
-    content_for(:theme_color, view_context.tag.meta(name: "theme-color", content: BROWSER_THEME_COLOR))
+    if @tenant.nil?
+      # Tenant-less sign-in names its own look; a tenant page takes the
+      # tenant's theme through the layout (@theme_tenant) instead.
+      content_for(:html_theme, "bento")
+      content_for(:theme_color, view_context.tag.meta(name: "theme-color", content: BROWSER_THEME_COLOR))
+    end
 
     main(id: "main-content", class: "auth-page relative isolate overflow-hidden min-h-dvh flex items-center justify-center p-4 " \
                 "bg-default text-default antialiased") do
@@ -58,8 +65,10 @@ class Views::Users::Sessions::NewView < Views::Base
   def branding
     div(class: "flex flex-col items-center gap-3 text-center") do
       brand_mark
-      h1(class: "text-2xl/7 font-bold") { product_name }
-      p(class: "text-base/5 text-muted") { "Career growth for your team" }
+      h1(class: "text-2xl/7 font-bold") { @tenant ? @tenant.name : product_name }
+      p(class: "text-base/5 text-muted") do
+        @tenant ? "#{product_name} · Career growth for your team" : "Career growth for your team"
+      end
     end
   end
 
@@ -156,6 +165,7 @@ class Views::Users::Sessions::NewView < Views::Base
       class: "flex flex-col gap-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: view_context.form_authenticity_token)
+      input(type: "hidden", name: "tenant_slug", value: @tenant.slug) if @tenant
 
       form_field("Email", :email, "user[email]", type: :email, autocomplete: "email")
       form_field("Password", :password, "user[password]", type: :password, autocomplete: "current-password")

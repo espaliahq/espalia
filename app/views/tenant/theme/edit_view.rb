@@ -31,11 +31,13 @@ class Views::Tenant::Theme::EditView < Views::Base
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
-  def initialize(tenant:, user:, current_tenant:, tenants: [])
+  # @param sign_in_url [String, nil] this tenant's sign-on URL (#660)
+  def initialize(tenant:, user:, current_tenant:, tenants: [], sign_in_url: nil)
     @tenant = tenant
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
+    @sign_in_url = sign_in_url
   end
 
   def view_template
@@ -58,10 +60,30 @@ class Views::Tenant::Theme::EditView < Views::Base
         scheme_note
         actions
       end
+
+      sign_in_url_note
     end
   end
 
   private
+
+  def sign_in_url_note
+    return if @sign_in_url.blank?
+
+    div(class: "mt-6") do
+      render Components::Kit::Card.new(title: "Sign-in page", heading_level: :h2) do |card|
+        card.body do
+          p(class: "text-sm text-muted") do
+            plain "People signing in at this address see the page under "
+            plain "#{@tenant.name}'s name and this theme:"
+          end
+          p(class: "mt-2 text-sm font-mono break-all") do
+            a(href: @sign_in_url, class: "text-link hover:text-link-hover") { @sign_in_url }
+          end
+        end
+      end
+    end
+  end
 
   def theme_choice
     render Components::Kit::Card.new(title: "Theme", heading_level: :h2) do |card|
