@@ -367,7 +367,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_evidence_requests_list",
-        "description" => "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing).",
+        "description" => "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing), " \
+          "each with when it was requested, due, last reminded, and responded to, declined (with the " \
+          "reason) or cancelled.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
@@ -1803,7 +1805,8 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "frameworks_get",
-        "description" => "Fetch one framework's top-level structure (role families, categories, child IDs and names).",
+        "description" => "Fetch one framework's top-level structure (role families, categories, child IDs and names) " \
+          "and every published version, newest first, with when and by whom it was published.",
         "inputSchema" => {
           "type" => "object",
           "properties" => { "framework_id" => { "type" => "string" } },

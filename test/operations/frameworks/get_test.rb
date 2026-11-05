@@ -92,6 +92,37 @@ class Operations::Frameworks::GetTest < ActiveSupport::TestCase
     end
   end
 
+  context "versions" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        stream = EventStreamNaming.framework_stream(@framework_id)
+        Rails.configuration.event_store.append(
+          Frameworks::Events::FrameworkVersionPublished.new(
+            data: { framework_id: @framework_id, version: 1 },
+            metadata: { tenant_id: @tenant.id, actor_id: @person.id, timestamp: Time.utc(2026, 3, 1) }
+          ),
+          stream_name: stream
+        )
+        Rails.configuration.event_store.append(
+          Frameworks::Events::FrameworkVersionPublished.new(
+            data: { framework_id: @framework_id, version: 2, published_by: @person.id },
+            metadata: { tenant_id: @tenant.id, timestamp: Time.utc(2026, 9, 1) }
+          ),
+          stream_name: stream
+        )
+      end
+    end
+
+    should "list every published version, newest first, with when and by whom" do
+      versions = call_op[:versions]
+
+      assert_equal [ 2, 1 ], versions.map { |v| v[:version] }
+      assert_equal "2026-09-01T00:00:00Z", versions.first[:published_at]
+      assert_equal @person.id, versions.first.dig(:published_by, :id)
+      assert_equal @person.id, versions.last.dig(:published_by, :id), "an older event names its publisher only in metadata"
+    end
+  end
+
   context "policy" do
     should "deny callers without tenant membership" do
       stranger = create(:user)

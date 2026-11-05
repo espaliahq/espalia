@@ -222,6 +222,31 @@ class Operations::Assessments::EvidenceRequestsTest < ActiveSupport::TestCase
         assert_not_nil row[:last_reminded_at]
       end
     end
+
+    should "say when each request was responded to, declined (with the reason) or cancelled" do
+      responded_id = request!(message: "First ask")[:request_id]
+      declined_id = request![:request_id]
+      cancelled_id = request!(message: "Second ask")[:request_id]
+      rows = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::RespondToEvidenceRequest.call(
+          context: @peer_ctx,
+          params: { request_id: responded_id, evidence_type: "peer_feedback", content: "Clear thinking.", valence: "demonstrated" }
+        )
+        Operations::Assessments::DeclineEvidenceRequest.call(
+          context: @peer_ctx, params: { request_id: declined_id, reason: "Didn't work together" }
+        )
+        Operations::Assessments::CancelEvidenceRequest.call(context: @report_ctx, params: { request_id: cancelled_id })
+        Operations::Assessments::EvidenceRequestsList.call(context: @report_ctx, params: {})[:outgoing].index_by { |r| r[:request_id] }
+      end
+
+      assert rows[responded_id][:responded_at]
+      assert_nil rows[responded_id][:declined_at]
+      assert rows[declined_id][:declined_at]
+      assert_equal "Didn't work together", rows[declined_id][:decline_reason]
+      assert_nil rows[declined_id][:cancelled_at]
+      assert rows[cancelled_id][:cancelled_at]
+      assert_nil rows[cancelled_id][:responded_at]
+    end
   end
 
   # Backdate a request so the NUDGE_GAP timing gate opens (the gate reads the
