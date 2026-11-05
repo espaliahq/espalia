@@ -174,6 +174,57 @@ class AuthSystemTest < ApplicationSystemTestCase
     end
   end
 
+  context "a tenant sign-on URL (#660)" do
+    setup do
+      @branded = FactoryBot.create(:tenant, name: "Null Island Systems", slug: "nullisland",
+        theme: "custom", custom_theme: { "brand" => { "light" => "#aa3366", "dark" => "#bb4477" } })
+      ActsAsTenant.with_tenant(@branded) { FactoryBot.create(:tenant_user, tenant: @branded, user: @user) }
+    end
+
+    should "carry the tenant's name and theme, and land scoped to it" do
+      visit "/t/nullisland/sign-in"
+      screenshot("tenant_sign_in_desktop")
+
+      assert_text "Null Island Systems"
+      assert_selector "style#tenant-theme", visible: :all
+      brand = page.evaluate_script("getComputedStyle(document.documentElement).getPropertyValue('--tenant-brand').trim()")
+      assert_equal "#aa3366", brand
+
+      js_fill_in "Email", with: @user.email
+      js_fill_in "Password", with: "password123"
+      click_button_with_js_fallback("Log in", expect_selector: "#user-menu")
+
+      assert_current_path root_path
+      assert_text "Null Island Systems"
+      screenshot("tenant_sign_in_landed")
+    end
+
+    should "keep the tenant's page through a failed attempt" do
+      visit "/t/nullisland/sign-in"
+
+      js_fill_in "Email", with: @user.email
+      js_fill_in "Password", with: "wrongpassword"
+      click_button_with_js_fallback("Log in", expect_selector: "[role='alert']")
+
+      assert_selector "[role='alert']", text: "Invalid email or password."
+      # Devise recalls #new with the POST's params (still branded via the
+      # hidden tenant_slug), and Turbo keeps the visited URL on the 422.
+      assert_current_path "/t/nullisland/sign-in"
+      assert_text "Null Island Systems"
+    end
+
+    should "render the branded page on mobile" do
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit "/t/nullisland/sign-in"
+      screenshot("tenant_sign_in_mobile")
+
+      assert_text "Null Island Systems"
+      assert_selector "input[type='email']"
+      assert_selector "button[type='submit']", text: "Log in"
+      assert_no_sideways_overflow
+    end
+  end
+
   context "Google sign in" do
     setup do
       OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(

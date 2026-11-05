@@ -10,7 +10,6 @@ module Reporting::OriginLabels
   NATIVE = "growthos"
 
   LABELS = {
-    NATIVE => "GrowthOS",
     "chip" => "Chip"
   }.freeze
 
@@ -43,6 +42,12 @@ module Reporting::OriginLabels
   # @return [String]
   def self.peer_label(slug)
     key = slug.to_s.strip.downcase.tr("-", "_")
+    return native_label if key == NATIVE
+
     LABELS.fetch(key) { key.tr("_", " ").titleize }
   end
+
+  # What the platform is called in the current tenant's context (#660).
+  # @return [String]
+  def self.native_label = Tenant.current_product_name
 end

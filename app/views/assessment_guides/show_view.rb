@@ -34,7 +34,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     manager: { label: "Your manager", icon: :shield, mark: "mark-category-1" },
     colleagues: { label: "Colleagues", icon: :users, mark: "mark-category-5" },
     admin: { label: "Admin / HR", icon: :grid, mark: "mark-category-4" },
-    growthos: { label: "GrowthOS", icon: :spark, mark: nil }
+    growthos: { label: nil, icon: :spark, mark: nil } # label resolves per tenant: {#actor_label}
   }.freeze
 
   STATIONS = [
@@ -129,7 +129,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
             li(class: "inline-flex items-center gap-2 rounded-full border border-default bg-subtle " \
                       "py-1 pl-1 pr-3 text-sm text-default") do
               avatar(key)
-              plain ACTORS[key][:label]
+              plain actor_label(key)
             end
           end
         end
@@ -204,7 +204,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     phase(
       anchor: "setup", number: 1,
       title: "The framework says what good looks like",
-      lead: "Before anyone rates anything, GrowthOS knows your role, your level, " \
+      lead: "Before anyone rates anything, #{product_name} knows your role, your level, " \
             "and the behaviours expected at each step of the ladder.",
       steps: [
         [ :admin, "Admin publishes the career framework",
@@ -563,10 +563,16 @@ class Views::AssessmentGuides::ShowView < Views::Base
   def avatar(key)
     actor = ACTORS.fetch(key)
     span(class: "grid h-7 w-7 shrink-0 place-items-center rounded-full bg-mark text-on-mark #{actor[:mark]}",
-      title: actor[:label]) do
+      title: actor_label(key)) do
       glyph(actor[:icon], "h-4 w-4")
-      span(class: "sr-only") { actor[:label] }
+      span(class: "sr-only") { actor_label(key) }
     end
+  end
+
+  # The platform actor is named per tenant (#660); the rest are static.
+  # @return [String]
+  def actor_label(key)
+    key == :growthos ? product_name : ACTORS.fetch(key)[:label]
   end
 
   # A level chip in the assessment screen's colours. `top` paints the

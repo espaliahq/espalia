@@ -9,7 +9,7 @@ class Views::Tenant::Theme::PreviewView < Views::Base
   end
 
   def view_template
-    render Components::Shell::Navbar.new(app_name: "GrowthOS", current_tenant: @tenant)
+    render Components::Shell::Navbar.new(app_name: product_name, current_tenant: @tenant)
     div(class: "p-4") do
       render Components::Kit::Card.new(title: "Quarterly check-in") do |card|
         card.body do

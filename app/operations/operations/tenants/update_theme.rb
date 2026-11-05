@@ -19,7 +19,9 @@ class Operations::Tenants::UpdateTheme < Operations::Base
 
   description "Update the active tenant's theme: default, bento, or custom with its own " \
               "colour-role values (light and dark hex) and Google font. custom_theme merges " \
-              "per role; a blank value restores the default for that role."
+              "per role; a blank value restores the default for that role. product_name is " \
+              "what this tenant calls the platform; blank restores the instance default. " \
+              "custom_domain is the tenant's own sign-in host (domain or subdomain); blank clears it."
   category :write
   approval :in_app
 
@@ -36,6 +38,8 @@ class Operations::Tenants::UpdateTheme < Operations::Base
     additionalProperties: false
   }
   parameter :font_family, String
+  parameter :product_name, String
+  parameter :custom_domain, String
 
   def policy_check
     authorize ActsAsTenant.current_tenant, :update_theme?, policy_class: TenantPolicy
@@ -52,9 +56,11 @@ class Operations::Tenants::UpdateTheme < Operations::Base
     tenant.assign_attributes(updates)
     unless tenant.valid?
       message = tenant.errors.full_messages.to_sentence
-      # The request's layout still renders from this tenant, so a rejected theme must not reach it
-      tenant.restore_attributes(updates.keys)
-      tenant.errors.clear
+      # The request's layout still renders from this tenant, so a rejected
+      # theme must not reach it. reload, not restore_attributes: the store
+      # accessors (font_family, product_name) dirty `settings`, which
+      # restore_attributes by their own names would silently skip.
+      tenant.reload
       raise ParameterError, message
     end
 

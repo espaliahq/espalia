@@ -1,16 +1,18 @@
 <!DOCTYPE html>
-<% theme_tenant = current_tenant if defined?(current_tenant) %>
+<%# @theme_tenant lets a pre-auth page (a tenant sign-on URL) carry a tenant's theme %>
+<% theme_tenant = @theme_tenant || (current_tenant if defined?(current_tenant)) %>
 <% overrides = respond_to?(:html_data_scheme) ? { theme: dev_theme_override, scheme: html_data_scheme }.compact : {} %>
 <%# A tenant-less page (sign-in) names its own theme with content_for(:html_theme) %>
 <% html_data = { theme: content_for(:html_theme).presence || theme_tenant&.theme_preset }.merge(overrides) %>
 <html <%= tag.attributes(lang: I18n.locale, data: html_data) %>>
   <head>
-    <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), "GrowthOS"].compact.join(" · ") %></title>
+    <% product_display_name = theme_tenant&.product_name || Rails.application.config.x.product_name %>
+    <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), product_display_name].compact.join(" · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%# Turbo keeps <html>'s attributes across a visit, so a page whose theme or scheme differs reloads %>
     <meta name="html-appearance" content="<%= html_data.values_at(:theme, :scheme).compact.join(" ") %>" data-turbo-track="reload">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="GrowthOS">
+    <meta name="application-name" content="<%= product_display_name %>">
     <% if content_for?(:theme_color) %>
       <%= yield :theme_color %>
     <% elsif html_data[:scheme] %>

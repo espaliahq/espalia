@@ -2560,7 +2560,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
           "provided by request or as proactive feedback, immutable manager/report/peer directionality, " \
-          "withdrawn feedback, where it was given (by_origin: GrowthOS, or the system it arrived from), " \
+          "withdrawn feedback, where it was given (by_origin: the stable key 'growthos' for feedback given here — labelled with the tenant's product name — or the system it arrived from), " \
           "request statuses, fulfilment rate, participant coverage, " \
           "and optional manager/role/level groups. Pass month (YYYY-MM) to narrow to feedback " \
           "recorded and requests sent in one calendar month of the cycle; the response lists " \
@@ -2658,13 +2658,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "tenants_update_theme",
         "description" => "Update the active tenant's theme: default, bento, or custom with its own " \
                          "colour-role values (light and dark hex) and Google font. custom_theme merges " \
-                         "per role; a blank value restores the default for that role.",
+                         "per role; a blank value restores the default for that role. product_name is " \
+                         "what this tenant calls the platform; blank restores the instance default. " \
+                         "custom_domain is the tenant's own sign-in host (domain or subdomain); blank clears it.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "theme"        => { "type" => "string", "enum" => %w[default bento custom] },
-            "custom_theme" => custom_theme_schema,
-            "font_family"  => { "type" => "string" }
+            "theme"         => { "type" => "string", "enum" => %w[default bento custom] },
+            "custom_theme"  => custom_theme_schema,
+            "font_family"   => { "type" => "string" },
+            "product_name"  => { "type" => "string" },
+            "custom_domain" => { "type" => "string" }
           },
           "required" => [],
           "additionalProperties" => false

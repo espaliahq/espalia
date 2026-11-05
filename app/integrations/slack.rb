@@ -17,6 +17,15 @@ module Slack
   # capture. Keep in sync with app/integrations/slack/manifest.yml.
   BOT_SCOPES = %w[chat:write users:read users:read.email im:write commands im:history].freeze
 
+  # Slack mrkdwn treats & < > as entities; tenant-authored text that lands in
+  # a message (the product name, #660) is escaped the way Slack documents.
+  #
+  # @param text [String]
+  # @return [String]
+  def self.escape_text(text)
+    text.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
+  end
+
   # @return [Hash] { client_id:, client_secret:, signing_secret: }
   def self.oauth_config
     creds = Rails.application.credentials.slack

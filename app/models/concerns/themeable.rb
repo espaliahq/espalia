@@ -38,16 +38,37 @@ module Themeable
 
   included do
     attribute :theme, :string, default: "default"
-    store_accessor :settings, :font_family
+    store_accessor :settings, :font_family, :product_name
+
+    # What this tenant calls the platform (#660): their own name for it, or
+    # the instance default. The raw setting stays in settings["product_name"].
+    # Defined here, on the class, so it sits above the accessor module
+    # store_accessor includes — at Themeable's level it would be shadowed and
+    # the fallback would never run.
+    def product_name
+      super.presence || Rails.application.config.x.product_name
+    end
 
     normalizes :custom_theme, with: ->(value) { Themeable.compact_custom_theme(value) }
 
     validates :theme, inclusion: { in: THEMES }
     validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
+    # Validate the STORED setting, not the reader — the reader falls back to
+    # the instance default, which no tenant save should be judged by.
+    validate :product_name_setting_fits
     validate :custom_theme_holds_known_roles_and_hex_colours
   end
 
   class_methods do
+    # What the platform is called in the current context (#660): the ambient
+    # tenant's own name for it, or the instance default. The one home for the
+    # fallback chain — views, Slack messages and labels all call this.
+    #
+    # @return [String]
+    def current_product_name
+      ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
+    end
+
     # The colour the browser should paint its own chrome (address bar, title
     # bar, task switcher) for a page of this tenant: its theme's navbar.
     #
@@ -125,6 +146,12 @@ module Themeable
   end
 
   private
+
+  # @return [void]
+  def product_name_setting_fits
+    raw = settings["product_name"]
+    errors.add(:product_name, "is too long (maximum is 60 characters)") if raw.present? && raw.length > 60
+  end
 
   # @return [void]
   def custom_theme_holds_known_roles_and_hex_colours

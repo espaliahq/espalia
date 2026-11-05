@@ -21,14 +21,14 @@ class Slack::CommandsController < ActionController::Base
     return ephemeral(USAGE) unless subcommand.to_s.casecmp?("feedback")
 
     identity = Slack::Identity.resolve(team_id: params[:team_id], slack_user_id: params[:user_id])
-    return ephemeral("This Slack workspace isn't connected to GrowthOS.") unless identity.connected?
+    return ephemeral("This Slack workspace isn't connected to #{Tenant.current_product_name}.") unless identity.connected?
     return ephemeral(Slack::Feedback.not_a_member_message(identity)) unless identity.can_give?
 
     Slack::Feedback.open_modal(identity, trigger_id: params[:trigger_id], initial_content: rest)
     head :ok
   rescue Slack::Errors::Error => e
     Rails.logger.warn("[slack] command failed: #{e.class}: #{e.message}")
-    ephemeral("GrowthOS couldn't open the form just now. Please try again.")
+    ephemeral("#{Tenant.current_product_name} couldn't open the form just now. Please try again.")
   end
 
   private

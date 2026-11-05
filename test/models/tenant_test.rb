@@ -17,6 +17,39 @@ class TenantTest < ActiveSupport::TestCase
     should validate_uniqueness_of(:slug).ignoring_case_sensitivity
   end
 
+  context "custom_domain (#660)" do
+    should "normalise to a lowercase hostname, blank to nil" do
+      assert_equal "growth.acme.com", build(:tenant, custom_domain: "  Growth.ACME.com ").custom_domain
+      assert_nil build(:tenant, custom_domain: "   ").custom_domain
+    end
+
+    should "accept a full domain and a subdomain, reject anything else" do
+      assert build(:tenant, custom_domain: "growth.acme.com").valid?
+      assert build(:tenant, custom_domain: "acme.espalia.app").valid?
+      assert_not build(:tenant, custom_domain: "not a host").valid?
+      assert_not build(:tenant, custom_domain: "no-tld").valid?
+      assert_not build(:tenant, custom_domain: "https://acme.com").valid?
+    end
+
+    should "refuse the instance's own host" do
+      # test env mailer host is example.com
+      assert_not build(:tenant, custom_domain: "example.com").valid?
+    end
+
+    should "be unique" do
+      create(:tenant, custom_domain: "growth.acme.com")
+      assert_not build(:tenant, custom_domain: "Growth.Acme.com").valid?
+    end
+
+    should "resolve a request host to its tenant" do
+      tenant = create(:tenant, custom_domain: "growth.acme.com")
+
+      assert_equal tenant, Tenant.for_host("Growth.Acme.com")
+      assert_nil Tenant.for_host("other.example")
+      assert_nil Tenant.for_host(nil)
+    end
+  end
+
   context "theme" do
     should "default to the Default theme" do
       assert_equal "default", Tenant.new.theme

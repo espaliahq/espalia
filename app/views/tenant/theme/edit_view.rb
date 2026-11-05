@@ -8,8 +8,10 @@ class Views::Tenant::Theme::EditView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::FormWith
 
+  # Default's description names the product, which is per-tenant (#660), so
+  # it resolves at render time in {#theme_description}.
   THEMES = [
-    { value: "default", label: "Default", description: "GrowthOS's own teal." },
+    { value: "default", label: "Default" },
     { value: "bento", label: "Bento", description: "The Bento design system: lime, with Plus Jakarta Sans." },
     { value: "custom", label: "Custom", description: "Default, with your own brand, navbar and font." }
   ].freeze
@@ -31,11 +33,13 @@ class Views::Tenant::Theme::EditView < Views::Base
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
-  def initialize(tenant:, user:, current_tenant:, tenants: [])
+  # @param sign_in_url [String, nil] this tenant's sign-on URL (#660)
+  def initialize(tenant:, user:, current_tenant:, tenants: [], sign_in_url: nil)
     @tenant = tenant
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
+    @sign_in_url = sign_in_url
   end
 
   def view_template
@@ -45,7 +49,7 @@ class Views::Tenant::Theme::EditView < Views::Base
     ) do
       render Components::Kit::SectionHeading.new(
         "Theme",
-        subtitle: "How GrowthOS looks for everyone here. Changes preview live; Save to keep them."
+        subtitle: "How #{product_name} looks for everyone here. Changes preview live; Save to keep them."
       )
 
       form_with(
@@ -54,14 +58,73 @@ class Views::Tenant::Theme::EditView < Views::Base
         class: "space-y-6"
       ) do |form|
         theme_choice
+        product_name_field(form)
         custom_controls(form)
         scheme_note
         actions
       end
+
+      sign_in_url_note
     end
   end
 
   private
+
+  def sign_in_url_note
+    return if @sign_in_url.blank?
+
+    div(class: "mt-6") do
+      render Components::Kit::Card.new(title: "Sign-in page", heading_level: :h2) do |card|
+        card.body do
+          p(class: "text-sm text-muted") do
+            plain "People signing in at this address see the page under your name and theme:"
+          end
+          p(class: "mt-2 text-sm font-mono break-all") do
+            a(href: @sign_in_url, class: "text-link hover:text-link-hover") { @sign_in_url }
+          end
+        end
+      end
+    end
+  end
+
+  def product_name_field(form)
+    render Components::Kit::Card.new(title: "Branding", heading_level: :h2) do |card|
+      card.body do
+        form.label :product_name, "What your team calls the platform", class: "block text-sm font-medium text-default"
+        p(id: "theme-product-name-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
+          "Shows in the navbar, page titles and notifications. Leave it blank for #{instance_product_name}."
+        end
+        form.text_field :product_name,
+          value: @tenant.settings["product_name"].presence || "",
+          placeholder: instance_product_name,
+          class: "#{Components::Kit::Field::INPUT} max-w-sm",
+          aria: { describedby: "theme-product-name-hint" }
+
+        div(class: "mt-4 border-t border-default pt-4") do
+          form.label :custom_domain, "Sign-in domain", class: "block text-sm font-medium text-default"
+          p(id: "theme-custom-domain-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
+            "A domain or subdomain of your own, such as growth.example.com. Anyone arriving on it " \
+            "sees your sign-in page and workspace. It works once its DNS points at this instance; " \
+            "ask your operator to add it for TLS."
+          end
+          form.text_field :custom_domain,
+            value: @tenant.custom_domain.presence || "",
+            placeholder: "growth.example.com",
+            class: "#{Components::Kit::Field::INPUT} max-w-sm",
+            aria: { describedby: "theme-custom-domain-hint" }
+        end
+      end
+    end
+  end
+
+  # The fallback shown beside the field: the instance default, never the
+  # tenant's own override (which is exactly what the field edits).
+  def instance_product_name = Rails.application.config.x.product_name
+
+  # @return [String]
+  def theme_description(theme)
+    theme[:description] || "#{product_name}'s own teal."
+  end
 
   def theme_choice
     render Components::Kit::Card.new(title: "Theme", heading_level: :h2) do |card|
@@ -92,7 +155,7 @@ class Views::Tenant::Theme::EditView < Views::Base
         )
         div(class: "min-w-0") do
           span(class: "block text-sm font-semibold text-default") { theme[:label] }
-          span(id: "theme-#{theme[:value]}-description", class: "block text-sm text-muted") { theme[:description] }
+          span(id: "theme-#{theme[:value]}-description", class: "block text-sm text-muted") { theme_description(theme) }
         end
       end
       div(class: "grid grid-cols-2 gap-2") do

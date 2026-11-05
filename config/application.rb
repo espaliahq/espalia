@@ -65,6 +65,11 @@ module GrowthOs
     # `request.base_url` so contributors don't have to configure anything.
     config.x.oauth_issuer = ENV.fetch("OAUTH_ISSUER", nil)
 
+    # The product's display name: page titles, the navbar, sign-in, OAuth
+    # consent and outbound Slack messages all read it (#660). An instance
+    # sets PRODUCT_NAME to run under its own identity; set-but-empty is unset.
+    config.x.product_name = ENV["PRODUCT_NAME"].presence || "GrowthOS"
+
     # Throttling for abuse-prone endpoints — currently only OAuth Dynamic
     # Client Registration. Disabled in test/dev via the initializer.
     config.middleware.use Rack::Attack

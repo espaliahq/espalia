@@ -114,7 +114,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
       end
       li do
         plain "Name it "
-        strong { "GrowthOS" }
+        strong { product_name }
         plain ", paste the server URL above, and save."
       end
       li do

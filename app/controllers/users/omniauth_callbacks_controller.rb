@@ -8,7 +8,7 @@
 class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   REFUSAL_FLASH = {
     email_unverified: "Your Google account email isn't verified. Verify it with Google and try again.",
-    no_matching_account: "No GrowthOS account is linked to this Google address. Ask your admin to invite you.",
+    no_matching_account: "No #{Rails.application.config.x.product_name} account is linked to this Google address. Ask your admin to invite you.",
     invalid_payload: "We couldn't read the response from Google. Please try again."
   }.freeze
 
@@ -28,5 +28,20 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   # Devise calls this on OmniAuth strategy errors (denied consent, network, etc.).
   def failure
     redirect_to new_user_session_path, alert: failure_message
+  end
+
+  private
+
+  # A Google sign-in that started on a tenant sign-on page carries the slug
+  # in omniauth.params (#660). Runs after super, which writes the user's
+  # first membership — same ordering as the password flow.
+  def after_sign_in_path_for(resource)
+    path = super
+    slug = request.env.dig("omniauth.params", "tenant_slug")
+    if slug.is_a?(String) && slug.present?
+      tenant = ActsAsTenant.without_tenant { Tenant.find_by(slug: slug) }
+      pin_session_to_tenant(resource, tenant)
+    end
+    path
   end
 end

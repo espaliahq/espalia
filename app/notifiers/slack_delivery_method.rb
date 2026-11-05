@@ -15,6 +15,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     tenant = Tenant.find_by(id: event.params[:tenant_id])
     return unless tenant&.slack_connected?
 
+    # The job has no ambient tenant; the blocks below name the product by this one.
+    @tenant = tenant
+
     slack_user_id = resolve_slack_user_id(tenant)
     return if slack_user_id.blank?
 
@@ -65,7 +68,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     if url
       blocks << {
         type: "actions",
-        elements: [ { type: "button", text: { type: "plain_text", text: "Open in GrowthOS" }, url: url } ]
+        # Slack caps a button's plain_text at 75 chars; the instance default
+        # (ENV) is unbounded even though a tenant's own name is capped at 60.
+        elements: [ { type: "button", text: { type: "plain_text", text: "Open in #{product_name}".truncate(75) }, url: url } ]
       }
     end
     blocks << preferences_footer if disclose_preferences
@@ -99,7 +104,7 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
       type: "context",
       elements: [ {
         type: "mrkdwn",
-        text: "👋 First time hearing from GrowthOS? Notifications arrive in the app first — " \
+        text: "👋 First time hearing from #{product_name}? Notifications arrive in the app first — " \
               "Slack only chimes in when you haven't seen them there. " \
               "Choose what reaches you, and where, in your #{prefs}."
       } ]
@@ -133,5 +138,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     port = Rails.application.config.action_mailer.default_url_options[:port]
     base = port ? "#{scheme}://#{host}:#{port}" : "#{scheme}://#{host}"
     "#{base}#{path}"
+  end
+
+  def product_name
+    Slack.escape_text(@tenant&.product_name || Tenant.current_product_name)
   end
 end
