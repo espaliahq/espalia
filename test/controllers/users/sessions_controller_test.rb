@@ -94,13 +94,16 @@ class Users::SessionsControllerTest < ActionDispatch::IntegrationTest
       assert_not_equal @tenant.id, session[:current_tenant_id]
     end
 
-    should "return a failed attempt to the tenant page, not the generic one" do
+    should "re-render the branded page on a failed attempt" do
       post user_session_path, params: {
         tenant_slug: "nullisland",
         user: { email: @user.email, password: "wrong" }
       }
 
-      assert_redirected_to tenant_sign_in_path(tenant_slug: "nullisland")
+      # Devise recalls #new with the POST's params, so the branding holds.
+      assert_response :unprocessable_content
+      assert_includes response.body, ">Null Island Systems</h1>"
+      assert_select "input[type=hidden][name=tenant_slug][value=nullisland]"
     end
   end
 end

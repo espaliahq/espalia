@@ -2,10 +2,11 @@
 
 # Overrides Devise's SessionsController to render the sign-in page using Phlex.
 #
-# A tenant sign-on URL (`/t/:tenant_slug/sign-in`, #660) renders the same page
-# under the tenant's name and theme, and a login from it lands scoped to that
-# tenant. The slug rides the form as a hidden field so the POST (and a failed
-# attempt, via Users::FailureApp) keeps the tenant context.
+# A tenant sign-on URL (`/t/:tenant_slug/sign-in` or a custom domain, #660)
+# renders the same page under the tenant's name and theme, and a login from it
+# lands scoped to that tenant. The slug rides the form as a hidden field, so a
+# failed attempt — which Devise recalls into #new with the POST's params —
+# re-renders the branded page too.
 class Users::SessionsController < Devise::SessionsController
   # GET /users/sign_in
   # GET /t/:tenant_slug/sign-in

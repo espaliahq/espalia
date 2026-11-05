@@ -40,13 +40,15 @@ class TenantHostTest < ActionDispatch::IntegrationTest
     should "be pinned to the domain's tenant over the session's" do
       other = create(:tenant, name: "Driftwood")
       ActsAsTenant.with_tenant(other) { create(:tenant_user, tenant: other, user: @user) }
-      sign_in @user
 
-      get root_path
-      # Plain host resolves from the session: first tenant wins, whichever it is.
-      assert_response :success
-
+      # Cookies are host-scoped, so the whole flow runs on the custom domain:
+      # sign in there, point the session elsewhere via the switcher, and the
+      # next request re-pins it to the domain's tenant.
       host! "growth.nullisland.example"
+      post user_session_path, params: { user: { email: @user.email, password: "password123" } }
+      post users_tenant_switch_path, params: { tenant_id: other.id }
+      assert_equal other.id, session[:current_tenant_id]
+
       get root_path
 
       assert_response :success

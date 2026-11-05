@@ -207,6 +207,8 @@ class AuthSystemTest < ApplicationSystemTestCase
       click_button_with_js_fallback("Log in", expect_selector: "[role='alert']")
 
       assert_selector "[role='alert']", text: "Invalid email or password."
+      # Devise recalls #new with the POST's params (still branded via the
+      # hidden tenant_slug), and Turbo keeps the visited URL on the 422.
       assert_current_path "/t/nullisland/sign-in"
       assert_text "Null Island Systems"
     end
