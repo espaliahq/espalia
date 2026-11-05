@@ -23,11 +23,17 @@
 # never mistaken for the assessment of record. Read through a lens whose role
 # has an open declared exploration, the payload carries it as
 # `current_exploration`.
+#
+# `current_cycle` and `cycle_history` say when each lifecycle milestone last
+# happened, with who acted, in `reporting_cycle_cohort`'s field names. Past
+# cycles carry their lifecycle only: no screen scores a past cycle, so
+# neither does this.
 class Operations::Assessments::Get < Operations::Base
   include Operations::Assessments::ReadLens
   include Operations::Assessments::ExplorationPayload
+  include Operations::Assessments::LifecyclePayload
 
-  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds, for lack of coverage or while an alignment is still agreeing cells (unscored_reason agreement_incomplete), reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it. Carried-forward ratings count as rated but are not this cycle's until confirmed: scoring.coverage.to_confirm_at_assessed_level says how many wait, and assessments_confirm_carried_ratings confirms them."
+  description "Fetch one assessment's framework structure, the assessee's current role/level/cycle status, and their score on the level-independent scale (100 = meeting their current level in full) with a per-category breakdown. Each score carries the scale's own meaning, its parts and the framework's thresholds; a score the screen withholds, for lack of coverage or while an alignment is still agreeing cells (unscored_reason agreement_incomplete), reports scored: false rather than a number. Pass as_role_id and/or as_level_ordinal to read the same ratings against another role or level (a lens): scoring.lens.home is then false and it is not the assessment of record, and each capability's in_role says whether the record's role and the lens role read it. When that role has an open declared exploration, current_exploration describes it. Carried-forward ratings count as rated but are not this cycle's until confirmed: scoring.coverage.to_confirm_at_assessed_level says how many wait, and assessments_confirm_carried_ratings confirms them. current_cycle says when each milestone happened (enrolled, started, self and manager assessment complete, alignment started and completed, with who acted) and each alignment's started, aligned and re-opened times. cycle_history lists every cycle the person joined on this framework, open, closed or withdrawn from, newest first, with the same lifecycle and alignments but no scores. Timestamps are ISO 8601 UTC and record the latest occurrence: a re-open clears aligned_at until the next completion."
   category :read
   approval :none
 
@@ -45,10 +51,12 @@ class Operations::Assessments::Get < Operations::Base
   # @return [Hash] same payload as {Operations::Frameworks::Get} under
   #   `:framework`, plus `:assignment` (role + level + person identity),
   #   `:current_cycle` (id, name, status, planned_end_at, and `alignments` —
-  #   every role alignment has started against, home included) or nil, and
+  #   every role alignment has started against, home included, each with its
+  #   times — plus the participation's lifecycle timestamps) or nil, and
   #   `:scoring` (scale, score, state, components, thresholds, blocked
   #   capabilities, unrated capabilities, per-category roll-up), and `:current_exploration` — the
-  #   open exploration of the lens role, or nil.
+  #   open exploration of the lens role, or nil, and `:cycle_history` — every
+  #   cycle joined on this framework with its lifecycle, newest first.
   def perform
     {
       framework: with_in_role(Mcp::FrameworkSerializer.framework(assignment.framework)),
@@ -56,7 +64,8 @@ class Operations::Assessments::Get < Operations::Base
       current_cycle: cycle_payload(assignment.current_open_cycle),
       scoring: score_summary.overall,
       current_exploration: current_exploration,
-      unplaced_feedback: unplaced_feedback
+      unplaced_feedback: unplaced_feedback,
+      cycle_history: cycle_history_payload
     }
   end
 
@@ -128,13 +137,15 @@ class Operations::Assessments::Get < Operations::Base
   def cycle_payload(cycle)
     return nil unless cycle
 
+    entry = history.find { |e| e.cycle.cycle_id == cycle.cycle_id }
     {
       id: cycle.cycle_id,
       name: cycle.name,
       status: cycle.status,
       planned_end_at: cycle.planned_end_at&.iso8601,
       participant_status: participant_status,
-      alignments: alignments_payload
+      alignments: alignments_payload(entry),
+      **(entry ? lifecycle_payload(entry.enrollment, entry.progress, actors) : {})
     }
   end
 
@@ -145,12 +156,60 @@ class Operations::Assessments::Get < Operations::Base
   # The conversations in progress or done this cycle (ADR-22), so an agent
   # knows a PM3 alignment exists without reading through that lens.
   # Disclosure-safe: starting alignment is what tells the other party.
-  def alignments_payload
+  def alignments_payload(entry)
     return [] unless read_lens
 
+    rows = entry ? entry.role_alignments.index_by(&:role_id) : {}
     Assessments::Disclosure.for(lens: read_lens, participant_status: participant_status).alignments.map do |alignment|
       { role_id: alignment.role_id, role_code: alignment.role_code, level_ordinal: alignment.level_ordinal,
-        status: alignment.status, home: alignment.home }
+        status: alignment.status, home: alignment.home, **alignment_times(rows[alignment.role_id], entry) }
+    end
+  end
+
+  # A home alignment started before per-role rows existed has none; its
+  # times are the participation's.
+  def alignment_times(row, entry)
+    return role_alignment_times(row, actors) if row
+
+    progress = entry&.progress
+    {
+      alignment_started_at: lifecycle_time(progress&.alignment_started_at),
+      alignment_started_by: lifecycle_actor(progress&.alignment_started_by_id, actors),
+      aligned_at: lifecycle_time(progress&.aligned_at),
+      aligned_by: lifecycle_actor(progress&.aligned_by_id, actors),
+      reopened_at: nil,
+      reopened_by: nil
+    }
+  end
+
+  def history
+    @history ||= Assessments::CycleHistory.new(assignment: assignment).call
+  end
+
+  def actors
+    @actors ||= actor_names(history.map(&:progress), history.flat_map(&:role_alignments))
+  end
+
+  def cycle_history_payload
+    roles = FrameworkState::Role.where(role_id: history.flat_map { |e| e.role_alignments.map(&:role_id) }.uniq)
+      .index_by(&:role_id)
+    history.map do |entry|
+      {
+        id: entry.cycle.cycle_id,
+        name: entry.cycle.name,
+        status: entry.cycle.status,
+        opened_at: lifecycle_time(entry.cycle.opened_at),
+        closed_at: lifecycle_time(entry.cycle.closed_at),
+        participant_status: AssessmentCycleParticipation.wrap(entry.enrollment, entry.progress).status,
+        concluded_at: lifecycle_time(entry.enrollment.concluded_at),
+        withdrawn_at: lifecycle_time(entry.enrollment.withdrawn_at),
+        **lifecycle_payload(entry.enrollment, entry.progress, actors),
+        role_alignments: entry.role_alignments.map do |row|
+          role = roles[row.role_id]
+          { role_id: row.role_id, role_code: role&.code, role_name: role&.name, level_ordinal: row.level_ordinal,
+            home: row.home, status: row.status, **role_alignment_times(row, actors) }
+        end
+      }
     end
   end
 end
