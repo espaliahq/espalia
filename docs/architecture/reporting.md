@@ -389,7 +389,9 @@ asks for more than the card does:
 - **`person_id`** is authorised like the assessment itself: the caller's
   subtree, then `AssessmentPolicy#show?` on that person's assignments (so a
   recorded reporting manager or a rating delegate reads them too), and any
-  person for a tenant admin.
+  person for a tenant admin. Authorised per assessment, the activity is kept
+  to those frameworks (`framework_ids:`): a delegate on framework A never sees
+  the person's ratings, evidence or comments on framework B.
 - **Alignments:** from the role-alignment rows (`lens_alignments: true`), so
   lens-role conversations and `alignment_reopened` appear with their role; the
   card keeps the home lifecycle on the progress rows. With `person_id` they come

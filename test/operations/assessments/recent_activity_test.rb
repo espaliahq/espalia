@@ -116,6 +116,24 @@ class Operations::Assessments::RecentActivityTest < ActiveSupport::TestCase
       assert_equal [ "Ada" ], activity.map { |i| i.dig(:person, :name) }
     end
 
+    should "show a delegate only the framework they were delegated, not the person's others" do
+      other_framework = SecureRandom.uuid_v7
+      create(:person_framework_assignment, tenant: @tenant, person_id: @report.id, framework_id: other_framework)
+      create(:evidence_item, tenant: @tenant, person_id: @report.id, framework_id: other_framework,
+        capability_stable_id: @cap.stable_id, level_ordinal: 1, recorded_at: 1.minute.ago)
+      create(:person_development_comment, tenant: @tenant, person_id: @report.id, framework_id: other_framework,
+        capability_stable_id: @cap.stable_id, level_ordinal: 1, posted_at: 30.seconds.ago, body: "Private note")
+      delegate_ctx = member_ctx("Dana") do |delegate|
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @report.id, framework_id: @framework_id,
+          delegate_person_id: delegate.id, granted_by_id: @manager.id)
+      end
+
+      activity = call_op(context: delegate_ctx, params: { person_id: @report.id })[:activity]
+
+      assert_equal [ @framework_id ], activity.map { |i| i[:framework_id] }.uniq
+      refute(activity.any? { |i| i[:detail] == "Private note" })
+    end
+
     should "let a tenant admin name anyone" do
       outsider = create(:person, tenant: @tenant, name: "Elsewhere")
       add_evidence(outsider, at: 1.minute.ago)

@@ -43,10 +43,12 @@ class Operations::Assessments::RecentActivity < Operations::Base
 
     authorize PersonFrameworkAssignment, :index?
     return if params[:person_id].blank? || context.tenant_admin? || scope_person_ids.include?(params[:person_id])
-    return if PersonFrameworkAssignment.where(person_id: params[:person_id])
-      .any? { |assignment| AssessmentPolicy.new(context, assignment).show? }
 
-    raise Pundit::NotAuthorizedError, "you may not view that person's assessment"
+    # Authorised per assessment (a recorded manager, a delegate): only those
+    # frameworks' activity, never the person's others.
+    @framework_ids = PersonFrameworkAssignment.where(person_id: params[:person_id])
+      .select { |assignment| AssessmentPolicy.new(context, assignment).show? }.map(&:framework_id)
+    raise Pundit::NotAuthorizedError, "you may not view that person's assessment" if @framework_ids.empty?
   end
 
   # @return [Hash] `{ activity: [...] }`, most recent first
@@ -60,7 +62,7 @@ class Operations::Assessments::RecentActivity < Operations::Base
       person_ids: params[:person_id].presence ? [ params[:person_id] ] : scope_person_ids,
       limit: limit, since: since, until_time: until_time,
       cycle_id: params[:cycle_id].presence, kinds: kinds,
-      lens_alignments: true, alignment_history: params[:person_id].present?
+      lens_alignments: true, alignment_history: params[:person_id].present?, framework_ids: @framework_ids
     ).call
 
     { activity: items.map { |item| serialize(item) } }

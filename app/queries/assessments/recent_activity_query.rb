@@ -65,8 +65,10 @@ class Assessments::RecentActivityQuery
   # @param lens_alignments [Boolean] include alignments against other roles
   # @param alignment_history [Boolean] read alignment milestones from the
   #   event stream, re-opened completions included
+  # @param framework_ids [Array<String>, nil] keep activity on these
+  #   frameworks only — a viewer authorised per assessment; nil keeps all
   def initialize(person_ids:, limit: DEFAULT_LIMIT, since: nil, until_time: nil, cycle_id: nil,
-                 kinds: DEFAULT_KINDS, lens_alignments: false, alignment_history: false)
+                 kinds: DEFAULT_KINDS, lens_alignments: false, alignment_history: false, framework_ids: nil)
     @person_ids = Array(person_ids).compact.uniq
     @limit = limit
     @window = since || until_time ? (since..until_time) : nil
@@ -74,6 +76,7 @@ class Assessments::RecentActivityQuery
     @kinds = kinds
     @lens_alignments = lens_alignments
     @alignment_history = alignment_history
+    @framework_ids = framework_ids
   end
 
   # Cheap existence check for card audience gating.
@@ -107,14 +110,20 @@ class Assessments::RecentActivityQuery
     narrow(AssessmentCycleRoleAlignment.where(person_id: @person_ids).where.not(column => nil), column)
   end
 
+  # Progress has no framework column; its cycle does.
   def progress_relation(column)
-    narrow(AssessmentCycleProgress.where(person_id: @person_ids).where.not(column => nil), column)
+    relation = AssessmentCycleProgress.joins(:cycle).where(person_id: @person_ids).where.not(column => nil)
+    relation = relation.where(column => @window) if @window
+    relation = relation.where(cycle_id: @cycle_id) if @cycle_id
+    relation = relation.where(assessment_cycles: { framework_id: @framework_ids }) if @framework_ids
+    relation
   end
 
-  # The window and the cycle, in SQL, before the caller's LIMIT.
+  # The window, the cycle and the frameworks, in SQL, before the caller's LIMIT.
   def narrow(relation, column, cycle: true)
     relation = relation.where(column => @window) if @window
     relation = relation.where(cycle_id: @cycle_id) if @cycle_id && cycle
+    relation = relation.where(framework_id: @framework_ids) if @framework_ids
     relation
   end
 
@@ -189,7 +198,7 @@ class Assessments::RecentActivityQuery
   # The home lifecycle's milestones, as the card has always shown them.
   def home_alignment_candidates
     HOME_ALIGNMENT_SOURCES.select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
-      progress_relation(ts).joins(:cycle).order(ts => :desc).limit(@limit)
+      progress_relation(ts).order(ts => :desc).limit(@limit)
         .pluck(:person_id, "assessment_cycles.framework_id", ts, actor_col)
         .map do |person_id, framework_id, occurred_at, actor_id|
           Candidate.new(
@@ -206,7 +215,9 @@ class Assessments::RecentActivityQuery
     kinds = ALIGNMENT_SOURCES.keys.select { |kind| wanted?(kind) }
     return [] if kinds.empty?
 
-    PersonFrameworkAssignment.where(person_id: @person_ids).flat_map do |assignment|
+    assignments = PersonFrameworkAssignment.where(person_id: @person_ids)
+    assignments = assignments.where(framework_id: @framework_ids) if @framework_ids
+    assignments.flat_map do |assignment|
       Assessments::LifecycleTimeline.new(assignment: assignment).call(cycle_id: @cycle_id, kinds: kinds)
         .select { |m| (@lens_alignments || m.home) && (@window.nil? || @window.cover?(m.occurred_at)) }
         .map do |m|
