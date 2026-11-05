@@ -77,8 +77,7 @@ class Views::Tenant::Theme::EditView < Views::Base
       render Components::Kit::Card.new(title: "Sign-in page", heading_level: :h2) do |card|
         card.body do
           p(class: "text-sm text-muted") do
-            plain "People signing in at this address see the page under "
-            plain "#{@tenant.name}'s name and this theme:"
+            plain "People signing in at this address see the page under your name and theme:"
           end
           p(class: "mt-2 text-sm font-mono break-all") do
             a(href: @sign_in_url, class: "text-link hover:text-link-hover") { @sign_in_url }
