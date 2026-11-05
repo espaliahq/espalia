@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   scan_ruby:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
         run: bin/bundler-audit
       
   scan_js:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code
@@ -45,7 +45,7 @@ jobs:
         run: bin/importmap audit
 
   lint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
     env:
       RUBOCOP_CACHE_ROOT: tmp/rubocop
     steps:
@@ -77,7 +77,7 @@ jobs:
   # test suite (where those gems ARE loaded), but crashes Render at boot.
   # Eager-loading is DB-free, so no postgres service is needed.
   production_boot:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
     env:
       BUNDLE_WITHOUT: "development:test"
       RAILS_ENV: production
@@ -100,7 +100,7 @@ jobs:
 
   # test_helper runs one worker per processor, so more vCPUs is a straight speed-up.
   test:
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_LARGE || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -141,7 +141,7 @@ jobs:
   # Running it as its own job lets the main `test` job finish faster and
   # makes "is CI red because of code, or because of Claude?" obvious.
   mcp-cli-test:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -216,8 +216,11 @@ jobs:
 
   # Ten workers on 32 vCPUs leaves each Chrome about three cores: a starved
   # Chrome drops clicks. Matched 12 sharded jobs for speed (.github/AGENTS.md).
+  # CI_SYSTEM_TEST_WORKERS and CI_RUNNER_XLARGE are separate variables — size
+  # them together (~3 vCPUs per Chrome). Without them (a fork) the job runs
+  # one worker on the GitHub-hosted fallback: slow, but no starved Chromes.
   system-test:
-    runs-on: blacksmith-32vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_XLARGE || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -242,7 +245,7 @@ jobs:
         env:
           RAILS_ENV: test
           DB_HOST: localhost
-          SYSTEM_TEST_WORKERS: "10"
+          SYSTEM_TEST_WORKERS: ${{ vars.CI_SYSTEM_TEST_WORKERS || '1' }}
         run: bin/rails db:test:prepare test:system
 
       - name: Keep screenshots from failed system tests
@@ -259,7 +262,7 @@ jobs:
   # /contract URL is the FEEDBACK_EXCHANGE_PEER_CONTRACT_URL repository variable;
   # while it is unset, or Chip has never published, that step passes with a warning.
   contract:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -323,7 +326,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
     concurrency:
       group: dependabot-auto-merge-${{ github.event.pull_request.number }}
     permissions:

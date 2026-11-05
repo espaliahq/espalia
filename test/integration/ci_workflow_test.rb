@@ -57,6 +57,18 @@ class CiWorkflowTest < ActiveSupport::TestCase
   end
 
   context "every workflow" do
+    should "resolve runner labels from repo variables with a hosted fallback" do
+      pattern = /\A\$\{\{ vars\.CI_RUNNER_(SMALL|LARGE|XLARGE) \|\| 'ubuntu-latest' \}\}\z/
+
+      WORKFLOWS.each do |path|
+        YAML.load_file(path).fetch("jobs").each do |name, job|
+          assert_match pattern, job.fetch("runs-on").to_s,
+            "#{path.basename} › #{name}: a hard-coded runner label queues forever in forks; " \
+            "use ${{ vars.CI_RUNNER_* || 'ubuntu-latest' }}"
+        end
+      end
+    end
+
     should "keep expressions out of shell scripts" do
       offenders = WORKFLOWS.flat_map do |path|
         YAML.load_file(path).fetch("jobs").flat_map do |name, job|
