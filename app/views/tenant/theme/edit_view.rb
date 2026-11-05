@@ -8,8 +8,10 @@ class Views::Tenant::Theme::EditView < Views::Base
   include Phlex::Rails::Helpers::Routes
   include Phlex::Rails::Helpers::FormWith
 
+  # Default's description names the product, which is per-tenant (#660), so
+  # it resolves at render time in {#theme_description}.
   THEMES = [
-    { value: "default", label: "Default", description: "#{product_name}'s own teal." },
+    { value: "default", label: "Default" },
     { value: "bento", label: "Bento", description: "The Bento design system: lime, with Plus Jakarta Sans." },
     { value: "custom", label: "Custom", description: "Default, with your own brand, navbar and font." }
   ].freeze
@@ -120,6 +122,11 @@ class Views::Tenant::Theme::EditView < Views::Base
   # tenant's own override (which is exactly what the field edits).
   def instance_product_name = Rails.application.config.x.product_name
 
+  # @return [String]
+  def theme_description(theme)
+    theme[:description] || "#{product_name}'s own teal."
+  end
+
   def theme_choice
     render Components::Kit::Card.new(title: "Theme", heading_level: :h2) do |card|
       card.body do
@@ -149,7 +156,7 @@ class Views::Tenant::Theme::EditView < Views::Base
         )
         div(class: "min-w-0") do
           span(class: "block text-sm font-semibold text-default") { theme[:label] }
-          span(id: "theme-#{theme[:value]}-description", class: "block text-sm text-muted") { theme[:description] }
+          span(id: "theme-#{theme[:value]}-description", class: "block text-sm text-muted") { theme_description(theme) }
         end
       end
       div(class: "grid grid-cols-2 gap-2") do

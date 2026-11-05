@@ -54,11 +54,12 @@ class Views::Users::Sessions::NewView < Views::Base
   private
 
   def backdrop
-    span(class: "auth-blob size-[420px] left-[30%] top-[30%] sm:size-[56vmax] sm:left-[36%] sm:top-[34%]",
+    blob = "auth-blob#{" auth-blob-brand" if @tenant}"
+    span(class: "#{blob} size-[420px] left-[30%] top-[30%] sm:size-[56vmax] sm:left-[36%] sm:top-[34%]",
       aria: { hidden: "true" })
-    span(class: "auth-blob size-[400px] left-[74%] top-1/2 sm:size-[52vmax] sm:left-[64%] sm:top-[46%]",
+    span(class: "#{blob} size-[400px] left-[74%] top-1/2 sm:size-[52vmax] sm:left-[64%] sm:top-[46%]",
       aria: { hidden: "true" })
-    span(class: "auth-blob size-[380px] left-[44%] top-[76%] sm:size-[50vmax] sm:left-1/2",
+    span(class: "#{blob} size-[380px] left-[44%] top-[76%] sm:size-[50vmax] sm:left-1/2",
       aria: { hidden: "true" })
   end
 
@@ -73,7 +74,7 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def brand_mark
-    svg(class: "size-10", viewBox: "166.5 148.5 730 730", aria: { hidden: "true" }, focusable: "false",
+    svg(class: "size-10#{" text-brand" if @tenant}", viewBox: "166.5 148.5 730 730", aria: { hidden: "true" }, focusable: "false",
       data: { brand_mark: true }) do |s|
       s.g(fill: "currentColor") do
         MARK_PATHS.each { |d| s.path(d:) }
@@ -203,9 +204,12 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def submit_button
+    # A tenant page shows the tenant's brand; the generic page stays neutral.
+    # The tone pair keeps the text readable on whatever colour the tenant picked.
+    tone = @tenant ? "tone-brand" : "tone-neutral"
     button(
       type: "submit",
-      class: "#{BUTTON_CLASSES} tone-neutral bg-tone-strong hover:bg-tone-strong-hover " \
+      class: "#{BUTTON_CLASSES} #{tone} bg-tone-strong hover:bg-tone-strong-hover " \
              "text-tone-content-inverse"
     ) { "Log in" }
   end

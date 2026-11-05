@@ -938,6 +938,13 @@ html:has(.auth-page) {
   }
 }
 
+/* A tenant sign-on page's backdrop takes the tenant's brand (#660); the
+ * generic page keeps the fixed violet above. Declared after .auth-blob so
+ * it wins — both sit outside Tailwind's layers. */
+.auth-blob-brand {
+  background-color: var(--gos-brand);
+}
+
 /* The forms plugin styles a checked box with a white tick on currentColor,
  * which vanishes on the dark theme's near-white fill. The tick's fill is
  * --gos-neutral-content-inverse; a data URI can't read a variable. */
