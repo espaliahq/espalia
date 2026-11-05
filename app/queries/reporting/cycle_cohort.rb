@@ -33,12 +33,36 @@ class Reporting::CycleCohort
     def aligned_pct = pct(aligned)
   end
 
+  # When each home-role milestone last happened. The read models keep only the
+  # latest: a re-open clears `aligned_at`, and a completion stamp clears when
+  # coverage drops and restarts when it returns.
+  Lifecycle = Data.define(
+    :enrolled_at, :started_at, :self_completed_at, :manager_completed_at,
+    :alignment_started_at, :alignment_started_by_id,
+    :aligned_at, :aligned_by_id, :aligned_framework_version
+  ) do
+    # @return [Float, nil]
+    def days_to_align
+      return nil unless aligned_at && enrolled_at
+
+      (aligned_at - enrolled_at) / 1.day
+    end
+  end
+
+  # One role's alignment conversation (ADR-22) — the home role or a lens.
+  RoleAlignment = Data.define(
+    :role_id, :role_name, :home, :status,
+    :alignment_started_at, :alignment_started_by_id,
+    :aligned_at, :aligned_by_id, :reopened_at, :reopened_by_id
+  )
+
   # One participant's progress. Carries no rating values — only coverage counts
-  # and lifecycle status.
+  # and lifecycle status. `role_alignments` is loaded in full mode only.
   Participant = Data.define(
     :person_id, :name, :manager_id, :role_id, :role_name, :level_ordinal,
     :status, :expected_count, :self_count, :manager_count,
-    :self_done, :manager_done, :aligned, :at_risk, :last_activity_at
+    :self_done, :manager_done, :aligned, :at_risk, :last_activity_at,
+    :lifecycle, :role_alignments
   )
 
   # A grouping bucket (by manager / role / level) with its own funnel.
@@ -46,7 +70,7 @@ class Reporting::CycleCohort
 
   Result = Data.define(
     :cycle, :total, :funnel, :status_counts, :at_risk_count,
-    :participants, :groups, :top_lagging_group
+    :participants, :groups, :top_lagging_group, :median_days_to_align
   ) do
     def any? = total.positive?
   end
@@ -76,7 +100,8 @@ class Reporting::CycleCohort
       at_risk_count: participants.count(&:at_risk),
       participants: @mode == :full ? participants : [],
       groups: @mode == :full ? full_groups(participants, manager_groups) : {},
-      top_lagging_group: top_lagging(manager_groups)
+      top_lagging_group: top_lagging(manager_groups),
+      median_days_to_align: median_days_to_align(participants)
     )
   end
 
@@ -97,13 +122,14 @@ class Reporting::CycleCohort
     roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
     scope_by_person = role_scopes_by_person(enrollments)
     coverage = coverage_by_person(enrollments, scope_by_person)
+    alignments = @mode == :full ? role_alignments_by_person(person_ids) : {}
 
     enrollments.map do |enrollment|
-      build_participant(enrollment, progress, people, roles, scope_by_person, coverage)
+      build_participant(enrollment, progress, people, roles, scope_by_person, coverage, alignments)
     end
   end
 
-  def build_participant(enrollment, progress, people, roles, scope_by_person, coverage)
+  def build_participant(enrollment, progress, people, roles, scope_by_person, coverage, alignments)
     person = people[enrollment.person_id]
     prog = progress[enrollment.person_id]
     status = prog&.status || "in_progress"
@@ -132,8 +158,54 @@ class Reporting::CycleCohort
       manager_done: expected_count.positive? && cov[:manager] >= expected_count,
       aligned: status == "aligned",
       at_risk: at_risk?(status, last_activity),
-      last_activity_at: last_activity
+      last_activity_at: last_activity,
+      lifecycle: build_lifecycle(enrollment, prog),
+      role_alignments: alignments.fetch(enrollment.person_id, [])
     )
+  end
+
+  def build_lifecycle(enrollment, prog)
+    Lifecycle.new(
+      enrolled_at: enrollment.enrolled_at,
+      started_at: prog&.started_at,
+      self_completed_at: prog&.self_completed_at,
+      manager_completed_at: prog&.manager_completed_at,
+      alignment_started_at: prog&.alignment_started_at,
+      alignment_started_by_id: prog&.alignment_started_by_id,
+      aligned_at: prog&.aligned_at,
+      aligned_by_id: prog&.aligned_by_id,
+      aligned_framework_version: prog&.aligned_framework_version
+    )
+  end
+
+  # Home role first, then lens roles in the order their conversations began.
+  # @return [Hash{String => Array<RoleAlignment>}]
+  def role_alignments_by_person(person_ids)
+    rows = AssessmentCycleRoleAlignment.where(cycle_id: @cycle.cycle_id, person_id: person_ids)
+      .order(home: :desc, alignment_started_at: :asc).to_a
+    role_names = FrameworkState::Role.where(role_id: rows.map(&:role_id).uniq).pluck(:role_id, :name).to_h
+
+    rows.group_by(&:person_id).transform_values do |person_rows|
+      person_rows.map do |row|
+        RoleAlignment.new(
+          role_id: row.role_id, role_name: role_names[row.role_id], home: row.home, status: row.status,
+          alignment_started_at: row.alignment_started_at, alignment_started_by_id: row.alignment_started_by_id,
+          aligned_at: row.aligned_at, aligned_by_id: row.aligned_by_id,
+          reopened_at: row.reopened_at, reopened_by_id: row.reopened_by_id
+        )
+      end
+    end
+  end
+
+  # Enrolment to (latest) alignment, over the participants aligned so far.
+  # @return [Float, nil] days, to one decimal place
+  def median_days_to_align(participants)
+    days = participants.select(&:aligned).filter_map { |p| p.lifecycle.days_to_align }.sort
+    return nil if days.empty?
+
+    mid = days.size / 2
+    median = days.size.odd? ? days[mid] : (days[mid - 1] + days[mid]) / 2
+    median.round(1)
   end
 
   # person_id => the cells their assessed role (enrollment snapshot) reads.

@@ -106,24 +106,36 @@ aggregates the existing read models at query time.
   capability bound to their **assessed role** (enrollment snapshot, ADR-19) has a
   self rating at their **assessed level**. Aligned is the one explicit milestone
   (`AssessmentCycleProgress.status == "aligned"`). There is no explicit self/manager
-  "completion" event — `self_completed_at` / `manager_completed_at` are unused.
+  "completion" event; `CurrentAssessment` stamps `self_completed_at` /
+  `manager_completed_at` from the same coverage rule on every rating change
+  ([assessments/lifecycle.md](../guidelines/assessments/lifecycle.md)).
 - **At-risk**: not yet aligned AND (past the cycle's `planned_end_at` OR ≥14 days
   with no enrolment/lifecycle/rating activity).
 - **Grouping**: by manager subtree / role / level (enrollment snapshot columns).
 - **Modes**: `:summary` (funnel + counts + most-lagging subtree, for the Home
   card) and `:full` (adds grouped breakdowns + per-participant rows, for the
   drill-down view).
+- **When**: each participant carries a `Lifecycle` (enrolled, started, self and
+  manager complete, alignment started and completed, with actors) and, in full
+  mode, one `RoleAlignment` per role aligned this cycle (home and lens, with
+  `reopened_at`). The result carries `median_days_to_align`. Every stamp is the
+  **latest** occurrence: a re-open clears `aligned_at` until the next completion,
+  and a completion stamp clears when coverage drops. First completions and
+  re-open history live only in the event stream.
 
-**Privacy invariant**: exposes only lifecycle status and completion counts —
-**never rating values or individual scores**. Skip-level viewers see funnel
-position per person, nothing finer.
+**Access and privacy**: the manager chain and tenant admins may see everything
+about a person, timestamps included, so skip-level viewers get the same rows as
+direct managers. The report still returns **no rating values or individual
+scores**: it reports progress, and scores have their own surfaces.
 
 **Surfaces** (one implementation, three entry points):
 - Home cohort card — `Home::CycleProgressCard` (summary mode, one per open cycle).
 - Drill-down view — `GET /assessment_cycles/:id/cohort`
   (`AssessmentCycles::CohortsController`, full mode).
 - MCP — `Operations::Reporting::CycleCohort` (`reporting_cycle_cohort`, summary by
-  default).
+  default). Full mode returns the lifecycle timestamps; `aligned_from` /
+  `aligned_to` (UTC dates, full mode only) narrow the participant list, not the
+  funnel.
 
 **Authorization**: `AssessmentCyclePolicy#cohort?` (any manager with a participant
 in their `Person#all_reports` subtree) / `#cohort_full_access?` (admins/HR see the
