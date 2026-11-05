@@ -11,8 +11,35 @@
 # the whole cycle. See `cohort?` / `cohort_full_access?`.
 #
 class AssessmentCyclePolicy < ApplicationPolicy
+  # The cycles a viewer may report on: every cycle for admins/HR, otherwise
+  # those `cohort?` would admit them to — a non-withdrawn participant
+  # somewhere in their subtree.
+  class Scope
+    # @param context [AuthorizationContext]
+    # @param scope [ActiveRecord::Relation<AssessmentCycle>]
+    def initialize(context, scope)
+      @context = context
+      @scope = scope
+    end
+
+    # @return [ActiveRecord::Relation<AssessmentCycle>]
+    def resolve
+      return @scope.all if @context.tenant_admin?
+      return @scope.none unless @context.person
+
+      subtree = @context.person.all_reports.select(:id)
+      @scope.where(cycle_id: AssessmentCycleEnrollment.active.where(person_id: subtree).select(:cycle_id))
+    end
+  end
+
   def index?
     tenant_admin?
+  end
+
+  # Whether the viewer may list cycles to report on. Any member may ask; the
+  # {Scope} decides which cycles they see.
+  def report_index?
+    tenant_member?
   end
 
   # Whether the viewer may see the cohort progress roll-up for this cycle.

@@ -264,4 +264,52 @@ class AssessmentCyclePolicyTest < ActiveSupport::TestCase
       end
     end
   end
+
+  # The list must never offer a cycle whose report would then be refused, nor
+  # hide one it would serve: the scope and `cohort?` answer the same question.
+  context "the reportable-cycles scope" do
+    setup do
+      @user = create(:user)
+      @tenant_user = create(:tenant_user, user: @user, tenant: @tenant, role: :member)
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant)
+        @tenant_user.update!(person: @manager)
+        report = create(:person, tenant: @tenant, manager: @manager)
+        @concluded = create(:assessment_cycle, :closed, tenant: @tenant)
+        @withdrawn = create(:assessment_cycle, tenant: @tenant)
+        @unrelated = create(:assessment_cycle, tenant: @tenant)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @cycle, person_id: report.id)
+        create(:assessment_cycle_enrollment, :concluded, tenant: @tenant, cycle: @concluded, person_id: report.id)
+        create(:assessment_cycle_enrollment, :withdrawn, tenant: @tenant, cycle: @withdrawn, person_id: report.id)
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: @unrelated)
+      end
+      @context = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: @manager)
+    end
+
+    should "hold exactly the cycles cohort? admits" do
+      ActsAsTenant.with_tenant(@tenant) do
+        listed = AssessmentCyclePolicy::Scope.new(@context, AssessmentCycle).resolve.pluck(:cycle_id)
+        admitted = AssessmentCycle.all.select { |cycle| AssessmentCyclePolicy.new(@context, cycle).cohort? }
+
+        assert_equal [ @cycle, @concluded ].map(&:cycle_id).sort, listed.sort
+        assert_equal admitted.map(&:cycle_id).sort, listed.sort
+      end
+    end
+
+    should "hold every cycle for an admin and none for a member without a person" do
+      admin = AuthorizationContext.new(user: create(:user, global_admin: true), tenant_user: nil, person: nil)
+      member = AuthorizationContext.new(user: @user, tenant_user: @tenant_user, person: nil)
+
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_equal 4, AssessmentCyclePolicy::Scope.new(admin, AssessmentCycle).resolve.count
+        assert_empty AssessmentCyclePolicy::Scope.new(member, AssessmentCycle).resolve
+      end
+    end
+
+    should "let any member ask for the list, and no one outside the tenant" do
+      assert AssessmentCyclePolicy.new(@context, AssessmentCycle).report_index?
+      refute AssessmentCyclePolicy.new(AuthorizationContext.new(user: @user, tenant_user: nil, person: nil),
+        AssessmentCycle).report_index?
+    end
+  end
 end

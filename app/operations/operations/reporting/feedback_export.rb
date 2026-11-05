@@ -50,7 +50,8 @@ class Operations::Reporting::FeedbackExport < Operations::Base
     origin_request: "Origin request"
   }.freeze
 
-  parameter :cycle_id, String, required: true, allow_blank: false
+  parameter :cycle_id, String, required: true, allow_blank: false,
+    schema: Operations::Reporting::CyclesList::CYCLE_ID_SCHEMA
   parameter :month, String, required: false, allow_blank: false, schema: {
     pattern: ::Reporting::CycleMonth::JSON_SCHEMA_PATTERN,
     description: "Calendar month within the cycle, YYYY-MM. Omit for the whole cycle."

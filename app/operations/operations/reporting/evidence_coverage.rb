@@ -17,7 +17,8 @@ class Operations::Reporting::EvidenceCoverage < Operations::Base
   category :read
   approval :none
 
-  parameter :cycle_id, String, required: true
+  parameter :cycle_id, String, required: true,
+    schema: Operations::Reporting::CyclesList::CYCLE_ID_SCHEMA
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :scope, String, required: false, allowed: %w[mine all]
   # `allow_blank: false` keeps the runtime in step with the advertised pattern

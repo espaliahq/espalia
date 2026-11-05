@@ -29,7 +29,8 @@ class Operations::Reporting::CapabilityAttainment < Operations::Base
     "aligned" => :aligned_only
   }.freeze
 
-  parameter :cycle_id, String, required: true
+  parameter :cycle_id, String, required: true,
+    schema: Operations::Reporting::CyclesList::CYCLE_ID_SCHEMA
   parameter :perspective, String, required: false, allowed: PERSPECTIVES.keys
   parameter :scope, String, required: false, allowed: %w[mine all]
 

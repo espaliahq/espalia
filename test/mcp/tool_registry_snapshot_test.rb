@@ -2373,7 +2373,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string" },
+            "cycle_id" => { "type" => "string", "description" => "An assessment cycle's id, from reporting_cycles_list." },
             "perspective" => { "type" => "string", "enum" => [ "effective", "self", "manager", "aligned" ] },
             "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
           },
@@ -2404,7 +2404,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string" },
+            "cycle_id" => { "type" => "string", "description" => "An assessment cycle's id, from reporting_cycles_list." },
             "mode" => { "type" => "string", "enum" => [ "summary", "full" ] },
             "scope" => { "type" => "string", "enum" => [ "mine", "all" ] },
             "aligned_from" => {
@@ -2441,6 +2441,28 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "reporting_cycles_list",
+        "description" => "List the assessment cycles the caller can report on, newest first, with their " \
+          "status, opened / planned end / closed dates, framework and version range, and " \
+          "participant count. Admins see every cycle; a manager sees the cycles with someone " \
+          "from their org subtree enrolled, and counts only that subtree. Use a cycle's id " \
+          "with the other reporting_* tools.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "status" => { "type" => "string", "enum" => [ "open", "closed" ] },
+            "framework_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+          },
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "reporting_evidence_coverage",
         "description" => "Aggregate feedback and evidence-request coverage for an assessment cycle " \
           "across the caller's org subtree (admins see the whole cycle): feedback " \
@@ -2453,7 +2475,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string" },
+            "cycle_id" => { "type" => "string", "description" => "An assessment cycle's id, from reporting_cycles_list." },
             "mode" => { "type" => "string", "enum" => [ "summary", "full" ] },
             "scope" => { "type" => "string", "enum" => [ "mine", "all" ] },
             "month" => {
@@ -2485,7 +2507,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "cycle_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "cycle_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "description" => "An assessment cycle's id, from reporting_cycles_list." },
             "month" => {
               "type" => "string",
               "minLength" => 1,
