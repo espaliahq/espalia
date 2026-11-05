@@ -70,6 +70,10 @@ editor integrations; `bin/rubocop`, and so precommit, passes `--config` and is
 immune. When you change a custom cop in a nested worktree, lint with
 `bin/rubocop` or add `--ignore-parent-exclusion`.
 
+## A system run where every test errors with "tab crashed"
+
+**In the devcontainer, hundreds of `Selenium::WebDriver::Error::WebDriverError: tab crashed` errors can mean the remote Selenium Grid's Chromium nodes ran out of memory — confirm that before treating it as infrastructure.** This applies to the devcontainer path, where `SELENIUM_HOST=selenium-hub` sends tests to the four `selenium-node-*` containers (`.devcontainer/compose.yaml`, 1 GB shm each); cloud sessions run a local Chromium instead (see above) and don't share this failure mode. Those containers share the OrbStack VM with every other session's containers, and when the VM is near its limit Chromium's renderers are killed mid-run: every later test then errors in `sign_in_as` or the first `fill_in`, and the summary reads like `720 runs, 280 assertions, 0 failures, 685 errors`. Treat it as memory pressure only with evidence: `free -h` shows the VM near its limit (~13 of 15 GB used, swap full, during the 5 Nov 2026 runs), the errors start at a sign-in rather than at your change's screens, and a re-run of `bin/rails test:system` once memory recovers is clean. A Grid status check (`curl -s http://selenium-hub:4444/status`: `ready: true`, four nodes `UP`) tells you the nodes are back, not why a renderer died. Anything that still fails on the re-run is a real failure.
+
 ## A checkout without `config/master.key`
 
 **The seeded dev admin is `admin@example.com` / `password123`** — created by
