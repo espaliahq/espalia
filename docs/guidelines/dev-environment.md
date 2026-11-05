@@ -118,7 +118,7 @@ prints anything.
 
 ## CodeRabbit CLI in the devcontainer
 
-**"Provider identity could not be verified" from `coderabbit` usually means the binary self-updated, not that the token expired.** The CLI updates itself on launch, and a major jump (0.4 → 0.9 here) invalidates the stored session even though `~/.coderabbit/auth.json` carries an `expiresAt` decades away. Fix with one `coderabbit auth login`. Containers rebuilt since the `~/.coderabbit` bind mount landed share the host's auth, so that login serves host and container alike and survives rebuilds. On an older container there is no mount: a login there lands in the container filesystem and vanishes on the next rebuild, so rebuild first.
+**CodeRabbit CLI auth is per-machine: log in interactively inside each container, and again after every rebuild.** Since 0.9 a browser sign-in's token is bound to the machine that logged in, so a host credential never serves the container — a `~/.coderabbit` bind mount was tried ([PR #684](https://github.com/mr-yum/growth-os/pull/684)) and reverted, because shared state just makes host and container overwrite each other's single credential slot. The symptoms of a foreign or stale credential are "Provider identity could not be verified" or `credentials_unavailable` ("no token is available" in `coderabbit doctor`), even though `auth.json` claims an `expiresAt` decades away; a self-update of the CLI (it updates itself on launch; 0.4 → 0.9 here) invalidates the session the same way. Fix with `coderabbit auth login` in the environment that will run the reviews. For headless use CodeRabbit offers Agentic API keys (`coderabbit auth login --api-key`), deliberately not adopted here.
 
 ## Measuring in development
 
