@@ -218,6 +218,20 @@ no screen scores a past one, so neither does the MCP
 latest occurrence — a re-open clears `aligned_at` — and the event stream holds
 the rest.
 
+**The event stream is the history; `assessments_timeline` reads it.**
+`Assessments::LifecycleTimeline` reads one person's PersonDevelopment stream at
+call time (`of_type` the milestone events, one stream) and returns every
+alignment started, completed and re-opened, cycle joins and exits, role, level
+and reporting-manager changes, explorations and rating delegations, each with
+`occurred_at` and the actor. It answers what the read models overwrite: when an
+alignment was first completed, and how often it was re-opened. Self and manager
+completion have no event, so they ride along from the progress stamps marked
+`derived: true`. History has older shapes: an alignment event with no `role_id`
+is the cycle's home role (enrollment snapshot, else the assignment — the
+projection's rule), and a missing actor falls back to the metadata `actor_id`.
+No projection backs it; a cohort-wide history ("every re-open this cycle") would
+be a new projection owning its own table.
+
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
 agent can tell a low score from a barely-rated one. The overall `coverage`
@@ -778,6 +792,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
 | `app/operations/operations/lifecycle_payload.rb` | Lifecycle timestamps and role-alignment times, one vocabulary for `reporting_cycle_cohort` and `assessments_get` (`current_cycle`, `past_cycles` over `Assessments::CycleHistory`) |
+| `app/operations/operations/assessments/timeline.rb` | `assessments_timeline` — a person's lifecycle history from their event stream (`Assessments::LifecycleTimeline`) |
 | `app/operations/operations/assessments/alignment_lens.rb` | The role an alignment milestone acts on, and the per-role policy check Pundit's `authorize` can't pass (ADR-22) |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |

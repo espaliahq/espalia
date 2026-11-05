@@ -430,6 +430,18 @@ feed.
 
 Replay to `FullAlignmentCompleted` event. No separate projection needed — it's on-demand replay.
 
+### Lifecycle Timeline
+
+The read models keep only the latest of each milestone: `AlignmentReopened`
+clears `aligned_at`, and the next `FullAlignmentCompleted` overwrites it.
+`Assessments::LifecycleTimeline` reads the stream on demand for the full
+record — every join, leave and conclude, alignment start, completion and
+re-open per role, role/level and reporting-manager change, exploration and
+rating delegation — and `assessments_timeline` serves it over MCP. No
+projection: it reads one stream filtered to the milestone types, and reading
+the events keeps every historical shape in play (a role-less alignment event
+is the home role's).
+
 ### Freshness
 
 Derived from timestamps on above projections. Queryable for dashboards.
