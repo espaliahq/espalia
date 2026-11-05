@@ -2444,14 +2444,17 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "reporting_cycles_list",
         "description" => "List the assessment cycles the caller can report on, newest first, with their " \
           "status, opened / planned end / closed dates, framework and version range, and " \
-          "participant count. Admins see every cycle; a manager sees the cycles with someone " \
-          "from their org subtree enrolled, and counts only that subtree. Use a cycle's id " \
-          "with the other reporting_* tools.",
+          "participant count. Admins see every cycle (scope: \"mine\" narrows to their own " \
+          "org subtree); a manager sees the cycles with someone from their subtree enrolled, " \
+          "and counts only that subtree. A listed id works with reporting_cycle_cohort, " \
+          "reporting_capability_attainment and reporting_evidence_coverage; " \
+          "reporting_feedback_export is for tenant admins only.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
             "status" => { "type" => "string", "enum" => [ "open", "closed" ] },
-            "framework_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" }
+            "framework_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" },
+            "scope" => { "type" => "string", "enum" => [ "mine", "all" ] }
           },
           "required" => [],
           "additionalProperties" => false

@@ -46,11 +46,36 @@ class Operations::Reporting::CyclesListTest < ActiveSupport::TestCase
     AuthorizationContext.new(user: user, tenant_user: tenant_user, person: tenant_user.person)
   end
 
-  should "give an admin every cycle, newest first, with whole-cycle counts" do
+  should "give an admin every cycle, newest first, with whole-cycle counts that leave out withdrawals" do
+    ActsAsTenant.with_tenant(@tenant) do
+      create(:assessment_cycle_enrollment, :withdrawn, tenant: @tenant, cycle: @open)
+    end
+
     cycles = call_op(context: member_context("Admin", role: :admin))[:cycles]
 
     assert_equal [ "Product H2", "H2 2026", "H1 2026" ], cycles.map { |c| c[:name] }
     assert_equal 2, cycles.find { |c| c[:name] == "H2 2026" }[:participant_count]
+  end
+
+  should "give a global admin with no membership every cycle" do
+    ctx = AuthorizationContext.new(user: create(:user, global_admin: true), tenant_user: nil, person: nil)
+
+    assert_equal 3, call_op(context: ctx)[:cycles].size
+  end
+
+  should "narrow an admin who manages a team to their own subtree on scope mine" do
+    ctx = member_context("Admin manager", role: :admin) { |admin| @manager.update!(manager: admin) }
+
+    cycles = call_op(context: ctx, params: { scope: "mine" })[:cycles]
+
+    assert_equal [ @open.cycle_id, @closed.cycle_id ], cycles.map { |c| c[:id] }
+    assert_equal 1, cycles.first[:participant_count]
+  end
+
+  should "refuse a framework_id that isn't a UUID rather than list nothing" do
+    assert_raises(Operations::Base::ParameterError) do
+      call_op(context: @manager_ctx, params: { framework_id: "Engineering Ladder" })
+    end
   end
 
   should "describe each cycle, closed ones with their close date" do
