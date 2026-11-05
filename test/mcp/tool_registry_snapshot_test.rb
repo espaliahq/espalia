@@ -834,6 +834,55 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "assessments_timeline",
+        "description" => "A person's lifecycle history on one assessment, oldest first, from their event stream: " \
+          "assignment to the framework and removal from it, cycle joins, exits and conclusions, every " \
+          "alignment started, completed and re-opened (per role, with role_id, role_code, role_name and " \
+          "home — whether it was the role they held when they joined the cycle), role, level and " \
+          "reporting-manager changes, explorations started and closed, and manager-rating delegations " \
+          "granted and revoked — each with occurred_at (ISO 8601 UTC) and the actor. Unlike " \
+          "assessments_get and reporting_cycle_cohort, which keep only the latest stamp, this answers " \
+          "when an alignment was first completed and how often it was re-opened. Self and manager " \
+          "assessment completion have no event: they appear with derived: true, at their latest " \
+          "completion only. Pass cycle_id for one cycle's milestones, and kinds to narrow by kind (an " \
+          "empty list returns none). Free-text reasons appear only for the manager chain and tenant admins. " \
+          "Returns no rating values.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "assignment_id" => { "type" => "string" },
+            "cycle_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S",
+              "description" => "Keep only the milestones of this cycle (from reporting_cycles_list or assessments_get)."
+            },
+            "kinds" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string",
+                "enum" => [
+                  "assigned_to_framework", "unassigned_from_framework", "joined_cycle",
+                  "left_cycle", "cycle_concluded", "alignment_started",
+                  "alignment_completed", "alignment_reopened", "role_changed",
+                  "level_changed", "reporting_manager_recorded", "exploration_started",
+                  "exploration_closed", "manager_rating_delegated", "manager_rating_delegation_revoked",
+                  "self_assessment_completed", "manager_assessment_completed"
+                ]
+              },
+              "description" => "Keep only these kinds of milestone."
+            }
+          },
+          "required" => [ "assignment_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "assessments_unassign",
         "description" => "Remove a person's framework assignment (when their real role no longer maps to a framework role).",
         "inputSchema" => {

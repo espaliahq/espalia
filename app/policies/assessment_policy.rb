@@ -94,6 +94,14 @@ class AssessmentPolicy < ApplicationPolicy
   # @return [Boolean]
   def unassign? = tenant_admin?
 
+  # Whether the viewer reads the free-text reasons on lifecycle events — why
+  # someone was unenrolled, unassigned or moved, why a delegation was
+  # granted. They were written about the assessee for the people around
+  # them: the manager chain and tenant admins, not the assessee or a delegate.
+  #
+  # @return [Boolean]
+  def view_lifecycle_reasons? = tenant_admin? || manages_assessee? || in_assessee_manager_chain?
+
   # Either the assessee or their manager can record an alignment, but only
   # while an alignment is in progress — against the home role (status
   # `aligning`) or another role. Which cells it may touch is the

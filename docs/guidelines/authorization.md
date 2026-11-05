@@ -111,6 +111,7 @@ Access to person development streams is based on the person/manager relationship
 | Unassign from framework (`unassign?`) | Tenant admin only — a destructive org-structure change, not the assessee or their manager |
 | Declare / close an exploration of another role (`start_exploration?` / `close_exploration?`) | The assessee, the reporting manager or an active delegate (`rating_participant?`) — no open cycle needed. View-only ancestors and admins outside the chain read it but can't declare or close |
 | Growth plan | Person proposes, manager agrees |
+| Read the free-text reasons on lifecycle events (`view_lifecycle_reasons?`): why someone was unenrolled, unassigned or moved, why a delegation was granted | The manager chain and tenant admins — not the assessee, and not a rating delegate outside the chain, though `show?` admits both |
 | Report on a cycle (`AssessmentCyclePolicy#cohort?`, `attainment?`, `evidence_report?`) and list the cycles to report on (`report_index?` + `AssessmentCyclePolicy::Scope`) | Tenant admins see every cycle; anyone else the cycles with a non-withdrawn participant in their subtree. The scope and `cohort?` must agree, and a policy test holds them together |
 
 **Recorded-authoritative manager.** `manages_assessee?` reads the reporting
