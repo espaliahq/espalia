@@ -100,6 +100,11 @@ An organisation's admin picks a theme under **Tenant admin → Theme**:
 
 Each person chooses Auto, Light or Dark under **Appearance** in the user menu.
 
+To build a screen, start with
+[the component catalogue](app/components/README.md); to build or change
+anything with colour, read
+[the theming guide](docs/guidelines/theming.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go to
