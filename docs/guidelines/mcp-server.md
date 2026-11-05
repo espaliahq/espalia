@@ -309,7 +309,10 @@ first, with `published_at` and `published_by`, read by
 `Frameworks::PublishedVersions` from the `FrameworkVersionPublished` events.
 Not from `framework_publications`: that table records only publishes made
 through the publication job, which started months after the first versions
-shipped. Older events name their publisher only in the metadata `actor_id`.
+shipped. A `published_by` that isn't a person's id — the seed and benchmark
+tasks publish as `"seed"` / `"bench"` — falls back to the metadata `actor_id`,
+then to nil. Reading the stream costs ~3 ms on a 1,600-event framework, so
+`assessments_get` carries it too rather than break shape parity.
 
 ### 5. Uniform input shape across related write tools
 

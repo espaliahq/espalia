@@ -24,8 +24,15 @@ class Frameworks::PublishedVersions
         Version.new(
           version: event.data[:version],
           published_at: event.metadata[:timestamp],
-          published_by_id: event.data[:published_by].presence || event.metadata[:actor_id]
+          published_by_id: person_id(event.data[:published_by]) || person_id(event.metadata[:actor_id])
         )
       end
+  end
+
+  private
+
+  # The seed and benchmark tasks publish as "seed" / "bench", not a person.
+  def person_id(value)
+    value.to_s.match?(Frameworks::ActivityFeedQuery::UUID_FORMAT) ? value : nil
   end
 end
