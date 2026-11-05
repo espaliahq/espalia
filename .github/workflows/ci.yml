@@ -216,8 +216,9 @@ jobs:
 
   # Ten workers on 32 vCPUs leaves each Chrome about three cores: a starved
   # Chrome drops clicks. Matched 12 sharded jobs for speed (.github/AGENTS.md).
-  # The worker count rides the same repo variables as the runner labels, so a
-  # fork without them gets 2 workers on the GitHub-hosted fallback runner.
+  # CI_SYSTEM_TEST_WORKERS and CI_RUNNER_XLARGE are separate variables — size
+  # them together (~3 vCPUs per Chrome). Without them (a fork) the job runs
+  # one worker on the GitHub-hosted fallback: slow, but no starved Chromes.
   system-test:
     runs-on: ${{ vars.CI_RUNNER_XLARGE || 'ubuntu-latest' }}
 
@@ -244,7 +245,7 @@ jobs:
         env:
           RAILS_ENV: test
           DB_HOST: localhost
-          SYSTEM_TEST_WORKERS: ${{ vars.CI_SYSTEM_TEST_WORKERS || '2' }}
+          SYSTEM_TEST_WORKERS: ${{ vars.CI_SYSTEM_TEST_WORKERS || '1' }}
         run: bin/rails db:test:prepare test:system
 
       - name: Keep screenshots from failed system tests
