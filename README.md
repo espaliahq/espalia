@@ -84,9 +84,11 @@ bin/rails development:precommit  # lint + security + full suite; the PR gate
 Espalia runs standalone: the Rails app, PostgreSQL and Solid Queue — no other
 services required. A [render.yaml](render.yaml) blueprint is included for
 [Render](https://render.com); any host that runs Rails and Postgres works.
-Bootstrap the first admin with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (or
-`bin/rails admin:create`), and configure integrations per tenant through the
-UI once signed in.
+Bootstrap the first admin with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`, or
+with `EMAIL=you@example.com bin/rails admin:create` — that task also reads
+`PASSWORD` from the environment when it creates a new user, so export it
+rather than typing it into the command line. Configure integrations per
+tenant through the UI once signed in.
 
 ## Theming
 
