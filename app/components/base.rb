@@ -8,12 +8,9 @@ class Components::Base < Phlex::HTML
   include Components::Helpers::LocalTimeHelpers
   include Components::Helpers::IconHelpers
 
-  # What the platform is called here (#660): the current tenant's own name
-  # for it, or the instance default.
+  # What the platform is called here (#660).
   # @return [String]
-  def product_name
-    ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
-  end
+  def product_name = Tenant.current_product_name
 
   if Rails.env.development?
     def before_template

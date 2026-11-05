@@ -49,10 +49,6 @@ class Users::SessionsController < Devise::SessionsController
   # The sign-on URL promises the tenant's workspace, so the session starts
   # there — but only for a member; anyone else gets the usual resolution.
   def scope_session_to_sign_in_tenant(user)
-    tenant = sign_in_tenant
-    return unless tenant
-
-    member = ActsAsTenant.without_tenant { user.tenants.exists?(tenant.id) }
-    session[:current_tenant_id] = tenant.id if member
+    pin_session_to_tenant(user, sign_in_tenant)
   end
 end

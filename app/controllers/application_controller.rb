@@ -143,10 +143,12 @@ class ApplicationController < ActionController::Base
 
   # The tenant whose custom domain this request arrived on (#660), or nil.
   # Memoised per request; available pre-auth (the sign-in page brands by it).
+  # The canonical host can never be a tenant's, so it skips the lookup.
   def host_tenant
     return @host_tenant if defined?(@host_tenant)
 
-    @host_tenant = Tenant.for_host(request.host)
+    canonical = Rails.application.config.action_mailer.default_url_options&.dig(:host)
+    @host_tenant = request.host == canonical ? nil : Tenant.for_host(request.host)
   end
 
   # A request on a tenant's custom domain assumes that tenant for its members
@@ -158,6 +160,14 @@ class ApplicationController < ActionController::Base
 
     session[:current_tenant_id] = tenant.id
     tenant
+  end
+
+  # Points the session at the tenant a sign-on surface promised (#660) —
+  # only for members; anyone else keeps the usual resolution.
+  def pin_session_to_tenant(user, tenant)
+    return unless tenant && ActsAsTenant.without_tenant { user.tenants.exists?(tenant.id) }
+
+    session[:current_tenant_id] = tenant.id
   end
 
   # Tags every event published during this web request with provenance via

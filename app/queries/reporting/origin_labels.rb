@@ -49,7 +49,5 @@ module Reporting::OriginLabels
 
   # What the platform is called in the current tenant's context (#660).
   # @return [String]
-  def self.native_label
-    ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
-  end
+  def self.native_label = Tenant.current_product_name
 end

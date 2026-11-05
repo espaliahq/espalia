@@ -57,5 +57,12 @@ class ProductNameTest < ActionDispatch::IntegrationTest
     should "reject a name over 60 characters" do
       assert_not build(:tenant, product_name: "x" * 61).valid?
     end
+
+    should "not judge tenants by the instance default's length" do
+      Rails.application.config.x.product_name = "y" * 80
+
+      assert build(:tenant).valid?
+      assert_equal "y" * 80, build(:tenant).product_name
+    end
   end
 end

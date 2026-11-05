@@ -101,8 +101,10 @@ module Slack::Feedback
     Result.new(errors: {}, draft: draft)
   end
 
-  def not_a_member_message(_identity)
-    "No #{product_name} account matches your Slack email. Ask a workspace admin to add you."
+  def not_a_member_message(identity)
+    # Called from the inbound controllers, outside any ambient tenant —
+    # the identity's tenant carries the name its workspace knows.
+    "No #{product_name(identity&.tenant)} account matches your Slack email. Ask a workspace admin to add you."
   end
 
   def confirm(identity, assignment, placed:)
@@ -146,7 +148,9 @@ module Slack::Feedback
     Slack::Client.new(bot_token: tenant.slack_bot_token)
   end
 
-  def product_name
-    ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
+  # @param tenant [Tenant, nil] pass the identity's tenant where no ambient
+  #   tenant context is set (the inbound Slack controllers)
+  def product_name(tenant = nil)
+    tenant&.product_name || Tenant.current_product_name
   end
 end

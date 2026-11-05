@@ -239,19 +239,27 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   # ── Counts ──
 
-  # What a skip reason means to the admin who has to act on it.
+  # What a skip reason means to the admin who has to act on it. Reasons that
+  # name the platform resolve per tenant in {#skip_reason_label} (#660).
   SKIP_REASON_LABELS = {
-    "author_unmatched" => "Giver not found in #{product_name}",
     "author_inactive" => "Giver inactive",
-    "recipient_unmatched" => "Recipient not found in #{product_name}",
     "recipient_inactive" => "Recipient inactive",
     "self_feedback" => "Feedback on themselves",
     "audience_too_narrow" => "Not shared with the manager line and HR",
     "kind_not_imported" => "A kind of feedback not imported",
     "no_assignment" => "Recipient has no framework assignment",
-    "echo" => "Came from #{product_name}",
     "invalid_record" => "Malformed or refused"
   }.freeze
+
+  # @return [String]
+  def skip_reason_label(reason)
+    case reason
+    when "author_unmatched" then "Giver not found in #{product_name}"
+    when "recipient_unmatched" then "Recipient not found in #{product_name}"
+    when "echo" then "Came from #{product_name}"
+    else SKIP_REASON_LABELS.fetch(reason, reason.humanize)
+    end
+  end
 
   def counts_section
     div(id: "feedback-exchange-counts") do
@@ -293,7 +301,7 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
       ul(class: "mt-2 space-y-1 text-sm text-default") do
         @summary[:skip_reasons].each do |reason, count|
           li(class: "flex justify-between gap-4", data: { skip_reason: reason }) do
-            span { SKIP_REASON_LABELS.fetch(reason, reason.humanize) }
+            span { skip_reason_label(reason) }
             span(class: "tabular-nums") { count.to_s }
           end
         end

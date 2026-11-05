@@ -15,6 +15,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     tenant = Tenant.find_by(id: event.params[:tenant_id])
     return unless tenant&.slack_connected?
 
+    # The job has no ambient tenant; the blocks below name the product by this one.
+    @tenant = tenant
+
     slack_user_id = resolve_slack_user_id(tenant)
     return if slack_user_id.blank?
 
@@ -136,6 +139,6 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
   end
 
   def product_name
-    ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
+    @tenant&.product_name || Tenant.current_product_name
   end
 end

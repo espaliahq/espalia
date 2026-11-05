@@ -13,6 +13,10 @@ class Tenant < ApplicationRecord
 
   FEEDBACK_EXCHANGE_MIN_SECRET_LENGTH = 32
 
+  # A hostname for custom_domain (#660): dot-separated labels, each 1-63
+  # chars, ending in a TLD.
+  CUSTOM_DOMAIN_FORMAT = /\A(?=.{4,253}\z)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\z/
+
   has_many :tenant_users, dependent: :destroy
   has_many :users, through: :tenant_users
   has_many :people, dependent: :destroy
@@ -157,9 +161,6 @@ class Tenant < ApplicationRecord
   normalizes :slug, with: ->(s) { s.downcase.strip.gsub(/[^a-z0-9-]/, "-").gsub(/-+/, "-").delete_prefix("-").delete_suffix("-") }
   normalizes :custom_domain, with: ->(d) { d.to_s.downcase.strip.presence }
 
-  # A hostname: dot-separated labels, each 1-63 chars, ending in a TLD.
-  CUSTOM_DOMAIN_FORMAT = /\A(?=.{4,253}\z)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\z/
-
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true,
     format: { with: /\A[a-z0-9-]+\z/, message: "must contain only lowercase letters, numbers, and dashes" }
@@ -167,17 +168,6 @@ class Tenant < ApplicationRecord
     format: { with: CUSTOM_DOMAIN_FORMAT, message: "must be a hostname like growth.example.com" },
     allow_nil: true
   validate :custom_domain_is_not_the_instance_host
-
-  # The tenant a request on this host should assume (#660), or nil.
-  #
-  # @param host [String, nil] `request.host`
-  # @return [Tenant, nil]
-  def self.for_host(host)
-    domain = host.to_s.downcase.strip
-    return nil if domain.blank?
-
-    ActsAsTenant.without_tenant { find_by(custom_domain: domain) }
-  end
   validates(*STATE_LABEL_ATTRIBUTES, length: { maximum: STATE_LABEL_MAX_LENGTH }, allow_blank: true)
   validates :hris_config, store_model: true
   validates :ai_config, store_model: true
@@ -378,15 +368,41 @@ class Tenant < ApplicationRecord
     end
   end
 
+  # The tenant a request on this host should assume (#660), or nil.
+  #
+  # @param host [String, nil] `request.host`
+  # @return [Tenant, nil]
+  def self.for_host(host)
+    domain = host.to_s.downcase.strip
+    return nil if domain.blank?
+
+    ActsAsTenant.without_tenant { find_by(custom_domain: domain) }
+  end
+
+  # The hosts the instance itself answers on: the mailer/link host and the
+  # OAuth issuer's. A tenant claiming one would pin the whole instance's
+  # sign-in to itself. Best effort — a serving host configured nowhere
+  # (an extra proxy alias) cannot be known here.
+  #
+  # @return [Array<String>]
+  def self.instance_hosts
+    hosts = [ Rails.application.config.action_mailer.default_url_options&.dig(:host) ]
+    if (issuer = Rails.application.config.x.oauth_issuer).present?
+      begin
+        hosts << URI.parse(issuer).host
+      rescue URI::InvalidURIError
+        # a malformed issuer cannot name a host to protect
+      end
+    end
+    hosts.compact.map(&:downcase).uniq
+  end
+
   private
 
-  # The canonical host serves every tenant; letting one claim it would pin
-  # the whole instance's sign-in to that tenant.
   def custom_domain_is_not_the_instance_host
     return if custom_domain.blank?
 
-    instance_host = Rails.application.config.action_mailer.default_url_options&.dig(:host).to_s.downcase
-    errors.add(:custom_domain, "is this instance's own host") if custom_domain == instance_host
+    errors.add(:custom_domain, "is this instance's own host") if Tenant.instance_hosts.include?(custom_domain)
   end
 
   # The key ids the verifier looks a tenant up by, derived from the stored secrets.

@@ -56,9 +56,11 @@ class Operations::Tenants::UpdateTheme < Operations::Base
     tenant.assign_attributes(updates)
     unless tenant.valid?
       message = tenant.errors.full_messages.to_sentence
-      # The request's layout still renders from this tenant, so a rejected theme must not reach it
-      tenant.restore_attributes(updates.keys)
-      tenant.errors.clear
+      # The request's layout still renders from this tenant, so a rejected
+      # theme must not reach it. reload, not restore_attributes: the store
+      # accessors (font_family, product_name) dirty `settings`, which
+      # restore_attributes by their own names would silently skip.
+      tenant.reload
       raise ParameterError, message
     end
 

@@ -7,7 +7,36 @@ class Users::OmniauthCallbacksControllerTest < ActionDispatch::IntegrationTest
     Rails.application.env_config["devise.mapping"] = Devise.mappings[:user]
   end
 
+  teardown do
+    Rails.application.env_config.delete("omniauth.params")
+  end
+
   context "GET /users/auth/google_oauth2/callback" do
+    should "scope the session to the sign-on tenant carried in omniauth.params (#660)" do
+      tenant = create(:tenant, slug: "nullisland")
+      other = create(:tenant)
+      user = create(:user, email: "bea@example.com")
+      # First membership elsewhere, so the default resolution would pick it.
+      ActsAsTenant.with_tenant(other) { create(:tenant_user, tenant: other, user: user) }
+      ActsAsTenant.with_tenant(tenant) { create(:tenant_user, tenant: tenant, user: user) }
+      OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(
+        provider: "google_oauth2",
+        uid: "uid-660",
+        info: { "email" => "bea@example.com", "email_verified" => true, "name" => "Bea" },
+        extra: { raw_info: { "email_verified" => true } }
+      )
+      Rails.application.env_config["omniauth.auth"] = OmniAuth.config.mock_auth[:google_oauth2]
+
+      # The real flow: the branded page's form POSTs to the authorize path
+      # with the slug in the QUERY string — OmniAuth copies request.GET into
+      # session["omniauth.params"] for the callback.
+      post user_google_oauth2_omniauth_authorize_path(tenant_slug: "nullisland")
+      follow_redirect!
+
+      assert_redirected_to root_path
+      assert_equal tenant.id, session[:current_tenant_id]
+    end
+
     should "sign in an existing user matched by email and redirect to root" do
       user = create(:user, email: "alice@example.com")
       OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(
