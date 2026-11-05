@@ -19,8 +19,9 @@
 # activity for {AT_RISK_IDLE_DAYS} days). "Activity" is the latest of enrolment,
 # lifecycle, and rating timestamps.
 #
-# Privacy: this query exposes only counts/status — never rating *values*. The
-# drill-down view renders individual funnel position, never scores.
+# Exposes per-person lifecycle status and timestamps, never rating *values*:
+# the manager chain and tenant admins may see everything about a person, but
+# this is a progress report and scores have their own surfaces.
 class Reporting::CycleCohort
   AT_RISK_IDLE_DAYS = 14
 
@@ -34,8 +35,10 @@ class Reporting::CycleCohort
   end
 
   # When each home-role milestone last happened. The read models keep only the
-  # latest: a re-open clears `aligned_at`, and a completion stamp clears when
-  # coverage drops and restarts when it returns.
+  # latest: a re-open clears `aligned_at`. The completion stamps come from
+  # `Assessments::LevelCoverage` on rating events, which counts human ratings
+  # against the live assignment's role, so they can disagree with
+  # `self_done` / `manager_done` until the next rating.
   Lifecycle = Data.define(
     :enrolled_at, :started_at, :self_completed_at, :manager_completed_at,
     :alignment_started_at, :alignment_started_by_id,
@@ -57,7 +60,7 @@ class Reporting::CycleCohort
   )
 
   # One participant's progress. Carries no rating values — only coverage counts
-  # and lifecycle status. `role_alignments` is loaded in full mode only.
+  # and lifecycle status. `role_alignments` is empty unless the caller asks.
   Participant = Data.define(
     :person_id, :name, :manager_id, :role_id, :role_name, :level_ordinal,
     :status, :expected_count, :self_count, :manager_count,
@@ -80,11 +83,14 @@ class Reporting::CycleCohort
   #   (a manager's subtree); nil = the whole cycle
   # @param mode [Symbol] :summary (card) or :full (drill-down view)
   # @param now [Time] injectable clock for at-risk calculations
-  def initialize(cycle:, scope_person_ids: nil, mode: :full, now: Time.current)
+  # @param include_role_alignments [Boolean] load every role alignment per
+  #   participant (the MCP payload); the web views don't show them
+  def initialize(cycle:, scope_person_ids: nil, mode: :full, now: Time.current, include_role_alignments: false)
     @cycle = cycle
     @scope_person_ids = scope_person_ids
     @mode = mode
     @now = now
+    @include_role_alignments = include_role_alignments
   end
 
   # @return [Reporting::CycleCohort::Result]
@@ -122,7 +128,7 @@ class Reporting::CycleCohort
     roles = FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
     scope_by_person = role_scopes_by_person(enrollments)
     coverage = coverage_by_person(enrollments, scope_by_person)
-    alignments = @mode == :full ? role_alignments_by_person(person_ids) : {}
+    alignments = @include_role_alignments ? role_alignments_by_person(person_ids) : {}
 
     enrollments.map do |enrollment|
       build_participant(enrollment, progress, people, roles, scope_by_person, coverage, alignments)
@@ -174,7 +180,8 @@ class Reporting::CycleCohort
       alignment_started_by_id: prog&.alignment_started_by_id,
       aligned_at: prog&.aligned_at,
       aligned_by_id: prog&.aligned_by_id,
-      aligned_framework_version: prog&.aligned_framework_version
+      # A re-join resets aligned_at but leaves the version behind.
+      aligned_framework_version: prog&.aligned_at && prog.aligned_framework_version
     )
   end
 

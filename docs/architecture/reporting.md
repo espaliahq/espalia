@@ -106,9 +106,14 @@ aggregates the existing read models at query time.
   capability bound to their **assessed role** (enrollment snapshot, ADR-19) has a
   self rating at their **assessed level**. Aligned is the one explicit milestone
   (`AssessmentCycleProgress.status == "aligned"`). There is no explicit self/manager
-  "completion" event; `CurrentAssessment` stamps `self_completed_at` /
-  `manager_completed_at` from the same coverage rule on every rating change
-  ([assessments/lifecycle.md](../guidelines/assessments/lifecycle.md)).
+  "completion" event. `CurrentAssessment` stamps `self_completed_at` /
+  `manager_completed_at` on every rating event from `Assessments::LevelCoverage`
+  ([assessments/lifecycle.md](../guidelines/assessments/lifecycle.md)), which is
+  not quite the funnel's rule: it counts only human ratings (the funnel counts
+  anything not seeded), reads the live assignment's role (the funnel reads the
+  enrollment snapshot), and refreshes only when someone rates. So a stamp can
+  disagree with `self_done` / `manager_done` after a role change or a framework
+  publish, until the next rating.
 - **At-risk**: not yet aligned AND (past the cycle's `planned_end_at` OR ≥14 days
   with no enrolment/lifecycle/rating activity).
 - **Grouping**: by manager subtree / role / level (enrollment snapshot columns).
@@ -118,10 +123,11 @@ aggregates the existing read models at query time.
 - **When**: each participant carries a `Lifecycle` (enrolled, started, self and
   manager complete, alignment started and completed, with actors) and, in full
   mode, one `RoleAlignment` per role aligned this cycle (home and lens, with
-  `reopened_at`). The result carries `median_days_to_align`. Every stamp is the
-  **latest** occurrence: a re-open clears `aligned_at` until the next completion,
-  and a completion stamp clears when coverage drops. First completions and
-  re-open history live only in the event stream.
+  `reopened_at`; loaded only when the caller passes `include_role_alignments:`,
+  as the MCP operation does). The result carries `median_days_to_align`. Every
+  stamp is the **latest** occurrence: a re-open clears `aligned_at` until the
+  next completion. First completions and re-open history live only in the event
+  stream.
 
 **Access and privacy**: the manager chain and tenant admins may see everything
 about a person, timestamps included, so skip-level viewers get the same rows as
@@ -134,7 +140,8 @@ scores**: it reports progress, and scores have their own surfaces.
   (`AssessmentCycles::CohortsController`, full mode).
 - MCP — `Operations::Reporting::CycleCohort` (`reporting_cycle_cohort`, summary by
   default). Full mode returns the lifecycle timestamps; `aligned_from` /
-  `aligned_to` (UTC dates, full mode only) narrow the participant list, not the
+  `aligned_to` (UTC dates, full mode only) keep participants with an alignment
+  against any role completed in the window. They narrow the list, not the
   funnel.
 
 **Authorization**: `AssessmentCyclePolicy#cohort?` (any manager with a participant

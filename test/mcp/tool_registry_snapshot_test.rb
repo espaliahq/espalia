@@ -2395,9 +2395,11 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "progress with when each milestone happened (enrolled, self and manager assessment " \
           "complete, alignment started and completed, with who acted) and every role " \
           "alignment, including re-opens. Timestamps are ISO 8601 UTC and record the LATEST " \
-          "occurrence: a re-open clears aligned_at until the next completion, and a " \
-          "completion stamp clears if coverage drops. aligned_from / aligned_to (full mode " \
-          "only, UTC dates, inclusive) narrow the participant list to those aligned in that " \
+          "occurrence: a re-open clears aligned_at until the next completion. The self/manager " \
+          "completion stamps update on rating events only, so after a role or framework " \
+          "change they can disagree with self_done / manager_done until the next rating. " \
+          "aligned_from / aligned_to (full mode only, UTC dates, inclusive) narrow the " \
+          "participant list to those with an alignment, against any role, completed in that " \
           "window. Returns no rating values.",
         "inputSchema" => {
           "type" => "object",

@@ -138,6 +138,44 @@ class Operations::Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_equal 1, before[:total], "the window narrows the list, not the funnel"
     end
 
+    should "keep someone whose lens alignment, not their home one, completed in the window" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleRoleAlignment.find_by!(role_id: @lens_role.role_id)
+          .update!(status: "aligned", aligned_at: Time.utc(2026, 9, 20, 12), aligned_by_id: @manager.id)
+      end
+
+      result = call_op(context: @manager_ctx,
+        params: { cycle_id: @cycle.cycle_id, mode: "full", aligned_from: "2026-09-20", aligned_to: "2026-09-20" })
+
+      assert_equal [ @report.id ], result[:participants].map { |p| p[:person_id] }
+    end
+
+    should "show no framework version once a re-join has cleared the alignment" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleProgress.find_by!(person_id: @report.id).update!(status: "in_progress", aligned_at: nil, aligned_by_id: nil)
+      end
+
+      participant = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, mode: "full" })[:participants].first
+
+      assert_nil participant[:aligned_framework_version]
+    end
+
+    should "load role alignments only when asked, so the web views don't pay for them" do
+      ActsAsTenant.with_tenant(@tenant) do
+        assert_empty Reporting::CycleCohort.new(cycle: @cycle).call.participants.first.role_alignments
+        assert_equal 2, Reporting::CycleCohort.new(cycle: @cycle, include_role_alignments: true)
+          .call.participants.first.role_alignments.size
+      end
+    end
+
+    should "refuse a date in any shape but YYYY-MM-DD" do
+      [ "2026-09-11T23:00:00+10:00", "20260911", "2026-W37-5" ].each do |value|
+        assert_raises(Operations::Base::ParameterError, value) do
+          call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, mode: "full", aligned_from: value })
+        end
+      end
+    end
+
     should "refuse a window outside full mode, or one that isn't a date" do
       assert_raises(Operations::Base::ParameterError) do
         call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id, aligned_from: "2026-09-01" })
