@@ -147,6 +147,47 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
     end
   end
 
+  # The aggregate fixes the home role at the join; ParticipantRoleSync moves
+  # the enrollment snapshot on a mid-cycle role change (#673).
+  context "history without a role after a mid-cycle role change" do
+    setup do
+      pm4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @pm.role_id, ordinal: 4) }
+      append_and_project(PersonDevelopment::Events::PersonRoleChanged, previous_role_id: @engineer.role_id,
+        new_role_id: @pm.role_id, previous_level_id: @e3.level_id, new_level_id: pm4.level_id, reason: "transfer")
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person_id)
+          .update!(role_id: @pm.role_id, level_id: pm4.level_id, level_ordinal: 4)
+      end
+      append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
+      append_and_project(PersonDevelopment::Events::FullAlignmentCompleted, cycle_id: @cycle_id,
+        completed_by_id: @manager.id, framework_version: 1)
+    end
+
+    should "be the role held at the join, at its level, through a rebuild" do
+      PersonDevelopment::Projections::CurrentAssessment.reset!(tenant: @tenant)
+      Projections::Replayer.replay(projection_class: PersonDevelopment::Projections::CurrentAssessment, tenant: @tenant)
+
+      row = role_alignment(@engineer)
+      assert row.home
+      assert_equal 3, row.level_ordinal
+      assert_equal "aligned", row.status
+      assert_nil role_alignment(@pm)
+      assert_equal "aligned", progress.status
+    end
+
+    should "agree with the lifecycle timeline" do
+      milestones = ActsAsTenant.with_tenant(@tenant) do
+        assignment = PersonFrameworkAssignment.find_by!(person_id: @person_id, framework_id: @framework_id)
+        Assessments::LifecycleTimeline.new(assignment: assignment)
+          .call(cycle_id: @cycle_id, kinds: %w[alignment_started alignment_completed])
+      end
+
+      assert_equal 2, milestones.size
+      assert(milestones.all? { |m| m.role_id == @engineer.role_id && m.home })
+      assert_equal @engineer.role_id, role_alignment(@engineer).role_id
+    end
+  end
+
   should "clear a participation's role rows when the person re-joins the cycle" do
     start(@pm, cells: [])
     append_and_project(PersonDevelopment::Events::JoinedAssessmentCycle, cycle_id: @cycle_id, framework_version: 1)
