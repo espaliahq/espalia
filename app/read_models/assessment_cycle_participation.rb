@@ -123,6 +123,17 @@ class AssessmentCycleParticipation
   def status
     return "withdrawn" if enrollment.status == "withdrawn"
     return "concluded" if enrollment.status == "concluded"
+
+    lifecycle_status
+  end
+
+  # How far the participation got, whether or not it has ended: what
+  # {#status} reports before the cycle closes or the person leaves. A past
+  # cycle reads its alignment from this.
+  #
+  # @return [String] `enrolled` | `started` | `self_complete` |
+  #   `manager_complete` | `aligning` | `aligned`
+  def lifecycle_status
     return progress.status if progress&.status.present? && progress.status != "in_progress"
     return "started" if progress&.started_at.present?
 

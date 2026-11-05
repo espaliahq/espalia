@@ -125,10 +125,15 @@ class AssessmentPolicy < ApplicationPolicy
   # sees `:manager` only; the manager's ratings are private to the manager
   # until they choose to start alignment.
   #
+  # A past cycle (#669) answers the same question from its own
+  # participation and rows: closing a cycle discloses nothing new.
+  #
   # @param role_id [String, nil] the role read against; nil = the home role
+  # @param cycle [AssessmentCycle, nil] a past cycle; nil reads the open one
   # @return [Boolean]
-  def view_alignment?(role_id: nil)
+  def view_alignment?(role_id: nil, cycle: nil)
     return false unless show?
+    return past_alignment_started?(cycle, role_id) if cycle
     return %w[aligning aligned].include?(current_open_cycle_participation&.status) if role_id.nil?
 
     !role_alignment(role_id).nil?
@@ -179,6 +184,15 @@ class AssessmentPolicy < ApplicationPolicy
   end
 
   private
+
+  def past_alignment_started?(cycle, role_id)
+    if role_id.nil?
+      participation = AssessmentCycleParticipation.find_by(cycle_id: cycle.cycle_id, person_id: record.person_id)
+      return Assessments::Disclosure::STARTED_STATUSES.include?(participation&.lifecycle_status)
+    end
+
+    AssessmentCycleRoleAlignment.exists?(cycle_id: cycle.cycle_id, person_id: record.person_id, role_id: role_id)
+  end
 
   # Whether the participation still takes self/manager ratings on some
   # cell. A started alignment freezes only its role's cells (ADR-22), so

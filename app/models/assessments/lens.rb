@@ -13,6 +13,10 @@
 # wherever a role goes, so the page, its frames, the rating responses and
 # the MCP payloads all read the same pair.
 #
+# A lens reads one cycle: the open one, or a past one named by `cycle_id`
+# (#669), whose home is that cycle's enrollment snapshot. A past cycle is
+# read-only.
+#
 # @example
 #   lens = Assessments::Lens.resolve(assignment: assignment, as_role: pm.role_id, as_level: 3)
 #   lens.home?            # => false
@@ -28,10 +32,11 @@ class Assessments::Lens
   # The assignment read as itself.
   #
   # @param assignment [PersonFrameworkAssignment]
+  # @param cycle_id [String, nil] a past cycle; nil reads the open one
   # @return [Assessments::Lens]
   # @raise [ActiveRecord::RecordNotFound] when the home role or level is gone
-  def self.home(assignment)
-    resolve(assignment: assignment)
+  def self.home(assignment, cycle_id: nil)
+    resolve(assignment: assignment, cycle_id: cycle_id)
   end
 
   # @param assignment [PersonFrameworkAssignment]
@@ -39,11 +44,16 @@ class Assessments::Lens
   #   blank keeps the home role
   # @param as_level [Integer, String, nil] a level ordinal in that role; blank
   #   picks the role's level nearest the home ordinal
+  # @param cycle_id [String, nil] a cycle the person joined on this
+  #   framework; blank, or the open cycle's id, reads the open cycle
   # @return [Assessments::Lens]
-  # @raise [NotFound] for a role or level the framework doesn't have
+  # @raise [NotFound] for a role, level or cycle the assignment doesn't have
   # @raise [ActiveRecord::RecordNotFound] when the home role or level is gone
-  def self.resolve(assignment:, as_role: nil, as_level: nil)
-    home_role, home_level = home_pair(assignment)
+  def self.resolve(assignment:, as_role: nil, as_level: nil, cycle_id: nil)
+    open_cycle = assignment.current_open_cycle
+    past = cycle_id.present? && cycle_id != open_cycle&.cycle_id
+    enrollment = past ? joined_enrollment(assignment, cycle_id) : open_enrollment(assignment, open_cycle)
+    home_role, home_level = home_pair(assignment, enrollment)
     role = as_role.present? ? framework_role(assignment, as_role) : home_role
     level =
       if as_level.present?
@@ -56,7 +66,8 @@ class Assessments::Lens
       end
     raise NotFound, "No level #{as_level.inspect} in role #{role.code}" unless level
 
-    new(assignment: assignment, role: role, level: level, home_role: home_role, home_level: home_level)
+    new(assignment: assignment, role: role, level: level, home_role: home_role, home_level: home_level,
+        cycle: past ? enrollment.cycle : open_cycle, past: past)
   end
 
   # The URL / Operation params that name a lens, relative to a home: empty
@@ -71,8 +82,7 @@ class Assessments::Lens
   end
 
   # @return [Array(FrameworkState::Role, FrameworkState::Level)]
-  def self.home_pair(assignment)
-    snapshot = open_cycle_snapshot(assignment)
+  def self.home_pair(assignment, snapshot)
     role_id, level_id =
       if snapshot&.role_id && snapshot.level_id
         [ snapshot.role_id, snapshot.level_id ]
@@ -86,11 +96,18 @@ class Assessments::Lens
   end
   private_class_method :home_pair
 
-  def self.open_cycle_snapshot(assignment)
-    cycle = assignment.current_open_cycle
+  def self.open_enrollment(assignment, cycle)
     cycle && AssessmentCycleEnrollment.find_by(cycle_id: cycle.cycle_id, person_id: assignment.person_id)
   end
-  private_class_method :open_cycle_snapshot
+  private_class_method :open_enrollment
+
+  def self.joined_enrollment(assignment, cycle_id)
+    AssessmentCycleEnrollment.joins(:cycle).includes(:cycle)
+      .find_by(cycle_id: cycle_id, person_id: assignment.person_id,
+               assessment_cycles: { framework_id: assignment.framework_id }) ||
+      raise(NotFound, "No cycle #{cycle_id} for this assessment")
+  end
+  private_class_method :joined_enrollment
 
   def self.framework_role(assignment, role_id)
     FrameworkState::Role
@@ -109,12 +126,38 @@ class Assessments::Lens
   end
   private_class_method :nearest_level
 
-  def initialize(assignment:, role:, level:, home_role:, home_level:)
+  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false)
     @assignment = assignment
     @role = role
     @level = level
     @home_role = home_role
     @home_level = home_level
+    @cycle = cycle
+    @past = past
+  end
+
+  # @return [AssessmentCycle, nil] the cycle read: a past one, else the open one
+  attr_reader :cycle
+
+  # @return [Boolean] reading a cycle other than the open one, read-only
+  def past?
+    @past
+  end
+
+  # @return [AssessmentCycleParticipation, nil] the person in the cycle read
+  def participation
+    return @participation if defined?(@participation)
+
+    @participation = @cycle && AssessmentCycleParticipation.find_by(cycle_id: @cycle.cycle_id,
+                                                                    person_id: @assignment.person_id)
+  end
+
+  # The home alignment's lifecycle in the cycle read. A past participation's
+  # own status is `concluded` or `withdrawn`; how far it got is the progress.
+  #
+  # @return [String, nil]
+  def participant_status
+    @past ? participation&.lifecycle_status : participation&.status
   end
 
   # @return [Boolean] reading the record itself
@@ -147,15 +190,21 @@ class Assessments::Lens
     [ @level.ordinal, @home_level.ordinal ].min
   end
 
-  # @return [Hash] the params naming this lens; empty for the home
+  # @return [Hash] the params naming this lens; empty for the open cycle's home
   def to_params
     params_for(role_id: @role.role_id, ordinal: @level.ordinal)
   end
 
-  # @return [Hash] the params naming another lens from this one's home
+  # @return [Hash] the params naming another lens from this one's home, in
+  #   the same cycle
   def params_for(role_id:, ordinal:)
     self.class.params_for(home_role_id: @home_role.role_id, home_ordinal: @home_level.ordinal,
-                          role_id: role_id, ordinal: ordinal)
+                          role_id: role_id, ordinal: ordinal).merge(cycle_params)
+  end
+
+  # @return [Hash] `cycle_id` on a past cycle; empty on the open one
+  def cycle_params
+    @past ? { cycle_id: @cycle.cycle_id } : {}
   end
 
   # Every role in the framework with its levels, grouped by role family —

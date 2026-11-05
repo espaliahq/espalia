@@ -48,7 +48,7 @@ class Assessments::Disclosure
   # @return [Assessments::Disclosure]
   def self.for(lens:, participant_status:)
     assignment = lens.assignment
-    cycle_id = assignment.current_open_cycle&.cycle_id
+    cycle_id = lens.cycle&.cycle_id
     rows = cycle_id ? AssessmentCycleRoleAlignment.for_participation(cycle_id: cycle_id, person_id: assignment.person_id).to_a : []
     home_rows, lens_rows = rows.partition { |row| row.role_id == lens.home_role.role_id }
 
