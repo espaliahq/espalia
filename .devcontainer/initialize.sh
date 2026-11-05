@@ -10,11 +10,6 @@
 # into gh on every attach.
 set -eu
 
-# devcontainer.json bind-mounts ~/.coderabbit; on a host that never ran the
-# CodeRabbit CLI the path doesn't exist, and Docker then either refuses the
-# mount or creates it root-owned. Make it ours before compose up.
-mkdir -p "$HOME/.coderabbit"
-
 # Seed Linux-side Claude Code onboarding flags. ~/.claude.json (top-level file)
 # is NOT in the bind mount and gets wiped on container rebuild, so Claude Code
 # would otherwise re-run the first-run wizard every rebuild. We write a seed

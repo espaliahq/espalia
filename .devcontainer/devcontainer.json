@@ -7,13 +7,7 @@
   "initializeCommand": ".devcontainer/initialize.sh",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
-    // CodeRabbit CLI auth is a plain file (~/.coderabbit/auth.json); sharing
-    // the directory means one login works on host and container alike and
-    // survives rebuilds. The dir also holds the CLI's logs and stats, so a
-    // host-side and a container-side review share that mutable state too.
-    // initialize.sh creates the dir so the mount works on a fresh host.
-    "source=${localEnv:HOME}/.coderabbit,target=/home/vscode/.coderabbit,type=bind"
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
   ],
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
