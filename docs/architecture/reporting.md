@@ -374,4 +374,18 @@ bounded `ORDER ... LIMIT` queries — **never** the per-assignment event replay 
 `Assessments::ActivityFeedQuery` (O(people × stream)). Rendered as actor-led
 sentences with the capability linked to the assessment cell; exposes activity
 metadata only, never rating values. Shared with MCP via
-`Operations::Assessments::RecentActivity` (`assessments_recent_activity`).
+`Operations::Assessments::RecentActivity` (`assessments_recent_activity`), which
+asks for more than the card does:
+
+- **Scope:** the caller and their whole `Person#all_reports` subtree (the card
+  keeps own-or-direct-reports); `person_id` narrows to one person in it, and a
+  tenant admin may name anyone.
+- **Filters:** `since` / `until`, `cycle_id` and `kinds` narrow each source in
+  SQL before its LIMIT, so a window returns what is in it rather than the newest
+  N overall. Comments carry no cycle, so `cycle_id` leaves them out.
+- **Alignments:** from the role-alignment rows (`lens_alignments: true`), so
+  lens-role conversations and `alignment_reopened` appear with their role; the
+  card keeps the home lifecycle on the progress rows. With `person_id` they come
+  from the event stream (`alignment_history: true`, via
+  `Assessments::LifecycleTimeline`), so a completion later re-opened still
+  shows — one stream per assignment, which is why it needs a single person.

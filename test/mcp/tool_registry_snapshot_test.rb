@@ -593,13 +593,49 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       },
       {
         "name" => "assessments_recent_activity",
-        "description" => "Recent assessment activity for the caller — their own as an IC, or their direct " \
-          "reports' as a manager: ratings, evidence, comments, and alignment milestones " \
-          "(metadata only, no rating values), most-recent first.",
+        "description" => "Recent assessment activity, most recent first (metadata only, no rating values): ratings, " \
+          "evidence, comments, and alignment milestones started, completed and re-opened against any " \
+          "role (role_id, role_code, role_name, home). Covers the caller and their whole org subtree; " \
+          "person_id narrows to one person in it (a tenant admin may name anyone), and then alignment " \
+          "milestones come from the event stream, so a completion later re-opened still appears. since " \
+          "/ until (ISO 8601; a bare date is its UTC day, inclusive) bound the window, and each source " \
+          "is narrowed before the limit, so a window returns what is in it. cycle_id keeps one cycle's " \
+          "activity (comments carry no cycle and are left out). kinds narrows by kind; an empty list " \
+          "returns none. limit defaults to 8, at most 50.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {
-            "limit" => { "type" => "integer" }
+            "limit" => { "type" => "integer" },
+            "person_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "since" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S",
+              "description" => "ISO 8601 date-time, or a date for the start of that UTC day."
+            },
+            "until" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S",
+              "description" => "ISO 8601 date-time, or a date for the end of that UTC day."
+            },
+            "cycle_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S",
+              "description" => "An assessment cycle's id, from reporting_cycles_list."
+            },
+            "kinds" => {
+              "type" => "array",
+              "items" => {
+                "type" => "string",
+                "enum" => [
+                  "self_rated", "manager_rated", "assessment_aligned", "evidence_recorded",
+                  "comment_posted", "alignment_started", "alignment_completed", "alignment_reopened"
+                ]
+              },
+              "description" => "Keep only these kinds of activity."
+            }
           },
           "required" => [],
           "additionalProperties" => false

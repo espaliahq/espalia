@@ -10,15 +10,27 @@
 # manager's reports. Instead each activity surface is read from its projection
 # read model with a bounded `ORDER ... LIMIT`, then merged and capped. Read-only
 # and tenant-scoped (the read models are `acts_as_tenant`).
+#
+# The window (`since` / `until_time`), `cycle_id` and `kinds` narrow each
+# source in SQL before its LIMIT, so a window returns what is in it rather
+# than the newest N overall. Comments carry no cycle, so a cycle filter leaves
+# them out. Alignment milestones come from the home lifecycle on the progress
+# rows by default (the card); with `lens_alignments: true` they come from the
+# role-alignment rows, every role's, re-opens included. Both hold only the
+# latest of each milestone; with
+# `alignment_history: true` they come from each person's event stream
+# instead ({Assessments::LifecycleTimeline}) — one stream per assignment, so
+# meant for a single person.
 class Assessments::RecentActivityQuery
   DEFAULT_LIMIT = 8
 
   # A resolved, displayable activity item. `detail` carries a comment body
   # (nil otherwise); `reply` flags a comment that is a reply to another.
+  # `role_id` and `home` are set on alignment milestones.
   Item = Data.define(
     :kind, :occurred_at, :person_id, :person_name, :actor_id, :actor_name,
     :framework_id, :assignment_id, :capability_stable_id, :capability_name, :level_ordinal,
-    :detail, :reply
+    :detail, :reply, :role_id, :role_code, :role_name, :home
   ) do
     # Whether the actor differs from the assessee (e.g. a manager rated them).
     def actor_other? = actor_id.present? && actor_id != person_id
@@ -26,7 +38,9 @@ class Assessments::RecentActivityQuery
 
   # Pre-resolution row gathered from a read model.
   Candidate = Data.define(:kind, :occurred_at, :person_id, :actor_id, :framework_id,
-                          :capability_stable_id, :level_ordinal, :detail, :reply)
+                          :capability_stable_id, :level_ordinal, :detail, :reply, :role_id, :home) do
+    def initialize(role_id: nil, home: nil, **rest) = super
+  end
 
   RATING_SOURCES = {
     "self_rated" => [ :last_self_rated_at, nil ],
@@ -36,14 +50,33 @@ class Assessments::RecentActivityQuery
 
   ALIGNMENT_SOURCES = {
     "alignment_started" => [ :alignment_started_at, :alignment_started_by_id ],
-    "alignment_completed" => [ :aligned_at, :aligned_by_id ]
+    "alignment_completed" => [ :aligned_at, :aligned_by_id ],
+    "alignment_reopened" => [ :reopened_at, :reopened_by_id ]
   }.freeze
+
+  # What the Home card shows; `alignment_reopened` is asked for explicitly.
+  DEFAULT_KINDS = %w[self_rated manager_rated assessment_aligned evidence_recorded comment_posted
+                     alignment_started alignment_completed].freeze
+  KINDS = (DEFAULT_KINDS + %w[alignment_reopened]).freeze
 
   # @param person_ids [Array<String>] assessees whose activity to include
   # @param limit [Integer] max items returned
-  def initialize(person_ids:, limit: DEFAULT_LIMIT)
+  # @param since [Time, nil] keep activity at or after this
+  # @param until_time [Time, nil] keep activity at or before this
+  # @param cycle_id [String, nil] keep activity attributed to this cycle
+  # @param kinds [Array<String>] keep these kinds (see {KINDS})
+  # @param lens_alignments [Boolean] include alignments against other roles
+  # @param alignment_history [Boolean] read alignment milestones from the
+  #   event stream, re-opened completions included
+  def initialize(person_ids:, limit: DEFAULT_LIMIT, since: nil, until_time: nil, cycle_id: nil,
+                 kinds: DEFAULT_KINDS, lens_alignments: false, alignment_history: false)
     @person_ids = Array(person_ids).compact.uniq
     @limit = limit
+    @window = since || until_time ? (since..until_time) : nil
+    @cycle_id = cycle_id
+    @kinds = kinds
+    @lens_alignments = lens_alignments
+    @alignment_history = alignment_history
   end
 
   # Cheap existence check for card audience gating.
@@ -54,7 +87,7 @@ class Assessments::RecentActivityQuery
     RATING_SOURCES.any? { |_, (ts, _)| rating_relation(ts).exists? } ||
       EvidenceItem.active.where(person_id: @person_ids).exists? ||
       PersonDevelopmentComment.active.where(person_id: @person_ids).exists? ||
-      ALIGNMENT_SOURCES.any? { |_, (ts, _)| progress_relation(ts).exists? }
+      ALIGNMENT_SOURCES.except("alignment_reopened").any? { |_, (ts, _)| progress_relation(ts).exists? }
   end
 
   # @return [Array<Item>] most-recent-first, capped at `limit`.
@@ -70,15 +103,28 @@ class Assessments::RecentActivityQuery
   private
 
   def rating_relation(column)
-    AssessmentLevelRating.across_all_roles.where(person_id: @person_ids).where.not(column => nil)
+    narrow(AssessmentLevelRating.across_all_roles.where(person_id: @person_ids).where.not(column => nil), column)
+  end
+
+  def alignment_relation(column)
+    narrow(AssessmentCycleRoleAlignment.where(person_id: @person_ids).where.not(column => nil), column)
   end
 
   def progress_relation(column)
-    AssessmentCycleProgress.where(person_id: @person_ids).where.not(column => nil)
+    narrow(AssessmentCycleProgress.where(person_id: @person_ids).where.not(column => nil), column)
   end
 
+  # The window and the cycle, in SQL, before the caller's LIMIT.
+  def narrow(relation, column, cycle: true)
+    relation = relation.where(column => @window) if @window
+    relation = relation.where(cycle_id: @cycle_id) if @cycle_id && cycle
+    relation
+  end
+
+  def wanted?(kind) = @kinds.include?(kind)
+
   def rating_candidates
-    RATING_SOURCES.flat_map do |kind, (ts, actor_col)|
+    RATING_SOURCES.select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
       columns = [ :person_id, :framework_id, :capability_stable_id, :level_ordinal, ts ]
       columns << actor_col if actor_col
 
@@ -94,7 +140,9 @@ class Assessments::RecentActivityQuery
   end
 
   def evidence_candidates
-    EvidenceItem.active.where(person_id: @person_ids)
+    return [] unless wanted?("evidence_recorded")
+
+    narrow(EvidenceItem.active.where(person_id: @person_ids), :recorded_at)
       .order(recorded_at: :desc).limit(@limit)
       .pluck(:person_id, :framework_id, :capability_stable_id, :level_ordinal, :recorded_at, :author_id)
       .map do |person_id, framework_id, stable_id, ordinal, occurred_at, author_id|
@@ -107,7 +155,9 @@ class Assessments::RecentActivityQuery
   end
 
   def comment_candidates
-    PersonDevelopmentComment.active.where(person_id: @person_ids)
+    return [] if !wanted?("comment_posted") || @cycle_id
+
+    narrow(PersonDevelopmentComment.active.where(person_id: @person_ids), :posted_at, cycle: false)
       .order(posted_at: :desc).limit(@limit)
       .pluck(:person_id, :framework_id, :capability_stable_id, :level_ordinal, :posted_at,
              :author_id, :body, :parent_id)
@@ -122,7 +172,26 @@ class Assessments::RecentActivityQuery
   end
 
   def alignment_candidates
-    ALIGNMENT_SOURCES.flat_map do |kind, (ts, actor_col)|
+    return alignment_history_candidates if @alignment_history
+
+    return home_alignment_candidates unless @lens_alignments
+
+    ALIGNMENT_SOURCES.select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
+      alignment_relation(ts).order(ts => :desc).limit(@limit)
+        .pluck(:person_id, :framework_id, ts, actor_col, :role_id, :home)
+        .map do |person_id, framework_id, occurred_at, actor_id, role_id, home|
+          Candidate.new(
+            kind: kind, occurred_at: occurred_at, person_id: person_id, actor_id: actor_id,
+            framework_id: framework_id, capability_stable_id: nil, level_ordinal: nil,
+            detail: nil, reply: false, role_id: role_id, home: home
+          )
+        end
+    end
+  end
+
+  # The home lifecycle's milestones, as the card has always shown them.
+  def home_alignment_candidates
+    ALIGNMENT_SOURCES.except("alignment_reopened").select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
       progress_relation(ts).joins(:cycle).order(ts => :desc).limit(@limit)
         .pluck(:person_id, "assessment_cycles.framework_id", ts, actor_col)
         .map do |person_id, framework_id, occurred_at, actor_id|
@@ -135,11 +204,30 @@ class Assessments::RecentActivityQuery
     end
   end
 
+  # Every alignment milestone in each person's stream, not only the latest.
+  def alignment_history_candidates
+    kinds = ALIGNMENT_SOURCES.keys.select { |kind| wanted?(kind) }
+    return [] if kinds.empty?
+
+    PersonFrameworkAssignment.where(person_id: @person_ids).flat_map do |assignment|
+      Assessments::LifecycleTimeline.new(assignment: assignment).call(cycle_id: @cycle_id, kinds: kinds)
+        .select { |m| (@lens_alignments || m.home) && (@window.nil? || @window.cover?(m.occurred_at)) }
+        .map do |m|
+          Candidate.new(
+            kind: m.kind, occurred_at: m.occurred_at, person_id: assignment.person_id, actor_id: m.actor_id,
+            framework_id: assignment.framework_id, capability_stable_id: nil,
+            level_ordinal: nil, detail: nil, reply: false, role_id: m.role_id, home: m.home
+          )
+        end
+    end
+  end
+
   # Bulk-resolve names, assignment ids, and capability names for the capped set.
   def resolve(candidates)
     names = person_names(candidates)
     assignments = assignment_index(candidates)
     cap_names = capability_names(candidates)
+    roles = role_index(candidates)
 
     candidates.map do |candidate|
       Item.new(
@@ -155,7 +243,11 @@ class Assessments::RecentActivityQuery
         capability_name: candidate.capability_stable_id && cap_names[candidate.capability_stable_id],
         level_ordinal: candidate.level_ordinal,
         detail: candidate.detail,
-        reply: candidate.reply
+        reply: candidate.reply,
+        role_id: candidate.role_id,
+        role_code: candidate.role_id && roles[candidate.role_id]&.code,
+        role_name: candidate.role_id && roles[candidate.role_id]&.name,
+        home: candidate.home
       )
     end
   end
@@ -175,6 +267,13 @@ class Assessments::RecentActivityQuery
       .where(person_id: pairs.map(&:first).uniq, framework_id: pairs.map(&:last).uniq)
       .pluck(:person_id, :framework_id, :id)
       .each_with_object({}) { |(person_id, framework_id, id), index| index[[ person_id, framework_id ]] = id }
+  end
+
+  def role_index(candidates)
+    role_ids = candidates.filter_map(&:role_id).uniq
+    return {} if role_ids.empty?
+
+    FrameworkState::Role.where(role_id: role_ids).index_by(&:role_id)
   end
 
   def capability_names(candidates)
