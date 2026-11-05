@@ -65,7 +65,7 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     if url
       blocks << {
         type: "actions",
-        elements: [ { type: "button", text: { type: "plain_text", text: "Open in GrowthOS" }, url: url } ]
+        elements: [ { type: "button", text: { type: "plain_text", text: "Open in #{product_name}" }, url: url } ]
       }
     end
     blocks << preferences_footer if disclose_preferences
@@ -99,7 +99,7 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
       type: "context",
       elements: [ {
         type: "mrkdwn",
-        text: "👋 First time hearing from GrowthOS? Notifications arrive in the app first — " \
+        text: "👋 First time hearing from #{product_name}? Notifications arrive in the app first — " \
               "Slack only chimes in when you haven't seen them there. " \
               "Choose what reaches you, and where, in your #{prefs}."
       } ]
@@ -133,5 +133,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     port = Rails.application.config.action_mailer.default_url_options[:port]
     base = port ? "#{scheme}://#{host}:#{port}" : "#{scheme}://#{host}"
     "#{base}#{path}"
+  end
+
+  def product_name
+    Rails.application.config.x.product_name
   end
 end

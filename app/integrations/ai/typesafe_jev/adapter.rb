@@ -16,7 +16,7 @@
 class Ai::TypesafeJev::Adapter
   include Ai::JsonEndpoint
 
-  PING_STATE = "GrowthOS is checking that it can reach this model."
+  PING_STATE = "#{Rails.application.config.x.product_name} is checking that it can reach this model."
   PING_QUESTIONS = { reachable: { type: "boolean", instructions: "Is this a connection check?" } }.freeze
 
   # @param api_key [String]

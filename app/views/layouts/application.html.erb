@@ -5,12 +5,12 @@
 <% html_data = { theme: content_for(:html_theme).presence || theme_tenant&.theme_preset }.merge(overrides) %>
 <html <%= tag.attributes(lang: I18n.locale, data: html_data) %>>
   <head>
-    <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), "GrowthOS"].compact.join(" · ") %></title>
+    <title><%= [@page_title, (current_tenant&.name if defined?(current_tenant)), Rails.application.config.x.product_name].compact.join(" · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%# Turbo keeps <html>'s attributes across a visit, so a page whose theme or scheme differs reloads %>
     <meta name="html-appearance" content="<%= html_data.values_at(:theme, :scheme).compact.join(" ") %>" data-turbo-track="reload">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="GrowthOS">
+    <meta name="application-name" content="<%= Rails.application.config.x.product_name %>">
     <% if content_for?(:theme_color) %>
       <%= yield :theme_color %>
     <% elsif html_data[:scheme] %>

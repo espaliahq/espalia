@@ -44,7 +44,7 @@ class Views::Home::DashboardView < Views::Base
   def greeting
     h1(class: "mb-1 text-2xl font-semibold text-default") { "Home" }
     p(class: "mb-6 text-sm text-muted") do
-      plain "Your next actions across GrowthOS. "
+      plain "Your next actions across #{product_name}. "
       a(href: evidence_hub_path(give: 1), class: "font-medium text-brand hover:underline",
         data: { testid: "home-give-feedback" }) { "Give someone feedback →" }
     end

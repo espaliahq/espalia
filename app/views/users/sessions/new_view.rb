@@ -58,7 +58,7 @@ class Views::Users::Sessions::NewView < Views::Base
   def branding
     div(class: "flex flex-col items-center gap-3 text-center") do
       brand_mark
-      h1(class: "text-2xl/7 font-bold") { "GrowthOS" }
+      h1(class: "text-2xl/7 font-bold") { product_name }
       p(class: "text-base/5 text-muted") { "Career growth for your team" }
     end
   end

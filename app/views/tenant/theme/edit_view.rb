@@ -9,7 +9,7 @@ class Views::Tenant::Theme::EditView < Views::Base
   include Phlex::Rails::Helpers::FormWith
 
   THEMES = [
-    { value: "default", label: "Default", description: "GrowthOS's own teal." },
+    { value: "default", label: "Default", description: "#{product_name}'s own teal." },
     { value: "bento", label: "Bento", description: "The Bento design system: lime, with Plus Jakarta Sans." },
     { value: "custom", label: "Custom", description: "Default, with your own brand, navbar and font." }
   ].freeze
@@ -45,7 +45,7 @@ class Views::Tenant::Theme::EditView < Views::Base
     ) do
       render Components::Kit::SectionHeading.new(
         "Theme",
-        subtitle: "How GrowthOS looks for everyone here. Changes preview live; Save to keep them."
+        subtitle: "How #{product_name} looks for everyone here. Changes preview live; Save to keep them."
       )
 
       form_with(

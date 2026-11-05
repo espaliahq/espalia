@@ -50,7 +50,7 @@ class Views::Tenant::Vocabulary::EditView < Views::Base
       card.body do
         p(class: "text-sm text-muted mb-4") do
           plain "The state past the halfway point to the next level. "
-          plain "GrowthOS calls it "
+          plain "#{product_name} calls it "
           strong { Views::Assessments::StateLabels.default_for(:mastering) }
           plain ". Leave this empty to keep that word."
         end

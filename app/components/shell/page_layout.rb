@@ -51,7 +51,7 @@ class Components::Shell::PageLayout < Components::Base
       ) { "Skip to main content" }
 
       render Components::Shell::Navbar.new(
-        app_name: "GrowthOS",
+        app_name: product_name,
         links: nav_links,
         user: @user,
         current_tenant: @current_tenant,

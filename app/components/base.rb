@@ -8,6 +8,10 @@ class Components::Base < Phlex::HTML
   include Components::Helpers::LocalTimeHelpers
   include Components::Helpers::IconHelpers
 
+  # The instance's product name (config.x.product_name, #660).
+  # @return [String]
+  def product_name = Rails.application.config.x.product_name
+
   if Rails.env.development?
     def before_template
       comment { "Before #{self.class.name}" }

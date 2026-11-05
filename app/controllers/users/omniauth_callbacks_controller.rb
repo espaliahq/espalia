@@ -8,7 +8,7 @@
 class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   REFUSAL_FLASH = {
     email_unverified: "Your Google account email isn't verified. Verify it with Google and try again.",
-    no_matching_account: "No GrowthOS account is linked to this Google address. Ask your admin to invite you.",
+    no_matching_account: "No #{Rails.application.config.x.product_name} account is linked to this Google address. Ask your admin to invite you.",
     invalid_payload: "We couldn't read the response from Google. Please try again."
   }.freeze
 

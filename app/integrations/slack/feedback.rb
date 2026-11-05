@@ -32,7 +32,7 @@ module Slack::Feedback
       elsif identity.person_only?
         draft(identity, fields)
       else
-        Result.new(errors: { Slack::FeedbackModal::BLOCKS[:content] => "No GrowthOS account matches your Slack email." })
+        Result.new(errors: { Slack::FeedbackModal::BLOCKS[:content] => "No #{product_name} account matches your Slack email." })
       end
     end
   end
@@ -96,19 +96,19 @@ module Slack::Feedback
       content: fields[:content], evidence_type: fields[:evidence_type],
       external_reference: (fields[:external_url].present? ? { system: "slack", url: fields[:external_url] } : {})
     )
-    dm(identity.tenant, nil, "Your feedback is saved. Sign in to GrowthOS to send it: #{absolute_url(draft.path)}",
+    dm(identity.tenant, nil, "Your feedback is saved. Sign in to #{product_name} to send it: #{absolute_url(draft.path)}",
        email: identity.email, url: absolute_url(draft.path), button: "Sign in and send")
     Result.new(errors: {}, draft: draft)
   end
 
   def not_a_member_message(_identity)
-    "No GrowthOS account matches your Slack email. Ask a workspace admin to add you."
+    "No #{product_name} account matches your Slack email. Ask a workspace admin to add you."
   end
 
   def confirm(identity, assignment, placed:)
     name = Person.where(id: assignment.person_id).pick(:name) || "them"
     text = placed ? "Feedback for #{name} recorded." : "Feedback for #{name} recorded — not yet placed on a capability; they or their manager can place it."
-    dm(identity.tenant, identity.tenant_user.slack_user_id, text, url: absolute_url("/evidence"), button: "Open in GrowthOS")
+    dm(identity.tenant, identity.tenant_user.slack_user_id, text, url: absolute_url("/evidence"), button: "Open in #{product_name}")
   end
 
   # A DM, by Slack user id or by email, with an optional button — queued, so
@@ -144,5 +144,9 @@ module Slack::Feedback
 
   def client(tenant)
     Slack::Client.new(bot_token: tenant.slack_bot_token)
+  end
+
+  def product_name
+    Rails.application.config.x.product_name
   end
 end

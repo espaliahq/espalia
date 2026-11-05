@@ -44,7 +44,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
 
   def branding
     div(class: "text-center mb-8") do
-      h1(class: "text-3xl font-bold text-default tracking-tight") { "GrowthOS" }
+      h1(class: "text-3xl font-bold text-default tracking-tight") { product_name }
       p(class: "text-muted mt-1 text-sm") { "Authorise an external client" }
     end
   end
@@ -53,7 +53,7 @@ class Views::Oauth::AuthorizationsView < Views::Base
     render Components::Kit::Card.new do |card|
       card.body do
         h2(class: "text-lg font-semibold text-default mb-1") { @application.name }
-        p(class: "text-sm text-muted mb-6") { "is requesting access to your GrowthOS account." }
+        p(class: "text-sm text-muted mb-6") { "is requesting access to your #{product_name} account." }
 
         error_alert
         requested_scopes

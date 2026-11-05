@@ -34,7 +34,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     manager: { label: "Your manager", icon: :shield, mark: "mark-category-1" },
     colleagues: { label: "Colleagues", icon: :users, mark: "mark-category-5" },
     admin: { label: "Admin / HR", icon: :grid, mark: "mark-category-4" },
-    growthos: { label: "GrowthOS", icon: :spark, mark: nil }
+    growthos: { label: Rails.application.config.x.product_name, icon: :spark, mark: nil }
   }.freeze
 
   STATIONS = [
@@ -204,7 +204,7 @@ class Views::AssessmentGuides::ShowView < Views::Base
     phase(
       anchor: "setup", number: 1,
       title: "The framework says what good looks like",
-      lead: "Before anyone rates anything, GrowthOS knows your role, your level, " \
+      lead: "Before anyone rates anything, #{product_name} knows your role, your level, " \
             "and the behaviours expected at each step of the ladder.",
       steps: [
         [ :admin, "Admin publishes the career framework",

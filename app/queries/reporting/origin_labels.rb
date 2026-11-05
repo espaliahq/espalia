@@ -10,7 +10,7 @@ module Reporting::OriginLabels
   NATIVE = "growthos"
 
   LABELS = {
-    NATIVE => "GrowthOS",
+    NATIVE => Rails.application.config.x.product_name,
     "chip" => "Chip"
   }.freeze
 

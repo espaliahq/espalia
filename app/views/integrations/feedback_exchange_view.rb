@@ -241,15 +241,15 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
 
   # What a skip reason means to the admin who has to act on it.
   SKIP_REASON_LABELS = {
-    "author_unmatched" => "Giver not found in GrowthOS",
+    "author_unmatched" => "Giver not found in #{product_name}",
     "author_inactive" => "Giver inactive",
-    "recipient_unmatched" => "Recipient not found in GrowthOS",
+    "recipient_unmatched" => "Recipient not found in #{product_name}",
     "recipient_inactive" => "Recipient inactive",
     "self_feedback" => "Feedback on themselves",
     "audience_too_narrow" => "Not shared with the manager line and HR",
     "kind_not_imported" => "A kind of feedback not imported",
     "no_assignment" => "Recipient has no framework assignment",
-    "echo" => "Came from GrowthOS",
+    "echo" => "Came from #{product_name}",
     "invalid_record" => "Malformed or refused"
   }.freeze
 
@@ -305,9 +305,9 @@ class Views::Integrations::FeedbackExchangeView < Views::Base
     return if @unmatched_people.empty?
 
     div(id: "feedback-exchange-unmatched", class: "mt-6 pt-6 border-t border-default") do
-      h3(class: "text-sm font-medium text-default") { "People not found in GrowthOS" }
+      h3(class: "text-sm font-medium text-default") { "People not found in #{product_name}" }
       p(class: HINT_CLASSES) do
-        plain "Their feedback waits here and imports on the next sync once GrowthOS has them, matched by their HRIS id or this email."
+        plain "Their feedback waits here and imports on the next sync once #{product_name} has them, matched by their HRIS id or this email."
       end
       ul(class: "mt-2 divide-y divide-default text-sm") do
         @unmatched_people.each do |person|
