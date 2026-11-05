@@ -102,15 +102,19 @@ class Assessments::RecentActivityQuery
 
   private
 
+  # @return [ActiveRecord::Relation<AssessmentLevelRating>]
   def rating_relation(column)
     narrow(AssessmentLevelRating.across_all_roles.where(person_id: @person_ids).where.not(column => nil), column)
   end
 
+  # @return [ActiveRecord::Relation<AssessmentCycleRoleAlignment>]
   def alignment_relation(column)
     narrow(AssessmentCycleRoleAlignment.where(person_id: @person_ids).where.not(column => nil), column)
   end
 
   # Progress has no framework column; its cycle does.
+  # Progress has no framework column; its cycle does.
+  # @return [ActiveRecord::Relation<AssessmentCycleProgress>]
   def progress_relation(column)
     relation = AssessmentCycleProgress.joins(:cycle).where(person_id: @person_ids).where.not(column => nil)
     relation = relation.where(column => @window) if @window
@@ -120,6 +124,8 @@ class Assessments::RecentActivityQuery
   end
 
   # The window, the cycle and the frameworks, in SQL, before the caller's LIMIT.
+  # The window, the cycle and the frameworks, in SQL, before the caller's LIMIT.
+  # @return [ActiveRecord::Relation]
   def narrow(relation, column, cycle: true)
     relation = relation.where(column => @window) if @window
     relation = relation.where(cycle_id: @cycle_id) if @cycle_id && cycle
@@ -177,6 +183,7 @@ class Assessments::RecentActivityQuery
       end
   end
 
+  # @return [Array<Candidate>]
   def alignment_candidates
     return alignment_history_candidates if @alignment_history
 
@@ -196,6 +203,8 @@ class Assessments::RecentActivityQuery
   end
 
   # The home lifecycle's milestones, as the card has always shown them.
+  # The home lifecycle's milestones, as the card has always shown them.
+  # @return [Array<Candidate>]
   def home_alignment_candidates
     HOME_ALIGNMENT_SOURCES.select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
       progress_relation(ts).order(ts => :desc).limit(@limit)
@@ -211,6 +220,8 @@ class Assessments::RecentActivityQuery
   end
 
   # Every alignment milestone in each person's stream, not only the latest.
+  # Every alignment milestone in each person's stream, not only the latest.
+  # @return [Array<Candidate>]
   def alignment_history_candidates
     kinds = ALIGNMENT_SOURCES.keys.select { |kind| wanted?(kind) }
     return [] if kinds.empty?
@@ -277,6 +288,7 @@ class Assessments::RecentActivityQuery
       .each_with_object({}) { |(person_id, framework_id, id), index| index[[ person_id, framework_id ]] = id }
   end
 
+  # @return [Hash{String => FrameworkState::Role}]
   def role_index(candidates)
     role_ids = candidates.filter_map(&:role_id).uniq
     return {} if role_ids.empty?

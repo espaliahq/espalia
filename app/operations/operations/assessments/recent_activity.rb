@@ -71,10 +71,14 @@ class Operations::Assessments::RecentActivity < Operations::Base
   private
 
   # The caller and everyone below them.
+  # The caller and everyone below them.
+  # @return [Array<String>]
   def scope_person_ids
     @scope_person_ids ||= [ context.person.id, *context.person.all_reports.pluck(:id) ]
   end
 
+  # @return [Array<String>] every kind when none were asked for
+  # @raise [Operations::Base::ParameterError] for a kind it doesn't know
   def kinds
     return Assessments::RecentActivityQuery::KINDS if params[:kinds].nil?
 
@@ -86,6 +90,9 @@ class Operations::Assessments::RecentActivity < Operations::Base
   end
 
   # A bare date is its UTC day; a date-time must say its offset.
+  # A bare date is its UTC day; a date-time must say its offset.
+  # @return [Time, nil]
+  # @raise [Operations::Base::ParameterError] when the value isn't ISO 8601
   def time_param(name, day_edge)
     value = params[name]
     return nil if value.blank?
@@ -102,6 +109,7 @@ class Operations::Assessments::RecentActivity < Operations::Base
     requested.positive? ? [ requested, MAX_LIMIT ].min : DEFAULT_LIMIT
   end
 
+  # @return [Hash] one activity row; role fields on alignment items only
   def serialize(item)
     row = {
       kind: item.kind,
