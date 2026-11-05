@@ -11,11 +11,11 @@ require "timeout"
 # the full chain — bearer auth → tools/list → tools/call → result —
 # against the same MCP transport a real client would speak.
 #
-# `cli_available?` is a precondition check: the consuming test should
-# `flunk` (not `skip`) when it returns false. CI installs the CLI in
-# the test job and the devcontainer's postCreateCommand installs it
-# for local dev, so absence is treated as a setup failure, not a
-# legitimate run condition.
+# `cli_available?` is a precondition check. Where the CLI is expected
+# — REQUIRE_MCP_CLI=1, set by the dedicated CI job and the devcontainer,
+# both of which install it — the consuming test `flunk`s on absence (a
+# setup failure). Without that env var it `skip`s with an install hint,
+# so a contributor without the CLI still gets a green suite.
 module McpCliHelpers
   CLAUDE_CLI = ENV["CLAUDE_CLI"] || "claude"
   CLI_TIMEOUT_SECONDS = 60

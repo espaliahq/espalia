@@ -154,24 +154,54 @@ jobs:
         options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
+      # A fork PR has no CLAUDE_CODE_OAUTH_TOKEN, so the real LLM round-trip
+      # cannot run: the job skips its steps and passes instead of failing
+      # every outside contribution. On a same-repo run an empty secret is a
+      # configuration loss, not a fork — fail loudly, or parity coverage
+      # disappears silently (and Dependabot PRs would auto-merge without
+      # it). Job-level `if:` cannot read secrets, hence this step.
+      - name: Check the Claude OAuth token is available
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "present=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_TOKEN" != "true" ]; then
+            if [ "$IS_FORK_PR" = "true" ]; then
+              echo "::notice::Fork PR without CLAUDE_CODE_OAUTH_TOKEN — skipping the CLI parity test; it runs on the upstream repository."
+            else
+              echo "::error::CLAUDE_CODE_OAUTH_TOKEN is empty on a same-repo run. Restore it (generate with 'claude setup-token', set under both Actions and Dependabot secrets), or remove this job if this instance deliberately runs without parity coverage."
+              exit 1
+            fi
+          fi
+
       - name: Checkout code
+        if: steps.token.outputs.present == 'true'
         uses: actions/checkout@v7
 
       - name: Set up Ruby
+        if: steps.token.outputs.present == 'true'
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
 
       - name: Set up Node + install claude CLI
+        if: steps.token.outputs.present == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: lts/*
-      - run: npm install -g @anthropic-ai/claude-code
+      - if: steps.token.outputs.present == 'true'
+        run: npm install -g @anthropic-ai/claude-code
 
       - name: Run claude CLI parity test
+        if: steps.token.outputs.present == 'true'
         env:
           RAILS_ENV: test
           DB_HOST: localhost
+          # The test skips when the claude binary is absent; in this job a
+          # missing binary means the install step above broke, so stay loud.
+          REQUIRE_MCP_CLI: "1"
           # Generate locally with `claude setup-token` and add the output
           # as a repo Actions secret (and Dependabot secret) named
           # CLAUDE_CODE_OAUTH_TOKEN.

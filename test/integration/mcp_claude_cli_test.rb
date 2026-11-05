@@ -10,9 +10,13 @@ require_relative "../support/mcp_cli_helpers"
 #
 # CI installs @anthropic-ai/claude-code alongside Ruby
 # (.github/workflows/ci.yml); the devcontainer's postCreateCommand
-# installs it for local dev. The test fails (does NOT skip) when the
-# binary is absent — silent skips were hiding the case where parity
-# coverage was being lost. Set CLAUDE_CLI=<path> for a non-default install.
+# installs it for local dev. When the binary is absent the test skips
+# with an install hint, so a contributor without the CLI still gets a
+# green suite — EXCEPT under REQUIRE_MCP_CLI=1 (set by the dedicated
+# mcp-cli-test CI job, which installs the CLI itself), where an absent
+# binary means the install broke and the test fails loudly. Silent
+# skips once hid lost parity coverage; the skip message and the CI
+# flunk keep it visible. Set CLAUDE_CLI=<path> for a non-default install.
 #
 # Per-test workflow:
 #   1. Mint a Doorkeeper access token directly (the OAuth UI is covered
@@ -35,19 +39,16 @@ class McpClaudeCliTest < ActiveSupport::TestCase
     # The main `test` CI job sets SKIP_MCP_CLI_TEST=1 so it doesn't have
     # to install Node + the claude CLI or carry the OAuth token. A
     # separate `mcp-cli-test` job runs this file with the env var unset.
-    # Local runs and the devcontainer leave the env var unset — the
-    # binary check below still flunks (does NOT silently skip) so missing
-    # CLI parity coverage outside this one CI carve-out stays loud.
     skip "SKIP_MCP_CLI_TEST set — runs in the dedicated mcp-cli-test CI job" if ENV["SKIP_MCP_CLI_TEST"].present?
 
-    # Non-optional: the dedicated CI job installs the CLI
-    # (.github/workflows/ci.yml) and the devcontainer postCreateCommand
-    # installs it for local dev. If you hit this outside those
-    # environments, run:
-    #   npm install -g @anthropic-ai/claude-code
-    # or point CLAUDE_CLI at a non-default install path.
+    # Where the CLI is expected (the dedicated CI job installs it; the
+    # devcontainer sets REQUIRE_MCP_CLI=1 and installs it), absence is a
+    # broken install and stays a loud failure. Anywhere else — a
+    # contributor without the CLI — skip with the install hint.
     unless cli_available?
-      flunk "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
+      message = "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
+      flunk message if ENV["REQUIRE_MCP_CLI"].present?
+      skip "#{message} (skipping; CI on the upstream repository still enforces parity coverage)"
     end
 
     @user = create(:user, password: "password123")
