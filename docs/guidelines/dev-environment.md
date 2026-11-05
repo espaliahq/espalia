@@ -108,17 +108,6 @@ prints anything.
 
 **Running on the macOS host instead of the devcontainer: parallel test workers hang, and a stray user gem directory breaks Bundler.** `bin/rails test` with the default `parallelize(workers: :number_of_processors)` forks workers that never print a dot on macOS — with or without `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` — so run with `PARALLEL_WORKERS=1` (the whole non-system suite is a few minutes single-process). And a `~/.gem/ruby/<abi>` directory on the gem path can make the pinned Ruby's Bundler fail to load with an unrelated-looking `NoMethodError` deep in rubygems; point `GEM_HOME`/`GEM_PATH` at the Ruby's own gem directory before `bundle install`. Homebrew's Postgres ships without the `postgres` role `database.yml` expects (`CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgres'`), and `DB_HOST=localhost` replaces the compose service name. Two mobile-viewport system tests fail on the host's Chrome whatever the branch (`notifications_system_test.rb` "keep the dropdown panel fully on-screen" and `framework_explorer_system_test.rb` "close mobile role tree overlay when clicking outside" — the window does not shrink to 375 px there); read them against `main` in a worktree before blaming a change, and let CI be the verdict. The devcontainer remains the documented path; this is for when it isn't running.
 
-## Claude Code credentials in the devcontainer (macOS)
-
-The devcontainer copies Claude Code credentials from the macOS keychain to
-`~/.claude.credentials.json` on (re)build, but a token refreshed after the
-build never reaches the container on its own. A launchd agent on the host can
-keep them synced on a schedule (the old README described one as
-`com.meandu.claude-creds-sync.plist`, though the plist itself was never
-committed): a `StartInterval` job that reads the keychain item and writes the
-JSON into the container's home. If the container's Claude Code logs out after
-a host-side token refresh, rebuilding the container re-copies the credential.
-
 ## `gh` in the devcontainer
 
 **`gh` unauthenticated in the devcontainer? Re-run the feature hook, don't `gh auth login`.** The `gh-auth-from-host` feature bridges the host's forwarded git credential into `gh` only on `postAttachCommand`; it warns and exits 0 when the host offers nothing at that instant, and a long-lived VS Code connection never re-attaches, so one silent miss at container creation leaves `gh` logged out for the container's lifetime. Fix in place with `sh /usr/local/share/gh-auth-from-host/refresh.sh`. A container-local `gh auth login` shadows the bridge and rots when the host token rotates.
