@@ -105,6 +105,17 @@ class Operations::Assessments::RecentActivityTest < ActiveSupport::TestCase
       assert_raises(Pundit::NotAuthorizedError) { call_op(context: @manager_ctx, params: { person_id: outsider.id }) }
     end
 
+    should "let a rating delegate outside the org name the person they rate" do
+      delegate_ctx = member_ctx("Dana") do |delegate|
+        create(:manager_assessment_delegation, tenant: @tenant, person_id: @report.id, framework_id: @framework_id,
+          delegate_person_id: delegate.id, granted_by_id: @manager.id)
+      end
+
+      activity = call_op(context: delegate_ctx, params: { person_id: @report.id })[:activity]
+
+      assert_equal [ "Ada" ], activity.map { |i| i.dig(:person, :name) }
+    end
+
     should "let a tenant admin name anyone" do
       outsider = create(:person, tenant: @tenant, name: "Elsewhere")
       add_evidence(outsider, at: 1.minute.ago)
@@ -141,8 +152,10 @@ class Operations::Assessments::RecentActivityTest < ActiveSupport::TestCase
       assert_raises(Operations::Base::ParameterError) { call_op(context: @manager_ctx, params: { kinds: %w[rated] }) }
     end
 
-    should "refuse a time it can't read" do
-      assert_raises(Operations::Base::ParameterError) { call_op(context: @manager_ctx, params: { since: "last week" }) }
+    should "refuse a time it can't read, a date-time with no offset, and a window that ends before it starts" do
+      [ { since: "last week" }, { since: "2026-09-10T09:00:00" }, { since: "2026-10-01", until: "2026-09-01" } ].each do |window|
+        assert_raises(Operations::Base::ParameterError, window.inspect) { call_op(context: @manager_ctx, params: window) }
+      end
     end
   end
 

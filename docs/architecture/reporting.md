@@ -381,8 +381,15 @@ asks for more than the card does:
   keeps own-or-direct-reports); `person_id` narrows to one person in it, and a
   tenant admin may name anyone.
 - **Filters:** `since` / `until`, `cycle_id` and `kinds` narrow each source in
-  SQL before its LIMIT, so a window returns what is in it rather than the newest
-  N overall. Comments carry no cycle, so `cycle_id` leaves them out.
+  SQL before its LIMIT, not after the newest N overall. The rating and
+  role-alignment rows keep only each cell's or role's latest stamp, so a window
+  misses activity later overwritten — a cell rated on the 10th and revised on
+  the 20th shows only the 20th. Comments carry no cycle, so `cycle_id` leaves
+  them out.
+- **`person_id`** is authorised like the assessment itself: the caller's
+  subtree, then `AssessmentPolicy#show?` on that person's assignments (so a
+  recorded reporting manager or a rating delegate reads them too), and any
+  person for a tenant admin.
 - **Alignments:** from the role-alignment rows (`lens_alignments: true`), so
   lens-role conversations and `alignment_reopened` appear with their role; the
   card keeps the home lifecycle on the progress rows. With `person_id` they come

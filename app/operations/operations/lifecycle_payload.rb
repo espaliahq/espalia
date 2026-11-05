@@ -70,6 +70,6 @@ module Operations::LifecyclePayload
   end
 
   def lifecycle_time(time)
-    time&.utc&.iso8601
+    time&.getutc&.iso8601
   end
 end

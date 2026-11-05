@@ -596,12 +596,14 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "description" => "Recent assessment activity, most recent first (metadata only, no rating values): ratings, " \
           "evidence, comments, and alignment milestones started, completed and re-opened against any " \
           "role (role_id, role_code, role_name, home). Covers the caller and their whole org subtree; " \
-          "person_id narrows to one person in it (a tenant admin may name anyone), and then alignment " \
+          "person_id narrows to one person whose assessment the caller may view, and then alignment " \
           "milestones come from the event stream, so a completion later re-opened still appears. since " \
-          "/ until (ISO 8601; a bare date is its UTC day, inclusive) bound the window, and each source " \
-          "is narrowed before the limit, so a window returns what is in it. cycle_id keeps one cycle's " \
-          "activity (comments carry no cycle and are left out). kinds narrows by kind; an empty list " \
-          "returns none. limit defaults to 8, at most 50.",
+          "/ until (ISO 8601; a bare date is its UTC day, inclusive; a date-time needs an offset) bound " \
+          "the window, applied before the limit. Ratings and alignment rows keep only each cell's or " \
+          "role's latest stamp, so a window misses activity later overwritten (with person_id, " \
+          "alignments are read in full from the stream). cycle_id keeps one cycle's activity (comments " \
+          "carry no cycle and are left out). kinds narrows by kind; an empty list returns none. limit " \
+          "defaults to 8, at most 50.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

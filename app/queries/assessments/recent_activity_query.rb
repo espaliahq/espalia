@@ -11,16 +11,10 @@
 # read model with a bounded `ORDER ... LIMIT`, then merged and capped. Read-only
 # and tenant-scoped (the read models are `acts_as_tenant`).
 #
-# The window (`since` / `until_time`), `cycle_id` and `kinds` narrow each
-# source in SQL before its LIMIT, so a window returns what is in it rather
-# than the newest N overall. Comments carry no cycle, so a cycle filter leaves
-# them out. Alignment milestones come from the home lifecycle on the progress
-# rows by default (the card); with `lens_alignments: true` they come from the
-# role-alignment rows, every role's, re-opens included. Both hold only the
-# latest of each milestone; with
-# `alignment_history: true` they come from each person's event stream
-# instead ({Assessments::LifecycleTimeline}) — one stream per assignment, so
-# meant for a single person.
+# Filters narrow each source in SQL before its LIMIT. The rating and
+# role-alignment rows keep only each cell's or role's latest stamp, so a
+# window misses activity later overwritten; the event stream
+# (`alignment_history:`) is the full record, one stream per assignment.
 class Assessments::RecentActivityQuery
   DEFAULT_LIMIT = 8
 
@@ -53,6 +47,9 @@ class Assessments::RecentActivityQuery
     "alignment_completed" => [ :aligned_at, :aligned_by_id ],
     "alignment_reopened" => [ :reopened_at, :reopened_by_id ]
   }.freeze
+
+  # The progress rows hold the home lifecycle and no re-open.
+  HOME_ALIGNMENT_SOURCES = ALIGNMENT_SOURCES.except("alignment_reopened").freeze
 
   # What the Home card shows; `alignment_reopened` is asked for explicitly.
   DEFAULT_KINDS = %w[self_rated manager_rated assessment_aligned evidence_recorded comment_posted
@@ -87,7 +84,7 @@ class Assessments::RecentActivityQuery
     RATING_SOURCES.any? { |_, (ts, _)| rating_relation(ts).exists? } ||
       EvidenceItem.active.where(person_id: @person_ids).exists? ||
       PersonDevelopmentComment.active.where(person_id: @person_ids).exists? ||
-      ALIGNMENT_SOURCES.except("alignment_reopened").any? { |_, (ts, _)| progress_relation(ts).exists? }
+      HOME_ALIGNMENT_SOURCES.any? { |_, (ts, _)| progress_relation(ts).exists? }
   end
 
   # @return [Array<Item>] most-recent-first, capped at `limit`.
@@ -191,7 +188,7 @@ class Assessments::RecentActivityQuery
 
   # The home lifecycle's milestones, as the card has always shown them.
   def home_alignment_candidates
-    ALIGNMENT_SOURCES.except("alignment_reopened").select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
+    HOME_ALIGNMENT_SOURCES.select { |kind, _| wanted?(kind) }.flat_map do |kind, (ts, actor_col)|
       progress_relation(ts).joins(:cycle).order(ts => :desc).limit(@limit)
         .pluck(:person_id, "assessment_cycles.framework_id", ts, actor_col)
         .map do |person_id, framework_id, occurred_at, actor_id|

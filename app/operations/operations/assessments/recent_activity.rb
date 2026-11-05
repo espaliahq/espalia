@@ -1,24 +1,21 @@
 # frozen_string_literal: true
 
-# Recent assessment activity for the caller — their own and their whole
-# org subtree's (ratings, evidence, comments, alignment milestones), or one
-# person's. Shares {Assessments::RecentActivityQuery} with the Home "Recent
-# activity" card, which keeps its own narrower scope. Read-only; emits event
-# metadata (kind, who, which capability, when) but never rating values.
-#
-# The manager chain may see everything about a person, so a skip-level reads
-# their whole org; a tenant admin may name anyone with `person_id`.
+# Shares {Assessments::RecentActivityQuery} with the Home "Recent activity"
+# card, which keeps its own narrower scope.
 class Operations::Assessments::RecentActivity < Operations::Base
   DATE_ONLY = /\A\d{4}-\d{2}-\d{2}\z/
+  WITH_OFFSET = /(Z|[+-]\d{2}:?\d{2})\z/
 
   description "Recent assessment activity, most recent first (metadata only, no rating values): " \
               "ratings, evidence, comments, and alignment milestones started, completed and " \
               "re-opened against any role (role_id, role_code, role_name, home). Covers the caller " \
-              "and their whole org subtree; person_id narrows to one person in it (a tenant admin " \
-              "may name anyone), and then alignment milestones come from the event stream, so a " \
+              "and their whole org subtree; person_id narrows to one person whose assessment the " \
+              "caller may view, and then alignment milestones come from the event stream, so a " \
               "completion later re-opened still appears. since / until (ISO 8601; a bare date is " \
-              "its UTC day, inclusive) bound the window, and each source is narrowed before the " \
-              "limit, so a window returns what is in it. cycle_id keeps one cycle's activity " \
+              "its UTC day, inclusive; a date-time needs an offset) bound the window, applied before " \
+              "the limit. Ratings and alignment rows keep only each cell's or role's latest stamp, " \
+              "so a window misses activity later overwritten (with person_id, alignments are read " \
+              "in full from the stream). cycle_id keeps one cycle's activity " \
               "(comments carry no cycle and are left out). kinds narrows by kind; an empty list " \
               "returns none. limit defaults to 8, at most 50."
   category :read
@@ -40,22 +37,28 @@ class Operations::Assessments::RecentActivity < Operations::Base
               description: "Keep only these kinds of activity." }
 
   # @raise [Pundit::NotAuthorizedError] when the caller has no person, or
-  #   names a person outside their subtree without being a tenant admin
+  #   names a person whose assessment they may not view
   def policy_check
     raise Pundit::NotAuthorizedError, "not linked to a person" if context.person.nil?
 
     authorize PersonFrameworkAssignment, :index?
     return if params[:person_id].blank? || context.tenant_admin? || scope_person_ids.include?(params[:person_id])
+    return if PersonFrameworkAssignment.where(person_id: params[:person_id])
+      .any? { |assignment| AssessmentPolicy.new(context, assignment).show? }
 
-    raise Pundit::NotAuthorizedError, "that person is outside your org"
+    raise Pundit::NotAuthorizedError, "you may not view that person's assessment"
   end
 
   # @return [Hash] `{ activity: [...] }`, most recent first
   # @raise [Operations::Base::ParameterError] for an unreadable time or an unknown kind
   def perform
+    since = time_param(:since, :beginning_of_day)
+    until_time = time_param(:until, :end_of_day)
+    raise ParameterError, "since must not be after until" if since && until_time && since > until_time
+
     items = Assessments::RecentActivityQuery.new(
       person_ids: params[:person_id].presence ? [ params[:person_id] ] : scope_person_ids,
-      limit: limit, since: time_param(:since, :beginning_of_day), until_time: time_param(:until, :end_of_day),
+      limit: limit, since: since, until_time: until_time,
       cycle_id: params[:cycle_id].presence, kinds: kinds,
       lens_alignments: true, alignment_history: params[:person_id].present?
     ).call
@@ -85,6 +88,7 @@ class Operations::Assessments::RecentActivity < Operations::Base
     value = params[name]
     return nil if value.blank?
     return Date.iso8601(value).in_time_zone("UTC").public_send(day_edge) if DATE_ONLY.match?(value)
+    raise ArgumentError unless WITH_OFFSET.match?(value)
 
     Time.iso8601(value)
   rescue ArgumentError
@@ -99,7 +103,7 @@ class Operations::Assessments::RecentActivity < Operations::Base
   def serialize(item)
     row = {
       kind: item.kind,
-      occurred_at: item.occurred_at&.utc&.iso8601,
+      occurred_at: item.occurred_at&.getutc&.iso8601,
       person: { id: item.person_id, name: item.person_name },
       actor: item.actor_other? ? { id: item.actor_id, name: item.actor_name } : nil,
       framework_id: item.framework_id,
