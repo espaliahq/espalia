@@ -126,18 +126,38 @@ class ApplicationController < ActionController::Base
     # Use without_tenant to bypass any existing scope — we are determining
     # which tenant to activate, so we must query unconditionally.
     tenant = ActsAsTenant.without_tenant do
-      if session[:current_tenant_id]
-        current_user.tenants.find_by(id: session[:current_tenant_id])
-      else
-        t = current_user.tenants.first
-        if t
-          session[:current_tenant_id] = t.id
-          t
+      host_tenant_for_member ||
+        if session[:current_tenant_id]
+          current_user.tenants.find_by(id: session[:current_tenant_id])
+        else
+          t = current_user.tenants.first
+          if t
+            session[:current_tenant_id] = t.id
+            t
+          end
         end
-      end
     end
 
     set_current_tenant(tenant) if tenant
+  end
+
+  # The tenant whose custom domain this request arrived on (#660), or nil.
+  # Memoised per request; available pre-auth (the sign-in page brands by it).
+  def host_tenant
+    return @host_tenant if defined?(@host_tenant)
+
+    @host_tenant = Tenant.for_host(request.host)
+  end
+
+  # A request on a tenant's custom domain assumes that tenant for its members
+  # (#660) — the host wins over the session, as on any workspace URL. A signed-in
+  # non-member falls through to the usual resolution.
+  def host_tenant_for_member
+    tenant = host_tenant
+    return nil unless tenant && current_user.tenants.exists?(tenant.id)
+
+    session[:current_tenant_id] = tenant.id
+    tenant
   end
 
   # Tags every event published during this web request with provenance via

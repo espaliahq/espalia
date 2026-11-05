@@ -32,12 +32,15 @@ class Users::SessionsController < Devise::SessionsController
 
   private
 
-  # @return [Tenant, nil] the tenant whose sign-on URL (or form) this request came through
+  # @return [Tenant, nil] the tenant whose sign-on URL this request came
+  #   through: its custom domain (#660) first, then the slug path or the
+  #   form's hidden field
   def sign_in_tenant
     return @sign_in_tenant if defined?(@sign_in_tenant)
 
     slug = params[:tenant_slug].presence
-    @sign_in_tenant = slug.is_a?(String) ? Tenant.find_by(slug: slug) : nil
+    @sign_in_tenant = host_tenant ||
+                      (ActsAsTenant.without_tenant { Tenant.find_by(slug: slug) } if slug.is_a?(String))
   end
 
   # The sign-on URL promises the tenant's workspace, so the session starts

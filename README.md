@@ -84,6 +84,11 @@ bin/rails development:precommit  # lint + security + full suite; the PR gate
 Espalia runs standalone: the Rails app, PostgreSQL and Solid Queue — no other
 services required. A [render.yaml](render.yaml) blueprint is included for
 [Render](https://render.com); any host that runs Rails and Postgres works.
+A tenant can sign in at its own domain or subdomain: set it under **Tenant
+admin → Theme**, point its DNS at the instance and add the domain to your
+host's TLS. Requests arriving on it carry that tenant's branding and scope
+the session to it.
+
 Bootstrap the first admin with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` —
 seeds run automatically when the database is first created, so on an existing
 database run `bin/rails db:seed` with those set. Or create one directly with

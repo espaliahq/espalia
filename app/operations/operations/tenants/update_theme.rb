@@ -20,7 +20,8 @@ class Operations::Tenants::UpdateTheme < Operations::Base
   description "Update the active tenant's theme: default, bento, or custom with its own " \
               "colour-role values (light and dark hex) and Google font. custom_theme merges " \
               "per role; a blank value restores the default for that role. product_name is " \
-              "what this tenant calls the platform; blank restores the instance default."
+              "what this tenant calls the platform; blank restores the instance default. " \
+              "custom_domain is the tenant's own sign-in host (domain or subdomain); blank clears it."
   category :write
   approval :in_app
 
@@ -38,6 +39,7 @@ class Operations::Tenants::UpdateTheme < Operations::Base
   }
   parameter :font_family, String
   parameter :product_name, String
+  parameter :custom_domain, String
 
   def policy_check
     authorize ActsAsTenant.current_tenant, :update_theme?, policy_class: TenantPolicy

@@ -17,7 +17,7 @@ class Tenant::ThemesController < ApplicationController
       user: current_user,
       current_tenant: ActsAsTenant.current_tenant,
       tenants: tenants_for_user,
-      sign_in_url: tenant_sign_in_url(tenant_slug: ActsAsTenant.current_tenant.slug)
+      sign_in_url: tenant_sign_in_url_for(ActsAsTenant.current_tenant)
     )
   end
 
@@ -48,7 +48,7 @@ class Tenant::ThemesController < ApplicationController
 
   def theme_params
     params.expect(tenant: [
-      :theme, :font_family, :product_name,
+      :theme, :font_family, :product_name, :custom_domain,
       { custom_theme: Tenant::CUSTOM_ROLES.index_with { Tenant::SCHEMES } }
     ])
   end
@@ -56,5 +56,15 @@ class Tenant::ThemesController < ApplicationController
   # @return [Array<Tenant>]
   def tenants_for_user
     ActsAsTenant.without_tenant { current_user.tenants.to_a }
+  end
+
+  # The address people sign in at (#660): the tenant's custom domain when one
+  # is configured, otherwise the slug-based sign-on path on this host.
+  def tenant_sign_in_url_for(tenant)
+    if tenant.custom_domain.present?
+      "#{request.protocol}#{tenant.custom_domain}"
+    else
+      tenant_sign_in_url(tenant_slug: tenant.slug)
+    end
   end
 end

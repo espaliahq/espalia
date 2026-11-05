@@ -87,7 +87,7 @@ class Views::Tenant::Theme::EditView < Views::Base
   end
 
   def product_name_field(form)
-    render Components::Kit::Card.new(title: "Product name", heading_level: :h2) do |card|
+    render Components::Kit::Card.new(title: "Branding", heading_level: :h2) do |card|
       card.body do
         form.label :product_name, "What your team calls the platform", class: "block text-sm font-medium text-default"
         p(id: "theme-product-name-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
@@ -98,6 +98,20 @@ class Views::Tenant::Theme::EditView < Views::Base
           placeholder: instance_product_name,
           class: "#{Components::Kit::Field::INPUT} max-w-sm",
           aria: { describedby: "theme-product-name-hint" }
+
+        div(class: "mt-4 border-t border-default pt-4") do
+          form.label :custom_domain, "Sign-in domain", class: "block text-sm font-medium text-default"
+          p(id: "theme-custom-domain-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
+            "A domain or subdomain of your own, such as growth.example.com. Anyone arriving on it " \
+            "sees your sign-in page and workspace. It works once its DNS points at this instance; " \
+            "ask your operator to add it for TLS."
+          end
+          form.text_field :custom_domain,
+            value: @tenant.custom_domain.presence || "",
+            placeholder: "growth.example.com",
+            class: "#{Components::Kit::Field::INPUT} max-w-sm",
+            aria: { describedby: "theme-custom-domain-hint" }
+        end
       end
     end
   end
