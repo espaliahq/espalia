@@ -75,7 +75,7 @@ Measured on the seeded dev database (7,298 handled events, one tenant): **~45 s 
 
 #### Recorded: `person_development/current_assessment` v9 (home role at the join, [#673](https://github.com/mr-yum/growth-os/issues/673))
 
-Path A, as v8. The rebuild fills `assessment_cycle_progress.joined_role_id` / `joined_level_id` from the assignment at each `JoinedAssessmentCycle`, then files a role-less (pre-ADR-22) alignment start, completion or re-open under that role, as the aggregate does. Only a participant who changed role mid-cycle after such an event reads differently: their historical alignment row moves from the new role to the one they joined as, still `home`. A progress row with no `joined_role_id` falls back to the enrollment snapshot, the v8 behaviour.
+Path A, as v8. The rebuild fills `assessment_cycle_progress.joined_role_id` / `joined_level_id` from the assignment at each `JoinedAssessmentCycle`, then files a role-less (pre-ADR-22) alignment start, completion or re-open under that role and level, as the aggregate does. Only a participant whose role or level changed mid-cycle in a cycle with such an event reads differently: their historical alignment row moves to the role and level they joined at, still `home`. A progress row with no `joined_role_id` falls back to the enrollment snapshot, the v8 behaviour.
 
 Measured on the seeded dev database (7,734 handled events, one tenant): **57 s wall**, Rails boot included.
 

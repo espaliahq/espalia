@@ -148,7 +148,8 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
   end
 
   # The aggregate fixes the home role at the join; ParticipantRoleSync moves
-  # the enrollment snapshot on a mid-cycle role change (#673).
+  # the enrollment snapshot on a mid-cycle role change
+  # (https://github.com/mr-yum/growth-os/issues/673).
   context "history without a role after a mid-cycle role change" do
     setup do
       pm4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @pm.role_id, ordinal: 4) }
@@ -186,6 +187,21 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
       assert(milestones.all? { |m| m.role_id == @engineer.role_id && m.home })
       assert_equal @engineer.role_id, role_alignment(@engineer).role_id
     end
+  end
+
+  should "keep history at the level held at the join after a mid-cycle promotion" do
+    e4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @engineer.role_id, ordinal: 4) }
+    append_and_project(PersonDevelopment::Events::PersonLevelChanged,
+      previous_level_id: @e3.level_id, new_level_id: e4.level_id, reason: "promotion")
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person_id)
+        .update!(level_id: e4.level_id, level_ordinal: 4)
+    end
+    append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
+
+    row = role_alignment(@engineer)
+    assert row.home
+    assert_equal 3, row.level_ordinal
   end
 
   should "clear a participation's role rows when the person re-joins the cycle" do

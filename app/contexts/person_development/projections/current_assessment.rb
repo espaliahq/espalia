@@ -95,7 +95,7 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     join (`joined_role_id` / `joined_level_id`), and a role-less
   #     (pre-ADR-22) alignment event is that role's, as the aggregate holds
   #     it — not the enrollment snapshot's, which a mid-cycle role change
-  #     moves (#673). A rebuild backfills the columns and re-homes such rows
+  #     moves (https://github.com/mr-yum/growth-os/issues/673). A rebuild backfills the columns and re-homes such rows
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
   CODE_VERSION = 9
 
@@ -524,13 +524,14 @@ class PersonDevelopment::Projections::CurrentAssessment
   # A start with no role is history — the home role's, over every cell.
   def handle_alignment_started(event)
     now = event.metadata[:timestamp] || Time.current
-    role_id = alignment_role_id(event)
+    progress = find_progress(event)
+    role_id = alignment_role_id(event, progress)
     home = home_alignment?(event, role_id)
     write_role_alignment(event, role_id) do |row|
       row.assign_attributes(
         home: home,
         whole_assessment: event.data[:cell_keys].nil?,
-        level_ordinal: event.data[:level_ordinal] || (alignment_level_ordinal(event, role_id) if home),
+        level_ordinal: event.data[:level_ordinal] || (alignment_level_ordinal(event, progress) if home),
         status: "aligning",
         alignment_started_at: now,
         alignment_started_by_id: event.data[:started_by_id],
@@ -539,7 +540,6 @@ class PersonDevelopment::Projections::CurrentAssessment
       )
     end
 
-    progress = find_progress(event)
     if home && progress
       progress.update!(
         status: "aligning",
@@ -588,12 +588,12 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   def handle_full_alignment_completed(event)
     now = event.metadata[:timestamp] || Time.current
-    role_id = alignment_role_id(event)
+    progress = find_progress(event)
+    role_id = alignment_role_id(event, progress)
     update_role_alignment(event, role_id,
       status: "aligned", aligned_at: now, aligned_by_id: event.data[:completed_by_id],
       aligned_framework_version: event.data[:framework_version])
 
-    progress = find_progress(event)
     if home_alignment?(event, role_id) && progress
       progress.update!(
         status: "aligned",
@@ -612,13 +612,13 @@ class PersonDevelopment::Projections::CurrentAssessment
   # The original alignment_started_at / _by_id are preserved (the role was
   # already in alignment; we're only undoing the completion).
   def handle_alignment_reopened(event)
-    role_id = alignment_role_id(event)
+    progress = find_progress(event)
+    role_id = alignment_role_id(event, progress)
     update_role_alignment(event, role_id,
       status: "aligning", aligned_at: nil, aligned_by_id: nil, aligned_framework_version: nil,
       reopened_at: event.metadata[:timestamp] || Time.current,
       reopened_by_id: event.data[:reopened_by_id])
 
-    progress = find_progress(event)
     if home_alignment?(event, role_id) && progress
       progress.update!(
         status: "aligning",
@@ -632,11 +632,13 @@ class PersonDevelopment::Projections::CurrentAssessment
 
   # The role an alignment event is about. History carries none: it is the
   # role held at the join, as the aggregate fixes `@home_role_id`, which a
-  # mid-cycle role change moves the enrollment snapshot away from (#673).
+  # mid-cycle role change moves the enrollment snapshot away from
+  # (https://github.com/mr-yum/growth-os/issues/673).
   #
+  # @param progress [AssessmentCycleProgress, nil]
   # @return [String, nil]
-  def alignment_role_id(event)
-    event.data[:role_id] || find_progress(event)&.joined_role_id || home_role_id(event)
+  def alignment_role_id(event, progress)
+    event.data[:role_id] || progress&.joined_role_id || home_role_id(event)
   end
 
   # @return [Boolean]
@@ -644,15 +646,12 @@ class PersonDevelopment::Projections::CurrentAssessment
     event.data[:role_id].nil? || role_id == home_role_id(event)
   end
 
-  # The home level, or the level held at the join when history's role is no
-  # longer the snapshot's.
+  # History's level is the one held at the join, with its role.
   #
+  # @param progress [AssessmentCycleProgress, nil]
   # @return [Integer, nil]
-  def alignment_level_ordinal(event, role_id)
-    return home_level_ordinal(event) if role_id == home_role_id(event)
-
-    level_id = find_progress(event)&.joined_level_id
-    level_id && FrameworkState::Level.find_by(level_id: level_id)&.ordinal
+  def alignment_level_ordinal(event, progress)
+    (level_ordinal_for(progress&.joined_level_id) if event.data[:role_id].nil?) || home_level_ordinal(event)
   end
 
   # The role the cycle assesses the person at: its enrollment snapshot, else
@@ -672,7 +671,11 @@ class PersonDevelopment::Projections::CurrentAssessment
     enrollment = AssessmentCycleEnrollment.find_by(cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id])
     return enrollment.level_ordinal if enrollment&.level_ordinal
 
-    level_id = find_assignment(event)&.level_id
+    level_ordinal_for(find_assignment(event)&.level_id)
+  end
+
+  # @return [Integer, nil]
+  def level_ordinal_for(level_id)
     level_id && FrameworkState::Level.find_by(level_id: level_id)&.ordinal
   end
 
