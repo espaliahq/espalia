@@ -31,6 +31,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert policy.show?
     end
 
+    should "not read the reasons written about them on lifecycle events" do
+      refute policy.view_lifecycle_reasons?
+    end
+
     should "allow matrix" do
       assert policy.matrix?
     end
@@ -61,6 +65,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
       assert policy.show?
     end
 
+    should "read the reasons on lifecycle events" do
+      assert policy.view_lifecycle_reasons?
+    end
+
     should "allow create_manager_rating" do
       assert policy.create_manager_rating?
     end
@@ -87,6 +95,10 @@ class AssessmentPolicyTest < ActiveSupport::TestCase
 
     should "allow show" do
       assert policy.show?
+    end
+
+    should "read the reasons on lifecycle events" do
+      assert policy.view_lifecycle_reasons?
     end
 
     should "allow matrix and scoring" do

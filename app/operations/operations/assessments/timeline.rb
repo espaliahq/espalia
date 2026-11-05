@@ -8,9 +8,9 @@
 #
 # Read-only; scoped by AssessmentPolicy#show? (the assessee, their manager
 # chain, active delegates and tenant admins). Free-text reasons — why someone
-# was unenrolled, unassigned or moved, why a delegation was granted — were
-# written about the assessee, for the people around them, so the assessee's
-# own read leaves them out.
+# was unenrolled, unassigned or moved, why a delegation was granted — go only
+# to the manager chain and tenant admins
+# (AssessmentPolicy#view_lifecycle_reasons?).
 class Operations::Assessments::Timeline < Operations::Base
   include Operations::LifecyclePayload
 
@@ -24,7 +24,7 @@ class Operations::Assessments::Timeline < Operations::Base
               "when an alignment was first completed and how often it was re-opened. Self and manager " \
               "assessment completion have no event: they appear with derived: true, at their latest " \
               "completion only. Pass cycle_id for one cycle's milestones, and kinds to narrow by kind (an " \
-              "empty list returns none). Free-text reasons are left out when the assessee reads their own. " \
+              "empty list returns none). Free-text reasons appear only for the manager chain and tenant admins. " \
               "Returns no rating values."
   category :read
   approval :none
@@ -107,8 +107,10 @@ class Operations::Assessments::Timeline < Operations::Base
     requested
   end
 
-  def assessee_reading?
-    context.person&.id == assignment.person_id
+  def reasons_visible?
+    return @reasons_visible if defined?(@reasons_visible)
+
+    @reasons_visible = AssessmentPolicy.new(context, assignment).view_lifecycle_reasons?
   end
 
   def milestone_payload(milestone, lookups)
@@ -135,7 +137,7 @@ class Operations::Assessments::Timeline < Operations::Base
   def detail_fields(details, lookups)
     {
       framework_version: details[:framework_version],
-      reason: assessee_reading? ? nil : details[:reason],
+      reason: reasons_visible? ? details[:reason] : nil,
       outcome: details[:outcome],
       source: details[:source],
       exploration_id: details[:exploration_id],

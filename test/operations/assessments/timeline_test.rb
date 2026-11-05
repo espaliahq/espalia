@@ -161,6 +161,19 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     refute call_op(context: assessee_ctx, kinds: %w[left_cycle])[:milestones].sole.key?(:reason)
   end
 
+  should "withhold free-text reasons from a rating delegate outside the chain" do
+    delegate_user = create(:user)
+    delegate_tu = with_tenant do
+      delegate = create(:person, tenant: @tenant, email: delegate_user.email, name: "Dana")
+      @pd.delegate_manager_rating(@person.id, @framework_id, delegate.id, granted_by_id: @manager.id)
+      create(:tenant_user, tenant: @tenant, user: delegate_user, person: delegate, role: :member)
+    end
+    delegate_ctx = AuthorizationContext.new(user: delegate_user, tenant_user: delegate_tu, person: delegate_tu.person)
+    append_historical(PersonDevelopment::Events::LeftAssessmentCycle, { cycle_id: @cycle_id, reason: "Moving teams" })
+
+    refute call_op(context: delegate_ctx, kinds: %w[left_cycle])[:milestones].sole.key?(:reason)
+  end
+
   should "report a delegation's expiry in the same format as every other time" do
     delegate = with_tenant { create(:person, tenant: @tenant, name: "Dana") }
     with_tenant do

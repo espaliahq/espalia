@@ -234,7 +234,9 @@ they ride along from the progress stamps marked `derived: true`.
   events to know it, and a role-less (pre-ADR-22) alignment event is that role's.
 - **A missing actor** falls back to the metadata `actor_id`, then nil.
 - **Free-text reasons** (unenrolment, unassignment, role change, delegation)
-  go to the manager chain and admins, never to the assessee reading their own.
+  go to the manager chain and tenant admins only
+  (`AssessmentPolicy#view_lifecycle_reasons?`): not to the assessee, and not to
+  a rating delegate, whom `show?` admits without making them part of the chain.
 - **No projection backs it**; a cohort-wide history ("every re-open this
   cycle") would be a new projection owning its own table.
 

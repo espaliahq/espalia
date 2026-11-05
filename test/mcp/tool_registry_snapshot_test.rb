@@ -845,7 +845,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "when an alignment was first completed and how often it was re-opened. Self and manager " \
           "assessment completion have no event: they appear with derived: true, at their latest " \
           "completion only. Pass cycle_id for one cycle's milestones, and kinds to narrow by kind (an " \
-          "empty list returns none). Free-text reasons are left out when the assessee reads their own. " \
+          "empty list returns none). Free-text reasons appear only for the manager chain and tenant admins. " \
           "Returns no rating values.",
         "inputSchema" => {
           "type" => "object",
