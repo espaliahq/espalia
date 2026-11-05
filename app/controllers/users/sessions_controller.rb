@@ -23,14 +23,16 @@ class Users::SessionsController < Devise::SessionsController
     )
   end
 
-  # POST /users/sign_in
-  def create
-    super do |user|
-      scope_session_to_sign_in_tenant(user)
-    end
-  end
-
   private
+
+  # Devise consults this after its yield, and ApplicationController's version
+  # writes the user's FIRST tenant into the session — so the sign-on scoping
+  # must run after super, or a multi-tenant member lands in the wrong tenant.
+  def after_sign_in_path_for(resource)
+    path = super
+    scope_session_to_sign_in_tenant(resource)
+    path
+  end
 
   # @return [Tenant, nil] the tenant whose sign-on URL this request came
   #   through: its custom domain (#660) first, then the slug path or the

@@ -65,6 +65,23 @@ class Users::SessionsControllerTest < ActionDispatch::IntegrationTest
       assert_equal @tenant.id, session[:current_tenant_id]
     end
 
+    should "keep the sign-on tenant for a user whose FIRST membership is elsewhere" do
+      # after_sign_in_path_for defaults the session to the first membership,
+      # so the sign-on scoping must run after it (caught by CodeRabbit CLI).
+      multi = create(:user, password: "password123")
+      other = create(:tenant, name: "Other Org")
+      ActsAsTenant.with_tenant(other) { create(:tenant_user, tenant: other, user: multi) }
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: multi) }
+
+      post user_session_path, params: {
+        tenant_slug: "nullisland",
+        user: { email: multi.email, password: "password123" }
+      }
+
+      assert_redirected_to root_path
+      assert_equal @tenant.id, session[:current_tenant_id]
+    end
+
     should "not scope the session to a tenant the user doesn't belong to" do
       outsider = create(:user, password: "password123")
 
