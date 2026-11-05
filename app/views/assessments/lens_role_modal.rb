@@ -30,6 +30,7 @@ class Views::Assessments::LensRoleModal < Views::Base
   def form_body
     form(action: assessment_path(@assessment_id), method: "get", class: "space-y-4",
          data: { controller: "lens-picker", lens_picker_levels_value: levels_by_role.to_json }) do
+      @lens.cycle_params.each { |name, value| input(type: "hidden", name: name.to_s, value: value) }
       p(class: "text-sm text-muted") { intro }
       field("lens-role-select", "Role") { role_select }
       field("lens-level-select", "Level") { level_select }

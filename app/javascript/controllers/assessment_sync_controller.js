@@ -15,7 +15,8 @@
 
 import BaseController from "controllers/base_controller"
 
-const LENS_PARAMS = ["as_role", "as_level"]
+// A past cycle's page reloads that cycle, never the open one.
+const LENS_PARAMS = ["as_role", "as_level", "cycle_id"]
 
 export default class extends BaseController {
   static targets = ["signal", "frame", "scoringFrame", "activityFrame"]

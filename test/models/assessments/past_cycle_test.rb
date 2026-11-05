@@ -42,9 +42,11 @@ class Assessments::PastCycleTest < ActiveSupport::TestCase
 
   def past_lens = Assessments::Lens.resolve(assignment: @assignment, cycle_id: @past_id)
 
-  def cell(matrix, capability)
+  def cell(matrix, capability) = cell_at(matrix, capability, 2)
+
+  def cell_at(matrix, capability, ordinal)
     matrix[:categories].flat_map { |c| c[:capabilities] }
-      .find { |cap| cap[:capability].stable_id == capability.stable_id }[:cells][2]
+      .find { |cap| cap[:capability].stable_id == capability.stable_id }[:cells][ordinal]
   end
 
   context "a lens on a past cycle" do
@@ -131,6 +133,20 @@ class Assessments::PastCycleTest < ActiveSupport::TestCase
         assert_equal :manager,
           Assessments::ViewerContext.for(assignment: @assignment, authorization: as_manager, lens: past_lens)
       end
+    end
+  end
+
+  should "ask nothing to be confirmed on a past cycle" do
+    with_tenant do
+      @pd.rate_self(@person.id, @fx.framework_id, @fx.shared.stable_id, level_ordinal: 3, frequency: "consistent",
+        cycle_id: @past_id, source: "seeded", seeded_from_cycle_id: SecureRandom.uuid_v7)
+      open = Assessments::MatrixDataBuilder.for_lens(lens: Assessments::Lens.home(@assignment), context: :self)
+      assert cell_at(open, @fx.shared, 3)[:current_frequency_carried]
+    end
+    open_next_cycle
+    with_tenant do
+      past = Assessments::MatrixDataBuilder.for_lens(lens: past_lens, context: :self)
+      assert_not cell_at(past, @fx.shared, 3)[:current_frequency_carried]
     end
   end
 

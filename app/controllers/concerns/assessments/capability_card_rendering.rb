@@ -17,13 +17,21 @@ module Assessments::CapabilityCardRendering
   private
 
   # The role and level the page is read against (`as_role` / `as_level`),
-  # resolved once per request and only after `authorize`, so a pair the
-  # framework doesn't have is a 404 to a permitted viewer and nobody else.
+  # in the cycle `cycle_id` names, else the open one — resolved once per
+  # request and only after `authorize`, so a pair or cycle the assignment
+  # doesn't have is a 404 to a permitted viewer and nobody else.
   #
   # @return [Assessments::Lens]
   # @raise [Assessments::Lens::NotFound]
   def lens
-    @lens ||= Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level])
+    @lens ||= Assessments::Lens.resolve(assignment: @assignment, as_role: params[:as_role], as_level: params[:as_level],
+                                        cycle_id: params[:cycle_id])
+  end
+
+  # A past cycle is read-only: every write affordance is off, whatever the
+  # viewer could do on the open cycle.
+  def past_cycle?
+    lens.past?
   end
 
   # Returns the assessment context based on the viewer's relationship and
@@ -75,10 +83,10 @@ module Assessments::CapabilityCardRendering
       context: assessment_context,
       viewer_is_manager: viewer_is_manager?,
       viewer_person_id: current_person&.id,
-      can_create_evidence: viewer_can_create_evidence?,
-      can_request_evidence: viewer_can_request_evidence?,
-      can_relink_others_evidence: viewer_can_relink_others_evidence?,
-      can_comment: viewer_can_comment?,
+      can_create_evidence: !past_cycle? && viewer_can_create_evidence?,
+      can_request_evidence: !past_cycle? && viewer_can_request_evidence?,
+      can_relink_others_evidence: !past_cycle? && viewer_can_relink_others_evidence?,
+      can_comment: !past_cycle? && viewer_can_comment?,
       viewer_is_tenant_admin: viewer_is_tenant_admin?
     }
   end

@@ -19,6 +19,8 @@
 | `app/views/assessments/header_chrome.rb` | Shared header chrome for both show views — the lens control, the status pill or lens banner, the lens modal, and `lens_params` for frame srcs |
 | `app/views/assessments/lens_control.rb` | The shortcode chip as the lens control — the role's ladder, "Back to E3", "Another role…" (see [*Role lens*](role-lens.md)) |
 | `app/views/assessments/lens_role_modal.rb` | "Read against another role" — GET form, role by family, level kept at the reader's ordinal |
+| `app/views/assessments/cycle_control.rb` | The header's cycle switcher — every cycle the person joined, a past one opening read-only with `?cycle_id=` (see [*Past cycles*](role-lens.md)) |
+| `app/views/assessments/past_cycle_banner.rb` | The line that replaces the status pill on a past cycle — how it ended, how far alignment got, the way back |
 | `app/views/assessments/lens_banner.rb` | The lines that replace the status pill under a lens — what it reads against, and where alignment against the lens role stands (with the manager's start) |
 | `app/views/assessments/start_lens_alignment_modal.rb` | "Start alignment against PM3?" — the confirmation, a `Kit::Modal` form |
 | `app/views/assessments/lens_alignment_chips.rb` | "Aligning · PM3" chips linking into each started lens role |

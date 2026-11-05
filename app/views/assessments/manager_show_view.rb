@@ -19,9 +19,10 @@ class Views::Assessments::ManagerShowView < Views::Base
                  activity_entries: [],
                  exploration: nil, can_explore: false,
                  can_manage_delegates: false, active_delegations: [], candidate_delegates: [],
-                 viewer_can_rate: true, unplaced_feedback_count: 0, unplaced_feedback_place: nil,
+                 viewer_can_rate: true, unplaced_feedback_count: 0, unplaced_feedback_place: nil, cycles: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
+    @cycles = cycles
     @unplaced_feedback_count = unplaced_feedback_count
     @unplaced_feedback_place = unplaced_feedback_place
     @assessee = assessee
@@ -159,6 +160,7 @@ class Views::Assessments::ManagerShowView < Views::Base
             @matrix_data[:level].title
           end
           render_lens_control(assessee_name: @assessee.name)
+          render_cycle_control
           render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
@@ -177,6 +179,7 @@ class Views::Assessments::ManagerShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
+      render_past_cycle_banner
       render_lens_banner(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment,
                          viewer: @lens_viewer)
     end

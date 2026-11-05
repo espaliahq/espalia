@@ -91,11 +91,12 @@ The matrix Turbo Frame still exists and still carries `id="assessment-matrix"`, 
 Active category, focused capability, and focused level ordinal are encoded as query params for shareability:
 
 ```text
-Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…
-Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…
+Browser:      /assessments/:id?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…[&cycle_id=<id>]
+Matrix frame: /assessments/:id/matrix?category=<category_id>&capability=<stable_id>&level_ordinal=<n>&levels[<stable_id>]=<n>…[&cycle_id=<id>]
 Activity:     /assessments/:id/activity?capability=<stable_id>&level_ordinal=<n>
 ```
 
+- `cycle_id` reads a past cycle, read-only ([role-lens.md → Past cycles](assessments/role-lens.md)); absent, the open one.
 - `category` absent → server defaults to the first category for highlighting in the chip bar; all categories still render in the document.
 - `capability` is the capability's **stable_id** (cross-version UUID), never the per-version `capability_id`.
 - `level_ordinal` only honoured when `capability` is also present.

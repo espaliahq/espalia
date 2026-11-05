@@ -25,6 +25,8 @@ class Views::Assessments::ShowView < Views::Base
   # @param exploration [AssessmentExploration, nil] the open exploration of
   #   the lens role (ADR-22)
   # @param can_explore [Boolean] the viewer may declare or close one
+  # @param cycles [Array<Assessments::CycleHistory::Entry>] every cycle the
+  #   person joined, for the header's cycle switcher
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
@@ -37,9 +39,10 @@ class Views::Assessments::ShowView < Views::Base
                  can_relink_others_evidence: false,
                  can_comment: false, viewer_is_tenant_admin: false,
                  activity_entries: [],
-                 exploration: nil, can_explore: false, unplaced_feedback_count: 0,
+                 exploration: nil, can_explore: false, unplaced_feedback_count: 0, cycles: [],
                  user: nil, current_tenant: nil, tenants: [])
     @assignment = assignment
+    @cycles = cycles
     @unplaced_feedback_count = unplaced_feedback_count
     @framework = framework
     @matrix_data = matrix_data
@@ -164,6 +167,7 @@ class Views::Assessments::ShowView < Views::Base
             @matrix_data[:level].title
           end
           render_lens_control(assessee_name: nil)
+          render_cycle_control
           render_status_pill_unless_lens(
             participant_status: @matrix_data[:participant_status],
             has_open_cycle: @assignment.current_open_cycle.present?,
@@ -178,6 +182,7 @@ class Views::Assessments::ShowView < Views::Base
           render Views::Assessments::Activity::PaneToggle.new(entry_count: @activity_entries.size)
         end
       end
+      render_past_cycle_banner
       render_lens_banner
     end
   end

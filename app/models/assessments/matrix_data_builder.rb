@@ -716,8 +716,9 @@ class Assessments::MatrixDataBuilder
     [ @level.ordinal, @home_level_ordinal ].min
   end
 
+  # A past cycle is read-only, so nothing in it asks to be confirmed.
   def asks_confirmation?(ordinal, carried)
-    carried.present? && ordinal >= assumed_below
+    !past_cycle? && carried.present? && ordinal >= assumed_below
   end
 
   # The frequency that counts as "rated" for the active context.
