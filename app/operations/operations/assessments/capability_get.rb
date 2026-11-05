@@ -22,7 +22,7 @@
 class Operations::Assessments::CapabilityGet < Operations::Base
   include Operations::Assessments::ReadLens
 
-  description "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability."
+  description "Fetch one capability's detail, the assessee's per-level ratings (self/manager/aligned), and the capability's own score on the same level-independent scale. Accepts either capability_id (version-specific) or stable_id (cross-version) in the capability_id argument. Pass as_role_id and/or as_level_ordinal to score it against another role or level (a lens); lens.home is then false, and in_role says whether the record's role and the lens role read the capability. Pass cycle_id (from assessments_get's past_cycles) to read a past cycle: its ratings and score at that cycle's own role and level, lens.past_cycle true; the assessee sees the manager's ratings only where alignment had started, as on the open cycle."
   category :read
   approval :none
 
@@ -33,6 +33,7 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   # A level of that role to read against; blank = the home level, or the
   # lens role's level nearest it.
   parameter :as_level_ordinal, Integer
+  parameter :cycle_id, String, allow_blank: false, schema: Operations::Assessments::ReadLens::CYCLE_ID_SCHEMA
 
   def policy_check
     authorize assignment, :show?
@@ -43,10 +44,10 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   #   each entry in `expectations` gaining `ratings: { self:, manager:, aligned: }`
   #   (each value a frequency string or nil), plus a `cycle_id` at the
   #   top level naming the cycle the ratings are scoped to (nil when
-  #   the assessee has no open cycle).
+  #   the assessee has no open cycle and none was named).
   def perform
     base = Mcp::FrameworkSerializer.capability(assignment.framework, capability)
-    cycle = assignment.current_open_cycle
+    cycle = read_lens ? read_lens.cycle : assignment.current_open_cycle
     ratings_index = ratings_by_level(cycle)
 
     base.merge(
@@ -119,7 +120,7 @@ class Operations::Assessments::CapabilityGet < Operations::Base
   def participant_status
     return @participant_status if defined?(@participant_status)
 
-    @participant_status = assignment.current_open_cycle_participation&.status
+    @participant_status = read_lens ? read_lens.participant_status : assignment.current_open_cycle_participation&.status
   end
 
   def ratings_by_level(cycle)

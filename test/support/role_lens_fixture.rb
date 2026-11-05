@@ -62,7 +62,8 @@ module RoleLensFixture
   end
 
   # Closes a cycle and enrols the person in the next one, a level up in the
-  # snapshot, so a past cycle and the open one assess different homes (#669).
+  # snapshot, so a past cycle and the open one assess different homes
+  # (https://github.com/mr-yum/growth-os/issues/669).
   #
   # @return [String] the new open cycle's id
   def close_and_open_next_role_lens_cycle(person, fixture, cycle_id, tenant:, level_ordinal: 3)

@@ -125,8 +125,9 @@ class AssessmentPolicy < ApplicationPolicy
   # sees `:manager` only; the manager's ratings are private to the manager
   # until they choose to start alignment.
   #
-  # A past cycle (#669) answers the same question from its own
-  # participation and rows: closing a cycle discloses nothing new.
+  # A past cycle answers the same question from its own participation and
+  # rows: closing a cycle discloses nothing new
+  # (https://github.com/mr-yum/growth-os/issues/669).
   #
   # @param role_id [String, nil] the role read against; nil = the home role
   # @param cycle [AssessmentCycle, nil] a past cycle; nil reads the open one

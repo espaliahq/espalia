@@ -5,9 +5,19 @@
 # `as_level_ordinal`. The same {Assessments::Lens} the web resolves, so an
 # agent's number is the number the person sees on that page.
 #
-# Including Operations declare `parameter :as_role_id, String` and
-# `parameter :as_level_ordinal, Integer`, and read `assignment`.
+# Including Operations declare `parameter :as_role_id, String`,
+# `parameter :as_level_ordinal, Integer` and `cycle_id` with
+# {CYCLE_ID_SCHEMA}, and read `assignment`. A `cycle_id` reads a past cycle
+# the person joined: its ratings and score at its own role and level, as the
+# web's read-only past-cycle page shows them
+# (https://github.com/mr-yum/growth-os/issues/669).
 module Operations::Assessments::ReadLens
+  # @return [Hash] the `cycle_id` parameter's schema
+  CYCLE_ID_SCHEMA = {
+    description: "A cycle the person joined on this framework, from past_cycles. Ratings and scores are then that " \
+                 "cycle's, at its own role and level. Omit for the open cycle."
+  }.freeze
+
   private
 
   # @return [Assessments::Lens, nil] nil when the assignment's home role or
@@ -18,7 +28,8 @@ module Operations::Assessments::ReadLens
     return @read_lens if defined?(@read_lens)
 
     @read_lens = Assessments::Lens.resolve(
-      assignment: assignment, as_role: params[:as_role_id], as_level: params[:as_level_ordinal]
+      assignment: assignment, as_role: params[:as_role_id], as_level: params[:as_level_ordinal],
+      cycle_id: params[:cycle_id]
     )
   rescue Assessments::Lens::NotFound => e
     raise Operations::Base::ParameterError, e.message

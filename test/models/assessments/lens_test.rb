@@ -50,7 +50,8 @@ class Assessments::LensTest < ActiveSupport::TestCase
     should "take the level asked for" do
       lens = Assessments::Lens.resolve(assignment: @assignment, as_role: @pm.role_id, as_level: 4)
       assert_equal "Product Manager · PM4", lens.label
-      assert_equal({ role_id: @pm.role_id, role_code: "PM", level_ordinal: 4, home: false }, lens.payload)
+      assert_equal({ role_id: @pm.role_id, role_code: "PM", level_ordinal: 4, home: false,
+                    cycle_id: nil, past_cycle: false }, lens.payload)
     end
 
     should "refuse a role from another framework" do

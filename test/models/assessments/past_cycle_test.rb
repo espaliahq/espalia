@@ -2,9 +2,9 @@
 
 require "test_helper"
 
-# Reading a cycle other than the open one (#669): its own ratings, at its own
+# Reading a cycle other than the open one: its own ratings, at its own
 # enrollment snapshot, read-only, and disclosed to the assessee exactly as
-# they were when it closed.
+# they were when it closed (https://github.com/mr-yum/growth-os/issues/669).
 class Assessments::PastCycleTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)

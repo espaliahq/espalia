@@ -13,9 +13,9 @@
 # wherever a role goes, so the page, its frames, the rating responses and
 # the MCP payloads all read the same pair.
 #
-# A lens reads one cycle: the open one, or a past one named by `cycle_id`
-# (#669), whose home is that cycle's enrollment snapshot. A past cycle is
-# read-only.
+# A lens reads one cycle: the open one, or a past one named by `cycle_id`,
+# whose home is that cycle's enrollment snapshot. A past cycle is read-only
+# (https://github.com/mr-yum/growth-os/issues/669).
 #
 # @example
 #   lens = Assessments::Lens.resolve(assignment: assignment, as_role: pm.role_id, as_level: 3)
@@ -235,10 +235,12 @@ class Assessments::Lens
   # @return [String]
   def framework_id = @assignment.framework_id
 
-  # What an MCP client needs to tell a lens number from the record.
+  # What an MCP client needs to tell a lens number from the record, and a
+  # past cycle's from the open one's.
   #
   # @return [Hash]
   def payload
-    { role_id: @role.role_id, role_code: @role.code, level_ordinal: @level.ordinal, home: home? }
+    { role_id: @role.role_id, role_code: @role.code, level_ordinal: @level.ordinal, home: home?,
+      cycle_id: @cycle&.cycle_id, past_cycle: @past }
   end
 end
