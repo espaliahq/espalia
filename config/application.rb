@@ -67,8 +67,8 @@ module GrowthOs
 
     # The product's display name: page titles, the navbar, sign-in, OAuth
     # consent and outbound Slack messages all read it (#660). An instance
-    # sets PRODUCT_NAME to run under its own identity.
-    config.x.product_name = ENV.fetch("PRODUCT_NAME", "GrowthOS")
+    # sets PRODUCT_NAME to run under its own identity; set-but-empty is unset.
+    config.x.product_name = ENV["PRODUCT_NAME"].presence || "GrowthOS"
 
     # Throttling for abuse-prone endpoints — currently only OAuth Dynamic
     # Client Registration. Disabled in test/dev via the initializer.

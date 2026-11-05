@@ -151,6 +151,6 @@ module Slack::Feedback
   # @param tenant [Tenant, nil] pass the identity's tenant where no ambient
   #   tenant context is set (the inbound Slack controllers)
   def product_name(tenant = nil)
-    tenant&.product_name || Tenant.current_product_name
+    Slack.escape_text(tenant&.product_name || Tenant.current_product_name)
   end
 end

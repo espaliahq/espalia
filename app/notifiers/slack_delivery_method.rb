@@ -68,7 +68,9 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
     if url
       blocks << {
         type: "actions",
-        elements: [ { type: "button", text: { type: "plain_text", text: "Open in #{product_name}" }, url: url } ]
+        # Slack caps a button's plain_text at 75 chars; the instance default
+        # (ENV) is unbounded even though a tenant's own name is capped at 60.
+        elements: [ { type: "button", text: { type: "plain_text", text: "Open in #{product_name}".truncate(75) }, url: url } ]
       }
     end
     blocks << preferences_footer if disclose_preferences
@@ -139,6 +141,6 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
   end
 
   def product_name
-    @tenant&.product_name || Tenant.current_product_name
+    Slack.escape_text(@tenant&.product_name || Tenant.current_product_name)
   end
 end
