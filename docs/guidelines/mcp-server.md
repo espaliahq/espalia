@@ -209,7 +209,10 @@ and `reporting_cycle_cohort`'s participants carry the same fields
 `Operations::LifecyclePayload` from an `Assessments::Lifecycle` and the
 `AssessmentCycleRoleAlignment` rows. `past_cycles` lists every other cycle
 the person joined on the framework, closed and withdrawn ones included, with
-that lifecycle and **no scores**: the scoring stack reads the open cycle, and
+that lifecycle and **no scores**. Its alignments sit under `role_alignments`,
+the cohort's key; `current_cycle` keeps its older `alignments` key, with the
+same fields (`role_id`, `role_code`, `role_name`, `level_ordinal`, `status`,
+`home` and the times). No past cycle is scored: the scoring stack reads the open cycle, and
 no screen scores a past one, so neither does the MCP
 ([#669](https://github.com/mr-yum/growth-os/issues/669)). Every stamp is the
 latest occurrence — a re-open clears `aligned_at` — and the event stream holds

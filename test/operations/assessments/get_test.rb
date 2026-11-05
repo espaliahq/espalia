@@ -214,6 +214,7 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
       alignment = call_assessment_op.dig(:current_cycle, :alignments).first
 
       assert alignment[:home]
+      assert_equal "SWE", alignment[:role_name]
       assert_equal "2026-09-10T00:00:00Z", alignment[:alignment_started_at]
       assert_equal "2026-09-12T00:00:00Z", alignment[:reopened_at]
       assert_equal({ id: @manager.id, name: "Morgan" }, alignment[:reopened_by])
