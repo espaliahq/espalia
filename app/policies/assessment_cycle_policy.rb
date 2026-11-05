@@ -11,9 +11,9 @@
 # the whole cycle. See `cohort?` / `cohort_full_access?`.
 #
 class AssessmentCyclePolicy < ApplicationPolicy
-  # The cycles a viewer may report on: every cycle for admins/HR, otherwise
-  # those `cohort?` would admit them to — a non-withdrawn participant
-  # somewhere in their subtree.
+  # The cycles a viewer may report on, and so the one definition of the
+  # cohort audience: every cycle for admins/HR, otherwise the cycles with a
+  # non-withdrawn participant somewhere in their subtree.
   class Scope
     # @param context [AuthorizationContext]
     # @param scope [ActiveRecord::Relation<AssessmentCycle>]
@@ -24,11 +24,17 @@ class AssessmentCyclePolicy < ApplicationPolicy
 
     # @return [ActiveRecord::Relation<AssessmentCycle>]
     def resolve
-      return @scope.all if @context.tenant_admin?
+      @context.tenant_admin? ? @scope.all : subtree
+    end
+
+    # The cycles the viewer's own subtree is in, admin or not — what an
+    # admin's `scope: "mine"` narrows to.
+    # @return [ActiveRecord::Relation<AssessmentCycle>]
+    def subtree
       return @scope.none unless @context.person
 
-      subtree = @context.person.all_reports.select(:id)
-      @scope.where(cycle_id: AssessmentCycleEnrollment.active.where(person_id: subtree).select(:cycle_id))
+      reports = @context.person.all_reports.select(:id)
+      @scope.where(cycle_id: AssessmentCycleEnrollment.active.where(person_id: reports).select(:cycle_id))
     end
   end
 
@@ -39,7 +45,7 @@ class AssessmentCyclePolicy < ApplicationPolicy
   # Whether the viewer may list cycles to report on. Any member may ask; the
   # {Scope} decides which cycles they see.
   def report_index?
-    tenant_member?
+    tenant_admin? || tenant_member?
   end
 
   # Whether the viewer may see the cohort progress roll-up for this cycle.
@@ -47,12 +53,8 @@ class AssessmentCyclePolicy < ApplicationPolicy
   # somewhere below them in the org chart.
   def cohort?
     return true if cohort_full_access?
-    return false unless person
 
-    AssessmentCycleEnrollment
-      .active
-      .where(cycle_id: record.cycle_id, person_id: person.all_reports.select(:id))
-      .exists?
+    Scope.new(context, AssessmentCycle).subtree.exists?(cycle_id: record.cycle_id)
   end
 
   # Whether the viewer sees the whole cycle (vs. only their own subtree).
