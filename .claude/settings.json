@@ -37,9 +37,5 @@
       "Bash(coderabbit review *)",
       "Bash(bin/pr-screenshots *)"
     ]
-  },
-  "enabledPlugins": {
-    "codex@openai-codex": true
-  },
-  "effortLevel": "high"
+  }
 }
