@@ -91,4 +91,34 @@ class Assessments::RecentActivityQueryTest < ActiveSupport::TestCase
       assert_not Assessments::RecentActivityQuery.new(person_ids: []).any?
     end
   end
+  context "options the MCP tool uses" do
+    setup do
+      @lens_role = create(:framework_role, name: "Product Manager", code: "P")
+      AssessmentCycleRoleAlignment.create!(
+        tenant: @tenant, cycle_id: @cycle.cycle_id, person_id: @assessee.id, framework_id: @framework_id,
+        role_id: @lens_role.role_id, home: false, status: "aligning", alignment_started_at: 10.minutes.ago,
+        reopened_at: 9.minutes.ago, reopened_by_id: @manager.id
+      )
+    end
+
+    should "apply the window before the limit" do
+      found = items(limit: 1, since: 5.minutes.ago, until_time: 3.5.minutes.ago)
+
+      assert_equal [ "manager_rated" ], found.map(&:kind)
+    end
+
+    should "leave lens alignments and re-opens to the caller who asks" do
+      refute_includes items(limit: 20).map(&:kind), "alignment_reopened"
+
+      reopened = items(limit: 20, kinds: Assessments::RecentActivityQuery::KINDS, lens_alignments: true)
+        .find { |item| item.kind == "alignment_reopened" }
+      assert_equal [ "P", false ], [ reopened.role_code, reopened.home ]
+    end
+
+    should "keep one cycle's activity" do
+      other = create(:assessment_cycle, :closed, tenant: @tenant, framework_id: @framework_id)
+
+      assert_empty items(cycle_id: other.cycle_id, limit: 20)
+    end
+  end
 end

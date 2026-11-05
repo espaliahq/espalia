@@ -374,4 +374,27 @@ bounded `ORDER ... LIMIT` queries — **never** the per-assignment event replay 
 `Assessments::ActivityFeedQuery` (O(people × stream)). Rendered as actor-led
 sentences with the capability linked to the assessment cell; exposes activity
 metadata only, never rating values. Shared with MCP via
-`Operations::Assessments::RecentActivity` (`assessments_recent_activity`).
+`Operations::Assessments::RecentActivity` (`assessments_recent_activity`), which
+asks for more than the card does:
+
+- **Scope:** the caller and their whole `Person#all_reports` subtree (the card
+  keeps own-or-direct-reports); `person_id` narrows to one person in it, and a
+  tenant admin may name anyone.
+- **Filters:** `since` / `until`, `cycle_id` and `kinds` narrow each source in
+  SQL before its LIMIT, not after the newest N overall. The rating and
+  role-alignment rows keep only each cell's or role's latest stamp, so a window
+  misses activity later overwritten — a cell rated on the 10th and revised on
+  the 20th shows only the 20th. Comments carry no cycle, so `cycle_id` leaves
+  them out.
+- **`person_id`** is authorised like the assessment itself: the caller's
+  subtree, then `AssessmentPolicy#show?` on that person's assignments (so a
+  recorded reporting manager or a rating delegate reads them too), and any
+  person for a tenant admin. Authorised per assessment, the activity is kept
+  to those frameworks (`framework_ids:`): a delegate on framework A never sees
+  the person's ratings, evidence or comments on framework B.
+- **Alignments:** from the role-alignment rows (`lens_alignments: true`), so
+  lens-role conversations and `alignment_reopened` appear with their role; the
+  card keeps the home lifecycle on the progress rows. With `person_id` they come
+  from the event stream (`alignment_history: true`, via
+  `Assessments::LifecycleTimeline`), so a completion later re-opened still
+  shows — one stream per assignment, which is why it needs a single person.
