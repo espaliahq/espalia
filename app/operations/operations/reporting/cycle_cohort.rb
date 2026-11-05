@@ -29,7 +29,8 @@ class Operations::Reporting::CycleCohort < Operations::Base
   category :read
   approval :none
 
-  parameter :cycle_id, String, required: true
+  parameter :cycle_id, String, required: true,
+    schema: Operations::Reporting::CyclesList::CYCLE_ID_SCHEMA
   parameter :mode, String, required: false, allowed: %w[summary full]
   parameter :scope, String, required: false, allowed: %w[mine all]
   parameter :aligned_from, String, required: false, allow_blank: false,

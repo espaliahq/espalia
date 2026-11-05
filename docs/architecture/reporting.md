@@ -333,6 +333,28 @@ piece of feedback a cycle holds, one row each, with names and content. Where
   `:read`, approval `:none`) returns `{ cycle:, period:, include_withdrawn:,
   columns:, rows: }` — the same rows as JSON.
 
+## 4.11 Cycles to Report On (MCP)
+
+Every cycle report above takes a `cycle_id`. `reporting_cycles_list`
+(`Operations::Reporting::CyclesList`, `:read`, approval `:none`) is where an MCP
+client finds one, closed cycles included: id, name, type, status, framework,
+version range, opened / planned end / closed dates and participant count,
+newest first, filterable by `status` and `framework_id`.
+
+**Access** is the cohort report's: `AssessmentCyclePolicy::Scope` is the one
+definition of that audience. It keeps every cycle for admins/HR and, for anyone
+else, the cycles with a non-withdrawn participant in their `Person#all_reports`
+subtree (`Scope#subtree`). `cohort?` (and so `attainment?` and
+`evidence_report?`) asks the same scope, and the Home cycle card lists its
+cycles from it, so the list never offers a cohort, attainment or coverage
+report that would be refused. The feedback export (4.10) stays admin-only, and
+the tool description says so. `report_index?` admits any member or admin.
+`participant_count` follows the cohort report too: whole cycle for admins
+unless they pass `scope: "mine"`, the subtree otherwise. `index?` (the admin
+cycle pages) stays admin-only.
+
+There is no web surface: the web reaches cycles from Home and the admin pages.
+
 
 ## Home dashboard
 

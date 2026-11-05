@@ -28,12 +28,7 @@ class Home::CycleProgressCard < Home::Card
   # otherwise cycles with an active participant somewhere in the viewer's subtree.
   # @return [ActiveRecord::Relation<AssessmentCycle>]
   def self.visible_open_cycles(context)
-    return AssessmentCycle.open_cycles if full_access?(context)
-    return AssessmentCycle.none unless context.person
-
-    report_ids = context.person.all_reports.select(:id)
-    cycle_ids = AssessmentCycleEnrollment.active.where(person_id: report_ids).select(:cycle_id)
-    AssessmentCycle.open_cycles.where(cycle_id: cycle_ids)
+    AssessmentCyclePolicy::Scope.new(context, AssessmentCycle).resolve.open_cycles
   end
 
   # Admins / global admins act as HR (whole-cycle visibility) for v1.
