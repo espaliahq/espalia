@@ -10,9 +10,13 @@ require_relative "../support/mcp_cli_helpers"
 #
 # CI installs @anthropic-ai/claude-code alongside Ruby
 # (.github/workflows/ci.yml); the devcontainer's postCreateCommand
-# installs it for local dev. The test fails (does NOT skip) when the
-# binary is absent — silent skips were hiding the case where parity
-# coverage was being lost. Set CLAUDE_CLI=<path> for a non-default install.
+# installs it for local dev. When the binary is absent the test skips
+# with an install hint, so a contributor without the CLI still gets a
+# green suite — EXCEPT under REQUIRE_MCP_CLI=1 (set by the dedicated
+# mcp-cli-test CI job, which installs the CLI itself), where an absent
+# binary means the install broke and the test fails loudly. Silent
+# skips once hid lost parity coverage; the skip message and the CI
+# flunk keep it visible. Set CLAUDE_CLI=<path> for a non-default install.
 #
 # Per-test workflow:
 #   1. Mint a Doorkeeper access token directly (the OAuth UI is covered
@@ -40,14 +44,10 @@ class McpClaudeCliTest < ActiveSupport::TestCase
     # CLI parity coverage outside this one CI carve-out stays loud.
     skip "SKIP_MCP_CLI_TEST set — runs in the dedicated mcp-cli-test CI job" if ENV["SKIP_MCP_CLI_TEST"].present?
 
-    # Non-optional: the dedicated CI job installs the CLI
-    # (.github/workflows/ci.yml) and the devcontainer postCreateCommand
-    # installs it for local dev. If you hit this outside those
-    # environments, run:
-    #   npm install -g @anthropic-ai/claude-code
-    # or point CLAUDE_CLI at a non-default install path.
     unless cli_available?
-      flunk "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
+      message = "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
+      flunk message if ENV["REQUIRE_MCP_CLI"].present?
+      skip "#{message} (skipping; the mcp-cli-test CI job still enforces parity coverage)"
     end
 
     @user = create(:user, password: "password123")
