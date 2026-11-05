@@ -11,7 +11,8 @@
 # payload bounded (~5-15 KB for a real framework) while giving the LLM
 # enough to choose what to drill into next.
 class Operations::Frameworks::Get < Operations::Base
-  description "Fetch one framework's top-level structure (role families, categories, child IDs and names)."
+  description "Fetch one framework's top-level structure (role families, categories, child IDs and names) " \
+              "and every published version, newest first, with when and by whom it was published."
   category :read
   approval :none
 

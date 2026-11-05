@@ -4,7 +4,9 @@
 # caller made (outgoing). Read — :none. Scoped to the caller's own person, so
 # no per-record authorization beyond "is a person" is needed.
 class Operations::Assessments::EvidenceRequestsList < Operations::Base
-  description "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing)."
+  description "List feedback / evidence requests addressed to you (incoming) and ones you've made (outgoing), " \
+              "each with when it was requested, due, last reminded, and responded to, declined (with the " \
+              "reason) or cancelled."
   category :read
   approval :none
 
@@ -42,6 +44,10 @@ class Operations::Assessments::EvidenceRequestsList < Operations::Base
         requested_at: req.requested_at&.iso8601,
         due_at: req.due_at&.iso8601,
         last_reminded_at: req.last_reminded_at&.iso8601,
+        responded_at: req.responded_at&.iso8601,
+        declined_at: req.declined_at&.iso8601,
+        decline_reason: req.decline_reason,
+        cancelled_at: req.cancelled_at&.iso8601,
         reminders: req.reminder_history,
         evidence_id: req.evidence_id
       }

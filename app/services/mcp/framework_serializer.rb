@@ -41,6 +41,7 @@ class Mcp::FrameworkSerializer
       name: @framework.name,
       current_published_version: @framework.current_published_version,
       draft_in_progress: @framework.draft_in_progress,
+      versions: versions,
       role_families: role_families,
       categories: categories
     }
@@ -72,6 +73,17 @@ class Mcp::FrameworkSerializer
   end
 
   private
+
+  # @return [Array<Hash>] `version`, `published_at`, `published_by`, newest first
+  def versions
+    published = Frameworks::PublishedVersions.new(framework_id: @framework.framework_id).call
+    ids = published.filter_map(&:published_by_id).uniq
+    names = ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
+    published.map do |v|
+      { version: v.version, published_at: v.published_at&.getutc&.iso8601,
+        published_by: v.published_by_id && { id: v.published_by_id, name: names[v.published_by_id] } }
+    end
+  end
 
   def binding_payload(binding)
     role = binding.role

@@ -304,6 +304,16 @@ truth. Framework Operations call it directly; Assessment Operations
 call it then `merge` overlay fields. Shape parity is asserted by
 explicit tests in `test/operations/assessments/*_test.rb`.
 
+The framework payload carries `versions`: every published version, newest
+first, with `published_at` and `published_by`, read by
+`Frameworks::PublishedVersions` from the `FrameworkVersionPublished` events.
+Not from `framework_publications`: that table records only publishes made
+through the publication job, which started months after the first versions
+shipped. A `published_by` that isn't a person's id — the seed and benchmark
+tasks publish as `"seed"` / `"bench"` — falls back to the metadata `actor_id`,
+then to nil. Reading the stream costs ~3 ms on a 1,600-event framework, so
+`assessments_get` carries it too rather than break shape parity.
+
 ### 5. Uniform input shape across related write tools
 
 The three rating tools (`assessments_rate_self`,
@@ -806,6 +816,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
 | `app/services/mcp/request_handler.rb` | JSON-RPC dispatch (initialize, tools/*, resources/*); validates an `:in_app` operation's parameters before deferring it to approval |
 | `app/services/mcp/framework_serializer.rb` | Shared shape source-of-truth |
+| `app/queries/frameworks/published_versions.rb` | Every published framework version with when and by whom, from the `FrameworkVersionPublished` events — the serializer's `versions` |
 | `app/services/mcp/resource_registry.rb` | `framework://` / `assessment://` resource list + read |
 | `app/services/audit_metadata.rb` | Thread-local audit context, shared with web/HRIS |
 | **MCP transport** | |
