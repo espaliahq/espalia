@@ -23,10 +23,17 @@ class Operations::Reporting::CyclesList < Operations::Base
   parameter :framework_id, String, required: false, allow_blank: false, schema: { format: "uuid" }
   parameter :scope, String, required: false, allowed: %w[mine all]
 
+  # @raise [Pundit::NotAuthorizedError] when the caller isn't a member or admin
+  #   of the tenant
   def policy_check
     authorize AssessmentCycle, :report_index?
   end
 
+  # @return [Hash] `:cycles`, newest first, each with `:id`, `:name`,
+  #   `:cycle_type`, `:status`, `:framework` (id, name), `:framework_version`,
+  #   `:latest_framework_version`, `:opened_at`, `:planned_end_at`,
+  #   `:closed_at` and `:participant_count`
+  # @raise [Operations::Base::ParameterError] when `framework_id` isn't a UUID
   def perform
     if params[:framework_id].present? && !UUID_FORMAT.match?(params[:framework_id])
       raise ParameterError, "framework_id must be a framework's UUID, from frameworks_list"
