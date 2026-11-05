@@ -39,6 +39,11 @@
 # Ignore CI service files.
 /.github
 
+# Kamal is no longer in the repo, but a stale local .kamal/secrets or
+# deploy.yml would otherwise be baked into the image by `COPY . .`.
+/config/deploy*.yml
+/.kamal
+
 # Ignore development files
 /.devcontainer
 
