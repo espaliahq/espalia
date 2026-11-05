@@ -127,6 +127,20 @@ class Operations::Reporting::CycleCohortTest < ActiveSupport::TestCase
       assert_equal "2026-09-11T09:00:00Z", participant[:aligned_at]
     end
 
+    should "give a tenant admin the same timestamps across the whole cycle" do
+      admin_user = create(:user)
+      admin_tu = ActsAsTenant.with_tenant(@tenant) do
+        admin = create(:person, tenant: @tenant, email: admin_user.email, name: "Admin")
+        create(:tenant_user, tenant: @tenant, user: admin_user, person: admin, role: :admin)
+      end
+      ctx = AuthorizationContext.new(user: admin_user, tenant_user: admin_tu, person: admin_tu.person)
+
+      participant = call_op(context: ctx, params: { cycle_id: @cycle.cycle_id, mode: "full" })[:participants].first
+
+      assert_equal "2026-09-11T09:00:00Z", participant[:aligned_at]
+      assert_equal 2, participant[:role_alignments].size
+    end
+
     should "narrow participants to those aligned in an inclusive UTC date window" do
       inside = call_op(context: @manager_ctx,
         params: { cycle_id: @cycle.cycle_id, mode: "full", aligned_from: "2026-09-11", aligned_to: "2026-09-11" })
