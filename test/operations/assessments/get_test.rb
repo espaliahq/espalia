@@ -167,6 +167,107 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
     end
   end
 
+  context "lifecycle timestamps" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        @manager = create(:person, tenant: @tenant, name: "Morgan")
+        @person.update!(manager: @manager)
+        AssessmentCycleProgress.find_by!(cycle_id: @cycle_id, person_id: @person.id).update!(
+          status: "aligning", started_at: Time.utc(2026, 9, 2), self_completed_at: Time.utc(2026, 9, 5),
+          alignment_started_at: Time.utc(2026, 9, 10), alignment_started_by_id: @manager.id
+        )
+        AssessmentCycleRoleAlignment.create!(
+          tenant: @tenant, cycle_id: @cycle_id, person_id: @person.id, framework_id: @framework_id,
+          role_id: @role.role_id, home: true, status: "aligning", alignment_started_at: Time.utc(2026, 9, 10),
+          alignment_started_by_id: @manager.id, reopened_at: Time.utc(2026, 9, 12), reopened_by_id: @manager.id
+        )
+
+        @past = create(:assessment_cycle, :closed, tenant: @tenant, framework_id: @framework_id, name: "H1",
+          opened_at: Time.utc(2026, 1, 1), closed_at: Time.utc(2026, 6, 30))
+        create(:assessment_cycle_enrollment, :concluded, tenant: @tenant, cycle: @past, person_id: @person.id,
+          enrolled_at: Time.utc(2026, 1, 2), concluded_at: Time.utc(2026, 6, 30))
+        create(:assessment_cycle_progress, tenant: @tenant, cycle: @past, person_id: @person.id, status: "aligned",
+          aligned_at: Time.utc(2026, 5, 20), aligned_by_id: @manager.id, aligned_framework_version: 1)
+
+        withdrawn = create(:assessment_cycle, :closed, tenant: @tenant, framework_id: @framework_id, name: "H2 2025",
+          opened_at: Time.utc(2025, 7, 1))
+        create(:assessment_cycle_enrollment, :withdrawn, tenant: @tenant, cycle: withdrawn, person_id: @person.id,
+          withdrawn_at: Time.utc(2025, 8, 1))
+
+        elsewhere = create(:assessment_cycle, tenant: @tenant, name: "Other framework")
+        create(:assessment_cycle_enrollment, tenant: @tenant, cycle: elsewhere, person_id: @person.id)
+      end
+    end
+
+    should "say when the open cycle's milestones happened, and who acted" do
+      cycle = call_assessment_op[:current_cycle]
+
+      assert cycle[:enrolled_at]
+      assert_equal "2026-09-05T00:00:00Z", cycle[:self_completed_at]
+      assert_equal "2026-09-10T00:00:00Z", cycle[:alignment_started_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, cycle[:alignment_started_by])
+      assert_nil cycle[:aligned_at]
+      assert_nil cycle[:aligned_framework_version]
+    end
+
+    should "give each alignment its started and re-opened times" do
+      alignment = call_assessment_op.dig(:current_cycle, :alignments).first
+
+      assert alignment[:home]
+      assert_equal "SWE", alignment[:role_name]
+      assert_equal "2026-09-10T00:00:00Z", alignment[:alignment_started_at]
+      assert_equal "2026-09-12T00:00:00Z", alignment[:reopened_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, alignment[:reopened_by])
+    end
+
+    should "list the other cycles joined on this framework, newest first, without scores" do
+      past = call_assessment_op[:past_cycles]
+
+      assert_equal [ "H1", "H2 2025" ], past.map { |c| c[:name] }
+      h1 = past.first
+      assert_equal "concluded", h1[:participant_status]
+      assert_equal "2026-05-20T00:00:00Z", h1[:aligned_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, h1[:aligned_by])
+      assert_equal 1, h1[:aligned_framework_version]
+      assert_equal "2026-06-30T00:00:00Z", h1[:closed_at]
+      refute h1.key?(:scoring)
+      assert_equal "withdrawn", past.last[:participant_status]
+      assert_equal "2025-08-01T00:00:00Z", past.last[:withdrawn_at]
+    end
+
+    should "give a past cycle's role alignments in the cohort report's shape" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleRoleAlignment.create!(
+          tenant: @tenant, cycle_id: @past.cycle_id, person_id: @person.id, framework_id: @framework_id,
+          role_id: @role.role_id, home: true, status: "aligned", alignment_started_at: Time.utc(2026, 5, 1),
+          aligned_at: Time.utc(2026, 5, 20), aligned_by_id: @manager.id
+        )
+      end
+
+      alignment = call_assessment_op.dig(:past_cycles, 0, :role_alignments, 0)
+
+      assert_equal({ code: "E", name: "SWE" }, { code: alignment[:role_code], name: alignment[:role_name] })
+      assert_equal "2026-05-20T00:00:00Z", alignment[:aligned_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, alignment[:aligned_by])
+    end
+
+    should "give a skip-level manager the past cycles too" do
+      skip_user = create(:user)
+      skip_tu = ActsAsTenant.with_tenant(@tenant) do
+        skip = create(:person, tenant: @tenant, email: skip_user.email, name: "Skip")
+        @manager.update!(manager: skip)
+        create(:tenant_user, tenant: @tenant, user: skip_user, person: skip, role: :member)
+      end
+      ctx = AuthorizationContext.new(user: skip_user, tenant_user: skip_tu, person: skip_tu.person)
+
+      history = ActsAsTenant.with_tenant(@tenant) do
+        Operations::Assessments::Get.call(context: ctx, params: { assignment_id: @assignment.id })[:past_cycles]
+      end
+
+      assert_equal 2, history.size
+    end
+  end
+
   context "structure" do
     should "embed the framework payload under :framework" do
       assert_equal "Eng", call_assessment_op.dig(:framework, :name)

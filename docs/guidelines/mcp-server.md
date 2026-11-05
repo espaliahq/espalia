@@ -202,6 +202,22 @@ completion gate is the role's own, and its refusal names how many cells remain.
 `current_cycle.alignments: [{ role_id, role_code, level_ordinal, status, home }]`
 without needing a lens, so an agent knows a PM3 conversation exists.
 
+**Lifecycle times use one vocabulary.** `assessments_get`'s `current_cycle`
+and `reporting_cycle_cohort`'s participants carry the same fields
+(`enrolled_at`, `self_completed_at`, `alignment_started_at` + `_by`,
+`aligned_at` + `_by`, …) and the same role-alignment shape, both built by
+`Operations::LifecyclePayload` from an `Assessments::Lifecycle` and the
+`AssessmentCycleRoleAlignment` rows. `past_cycles` lists every other cycle
+the person joined on the framework, closed and withdrawn ones included, with
+that lifecycle and **no scores**. Its alignments sit under `role_alignments`,
+the cohort's key; `current_cycle` keeps its older `alignments` key, with the
+same fields (`role_id`, `role_code`, `role_name`, `level_ordinal`, `status`,
+`home` and the times). No past cycle is scored: the scoring stack reads the open cycle, and
+no screen scores a past one, so neither does the MCP
+([#669](https://github.com/mr-yum/growth-os/issues/669)). Every stamp is the
+latest occurrence — a re-open clears `aligned_at` — and the event stream holds
+the rest.
+
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
 agent can tell a low score from a barely-rated one. The overall `coverage`
@@ -761,6 +777,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
+| `app/operations/operations/lifecycle_payload.rb` | Lifecycle timestamps and role-alignment times, one vocabulary for `reporting_cycle_cohort` and `assessments_get` (`current_cycle`, `past_cycles` over `Assessments::CycleHistory`) |
 | `app/operations/operations/assessments/alignment_lens.rb` | The role an alignment milestone acts on, and the per-role policy check Pundit's `authorize` can't pass (ADR-22) |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |
