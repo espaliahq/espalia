@@ -220,17 +220,23 @@ the rest.
 
 **The event stream is the history; `assessments_timeline` reads it.**
 `Assessments::LifecycleTimeline` reads one person's PersonDevelopment stream at
-call time (`of_type` the milestone events, one stream) and returns every
-alignment started, completed and re-opened, cycle joins and exits, role, level
-and reporting-manager changes, explorations and rating delegations, each with
-`occurred_at` and the actor. It answers what the read models overwrite: when an
-alignment was first completed, and how often it was re-opened. Self and manager
-completion have no event, so they ride along from the progress stamps marked
-`derived: true`. History has older shapes: an alignment event with no `role_id`
-is the cycle's home role (enrollment snapshot, else the assignment — the
-projection's rule), and a missing actor falls back to the metadata `actor_id`.
-No projection backs it; a cohort-wide history ("every re-open this cycle") would
-be a new projection owning its own table.
+call time (`of_type` the requested milestone events, one stream) and returns
+assignment and removal, cycle joins and exits, every alignment started,
+completed and re-opened, role, level and reporting-manager changes,
+explorations and rating delegations, each with `occurred_at` and the actor. It
+answers what the read models overwrite: when an alignment was first completed,
+and how often it was re-opened. Self and manager completion have no event, so
+they ride along from the progress stamps marked `derived: true`.
+
+- **Home is the role held at the join**, as the aggregate fixes
+  `@home_role_id` — not the enrollment row, which `ParticipantRoleSync` rewrites
+  on a mid-cycle role change. The query replays assignment and role-change
+  events to know it, and a role-less (pre-ADR-22) alignment event is that role's.
+- **A missing actor** falls back to the metadata `actor_id`, then nil.
+- **Free-text reasons** (unenrolment, unassignment, role change, delegation)
+  go to the manager chain and admins, never to the assessee reading their own.
+- **No projection backs it**; a cohort-wide history ("every re-open this
+  cycle") would be a new projection owning its own table.
 
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an

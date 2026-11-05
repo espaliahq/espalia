@@ -11,16 +11,24 @@
 # coverage), so they come from the progress stamps — the latest only — and
 # are marked `derived`.
 #
-# Historical events lack fields added since (ADR-22's `role_id`, ADR-18's
-# actors): a missing role is the cycle's home role, and a missing actor
-# falls back to the metadata `actor_id`, then nil.
+# A cycle's home role is the role the person held when they joined it, as
+# the aggregate fixes it (`@home_role_id`) — not the enrollment row, which a
+# mid-cycle role change rewrites. So the stream is replayed: assignment and
+# role changes track the role, and each join records it. Historical events
+# lack fields added since (ADR-22's `role_id`, ADR-18's actors): a missing
+# role is the cycle's home role, and a missing actor falls back to the
+# metadata `actor_id`, then nil.
 #
 # @example
 #   Assessments::LifecycleTimeline.new(assignment: assignment).call(kinds: %w[alignment_reopened])
 class Assessments::LifecycleTimeline
-  Milestone = Data.define(:kind, :occurred_at, :actor_id, :cycle_id, :role_id, :home, :derived, :details)
+  # One milestone. `position` is its place in the stream, the order ties
+  # keep; `home` is set on alignment milestones only.
+  Milestone = Data.define(:kind, :occurred_at, :actor_id, :cycle_id, :role_id, :home, :derived, :details, :position)
 
   EVENTS = {
+    PersonDevelopment::Events::PersonAssignedToFramework => "assigned_to_framework",
+    PersonDevelopment::Events::PersonUnassignedFromFramework => "unassigned_from_framework",
     PersonDevelopment::Events::JoinedAssessmentCycle => "joined_cycle",
     PersonDevelopment::Events::LeftAssessmentCycle => "left_cycle",
     PersonDevelopment::Events::AssessmentCycleConcluded => "cycle_concluded",
@@ -36,11 +44,21 @@ class Assessments::LifecycleTimeline
     PersonDevelopment::Events::ManagerRatingDelegationRevoked => "manager_rating_delegation_revoked"
   }.freeze
 
+  # The events that decide a cycle's home role, read whatever kinds are asked for.
+  HOME_TRACKING = [
+    PersonDevelopment::Events::PersonAssignedToFramework,
+    PersonDevelopment::Events::PersonRoleChanged,
+    PersonDevelopment::Events::PersonUnassignedFromFramework,
+    PersonDevelopment::Events::JoinedAssessmentCycle
+  ].freeze
+
   DERIVED_KINDS = %w[self_assessment_completed manager_assessment_completed].freeze
   KINDS = (EVENTS.values + DERIVED_KINDS).freeze
   ALIGNMENT_KINDS = %w[alignment_started alignment_completed alignment_reopened].freeze
 
   ACTOR_KEYS = {
+    "assigned_to_framework" => :assigned_by,
+    "unassigned_from_framework" => :unassigned_by,
     "alignment_started" => :started_by_id,
     "alignment_completed" => :completed_by_id,
     "alignment_reopened" => :reopened_by_id,
@@ -53,6 +71,8 @@ class Assessments::LifecycleTimeline
   }.freeze
 
   DETAIL_KEYS = {
+    "assigned_to_framework" => %i[role_id level_id],
+    "unassigned_from_framework" => %i[previous_role_id previous_level_id reason],
     "joined_cycle" => %i[framework_version],
     "left_cycle" => %i[reason],
     "alignment_started" => %i[level_ordinal],
@@ -74,28 +94,44 @@ class Assessments::LifecycleTimeline
   end
 
   # @param cycle_id [String, nil] keep only the milestones of this cycle
-  # @param kinds [Array<String>, nil] keep only these kinds (see {KINDS})
-  # @return [Array<Milestone>] oldest first
+  # @param kinds [Array<String>, nil] keep only these kinds (see {KINDS}); nil keeps all
+  # @return [Array<Milestone>] oldest first; ties keep stream order
   def call(cycle_id: nil, kinds: nil)
-    milestones = event_milestones + derived_milestones
+    kinds ||= KINDS
+    milestones = event_milestones(kinds) + derived_milestones(kinds)
     milestones = milestones.select { |m| m.cycle_id == cycle_id } if cycle_id
-    milestones = milestones.select { |m| kinds.include?(m.kind) } if kinds
-    milestones.sort_by { |m| [ m.occurred_at, KINDS.index(m.kind) ] }
+    milestones.sort_by { |m| [ m.occurred_at, m.position ] }
   end
 
   private
 
-  def event_milestones
+  def event_milestones(kinds)
+    wanted = EVENTS.select { |_, kind| kinds.include?(kind) }.keys
+    return [] if wanted.empty?
+
     stream = EventStreamNaming.person_development_stream(@assignment.person_id, @assignment.framework_id)
-    @event_store.read.stream(stream).of_type(EVENTS.keys).to_a.map { |event| milestone_for(event) }
+    events = @event_store.read.stream(stream).of_type((wanted + HOME_TRACKING).uniq).to_a
+
+    role_id = nil
+    home_roles = {}
+    events.each_with_index.filter_map do |event, position|
+      data = event.data.with_indifferent_access
+      case event
+      when PersonDevelopment::Events::PersonAssignedToFramework then role_id = data[:role_id]
+      when PersonDevelopment::Events::PersonRoleChanged then role_id = data[:new_role_id]
+      when PersonDevelopment::Events::PersonUnassignedFromFramework then role_id = nil
+      when PersonDevelopment::Events::JoinedAssessmentCycle then home_roles[data[:cycle_id]] = role_id
+      end
+      milestone_for(event, data, position, home_roles) if wanted.include?(event.class)
+    end
   end
 
-  def milestone_for(event)
+  def milestone_for(event, data, position, home_roles)
     kind = EVENTS.fetch(event.class)
-    data = event.data.with_indifferent_access
     cycle_id = data[:cycle_id]
     alignment = ALIGNMENT_KINDS.include?(kind)
-    role_id = alignment ? data[:role_id] || home_role_id(cycle_id) : nil
+    home_role_id = home_roles.fetch(cycle_id) { @assignment.role_id }
+    role_id = alignment ? data[:role_id] || home_role_id : nil
 
     Milestone.new(
       kind: kind,
@@ -103,40 +139,30 @@ class Assessments::LifecycleTimeline
       actor_id: (ACTOR_KEYS[kind] && data[ACTOR_KEYS[kind]]) || event.metadata[:actor_id],
       cycle_id: cycle_id,
       role_id: role_id,
-      home: alignment ? role_id == home_role_id(cycle_id) : nil,
+      home: alignment ? role_id == home_role_id : nil,
       derived: false,
-      details: data.slice(*DETAIL_KEYS.fetch(kind, [])).symbolize_keys
+      details: data.slice(*DETAIL_KEYS.fetch(kind, [])).symbolize_keys,
+      position: position
     )
   end
 
-  def derived_milestones
+  # Derived after every event at the same instant: the stamp follows the
+  # rating that completed the side.
+  def derived_milestones(kinds)
+    return [] if (kinds & DERIVED_KINDS).empty?
+
+    cycle_ids = AssessmentCycleEnrollment.for_person(@assignment.person_id)
+      .joins(:cycle).where(assessment_cycles: { framework_id: @assignment.framework_id }).pluck(:cycle_id)
     AssessmentCycleProgress.where(person_id: @assignment.person_id, cycle_id: cycle_ids).flat_map do |progress|
       [
-        derived("self_assessment_completed", progress.self_completed_at, progress.cycle_id),
-        derived("manager_assessment_completed", progress.manager_completed_at, progress.cycle_id)
-      ].compact
+        kinds.include?("self_assessment_completed") && derived("self_assessment_completed", progress.self_completed_at, progress.cycle_id),
+        kinds.include?("manager_assessment_completed") && derived("manager_assessment_completed", progress.manager_completed_at, progress.cycle_id)
+      ].select(&:itself)
     end
   end
 
   def derived(kind, time, cycle_id)
-    time && Milestone.new(kind: kind, occurred_at: time, actor_id: nil, cycle_id: cycle_id,
-                          role_id: nil, home: nil, derived: true, details: {})
-  end
-
-  # The cycles of this framework the person enrolled in.
-  def cycle_ids
-    @cycle_ids ||= enrollments.keys
-  end
-
-  # The role a cycle assesses the person in: its enrollment snapshot, else
-  # the live assignment's — as CurrentAssessment resolves a role-less event.
-  def home_role_id(cycle_id)
-    enrollments[cycle_id]&.role_id || @assignment.role_id
-  end
-
-  def enrollments
-    @enrollments ||= AssessmentCycleEnrollment.for_person(@assignment.person_id)
-      .joins(:cycle).where(assessment_cycles: { framework_id: @assignment.framework_id })
-      .index_by(&:cycle_id)
+    time && Milestone.new(kind: kind, occurred_at: time, actor_id: nil, cycle_id: cycle_id, role_id: nil,
+                          home: nil, derived: true, details: {}, position: Float::INFINITY)
   end
 end

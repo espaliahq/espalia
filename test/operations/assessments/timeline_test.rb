@@ -58,14 +58,15 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
 
     assert_equal %w[alignment_started alignment_completed alignment_reopened alignment_completed], milestones.map { |m| m[:kind] }
     assert(milestones.all? { |m| m[:actor] == { id: @manager.id, name: "Morgan" } })
-    assert(milestones.all? { |m| m[:home] && m.dig(:role, :code) == "E" && m.dig(:cycle, :name) == "H2" })
+    assert(milestones.all? { |m| m[:home] && m[:role_code] == "E" && m[:role_name] == "SWE" && m.dig(:cycle, :name) == "H2" })
     assert_equal 1, milestones.second[:framework_version]
   end
 
-  should "start with the join, in occurrence order" do
+  should "start with the assignment, then the join, in occurrence order" do
     milestones = call_op[:milestones]
 
-    assert_equal "joined_cycle", milestones.first[:kind]
+    assert_equal %w[assigned_to_framework joined_cycle], milestones.first(2).map { |m| m[:kind] }
+    assert_equal({ id: @role.role_id, code: "E", name: "SWE" }, milestones.first[:role])
     assert_equal milestones.map { |m| m[:occurred_at] }.sort, milestones.map { |m| m[:occurred_at] }
   end
 
@@ -75,7 +76,7 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     milestone = call_op(kinds: %w[alignment_completed])[:milestones].sole
 
     assert milestone[:home]
-    assert_equal @role.role_id, milestone.dig(:role, :id)
+    assert_equal @role.role_id, milestone[:role_id]
     assert_equal({ id: @manager.id, name: "Morgan" }, milestone[:actor])
   end
 
@@ -87,7 +88,7 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     milestone = call_op(kinds: %w[alignment_started])[:milestones].sole
 
     refute milestone[:home]
-    assert_equal({ id: lens_role.role_id, code: "P", name: "PM" }, milestone[:role])
+    assert_equal [ lens_role.role_id, "P", "PM" ], milestone.values_at(:role_id, :role_code, :role_name)
     assert_equal 3, milestone[:level_ordinal]
   end
 
@@ -125,6 +126,51 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     cycle_ids = call_op(cycle_id: @cycle_id)[:milestones].map { |m| m.dig(:cycle, :id) }.uniq
 
     assert_equal [ @cycle_id ], cycle_ids
+  end
+
+  should "keep the home role fixed at the join when the role changes mid-cycle" do
+    pm = with_tenant { create(:framework_role, role_family_id: @role.role_family_id, name: "PM", code: "P") }
+    pm_level = with_tenant { create(:framework_level, role_id: pm.role_id, ordinal: 2, title: "PM2", code: "P2") }
+    with_tenant do
+      @pd.change_person_role(@person.id, @framework_id, pm.role_id, pm_level.level_id, changed_by: @manager.id)
+      assert_equal pm.role_id, AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person.id).role_id,
+        "the enrollment follows the change; the timeline must not"
+    end
+    append_historical(PersonDevelopment::Events::FullAlignmentCompleted, { cycle_id: @cycle_id }, actor_id: @manager.id)
+
+    milestone = call_op(kinds: %w[alignment_completed])[:milestones].sole
+
+    assert milestone[:home]
+    assert_equal @role.role_id, milestone[:role_id]
+  end
+
+  should "return nothing for an empty kinds list" do
+    assert_empty call_op(kinds: [])[:milestones]
+  end
+
+  should "show free-text reasons to the manager chain and withhold them from the assessee" do
+    assessee_user = create(:user)
+    assessee_tu = with_tenant do
+      @person.update!(email: assessee_user.email)
+      create(:tenant_user, tenant: @tenant, user: assessee_user, person: @person, role: :member)
+    end
+    assessee_ctx = AuthorizationContext.new(user: assessee_user, tenant_user: assessee_tu, person: @person)
+    append_historical(PersonDevelopment::Events::LeftAssessmentCycle, { cycle_id: @cycle_id, reason: "Moving teams" })
+
+    assert_equal "Moving teams", call_op(kinds: %w[left_cycle])[:milestones].sole[:reason]
+    refute call_op(context: assessee_ctx, kinds: %w[left_cycle])[:milestones].sole.key?(:reason)
+  end
+
+  should "report a delegation's expiry in the same format as every other time" do
+    delegate = with_tenant { create(:person, tenant: @tenant, name: "Dana") }
+    with_tenant do
+      @pd.delegate_manager_rating(@person.id, @framework_id, delegate.id, granted_by_id: @manager.id,
+                                  expires_at: Time.utc(2026, 12, 1, 9, 30))
+    end
+
+    milestone = call_op(kinds: %w[manager_rating_delegated])[:milestones].sole
+
+    assert_equal "2026-12-01T09:30:00Z", milestone[:expires_at]
   end
 
   should "refuse a kind it doesn't know" do
