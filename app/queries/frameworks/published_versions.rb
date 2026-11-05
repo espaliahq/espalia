@@ -8,6 +8,10 @@
 # @example
 #   Frameworks::PublishedVersions.new(framework_id: id).call.first.version
 class Frameworks::PublishedVersions
+  # @!attribute version [Integer] the published version number
+  # @!attribute published_at [Time] when the publish event was recorded
+  # @!attribute published_by_id [String, nil] the publishing person, or nil
+  #   when the event names no person
   Version = Data.define(:version, :published_at, :published_by_id)
 
   # @param framework_id [String]
@@ -32,6 +36,7 @@ class Frameworks::PublishedVersions
   private
 
   # The seed and benchmark tasks publish as "seed" / "bench", not a person.
+  # @return [String, nil]
   def person_id(value)
     value.to_s.match?(Frameworks::ActivityFeedQuery::UUID_FORMAT) ? value : nil
   end

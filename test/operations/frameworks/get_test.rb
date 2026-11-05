@@ -119,7 +119,9 @@ class Operations::Frameworks::GetTest < ActiveSupport::TestCase
       assert_equal [ 2, 1 ], versions.map { |v| v[:version] }
       assert_equal "2026-09-01T00:00:00Z", versions.first[:published_at]
       assert_equal @person.id, versions.first.dig(:published_by, :id)
+      assert_equal @person.name, versions.first.dig(:published_by, :name)
       assert_equal @person.id, versions.last.dig(:published_by, :id), "an older event names its publisher only in metadata"
+      assert_equal @person.name, versions.last.dig(:published_by, :name)
     end
   end
 

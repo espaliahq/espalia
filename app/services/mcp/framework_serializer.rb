@@ -74,6 +74,7 @@ class Mcp::FrameworkSerializer
 
   private
 
+  # @return [Array<Hash>] `version`, `published_at`, `published_by`, newest first
   def versions
     published = Frameworks::PublishedVersions.new(framework_id: @framework.framework_id).call
     ids = published.filter_map(&:published_by_id).uniq
