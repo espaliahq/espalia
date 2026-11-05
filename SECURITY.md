@@ -13,8 +13,8 @@ unless you'd rather stay anonymous.
 
 ## Supported versions
 
-Espalia is pre-1.0: fixes land on `main` only. If you deploy it, track `main`
-or a tagged release and keep your instance current.
+Espalia is pre-1.0 and has no tagged releases yet: fixes land on `main` only.
+If you deploy it, track `main` and keep your instance current.
 
 ## Scope
 
