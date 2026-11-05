@@ -114,7 +114,7 @@ prints anything.
 
 ## CodeRabbit CLI in the devcontainer
 
-**"Provider identity could not be verified" from `coderabbit` usually means the binary self-updated, not that the token expired.** The CLI updates itself on launch, and a major jump (0.4 → 0.9 here) invalidates the stored session even though `~/.coderabbit/auth.json` carries an `expiresAt` decades away. Fix with one `coderabbit auth login`. The devcontainer bind-mounts `~/.coderabbit` from the host, so that login serves host and container alike and survives rebuilds — like `gh` above, never create a container-local credential that shadows it.
+**"Provider identity could not be verified" from `coderabbit` usually means the binary self-updated, not that the token expired.** The CLI updates itself on launch, and a major jump (0.4 → 0.9 here) invalidates the stored session even though `~/.coderabbit/auth.json` carries an `expiresAt` decades away. Fix with one `coderabbit auth login`. Containers rebuilt since the `~/.coderabbit` bind mount landed share the host's auth, so that login serves host and container alike and survives rebuilds. On an older container there is no mount: a login there lands in the container filesystem and vanishes on the next rebuild, so rebuild first.
 
 ## Measuring in development
 
