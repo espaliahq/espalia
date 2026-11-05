@@ -112,6 +112,10 @@ prints anything.
 
 **`gh` unauthenticated in the devcontainer? Re-run the feature hook, don't `gh auth login`.** The `gh-auth-from-host` feature bridges the host's forwarded git credential into `gh` only on `postAttachCommand`; it warns and exits 0 when the host offers nothing at that instant, and a long-lived VS Code connection never re-attaches, so one silent miss at container creation leaves `gh` logged out for the container's lifetime. Fix in place with `sh /usr/local/share/gh-auth-from-host/refresh.sh`. A container-local `gh auth login` shadows the bridge and rots when the host token rotates.
 
+## CodeRabbit CLI in the devcontainer
+
+**"Provider identity could not be verified" from `coderabbit` usually means the binary self-updated, not that the token expired.** The CLI updates itself on launch, and a major jump (0.4 → 0.9 here) invalidates the stored session even though `~/.coderabbit/auth.json` carries an `expiresAt` decades away. Fix with one `coderabbit auth login`. The devcontainer bind-mounts `~/.coderabbit` from the host, so that login serves host and container alike and survives rebuilds — like `gh` above, never create a container-local credential that shadows it.
+
 ## Measuring in development
 
 **Never quote dev-mode timings from the first requests after a boot.** They run 2–3× slower than steady state (cold caches, first-time constant loading, GC). [#487](https://github.com/mr-yum/growth-os/issues/487) was filed saying a framework-tree preload cost 88 ms of a 134 ms build; warm, the whole build was 46 ms, and the fix saved 13 ms rather than ~70. Warm up first, then interleave old and new paths in one process (shuffle the order each iteration) and compare medians. Measure against seeded data in a cloned database (`createdb -h postgres -U postgres -T growth_os_development <name>`, then `DATABASE_URL=postgresql://postgres:postgres@postgres/<name>`), never by mutating the shared dev database.
