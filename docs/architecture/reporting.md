@@ -120,10 +120,10 @@ aggregates the existing read models at query time.
 - **Modes**: `:summary` (funnel + counts + most-lagging subtree, for the Home
   card) and `:full` (adds grouped breakdowns + per-participant rows, for the
   drill-down view).
-- **When**: each participant carries a `Lifecycle` (enrolled, started, self and
-  manager complete, alignment started and completed, with actors) and, in full
-  mode, one `RoleAlignment` per role aligned this cycle (home and lens, with
-  `reopened_at`; loaded only when the caller passes `include_role_alignments:`,
+- **When**: each participant carries an `Assessments::Lifecycle` (enrolled,
+  started, self and manager complete, alignment started and completed, with
+  actors) and, in full mode, their `AssessmentCycleRoleAlignment` rows, one per
+  role aligned this cycle (home and lens, with `reopened_at`; loaded only when the caller passes `include_role_alignments:`,
   as the MCP operation does). The result carries `median_days_to_align`. Every
   stamp is the **latest** occurrence: a re-open clears `aligned_at` until the
   next completion. First completions and re-open history live only in the event

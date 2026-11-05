@@ -219,29 +219,38 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
       assert_equal({ id: @manager.id, name: "Morgan" }, alignment[:reopened_by])
     end
 
-    should "list every cycle joined on this framework, newest first, past ones without scores" do
-      history = call_assessment_op[:cycle_history]
+    should "list the other cycles joined on this framework, newest first, without scores" do
+      past = call_assessment_op[:past_cycles]
 
-      assert_equal [ "Q1", "H1", "H2 2025" ], history.map { |c| c[:name] }
-      past = history.second
-      assert_equal "concluded", past[:participant_status]
-      assert_equal "2026-05-20T00:00:00Z", past[:aligned_at]
-      assert_equal({ id: @manager.id, name: "Morgan" }, past[:aligned_by])
-      assert_equal 1, past[:aligned_framework_version]
-      assert_equal "2026-06-30T00:00:00Z", past[:closed_at]
-      refute past.key?(:scoring)
-      assert_equal "withdrawn", history.last[:participant_status]
-      assert_equal "2025-08-01T00:00:00Z", history.last[:withdrawn_at]
+      assert_equal [ "H1", "H2 2025" ], past.map { |c| c[:name] }
+      h1 = past.first
+      assert_equal "concluded", h1[:participant_status]
+      assert_equal "2026-05-20T00:00:00Z", h1[:aligned_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, h1[:aligned_by])
+      assert_equal 1, h1[:aligned_framework_version]
+      assert_equal "2026-06-30T00:00:00Z", h1[:closed_at]
+      refute h1.key?(:scoring)
+      assert_equal "withdrawn", past.last[:participant_status]
+      assert_equal "2025-08-01T00:00:00Z", past.last[:withdrawn_at]
     end
 
-    should "carry the open cycle's role alignments in its history entry" do
-      entry = call_assessment_op[:cycle_history].first
+    should "give a past cycle's role alignments in the cohort report's shape" do
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleRoleAlignment.create!(
+          tenant: @tenant, cycle_id: @past.cycle_id, person_id: @person.id, framework_id: @framework_id,
+          role_id: @role.role_id, home: true, status: "aligned", alignment_started_at: Time.utc(2026, 5, 1),
+          aligned_at: Time.utc(2026, 5, 20), aligned_by_id: @manager.id
+        )
+      end
 
-      assert_equal [ "E" ], entry[:role_alignments].map { |a| a[:role_code] }
-      assert_equal "2026-09-12T00:00:00Z", entry[:role_alignments].first[:reopened_at]
+      alignment = call_assessment_op.dig(:past_cycles, 0, :role_alignments, 0)
+
+      assert_equal({ code: "E", name: "SWE" }, { code: alignment[:role_code], name: alignment[:role_name] })
+      assert_equal "2026-05-20T00:00:00Z", alignment[:aligned_at]
+      assert_equal({ id: @manager.id, name: "Morgan" }, alignment[:aligned_by])
     end
 
-    should "give a skip-level manager the history too" do
+    should "give a skip-level manager the past cycles too" do
       skip_user = create(:user)
       skip_tu = ActsAsTenant.with_tenant(@tenant) do
         skip = create(:person, tenant: @tenant, email: skip_user.email, name: "Skip")
@@ -251,10 +260,10 @@ class Operations::Assessments::GetTest < ActiveSupport::TestCase
       ctx = AuthorizationContext.new(user: skip_user, tenant_user: skip_tu, person: skip_tu.person)
 
       history = ActsAsTenant.with_tenant(@tenant) do
-        Operations::Assessments::Get.call(context: ctx, params: { assignment_id: @assignment.id })[:cycle_history]
+        Operations::Assessments::Get.call(context: ctx, params: { assignment_id: @assignment.id })[:past_cycles]
       end
 
-      assert_equal 3, history.size
+      assert_equal 2, history.size
     end
   end
 

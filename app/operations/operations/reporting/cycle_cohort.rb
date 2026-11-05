@@ -9,6 +9,8 @@
 # Incremental disclosure: defaults to `summary` (funnel + counts + the most
 # lagging subtree). Pass `mode: "full"` for the per-participant breakdown.
 class Operations::Reporting::CycleCohort < Operations::Base
+  include Operations::LifecyclePayload
+
   DATE_FORMAT = "[0-9]{4}-[0-9]{2}-[0-9]{2}"
   DATE_PATTERN = "^#{DATE_FORMAT}$"
   DATE_KEY = /\A#{DATE_FORMAT}\z/
@@ -120,9 +122,9 @@ class Operations::Reporting::CycleCohort < Operations::Base
         id: result.cycle.cycle_id,
         name: result.cycle.name,
         status: result.cycle.status,
-        opened_at: iso(result.cycle.opened_at),
+        opened_at: lifecycle_time(result.cycle.opened_at),
         planned_end_at: result.cycle.planned_end_at,
-        closed_at: iso(result.cycle.closed_at)
+        closed_at: lifecycle_time(result.cycle.closed_at)
       },
       total: result.total,
       funnel: funnel_payload(result.funnel),
@@ -156,21 +158,13 @@ class Operations::Reporting::CycleCohort < Operations::Base
   end
 
   def participant_payloads(participants)
-    actors = actor_names(participants)
-    participants.map { |participant| participant_payload(participant, actors) }
+    rows = participants.flat_map(&:role_alignments)
+    actors = person_names(participants.map(&:lifecycle), rows)
+    roles = roles_for(rows)
+    participants.map { |participant| participant_payload(participant, roles, actors) }
   end
 
-  # @return [Hash{String => String}] person id => name, for every actor named
-  def actor_names(participants)
-    ids = participants.flat_map do |p|
-      [ p.lifecycle.alignment_started_by_id, p.lifecycle.aligned_by_id ] +
-        p.role_alignments.flat_map { |a| [ a.alignment_started_by_id, a.aligned_by_id, a.reopened_by_id ] }
-    end.compact.uniq
-    ids.empty? ? {} : Person.where(id: ids).pluck(:id, :name).to_h
-  end
-
-  def participant_payload(participant, actors)
-    lifecycle = participant.lifecycle
+  def participant_payload(participant, roles, actors)
     {
       person_id: participant.person_id,
       name: participant.name,
@@ -181,40 +175,9 @@ class Operations::Reporting::CycleCohort < Operations::Base
       manager_done: participant.manager_done,
       aligned: participant.aligned,
       at_risk: participant.at_risk,
-      enrolled_at: iso(lifecycle.enrolled_at),
-      started_at: iso(lifecycle.started_at),
-      self_completed_at: iso(lifecycle.self_completed_at),
-      manager_completed_at: iso(lifecycle.manager_completed_at),
-      alignment_started_at: iso(lifecycle.alignment_started_at),
-      alignment_started_by: actor(lifecycle.alignment_started_by_id, actors),
-      aligned_at: iso(lifecycle.aligned_at),
-      aligned_by: actor(lifecycle.aligned_by_id, actors),
-      aligned_framework_version: lifecycle.aligned_framework_version,
-      last_activity_at: iso(participant.last_activity_at),
-      role_alignments: participant.role_alignments.map { |alignment| role_alignment_payload(alignment, actors) }
+      **lifecycle_payload(participant.lifecycle, actors),
+      last_activity_at: lifecycle_time(participant.last_activity_at),
+      role_alignments: participant.role_alignments.map { |row| role_alignment_payload(row, roles, actors) }
     }
-  end
-
-  def role_alignment_payload(alignment, actors)
-    {
-      role_id: alignment.role_id,
-      role_name: alignment.role_name,
-      home: alignment.home,
-      status: alignment.status,
-      alignment_started_at: iso(alignment.alignment_started_at),
-      alignment_started_by: actor(alignment.alignment_started_by_id, actors),
-      aligned_at: iso(alignment.aligned_at),
-      aligned_by: actor(alignment.aligned_by_id, actors),
-      reopened_at: iso(alignment.reopened_at),
-      reopened_by: actor(alignment.reopened_by_id, actors)
-    }
-  end
-
-  def actor(id, actors)
-    id && { id: id, name: actors[id] }
-  end
-
-  def iso(time)
-    time&.utc&.iso8601
   end
 end

@@ -205,14 +205,15 @@ without needing a lens, so an agent knows a PM3 conversation exists.
 **Lifecycle times use one vocabulary.** `assessments_get`'s `current_cycle`
 and `reporting_cycle_cohort`'s participants carry the same fields
 (`enrolled_at`, `self_completed_at`, `alignment_started_at` + `_by`,
-`aligned_at` + `_by`, …), built for the assessment tools by
-`Operations::Assessments::LifecyclePayload`; each alignment adds its started,
-aligned and re-opened times. `cycle_history` lists every cycle the person
-joined on the framework, closed and withdrawn ones included, with that
-lifecycle and **no scores**: the scoring stack reads the open cycle, and no
-screen scores a past one, so neither does the MCP. Every stamp is the latest
-occurrence — a re-open clears `aligned_at` — and the event stream holds the
-rest.
+`aligned_at` + `_by`, …) and the same role-alignment shape, both built by
+`Operations::LifecyclePayload` from an `Assessments::Lifecycle` and the
+`AssessmentCycleRoleAlignment` rows. `past_cycles` lists every other cycle
+the person joined on the framework, closed and withdrawn ones included, with
+that lifecycle and **no scores**: the scoring stack reads the open cycle, and
+no screen scores a past one, so neither does the MCP
+([#669](https://github.com/mr-yum/growth-os/issues/669)). Every stamp is the
+latest occurrence — a re-open clears `aligned_at` — and the event stream holds
+the rest.
 
 The per-category roll-up also carries `rated_at_assessed_level` /
 `total_at_assessed_level`, the same coverage counts the screen shows, so an
@@ -769,7 +770,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `app/operations/operations/assessments/feedback_recipients.rb` | The recipient directory behind "who can I give feedback to?" — over `Assessments::FeedbackRecipients`, shared with the web |
 | `app/operations/operations/reporting/feedback_export.rb` | Row-level feedback export (`reporting_feedback_export`) — tenant admins only, refused while impersonating although it is a read; the web encodes the same rows as CSV |
 | `app/operations/operations/assessments/read_lens.rb` / `rating_cell.rb` | Role-lens resolution for the assessment read tools and the rating tools' cell check and per-cell freeze (ADR-22) |
-| `app/operations/operations/assessments/lifecycle_payload.rb` | Lifecycle timestamps and alignment times in `reporting_cycle_cohort`'s field names, for `assessments_get`'s `current_cycle` and `cycle_history` (over `Assessments::CycleHistory`) |
+| `app/operations/operations/lifecycle_payload.rb` | Lifecycle timestamps and role-alignment times, one vocabulary for `reporting_cycle_cohort` and `assessments_get` (`current_cycle`, `past_cycles` over `Assessments::CycleHistory`) |
 | `app/operations/operations/assessments/alignment_lens.rb` | The role an alignment milestone acts on, and the per-role policy check Pundit's `authorize` can't pass (ADR-22) |
 | **MCP protocol plumbing** | |
 | `app/services/mcp/operation_to_tool.rb` | Operation class → MCP tool descriptor |

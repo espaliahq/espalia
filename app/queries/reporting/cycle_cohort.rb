@@ -34,33 +34,10 @@ class Reporting::CycleCohort
     def aligned_pct = pct(aligned)
   end
 
-  # When each home-role milestone last happened. The read models keep only the
-  # latest: a re-open clears `aligned_at`. The completion stamps come from
-  # `Assessments::LevelCoverage` on rating events, which counts human ratings
-  # against the live assignment's role, so they can disagree with
-  # `self_done` / `manager_done` until the next rating.
-  Lifecycle = Data.define(
-    :enrolled_at, :started_at, :self_completed_at, :manager_completed_at,
-    :alignment_started_at, :alignment_started_by_id,
-    :aligned_at, :aligned_by_id, :aligned_framework_version
-  ) do
-    # @return [Float, nil]
-    def days_to_align
-      return nil unless aligned_at && enrolled_at
-
-      (aligned_at - enrolled_at) / 1.day
-    end
-  end
-
-  # One role's alignment conversation (ADR-22) — the home role or a lens.
-  RoleAlignment = Data.define(
-    :role_id, :role_name, :home, :status,
-    :alignment_started_at, :alignment_started_by_id,
-    :aligned_at, :aligned_by_id, :reopened_at, :reopened_by_id
-  )
-
   # One participant's progress. Carries no rating values — only coverage counts
-  # and lifecycle status. `role_alignments` is empty unless the caller asks.
+  # and lifecycle status: `lifecycle` is an {Assessments::Lifecycle}, and
+  # `role_alignments` their AssessmentCycleRoleAlignment rows (home first),
+  # empty unless the caller asks.
   Participant = Data.define(
     :person_id, :name, :manager_id, :role_id, :role_name, :level_ordinal,
     :status, :expected_count, :self_count, :manager_count,
@@ -165,43 +142,16 @@ class Reporting::CycleCohort
       aligned: status == "aligned",
       at_risk: at_risk?(status, last_activity),
       last_activity_at: last_activity,
-      lifecycle: build_lifecycle(enrollment, prog),
+      lifecycle: Assessments::Lifecycle.from(enrollment: enrollment, progress: prog),
       role_alignments: alignments.fetch(enrollment.person_id, [])
     )
   end
 
-  def build_lifecycle(enrollment, prog)
-    Lifecycle.new(
-      enrolled_at: enrollment.enrolled_at,
-      started_at: prog&.started_at,
-      self_completed_at: prog&.self_completed_at,
-      manager_completed_at: prog&.manager_completed_at,
-      alignment_started_at: prog&.alignment_started_at,
-      alignment_started_by_id: prog&.alignment_started_by_id,
-      aligned_at: prog&.aligned_at,
-      aligned_by_id: prog&.aligned_by_id,
-      # A re-join resets aligned_at but leaves the version behind.
-      aligned_framework_version: prog&.aligned_at && prog.aligned_framework_version
-    )
-  end
-
   # Home role first, then lens roles in the order their conversations began.
-  # @return [Hash{String => Array<RoleAlignment>}]
+  # @return [Hash{String => Array<AssessmentCycleRoleAlignment>}]
   def role_alignments_by_person(person_ids)
-    rows = AssessmentCycleRoleAlignment.where(cycle_id: @cycle.cycle_id, person_id: person_ids)
-      .order(home: :desc, alignment_started_at: :asc).to_a
-    role_names = FrameworkState::Role.where(role_id: rows.map(&:role_id).uniq).pluck(:role_id, :name).to_h
-
-    rows.group_by(&:person_id).transform_values do |person_rows|
-      person_rows.map do |row|
-        RoleAlignment.new(
-          role_id: row.role_id, role_name: role_names[row.role_id], home: row.home, status: row.status,
-          alignment_started_at: row.alignment_started_at, alignment_started_by_id: row.alignment_started_by_id,
-          aligned_at: row.aligned_at, aligned_by_id: row.aligned_by_id,
-          reopened_at: row.reopened_at, reopened_by_id: row.reopened_by_id
-        )
-      end
-    end
+    AssessmentCycleRoleAlignment.where(cycle_id: @cycle.cycle_id, person_id: person_ids)
+      .order(home: :desc, alignment_started_at: :asc).group_by(&:person_id)
   end
 
   # Enrolment to (latest) alignment, over the participants aligned so far.
