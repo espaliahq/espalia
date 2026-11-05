@@ -56,6 +56,7 @@ class Views::Tenant::Theme::EditView < Views::Base
         class: "space-y-6"
       ) do |form|
         theme_choice
+        product_name_field(form)
         custom_controls(form)
         scheme_note
         actions
@@ -84,6 +85,26 @@ class Views::Tenant::Theme::EditView < Views::Base
       end
     end
   end
+
+  def product_name_field(form)
+    render Components::Kit::Card.new(title: "Product name", heading_level: :h2) do |card|
+      card.body do
+        form.label :product_name, "What your team calls the platform", class: "block text-sm font-medium text-default"
+        p(id: "theme-product-name-hint", class: "mt-0.5 mb-2 text-sm text-muted") do
+          "Shows in the navbar, page titles and notifications. Leave it blank for #{instance_product_name}."
+        end
+        form.text_field :product_name,
+          value: @tenant.settings["product_name"].presence || "",
+          placeholder: instance_product_name,
+          class: "#{Components::Kit::Field::INPUT} max-w-sm",
+          aria: { describedby: "theme-product-name-hint" }
+      end
+    end
+  end
+
+  # The fallback shown beside the field: the instance default, never the
+  # tenant's own override (which is exactly what the field edits).
+  def instance_product_name = Rails.application.config.x.product_name
 
   def theme_choice
     render Components::Kit::Card.new(title: "Theme", heading_level: :h2) do |card|

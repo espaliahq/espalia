@@ -136,6 +136,6 @@ class SlackDeliveryMethod < Noticed::DeliveryMethod
   end
 
   def product_name
-    Rails.application.config.x.product_name
+    ActsAsTenant.current_tenant&.product_name || Rails.application.config.x.product_name
   end
 end

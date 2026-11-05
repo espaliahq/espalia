@@ -48,7 +48,7 @@ class Tenant::ThemesController < ApplicationController
 
   def theme_params
     params.expect(tenant: [
-      :theme, :font_family,
+      :theme, :font_family, :product_name,
       { custom_theme: Tenant::CUSTOM_ROLES.index_with { Tenant::SCHEMES } }
     ])
   end

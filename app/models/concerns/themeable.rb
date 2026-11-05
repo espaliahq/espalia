@@ -38,12 +38,13 @@ module Themeable
 
   included do
     attribute :theme, :string, default: "default"
-    store_accessor :settings, :font_family
+    store_accessor :settings, :font_family, :product_name
 
     normalizes :custom_theme, with: ->(value) { Themeable.compact_custom_theme(value) }
 
     validates :theme, inclusion: { in: THEMES }
     validates :font_family, format: { with: /\A[a-zA-Z0-9\s]+\z/ }, allow_blank: true
+    validates :product_name, length: { maximum: 60 }, allow_blank: true
     validate :custom_theme_holds_known_roles_and_hex_colours
   end
 
@@ -78,6 +79,13 @@ module Themeable
   # @return [Boolean]
   def custom_theme?
     theme == "custom"
+  end
+
+  # What this tenant calls the platform (#660): their own name for it, or the
+  # instance default. The raw setting stays in settings["product_name"].
+  # @return [String]
+  def product_name
+    super.presence || Rails.application.config.x.product_name
   end
 
   # @return [String, nil] the preset for `<html data-theme>`; Default and Custom set none

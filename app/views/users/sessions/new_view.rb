@@ -67,7 +67,7 @@ class Views::Users::Sessions::NewView < Views::Base
       brand_mark
       h1(class: "text-2xl/7 font-bold") { @tenant ? @tenant.name : product_name }
       p(class: "text-base/5 text-muted") do
-        @tenant ? "#{product_name} · Career growth for your team" : "Career growth for your team"
+        @tenant ? "#{@tenant.product_name} · Career growth for your team" : "Career growth for your team"
       end
     end
   end
