@@ -393,15 +393,19 @@ dispatch) works against a real client. Constraints worth knowing:
   name, etc).
 - Use `--no-session-persistence` to avoid littering the user's
   `/resume` picker.
-- The CLI is required in CI (`.github/workflows/ci.yml` installs
-  `@anthropic-ai/claude-code`) and in the devcontainer (`postCreateCommand`).
-  The harness `flunk`s if missing — silent skips hide parity erosion.
+- The CLI is installed wherever the test is expected to run: the
+  dedicated CI job (`.github/workflows/ci.yml` installs
+  `@anthropic-ai/claude-code`) and the devcontainer (`postCreateCommand`).
+  Both set `REQUIRE_MCP_CLI=1`, under which an absent binary `flunk`s —
+  a broken install must stay loud, since silent skips hide parity
+  erosion. Without that env var (a contributor without the CLI) the
+  test `skip`s with an install hint.
 - The CLI test runs in a dedicated `mcp-cli-test` CI job so the main
   `test` job doesn't pay for Node + the CLI install or the LLM
-  round-trip. The main job sets `SKIP_MCP_CLI_TEST=1`, which is the
-  ONLY supported skip path — the binary check still `flunk`s for any
-  other invocation so missing parity coverage outside the carve-out
-  stays loud.
+  round-trip. The main job sets `SKIP_MCP_CLI_TEST=1`. The dedicated
+  job gates itself on the `CLAUDE_CODE_OAUTH_TOKEN` secret: a fork PR
+  (no secrets) skips it green, while a same-repo run with the secret
+  missing fails — see [.github/AGENTS.md](../../.github/AGENTS.md).
 
 ## Hard-Won Lessons
 

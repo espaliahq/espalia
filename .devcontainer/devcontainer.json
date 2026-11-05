@@ -35,6 +35,9 @@
   },
   "containerEnv": {
     "CLAUDE_CODE_EFFORT_LEVEL": "high",
+    // postCreateCommand installs the claude CLI here, so an absent binary is a
+    // broken install: make the MCP parity test flunk instead of skipping.
+    "REQUIRE_MCP_CLI": "1",
     // Rails' `server` command defaults to 3000 regardless of config/puma.rb, so
     // set PORT to keep a bare `bin/rails server` on the same port bin/dev uses.
     // 6600 avoids clashing with other apps devs run on the host.

@@ -39,15 +39,16 @@ class McpClaudeCliTest < ActiveSupport::TestCase
     # The main `test` CI job sets SKIP_MCP_CLI_TEST=1 so it doesn't have
     # to install Node + the claude CLI or carry the OAuth token. A
     # separate `mcp-cli-test` job runs this file with the env var unset.
-    # Local runs and the devcontainer leave the env var unset — the
-    # binary check below still flunks (does NOT silently skip) so missing
-    # CLI parity coverage outside this one CI carve-out stays loud.
     skip "SKIP_MCP_CLI_TEST set — runs in the dedicated mcp-cli-test CI job" if ENV["SKIP_MCP_CLI_TEST"].present?
 
+    # Where the CLI is expected (the dedicated CI job installs it; the
+    # devcontainer sets REQUIRE_MCP_CLI=1 and installs it), absence is a
+    # broken install and stays a loud failure. Anywhere else — a
+    # contributor without the CLI — skip with the install hint.
     unless cli_available?
       message = "claude CLI not on PATH — install with `npm i -g @anthropic-ai/claude-code` or set CLAUDE_CLI=<path>"
       flunk message if ENV["REQUIRE_MCP_CLI"].present?
-      skip "#{message} (skipping; the mcp-cli-test CI job still enforces parity coverage)"
+      skip "#{message} (skipping; CI on the upstream repository still enforces parity coverage)"
     end
 
     @user = create(:user, password: "password123")
