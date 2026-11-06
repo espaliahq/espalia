@@ -252,8 +252,9 @@ Alignment lifecycle (per cycle, per role — ADR-22):
   moved by a transfer or promotion until any alignment starts. A role-less
   event from history is that home's. The projection never reads the
   enrollment snapshot, which a rebuild would see as it ended, not as it
-  stood at the event (#687). `PersonFrameworkAssignment.current_cycle_id`
-  names the cycle a role change lands in.
+  stood at the event ([#687](https://github.com/mr-yum/growth-os/issues/687)).
+  `PersonFrameworkAssignment.current_cycle_id` names the cycle a role change
+  lands in.
 
 Declared explorations (ADR-22 — intent, not a rating scope):
   ExplorationStarted { exploration_id, target_role_id, target_level_id, target_level_ordinal,
