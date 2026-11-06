@@ -661,9 +661,10 @@ away before that load ends (the evidence hub following an old notification
 anchor with `window.location.replace`) can come back as
 `StaleElementReferenceError` on CI. It never reproduced locally, even with a
 throttled network ([#691](https://github.com/mr-yum/growth-os/issues/691)).
-Visit such a page through a helper that rescues the error and visits once more,
-then assert where it landed (`visit_self_replacing_page` in
-`evidence_hub_system_test.rb`).
+Rescue the error and let the next assertion wait for where the page lands;
+visiting again only reruns the race. `visit_self_replacing_page` in
+`evidence_hub_system_test.rb` does this; move it to `test/support/system/`
+when a second test needs it.
 
 ## Shared Setup Across Contexts
 

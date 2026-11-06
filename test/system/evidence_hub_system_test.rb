@@ -54,12 +54,13 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
 
   # The hub replaces itself while still loading when it follows an old anchor,
   # and ChromeDriver can report the abandoned document as a stale element
-  # (#691). Navigating again ends in the same place, and the caller's
-  # assertions prove it got there.
+  # (https://github.com/mr-yum/growth-os/issues/691). The browser is already
+  # on its way by then, and visiting again would only rerun the race, so the
+  # caller's assertions wait for where it lands.
   def visit_self_replacing_page(path)
     visit path
   rescue Selenium::WebDriver::Error::StaleElementReferenceError
-    visit path
+    nil
   end
 
   should "let the requestee respond with evidence" do
