@@ -125,8 +125,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "You asked Peer for feedback"
 
-    auto_confirm { click_link "Cancel request" }
-    assert_text "Request cancelled"
+    auto_confirm { click_link_with_js_fallback("Cancel request", expect_text: "Request cancelled") }
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end
 
