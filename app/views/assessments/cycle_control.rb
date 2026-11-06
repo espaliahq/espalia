@@ -6,8 +6,8 @@
 # (https://github.com/mr-yum/growth-os/issues/669). Every entry is a plain
 # link, so a past cycle survives refresh, Back and sharing.
 #
-# Shown only when there is somewhere else to go: more than one cycle, or a
-# past one already open.
+# Shown only when there is somewhere else to go: a cycle other than the one
+# read, which includes a person whose only cycle has closed.
 class Views::Assessments::CycleControl < Views::Base
   ID = "assessment-cycle-control"
   ITEM = Views::Assessments::LensControl::ITEM
@@ -22,7 +22,7 @@ class Views::Assessments::CycleControl < Views::Base
   end
 
   def view_template
-    return unless @cycles.size > 1 || @lens.past?
+    return if @cycles.none? { |entry| entry.cycle.cycle_id != @lens.cycle&.cycle_id }
 
     div(id: ID, class: "inline-block") do
       render Components::Kit::Dropdown.new(align: :left) do |dropdown|
@@ -71,7 +71,7 @@ class Views::Assessments::CycleControl < Views::Base
   end
 
   def open?(entry)
-    entry.cycle.status == "open" && entry.enrollment.status != "withdrawn"
+    entry.cycle.cycle_id == @lens.open_cycle_id
   end
 
   def current_name

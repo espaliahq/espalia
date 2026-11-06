@@ -30,6 +30,9 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
         end
       end
     end
+  end
+
+  def close_past_cycle
     @open_id = close_and_open_next_role_lens_cycle(@person, @fx, @past_id, tenant: @tenant)
   end
 
@@ -51,7 +54,27 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
   end
 
   context Operations::Assessments::Get do
+    should "describe the open cycle's alignments in current_cycle, not the past one's" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.start_alignment(@person.id, @fx.framework_id, @past_id,
+          started_by_id: @manager.id, role_id: @fx.pm.role_id, level_ordinal: 2)
+      end
+      close_past_cycle
+
+      assert_empty get(cycle_id: @past_id)[:current_cycle][:alignments]
+    end
+
+    should "refuse a past cycle whose level is gone rather than read the open one" do
+      close_past_cycle
+      ActsAsTenant.with_tenant(@tenant) do
+        AssessmentCycleEnrollment.find_by!(cycle_id: @past_id, person_id: @person.id).update!(level_id: SecureRandom.uuid_v7)
+      end
+
+      assert_raises(Operations::Base::ParameterError) { capability_get(cycle_id: @past_id) }
+    end
+
     should "score the past cycle at its own level, as its page builds it" do
+      close_past_cycle
       scoring = get(cycle_id: @past_id)[:scoring]
 
       assert_equal({ role_id: @fx.engineer.role_id, role_code: "E", level_ordinal: 2, home: true,
@@ -66,6 +89,7 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
     end
 
     should "keep scoring the open cycle without a cycle_id" do
+      close_past_cycle
       scoring = get[:scoring]
 
       assert_equal @open_id, scoring[:lens][:cycle_id]
@@ -74,6 +98,7 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
     end
 
     should "refuse a cycle the person never joined" do
+      close_past_cycle
       other = ActsAsTenant.with_tenant(@tenant) do
         create(:assessment_cycle, tenant: @tenant, framework_id: @fx.framework_id, status: "closed")
       end
@@ -83,6 +108,7 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
 
   context Operations::Assessments::CapabilityGet do
     should "return the past cycle's ratings" do
+      close_past_cycle
       payload = capability_get(cycle_id: @past_id)
 
       assert_equal @past_id, payload[:cycle_id]
@@ -92,6 +118,7 @@ class Operations::Assessments::PastCycleReadTest < ActiveSupport::TestCase
     end
 
     should "keep the manager's ratings from the assessee where alignment never started" do
+      close_past_cycle
       ratings = capability_get(context: as_assessee, cycle_id: @past_id)[:expectations]
         .find { |e| e[:level_ordinal] == 2 }[:ratings]
 

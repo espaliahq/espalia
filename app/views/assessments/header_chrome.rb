@@ -57,7 +57,7 @@ module Views::Assessments::HeaderChrome
     return unless lens
 
     render Views::Assessments::PastCycleBanner.new(lens: lens, assessment_id: @assignment.id,
-                                                   has_open_cycle: @cycles.any? { |entry| open_entry?(entry) })
+                                                   has_open_cycle: lens.open_cycle_id.present?)
   end
 
   def past_cycle_lens
@@ -65,9 +65,6 @@ module Views::Assessments::HeaderChrome
     lens if lens&.past?
   end
 
-  def open_entry?(entry)
-    entry.cycle.status == "open" && entry.enrollment.status != "withdrawn"
-  end
 
   # The line saying what the page is read against and how to get back, on
   # its own row under the header so it never pushes the header's actions

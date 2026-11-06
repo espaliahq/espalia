@@ -150,6 +150,14 @@ class Assessments::PastCycleTest < ActiveSupport::TestCase
     end
   end
 
+  should "not wait for agreement on a cycle that closed mid-alignment" do
+    with_tenant { @pd.start_alignment(@person.id, @fx.framework_id, @past_id, started_by_id: @manager.id) }
+    open_next_cycle
+    with_tenant do
+      assert_not Assessments::MatrixDataBuilder.for_lens(lens: past_lens, context: :alignment)[:awaiting_agreement]
+    end
+  end
+
   should "read a cycle the person withdrew from while it is still open" do
     with_tenant do
       AssessmentCycles::CommandHandler.new.unenroll(@past_id, @person.id, "left the team")

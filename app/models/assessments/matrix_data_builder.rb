@@ -648,7 +648,7 @@ class Assessments::MatrixDataBuilder
     return @awaiting_agreement if defined?(@awaiting_agreement)
 
     @awaiting_agreement =
-      @context == :alignment && lens_alignment_started? && !lens_alignment_completed? &&
+      !past_cycle? && @context == :alignment && lens_alignment_started? && !lens_alignment_completed? &&
       @level.ordinal == (home_lifecycle? ? @home_level_ordinal : lens_alignment&.level_ordinal)
   end
 

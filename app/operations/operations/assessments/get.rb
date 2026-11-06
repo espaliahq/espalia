@@ -159,16 +159,27 @@ class Operations::Assessments::Get < Operations::Base
   # knows a PM3 alignment exists without reading through that lens.
   # Disclosure-safe: starting alignment is what tells the other party.
   def alignments_payload(entry)
-    return [] unless read_lens
+    return [] unless open_cycle_lens
 
     rows = entry ? entry.role_alignments.index_by(&:role_id) : {}
     roles = roles_for(rows.values)
-    Assessments::Disclosure.for(lens: read_lens, participant_status: participant_status).alignments.map do |alignment|
+    Assessments::Disclosure.for(lens: open_cycle_lens, participant_status: participant_status).alignments.map do |alignment|
       row = rows[alignment.role_id]
       { role_id: alignment.role_id, role_code: alignment.role_code, role_name: roles[alignment.role_id]&.name,
         level_ordinal: alignment.level_ordinal, status: alignment.status, home: alignment.home,
         **(row ? role_alignment_times(row, actors) : {}) }
     end
+  end
+
+  # `current_cycle` describes the open cycle whatever `cycle_id` scores.
+  #
+  # @return [Assessments::Lens, nil]
+  def open_cycle_lens
+    return read_lens unless read_lens&.past?
+
+    @open_cycle_lens ||= Assessments::Lens.home(assignment)
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   def history

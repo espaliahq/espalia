@@ -34,6 +34,9 @@ module Operations::Assessments::ReadLens
   rescue Assessments::Lens::NotFound => e
     raise Operations::Base::ParameterError, e.message
   rescue ActiveRecord::RecordNotFound
+    # A past cycle whose role or level is gone must not fall back to the open one.
+    raise Operations::Base::ParameterError, "That cycle's role or level is no longer in the framework" if params[:cycle_id].present?
+
     @read_lens = nil
   end
 

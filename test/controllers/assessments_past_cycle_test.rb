@@ -24,6 +24,9 @@ class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
       PersonDevelopment::CommandHandler.new.rate_as_manager(@person.id, @fx.framework_id, @fx.shared.stable_id,
         level_ordinal: 2, frequency: "some", cycle_id: @past_id, rated_by_id: @manager.id)
     end
+  end
+
+  def close_past_cycle
     @open_id = close_and_open_next_role_lens_cycle(@person, @fx, @past_id, tenant: @tenant)
   end
 
@@ -32,7 +35,10 @@ class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
   end
 
   context "as the manager" do
-    setup { sign_in(@manager_user) }
+    setup do
+      close_past_cycle
+      sign_in(@manager_user)
+    end
 
     should "render the past cycle read-only with its banner" do
       get assessment_path(@assignment, cycle_id: @past_id)
@@ -74,6 +80,7 @@ class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
   end
 
   should "show the assessee their past cycle without the manager's private ratings" do
+    close_past_cycle
     sign_in(@user)
     get matrix_assessment_path(@assignment, cycle_id: @past_id)
 
@@ -81,7 +88,37 @@ class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
     assert_no_match(/Manager rating/, response.body)
   end
 
+  # The feed spans every cycle; aligning a past one must not open the
+  # manager's ratings in the cycle under way.
+  should "gate the assessee's feed by the open cycle on a past cycle's page" do
+    pd = PersonDevelopment::CommandHandler.new
+    ActsAsTenant.with_tenant(@tenant) do
+      pd.start_alignment(@person.id, @fx.framework_id, @past_id, started_by_id: @manager.id)
+    end
+    close_past_cycle
+    ActsAsTenant.with_tenant(@tenant) do
+      pd.rate_as_manager(@person.id, @fx.framework_id, @fx.shared.stable_id, level_ordinal: 3, frequency: "some",
+        cycle_id: @open_id, rated_by_id: @manager.id)
+    end
+    sign_in(@user)
+
+    get assessment_path(@assignment)
+    open_count = css_select("[data-kind='manager_rated']").size
+    get assessment_path(@assignment, cycle_id: @past_id)
+
+    assert_equal open_count, css_select("[data-kind='manager_rated']").size
+  end
+
+  should "offer the only cycle once it has closed" do
+    ActsAsTenant.with_tenant(@tenant) { AssessmentCycles::CommandHandler.new.close_cycle(@past_id) }
+    sign_in(@user)
+    get assessment_path(@assignment)
+
+    assert_select "##{Views::Assessments::CycleControl::ID} a[href*='cycle_id=#{@past_id}']", text: /Q3 2026/
+  end
+
   should "refuse someone outside the assessment" do
+    close_past_cycle
     sign_in(@stranger_user)
     get assessment_path(@assignment, cycle_id: @past_id)
 

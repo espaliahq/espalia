@@ -32,11 +32,10 @@ class Assessments::Lens
   # The assignment read as itself.
   #
   # @param assignment [PersonFrameworkAssignment]
-  # @param cycle_id [String, nil] a past cycle; nil reads the open one
   # @return [Assessments::Lens]
   # @raise [ActiveRecord::RecordNotFound] when the home role or level is gone
-  def self.home(assignment, cycle_id: nil)
-    resolve(assignment: assignment, cycle_id: cycle_id)
+  def self.home(assignment)
+    resolve(assignment: assignment)
   end
 
   # @param assignment [PersonFrameworkAssignment]
@@ -67,7 +66,7 @@ class Assessments::Lens
     raise NotFound, "No level #{as_level.inspect} in role #{role.code}" unless level
 
     new(assignment: assignment, role: role, level: level, home_role: home_role, home_level: home_level,
-        cycle: past ? enrollment.cycle : open_cycle, past: past)
+        cycle: past ? enrollment.cycle : open_cycle, past: past, open_cycle_id: open_cycle&.cycle_id)
   end
 
   # The URL / Operation params that name a lens, relative to a home: empty
@@ -126,7 +125,7 @@ class Assessments::Lens
   end
   private_class_method :nearest_level
 
-  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false)
+  def initialize(assignment:, role:, level:, home_role:, home_level:, cycle: nil, past: false, open_cycle_id: nil)
     @assignment = assignment
     @role = role
     @level = level
@@ -134,10 +133,14 @@ class Assessments::Lens
     @home_level = home_level
     @cycle = cycle
     @past = past
+    @open_cycle_id = open_cycle_id
   end
 
   # @return [AssessmentCycle, nil] the cycle read: a past one, else the open one
   attr_reader :cycle
+
+  # @return [String, nil] the cycle the person is in now, whichever is read
+  attr_reader :open_cycle_id
 
   # @return [Boolean] reading a cycle other than the open one, read-only
   def past?

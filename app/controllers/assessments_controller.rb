@@ -99,11 +99,11 @@ class AssessmentsController < ApplicationController
         exploration: lens_exploration,
         can_explore: !past_cycle? && policy.start_exploration?,
         can_manage_delegates: !past_cycle? && policy.delegate_manager_rating?,
-        active_delegations: load_active_delegations(policy),
-        candidate_delegates: load_candidate_delegates(policy),
+        active_delegations: past_cycle? ? [] : load_active_delegations(policy),
+        candidate_delegates: past_cycle? ? [] : load_candidate_delegates(policy),
         viewer_can_rate: !past_cycle? && policy.rating_participant?,
         unplaced_feedback_count: past_cycle? ? 0 : unplaced_feedback_count,
-        unplaced_feedback_place: unplaced_feedback_place,
+        unplaced_feedback_place: past_cycle? ? nil : unplaced_feedback_place,
         cycles: cycle_history,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
@@ -295,16 +295,20 @@ class AssessmentsController < ApplicationController
   # Loads the activity feed entries the current viewer is permitted to
   # see. Identical visibility rules to the matrix's evidence list +
   # rating-event privacy gates from ActivityFeedQuery.
+  #
+  # The feed spans every cycle and gates the open cycle's entries, so a past
+  # cycle's page gates it as the activity frame does — by the open cycle,
+  # never by the cycle the page reads.
   def load_activity_entries
     return [] unless current_person
 
     Assessments::ActivityFeedQuery.new(
       assignment: @assignment,
-      context: assessment_context,
+      context: past_cycle? ? Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user) : assessment_context,
       viewer_person_id: current_person.id,
       viewer_sees_all: viewer_sees_all_evidence?,
       alignment_started: alignment_started?,
-      disclosure: (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
+      disclosure: past_cycle? ? assessee_disclosure : (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
     ).call
   end
 
