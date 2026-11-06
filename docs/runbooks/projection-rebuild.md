@@ -99,6 +99,17 @@ JOIN assessment_cycles c ON c.cycle_id = e.cycle_id
 WHERE c.status = 'open' AND e.status = 'enrolled' AND p.home_role_id IS DISTINCT FROM e.role_id;
 ```
 
+For each row it returns, move the snapshot back to the record's home. The aggregate's guards still apply (cycle open, person enrolled), and `ParticipantRoleSync` is not involved:
+
+```ruby
+ActsAsTenant.with_tenant(Tenant.find(tenant_id)) do
+  progress = AssessmentCycleProgress.find_by!(cycle_id: cycle_id, person_id: person_id)
+  AssessmentCycles::CommandHandler.new.update_participant_role(
+    cycle_id, person_id, progress.home_role_id, progress.home_level_id, reason: "home_pinned"
+  )
+end
+```
+
 Measured on the seeded dev database (7,734 handled events, one tenant): **63–83 s wall** over three runs, Rails boot included; main's v9 took 65 s on the same run, so v10 costs nothing extra.
 
 ### Path B — two-stage deploy (large rebuilds)
