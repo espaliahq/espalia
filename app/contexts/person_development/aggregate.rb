@@ -1605,9 +1605,12 @@ class PersonDevelopment::Aggregate
     @assigned = true
   end
 
+  # A transfer moves the cycle's home until alignment starts, then the
+  # conversation pins it (https://github.com/mr-yum/growth-os/issues/687).
   on PersonDevelopment::Events::PersonRoleChanged do |event|
     @role_id = event.data[:new_role_id]
     @level_id = event.data[:new_level_id]
+    @home_role_id = @role_id if @current_cycle_id && @alignments.empty?
   end
 
   on PersonDevelopment::Events::PersonLevelChanged do |event|
