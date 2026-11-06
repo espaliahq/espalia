@@ -6,6 +6,16 @@ conventions live in [AGENTS.md](AGENTS.md) and the per-layer guides under
 before writing code. They are written for AI coding agents and humans alike,
 and they are the review standard your PR is held to.
 
+## Where development happens
+
+Espalia is developed entirely in this repository. Downstream deployments —
+including the me&u instance the project grew out of — are forks that track
+this repo and carry only their own deployment configuration; no product
+development happens in them. If you run a fork, send product changes here
+first, whoever needs them, and pull them back with the rest of upstream.
+That keeps every fix and feature shared instead of stranded in one
+deployment.
+
 ## Getting set up
 
 ```bash
