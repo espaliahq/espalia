@@ -79,6 +79,28 @@ Path A, as v8. The rebuild fills `assessment_cycle_progress.joined_role_id` / `j
 
 Measured on the seeded dev database (7,734 handled events, one tenant): **57 s wall**, Rails boot included.
 
+#### Recorded: `person_development/current_assessment` v10 (home pinned at alignment, [#687](https://github.com/mr-yum/growth-os/issues/687))
+
+Path A, as v8. The rebuild fills `assessment_cycle_progress.home_role_id` / `home_level_id` and `person_framework_assignments.current_cycle_id` from the projection's own events: the home starts at the join and moves with each transfer or promotion until the cycle's first alignment starts. Every alignment and rating is judged against that home as it stood at the event, never against the enrollment snapshot. Only a participant with a mid-cycle role or level change reads differently:
+
+- **A transfer or promotion before alignment:** a role-less (pre-ADR-22) alignment now belongs to the new role and level. v9 filed it under the join role.
+- **A transfer after alignment started:** the alignment stays the home one, and the progress row follows it. v9 judged it against the final snapshot, so it went to `home: false` and progress missed the start.
+- **A lens rating before a transfer:** it is judged against the home at the time, so `started` matches what live wrote.
+
+`joined_role_id` / `joined_level_id` are ignored from v10 and dropped once no deployed release writes them.
+
+**After the deploy, check that the snapshot agrees.** Before v10, `ParticipantRoleSync` moved the enrollment snapshot even after alignment had started. Any such participation still has a snapshot naming the new role while the aggregate and the projection hold the alignment's. Readers of the snapshot (`RoleScope.home_role_ids`, `AssessmentPolicy#home_role?`, `Disclosure`, the command handler's default role) then disagree with the record. This lists them; it should return nothing:
+
+```sql
+SELECT e.tenant_id, e.cycle_id, e.person_id, e.role_id AS snapshot_role_id, p.home_role_id
+FROM assessment_cycle_enrollments e
+JOIN assessment_cycle_progress p ON p.cycle_id = e.cycle_id AND p.person_id = e.person_id
+JOIN assessment_cycles c ON c.cycle_id = e.cycle_id
+WHERE c.status = 'open' AND e.status = 'enrolled' AND p.home_role_id IS DISTINCT FROM e.role_id;
+```
+
+Measured on the seeded dev database (7,734 handled events, one tenant): **63–83 s wall** over three runs, Rails boot included; main's v9 took 65 s on the same run, so v10 costs nothing extra.
+
 ### Path B — two-stage deploy (large rebuilds)
 
 Use when the rebuild won't fit in predeploy's window (Render's default is generous but not unlimited; check Render docs for your plan).

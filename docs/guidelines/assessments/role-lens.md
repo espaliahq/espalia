@@ -8,7 +8,7 @@ A person can be read against a role or level they are not in — "how would I re
 
 | Term | Meaning |
 |---|---|
-| **Home role / home level** | The role and level the cycle's enrollment snapshot assesses the person at (ADR-19). What the record is. |
+| **Home role / home level** | The role and level the cycle's enrollment snapshot assesses the person at (ADR-19). What the record is. It follows a promotion or transfer until any alignment starts in the cycle, then the conversation pins it ([#687](https://github.com/mr-yum/growth-os/issues/687)). The aggregate, the snapshot and `CurrentAssessment` each apply that rule, so they name the same home. |
 | **Lens** | A `(role, level)` the page is *read against* — `as_role` / `as_level` in URLs and Operation params. The home role is the default lens. |
 | **Role scope** | The `(capability_stable_id, level_ordinal)` cells a role's active bindings and expectations define — `Assessments::RoleScope`. |
 | **Out-of-scope cell** | A cell outside the home role's scope. Rated into the same cycle; invisible to every home-role reader. |

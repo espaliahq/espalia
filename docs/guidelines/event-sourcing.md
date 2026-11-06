@@ -81,6 +81,8 @@ Every projection in [lib/projections/registry.rb](../../lib/projections/registry
 
 **Each read-model table has exactly one projection writer.** This is the load-bearing rule for replays to be self-contained: dropping the table and replaying that projection's events must reproduce the same state — which is only true if no other projection contributes writes to the same table. See the anti-pattern entry below.
 
+**Never decide a row from another projection's mutable table.** A rebuild replays your events against that table as it *ended*, not as it stood when each event was written, so an event from before a change is judged by the state after it. `CurrentAssessment` once read the enrollment snapshot to decide which alignment was the home one; after a mid-cycle transfer a rebuild re-homed history that live had filed correctly ([#687](https://github.com/mr-yum/growth-os/issues/687)). Track the fact from your own events instead, as the projection now tracks `home_role_id`. A fact that never changes after it is written, such as a cycle's framework, is safe to read. Prove it with a round-trip test that moves the other table to its final state before the rebuild.
+
 `reset!` ownership rules:
 - Truncate every table the projection writes to. Each table is owned exclusively, so no other projection's `reset!` will touch it.
 - Use `destroy_all` when you need Rails `dependent: :destroy` cascades. Use `delete_all` for flat tables (faster, skips callbacks).

@@ -192,8 +192,9 @@ Reporting line & delegation:
 
 Alignment lifecycle (per cycle, per role — ADR-22):
   AlignmentStarted { cycle_id, started_by_id, role_id?, level_ordinal?, cell_keys? }
-    ← Manager-only. Alignment is against a role: the home role (the role the
-      person held when they joined the cycle) or a lens role. The aggregate
+    ← Manager-only. Alignment is against a role: the home role (the role
+      held at the join, moved by a transfer until any alignment starts in the
+      cycle, then pinned) or a lens role. The aggregate
       holds @alignments[role_id] = { completed:, cells: Set | :all } and
       FREEZES self/manager ratings on the UNION of every started role's cells
       (ensure_individual_ratings_unfrozen!(cell)) until leave/conclude.
@@ -246,10 +247,13 @@ Alignment lifecycle (per cycle, per role — ADR-22):
   Read models (CurrentAssessment): AssessmentCycleProgress keeps the HOME
   lifecycle; AssessmentCycleRoleAlignment holds one row per role started
   (home included; `whole_assessment` marks a start from history).
-  AssessmentCycleProgress records the role and level held at the join
-  (`joined_role_id`, `joined_level_id`), and a role-less event from history
-  is that role's, as the aggregate holds it, even after a mid-cycle role
-  change moved the enrollment snapshot.
+  AssessmentCycleProgress tracks the home (`home_role_id`, `home_level_id`)
+  from the projection's own events, as the aggregate does: set at the join,
+  moved by a transfer or promotion until any alignment starts. A role-less
+  event from history is that home's. The projection never reads the
+  enrollment snapshot, which a rebuild would see as it ended, not as it
+  stood at the event (#687). `PersonFrameworkAssignment.current_cycle_id`
+  names the cycle a role change lands in.
 
 Declared explorations (ADR-22 — intent, not a rating scope):
   ExplorationStarted { exploration_id, target_role_id, target_level_id, target_level_ordinal,
@@ -444,9 +448,9 @@ re-open per role, role/level and reporting-manager change, exploration and
 rating delegation — and `assessments_timeline` serves it over MCP. No
 projection: it reads one stream filtered to the milestone types, and reading
 the events keeps every historical shape in play. A cycle's home role there is
-the role held at `JoinedAssessmentCycle`, as the aggregate fixes
-`@home_role_id`, so a role-less alignment event is that role's even after a
-mid-cycle role change moved the enrollment snapshot.
+the aggregate's `@home_role_id` (the role held at `JoinedAssessmentCycle`,
+moved by `PersonRoleChanged` until the cycle's first `AlignmentStarted`), so a
+role-less alignment event is that role's.
 
 ### Freshness
 
