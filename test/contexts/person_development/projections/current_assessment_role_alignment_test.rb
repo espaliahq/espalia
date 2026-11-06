@@ -216,6 +216,17 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
     end
   end
 
+  should "count completion against the pinned home after a transfer" do
+    self_rate(@shared)
+    assert progress.self_completed_at
+
+    start(@engineer, cells: [ [ @shared.stable_id, 3 ] ])
+    transfer_to_pm(move_snapshot: true)
+    self_rate(@pm_only, via_role_id: @pm.role_id)
+
+    assert progress.self_completed_at
+  end
+
   should "rebuild a lens rating made before a transfer as unstarted" do
     self_rate(@pm_only, via_role_id: @pm.role_id)
     transfer_to_pm(move_snapshot: true)

@@ -706,10 +706,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   # binding nothing — can't rule a cell out either.
   #
   # @return [Boolean]
-  def in_home_scope?(event)
+  def in_home_scope?(event, progress)
     return true if event.data[:via_role_id].blank?
 
-    role_id = home_role_id(event)
+    role_id = home_role_id(event, progress)
     return true unless role_id
 
     scope = Assessments::RoleScope.for(role_id: role_id, framework_id: event.metadata[:framework_id])
@@ -809,7 +809,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     progress = find_progress(event)
     return unless progress
     return if progress.started_at.present?
-    return unless in_home_scope?(event)
+    return unless in_home_scope?(event, progress)
 
     now = event.metadata[:timestamp] || Time.current
     progress.update_columns(
@@ -839,7 +839,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     coverage = Assessments::LevelCoverage.new(
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
-      cycle_id: event.data[:cycle_id]
+      cycle_id: event.data[:cycle_id],
+      role_id: home_role_id(event, progress),
+      level_ordinal: home_level_ordinal(event, progress)
     ).call
     now = event.metadata[:timestamp] || Time.current
 
