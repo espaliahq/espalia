@@ -109,6 +109,30 @@ class AssessmentsPastCycleTest < ActionDispatch::IntegrationTest
     assert_equal open_count, css_select("[data-kind='manager_rated']").size
   end
 
+  should "render the past cycle's score that assessments_get reports" do
+    pd = PersonDevelopment::CommandHandler.new
+    ActsAsTenant.with_tenant(@tenant) do
+      [ @fx.shared, @fx.e_only ].product([ 1, 2 ]).each do |capability, ordinal|
+        pd.rate_as_manager(@person.id, @fx.framework_id, capability.stable_id, level_ordinal: ordinal,
+          frequency: "occasional", cycle_id: @past_id, rated_by_id: @manager.id)
+      end
+    end
+    close_past_cycle
+    mcp = ActsAsTenant.with_tenant(@tenant) do
+      tenant_user = TenantUser.find_by!(user: @manager_user)
+      Operations::Assessments::Get.call(
+        context: AuthorizationContext.new(user: @manager_user, tenant_user: tenant_user, person: @manager),
+        params: { assignment_id: @assignment.id, cycle_id: @past_id }
+      )[:scoring]
+    end
+    assert mcp[:scored]
+
+    sign_in(@manager_user)
+    get scoring_assessment_path(@assignment, cycle_id: @past_id)
+
+    assert_select "#hero-score-bar [role='progressbar'][aria-valuenow='#{mcp[:score]}']"
+  end
+
   should "offer the only cycle once it has closed" do
     ActsAsTenant.with_tenant(@tenant) { AssessmentCycles::CommandHandler.new.close_cycle(@past_id) }
     sign_in(@user)
