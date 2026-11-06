@@ -654,6 +654,17 @@ find("#rating-#{@cap1_stable}-1 button", text: "Consistently").click
 - If you must use `within`, scope it to a container that is NOT replaced (e.g. the parent `tr` or a wrapper div that sits outside the Turbo Stream target)
 - This applies to any element inside a Turbo Stream replacement target: rating cells, scoring panels, category headers, contribution labels
 
+**`visit` itself can raise it when the page replaces itself while loading.**
+Capybara's `visit` is a bare `navigate.to`, which holds no element, but
+ChromeDriver waits on the document it loaded. A page whose script navigates
+away before that load ends (the evidence hub following an old notification
+anchor with `window.location.replace`) can come back as
+`StaleElementReferenceError` on CI. It never reproduced locally, even with a
+throttled network ([#691](https://github.com/mr-yum/growth-os/issues/691)).
+Visit such a page through a helper that rescues the error and visits once more,
+then assert where it landed (`visit_self_replacing_page` in
+`evidence_hub_system_test.rb`).
+
 ## Shared Setup Across Contexts
 
 **When multiple contexts need the same setup (e.g. a manager identity), use a single parent context instead of duplicating the setup block.** Duplicated setup drifts apart over time, makes tests harder to maintain, and inflates the test file.
