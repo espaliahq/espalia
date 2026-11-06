@@ -246,6 +246,10 @@ Alignment lifecycle (per cycle, per role — ADR-22):
   Read models (CurrentAssessment): AssessmentCycleProgress keeps the HOME
   lifecycle; AssessmentCycleRoleAlignment holds one row per role started
   (home included; `whole_assessment` marks a start from history).
+  AssessmentCycleProgress records the role and level held at the join
+  (`joined_role_id`, `joined_level_id`), and a role-less event from history
+  is that role's, as the aggregate holds it, even after a mid-cycle role
+  change moved the enrollment snapshot.
 
 Declared explorations (ADR-22 — intent, not a rating scope):
   ExplorationStarted { exploration_id, target_role_id, target_level_id, target_level_ordinal,

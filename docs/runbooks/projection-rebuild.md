@@ -73,6 +73,12 @@ Path A: `REBUILD_ON_DEPLOY=person_development/current_assessment`, removed from 
 
 Measured on the seeded dev database (7,298 handled events, one tenant): **~45 s wall** for `events:projections:rebuild[person_development/current_assessment]`, Rails boot included (about 6 ms an event; the `started` check adds a role-scope read only until a participation has started). Scale that by the production event count (pre-flight step 4) before choosing Path A: every assessment reads as empty for that long while the previous release serves traffic, so deploy in a quiet window.
 
+#### Recorded: `person_development/current_assessment` v9 (home role at the join, [#673](https://github.com/mr-yum/growth-os/issues/673))
+
+Path A, as v8. The rebuild fills `assessment_cycle_progress.joined_role_id` / `joined_level_id` from the assignment at each `JoinedAssessmentCycle`, then files a role-less (pre-ADR-22) alignment start, completion or re-open under that role and level, as the aggregate does. Only a participant whose role or level changed mid-cycle in a cycle with such an event reads differently: their historical alignment row moves to the role and level they joined at, still `home`. A progress row with no `joined_role_id` falls back to the enrollment snapshot, the v8 behaviour.
+
+Measured on the seeded dev database (7,734 handled events, one tenant): **57 s wall**, Rails boot included.
+
 ### Path B — two-stage deploy (large rebuilds)
 
 Use when the rebuild won't fit in predeploy's window (Render's default is generous but not unlimited; check Render docs for your plan).
