@@ -14,9 +14,12 @@ class Views::Assessments::Evidence::List < Views::Base
   #   assessment, not just items they authored.
   # @param capability_stable_id [String]
   # @param level_ordinal [Integer]
+  # @param read_only [Boolean] a past cycle's page: no item can be edited,
+  #   relinked or withdrawn from it
   def initialize(items:, assessment_id:, viewer_person_id:, can_create:,
                  capability_stable_id:, level_ordinal:, can_relink_others: false,
-                 can_request: false)
+                 can_request: false, read_only: false)
+    @read_only = read_only
     @items = items
     @assessment_id = assessment_id
     @viewer_person_id = viewer_person_id
@@ -119,13 +122,13 @@ class Views::Assessments::Evidence::List < Views::Base
   end
 
   def can_withdraw?(item)
-    @viewer_person_id.present? && item.author_id == @viewer_person_id
+    !@read_only && @viewer_person_id.present? && item.author_id == @viewer_person_id
   end
 
   # Author may manage their own evidence's links; the assessee and their
   # manager chain (`@can_relink_others`) may manage any item's links.
   def can_manage_links?(item)
-    return false unless @viewer_person_id.present?
+    return false if @read_only || @viewer_person_id.blank?
     return false if item.withdrawn?
 
     item.author_id == @viewer_person_id || @can_relink_others
@@ -134,7 +137,7 @@ class Views::Assessments::Evidence::List < Views::Base
   # Author-only edit (matches {EvidencePolicy#update?}); withdrawn items
   # are not editable.
   def can_update?(item)
-    return false unless @viewer_person_id.present?
+    return false if @read_only || @viewer_person_id.blank?
     return false if item.withdrawn?
 
     item.author_id == @viewer_person_id

@@ -24,7 +24,8 @@ class Operations::Assessments::ReadThroughLensTest < ActiveSupport::TestCase
     should "name the lens and the roles that read each capability" do
       payload = get(**@pm_lens)
 
-      assert_equal({ role_id: @fx.pm.role_id, role_code: "PM", level_ordinal: 2, home: false },
+      assert_equal({ role_id: @fx.pm.role_id, role_code: "PM", level_ordinal: 2, home: false,
+                     cycle_id: @cycle_id, past_cycle: false },
                    payload[:scoring][:lens])
       assert_equal "PM2", payload[:scoring][:scale][:assessed_level]
       capabilities = payload[:framework][:categories].flat_map { |c| c[:capabilities] }.index_by { |c| c[:name] }

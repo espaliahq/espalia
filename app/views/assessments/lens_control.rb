@@ -89,7 +89,7 @@ class Views::Assessments::LensControl < Views::Base
   end
 
   def back_home_item
-    a(href: assessment_path(@assessment_id), role: "menuitem", class: ITEM) do
+    a(href: assessment_path(@assessment_id, @lens.cycle_params), role: "menuitem", class: ITEM) do
       span(class: "w-4 shrink-0", aria_hidden: "true") { "←" }
       span { "Back to #{@lens.home_code}" }
     end

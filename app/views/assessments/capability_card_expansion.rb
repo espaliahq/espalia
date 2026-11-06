@@ -91,7 +91,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
       capability_stable_id: @capability_stable_id,
       level_ordinal: @ordinal,
       lens_params: @lens&.to_params || {},
-      focus: focus
+      focus: focus,
+      read_only: @lens&.past? || false
     )
   end
 
@@ -202,7 +203,8 @@ class Views::Assessments::CapabilityCardExpansion < Views::Base
         can_request: @can_request_evidence,
         can_relink_others: @can_relink_others_evidence,
         capability_stable_id: @capability_stable_id,
-        level_ordinal: @ordinal
+        level_ordinal: @ordinal,
+        read_only: @lens&.past? || false
       )
     end
   end

@@ -84,26 +84,27 @@ class AssessmentsController < ApplicationController
         # record, a lens role's on that lens at the level its conversation
         # is about. Never on another level of the home ladder: the
         # completion control counts the level it is rendered against.
-        can_start_alignment: lens.home? && policy.start_alignment?,
-        can_complete_alignment: milestone_lens? && policy.complete_alignment?(role_id: lens_role_id),
-        can_reopen_alignment: milestone_lens? && policy.reopen_alignment?(role_id: lens_role_id),
-        can_start_lens_alignment: !lens.home_role? && policy.start_alignment?(role_id: lens_role_id),
+        can_start_alignment: !past_cycle? && lens.home? && policy.start_alignment?,
+        can_complete_alignment: !past_cycle? && milestone_lens? && policy.complete_alignment?(role_id: lens_role_id),
+        can_reopen_alignment: !past_cycle? && milestone_lens? && policy.reopen_alignment?(role_id: lens_role_id),
+        can_start_lens_alignment: !past_cycle? && !lens.home_role? && policy.start_alignment?(role_id: lens_role_id),
         lens_viewer: lens_viewer(policy),
         viewer_person_id: current_person&.id,
-        can_create_evidence: viewer_can_create_evidence?,
-        can_request_evidence: viewer_can_request_evidence?,
-        can_relink_others_evidence: can_relink_others,
-        can_comment: viewer_can_comment?,
+        can_create_evidence: !past_cycle? && viewer_can_create_evidence?,
+        can_request_evidence: !past_cycle? && viewer_can_request_evidence?,
+        can_relink_others_evidence: !past_cycle? && can_relink_others,
+        can_comment: !past_cycle? && viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
         exploration: lens_exploration,
-        can_explore: policy.start_exploration?,
-        can_manage_delegates: policy.delegate_manager_rating?,
-        active_delegations: load_active_delegations(policy),
-        candidate_delegates: load_candidate_delegates(policy),
-        viewer_can_rate: policy.rating_participant?,
-        unplaced_feedback_count: unplaced_feedback_count,
-        unplaced_feedback_place: unplaced_feedback_place,
+        can_explore: !past_cycle? && policy.start_exploration?,
+        can_manage_delegates: !past_cycle? && policy.delegate_manager_rating?,
+        active_delegations: past_cycle? ? [] : load_active_delegations(policy),
+        candidate_delegates: past_cycle? ? [] : load_candidate_delegates(policy),
+        viewer_can_rate: !past_cycle? && policy.rating_participant?,
+        unplaced_feedback_count: past_cycle? ? 0 : unplaced_feedback_count,
+        unplaced_feedback_place: past_cycle? ? nil : unplaced_feedback_place,
+        cycles: cycle_history,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -119,15 +120,16 @@ class AssessmentsController < ApplicationController
         selected_levels: selected_levels_param,
         context: context,
         viewer_person_id: current_person&.id,
-        can_create_evidence: viewer_can_create_evidence?,
-        can_request_evidence: viewer_can_request_evidence?,
-        can_relink_others_evidence: can_relink_others,
-        can_comment: viewer_can_comment?,
+        can_create_evidence: !past_cycle? && viewer_can_create_evidence?,
+        can_request_evidence: !past_cycle? && viewer_can_request_evidence?,
+        can_relink_others_evidence: !past_cycle? && can_relink_others,
+        can_comment: !past_cycle? && viewer_can_comment?,
         viewer_is_tenant_admin: viewer_is_tenant_admin?,
         activity_entries: activity_entries,
         exploration: lens_exploration,
-        can_explore: policy.start_exploration?,
-        unplaced_feedback_count: unplaced_feedback_count,
+        can_explore: !past_cycle? && policy.start_exploration?,
+        unplaced_feedback_count: past_cycle? ? 0 : unplaced_feedback_count,
+        cycles: cycle_history,
         user: current_user,
         current_tenant: ActsAsTenant.current_tenant,
         tenants: current_user_tenants
@@ -173,7 +175,7 @@ class AssessmentsController < ApplicationController
       active_category_id: resolve_active_category_id,
       assessment_id: @assignment.id,
       assessee_name: manager_viewing? ? @assessee&.name : nil,
-      viewer_can_rate: assignment_policy.rating_participant?
+      viewer_can_rate: !past_cycle? && assignment_policy.rating_participant?
     ), layout: false
   end
 
@@ -227,6 +229,14 @@ class AssessmentsController < ApplicationController
   # @return [Boolean]
   def manager_viewing?
     viewer_is_manager?
+  end
+
+  # Every cycle the person joined on this framework, newest first — what the
+  # header's cycle switcher offers.
+  #
+  # @return [Array<Assessments::CycleHistory::Entry>]
+  def cycle_history
+    @cycle_history ||= Assessments::CycleHistory.new(assignment: @assignment).call
   end
 
   # Whose ratings the lens banner speaks of on the manager view: the
@@ -285,16 +295,20 @@ class AssessmentsController < ApplicationController
   # Loads the activity feed entries the current viewer is permitted to
   # see. Identical visibility rules to the matrix's evidence list +
   # rating-event privacy gates from ActivityFeedQuery.
+  #
+  # The feed spans every cycle and gates the open cycle's entries, so a past
+  # cycle's page gates it as the activity frame does — by the open cycle,
+  # never by the cycle the page reads.
   def load_activity_entries
     return [] unless current_person
 
     Assessments::ActivityFeedQuery.new(
       assignment: @assignment,
-      context: assessment_context,
+      context: past_cycle? ? Assessments::ViewerContext.for(assignment: @assignment, authorization: pundit_user) : assessment_context,
       viewer_person_id: current_person.id,
       viewer_sees_all: viewer_sees_all_evidence?,
       alignment_started: alignment_started?,
-      disclosure: (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
+      disclosure: past_cycle? ? assessee_disclosure : (@matrix_data[:disclosure] if @assignment.person_id == current_person.id)
     ).call
   end
 

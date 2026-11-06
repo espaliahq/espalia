@@ -32,12 +32,12 @@ class Assessments::MatrixDataBuilder
   # @return [Hash] see {#build}
   def self.for_lens(lens:, context:, viewer_person_id: nil, viewer_sees_all_evidence: false)
     assignment = lens.assignment
-    status = assignment.current_open_cycle_participation&.status
+    status = lens.participant_status
     new(
       framework: FrameworkState::Framework.find_by!(framework_id: assignment.framework_id),
       lens: lens,
       person_id: assignment.person_id,
-      cycle_id: assignment.current_open_cycle&.cycle_id,
+      cycle_id: lens.cycle&.cycle_id,
       categories: lens_tree(framework_id: assignment.framework_id, lens: lens),
       participant_status: status,
       disclosure: Assessments::Disclosure.for(lens: lens, participant_status: status),
@@ -95,10 +95,10 @@ class Assessments::MatrixDataBuilder
   # @param categories [Array<FrameworkState::CapabilityCategory>] eager-loaded;
   #   either the whole framework or {.lens_tree}'s subset — the builder filters
   #   to the role either way
-  # @param participant_status [String, nil] current cycle participant lifecycle
+  # @param participant_status [String, nil] the cycle's participant lifecycle
   #   status (`enrolled` | `started` | `aligning` | `aligned` | `withdrawn`).
-  #   Sourced from the current OPEN cycle's participation, so the terminal
-  #   `concluded` status (closed cycles only) never reaches this builder.
+  #   The open cycle's participation; a past cycle passes how far it got
+  #   ({AssessmentCycleParticipation#lifecycle_status}), never `concluded`.
   #   Used by views to decide read-only vs interactive rendering.
   # @param context [Symbol] viewer context (`:self` | `:manager` | `:alignment`).
   #   When `:self`, manager and aligned ratings are scrubbed from every cell
@@ -201,8 +201,10 @@ class Assessments::MatrixDataBuilder
       # Lens-independent, so the page's feed reuses it rather than building
       # a second one.
       disclosure: @disclosure,
-      individual_ratings_frozen: lens_alignment_started?,
-      alignment_locked: lens_alignment_completed?,
+      # A past cycle is read-only, whatever its alignment reached.
+      past_cycle: past_cycle?,
+      individual_ratings_frozen: past_cycle? || lens_alignment_started?,
+      alignment_locked: past_cycle? || lens_alignment_completed?,
       awaiting_agreement: awaiting_agreement?,
       current_level_complete: current_level_complete?(categories),
       current_level_work: current_level_work(categories)
@@ -646,12 +648,16 @@ class Assessments::MatrixDataBuilder
     return @awaiting_agreement if defined?(@awaiting_agreement)
 
     @awaiting_agreement =
-      @context == :alignment && lens_alignment_started? && !lens_alignment_completed? &&
+      !past_cycle? && @context == :alignment && lens_alignment_started? && !lens_alignment_completed? &&
       @level.ordinal == (home_lifecycle? ? @home_level_ordinal : lens_alignment&.level_ordinal)
   end
 
   def home_lifecycle?
     @lens.nil? || @lens.home_role?
+  end
+
+  def past_cycle?
+    @lens&.past? || false
   end
 
   # In :self context the effective fallback chain (aligned → manager → self)
@@ -710,8 +716,9 @@ class Assessments::MatrixDataBuilder
     [ @level.ordinal, @home_level_ordinal ].min
   end
 
+  # A past cycle is read-only, so nothing in it asks to be confirmed.
   def asks_confirmation?(ordinal, carried)
-    carried.present? && ordinal >= assumed_below
+    !past_cycle? && carried.present? && ordinal >= assumed_below
   end
 
   # The frequency that counts as "rated" for the active context.

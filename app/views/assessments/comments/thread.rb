@@ -33,8 +33,12 @@ class Views::Assessments::Comments::Thread < Views::Base
   #   `as_level`), so the card that comes back matches the page around it
   # @param focus [String, nil] set only in the response to the viewer's own
   #   write: the id of the comment to focus, or FOCUS_SELF
+  # @param read_only [Boolean] a past cycle's page: no comment can be
+  #   edited or deleted from it
   def initialize(comments:, assessment_id:, viewer_person_id:, can_create:,
-                 capability_stable_id:, level_ordinal:, tenant_admin: false, lens_params: {}, focus: nil)
+                 capability_stable_id:, level_ordinal:, tenant_admin: false, lens_params: {}, focus: nil,
+                 read_only: false)
+    @read_only = read_only
     @comments = comments
     @assessment_id = assessment_id
     @viewer_person_id = viewer_person_id
@@ -187,11 +191,11 @@ class Views::Assessments::Comments::Thread < Views::Base
   end
 
   def can_edit?(comment)
-    !comment.deleted? && comment.author_id == @viewer_person_id
+    !@read_only && !comment.deleted? && comment.author_id == @viewer_person_id
   end
 
   def can_delete?(comment)
-    return false if comment.deleted?
+    return false if @read_only || comment.deleted?
 
     comment.author_id == @viewer_person_id || @tenant_admin
   end

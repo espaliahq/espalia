@@ -37,10 +37,34 @@ module Views::Assessments::HeaderChrome
 
   # The record's status pill — withheld while a lens is on, where the lens
   # banner takes its place (the pill describes the record's lifecycle, which
-  # a lens neither reads nor changes).
+  # a lens neither reads nor changes), and on a past cycle, where the past
+  # cycle banner does.
   def render_status_pill_unless_lens(**pill)
-    render_status_pill(**pill) unless off_record_lens
+    render_status_pill(**pill) unless off_record_lens || past_cycle_lens
   end
+
+  # Every cycle the person joined, so a past one is a click away.
+  def render_cycle_control
+    lens = @matrix_data[:lens]
+    return unless lens
+
+    render Views::Assessments::CycleControl.new(lens: lens, cycles: @cycles, assessment_id: @assignment.id)
+  end
+
+  # Which past cycle the page reads, how it ended, and the way back.
+  def render_past_cycle_banner
+    lens = past_cycle_lens
+    return unless lens
+
+    render Views::Assessments::PastCycleBanner.new(lens: lens, assessment_id: @assignment.id,
+                                                   has_open_cycle: lens.open_cycle_id.present?)
+  end
+
+  def past_cycle_lens
+    lens = @matrix_data[:lens]
+    lens if lens&.past?
+  end
+
 
   # The line saying what the page is read against and how to get back, on
   # its own row under the header so it never pushes the header's actions
@@ -79,7 +103,7 @@ module Views::Assessments::HeaderChrome
   # has started against this cycle (ADR-22). Off the record, the banner says
   # where the lens role stands instead.
   def render_lens_alignment_chips
-    return if off_record_lens
+    return if off_record_lens || past_cycle_lens
 
     render Views::Assessments::LensAlignmentChips.new(alignments: @matrix_data[:lens_alignments] || [],
                                                       assessment_id: @assignment.id)

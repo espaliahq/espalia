@@ -25,7 +25,8 @@ class Assessments::ViewerContext
   # @return [Symbol] :self, :manager or :alignment
   def self.for(assignment:, authorization:, lens: nil)
     role_id = lens.role.role_id unless lens.nil? || lens.home_role?
-    return :alignment if AssessmentPolicy.new(authorization, assignment).view_alignment?(role_id: role_id)
+    cycle = lens.cycle if lens&.past?
+    return :alignment if AssessmentPolicy.new(authorization, assignment).view_alignment?(role_id: role_id, cycle: cycle)
 
     assignment.person_id == authorization.person&.id ? :self : :manager
   end

@@ -209,14 +209,22 @@ and `reporting_cycle_cohort`'s participants carry the same fields
 `Operations::LifecyclePayload` from an `Assessments::Lifecycle` and the
 `AssessmentCycleRoleAlignment` rows. `past_cycles` lists every other cycle
 the person joined on the framework, closed and withdrawn ones included, with
-that lifecycle and **no scores**. Its alignments sit under `role_alignments`,
-the cohort's key; `current_cycle` keeps its older `alignments` key, with the
-same fields (`role_id`, `role_code`, `role_name`, `level_ordinal`, `status`,
-`home` and the times). No past cycle is scored: the scoring stack reads the open cycle, and
-no screen scores a past one, so neither does the MCP
-([#669](https://github.com/mr-yum/growth-os/issues/669)). Every stamp is the
-latest occurrence — a re-open clears `aligned_at` — and the event stream holds
-the rest.
+that lifecycle. Its alignments sit under `role_alignments`, the cohort's key;
+`current_cycle` keeps its older `alignments` key, with the same fields
+(`role_id`, `role_code`, `role_name`, `level_ordinal`, `status`, `home` and the
+times). Every stamp is the latest occurrence — a re-open clears `aligned_at` —
+and the event stream holds the rest.
+
+**A past cycle reads through `cycle_id`.** `assessments_get` and
+`assessments_capability_get` take a `cycle_id` from `past_cycles` and read
+that cycle as its read-only web page does
+([#669](https://github.com/mr-yum/growth-os/issues/669)): its ratings, scored
+at its own enrollment snapshot's role and level, with `scoring.lens` carrying
+`cycle_id` and `past_cycle: true`. `Assessments::Lens.resolve(cycle_id:)` does
+the work, so the builder, the disclosure and the viewer's perspective all read
+that cycle. Disclosure is the open cycle's rule: closing a cycle discloses
+nothing new, so the assessee sees a manager's rating only on a cell an
+alignment covered. `current_cycle` stays the open cycle.
 
 **The event stream is the history; `assessments_timeline` reads it.**
 `Assessments::LifecycleTimeline` reads one person's PersonDevelopment stream at
