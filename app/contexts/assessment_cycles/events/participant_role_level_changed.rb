@@ -13,7 +13,8 @@
 # cycle is open and the person enrolled, and no-ops when role+level are
 # unchanged (so repeat HRIS syncs don't emit redundant events). A change after
 # the cycle closes does NOT emit — closed cycles stay frozen at their last
-# assessed level.
+# assessed level — and nor does one after alignment has started, which pins
+# the assessed role and level.
 #
 # @!attribute [r] data
 #   @return [Hash] event data

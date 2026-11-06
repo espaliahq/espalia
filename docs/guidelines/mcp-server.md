@@ -236,10 +236,10 @@ answers what the read models overwrite: when an alignment was first completed,
 and how often it was re-opened. Self and manager completion have no event, so
 they ride along from the progress stamps marked `derived: true`.
 
-- **Home is the role held at the join**, as the aggregate fixes
-  `@home_role_id` — not the enrollment row, which `ParticipantRoleSync` rewrites
-  on a mid-cycle role change. The query replays assignment and role-change
-  events to know it, and a role-less (pre-ADR-22) alignment event is that role's.
+- **Home is the aggregate's `@home_role_id`**: the role held at the join,
+  moved by a transfer until any alignment starts in the cycle. The query
+  replays assignment, role-change, cycle and alignment-start events to know
+  it, and a role-less (pre-ADR-22) alignment event is that role's.
 - **A missing actor** falls back to the metadata `actor_id`, then nil.
 - **Free-text reasons** (unenrolment, unassignment, role change, delegation)
   go to the manager chain and tenant admins only

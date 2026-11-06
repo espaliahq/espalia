@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -41,6 +41,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_000001) do
     t.uuid "alignment_started_by_id"
     t.datetime "created_at", null: false
     t.uuid "cycle_id", null: false
+    t.uuid "home_level_id"
+    t.uuid "home_role_id"
     t.uuid "joined_level_id"
     t.uuid "joined_role_id"
     t.datetime "manager_completed_at"
@@ -796,6 +798,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_000001) do
 
   create_table "person_framework_assignments", id: :uuid, default: nil, force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.uuid "current_cycle_id"
     t.uuid "framework_id", null: false
     t.uuid "level_id", null: false
     t.uuid "person_id", null: false

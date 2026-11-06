@@ -11,10 +11,11 @@
 # coverage), so they come from the progress stamps — the latest only — and
 # are marked `derived`.
 #
-# A cycle's home role is the role the person held when they joined it, as
-# the aggregate fixes it (`@home_role_id`) — not the enrollment row, which a
-# mid-cycle role change rewrites. So the stream is replayed: assignment and
-# role changes track the role, and each join records it. Historical events
+# A cycle's home role is the one the aggregate holds (`@home_role_id`): the
+# role held at the join, moved by a transfer until any alignment starts in
+# the cycle (https://github.com/mr-yum/growth-os/issues/687). So the stream
+# is replayed: assignment and role changes track the role, a join records it,
+# and a transfer moves it while the cycle is unpinned. Historical events
 # lack fields added since (ADR-22's `role_id`, ADR-18's actors): a missing
 # role is the cycle's home role, and a missing actor falls back to the
 # metadata `actor_id`, then nil.
@@ -49,7 +50,10 @@ class Assessments::LifecycleTimeline
     PersonDevelopment::Events::PersonAssignedToFramework,
     PersonDevelopment::Events::PersonRoleChanged,
     PersonDevelopment::Events::PersonUnassignedFromFramework,
-    PersonDevelopment::Events::JoinedAssessmentCycle
+    PersonDevelopment::Events::JoinedAssessmentCycle,
+    PersonDevelopment::Events::LeftAssessmentCycle,
+    PersonDevelopment::Events::AssessmentCycleConcluded,
+    PersonDevelopment::Events::AlignmentStarted
   ].freeze
 
   DERIVED_KINDS = %w[self_assessment_completed manager_assessment_completed].freeze
@@ -113,14 +117,24 @@ class Assessments::LifecycleTimeline
     events = @event_store.read.stream(stream).of_type((wanted + HOME_TRACKING).uniq).to_a
 
     role_id = nil
+    current_cycle_id = nil
+    pinned = Set.new
     home_roles = {}
     events.each_with_index.filter_map do |event, position|
       data = event.data.with_indifferent_access
       case event
       when PersonDevelopment::Events::PersonAssignedToFramework then role_id = data[:role_id]
-      when PersonDevelopment::Events::PersonRoleChanged then role_id = data[:new_role_id]
       when PersonDevelopment::Events::PersonUnassignedFromFramework then role_id = nil
-      when PersonDevelopment::Events::JoinedAssessmentCycle then home_roles[data[:cycle_id]] = role_id
+      when PersonDevelopment::Events::PersonRoleChanged
+        role_id = data[:new_role_id]
+        home_roles[current_cycle_id] = role_id if current_cycle_id && !pinned.include?(current_cycle_id)
+      when PersonDevelopment::Events::JoinedAssessmentCycle
+        current_cycle_id = data[:cycle_id]
+        pinned.delete(current_cycle_id)
+        home_roles[current_cycle_id] = role_id
+      when PersonDevelopment::Events::LeftAssessmentCycle, PersonDevelopment::Events::AssessmentCycleConcluded
+        current_cycle_id = nil
+      when PersonDevelopment::Events::AlignmentStarted then pinned << data[:cycle_id]
       end
       milestone_for(event, data, position, home_roles) if wanted.include?(event.class)
     end

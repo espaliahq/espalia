@@ -21,6 +21,9 @@ class AssessmentCycleProgress < ApplicationRecord
   INDIVIDUAL_RATING_STATUSES = %w[in_progress started].freeze
 
   self.table_name = "assessment_cycle_progress"
+  # Superseded by home_role_id / home_level_id; dropped once no deployed
+  # release writes them.
+  self.ignored_columns += %w[joined_role_id joined_level_id]
 
   acts_as_tenant :tenant
 

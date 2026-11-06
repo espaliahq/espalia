@@ -52,6 +52,16 @@ class AssessmentCycles::SyncHandlers::ParticipantRoleSyncTest < ActiveSupport::T
     assert_equal 2, enrollment.level_ordinal
   end
 
+  should "keep the snapshot once alignment has started" do
+    Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
+      @pd.start_alignment(@person_id, @framework_id, @cycle_id, started_by_id: create(:person, tenant: @tenant).id)
+      @handler.call(level_changed_event(@level2.level_id))
+    end
+
+    assert_equal @level1.level_id, enrollment.level_id
+    assert_equal 1, enrollment.level_ordinal
+  end
+
   should "no-op when the change is for a framework with no open enrolled cycle" do
     Rails.configuration.event_store.with_metadata(tenant_id: @tenant.id) do
       @handler.call(level_changed_event(@level2.level_id, framework_id: SecureRandom.uuid_v7))

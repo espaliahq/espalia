@@ -97,7 +97,16 @@ class PersonDevelopment::Projections::CurrentAssessment
   #     it — not the enrollment snapshot's, which a mid-cycle role change
   #     moves (https://github.com/mr-yum/growth-os/issues/673). A rebuild backfills the columns and re-homes such rows
   #     (REBUILD_ON_DEPLOY=person_development/current_assessment).
-  CODE_VERSION = 9
+  #
+  # 10 — the home is tracked from this projection's own events
+  #     (`home_role_id` / `home_level_id`): the role and level held at the
+  #     join, moved by a transfer or promotion until any alignment starts,
+  #     as the aggregate does. Nothing reads the enrollment snapshot, so a
+  #     rebuild judges each event against the home as it was then, not as
+  #     the snapshot ended (https://github.com/mr-yum/growth-os/issues/687).
+  #     A role-less alignment after a pre-alignment transfer is now the new
+  #     role's (REBUILD_ON_DEPLOY=person_development/current_assessment).
+  CODE_VERSION = 10
 
   # All event classes this projection handles.
   #
@@ -359,6 +368,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       role_id: event.data[:new_role_id],
       level_id: event.data[:new_level_id]
     )
+    move_home(assignment, home_role_id: event.data[:new_role_id], home_level_id: event.data[:new_level_id])
   end
 
   def handle_level_changed(event)
@@ -366,6 +376,19 @@ class PersonDevelopment::Projections::CurrentAssessment
     return unless assignment
 
     assignment.update!(level_id: event.data[:new_level_id])
+    move_home(assignment, home_level_id: event.data[:new_level_id])
+  end
+
+  # A promotion or transfer moves the home of the cycle the person is in,
+  # until any alignment has started there: the conversation pins it.
+  def move_home(assignment, **home)
+    return unless assignment.current_cycle_id
+
+    progress = AssessmentCycleProgress.find_by(cycle_id: assignment.current_cycle_id, person_id: assignment.person_id)
+    return unless progress
+    return if AssessmentCycleRoleAlignment.for_participation(cycle_id: progress.cycle_id, person_id: progress.person_id).exists?
+
+    progress.update!(home)
   end
 
   # Removes the assignment row entirely. The PersonUnassignedFromFramework
@@ -383,8 +406,9 @@ class PersonDevelopment::Projections::CurrentAssessment
   #   2. Upsert the AssessmentCycleProgress row to a fresh state (status
   #      `in_progress`, all journey columns nil). Re-joining clears any
   #      historical progress from a prior enrollment in the same cycle —
-  #      a fresh enrollment is a fresh journey. It records the role and
-  #      level held at the join: the home the aggregate fixes.
+  #      a fresh enrollment is a fresh journey. Its home starts at the role
+  #      and level held at the join, and the assignment names the cycle so
+  #      a later role change can find it.
   def handle_joined_cycle(event)
     AssessmentLevelRating.where(
       cycle_id: event.data[:cycle_id],
@@ -399,10 +423,11 @@ class PersonDevelopment::Projections::CurrentAssessment
       person_id: event.metadata[:person_id]
     )
     assignment = find_assignment(event)
+    assignment&.update!(current_cycle_id: event.data[:cycle_id])
     progress.assign_attributes(
       tenant_id: event.metadata[:tenant_id],
-      joined_role_id: assignment&.role_id,
-      joined_level_id: assignment&.level_id,
+      home_role_id: assignment&.role_id,
+      home_level_id: assignment&.level_id,
       status: "in_progress",
       started_at: nil,
       self_completed_at: nil,
@@ -415,18 +440,25 @@ class PersonDevelopment::Projections::CurrentAssessment
     progress.save!
   end
 
-  def handle_left_cycle(_event)
-    # Intentional no-op: keep the progress row as a historical record of
-    # how far the person got. Active-participant queries already filter
-    # via the enrollment row's status flipping to "withdrawn"; the orphaned
-    # progress row doesn't leak into active views.
+  # The progress row stays as a historical record of how far the person
+  # got. Active-participant queries already filter via the enrollment row's
+  # status flipping to "withdrawn"; the orphaned progress row doesn't leak
+  # into active views. Only the assignment lets go of the cycle.
+  def handle_left_cycle(event)
+    leave_cycle(event)
   end
 
-  def handle_cycle_concluded(_event)
-    # Intentional no-op, mirroring handle_left_cycle: the progress row IS
-    # the historical record of the concluded participation (aligned_at on
-    # it drives next-cycle rating seeding). The enrollment row's status
-    # flip to "concluded" is owned by AssessmentCycles::Projections::CurrentState.
+  # Mirrors handle_left_cycle: the progress row IS the historical record of
+  # the concluded participation (aligned_at on it drives next-cycle rating
+  # seeding). The enrollment row's status flip to "concluded" is owned by
+  # AssessmentCycles::Projections::CurrentState.
+  def handle_cycle_concluded(event)
+    leave_cycle(event)
+  end
+
+  def leave_cycle(event)
+    assignment = find_assignment(event)
+    assignment.update!(current_cycle_id: nil) if assignment&.current_cycle_id == event.data[:cycle_id]
   end
 
   def handle_self_rated(event)
@@ -526,12 +558,12 @@ class PersonDevelopment::Projections::CurrentAssessment
     now = event.metadata[:timestamp] || Time.current
     progress = find_progress(event)
     role_id = alignment_role_id(event, progress)
-    home = home_alignment?(event, role_id)
+    home = home_alignment?(event, role_id, progress)
     write_role_alignment(event, role_id) do |row|
       row.assign_attributes(
         home: home,
         whole_assessment: event.data[:cell_keys].nil?,
-        level_ordinal: event.data[:level_ordinal] || (alignment_level_ordinal(event, progress) if home),
+        level_ordinal: event.data[:level_ordinal] || (home_level_ordinal(event, progress) if home),
         status: "aligning",
         alignment_started_at: now,
         alignment_started_by_id: event.data[:started_by_id],
@@ -594,7 +626,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       status: "aligned", aligned_at: now, aligned_by_id: event.data[:completed_by_id],
       aligned_framework_version: event.data[:framework_version])
 
-    if home_alignment?(event, role_id) && progress
+    if home_alignment?(event, role_id, progress) && progress
       progress.update!(
         status: "aligned",
         aligned_at: now,
@@ -619,7 +651,7 @@ class PersonDevelopment::Projections::CurrentAssessment
       reopened_at: event.metadata[:timestamp] || Time.current,
       reopened_by_id: event.data[:reopened_by_id])
 
-    if home_alignment?(event, role_id) && progress
+    if home_alignment?(event, role_id, progress) && progress
       progress.update!(
         status: "aligning",
         aligned_at: nil,
@@ -631,47 +663,34 @@ class PersonDevelopment::Projections::CurrentAssessment
   end
 
   # The role an alignment event is about. History carries none: it is the
-  # role held at the join, as the aggregate fixes `@home_role_id`, which a
-  # mid-cycle role change moves the enrollment snapshot away from
-  # (https://github.com/mr-yum/growth-os/issues/673).
+  # cycle's home role.
   #
   # @param progress [AssessmentCycleProgress, nil]
   # @return [String, nil]
   def alignment_role_id(event, progress)
-    event.data[:role_id] || progress&.joined_role_id || home_role_id(event)
+    event.data[:role_id] || home_role_id(event, progress)
   end
 
   # @return [Boolean]
-  def home_alignment?(event, role_id)
-    event.data[:role_id].nil? || role_id == home_role_id(event)
+  def home_alignment?(event, role_id, progress)
+    event.data[:role_id].nil? || role_id == home_role_id(event, progress)
   end
 
-  # History's level is the one held at the join, with its role.
-  #
   # @param progress [AssessmentCycleProgress, nil]
   # @return [Integer, nil]
-  def alignment_level_ordinal(event, progress)
-    (level_ordinal_for(progress&.joined_level_id) if event.data[:role_id].nil?) || home_level_ordinal(event)
+  def home_level_ordinal(event, progress)
+    level_ordinal_for(progress&.home_level_id || find_assignment(event)&.level_id)
   end
 
-  # The role the cycle assesses the person at: its enrollment snapshot, else
-  # the assignment this projection owns — the same home every reader uses
-  # ({Assessments::RoleScope.home_role_ids}).
+  # The role the cycle assesses the person at, as this projection tracks it
+  # from its own events ({#move_home}), never the enrollment snapshot: a
+  # rebuild reads that table as it ended, not as it stood at the event
+  # (https://github.com/mr-yum/growth-os/issues/687).
   #
+  # @param progress [AssessmentCycleProgress, nil]
   # @return [String, nil]
-  def home_role_id(event)
-    Assessments::RoleScope.home_role_ids(
-      cycle_id: event.data[:cycle_id], framework_id: event.metadata[:framework_id],
-      person_ids: [ event.metadata[:person_id] ]
-    )[event.metadata[:person_id]]
-  end
-
-  # @return [Integer, nil]
-  def home_level_ordinal(event)
-    enrollment = AssessmentCycleEnrollment.find_by(cycle_id: event.data[:cycle_id], person_id: event.metadata[:person_id])
-    return enrollment.level_ordinal if enrollment&.level_ordinal
-
-    level_ordinal_for(find_assignment(event)&.level_id)
+  def home_role_id(event, progress = find_progress(event))
+    progress&.home_role_id || find_assignment(event)&.role_id
   end
 
   # @return [Integer, nil]
@@ -687,10 +706,10 @@ class PersonDevelopment::Projections::CurrentAssessment
   # binding nothing — can't rule a cell out either.
   #
   # @return [Boolean]
-  def in_home_scope?(event)
+  def in_home_scope?(event, progress)
     return true if event.data[:via_role_id].blank?
 
-    role_id = home_role_id(event)
+    role_id = home_role_id(event, progress)
     return true unless role_id
 
     scope = Assessments::RoleScope.for(role_id: role_id, framework_id: event.metadata[:framework_id])
@@ -790,7 +809,7 @@ class PersonDevelopment::Projections::CurrentAssessment
     progress = find_progress(event)
     return unless progress
     return if progress.started_at.present?
-    return unless in_home_scope?(event)
+    return unless in_home_scope?(event, progress)
 
     now = event.metadata[:timestamp] || Time.current
     progress.update_columns(
@@ -820,7 +839,9 @@ class PersonDevelopment::Projections::CurrentAssessment
     coverage = Assessments::LevelCoverage.new(
       person_id: event.metadata[:person_id],
       framework_id: event.metadata[:framework_id],
-      cycle_id: event.data[:cycle_id]
+      cycle_id: event.data[:cycle_id],
+      role_id: home_role_id(event, progress),
+      level_ordinal: home_level_ordinal(event, progress)
     ).call
     now = event.metadata[:timestamp] || Time.current
 

@@ -63,6 +63,21 @@ class PersonDevelopment::AggregateRoleAlignmentTest < ActiveSupport::TestCase
       assert_equal @home_role, events_of(PersonDevelopment::Events::AlignmentStarted).last.data[:role_id]
     end
 
+    should "follow a transfer made before alignment starts" do
+      @aggregate.change_role(@pm_role, SecureRandom.uuid_v7)
+      @aggregate.start_alignment(@cycle_id, started_by_id: @manager, cell_keys: @pm_cells)
+
+      assert_equal @pm_role, events_of(PersonDevelopment::Events::AlignmentStarted).last.data[:role_id]
+    end
+
+    should "stay on the role alignment started against through a later transfer" do
+      start(@pm_role, @pm_cells)
+      @aggregate.change_role(@pm_role, SecureRandom.uuid_v7)
+      @aggregate.start_alignment(@cycle_id, started_by_id: @manager, cell_keys: @home_cells)
+
+      assert_equal @home_role, events_of(PersonDevelopment::Events::AlignmentStarted).last.data[:role_id]
+    end
+
     should "refuse a second start against the same role but allow another role" do
       start(@home_role, @home_cells)
 

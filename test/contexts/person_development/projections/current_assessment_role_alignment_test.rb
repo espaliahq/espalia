@@ -147,32 +147,24 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
     end
   end
 
-  # The aggregate fixes the home role at the join; ParticipantRoleSync moves
-  # the enrollment snapshot on a mid-cycle role change
-  # (https://github.com/mr-yum/growth-os/issues/673).
-  context "history without a role after a mid-cycle role change" do
+  # Home follows a transfer or promotion until alignment starts, then the
+  # conversation pins it (https://github.com/mr-yum/growth-os/issues/687).
+  context "history without a role after a transfer before alignment" do
     setup do
-      pm4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @pm.role_id, ordinal: 4) }
-      append_and_project(PersonDevelopment::Events::PersonRoleChanged, previous_role_id: @engineer.role_id,
-        new_role_id: @pm.role_id, previous_level_id: @e3.level_id, new_level_id: pm4.level_id, reason: "transfer")
-      ActsAsTenant.with_tenant(@tenant) do
-        AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person_id)
-          .update!(role_id: @pm.role_id, level_id: pm4.level_id, level_ordinal: 4)
-      end
+      transfer_to_pm
       append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
       append_and_project(PersonDevelopment::Events::FullAlignmentCompleted, cycle_id: @cycle_id,
         completed_by_id: @manager.id, framework_version: 1)
     end
 
-    should "be the role held at the join, at its level, through a rebuild" do
-      PersonDevelopment::Projections::CurrentAssessment.reset!(tenant: @tenant)
-      Projections::Replayer.replay(projection_class: PersonDevelopment::Projections::CurrentAssessment, tenant: @tenant)
+    should "be the new role's, at its level, through a rebuild" do
+      rebuild
 
-      row = role_alignment(@engineer)
+      row = role_alignment(@pm)
       assert row.home
-      assert_equal 3, row.level_ordinal
+      assert_equal 4, row.level_ordinal
       assert_equal "aligned", row.status
-      assert_nil role_alignment(@pm)
+      assert_nil role_alignment(@engineer)
       assert_equal "aligned", progress.status
     end
 
@@ -184,24 +176,63 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
       end
 
       assert_equal 2, milestones.size
-      assert(milestones.all? { |m| m.role_id == @engineer.role_id && m.home })
-      assert_equal @engineer.role_id, role_alignment(@engineer).role_id
+      assert(milestones.all? { |m| m.role_id == @pm.role_id && m.home })
     end
   end
 
-  should "keep history at the level held at the join after a mid-cycle promotion" do
+  should "follow a promotion made before alignment starts" do
     e4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @engineer.role_id, ordinal: 4) }
     append_and_project(PersonDevelopment::Events::PersonLevelChanged,
       previous_level_id: @e3.level_id, new_level_id: e4.level_id, reason: "promotion")
-    ActsAsTenant.with_tenant(@tenant) do
-      AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person_id)
-        .update!(level_id: e4.level_id, level_ordinal: 4)
-    end
     append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
 
     row = role_alignment(@engineer)
     assert row.home
-    assert_equal 3, row.level_ordinal
+    assert_equal 4, row.level_ordinal
+  end
+
+  # Before the fix a rebuild read the enrollment snapshot as it ended, so a
+  # transfer judged every earlier event against the new role. The snapshot is
+  # moved here as the sync handler moved it before alignment pinned it.
+  context "a transfer after alignment starts" do
+    setup do
+      self_rate(@pm_only, via_role_id: @pm.role_id)
+      append_and_project(PersonDevelopment::Events::AlignmentStarted, cycle_id: @cycle_id, started_by_id: @manager.id)
+      transfer_to_pm(move_snapshot: true)
+      append_and_project(PersonDevelopment::Events::FullAlignmentCompleted, cycle_id: @cycle_id,
+        completed_by_id: @manager.id, framework_version: 1)
+    end
+
+    should "keep the alignment, the progress row and started on the role it began on" do
+      assert role_alignment(@engineer).home
+      assert_equal "aligned", role_alignment(@engineer).status
+      assert_nil role_alignment(@pm)
+      assert_equal @engineer.role_id, progress.home_role_id
+      assert_equal "aligned", progress.status
+    end
+
+    should "rebuild every row identically" do
+      assert_rebuilds_identically
+    end
+  end
+
+  should "count completion against the pinned home after a transfer" do
+    self_rate(@shared)
+    assert progress.self_completed_at
+
+    start(@engineer, cells: [ [ @shared.stable_id, 3 ] ])
+    transfer_to_pm(move_snapshot: true)
+    self_rate(@pm_only, via_role_id: @pm.role_id)
+
+    assert progress.self_completed_at
+  end
+
+  should "rebuild a lens rating made before a transfer as unstarted" do
+    self_rate(@pm_only, via_role_id: @pm.role_id)
+    transfer_to_pm(move_snapshot: true)
+
+    assert_rebuilds_identically
+    assert_nil progress.started_at
   end
 
   should "clear a participation's role rows when the person re-joins the cycle" do
@@ -231,6 +262,29 @@ class PersonDevelopment::Projections::CurrentAssessmentRoleAlignmentTest < Activ
   end
 
   private
+
+  def transfer_to_pm(move_snapshot: false)
+    pm4 = ActsAsTenant.with_tenant(@tenant) { create(:framework_level, role_id: @pm.role_id, ordinal: 4) }
+    append_and_project(PersonDevelopment::Events::PersonRoleChanged, previous_role_id: @engineer.role_id,
+      new_role_id: @pm.role_id, previous_level_id: @e3.level_id, new_level_id: pm4.level_id, reason: "transfer")
+    return unless move_snapshot
+
+    ActsAsTenant.with_tenant(@tenant) do
+      AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person_id)
+        .update!(role_id: @pm.role_id, level_id: pm4.level_id, level_ordinal: 4)
+    end
+  end
+
+  def rebuild
+    PersonDevelopment::Projections::CurrentAssessment.reset!(tenant: @tenant)
+    Projections::Replayer.replay(projection_class: PersonDevelopment::Projections::CurrentAssessment, tenant: @tenant)
+  end
+
+  def assert_rebuilds_identically
+    before = snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+    rebuild
+    assert_equal before, snapshot_read_models(PersonDevelopment::Projections::CurrentAssessment, @tenant)
+  end
 
   def append_and_project(event_class, **data)
     event = event_class.new(
