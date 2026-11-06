@@ -54,6 +54,14 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
       assert_match(/js_fallback/, messages.first)
     end
 
+    should "flag a click through page and a found element's click" do
+      messages = offenses_for(<<~RUBY)
+        auto_confirm { page.click_link "Cancel request" }
+        auto_confirm { find("button", text: "Start session").click }
+      RUBY
+      assert_equal 2, messages.size
+    end
+
     should "flag a click nested in a within inside the block" do
       messages = offenses_for(<<~RUBY)
         auto_confirm do

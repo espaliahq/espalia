@@ -64,8 +64,9 @@ module RuboCop
         MSG_BARE_CONFIRM_CLICK =
           "`auto_confirm` removes the dialog race but not the dropped click: a " \
           "bare click inside it is lost on starved CI just the same. Use " \
-          "`click_button_with_js_fallback` / `click_link_with_js_fallback`. See " \
-          "docs/guidelines/testing.md."
+          "`click_button_with_js_fallback` / `click_link_with_js_fallback`, or " \
+          "dispatch through `page.execute_script` when the label is not unique " \
+          "on the page. See docs/guidelines/testing.md."
 
         # Matches `accept_confirm`, `accept_confirm(...)`, `accept_confirm { }`.
         def_node_matcher :accept_confirm?, <<~PATTERN
@@ -109,7 +110,10 @@ module RuboCop
         PATTERN
 
         def_node_search :bare_clicks, <<~PATTERN
-          (send nil? {:click_button :click_link :click_on} ...)
+          {
+            (send {nil? (send nil? :page)} {:click_button :click_link :click_on} ...)
+            (send (send _ {:find :first} ...) :click ...)
+          }
         PATTERN
 
         def on_block(node)
