@@ -36,6 +36,10 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
 
   def with_tenant(&) = ActsAsTenant.with_tenant(@tenant, &)
 
+  def transfer
+    with_tenant { @pd.change_person_role(@person.id, @framework_id, @pm.role_id, @pm_level.level_id, changed_by: @manager.id) }
+  end
+
   def append_historical(event_class, data, actor_id: nil)
     with_tenant do
       Rails.configuration.event_store.append(
@@ -128,20 +132,34 @@ class Operations::Assessments::TimelineTest < ActiveSupport::TestCase
     assert_equal [ @cycle_id ], cycle_ids
   end
 
-  should "keep the home role fixed at the join when the role changes mid-cycle" do
-    pm = with_tenant { create(:framework_role, role_family_id: @role.role_family_id, name: "PM", code: "P") }
-    pm_level = with_tenant { create(:framework_level, role_id: pm.role_id, ordinal: 2, title: "PM2", code: "P2") }
-    with_tenant do
-      @pd.change_person_role(@person.id, @framework_id, pm.role_id, pm_level.level_id, changed_by: @manager.id)
-      assert_equal pm.role_id, AssessmentCycleEnrollment.find_by!(cycle_id: @cycle_id, person_id: @person.id).role_id,
-        "the enrollment follows the change; the timeline must not"
+  # Home follows a transfer until alignment starts, then stays
+  # (https://github.com/mr-yum/growth-os/issues/687).
+  context "after a mid-cycle transfer" do
+    setup do
+      @pm = with_tenant { create(:framework_role, role_family_id: @role.role_family_id, name: "PM", code: "P") }
+      @pm_level = with_tenant { create(:framework_level, role_id: @pm.role_id, ordinal: 2, title: "PM2", code: "P2") }
     end
-    append_historical(PersonDevelopment::Events::FullAlignmentCompleted, { cycle_id: @cycle_id }, actor_id: @manager.id)
 
-    milestone = call_op(kinds: %w[alignment_completed])[:milestones].sole
+    should "file a role-less completion under the new role when alignment hadn't started" do
+      transfer
+      append_historical(PersonDevelopment::Events::FullAlignmentCompleted, { cycle_id: @cycle_id }, actor_id: @manager.id)
 
-    assert milestone[:home]
-    assert_equal @role.role_id, milestone[:role_id]
+      milestone = call_op(kinds: %w[alignment_completed])[:milestones].sole
+
+      assert milestone[:home]
+      assert_equal @pm.role_id, milestone[:role_id]
+    end
+
+    should "keep the role alignment started on" do
+      append_historical(PersonDevelopment::Events::AlignmentStarted, { cycle_id: @cycle_id, started_by_id: @manager.id })
+      transfer
+      append_historical(PersonDevelopment::Events::FullAlignmentCompleted, { cycle_id: @cycle_id }, actor_id: @manager.id)
+
+      milestone = call_op(kinds: %w[alignment_completed])[:milestones].sole
+
+      assert milestone[:home]
+      assert_equal @role.role_id, milestone[:role_id]
+    end
   end
 
   should "return nothing for an empty kinds list" do
