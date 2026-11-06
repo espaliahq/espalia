@@ -290,7 +290,7 @@ assert_selector "[data-matrix-target='expandedRow']", visible: true
 
 The dropped-click flake class (Selenium's synthetic pointer click / modal-handler registration silently lost on starved CI) recurs often enough that two automated guards now steer new tests toward the JS-dispatch remedies documented in the sections below:
 
-- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` / `send_keys(:tab)` (use `press_escape` / `press_tab`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
+- **RuboCop cop `SystemTests/FlakeProneClick`** (`lib/rubocop/cop/system_tests/flake_prone_click.rb`) hard-fails CI (the existing `lint` job) on the highest-signal, lowest-false-positive patterns: a bare `accept_confirm` (use `auto_confirm`), a bare `click_button` / `click_link` / `click_on` inside `auto_confirm` (use a JS-fallback helper), `find("...data-action...").click` on a Stimulus-action element (JS-dispatch it) — **including a scoped `row.find(...)`, which drops its click exactly like a top-level one** — and `send_keys(:escape)` / `send_keys(:tab)` (use `press_escape` / `press_tab`). When a flagged call is genuinely the behaviour under test, opt out inline with `# rubocop:disable SystemTests/FlakeProneClick` and a comment explaining why.
 - **CodeRabbit path instructions** (`.coderabbit.yaml`) catch the fuzzier cases a static cop can't reliably detect without false positives: navigation `click_button`/`click_link` without a retry/JS-fallback wrapper, `data-turbo-confirm` form submits via click, `fill_in` of an assertion-critical field, and read-after-click races.
 
 If you add a new JS-dispatch helper, update both the cop (if it introduces a new safe form) and the table in *Stimulus Toggle Helpers*.
@@ -419,18 +419,24 @@ The devcontainer serves the app from `http://rails-app`, which is not a secure c
 
 **Use `auto_confirm { ... }` for Turbo `data-turbo-confirm` form submissions where the test cares about the action, not the dialog text.** Capybara's `accept_confirm` registers a modal handler then yields the click block, then waits for the dialog. On slow CI, the click can fire before the modal handler is fully registered — the dialog appears, fires `confirm()` instantly with no listener, and is gone before Capybara polls. Even with retry, this can fail repeatedly because each attempt re-races the same registration window.
 
-`auto_confirm` stubs `window.confirm` to return `true` before the click and **leaves the stub in place** (a full-page navigation loads a fresh document that resets `window.confirm` on its own), so Turbo's confirm resolves to `true` with no dialog ever opening — use it bare, exactly like the rest of the suite:
+`auto_confirm` stubs `window.confirm` to return `true` before the click and **leaves the stub in place** (a full-page navigation loads a fresh document that resets `window.confirm` on its own), so Turbo's confirm resolves to `true` with no dialog ever opening. Call it directly, never inside a retry wrapper:
 
 ```ruby
 # WRONG — accept_confirm flakes on starved CI even with retry
 accept_confirm(/Starting alignment will lock/) { click_button "Start alignment" }
 
-# CORRECT — bare auto_confirm, then assert the resulting action
-auto_confirm { click_button "Start alignment" }
-assert_text "Aligning"
+# CORRECT — auto_confirm around a guarded click, which asserts the result
+auto_confirm { click_button_with_js_fallback("Start alignment", expect_text: "Aligning") }
 ```
 
-**Do NOT wrap `auto_confirm` in `click_with_retry`.** It's actively harmful for a `data-turbo-method` *link* (vs. a form-submit button): Turbo invokes `confirm()` *asynchronously* there, so if anything restores the native `window.confirm` between the click and that call, a real dialog opens — and `click_with_retry` then re-clicks *into* the open dialog, raising `UnexpectedAlertOpenError` (and a downstream `NoMethodError` from Selenium's alert handling) on every retry. `auto_confirm` no longer restores the stub precisely to close this race, so the bare form is reliable for both links and buttons; the retry wrapper only reopens the hole.
+**The stub removes the dialog race, not the dropped click.** A bare
+`click_button` inside `auto_confirm` is lost on a starved runner like any other
+click, and two tests did exactly that
+([#691](https://github.com/mr-yum/growth-os/issues/691)). Put a JS-fallback
+helper or an `execute_script` dispatch inside the block; the cop flags a bare
+`click_button` / `click_link` / `click_on` there.
+
+**Do NOT wrap `auto_confirm` in `click_with_retry`.** It's actively harmful for a `data-turbo-method` *link* (vs. a form-submit button): Turbo invokes `confirm()` *asynchronously* there, so if anything restores the native `window.confirm` between the click and that call, a real dialog opens — and `click_with_retry` then re-clicks *into* the open dialog, raising `UnexpectedAlertOpenError` (and a downstream `NoMethodError` from Selenium's alert handling) on every retry. `auto_confirm` no longer restores the stub precisely to close this race, so `auto_confirm` on its own is reliable for both links and buttons; the retry wrapper only reopens the hole.
 
 **When NOT to use:** When the dialog's text/behaviour is itself under test. Then keep `accept_confirm` and pay the flake cost knowingly (or write the assertion at the integration test layer).
 

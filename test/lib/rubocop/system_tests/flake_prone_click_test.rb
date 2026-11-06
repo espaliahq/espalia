@@ -35,9 +35,40 @@ class RuboCop::Cop::SystemTests::FlakeProneClickTest < ActiveSupport::TestCase
       assert_equal 1, messages.size
     end
 
-    should "not flag auto_confirm" do
+    should "not flag auto_confirm around a guarded click" do
       messages = offenses_for(<<~RUBY)
-        auto_confirm { click_button "Delete" }
+        auto_confirm { click_button_with_js_fallback("Delete", expect_text: "Deleted") }
+      RUBY
+      assert_empty messages
+    end
+  end
+
+  context "bare clicks inside auto_confirm" do
+    should "flag each of click_button, click_link and click_on" do
+      messages = offenses_for(<<~RUBY)
+        auto_confirm { click_button "Start session" }
+        auto_confirm { click_link "Cancel request" }
+        auto_confirm { click_on "Delete" }
+      RUBY
+      assert_equal 3, messages.size
+      assert_match(/js_fallback/, messages.first)
+    end
+
+    should "flag a click nested in a within inside the block" do
+      messages = offenses_for(<<~RUBY)
+        auto_confirm do
+          within("#row") { click_button "Remove" }
+        end
+      RUBY
+      assert_equal 1, messages.size
+    end
+
+    should "not flag a JS-dispatched click or a click outside the block" do
+      messages = offenses_for(<<~RUBY)
+        auto_confirm do
+          page.execute_script("document.querySelector('button').click()")
+        end
+        click_button "Save"
       RUBY
       assert_empty messages
     end
