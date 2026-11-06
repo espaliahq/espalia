@@ -125,10 +125,10 @@ prints anything.
 **Anything that must survive a devcontainer rebuild goes in the repo's
 gitignored `tmp/`, never under `/tmp`.** The container's `/tmp` — including
 agent scratchpad directories — is destroyed on every rebuild, while the
-workspace is a mounted volume and persists. This repo lost its only copy of
-the public-history export pipeline this way (recovered from a session
-transcript). If a scratchpad file matters beyond the current session, copy it
-to `tmp/<purpose>/` or commit it before the next rebuild.
+workspace is a mounted volume and persists. A set of scripts whose only copy
+lived in a scratchpad was lost this way and had to be reconstructed from a
+session transcript. If a scratchpad file matters beyond the current session,
+copy it to `tmp/<purpose>/` or commit it before the next rebuild.
 
 ## Measuring in development
 
