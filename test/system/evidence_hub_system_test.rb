@@ -52,6 +52,17 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
                                     expect_selector: "##{decline_modal_id(request_id)}")
   end
 
+  # The hub replaces itself while still loading when it follows an old anchor,
+  # and ChromeDriver can report the abandoned document as a stale element
+  # (https://github.com/mr-yum/growth-os/issues/691). The browser is already
+  # on its way by then, and visiting again would only rerun the race, so the
+  # caller's assertions wait for where it lands.
+  def visit_self_replacing_page(path)
+    visit path
+  rescue Selenium::WebDriver::Error::StaleElementReferenceError
+    nil
+  end
+
   should "let the requestee respond with evidence" do
     make_request!
     sign_in_as(@peer_user)
@@ -125,8 +136,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     visit evidence_hub_path
     assert_text "You asked Peer for feedback"
 
-    auto_confirm { click_link "Cancel request" }
-    assert_text "Request cancelled"
+    auto_confirm { click_link_with_js_fallback("Cancel request", expect_text: "Request cancelled") }
     ActsAsTenant.with_tenant(@tenant) { assert_equal "cancelled", EvidenceRequest.last.status }
   end
 
@@ -356,7 +366,7 @@ class EvidenceHubSystemTest < ApplicationSystemTestCase
     should "follow an old notification anchor to the thread that holds the item" do
       item_id = ActsAsTenant.with_tenant(@tenant) { EvidenceItem.find_by!(content: "From Lena.").id }
       sign_in_as(@report_user)
-      visit "#{evidence_hub_path}##{EvidenceItem.dom_id(item_id)}"
+      visit_self_replacing_page "#{evidence_hub_path}##{EvidenceItem.dom_id(item_id)}"
       assert_selector "[data-testid='conversation-thread'] h2", text: "About you"
       assert_current_path evidence_report_conversation_path(@report.id)
       assert_equal "##{EvidenceItem.dom_id(item_id)}", page.evaluate_script("window.location.hash")

@@ -19,6 +19,10 @@ module RuboCop
       #   accept_confirm { click_button "Delete" }
       #
       #   # good — stub window.confirm so Turbo resolves it synchronously
+      #   auto_confirm { click_button_with_js_fallback("Delete", expect_text: "Deleted") }
+      #
+      # @example a bare click inside auto_confirm (flagged)
+      #   # bad — the stub removes the dialog race, not the dropped click
       #   auto_confirm { click_button "Delete" }
       #
       # @example clicking a Stimulus-action element (flagged)
@@ -57,6 +61,13 @@ module RuboCop
           "starved CI. Dispatch the click via `page.execute_script` (or a helper " \
           "like `open_dropdown` / `expand_matrix_row`). See docs/guidelines/testing.md."
 
+        MSG_BARE_CONFIRM_CLICK =
+          "`auto_confirm` removes the dialog race but not the dropped click: a " \
+          "bare click inside it is lost on starved CI just the same. Use " \
+          "`click_button_with_js_fallback` / `click_link_with_js_fallback`, or " \
+          "dispatch through `page.execute_script` when the label is not unique " \
+          "on the page. See docs/guidelines/testing.md."
+
         # Matches `accept_confirm`, `accept_confirm(...)`, `accept_confirm { }`.
         def_node_matcher :accept_confirm?, <<~PATTERN
           (send nil? :accept_confirm ...)
@@ -93,6 +104,23 @@ module RuboCop
         def_node_matcher :send_keys?, <<~PATTERN
           (send _ :send_keys ...)
         PATTERN
+
+        def_node_matcher :auto_confirm_block?, <<~PATTERN
+          (block (send nil? :auto_confirm) ...)
+        PATTERN
+
+        def_node_search :bare_clicks, <<~PATTERN
+          {
+            (send {nil? (send nil? :page)} {:click_button :click_link :click_on} ...)
+            (send (send _ {:find :first} ...) :click ...)
+          }
+        PATTERN
+
+        def on_block(node)
+          return unless auto_confirm_block?(node) && node.body
+
+          bare_clicks(node.body).each { |click| add_offense(click, message: MSG_BARE_CONFIRM_CLICK) }
+        end
 
         def on_send(node)
           add_offense(node, message: MSG_ACCEPT_CONFIRM) if accept_confirm?(node)

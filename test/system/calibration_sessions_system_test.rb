@@ -141,8 +141,7 @@ class CalibrationSessionsSystemTest < ApplicationSystemTestCase
     assert_text "Mia Manager's reports (1)"
 
     # Start — population freezes, curation affordances disappear
-    auto_confirm { click_button "Start session" }
-    assert_text "Session started"
+    auto_confirm { click_button_with_js_fallback("Start session", expect_text: "Session started") }
     assert_text "Live · ratings as of"
     # The header carries the live state; the stale "frozen … coming next"
     # sentence read as "the numbers are frozen".
