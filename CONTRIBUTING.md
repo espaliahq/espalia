@@ -9,7 +9,9 @@ and they are the review standard your PR is held to.
 ## Where development happens
 
 Espalia is developed entirely at
-[espaliahq/espalia](https://github.com/espaliahq/espalia). Downstream
+[espaliahq/espalia](https://github.com/espaliahq/espalia). (Until the
+open-source cutover completes, that repository is a placeholder and
+development continues in the original private repository.) Downstream
 deployments — including the me&u instance the project grew out of — are
 forks that track that repo and carry only their own deployment
 configuration; no product development happens in them. If you run a fork,

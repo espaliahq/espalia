@@ -128,7 +128,8 @@ agent scratchpad directories — is destroyed on every rebuild, while the
 workspace is a mounted volume and persists. A set of scripts whose only copy
 lived in a scratchpad was lost this way and had to be reconstructed from a
 session transcript. If a scratchpad file matters beyond the current session,
-copy it to `tmp/<purpose>/` or commit it before the next rebuild.
+copy it to `tmp/<purpose>/` in the main checkout — not in a removable
+worktree — or commit it, before the next rebuild or worktree removal.
 
 ## Measuring in development
 
