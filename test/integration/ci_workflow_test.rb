@@ -45,6 +45,27 @@ class CiWorkflowTest < ActiveSupport::TestCase
     end
   end
 
+  context "the mcp-cli-test token gate" do
+    should "skip Dependabot PRs by author, before reading the secret's presence" do
+      gate, = ci_jobs.dig("mcp-cli-test", "steps")
+
+      assert_equal "token", gate["id"]
+      assert_equal "${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}",
+        gate.dig("env", "IS_DEPENDABOT_PR")
+      assert_includes gate["run"].lines.first, "$IS_DEPENDABOT_PR",
+        "the Dependabot branch must come first, or a Dependabot-scoped secret would hand the token " \
+        "to the freshly bumped dependency's own code"
+    end
+
+    should "withhold the token from every step the gate skips" do
+      _gate, *rest = ci_jobs.dig("mcp-cli-test", "steps")
+
+      rest.each do |step|
+        assert_equal "steps.token.outputs.present == 'true'", step["if"], step["name"] || step["run"]
+      end
+    end
+  end
+
   context "the feedback exchange contract checks" do
     should "take Chip's and our deployed /contract from repository variables, never a hard-coded address" do
       contract_yml = YAML.load_file(Rails.root.join(".github/workflows/contract.yml")).fetch("jobs")
