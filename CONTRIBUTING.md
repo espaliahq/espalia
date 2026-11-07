@@ -13,9 +13,9 @@ Espalia is developed entirely at
 deployments — including the me&u instance the project grew out of — are
 forks that track that repo and carry only their own deployment
 configuration; no product development happens in them. If you run a fork,
-send product changes upstream first, whoever needs them, and pull them back
-with the rest of upstream. That keeps every fix and feature shared instead
-of stranded in one deployment.
+send product changes upstream first — even when only your deployment needs
+them — and pull them back with the rest of upstream. That keeps every fix
+and feature shared instead of stranded in one deployment.
 
 ## Getting set up
 

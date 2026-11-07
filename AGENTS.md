@@ -95,7 +95,7 @@ Before designing or planning any feature, **read the relevant guideline files** 
 | Change the feedback exchange with a peer system: its settings, secrets, signing, client or signed endpoints | [feedback-exchange.md](docs/guidelines/feedback-exchange.md), [integrations.md](docs/architecture/integrations.md) |
 | Add or change an event, aggregate, projection or read model | [event-sourcing.md](docs/guidelines/event-sourcing.md) |
 | Bump a projection's `CODE_VERSION`, or rebuild one | [projection-rebuild.md](docs/runbooks/projection-rebuild.md) |
-| Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) |
+| Investigate a production incident or a 500 on Render | [production-diagnostics.md](docs/runbooks/production-diagnostics.md) (private: excluded from the public export) |
 | Sync this repo from Espalia upstream, or decide whether a change belongs upstream or in this fork (post-cutover) | [upstream-sync.md](docs/runbooks/upstream-sync.md) (private: excluded from the public export) |
 | Add or change an Operation, MCP tool, OAuth or DCR flow | [mcp-server.md](docs/guidelines/mcp-server.md) |
 | Review a Dependabot PR, or change the `Gemfile` or a workflow | [dependencies.md](docs/guidelines/dependencies.md), [.github/AGENTS.md](.github/AGENTS.md) |
