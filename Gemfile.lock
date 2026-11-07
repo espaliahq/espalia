@@ -248,7 +248,7 @@ GEM
     net-http (0.10.0)
       net-protocol (>= 0.3.0)
       uri (>= 0.11.1)
-    net-imap (0.6.7)
+    net-imap (0.6.8)
       date
       net-protocol
     net-pop (0.1.2)
@@ -268,7 +268,7 @@ GEM
       racc (~> 1.4)
     nokogiri (1.19.7-x86_64-linux-musl)
       racc (~> 1.4)
-    noticed (3.1.0)
+    noticed (3.1.1)
       rails (>= 7.1.0)
     oauth2 (2.0.25)
       anonymous_loader (~> 0.1, >= 0.1.3)
