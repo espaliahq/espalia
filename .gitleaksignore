@@ -1,0 +1,15 @@
+# Synthetic test fixtures flagged by the gitleaks job in ci.yml: invented
+# feedback-exchange and HRIS values in tests, never live credentials.
+4d163590c6a5a15be4fa7716de337d819dcf8d5f:test/controllers/slack/events_controller_test.rb:generic-api-key:6
+4d163590c6a5a15be4fa7716de337d819dcf8d5f:test/integrations/slack/request_verifier_test.rb:generic-api-key:6
+9594a6d80dfa093f68d0f1e9c7cd30d14f80ede2:test/controllers/tenant/feedback_exchanges_controller_test.rb:generic-api-key:429
+9594a6d80dfa093f68d0f1e9c7cd30d14f80ede2:test/controllers/tenant/feedback_exchanges_controller_test.rb:generic-api-key:450
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:14
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:144
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:23
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:32
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:34
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:44
+b3bade4487b831b91108c8556334e9264a5f3ddb:test/models/feedback_exchange_secrets_test.rb:generic-api-key:45
+c924279a4b2a8fd3d10cf622b1438a9ddd174773:test/models/tenant_disconnect_test.rb:generic-api-key:59
+e951f3a37cf023a45f726113bd7c2a96de2ed32e:test/system/feedback_exchange_system_test.rb:generic-api-key:176

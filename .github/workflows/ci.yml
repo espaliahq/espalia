@@ -21,6 +21,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Scan for common Rails security vulnerabilities using static analysis
@@ -39,6 +42,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Scan for security vulnerabilities in JavaScript dependencies
@@ -55,6 +61,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Prepare RuboCop cache
@@ -93,6 +102,9 @@ jobs:
       - name: Set up Ruby (production gem set only)
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Eager-load the app as production would
@@ -119,6 +131,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Run tests
@@ -184,6 +199,9 @@ jobs:
         if: steps.token.outputs.present == 'true'
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Set up Node + install claude CLI
@@ -239,6 +257,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Run System Tests
@@ -285,6 +306,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Prepare the database

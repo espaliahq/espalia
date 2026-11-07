@@ -36,6 +36,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Consumer pact unchanged, or labelled contract-change
@@ -70,6 +73,9 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          # The series, not .ruby-version's exact patch: GitHub-hosted images
+          # only carry each series' latest patch build. Gemfile allows the range.
+          ruby-version: "4.0"
           bundler-cache: true
 
       - name: Prepare the database
