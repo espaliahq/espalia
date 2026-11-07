@@ -316,12 +316,28 @@ jobs:
           FEEDBACK_EXCHANGE_PEER_CONTRACT_URL: ${{ vars.FEEDBACK_EXCHANGE_PEER_CONTRACT_URL }}
         run: bin/rails contract:provider
 
+  gitleaks:
+    runs-on: ${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Scan all git history for secrets
+        env:
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
+          ./gitleaks git --no-banner --redact .
+
   # Merges Dependabot's PRs once every job above has passed on the same head.
   # Every guard reads the PR, never github.actor: the actor can be made
   # dependabot[bot] on someone else's PR ("Dependabot confusion"). Fork PRs get a
   # read-only token whatever this job asks for. See .github/AGENTS.md before editing.
   dependabot-auto-merge:
-    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test, contract]
+    needs: [scan_ruby, scan_js, lint, production_boot, test, mcp-cli-test, system-test, contract, gitleaks]
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
