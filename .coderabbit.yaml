@@ -10,7 +10,11 @@ language: en-US
 reviews:
   profile: chill
   request_changes_workflow: true
-  allow_author_approval: false
+  # Every PR here is author-driven, so author commands must be able to clear
+  # CodeRabbit's change requests or they deadlock (seen on PR #694).
+  allow_author_approval: true
+  auto_approvals:
+    allow_author_approval: true
   high_level_summary: true
   poem: false
   review_status: true
