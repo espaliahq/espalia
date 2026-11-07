@@ -43,6 +43,20 @@ class CiWorkflowTest < ActiveSupport::TestCase
       assert_includes script, '--match-head-commit "$HEAD_SHA"'
       assert_not_includes script, "gh pr review", "gh pr review approves whatever the head is now"
     end
+
+    should "dispatch the main CI run its own GITHUB_TOKEN merge suppresses" do
+      doc = YAML.load_file(Rails.root.join(".github/workflows/ci.yml"))
+      on = doc.fetch(true) { doc.fetch("on") }
+      assert_includes on.keys, "workflow_dispatch",
+        "without the trigger the dispatch is refused and no parity run ever meets a Dependabot bump"
+
+      steps = ci_jobs.dig(AUTO_MERGE_JOB, "steps")
+      merge = steps.find { |step| step["id"] == "merge" }
+      assert_includes merge["run"], 'echo "merged=true"', "the dispatch must fire only on a real merge"
+      dispatch = steps.find { |step| step["run"].to_s.include?("gh workflow run ci.yml") }
+      assert_equal "steps.merge.outputs.merged == 'true'", dispatch&.dig("if"),
+        "the detection run on main must follow every auto-merge"
+    end
   end
 
   context "the mcp-cli-test token gate" do

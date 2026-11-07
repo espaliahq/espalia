@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [ main ]
+  # Fired by dependabot-auto-merge after its GITHUB_TOKEN merge, which GitHub's
+  # recursion guard stops from triggering the push run above.
+  workflow_dispatch:
 
 # Every job here is read-only (no git push/commit, no releases). Grant the
 # workflow token least privilege rather than the repo default.
@@ -383,6 +386,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -419,6 +423,7 @@ jobs:
           gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/reviews" -f event=APPROVE -f commit_id="$HEAD_SHA"
 
       - name: Merge the head CI tested
+        id: merge
         if: steps.commits.outputs.trusted == 'true'
         run: |
           # Retry to absorb the brief mergeability recompute after approval.
@@ -438,6 +443,7 @@ jobs:
               exit 0
             fi
             if gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
               echo "Merged on attempt $attempt"
               exit 0
             fi
@@ -446,3 +452,12 @@ jobs:
           done
           echo "::error::PR #$PR_NUMBER still not mergeable after retries (unresolved conversations, or a policy not yet met)."
           exit 1
+
+      - name: Run the parity test on the merged main
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          # The GITHUB_TOKEN merge above cannot trigger the push run on main
+          # (GitHub's recursion guard), and that run is the only place the CLI
+          # parity test meets a Dependabot bump. workflow_dispatch is exempt
+          # from the guard, so fire the run the merge suppressed.
+          gh workflow run ci.yml --repo "$REPO" --ref main
