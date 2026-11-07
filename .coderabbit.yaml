@@ -9,8 +9,16 @@ language: en-US
 
 reviews:
   profile: chill
-  request_changes_workflow: true
-  allow_author_approval: false
+  # CodeRabbit's approval satisfies main's one required review. Every PR here
+  # is author-driven, so the author's @coderabbitai resolve/approve must work
+  # or a changes-requested verdict deadlocks the merge — seen on
+  # https://github.com/mr-yum/growth-os/pull/694, which took manual review
+  # dismissal plus an admin merge. allow_author_approval therefore grants the
+  # author full self-approval; accepted, since the author holds admin merge
+  # rights anyway. `enabled` replaces the deprecated request_changes_workflow.
+  auto_approvals:
+    enabled: true
+    allow_author_approval: true
   high_level_summary: true
   poem: false
   review_status: true
