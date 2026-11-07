@@ -120,6 +120,17 @@ prints anything.
 
 **CodeRabbit CLI auth is per-machine: log in interactively inside each container, and again after every rebuild.** Since 0.9 a browser sign-in's token is bound to the machine that logged in, so a host credential never serves the container — a `~/.coderabbit` bind mount was tried ([PR #684](https://github.com/mr-yum/growth-os/pull/684)) and reverted, because shared state just makes host and container overwrite each other's single credential slot. The symptoms of a foreign or stale credential are "Provider identity could not be verified" or `credentials_unavailable` ("no token is available" in `coderabbit doctor`), even though `auth.json` claims an `expiresAt` decades away; a self-update of the CLI (it updates itself on launch; 0.4 → 0.9 here) invalidates the session the same way. Fix with `coderabbit auth login` in the environment that will run the reviews. For headless use CodeRabbit offers Agentic API keys (`coderabbit auth login --api-key`), deliberately not adopted here.
 
+## A container rebuild wipes `/tmp`
+
+**Anything that must survive a devcontainer rebuild goes in the repo's
+gitignored `tmp/`, never under `/tmp`.** The container's `/tmp` — including
+agent scratchpad directories — is destroyed on every rebuild, while the
+workspace is a mounted volume and persists. A set of scripts whose only copy
+lived in a scratchpad was lost this way and had to be reconstructed from a
+session transcript. If a scratchpad file matters beyond the current session,
+copy it to `tmp/<purpose>/` in the main checkout — not in a removable
+worktree — or commit it, before the next rebuild or worktree removal.
+
 ## Measuring in development
 
 **Never quote dev-mode timings from the first requests after a boot.** They run 2–3× slower than steady state (cold caches, first-time constant loading, GC). [#487](https://github.com/mr-yum/growth-os/issues/487) was filed saying a framework-tree preload cost 88 ms of a 134 ms build; warm, the whole build was 46 ms, and the fix saved 13 ms rather than ~70. Warm up first, then interleave old and new paths in one process (shuffle the order each iteration) and compare medians. Measure against seeded data in a cloned database (`createdb -h postgres -U postgres -T growth_os_development <name>`, then `DATABASE_URL=postgresql://postgres:postgres@postgres/<name>`), never by mutating the shared dev database.
