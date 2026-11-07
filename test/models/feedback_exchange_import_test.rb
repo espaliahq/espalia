@@ -40,7 +40,7 @@ class FeedbackExchangeImportTest < ActiveSupport::TestCase
     assert_equal [ keep ], FeedbackExchangeImport.retriable.to_a
   end
 
-  should "list the people a peer named that GrowthOS could not find, most seen first" do
+  should "list the people a peer named that Espalia could not find, most seen first" do
     row("skipped", "author_unmatched", record: { "author" => { "email" => "Ghost@example.com", "display_name" => "Ghost" } })
     row("skipped", "author_unmatched", record: { "author" => { "email" => "ghost@example.com" } })
     row("skipped", "recipient_unmatched", record: { "recipient" => { "email" => "new@example.com", "display_name" => "New" } })

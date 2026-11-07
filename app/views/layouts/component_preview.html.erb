@@ -4,7 +4,7 @@
 <% scheme = display[:scheme].presence_in(DevThemeOverride::SCHEMES) %>
 <html <%= tag.attributes(lang: I18n.locale, data: { theme: theme, scheme: scheme }) %>>
   <head>
-    <title>GrowthOS previews</title>
+    <title>Espalia previews</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%= csrf_meta_tags %>
     <%= stylesheet_link_tag "tailwind" %>

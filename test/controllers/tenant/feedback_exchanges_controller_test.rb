@@ -79,7 +79,7 @@ class Tenant::FeedbackExchangesControllerTest < ActionDispatch::IntegrationTest
         get tenant_integration_path("feedback-exchange")
 
         assert_select "#feedback-exchange-counts dd", text: "1", count: 2
-        assert_select "[data-skip-reason='author_unmatched']", text: /Giver not found in GrowthOS\s*1/
+        assert_select "[data-skip-reason='author_unmatched']", text: /Giver not found in Espalia\s*1/
         assert_select "#feedback-exchange-unmatched li", text: /ghost@example.com · Ghost\s*Gave 1 record/
 
         get tenant_integrations_path

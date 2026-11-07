@@ -134,7 +134,7 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       feedback(person: @second, status: "withdrawn", external_reference: { system: "chip" })
     end
 
-    should "split provided feedback by the system it was given in, GrowthOS first" do
+    should "split provided feedback by the system it was given in, Espalia first" do
       by_origin = result.metrics.by_origin
 
       assert_equal({ "growthos" => 2, "chip" => 2, "kudos" => 1 }, by_origin)
@@ -142,7 +142,7 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_equal result.metrics.feedback_provided, by_origin.values.sum
     end
 
-    should "report GrowthOS as zero rather than omit it" do
+    should "report Espalia as zero rather than omit it" do
       only_peer = Reporting::EvidenceCoverage.new(cycle: @cycle, scope_person_ids: [ @second.id ]).call
       assert_equal({ "growthos" => 0, "chip" => 2 }, only_peer.metrics.by_origin)
 
@@ -164,7 +164,7 @@ class Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       assert_equal 2, result.metrics.by_origin["growthos"]
     end
 
-    should "count a blank system as GrowthOS" do
+    should "count a blank system as Espalia" do
       feedback(person: @first, external_reference: { system: "" })
 
       assert_equal 3, result.metrics.by_origin["growthos"]

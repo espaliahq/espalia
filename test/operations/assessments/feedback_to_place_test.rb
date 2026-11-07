@@ -112,7 +112,7 @@ class Operations::Assessments::FeedbackToPlaceTest < ActiveSupport::TestCase
     assert_equal({ id: @direct.id, name: "Dana Direct" }, row[:person])
     assert_equal({ id: @framework_id, name: "Engineering" }, row[:framework])
     assert_equal "peer_feedback", row[:kind]
-    assert_equal({ system: "growthos", label: "GrowthOS", url: nil }, row[:origin])
+    assert_equal({ system: "growthos", label: "Espalia", url: nil }, row[:origin])
     assert_equal({ id: @peer.id, name: "Priya Peer" }, row[:author])
     assert_equal "About Dana.", row[:excerpt]
     assert row[:recorded_at].present?

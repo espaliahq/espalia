@@ -3,7 +3,7 @@
 require "test_helper"
 
 # WCAG 2.4.2 — every page carries a descriptive, page-specific <title>
-# (issue #321). The layout renders [@page_title, tenant, "GrowthOS"] joined
+# (issue #321). The layout renders [@page_title, tenant, "Espalia"] joined
 # with " · "; these tests pin the convention for the primary surfaces.
 class PageTitlesTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
@@ -39,22 +39,22 @@ class PageTitlesTest < ActionDispatch::IntegrationTest
   context "signed-in pages" do
     should "title the home dashboard" do
       get root_path
-      assert_equal "Home · Acme · GrowthOS", page_title
+      assert_equal "Home · Acme · Espalia", page_title
     end
 
     should "title the assessments index" do
       get assessments_path
-      assert_equal "My Assessments · Acme · GrowthOS", page_title
+      assert_equal "My Assessments · Acme · Espalia", page_title
     end
 
     should "title the own assessment page" do
       get assessment_path(@assignment)
-      assert_equal "My Assessment · Acme · GrowthOS", page_title
+      assert_equal "My Assessment · Acme · Espalia", page_title
     end
 
     should "title the framework explorer with the framework name" do
       get framework_path(@framework.framework_id)
-      assert_equal "Engineering Growth · Acme · GrowthOS", page_title
+      assert_equal "Engineering Growth · Acme · Espalia", page_title
     end
 
     should "title distinct pages distinctly" do
@@ -79,7 +79,7 @@ class PageTitlesTest < ActionDispatch::IntegrationTest
 
     should "title the report's assessment with their name" do
       get assessment_path(@report_assignment)
-      assert_equal "Alex Report · Assessment · Acme · GrowthOS", page_title
+      assert_equal "Alex Report · Assessment · Acme · Espalia", page_title
     end
   end
 
@@ -87,7 +87,7 @@ class PageTitlesTest < ActionDispatch::IntegrationTest
     should "render a clean fallback title with no leading separator" do
       sign_out @user
       get new_user_session_path
-      assert_equal "GrowthOS", page_title
+      assert_equal "Espalia", page_title
     end
   end
 end

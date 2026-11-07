@@ -49,7 +49,7 @@ class ImpersonationSystemTest < ApplicationSystemTestCase
   should "hide admin-only nav links while impersonating a non-admin member" do
     sign_in_as(@admin_user)
     visit root_path
-    assert_text "Your next actions across GrowthOS."
+    assert_text "Your next actions across Espalia."
 
     # Nav-scoped CSS selectors (not `within "nav"`) so each retry re-queries
     # the navbar — a `within` block caches the <nav> node, which Turbo Drive

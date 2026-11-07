@@ -10,7 +10,7 @@ class FeedbackExchange::DeletionsControllerTest < ActionDispatch::IntegrationTes
   setup { setup_exchange_tenant }
   teardown { ActsAsTenant.current_tenant = nil }
 
-  should "always be empty, because GrowthOS withdraws and never deletes" do
+  should "always be empty, because Espalia withdraws and never deletes" do
     author = create_person("a@example.com")
     item = create_item(author: author, recipient: create_person("r@example.com"), link_status: "withdrawn")
 

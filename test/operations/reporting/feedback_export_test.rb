@@ -116,11 +116,11 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
         metadata: { given_at: "2026-10-18T03:12:44Z" })
     end
 
-    should "name where each item was given, GrowthOS for native ones and plain links" do
+    should "name where each item was given, Espalia for native ones and plain links" do
       rows = call_op[:rows].index_by { |row| row[:feedback] }
 
-      assert_equal "GrowthOS", rows["Native."][:origin]
-      assert_equal "GrowthOS", rows["From Slack."][:origin]
+      assert_equal "Espalia", rows["Native."][:origin]
+      assert_equal "Espalia", rows["From Slack."][:origin]
       assert_equal "Slack", rows["Imported from a peer named slack."][:origin]
       assert_equal "Chip", rows["From Chip."][:origin]
       assert_equal "Hr Portal", rows["Elsewhere."][:origin]
@@ -134,7 +134,7 @@ class Operations::Reporting::FeedbackExportTest < ActiveSupport::TestCase
       assert_nil rows["Native."][:origin_request]
     end
 
-    should "leave Requested or proactive about GrowthOS requests only" do
+    should "leave Requested or proactive about Espalia requests only" do
       row = call_op[:rows].find { |candidate| candidate[:feedback] == "From Chip." }
 
       assert_equal "Proactive", row[:requested]

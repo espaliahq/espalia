@@ -101,7 +101,7 @@ Rails.application.configure do
     config.active_record.encryption.key_derivation_salt = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-salt")
   end
 
-  config.lookbook.project_name = "GrowthOS"
+  config.lookbook.project_name = "Espalia"
   config.lookbook.component_paths << Rails.root.join("app/components")
   config.lookbook.preview_layout = "component_preview"
   # Toolbar switches; the preview layout turns them into <html data-theme / data-scheme>

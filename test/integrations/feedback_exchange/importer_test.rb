@@ -99,7 +99,7 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_equal 1, EvidenceItem.count
     end
 
-    should "type it by kind when GrowthOS knows the kind, and by the author otherwise" do
+    should "type it by kind when Espalia knows the kind, and by the author otherwise" do
       @importer.import(exchange_record(kind: "observation"))
       assert_equal "observation", EvidenceItem.find(evidence_id).evidence_type
 
@@ -285,7 +285,7 @@ class FeedbackExchange::ImporterTest < ActiveSupport::TestCase
       assert_skipped "kind_not_imported", exchange_record(kind: "feedback")
     end
 
-    should "import every kind by default, even one GrowthOS has no type for" do
+    should "import every kind by default, even one Espalia has no type for" do
       assert_equal %w[all], @tenant.feedback_exchange_config.import_kinds
 
       assert_equal :imported, @importer.import(exchange_record(kind: "shout_out")).outcome

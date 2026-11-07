@@ -44,7 +44,7 @@ class Operations::Tenants::UpdateScoringVocabularyTest < ActiveSupport::TestCase
   end
 
   context "clearing a label" do
-    should "fall back to the word GrowthOS ships" do
+    should "fall back to the word Espalia ships" do
       call(mastering_label: "Advancing")
       result = call(mastering_label: "")
 

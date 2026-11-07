@@ -39,7 +39,7 @@ class AuthSystemTest < ApplicationSystemTestCase
       visit new_user_session_path
       screenshot("sign_in_page")
 
-      assert_text "GrowthOS"
+      assert_text "Espalia"
       assert_text "Career growth for your team"
       assert_text "Sign in to your account"
       assert_selector "input[type='email']"
@@ -152,7 +152,7 @@ class AuthSystemTest < ApplicationSystemTestCase
 
       # Sign-in lands on the Home dashboard.
       assert_current_path root_path
-      assert_text "GrowthOS"
+      assert_text "Espalia"
     end
   end
 
@@ -245,10 +245,10 @@ class AuthSystemTest < ApplicationSystemTestCase
       # button can be dropped, leaving the test on /users/sign_in. The
       # JS-fallback helper escalates to a synthetic JS click and then
       # form.requestSubmit() if the destination text doesn't appear.
-      # "Your next actions across GrowthOS." is unique to the post-login
-      # Home dashboard (the sign-in page only says "GrowthOS").
+      # "Your next actions across Espalia." is unique to the post-login
+      # Home dashboard (the sign-in page only says "Espalia").
       click_button_with_js_fallback "Continue with Google",
-        expect_text: "Your next actions across GrowthOS."
+        expect_text: "Your next actions across Espalia."
 
       assert_current_path root_path
     end

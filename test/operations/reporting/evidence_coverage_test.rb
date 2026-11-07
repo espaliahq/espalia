@@ -48,7 +48,7 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
     assert_equal 0, result.dig(:metrics, :feedback_directionality, :self_provided)
   end
 
-  should "split provided feedback by origin, keyed by system with GrowthOS always present" do
+  should "split provided feedback by origin, keyed by system with Espalia always present" do
     item = EvidenceItem.where(person_id: @report.id).sole
     item.update_columns(external_reference: { system: "chip" })
 
@@ -60,7 +60,7 @@ class Operations::Reporting::EvidenceCoverageTest < ActiveSupport::TestCase
       JSON.parse(JSON.generate(result)).dig("metrics", "by_origin"))
   end
 
-  should "report only GrowthOS when nothing was imported" do
+  should "report only Espalia when nothing was imported" do
     result = call_op(context: @manager_ctx, params: { cycle_id: @cycle.cycle_id })
 
     assert_equal({ "growthos" => 1 }, result.dig(:metrics, :by_origin))

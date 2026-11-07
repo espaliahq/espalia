@@ -29,7 +29,7 @@ class Views::Evidence::OriginBadgeTest < ActiveSupport::TestCase
     assert_includes render_badge(imported(system: "kudos-board")).text, "via Kudos Board"
   end
 
-  should "name a peer that shares a link target's slug as that peer, not GrowthOS" do
+  should "name a peer that shares a link target's slug as that peer, not Espalia" do
     assert_includes render_badge(imported(system: "slack")).text, "via Slack"
   end
 

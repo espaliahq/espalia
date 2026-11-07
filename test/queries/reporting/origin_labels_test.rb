@@ -4,7 +4,7 @@ require "test_helper"
 
 class Reporting::OriginLabelsTest < ActiveSupport::TestCase
   context ".key_for" do
-    should "read nil and blank as GrowthOS" do
+    should "read nil and blank as Espalia" do
       assert_equal "growthos", Reporting::OriginLabels.key_for(nil)
       assert_equal "growthos", Reporting::OriginLabels.key_for("  ")
     end
@@ -17,7 +17,7 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
       assert_equal "hr_portal", Reporting::OriginLabels.key_for("hr-portal")
     end
 
-    should "count a plain link target as GrowthOS, since the feedback was given here" do
+    should "count a plain link target as Espalia, since the feedback was given here" do
       ExternalReference::LINK_SYSTEMS.each do |system|
         assert_equal "growthos", Reporting::OriginLabels.key_for(system), system
       end
@@ -33,10 +33,10 @@ class Reporting::OriginLabelsTest < ActiveSupport::TestCase
 
   context ".label" do
     should "name the systems it knows" do
-      assert_equal "GrowthOS", Reporting::OriginLabels.label(nil)
+      assert_equal "Espalia", Reporting::OriginLabels.label(nil)
       assert_equal "Chip", Reporting::OriginLabels.label("chip")
-      assert_equal "GrowthOS", Reporting::OriginLabels.label("growthos")
-      assert_equal "GrowthOS", Reporting::OriginLabels.label("github")
+      assert_equal "Espalia", Reporting::OriginLabels.label("growthos")
+      assert_equal "Espalia", Reporting::OriginLabels.label("github")
     end
 
     should "name an imported item's peer by its slug, even one that matches a link target" do

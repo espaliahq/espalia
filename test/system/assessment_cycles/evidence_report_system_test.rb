@@ -146,7 +146,7 @@ class AssessmentCycles::EvidenceReportSystemTest < ApplicationSystemTestCase
       assert_selector "[data-origin-split] dt", text: "Of which via Kudos"
       assert_selector "[data-origin-split] [data-origin='kudos']", text: "1"
       assert_no_selector "[data-origin-split] [data-origin='github']"
-      assert_no_text "Of which via GrowthOS"
+      assert_no_text "Of which via Espalia"
       screenshot("light_#{name}_origin_split")
     end
   end

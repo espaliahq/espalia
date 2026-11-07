@@ -82,7 +82,7 @@ class Users::OmniauthCallbacksControllerTest < ActionDispatch::IntegrationTest
       get user_google_oauth2_omniauth_callback_path
 
       assert_redirected_to new_user_session_path
-      assert_match(/No GrowthOS account/, flash[:alert])
+      assert_match(/No Espalia account/, flash[:alert])
     end
   end
 

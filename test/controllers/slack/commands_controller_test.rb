@@ -46,7 +46,7 @@ class Slack::CommandsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_equal 1, fake.calls.count { |c| c.first == :open_view }
       post_command(text: "feedback", user_id: "U_GHOST")
-      assert_match(/No GrowthOS account/, response.parsed_body["text"])
+      assert_match(/No Espalia account/, response.parsed_body["text"])
       assert_equal 1, fake.calls.count { |c| c.first == :open_view }
     end
   end

@@ -155,7 +155,7 @@ class FeedbackExchange::FeedControllerTest < ActionDispatch::IntegrationTest
       assert_equal kept.map(&:id).sort, feed_ids.sort
     end
 
-    should "send nothing of a type GrowthOS does not know, even when sending all types" do
+    should "send nothing of a type Espalia does not know, even when sending all types" do
       kept = create_item(author: @author, recipient: @recipient, evidence_type: "observation")
       stray = create_item(author: @author, recipient: @recipient, evidence_type: "observation")
       stray.update_column(:evidence_type, "retired_type")

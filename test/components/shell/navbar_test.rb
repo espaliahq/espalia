@@ -5,7 +5,7 @@ require "test_helper"
 class Components::Shell::NavbarTest < ActiveSupport::TestCase
   context "the brand" do
     setup do
-      @html = Components::Shell::Navbar.new(app_name: "GrowthOS").call
+      @html = Components::Shell::Navbar.new(app_name: "Espalia").call
     end
 
     should "be a button wired to the confetti controller" do
@@ -28,7 +28,7 @@ class Components::Shell::NavbarTest < ActiveSupport::TestCase
 
   context "the mobile toggle" do
     setup do
-      @toggle = Nokogiri::HTML.fragment(Components::Shell::Navbar.new(app_name: "GrowthOS").call)
+      @toggle = Nokogiri::HTML.fragment(Components::Shell::Navbar.new(app_name: "Espalia").call)
         .at_css("button[aria-label='Toggle navigation']")
     end
 

@@ -71,7 +71,7 @@ class AppIconsTest < ActionDispatch::IntegrationTest
     should "replace the theme colour with the sign-in page's own" do
       assert_select "meta[name='theme-color']", count: 1
       assert_select "meta[name='theme-color'][content='#{Views::Users::Sessions::NewView::BROWSER_THEME_COLOR}']"
-      assert_select "meta[name='application-name'][content='GrowthOS']"
+      assert_select "meta[name='application-name'][content='Espalia']"
     end
   end
 
@@ -103,7 +103,7 @@ class AppIconsTest < ActionDispatch::IntegrationTest
       assert_response :success
       manifest = JSON.parse(response.body)
 
-      assert_equal "GrowthOS", manifest["name"]
+      assert_equal "Espalia", manifest["name"]
       assert_equal "standalone", manifest["display"]
       assert_equal Tenant::DEFAULT_NAV_BG_COLOR, manifest["theme_color"]
       assert_match Tenant::HEX_COLOR_FORMAT, manifest["background_color"]
@@ -127,7 +127,7 @@ class AppIconsTest < ActionDispatch::IntegrationTest
 
     should "carry an accessible name and description" do
       assert_includes @svg, 'role="img"'
-      assert_match(%r{<title id="[^"]+">GrowthOS</title>}, @svg)
+      assert_match(%r{<title id="[^"]+">Espalia</title>}, @svg)
       assert_match(%r{<desc id="[^"]+">.+</desc>}, @svg)
     end
 

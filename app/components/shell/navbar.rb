@@ -7,7 +7,7 @@
 #
 # @example
 #   render Components::Shell::Navbar.new(
-#     app_name: "GrowthOS",
+#     app_name: "Espalia",
 #     links: [{ label: "Home", href: "/" }],
 #     user: current_user,
 #     current_tenant: ActsAsTenant.current_tenant,

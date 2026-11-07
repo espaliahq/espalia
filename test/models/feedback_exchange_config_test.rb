@@ -140,7 +140,7 @@ class FeedbackExchangeConfigTest < ActiveSupport::TestCase
       assert config.imports_kind?("observation")
     end
 
-    should "import any kind when all, even one GrowthOS does not know" do
+    should "import any kind when all, even one Espalia does not know" do
       config = FeedbackExchangeConfig.new(import_kinds: %w[all])
 
       assert config.imports_kind?("feedback")

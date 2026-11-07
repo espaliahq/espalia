@@ -164,7 +164,7 @@ class Slack::InteractionsControllerTest < ActionDispatch::IntegrationTest
         end
         assert_response :success
         assert_empty fake.calls.select { |c| c.first == :open_view }
-        assert fake.calls.any? { |c| c.first == :post_dm && c[2].include?("No GrowthOS account") }
+        assert fake.calls.any? { |c| c.first == :post_dm && c[2].include?("No Espalia account") }
       end
     end
   end
