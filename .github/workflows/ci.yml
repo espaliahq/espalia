@@ -178,8 +178,10 @@ jobs:
       # token absence: the test step would hand the token to the freshly
       # bumped dependency's own code, a supply-chain exfiltration channel,
       # so no Dependabot secret exists and none should be added — the bump
-      # gets its parity run on main right after the merge (ci.yml runs on
-      # push to main). On any other same-repo run an empty secret is a
+      # gets its parity run on main via the workflow_dispatch that
+      # dependabot-auto-merge fires after merging (its own GITHUB_TOKEN
+      # merge cannot trigger the push run). On any other same-repo run an
+      # empty secret is a
       # configuration loss, not a fork — fail loudly, or parity coverage
       # disappears silently. Job-level `if:` cannot read secrets, hence
       # this step.
@@ -436,6 +438,9 @@ jobs:
             read -r state head <<< "$pr"
             if [ "$state" != "OPEN" ]; then
               echo "::notice::PR #$PR_NUMBER is $state; nothing to merge."
+              # A merge that lands but exits non-zero (say --delete-branch
+              # failed) reaches here as MERGED: still owed its parity run.
+              [ "$state" = "MERGED" ] && echo "merged=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "$head" != "$HEAD_SHA" ]; then

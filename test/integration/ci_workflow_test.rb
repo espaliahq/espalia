@@ -33,7 +33,11 @@ class CiWorkflowTest < ActiveSupport::TestCase
       assert_equal "commits", check["id"]
       assert_includes check["run"], '.author.login != "dependabot[bot]" or .commit.verification.verified != true'
       assert_includes check["run"], '[ "$total" -gt 250 ]', "GitHub lists at most 250 commits; past that, fail closed"
-      actions.each { |step| assert_equal "steps.commits.outputs.trusted == 'true'", step["if"], step["name"] }
+      actions.each do |step|
+        # The dispatch step chains off the merge, whose own guard is the trusted check.
+        guard = step["run"].to_s.include?("gh workflow run ci.yml") ? "steps.merge.outputs.merged" : "steps.commits.outputs.trusted"
+        assert_equal "#{guard} == 'true'", step["if"], step["name"]
+      end
     end
 
     should "approve and merge only the head CI tested" do
@@ -49,10 +53,18 @@ class CiWorkflowTest < ActiveSupport::TestCase
       on = doc.fetch(true) { doc.fetch("on") }
       assert_includes on.keys, "workflow_dispatch",
         "without the trigger the dispatch is refused and no parity run ever meets a Dependabot bump"
+      assert_equal "write", ci_jobs.dig(AUTO_MERGE_JOB, "permissions", "actions"),
+        "gh workflow run needs actions: write, or every post-merge dispatch 403s"
 
       steps = ci_jobs.dig(AUTO_MERGE_JOB, "steps")
       merge = steps.find { |step| step["id"] == "merge" }
-      assert_includes merge["run"], 'echo "merged=true"', "the dispatch must fire only on a real merge"
+      assert merge, "the merge step must carry id: merge for the dispatch guard to read"
+      assert_match(/if gh pr merge .*; then\n\s*echo "merged=true"/, merge["run"],
+        "merged=true must be written on the success branch, not unconditionally")
+      assert_includes merge["run"], '[ "$state" = "MERGED" ] && echo "merged=true"',
+        "a merge that landed but exited non-zero is still owed its parity run"
+      assert_equal 2, merge["run"].scan("merged=true").length,
+        "merged=true written anywhere else would dispatch without a merge"
       dispatch = steps.find { |step| step["run"].to_s.include?("gh workflow run ci.yml") }
       assert_equal "steps.merge.outputs.merged == 'true'", dispatch&.dig("if"),
         "the detection run on main must follow every auto-merge"
