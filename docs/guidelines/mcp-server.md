@@ -460,8 +460,10 @@ dispatch) works against a real client. Constraints worth knowing:
   `test` job doesn't pay for Node + the CLI install or the LLM
   round-trip. The main job sets `SKIP_MCP_CLI_TEST=1`. The dedicated
   job gates itself on the `CLAUDE_CODE_OAUTH_TOKEN` secret: a fork PR
-  (no secrets) skips it green, while a same-repo run with the secret
-  missing fails — see [.github/AGENTS.md](../../.github/AGENTS.md).
+  (no secrets) and a Dependabot PR (the token must never reach a run of
+  just-bumped dependency code) skip it green, while any other same-repo
+  run with the secret missing fails — see
+  [.github/AGENTS.md](../../.github/AGENTS.md).
 
 ## Hard-Won Lessons
 
