@@ -68,7 +68,7 @@ class Tenant::FeedbackExportsControllerTest < ActionDispatch::IntegrationTest
 
         assert_response :success
         assert_equal "text/csv; charset=utf-8", response.media_type + "; charset=" + response.charset
-        assert_match(/\Aattachment; filename="growthos-feedback-export-q3-2026-all-\d{8}T\d{6}Z\.csv"/,
+        assert_match(/\Aattachment; filename="espalia-feedback-export-q3-2026-all-\d{8}T\d{6}Z\.csv"/,
           response.headers["Content-Disposition"])
 
         assert_equal "no-store", response.headers["Cache-Control"]

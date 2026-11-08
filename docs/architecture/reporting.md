@@ -306,7 +306,7 @@ piece of feedback a cycle holds, one row each, with names and content. Where
 
 - **The file**: `text/csv`, UTF-8 with a byte-order mark (so Excel reads "→"
   and accented names correctly), named
-  `growthos-feedback-export-<cycle-slug>-<YYYY-MM|all>-<UTC timestamp>.csv`. A
+  `espalia-feedback-export-<cycle-slug>-<YYYY-MM|all>-<UTC timestamp>.csv`. A
   cell that starts like a formula (`=`, `+`, `-`, `@`, tab, CR) is prefixed with
   an apostrophe — the cells hold text people typed, and a spreadsheet would
   otherwise run it (`Reporting::FeedbackExportCsv`).
