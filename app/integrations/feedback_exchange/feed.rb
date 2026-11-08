@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# One page of GrowthOS feedback for a peer system to pull (protocol §5.1).
+# One page of Espalia feedback for a peer system to pull (protocol §5.1).
 #
 # Reads {EvidenceItem} rows keyset-paged on `(updated_at, id)`, so an edit or a
 # withdrawal comes back with a newer position and a row inserted mid-walk is

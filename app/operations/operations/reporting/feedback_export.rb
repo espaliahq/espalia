@@ -13,7 +13,7 @@
 class Operations::Reporting::FeedbackExport < Operations::Base
   description "Export every piece of feedback / evidence in an assessment cycle, one row each, " \
               "for monthly reporting (tenant admins only): recipient and provider with their roles, " \
-              "direction, requested or proactive (a #{Rails.application.config.x.product_name} request), where it was given (origin) and the request " \
+              "direction, requested or proactive (a request made in #{Rails.application.config.x.product_name}), where it was given (origin) and the request " \
               "it answered there, type, title, the feedback text, the behaviours it applies to, and status. " \
               "The rows match the feedback the cycle's coverage report counts as provided; include_withdrawn " \
               "adds the withdrawn items it reports separately. Pass month (YYYY-MM) to narrow to feedback " \

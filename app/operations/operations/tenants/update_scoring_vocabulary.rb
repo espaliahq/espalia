@@ -8,7 +8,7 @@
 # framework. This changes only the WORD a person reads, which is culture:
 # "Mastering" reads oddly in plenty of teams beside "62% of the way to E4".
 #
-# Blank clears an override and the state falls back to the word GrowthOS
+# Blank clears an override and the state falls back to the word Espalia
 # ships, so a tenant stores only what it chose and a later change to the
 # default still reaches them.
 #

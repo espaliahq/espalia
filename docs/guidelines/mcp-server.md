@@ -1,7 +1,7 @@
 # MCP Server — Design & Architecture
 
 This document captures the design decisions, conventions, and hard-won
-lessons from building GrowthOS's MCP (Model Context Protocol) server.
+lessons from building Espalia's MCP (Model Context Protocol) server.
 Consult this before adding new MCP tools, changing tool shapes, or
 touching anything under `app/operations/`, `app/services/mcp/`,
 `app/controllers/mcp/`, `app/models/mcp/`, `app/jobs/mcp/`, or
@@ -21,7 +21,7 @@ touching anything under `app/operations/`, `app/services/mcp/`,
 
 ## Overview
 
-GrowthOS exposes a single MCP endpoint at `POST /mcp` that speaks
+Espalia exposes a single MCP endpoint at `POST /mcp` that speaks
 JSON-RPC 2.0 over the Streamable HTTP transport. An MCP client
 (Claude Code, Claude Desktop, etc.) connects with `{ "type":
 "streamable-http", "url": "https://app/mcp" }` and is expected to do
@@ -761,7 +761,7 @@ haven't noticed?
 
 The serializer sorted each category's capabilities by name, a choice made
 before capabilities could be reordered. Once a category was reordered the web
-and the MCP disagreed, and an agent asked to "follow GrowthOS's order" had no
+and the MCP disagreed, and an agent asked to "follow Espalia's order" had no
 way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
 is part of the content: a reader compares the two side by side. Keep the read
 model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,

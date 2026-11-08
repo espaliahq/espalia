@@ -15,7 +15,7 @@
 # answered later still reads as fulfilled.
 #
 # Each item is also counted once under the system it was given in
-# (`external_reference.system`, nil meaning GrowthOS), so a figure combined
+# (`external_reference.system`, nil meaning Espalia), so a figure combined
 # with another system's counts every item where it was given. Imported items
 # stay in `feedback_provided`; `by_origin` shows them apart.
 #
@@ -219,7 +219,7 @@ class Reporting::EvidenceCoverage
     )
   end
 
-  # GrowthOS first (always present, so a client can rely on the key), then
+  # Espalia first (always present, so a client can rely on the key), then
   # every other origin by count. The values sum to `feedback_provided`.
   def origin_counts(origins)
     native = Reporting::OriginLabels::NATIVE

@@ -99,7 +99,7 @@ class FeedbackExchange::Record
     cycle && { id: cycle.cycle_id, name: cycle.name }
   end
 
-  # Where the item can be read in GrowthOS: its cell in the assessment, or the
+  # Where the item can be read in Espalia: its cell in the assessment, or the
   # feedback hub while it is still unplaced. The recipient and their managers
   # can open the first; the second is the viewer's own list.
   def source_url(item)

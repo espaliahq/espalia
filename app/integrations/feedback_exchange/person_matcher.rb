@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Finds the GrowthOS Person a protocol person (§3) names: by the id the
+# Finds the Espalia Person a protocol person (§3) names: by the id the
 # tenant's HRIS holds when the peer sent one under that system's key, else by
 # lower-cased email. A consumer never creates a person from a record; no match
 # is nil, and the importer skips the record with a reason.

@@ -43,7 +43,7 @@
 | `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |
 | `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard); `weight_chip` / `required_chip` — the ONE drawing of the binding chips the card, the hero gap list and the explainer share |
 | `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count |
-| `app/views/assessments/state_labels.rb` | The ONE reader of a state's word — the tenant's own if it set one, else the word GrowthOS ships (#415) |
+| `app/views/assessments/state_labels.rb` | The ONE reader of a state's word — the tenant's own if it set one, else the word Espalia ships (#415) |
 | `app/operations/operations/tenants/update_scoring_vocabulary.rb` | Shared web + MCP operation — rename the performance states for a tenant (labels only; the states and thresholds are untouched) |
 | `app/views/assessments/concerns/score_scale.rb` | The ONE score vocabulary every altitude reads — tone by state, state words, level codes relative to the assessed level, the band count the bar draws |
 | `app/views/assessments/score_bar.rb` | The scale made visible at three sizes (`:lg` hero / `:md` category / `:sm` card) — one segment per band, tick-labelled with level codes at hero size only |

@@ -18,13 +18,13 @@ The short version: **colour with a role, never a palette step.** Write `text-mut
 | **Elevation** | A shadow per job, lowest first: raised, lifted, overlay, drawer, modal. | The `--gos-shadow-*` block at the foot of `roles.css` |
 | **Scheme rule** | When dark applies. | `@custom-variant dark` in `application.css` |
 
-Role names follow Bento's vocabulary: content, surface, border, neutral, brand, accent, danger, success, warning, info, each with subtle, muted and strong steps and a `content-inverse` for text on the strong fill. GrowthOS adds a few roles Bento lacks: `surface-page`, `surface-overlay`, the two hover surfaces, `surface-field`, `scrim`, `content-link` and the nav pair.
+Role names follow Bento's vocabulary: content, surface, border, neutral, brand, accent, danger, success, warning, info, each with subtle, muted and strong steps and a `content-inverse` for text on the strong fill. Espalia adds a few roles Bento lacks: `surface-page`, `surface-overlay`, the two hover surfaces, `surface-field`, `scrim`, `content-link` and the nav pair.
 
 Default's values point at the palette steps the app used before roles existed, so moving a class onto a role renders the same.
 
 ### Three themes
 
-- **Default** looks the way GrowthOS always has.
+- **Default** looks the way Espalia always has.
 - **Bento** sets every role, in both schemes, from the Bento design system, and its font, Plus Jakarta Sans.
 - **Custom** starts from Default and takes a tenant's own values for the roles that have a `--tenant-*` hook (see [What Custom can set](#what-custom-can-set)).
 

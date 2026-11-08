@@ -5,7 +5,7 @@
 
 ## The mark
 
-GrowthOS's mark is three ascending steps with a leaf sprouting from the top
+Espalia's mark is three ascending steps with a leaf sprouting from the top
 step — a career path, and the growth it produces. It is a **vector**: the two
 paths in [`bin/build-icons`](../../bin/build-icons) are the source of truth,
 and [`public/icon.svg`](../../public/icon.svg) is written from them (with a
@@ -38,7 +38,7 @@ does, with Bento's sloe (`#6b58da`) in both schemes, since it has no navbar.
 The manifest is a static [`public/manifest.json`](../../public/manifest.json)
 (nothing in it is per-request, so it costs no Rails request); its `theme_color`
 is the app default — an installed app's splash and title bar are therefore
-GrowthOS teal even for a themed tenant, a known trade-off of keeping it static.
+Espalia teal even for a themed tenant, a known trade-off of keeping it static.
 It lists only PNGs: Chromium's manifest icon fetcher has no SVG decoder, so an
 SVG entry it selects yields a blank tile. The service worker is deliberately not enabled (nothing
 needs offline or push yet).

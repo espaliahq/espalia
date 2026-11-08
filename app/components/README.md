@@ -168,7 +168,7 @@ Three rules:
 
 A tenant admin picks one under **Tenant admin → Theme**:
 
-- **Default**, the standard GrowthOS look.
+- **Default**, the standard Espalia look.
 - **Bento**, a preset that sets every role, in both schemes, and its own font.
 - **Custom**, Default with the tenant's brand colour, navbar colour and font, each in light and dark.
 

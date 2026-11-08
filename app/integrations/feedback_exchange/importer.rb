@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Turns one protocol record (§4) from a peer into GrowthOS feedback, or says
+# Turns one protocol record (§4) from a peer into Espalia feedback, or says
 # why not, and writes the outcome to the ledger ({FeedbackExchangeImport}).
 #
 # A new record becomes UNPLACED evidence on the recipient's assessment, written
@@ -24,7 +24,7 @@ class FeedbackExchange::Importer
   # Frozen forever: every imported item's id is derived from it.
   NAMESPACE = "27186816-29e3-43ba-b58b-35dd84bf53ed"
 
-  # Who can read feedback in GrowthOS, in protocol roles (§4.1). A record is
+  # Who can read feedback in Espalia, in protocol roles (§4.1). A record is
   # imported only when its author agreed to every one of them (§2.1).
   VISIBILITY = %w[recipient management_line hr].freeze
 
@@ -276,7 +276,7 @@ class FeedbackExchange::Importer
     EvidenceItem.find(evidence_id)
   end
 
-  # A kind GrowthOS knows keeps its type; anything else is feedback from a
+  # A kind Espalia knows keeps its type; anything else is feedback from a
   # manager or a peer, whichever the author is.
   def evidence_type_for(kind, source)
     return kind if EvidenceItem::EVIDENCE_TYPES.include?(kind) && kind != "other"

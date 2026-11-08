@@ -84,7 +84,7 @@ class Reporting::FeedbackExport
   end
 
   # What the item's source system said it answered there. "Requested or
-  # proactive" is only ever about a GrowthOS request, so this is how a reader
+  # proactive" is only ever about an Espalia request, so this is how a reader
   # sees that a peer's item was asked for.
   def origin_request(item)
     metadata = item.external_reference&.metadata

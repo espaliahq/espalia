@@ -1,12 +1,12 @@
 # Feedback Exchange
 
-> Read this when: touching anything under `app/integrations/feedback_exchange/`, `app/controllers/feedback_exchange/`, the signed-request concern, the exchange settings page, or a feature that sends feedback to, or takes it from, another feedback system. The contract is [the protocol](../notes/feedback-exchange-protocol.md); what GrowthOS builds on it is [the plan](../notes/feedback-integration-plan.md).
+> Read this when: touching anything under `app/integrations/feedback_exchange/`, `app/controllers/feedback_exchange/`, the signed-request concern, the exchange settings page, or a feature that sends feedback to, or takes it from, another feedback system. The contract is [the protocol](../notes/feedback-exchange-protocol.md); what Espalia builds on it is [the plan](../notes/feedback-integration-plan.md).
 
 ## What it is
 
-Two feedback systems each serve the feedback given in them and pull the other's. GrowthOS plays both roles under one namespace, `FeedbackExchange`. The first peer is Chip. Nothing is pushed: a consumer pulls on its own schedule, so a missed run costs nothing.
+Two feedback systems each serve the feedback given in them and pull the other's. Espalia plays both roles under one namespace, `FeedbackExchange`. The first peer is Chip. Nothing is pushed: a consumer pulls on its own schedule, so a missed run costs nothing.
 
-Phase 0 is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Two roles are built on it: the consumer, which pulls the peer's feed and turns each record into unplaced feedback ([The consumer](#the-consumer)), and the producer, which serves GrowthOS's own feedback (see *Serving the feed*). Placement suggestions help place what the consumer imports.
+Phase 0 is the foundation: config, secrets, signing, the client, the verifier, the health endpoint and the admin card. Two roles are built on it: the consumer, which pulls the peer's feed and turns each record into unplaced feedback ([The consumer](#the-consumer)), and the producer, which serves Espalia's own feedback (see *Serving the feed*). Placement suggestions help place what the consumer imports.
 
 ## Configuration
 
@@ -88,12 +88,12 @@ Cursors and `last_synced_at` are written through `Tenant#update_feedback_exchang
 ### One record (`FeedbackExchange::Importer`)
 
 - **People** match through `FeedbackExchange::PersonMatcher`: the id under the tenant's HRIS provider key in `external_ids`, else the lower-cased email (`Person.identified_by`). No match is a skip; a person is never created.
-- **New record → unplaced evidence**, dispatched straight to `PersonDevelopment::CommandHandler#record_evidence` (the author may have no account) inside `AuditMetadata.with(acting_via: :feedback_exchange, actor_id: <author>, correlation_id: "<origin>:<id>")` and the tenant metadata. The evidence id is `UUIDv5(Importer::NAMESPACE, "<tenant_id>:<origin>:<id>")`, so a lost ledger row or a replay finds the same item. `source` comes from `EvidenceItem.source_for`; `evidence_type` is the record's `kind` when GrowthOS has that type, else `manager_feedback` or `peer_feedback`; the text goes through `FeedbackExchange::TextFormat` (below) with a request's question quoted above the answer; `external_reference` is `{ system: origin, external_id: id, url: source_url, metadata: { kind, request_context, requested_by_email, period_name, given_at, notified } }`.
+- **New record → unplaced evidence**, dispatched straight to `PersonDevelopment::CommandHandler#record_evidence` (the author may have no account) inside `AuditMetadata.with(acting_via: :feedback_exchange, actor_id: <author>, correlation_id: "<origin>:<id>")` and the tenant metadata. The evidence id is `UUIDv5(Importer::NAMESPACE, "<tenant_id>:<origin>:<id>")`, so a lost ledger row or a replay finds the same item. `source` comes from `EvidenceItem.source_for`; `evidence_type` is the record's `kind` when Espalia has that type, else `manager_feedback` or `peer_feedback`; the text goes through `FeedbackExchange::TextFormat` (below) with a request's question quoted above the answer; `external_reference` is `{ system: origin, external_id: id, url: source_url, metadata: { kind, request_context, requested_by_email, period_name, given_at, notified } }`.
 - **Dated when given.** `recorded_at` on the event is the record's `given_at`, so reports count a backfill in the month it was given.
 - **Counted in a cycle only when given in it.** `cycle_id` is the open cycle only when `given_at` falls inside the recipient's enrollment window there; otherwise nil, and reporting infers it as it does for history. A backfill of last year's feedback never counts as this cycle's.
-- **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"), and so does a newer version whose `audience` no longer covers everyone who can read it here (consent is data); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op, and so is a blank edit. An item withdrawn in GrowthOS stays withdrawn and is not acknowledged.
+- **Seen again**: a newer `updated_at` updates the content as the author; `status: withdrawn` withdraws it as the author ("Withdrawn in Chip"), and so does a newer version whose `audience` no longer covers everyone who can read it here (consent is data); a deletions-feed id withdraws it as the system ("Deleted in Chip"). An older or equal version is a no-op, and so is a blank edit. An item withdrawn in Espalia stays withdrawn and is not acknowledged.
 - **A refused write never stops the page.** The domain can refuse an update or a withdrawal (the recipient was unassigned since, say); the importer logs it, leaves the ledger as it was and moves on, so one record cannot fail every run.
-- **Silently.** The system the feedback was given in owns its notifications, so GrowthOS sends nothing on import: no arrival notice and no request to place it (`FeedbackNotifier` returns early for every `acting_via: feedback_exchange` event; `notified` is kept in the metadata only as part of the record). Imported feedback surfaces on the hub under "Feedback to place", and through placement suggestions ([#558](https://github.com/mr-yum/growth-os/pull/558)) once they are enabled. See [evidence.md](assessments/evidence.md).
+- **Silently.** The system the feedback was given in owns its notifications, so Espalia sends nothing on import: no arrival notice and no request to place it (`FeedbackNotifier` returns early for every `acting_via: feedback_exchange` event; `notified` is kept in the metadata only as part of the record). Imported feedback surfaces on the hub under "Feedback to place", and through placement suggestions ([#558](https://github.com/mr-yum/growth-os/pull/558)) once they are enabled. See [evidence.md](assessments/evidence.md).
 
 ### Skip reasons
 
@@ -110,11 +110,11 @@ Every outcome lands in `feedback_exchange_imports` (`FeedbackExchangeImport`), u
 | `no_assignment` | the recipient has no framework assignment | yes, and at once on `PersonAssignedToFramework` |
 | `invalid_record` | no `id`, no usable `given_at`, an `origin` that is not the configured peer, a malformed nested part, or the domain refused it | no |
 
-The import list decides what is taken in, not what is kept. A copy GrowthOS already holds keeps following its source after the list narrows: an edit updates it and a withdrawal withdraws it, so narrowing never leaves a stale copy behind. Only consent is re-checked on every version, because an audience that no longer covers our readers takes the copy back (protocol rule 1).
+The import list decides what is taken in, not what is kept. A copy Espalia already holds keeps following its source after the list narrows: an edit updates it and a withdrawal withdraws it, so narrowing never leaves a stale copy behind. Only consent is re-checked on every version, because an audience that no longer covers our readers takes the copy back (protocol rule 1).
 
 A retriable skip keeps the record in the ledger's `record` column so a retry needs no pull; nothing else does. `FeedbackExchange::AssignmentRetry` (a sync handler subscribed in the RES initializer, never a projection) enqueues a sync when a newly assigned person has a `no_assignment` record waiting. A record skipped for a reason that is not retried is evaluated again if the peer sends a newer version.
 
-The Integrations card and page show the counts, the skip reasons and the people the peer named that GrowthOS could not find; `integrations_feedback_exchange_status` returns the same under `imports` and `unmatched_people`.
+The Integrations card and page show the counts, the skip reasons and the people the peer named that Espalia could not find; `integrations_feedback_exchange_status` returns the same under `imports` and `unmatched_people`.
 
 ### Text (`FeedbackExchange::TextFormat`)
 
@@ -122,7 +122,7 @@ The Integrations card and page show the counts, the skip reasons and the people 
 
 ### Replaying
 
-To pull everything again, for instance after fixing people the peer named that GrowthOS did not know, clear the cursors and run a sync:
+To pull everything again, for instance after fixing people the peer named that Espalia did not know, clear the cursors and run a sync:
 
 ```ruby
 tenant.update_feedback_exchange!(settings: { cursor: nil, deletions_cursor: nil })
@@ -154,14 +154,14 @@ Routes sit under `/api/feedback_exchange/` in `config/routes.rb`. Note the under
 
 `GET /api/feedback_exchange/feedback/contract` is the one exchange route outside the signed-request concern (protocol §5.5). It is unsigned, has no tenant, answers whatever any tenant's exchange is set to, and may be cached for five minutes: `{ "protocol": "v1", "build": <release id>, "consumer_pact": <contract/pacts/growthos-chip.json> }`. The peer's provider verification fetches our pact from it (see [Contract tests](#contract-tests-pact)). It is not an MCP tool: it is a static artefact for the peer, not a user surface.
 
-## Serving the feed (GrowthOS as producer)
+## Serving the feed (Espalia as producer)
 
 Three more signed endpoints, all `ActionController::Base` controllers that include `FeedbackExchangeProducer` (the signed-request concern plus the consumer name and a 400 for a bad cursor, limit or body). Nothing here is an MCP tool: the peer is the only caller and the credential is a shared secret, not a user.
 
 | Endpoint | Controller | Answers |
 |---|---|---|
 | `GET /api/feedback_exchange/feedback?since=&limit=` | `FeedbackExchange::FeedController` | `{ items, next_cursor, has_more }` |
-| `GET /api/feedback_exchange/feedback/deletions` | `DeletionsController` | always `{ items: [], next_cursor: <since>, has_more: false }`; GrowthOS withdraws, never deletes |
+| `GET /api/feedback_exchange/feedback/deletions` | `DeletionsController` | always `{ items: [], next_cursor: <since>, has_more: false }`; Espalia withdraws, never deletes |
 | `POST /api/feedback_exchange/feedback/ack` | `AcksController` | 204; `400` for a malformed body |
 
 **The feed** (`FeedbackExchange::Feed`) reads `EvidenceItem` rows keyset-paged on `(updated_at, id)`. The cursor (`FeedCursor`) is URL-safe base64 of `[updated_at at microsecond precision, id]`; an edit or withdrawal moves a row to a newer position, so it comes back, and a row inserted mid-walk sorts after the cursor and is never skipped. `limit` defaults to 100 and is capped at 200; zero, negative or non-integer is a 400, as is a cursor we did not issue. An empty page hands the caller's own cursor back. A cursor must end in `Z`. Keyset paging on a timestamp has the usual limit: a row that commits late with an `updated_at` behind the cursor (a long transaction that began before a faster one) is missed until the peer resets its cursor. Projection writes are short, so the window is small; a peer that needs certainty can overlap its `since` slightly, as records are idempotent. The cursor advances over every row read, including rows the serializer then skips, so an unnameable person cannot stall it.
@@ -172,7 +172,7 @@ What is left out (protocol §2.5, §2.3):
 - Items nobody wrote: `recorded_via` of `feedback_exchange`, `hris` or `system`. A nil `recorded_via` is history and counts as human.
 - What the asking consumer itself sent us: `external_reference.system` equal to its name. Matching is case-insensitive.
 - Another system's import that the consumer has since acknowledged (an ack row from this consumer for an item whose `external_reference.system` is not a plain link target such as `github`). An ack on an ordinary item does not hide it. Imports through the exchange itself never get this far: `recorded_via: feedback_exchange` is already left out.
-- Kinds outside `export_kinds`. With `all`, that is every type in `EvidenceItem::EVIDENCE_TYPES` at the time of the request, so a type added later is sent and a row holding a type GrowthOS no longer knows is not.
+- Kinds outside `export_kinds`. With `all`, that is every type in `EvidenceItem::EVIDENCE_TYPES` at the time of the request, so a type added later is sent and a row holding a type Espalia no longer knows is not.
 
 **Widening `export_kinds` does not backfill.** The peer's cursor has already passed the older items of a newly sent kind, so only new and edited ones reach it. For the history, the peer resets its cursor; records are idempotent, so the rest come back as no-ops.
 

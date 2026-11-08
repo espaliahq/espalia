@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The one place GrowthOS asks a model where feedback belongs: given a placement
+# The one place Espalia asks a model where feedback belongs: given a placement
 # prompt, return the placements the model proposes. Which model answers is the
 # tenant's choice ({AiModelConfig}); {Ai::ModelClient} picks the adapter, and
 # all this class knows of it is whether it is a chat model (`#suggest`) or a

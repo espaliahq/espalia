@@ -264,7 +264,7 @@ as its real author, dated by when it was given.
   neutral grey on purpose: colour beside feedback already means a rating or a
   valence.
 - **An import is silent.** The system the feedback was given in owns its
-  notifications, so GrowthOS sends nothing for an imported item: not the
+  notifications, so Espalia sends nothing for an imported item: not the
   arrival, not a request to place it. `FeedbackNotifier` returns early for
   every `acting_via: feedback_exchange` event, whatever the record's
   `notified` says (that list stays in `external_reference.metadata` as part
@@ -536,7 +536,7 @@ Rules, all deliberate:
   ([#620](https://github.com/mr-yum/growth-os/issues/620)). A config stored
   with it still loads and the key is ignored; the next save of the AI model
   card drops it. It
-  covers the names of people GrowthOS knows, nothing more: a nickname, someone
+  covers the names of people Espalia knows, nothing more: a nickname, someone
   outside the directory, a role, a project or the story itself goes as
   written.
   Test connection sends no names; the eval runs the same path as production.
@@ -721,10 +721,10 @@ from request workflow:
   manager → report, peer → peer, or report → manager. Self feedback is separate
   and requested versus proactive remains an orthogonal split.
 - Active feedback is also split by origin: `external_reference.system`, with
-  none meaning GrowthOS. The report shows "Of which via Chip: N" under the
+  none meaning Espalia. The report shows "Of which via Chip: N" under the
   provided tile when any item came from another system, and the MCP payload
   carries `by_origin`. Origin does not change what "requested" means: that is
-  still a GrowthOS evidence request.
+  still an Espalia evidence request.
 
 `EvidenceRequested` and `EvidenceRecorded` carry nullable `cycle_id`. Direct
 feedback and requests use the PersonDevelopment aggregate's current cycle; a
