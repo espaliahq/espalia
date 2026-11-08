@@ -63,7 +63,9 @@ class CiWorkflowTest < ActiveSupport::TestCase
         "merged=true must be written on the success branch, not unconditionally")
       assert_includes merge["run"], '[ "$state" = "MERGED" ] && echo "merged=true"',
         "a merge that landed but exited non-zero is still owed its parity run"
-      assert_equal 2, merge["run"].scan("merged=true").length,
+      assert_match(/if \[ "\$state" = "MERGED" \]; then\n(.*\n)*?\s*echo "merged=true"/, merge["run"],
+        "the final attempt can land while exiting non-zero too; re-check after the loop")
+      assert_equal 3, merge["run"].scan("merged=true").length,
         "merged=true written anywhere else would dispatch without a merge"
       dispatch = steps.find { |step| step["run"].to_s.include?("gh workflow run ci.yml") }
       assert_equal "steps.merge.outputs.merged == 'true'", dispatch&.dig("if"),

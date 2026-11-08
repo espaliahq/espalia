@@ -455,6 +455,14 @@ jobs:
             echo "Merge not ready (attempt $attempt); sleeping 10s…"
             sleep 10
           done
+          # The loop re-reads state only at its top: a fifth attempt that lands
+          # while exiting non-zero would otherwise lose its parity run.
+          state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state --jq .state || echo UNKNOWN)
+          if [ "$state" = "MERGED" ]; then
+            echo "::notice::PR #$PR_NUMBER merged on the final attempt despite a non-zero exit."
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "::error::PR #$PR_NUMBER still not mergeable after retries (unresolved conversations, or a policy not yet met)."
           exit 1
 
