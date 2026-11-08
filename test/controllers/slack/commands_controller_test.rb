@@ -9,7 +9,7 @@ class Slack::CommandsControllerTest < ActionDispatch::IntegrationTest
   setup { build_slack_fixture }
 
   def post_command(text:, user_id: "U_JORDAN", team_id: TEAM_ID, signed: true)
-    body = { command: "/growthos", text: text, user_id: user_id, team_id: team_id, trigger_id: "trig.1" }.to_query
+    body = { command: "/espalia", text: text, user_id: user_id, team_id: team_id, trigger_id: "trig.1" }.to_query
     headers = signed ? signed_slack_headers(body) : {}
     Slack.stub(:oauth_config, { signing_secret: SECRET }) do
       post slack_commands_path, params: body, headers: headers.merge("CONTENT_TYPE" => "application/x-www-form-urlencoded")
@@ -35,7 +35,7 @@ class Slack::CommandsControllerTest < ActionDispatch::IntegrationTest
     with_fake_slack do
       post_command(text: "help")
       assert_response :success
-      assert_match(/\/growthos feedback/, response.parsed_body["text"])
+      assert_match(/\/espalia feedback/, response.parsed_body["text"])
       assert_equal "ephemeral", response.parsed_body["response_type"]
     end
   end
@@ -53,7 +53,7 @@ class Slack::CommandsControllerTest < ActionDispatch::IntegrationTest
 
   should "answer a replayed request with nothing, and record nothing twice" do
     with_fake_slack do |fake|
-      body = { command: "/growthos", text: "feedback", user_id: "U_JORDAN", team_id: TEAM_ID, trigger_id: "trig.1" }.to_query
+      body = { command: "/espalia", text: "feedback", user_id: "U_JORDAN", team_id: TEAM_ID, trigger_id: "trig.1" }.to_query
       headers = signed_slack_headers(body).merge("CONTENT_TYPE" => "application/x-www-form-urlencoded")
       Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
         Slack.stub(:oauth_config, { signing_secret: SECRET }) do

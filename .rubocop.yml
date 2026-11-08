@@ -5,15 +5,15 @@ inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 # SystemTests/FlakeProneClick — guards against the recurring CI flake class
 # where Selenium's synthetic pointer click / modal-handler registration is
 # dropped on starved runners (see docs/guidelines/testing.md).
-# GrowthOs/ControllersMustUseOperations — enforces the Operations::* layer
+# Espalia/ControllersMustUseOperations — enforces the Operations::* layer
 # as the single write surface shared by controllers and the MCP server
 # (see app/operations/base.rb).
-# GrowthOs/RatingsMustBeRoleScoped — every rating read says which role it
+# Espalia/RatingsMustBeRoleScoped — every rating read says which role it
 # reads for (ADR-22, Assessments::RoleScope).
 require:
   - ./lib/rubocop/cop/system_tests/flake_prone_click.rb
-  - ./lib/rubocop/cop/growth_os/controllers_must_use_operations.rb
-  - ./lib/rubocop/cop/growth_os/ratings_must_be_role_scoped.rb
+  - ./lib/rubocop/cop/espalia/controllers_must_use_operations.rb
+  - ./lib/rubocop/cop/espalia/ratings_must_be_role_scoped.rb
 
 SystemTests/FlakeProneClick:
   Enabled: true
@@ -25,7 +25,7 @@ SystemTests/FlakeProneClick:
     - "test/*.rb"
     - "test/support/**/*.rb"
 
-GrowthOs/ControllersMustUseOperations:
+Espalia/ControllersMustUseOperations:
   Enabled: true
   Include:
     - "app/controllers/**/*.rb"
@@ -39,7 +39,7 @@ GrowthOs/ControllersMustUseOperations:
     - "app/controllers/assessments/comments_controller.rb"
     - "app/controllers/assessments/evidence_controller.rb"
 
-GrowthOs/RatingsMustBeRoleScoped:
+Espalia/RatingsMustBeRoleScoped:
   Enabled: true
   Include:
     - "app/**/*.rb"

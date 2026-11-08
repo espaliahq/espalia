@@ -8,7 +8,7 @@ require "rails/all"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-module GrowthOs
+module Espalia
   class Application < Rails::Application
     # Below this a gzip frame costs about as much as it saves. Only consulted
     # when the response DECLARES its length: Rails leaves Content-Length to the
@@ -76,7 +76,7 @@ module GrowthOs
 
     # Compress our own HTML/JSON/JS responses.
     #
-    # growthos.work sits behind Cloudflare, which already compresses at the
+    # The reference deployment sits behind Cloudflare, which already compresses at the
     # edge (measured 2026-09-09: the sign-in page, 16,914 B identity vs 3,496 B
     # gzip). This covers the two paths that edge does not: a self-hosted
     # deployment with no proxy in front of it — an explicitly supported

@@ -723,7 +723,7 @@ Things that bite when changing this surface:
 
 Calibration converges when the room stops trading adjectives and starts
 comparing observed behaviour. "What did you actually see?" is the method —
-and GrowthOS already stores exactly that artifact: evidence items linked
+and Espalia already stores exactly that artifact: evidence items linked
 per (capability × level) cell, each link carrying a **valence**. The session
 surfaces evidence at four altitudes:
 

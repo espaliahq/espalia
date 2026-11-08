@@ -4,7 +4,7 @@ require "test_helper"
 
 # The app compresses its own HTML/JSON responses (#383).
 #
-# growthos.work is behind Cloudflare, which already compresses at the edge; this
+# The reference deployment is behind Cloudflare, which already compresses at the edge; this
 # covers the deployments that have no such edge (self-hosting is a supported
 # model) and the origin-to-edge hop, which carries the explorer's ~1 MB matrix
 # frame. See the Rack::Deflater comment in config/application.rb.
@@ -63,7 +63,7 @@ class ResponseCompressionTest < ActionDispatch::IntegrationTest
 
     should "skip a response that already declares a small length" do
       assert_not compressible?("text/html", length: 200)
-      assert compressible?("text/html", length: GrowthOs::Application::COMPRESSION_MIN_BYTES)
+      assert compressible?("text/html", length: Espalia::Application::COMPRESSION_MIN_BYTES)
     end
 
     should "compress a body whose length is unknown" do
@@ -73,7 +73,7 @@ class ResponseCompressionTest < ActionDispatch::IntegrationTest
     end
 
     should "never re-frame a response the app already encoded" do
-      assert_not GrowthOs::Application::COMPRESSIBLE.call(
+      assert_not Espalia::Application::COMPRESSIBLE.call(
         {}, 200, { "content-type" => "text/html", "content-encoding" => "gzip" }, [ "<html>" ]
       )
     end
@@ -86,7 +86,7 @@ class ResponseCompressionTest < ActionDispatch::IntegrationTest
       streamed = Class.new { def call(stream) = stream.close }.new
 
       assert_not streamed.respond_to?(:each), "the fixture must be callable-only"
-      assert_not GrowthOs::Application::COMPRESSIBLE.call(
+      assert_not Espalia::Application::COMPRESSIBLE.call(
         {}, 200, { "content-type" => "text/event-stream" }, streamed
       )
     end
@@ -99,6 +99,6 @@ class ResponseCompressionTest < ActionDispatch::IntegrationTest
   def compressible?(content_type, length: 100_000)
     headers = { "content-type" => content_type }
     headers["content-length"] = length.to_s if length
-    GrowthOs::Application::COMPRESSIBLE.call({}, 200, headers, [ "body" ])
+    Espalia::Application::COMPRESSIBLE.call({}, 200, headers, [ "body" ])
   end
 end

@@ -32,7 +32,7 @@ the chromedriver there.
 **The environment provides three things.** Network access to the hosts the script downloads
 from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
 (gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
-Ruby reads files as US-ASCII. `GROWTHOS_MASTER_KEY` is optional: `db:prepare` seeds the Null Island demo tenant with no
+Ruby reads files as US-ASCII. `ESPALIA_MASTER_KEY` (or the older `GROWTHOS_MASTER_KEY`) is optional: `db:prepare` seeds the Null Island demo tenant with no
 secrets at all (synthetic people on @nullisland.example). With the key set, the credentials
 file's other entries decrypt as usual; the seed itself no longer reads it.
 

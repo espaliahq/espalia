@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Converts a peer's feedback text to the Markdown GrowthOS stores (protocol
+# Converts a peer's feedback text to the Markdown Espalia stores (protocol
 # §4.1: `markdown` is canonical, a producer that stores anything else says so
 # and the consumer converts).
 #

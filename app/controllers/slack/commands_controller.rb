@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# The `/growthos` slash command (POST /slack/commands). Slack sends a
+# The product slash command (`/espalia`; a deployment's manifest names it
+# after its own product). Slack sends a
 # form-encoded payload and wants an answer within three seconds, so the only
 # work here is to resolve who is asking and open the modal; the submission
 # comes back through Slack::InteractionsController.
@@ -13,12 +14,10 @@ class Slack::CommandsController < ActionController::Base
 
   before_action :verify_slack_signature!
 
-  USAGE = "Try `/growthos feedback` to give someone feedback."
-
   # POST /slack/commands
   def create
     subcommand, rest = params[:text].to_s.strip.split(/\s+/, 2)
-    return ephemeral(USAGE) unless subcommand.to_s.casecmp?("feedback")
+    return ephemeral(usage) unless subcommand.to_s.casecmp?("feedback")
 
     identity = Slack::Identity.resolve(team_id: params[:team_id], slack_user_id: params[:user_id])
     return ephemeral("This Slack workspace isn't connected to #{Tenant.current_product_name}.") unless identity.connected?
@@ -32,6 +31,14 @@ class Slack::CommandsController < ActionController::Base
   end
 
   private
+
+  # The deployment's manifest registers ONE command for every workspace, so
+  # the usage line uses the instance name — a tenant's own product name would
+  # describe a command Slack has never heard of.
+  def usage
+    name = Rails.configuration.x.product_name.parameterize.presence || "espalia"
+    "Try `/#{name} feedback` to give someone feedback."
+  end
 
   # Answer the command privately, in place, without any extra Slack call.
   def ephemeral(text)

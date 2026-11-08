@@ -26,7 +26,7 @@
 #      check for this controller.
 class Oauth::AuthorizationsController < Doorkeeper::AuthorizationsController
   # Render the consent screen through the app's own layout so it picks up
-  # the Tailwind stylesheet and renders like the rest of GrowthOS (the
+  # the Tailwind stylesheet and renders like the rest of Espalia (the
   # sign-in page uses this same layout). Without this, Rails' layout
   # resolution falls through the Doorkeeper inheritance chain to the gem's
   # bare `layouts/doorkeeper/application`, which only links the unused

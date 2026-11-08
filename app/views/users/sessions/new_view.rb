@@ -2,7 +2,7 @@
 
 # Phlex view for the Devise sign-in page.
 #
-# Renders a full-page centered auth layout with GrowthOS branding,
+# Renders a full-page centered auth layout with Espalia branding,
 # styled form fields, flash error display, and helper links.
 class Views::Users::Sessions::NewView < Views::Base
   include Phlex::Rails::Helpers::Routes

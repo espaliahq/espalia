@@ -134,7 +134,7 @@ database whose admin predates this login keeps its old password.
 
 ## Standard viewports
 
-GrowthOS is a responsive **desktop-first** app — most surfaces (the matrix, the
+Espalia is a responsive **desktop-first** app — most surfaces (the matrix, the
 explorer three-pane, the assessment cards) are designed for the wide layout and
 collapse to overlays/stacks on narrow. Verify the desktop layout first, then do a
 mobile pass for anything with responsive behaviour. These mirror the
@@ -325,5 +325,5 @@ Re-vendor from `mr-yum/connect` `.claude/skills/ux-quality/` to pick up upstream
 improvements (last synced: `4aa21f8` — connect#137, which upstreamed all of this
 repo's fixes, so the two trees are identical as of that merge). Since then this repo is ahead: discovery also resolves the component catalogue, conformance checks, theme matrix and stricter house rules, and build mode picks from the catalogue, skips code marked as debt, and runs the checks first. Upstream those to connect. Generic fixes
 made here must be contributed upstream in the same round-trip; never edit the
-vendored files with GrowthOS-specific facts — put those in this guide or
+vendored files with Espalia-specific facts — put those in this guide or
 another under `docs/guidelines/`.

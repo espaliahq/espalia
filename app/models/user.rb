@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Authentication identity for a GrowthOS user.
+# Authentication identity for an Espalia user.
 #
 # User holds global Devise credentials. It is NOT tenant-scoped — the same
 # User can belong to multiple tenants via TenantUser join records. Tenant

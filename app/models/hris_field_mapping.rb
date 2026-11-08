@@ -3,7 +3,7 @@
 # A single field mapping from an HRIS source field to a Person attribute.
 #
 # Used within {HrisConfig} to allow tenants to customise how HRIS fields
-# map to GrowthOS Person attributes beyond the built-in defaults.
+# map to Espalia Person attributes beyond the built-in defaults.
 #
 # @example
 #   HrisFieldMapping.new(hris_field: "work.customField", person_field: "department")

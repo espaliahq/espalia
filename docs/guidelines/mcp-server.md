@@ -1,7 +1,7 @@
 # MCP Server — Design & Architecture
 
 This document captures the design decisions, conventions, and hard-won
-lessons from building GrowthOS's MCP (Model Context Protocol) server.
+lessons from building Espalia's MCP (Model Context Protocol) server.
 Consult this before adding new MCP tools, changing tool shapes, or
 touching anything under `app/operations/`, `app/services/mcp/`,
 `app/controllers/mcp/`, `app/models/mcp/`, `app/jobs/mcp/`, or
@@ -21,7 +21,7 @@ touching anything under `app/operations/`, `app/services/mcp/`,
 
 ## Overview
 
-GrowthOS exposes a single MCP endpoint at `POST /mcp` that speaks
+Espalia exposes a single MCP endpoint at `POST /mcp` that speaks
 JSON-RPC 2.0 over the Streamable HTTP transport. An MCP client
 (Claude Code, Claude Desktop, etc.) connects with `{ "type":
 "streamable-http", "url": "https://app/mcp" }` and is expected to do
@@ -65,7 +65,7 @@ config/routes.rb             ← `/mcp`, `/oauth/*`, `/.well-known/*`
 MCP server both go through `Operations::*` — never direct
 `*::CommandHandler` calls. This is the load-bearing invariant for
 parity between the two interfaces and is enforced by the
-`GrowthOs/ControllersMustUseOperations` RuboCop cop. Existing controllers
+`Espalia/ControllersMustUseOperations` RuboCop cop. Existing controllers
 pre-dating the layer are grandfathered via `.rubocop.yml`'s `Exclude:`
 list and migrated one PR at a time.
 
@@ -431,7 +431,7 @@ Two automated guards:
   introduces it; intentional changes update the snapshot in the same
   commit.
 
-For controllers, the `GrowthOs/ControllersMustUseOperations` cop
+For controllers, the `Espalia/ControllersMustUseOperations` cop
 prevents direct `*::CommandHandler.new` calls; grandfathered
 controllers are listed in `.rubocop.yml`'s `Exclude:` (remove the
 entry when porting one).
@@ -490,7 +490,7 @@ fail with `NULL` PK violations. The fix: `Mcp::Application` /
 
 ### 3. `--allowed-tools <tools...>` swallows positional args
 
-`claude --print "prompt" --allowed-tools "mcp__growth_os__*"`:
+`claude --print "prompt" --allowed-tools "mcp__espalia__*"`:
 the variadic option consumes "prompt" as part of its tool list, then
 the CLI errors with `"Input must be provided either through stdin
 or as a prompt argument"`. Fix: put the prompt FIRST (right after the
@@ -614,7 +614,7 @@ Two rules for any complex param:
 test server with the developer's user-scope (`~/.claude.json`) and
 project-scope (`.mcp.json`) MCP servers. In the devcontainer — where the
 host's `~/.claude` is bind-mounted — a dev's own unauthenticated server entry
-(e.g. a "growthOS" OAuth remote) then appears in the same session as the test
+(e.g. a "growthos" OAuth remote) then appears in the same session as the test
 server, and the model sometimes answers "that server needs authorization"
 instead of calling the test tool. Flaked exactly this way in a local
 precommit run. `--strict-mcp-config` restricts the session to the servers in
@@ -761,7 +761,7 @@ haven't noticed?
 
 The serializer sorted each category's capabilities by name, a choice made
 before capabilities could be reordered. Once a category was reordered the web
-and the MCP disagreed, and an agent asked to "follow GrowthOS's order" had no
+and the MCP disagreed, and an agent asked to "follow Espalia's order" had no
 way to find it ([#492](https://github.com/mr-yum/growth-os/issues/492)). Order
 is part of the content: a reader compares the two side by side. Keep the read
 model's own order (`CapabilityCategory#capabilities` is `[ordinal, created_at,
@@ -864,7 +864,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `test/integration/mcp_claude_cli_test.rb` | End-to-end with real `claude` CLI subprocess |
 | `test/jobs/mcp/prune_stale_clients_job_test.rb` | Prune scope + safety |
 | **Lint** | |
-| `lib/rubocop/cop/growth_os/controllers_must_use_operations.rb` | Controllers must dispatch through Operations |
+| `lib/rubocop/cop/espalia/controllers_must_use_operations.rb` | Controllers must dispatch through Operations |
 
 ## Keeping This Document Current
 

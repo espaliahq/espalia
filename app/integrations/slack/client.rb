@@ -60,7 +60,7 @@ class Slack::Client
     post("chat.postMessage", **payload)
   end
 
-  # The email Slack holds for a user — the key GrowthOS matches a member on.
+  # The email Slack holds for a user — the key Espalia matches a member on.
   # Nil when Slack withholds it (a guest, a deactivated account).
   #
   # @param slack_user_id [String]

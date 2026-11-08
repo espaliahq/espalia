@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Pulls one tenant's peer feed and deletions feed into GrowthOS (protocol §5).
+# Pulls one tenant's peer feed and deletions feed into Espalia (protocol §5).
 #
 # Each run first retries the records the ledger skipped for reasons our side
 # can fix, then, page by page: imports every record, acknowledges the ones that

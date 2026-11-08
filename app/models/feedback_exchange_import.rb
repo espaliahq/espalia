@@ -5,7 +5,7 @@
 # became of it. Written only by {FeedbackExchange::Importer}.
 #
 # A record skipped for a reason that can change on our side (the person is not
-# in GrowthOS yet, is inactive, or has no assignment) keeps the record itself
+# in Espalia yet, is inactive, or has no assignment) keeps the record itself
 # in `record`, so the importer can retry it without pulling it again. Every
 # other row keeps no copy: the feedback lives on the evidence item.
 class FeedbackExchangeImport < ApplicationRecord
@@ -53,7 +53,7 @@ class FeedbackExchangeImport < ApplicationRecord
     }
   end
 
-  # The people a peer named that GrowthOS could not find, from the records
+  # The people a peer named that Espalia could not find, from the records
   # skipped for that reason, most often seen first.
   #
   # @return [Array<Hash>] { email:, display_name:, role: "author" | "recipient", records: }

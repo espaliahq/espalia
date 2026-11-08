@@ -50,7 +50,7 @@ class Hris::DevNameWhimsifier
   NAME_KEYS = %w[firstName surname displayName].freeze
 
   # Version tag in the digest input — bump to reshuffle every pseudonym.
-  DIGEST_PREFIX = "growthos-dev-whimsy-v2"
+  DIGEST_PREFIX = "espalia-dev-whimsy-v3"
 
   class << self
     # @return [Boolean] whether whimsification applies (development only)

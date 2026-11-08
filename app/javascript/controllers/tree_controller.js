@@ -18,7 +18,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 // localStorage key remembering that the user dismissed the "solo" discovery tip.
-const SOLO_HINT_KEY = "growthos:explorer:soloHintDismissed"
+const SOLO_HINT_KEY = "espalia:explorer:soloHintDismissed"
 
 export default class extends Controller {
   static targets = ["role", "group", "familyCheckbox", "trackButton", "childList", "hint"]

@@ -32,11 +32,11 @@ class Reporting::FeedbackExportCsv
   end
 
   # @param now [Time]
-  # @return [String] e.g. "growthos-feedback-export-q3-2026-2026-09-20261002T093000Z.csv"
+  # @return [String] e.g. "espalia-feedback-export-q3-2026-2026-09-20261002T093000Z.csv"
   def filename(now: Time.current)
     slug = @export.dig(:cycle, :name).to_s.parameterize.presence || "cycle"
     period = @export.dig(:period, :month) || "all"
-    "growthos-feedback-export-#{slug}-#{period}-#{now.utc.strftime('%Y%m%dT%H%M%SZ')}.csv"
+    "#{Tenant.current_product_name.parameterize}-feedback-export-#{slug}-#{period}-#{now.utc.strftime('%Y%m%dT%H%M%SZ')}.csv"
   end
 
   private

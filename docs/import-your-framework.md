@@ -1,8 +1,8 @@
 # Import your framework through MCP
 
 Your career framework probably already exists — in Notion, a spreadsheet, a
-PDF, a wiki. The fastest way into GrowthOS is not retyping it and not writing
-YAML: connect an AI agent to the GrowthOS MCP server, hand it the source
+PDF, a wiki. The fastest way into Espalia is not retyping it and not writing
+YAML: connect an AI agent to the Espalia MCP server, hand it the source
 document, and let it build the framework through the same tools the web app
 uses. The result is a reviewable draft; nothing is visible to your
 organisation until you publish it.

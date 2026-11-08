@@ -287,7 +287,7 @@ class Views::AssessmentCycles::EvidenceReport::ShowView < Views::Base
     end
   end
 
-  # "Of which via Chip: 4" — only for origins other than GrowthOS, and only
+  # "Of which via Chip: 4" — only for origins other than Espalia, and only
   # when there are some, so a tenant with no imports never sees the line.
   def origin_split
     peers = (metrics[:by_origin] || {}).except(Reporting::OriginLabels::NATIVE).select { |_, count| count.positive? }

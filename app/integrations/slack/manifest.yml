@@ -1,10 +1,10 @@
-# Slack App Manifest — GrowthOS
+# Slack App Manifest — Espalia
 #
 # Register this app at https://api.slack.com/apps → "Create New App" → "From a manifest".
 # Paste this YAML, then install to your workspace. Rotate/replace the signing secret and
 # tokens via Rails credentials (config/credentials.yml.enc) — never commit them.
 #
-# GrowthOS sends OUTBOUND direct-message notifications today (assessment nudges,
+# Espalia sends OUTBOUND direct-message notifications today (assessment nudges,
 # alignment reminders, evidence-request pings). The scopes that power that — and
 # which the OAuth install flow requests via Slack::BOT_SCOPES — are:
 #
@@ -23,7 +23,7 @@
 # scopes they need are all granted up front, even though no code uses them yet:
 #
 #   chat:write     → post interactive messages, chat.update, views.open (modals)
-#   commands       → a /growthos slash-command entry point
+#   commands       → a /espalia slash-command entry point
 #   im:history     → capture a free-text DM reply to an evidence request
 #
 # With these pre-granted, the remaining work to light up each feature is pure
@@ -31,7 +31,7 @@
 #   • Inline button/modal responses — flip on Interactivity (done below) + build
 #     /slack/interactions. Interactivity URLs are NOT challenge-verified, so the
 #     placeholder below is safe before the endpoint exists.
-#   • Slash command — declare the /growthos command (name + request_url) once its
+#   • Slash command — declare the /espalia command (name + request_url) once its
 #     endpoint exists. Slash-command URLs aren't challenge-verified either.
 #   • Free-text DM replies — the `message.im` Events subscription is declared
 #     below. Events API request_urls ARE challenge-verified the moment they're
@@ -41,32 +41,32 @@
 # None of those three steps adds a scope, so none triggers a reinstall.
 
 display_information:
-  name: GrowthOS
+  name: Espalia
   description: Career growth framework assistant — assessment nudges, alignment reminders, and growth-plan check-ins.
   background_color: "#1a1a2e"
   long_description: >-
-    GrowthOS operationalises career growth frameworks — self-assessments, manager
+    Espalia operationalises career growth frameworks — self-assessments, manager
     alignment conversations, evidence collection, and growth planning. This Slack app
     delivers timely direct-message notifications about your development journey.
 
 features:
   bot_user:
-    display_name: GrowthOS
+    display_name: Espalia
     always_online: true
-  # Inbound: the /growthos command and the message shortcut open the feedback
+  # Inbound: the /espalia command and the message shortcut open the feedback
   # modal; both answer through the interactivity URL below. Config only — the
   # `commands` scope was pre-granted, so no reinstall.
   slash_commands:
-    - command: /growthos
+    - command: /espalia
       description: Give someone feedback
       usage_hint: feedback
-      url: https://growthos.work/slack/commands
+      url: https://espalia.example/slack/commands
       should_escape: false
   shortcuts:
     - name: Feedback on this message
       type: message
       callback_id: give_feedback_on_message
-      description: Turn this message into feedback for someone in GrowthOS
+      description: Turn this message into feedback for someone in Espalia
   app_home:
     # Notifications arrive as DMs and surface in the Messages tab. The tab is
     # writable so members can reply to an evidence-request DM (captured via the
@@ -87,7 +87,7 @@ oauth_config:
       # Pre-granted for planned inbound features so they ship with NO reinstall.
       # No code uses these yet (see the header note); they exist purely so a later
       # config-only change can light up the feature:
-      - commands           # a /growthos slash-command entry point
+      - commands           # a /espalia slash-command entry point
       - im:history         # capture a free-text DM reply to an evidence request
 
 settings:
@@ -100,15 +100,15 @@ settings:
     # modal's recipient typeahead (options URL below), its submission, and the
     # message shortcut.
     is_enabled: true
-    request_url: https://growthos.work/slack/interactions
-    message_menu_options_url: https://growthos.work/slack/interactions
+    request_url: https://espalia.example/slack/interactions
+    message_menu_options_url: https://espalia.example/slack/interactions
   event_subscriptions:
     # Importable because Slack::EventsController answers the url_verification
     # challenge Slack POSTs when this URL is saved. message.im delivers a member's
     # free-text reply to an evidence-request DM; it needs the im:history scope
     # (granted above), so no reinstall. The bot acks + drops these until the
     # reply handler is built.
-    request_url: https://growthos.work/slack/events
+    request_url: https://espalia.example/slack/events
     bot_events:
       - message.im
   org_deploy_enabled: false

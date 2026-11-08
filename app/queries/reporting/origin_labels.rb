@@ -4,7 +4,7 @@
 # `external_reference.system`. Feedback is foreign only when it came from
 # another feedback system; a nil system, or one of the plain link targets in
 # `ExternalReference::LINK_SYSTEMS` (a GitHub PR, a Slack message, a Notion
-# doc someone pointed at), was given in GrowthOS. Shared by the cycle report,
+# doc someone pointed at), was given in Espalia. Shared by the cycle report,
 # the feedback export and anything else that shows origin.
 module Reporting::OriginLabels
   NATIVE = "growthos"
@@ -18,7 +18,7 @@ module Reporting::OriginLabels
   #   ({ExternalReference#imported?}), so its system is a peer even when it
   #   shares a link target's slug
   # @return [String] the origin key reports group by; nil, blank and link
-  #   targets are GrowthOS
+  #   targets are Espalia
   def self.key_for(system, imported: false)
     key = system.to_s.strip.downcase.tr("-", "_")
     return NATIVE if key.empty?

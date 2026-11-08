@@ -2603,7 +2603,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "name" => "reporting_feedback_export",
         "description" => "Export every piece of feedback / evidence in an assessment cycle, one row each, " \
           "for monthly reporting (tenant admins only): recipient and provider with their roles, " \
-          "direction, requested or proactive (a Espalia request), where it was given (origin) and the request " \
+          "direction, requested or proactive (a request made here), where it was given (origin) and the request " \
           "it answered there, type, title, the feedback text, the behaviours it applies to, and status. " \
           "The rows match the feedback the cycle's coverage report counts as provided; include_withdrawn " \
           "adds the withdrawn items it reports separately. Pass month (YYYY-MM) to narrow to feedback " \

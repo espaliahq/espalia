@@ -330,7 +330,7 @@ jobs:
       - name: Prepare the database
         run: bin/rails db:test:prepare
 
-      - name: Consumer contract tests (GrowthOS as Chip's consumer)
+      - name: Consumer contract tests (Espalia as Chip's consumer)
         run: bin/rails contract:consumer
 
       - name: Committed pact is what the tests wrote

@@ -2,7 +2,7 @@
 
 module RuboCop
   module Cop
-    module GrowthOs
+    module Espalia
       # Flags an `AssessmentLevelRating` query that never says which role it
       # reads for. A rating is a fact about a person at a capability × level,
       # not about a role (ADR-22), so a reader that counts raw rows picks up

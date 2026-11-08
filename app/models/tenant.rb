@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Represents an organisation using GrowthOS.
+# Represents an organisation using Espalia.
 #
 # Tenants are the root of the multi-tenancy model. All user and domain data
 # is scoped to a tenant via acts_as_tenant row-level isolation.
@@ -41,7 +41,7 @@ class Tenant < ApplicationRecord
   encrypts :feedback_exchange_credentials
 
   # Slack bot credentials for this workspace, set when a tenant admin installs
-  # the GrowthOS Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
+  # the Espalia Slack app. Encrypted JSON: { bot_token:, team_name:, installed_by: }.
   serialize :slack_credentials, coder: JSON
   encrypts :slack_credentials
 
