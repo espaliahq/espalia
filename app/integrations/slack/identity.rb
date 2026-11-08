@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Who a Slack user is in GrowthOS: the tenant whose workspace the request
+# Who a Slack user is in Espalia: the tenant whose workspace the request
 # came from, and the membership behind the Slack user — by the id cached on
 # `TenantUser.slack_user_id`, else by the email Slack holds for them. The
 # cache is filled on the way through, the same column the outbound DM
@@ -11,7 +11,7 @@
 # - {#member?} — a TenantUser with a Person: act as them.
 # - {#person_only?} — a Person with that email (HRIS-imported) but no account
 #   yet: they have to sign in once; see Evidence::DraftsController.
-# - neither — no GrowthOS identity for the Slack email, or the workspace is
+# - neither — no Espalia identity for the Slack email, or the workspace is
 #   not connected.
 class Slack::Identity
   # @return [Tenant, nil]

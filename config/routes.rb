@@ -23,7 +23,7 @@ Rails.application.routes.draw do
   # can be verified; real events are acked and dropped until the evidence-reply
   # handler is built. See Slack::EventsController.
   post "/slack/events", to: "slack/events#create", as: :slack_events
-  # The /growthos slash command and interactive payloads (the feedback modal's
+  # The /espalia slash command and interactive payloads (the feedback modal's
   # typeahead and submission, the message shortcut). Same trust model.
   post "/slack/commands", to: "slack/commands#create", as: :slack_commands
   post "/slack/interactions", to: "slack/interactions#create", as: :slack_interactions

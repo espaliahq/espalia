@@ -11,7 +11,7 @@
 notification to its recipient over the tenant's workspace, after the in-app
 copy has had its minute to be read ([assessments/evidence.md → Comment
 notifications](assessments/evidence.md)). **Inbound** is the feedback modal: the
-`/growthos feedback` slash command and the "Feedback on this message"
+`/espalia feedback` slash command and the "Feedback on this message"
 shortcut open it, and its submission records evidence as the Slack user.
 
 The app is installed per tenant (`Tenant#connect_slack!` keeps the bot token
@@ -35,17 +35,20 @@ in Slack's own settings. Two kinds of change, and they cost different things:
   connected after that grant is already covered; one connected before it
   must reconnect.
 
-The steps, for whoever holds the GrowthOS Slack app:
+The steps, for whoever holds the Espalia Slack app:
 
 1. Open [api.slack.com/apps](https://api.slack.com/apps) and pick
-   **GrowthOS**. Under **Features → App Manifest**, replace the YAML with
-   `app/integrations/slack/manifest.yml` and save. Slack diffs the two and
+   **Espalia** (or whatever your deployment's app is called). Under
+   **Features → App Manifest**, replace the YAML with
+   `app/integrations/slack/manifest.yml` — swapping its `espalia.example`
+   request URLs for your deployment's host, and the app and command names
+   for your product's if it has its own — and save. Slack diffs the two and
    lists what changes; request URLs are validated on save (the Events API URL
    is challenge-verified, which `Slack::EventsController` answers). The
    format is documented in the
    [manifest reference](https://docs.slack.dev/reference/app-manifest).
 2. Check the surfaces the manifest declares landed: **Features → Slash
-   Commands** shows `/growthos` pointing at `/slack/commands`
+   Commands** shows `/espalia` pointing at `/slack/commands`
    ([slash commands](https://docs.slack.dev/interactivity/implementing-slash-commands));
    **Features → Interactivity & Shortcuts** shows the request URL and the
    options load URL both at `/slack/interactions`, and the message shortcut
@@ -55,18 +58,18 @@ The steps, for whoever holds the GrowthOS Slack app:
    `Slack::BOT_SCOPES`. The install grants that constant, not the manifest,
    so the two must agree ([scopes reference](https://docs.slack.dev/reference/scopes)).
 4. If a scope was added, or a workspace was connected before `commands` was
-   granted, reconnect that workspace from GrowthOS: **Integrations → Slack →
+   granted, reconnect that workspace from Espalia: **Integrations → Slack →
    Disconnect**, then **Connect Slack**. The OAuth flow asks for
    `Slack::BOT_SCOPES` afresh and stores the new token; a reconnect also
    clears cached Slack ids, which re-resolve by email on next contact.
    What a missing scope looks like depends on which one. Without `commands`,
-   Slack never sends `/growthos` to GrowthOS, so the command does not exist in
-   that workspace. Without a scope GrowthOS calls with (`users:read` to
+   Slack never sends `/espalia` to Espalia, so the command does not exist in
+   that workspace. Without a scope Espalia calls with (`users:read` to
    resolve the person, `chat:write` to DM them), Slack answers `missing_scope`:
-   the command logs `[slack] command failed` and replies "GrowthOS couldn't
+   the command logs `[slack] command failed` and replies "Espalia couldn't
    open the form just now", and a DM is dropped with `[slack] dm skipped` in
    the log. `views.open` itself needs no scope.
-5. Prove it in the workspace: `/growthos feedback` opens the modal, the
+5. Prove it in the workspace: `/espalia feedback` opens the modal, the
    message shortcut appears in a message's **More actions** menu, and a
    submission DMs a confirmation. The signing secret in Rails credentials
    must be the app's current one (**Settings → Basic Information → App
@@ -81,7 +84,7 @@ and none under Devise or CSRF:
 | Endpoint | Controller | Answers |
 |---|---|---|
 | `POST /slack/events` | `Slack::EventsController` | the `url_verification` challenge; real events are acked and dropped until a reply handler exists |
-| `POST /slack/commands` | `Slack::CommandsController` | `/growthos feedback [text]` — opens the modal; anything else, usage |
+| `POST /slack/commands` | `Slack::CommandsController` | `/espalia feedback [text]` — opens the modal; anything else, usage |
 | `POST /slack/interactions` | `Slack::InteractionsController` | the modal's recipient typeahead (`block_suggestion`), its submission (`view_submission`), the message shortcut (`message_action`) |
 
 **Who is asking** is `Slack::Identity.resolve(team_id:, slack_user_id:)`:
