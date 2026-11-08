@@ -18,7 +18,7 @@
 # token; this class never inspects the request directly.
 class Mcp::RequestHandler
   PROTOCOL_VERSION = "2025-06-18"
-  SERVER_NAME = "growth_os"
+  SERVER_NAME = Rails.configuration.x.product_name.parameterize(separator: "_")
   SERVER_VERSION = "0.1.0"
 
   # @param context [AuthorizationContext]

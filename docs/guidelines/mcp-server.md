@@ -490,7 +490,7 @@ fail with `NULL` PK violations. The fix: `Mcp::Application` /
 
 ### 3. `--allowed-tools <tools...>` swallows positional args
 
-`claude --print "prompt" --allowed-tools "mcp__growth_os__*"`:
+`claude --print "prompt" --allowed-tools "mcp__espalia__*"`:
 the variadic option consumes "prompt" as part of its tool list, then
 the CLI errors with `"Input must be provided either through stdin
 or as a prompt argument"`. Fix: put the prompt FIRST (right after the
@@ -614,7 +614,7 @@ Two rules for any complex param:
 test server with the developer's user-scope (`~/.claude.json`) and
 project-scope (`.mcp.json`) MCP servers. In the devcontainer — where the
 host's `~/.claude` is bind-mounted — a dev's own unauthenticated server entry
-(e.g. a "growthOS" OAuth remote) then appears in the same session as the test
+(e.g. a "growthos" OAuth remote) then appears in the same session as the test
 server, and the model sometimes answers "that server needs authorization"
 instead of calling the test tool. Flaked exactly this way in a local
 precommit run. `--strict-mcp-config` restricts the session to the servers in

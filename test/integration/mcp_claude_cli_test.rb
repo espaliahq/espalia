@@ -23,7 +23,7 @@ require_relative "../support/mcp_cli_helpers"
 #      separately by OauthPkceFlowTest).
 #   2. Write a per-test .mcp.json config pointing at the test server +
 #      bearer token.
-#   3. `claude --print --mcp-config <file> --allowed-tools mcp__growth_os__*
+#   3. `claude --print --mcp-config <file> --allowed-tools mcp__espalia__*
 #      <prompt>` and read stdout.
 #   4. Assert stdout AND any DB-side effect.
 #
@@ -94,7 +94,7 @@ class McpClaudeCliTest < ActiveSupport::TestCase
     # tool was actually invoked (a previous version asked for the email
     # and the CLI answered from auto-memory without calling the tool).
     stdout = run_claude_cli(
-      "You MUST call the mcp__growth_os__system_whoami tool right now. " \
+      "You MUST call the mcp__espalia__system_whoami tool right now. " \
       "Do NOT answer from your own knowledge, memory, or context — only the " \
       "tool can answer this. After receiving the tool's response, return ONLY " \
       "the value of result.tenant.id, with no other text.",

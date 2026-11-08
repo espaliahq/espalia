@@ -33,7 +33,7 @@ class Settings::ConnectedClientsSystemTest < ApplicationSystemTestCase
       assert_text "Claude.ai & Claude Desktop"
       assert_text "ChatGPT"
       assert_text "Codex"
-      assert_text "claude mcp add --transport http growthos"
+      assert_text "claude mcp add --transport http espalia"
     end
 
     should "give Copy feedback when copying a command" do

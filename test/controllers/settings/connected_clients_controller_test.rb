@@ -83,7 +83,7 @@ class Settings::ConnectedClientsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       # No OAUTH_ISSUER configured in test → falls back to request base URL.
       assert_match "#{request.base_url}/mcp", response.body
-      assert_match "claude mcp add --transport http growthos", response.body
+      assert_match "claude mcp add --transport http espalia", response.body
     end
 
     should "not double-slash the MCP URL when the issuer has a trailing slash" do

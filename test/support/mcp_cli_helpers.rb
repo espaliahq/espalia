@@ -51,7 +51,7 @@ module McpCliHelpers
   def write_mcp_config(base_url:, token:)
     config = {
       mcpServers: {
-        growth_os: {
+        espalia: {
           # Streamable HTTP transport per the MCP spec; the CLI infers
           # transport from `url` (vs `command` for stdio), but stating it
           # explicitly is more robust across CLI versions.
@@ -96,14 +96,14 @@ module McpCliHelpers
       # --strict-mcp-config: use ONLY the servers in --mcp-config. Without
       # it the CLI merges user (~/.claude.json) and project (.mcp.json)
       # servers into the session — a dev's unauthenticated server entry
-      # (e.g. a "growthOS" OAuth server) then competes with the test
+      # (e.g. a "growthos" OAuth server) then competes with the test
       # server and the model sometimes answers about authorization
       # instead of calling the test tool. Flaked locally; strict scoping
       # makes the test hermetic everywhere.
       "--mcp-config", config_path,
       "--strict-mcp-config",
       "--permission-mode", "acceptEdits",
-      "--allowed-tools", "mcp__growth_os__*"
+      "--allowed-tools", "mcp__espalia__*"
     ]
     # Bound the subprocess — a stuck CLI process must not hang the whole
     # test job. We spawn in its own process group so we can SIGKILL the

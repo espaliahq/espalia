@@ -75,7 +75,7 @@ class McpServerTest < ActionDispatch::IntegrationTest
       assert_equal "2.0", body["jsonrpc"]
       assert_equal 1, body["id"]
       assert_equal Mcp::RequestHandler::PROTOCOL_VERSION, body.dig("result", "protocolVersion")
-      assert_equal "growth_os", body.dig("result", "serverInfo", "name")
+      assert_equal "espalia", body.dig("result", "serverInfo", "name")
       assert body.dig("result", "capabilities", "tools").is_a?(Hash)
     end
   end

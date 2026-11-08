@@ -91,7 +91,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
     ol(class: "list-decimal list-outside ml-5 space-y-2 text-sm text-muted") do
       li do
         plain "Add the server from your terminal:"
-        copyable("claude mcp add --transport http growthos #{@mcp_url}", class: "mt-2")
+        copyable("claude mcp add --transport http #{server_alias} #{@mcp_url}", class: "mt-2")
       end
       li do
         plain "Run "
@@ -147,7 +147,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
         plain "Add an entry to "
         inline_code("~/.codex/config.toml")
         plain ":"
-        copyable("[mcp_servers.growthos]\nurl = \"#{@mcp_url}\"", multiline: true, class: "mt-2")
+        copyable("[mcp_servers.#{server_alias}]\nurl = \"#{@mcp_url}\"", multiline: true, class: "mt-2")
       end
       li do
         plain "Restart Codex. It opens a browser to authorise on first use, where you pick "
@@ -155,6 +155,9 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
       end
     end
   end
+
+  # The local name the snippets register the server under.
+  def server_alias = product_name.parameterize
 
   # A copy-to-clipboard block: monospaced text plus a Copy button wired to
   # the `clipboard` Stimulus controller.
