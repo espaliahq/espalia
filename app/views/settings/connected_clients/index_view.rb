@@ -157,7 +157,7 @@ class Views::Settings::ConnectedClients::IndexView < Views::Base
   end
 
   # The local name the snippets register the server under.
-  def server_alias = product_name.parameterize
+  def server_alias = product_name.parameterize.presence || "espalia"
 
   # A copy-to-clipboard block: monospaced text plus a Copy button wired to
   # the `clipboard` Stimulus controller.

@@ -60,7 +60,7 @@ features:
     - command: /espalia
       description: Give someone feedback
       usage_hint: feedback
-      url: https://espalia.work/slack/commands
+      url: https://espalia.example/slack/commands
       should_escape: false
   shortcuts:
     - name: Feedback on this message
@@ -100,15 +100,15 @@ settings:
     # modal's recipient typeahead (options URL below), its submission, and the
     # message shortcut.
     is_enabled: true
-    request_url: https://espalia.work/slack/interactions
-    message_menu_options_url: https://espalia.work/slack/interactions
+    request_url: https://espalia.example/slack/interactions
+    message_menu_options_url: https://espalia.example/slack/interactions
   event_subscriptions:
     # Importable because Slack::EventsController answers the url_verification
     # challenge Slack POSTs when this URL is saved. message.im delivers a member's
     # free-text reply to an evidence-request DM; it needs the im:history scope
     # (granted above), so no reinstall. The bot acks + drops these until the
     # reply handler is built.
-    request_url: https://espalia.work/slack/events
+    request_url: https://espalia.example/slack/events
     bot_events:
       - message.im
   org_deploy_enabled: false

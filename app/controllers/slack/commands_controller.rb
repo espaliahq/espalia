@@ -32,12 +32,12 @@ class Slack::CommandsController < ActionController::Base
 
   private
 
-  # The command is named after the workspace's product (see the manifest), so
-  # the usage line echoes the same name.
+  # The deployment's manifest registers ONE command for every workspace, so
+  # the usage line uses the instance name — a tenant's own product name would
+  # describe a command Slack has never heard of.
   def usage
-    name = Tenant.find_by(slack_team_id: params[:team_id])&.product_name ||
-           Rails.configuration.x.product_name
-    "Try `/#{name.parameterize} feedback` to give someone feedback."
+    name = Rails.configuration.x.product_name.parameterize.presence || "espalia"
+    "Try `/#{name} feedback` to give someone feedback."
   end
 
   # Answer the command privately, in place, without any extra Slack call.
