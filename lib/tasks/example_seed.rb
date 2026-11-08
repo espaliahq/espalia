@@ -9,7 +9,9 @@
 # StressSeed is the volume fixture (hundreds of people, every edge state);
 # this is the demo fixture — small enough to read on one screen in the app.
 class ExampleSeed
-  TENANT = { slug: "nullisland", name: "Null Island Systems" }.freeze
+  # The demo tenant brands its instance "Ladder" to show the product name is
+  # a tenant setting; Driftwood keeps the instance default for contrast.
+  TENANT = { slug: "nullisland", name: "Null Island Systems", product_name: "Ladder" }.freeze
   # A second workspace so the tenant switcher has somewhere to switch to.
   SECOND_TENANT = { slug: "driftwood", name: "Driftwood Labs" }.freeze
   CYCLE_NAME = "Q4 2026 Capability Review"
@@ -74,7 +76,10 @@ class ExampleSeed
   private
 
   def upsert_tenants
-    tenant = Tenant.find_or_create_by!(slug: TENANT[:slug]) { |t| t.name = TENANT[:name] }
+    tenant = Tenant.find_or_create_by!(slug: TENANT[:slug]) do |t|
+      t.name = TENANT[:name]
+      t.product_name = TENANT[:product_name]
+    end
     second = Tenant.find_or_create_by!(slug: SECOND_TENANT[:slug]) { |t| t.name = SECOND_TENANT[:name] }
     [ tenant, second ].each do |t|
       ActsAsTenant.with_tenant(t) do

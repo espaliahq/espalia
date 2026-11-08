@@ -27,6 +27,7 @@ class ExampleSeedTest < ActiveSupport::TestCase
     assert counts[:draft_in_progress], "a v2 draft stays open for the explorer to show"
     assert_equal 1, counts[:pending_requests]
     assert Tenant.exists?(slug: ExampleSeed::SECOND_TENANT[:slug]), "the switcher has a second workspace"
+    assert_equal "Ladder", tenant.product_name, "the demo tenant brands its own instance"
 
     rerun = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
     assert_equal counts, ActsAsTenant.with_tenant(rerun) { snapshot }, "a re-run converges"
