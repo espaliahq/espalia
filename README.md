@@ -154,7 +154,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go to
 ## History and license
 
 Espalia began life as **GrowthOS**, the internal growth platform at
-[me&u](https://www.meandu.com); you'll still see that name in places until the
-product name becomes configurable. MIT-licensed — see [LICENSE](LICENSE).
+[me&u](https://www.meandu.com), whose own instance still runs under that
+name — the product name is a tenant setting. MIT-licensed — see
+[LICENSE](LICENSE).
 The Espalia name and mark are trademarked separately and not granted by the
 license.
