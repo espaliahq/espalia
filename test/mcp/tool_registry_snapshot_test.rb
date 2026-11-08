@@ -2393,7 +2393,7 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
                          "as stored (\"all\" means every type, including any added later; an empty list means none), " \
                          "the types actually sent today with \"all\" resolved, whether the secrets and sync cursors are present, and " \
                          "what the import has done: records imported, updated, withdrawn and skipped, with each skip reason " \
-                         "and the people the peer named that Espalia could not find. Never returns a secret.",
+                         "and the people the peer named that no Person matched at the last sync. Never returns a secret.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
