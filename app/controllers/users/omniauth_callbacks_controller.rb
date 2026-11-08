@@ -33,15 +33,13 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   private
 
   # A Google sign-in that started on a tenant sign-on page carries the slug
-  # in omniauth.params (#660). Runs after super, which writes the user's
-  # first membership — same ordering as the password flow.
+  # in omniauth.params (#660); the shared resolution also covers the custom
+  # domain the callback arrived on and the instance's default tenant, so SSO
+  # and password sign-ins land in the same place. Runs after super, which
+  # writes the user's first membership — same ordering as the password flow.
   def after_sign_in_path_for(resource)
     path = super
-    slug = request.env.dig("omniauth.params", "tenant_slug")
-    if slug.is_a?(String) && slug.present?
-      tenant = ActsAsTenant.without_tenant { Tenant.find_by(slug: slug) }
-      pin_session_to_tenant(resource, tenant)
-    end
+    pin_session_to_tenant(resource, sign_on_tenant(request.env.dig("omniauth.params", "tenant_slug")))
     path
   end
 end

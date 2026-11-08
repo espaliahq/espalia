@@ -70,6 +70,14 @@ module Espalia
     # sets PRODUCT_NAME to run under its own identity; set-but-empty is unset.
     config.x.product_name = ENV["PRODUCT_NAME"].presence || "Espalia"
 
+    # A single-org deployment names the tenant its own sign-in belongs to
+    # (https://github.com/espaliahq/espalia/issues/12): the instance sign-in
+    # page brands as that tenant and a member lands scoped to it, with no
+    # /t/<slug> in the URL. Sign-on surfaces only — it never forces a
+    # signed-in session, so tenant switching and other tenants' sign-on
+    # URLs behave exactly as without it.
+    config.x.default_tenant_slug = ENV["DEFAULT_TENANT_SLUG"].presence
+
     # Throttling for abuse-prone endpoints — currently only OAuth Dynamic
     # Client Registration. Disabled in test/dev via the initializer.
     config.middleware.use Rack::Attack

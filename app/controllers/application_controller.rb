@@ -162,6 +162,25 @@ class ApplicationController < ActionController::Base
     tenant
   end
 
+  # The tenant a sign-on surface should assume, shared by the password and
+  # SSO flows so they cannot drift: the host's custom domain (#660) first,
+  # then an explicit slug, then the instance's default tenant
+  # (https://github.com/espaliahq/espalia/issues/12) — the default only when
+  # no slug was asked for at all, so a mistyped or empty slug never silently
+  # wears the default's identity.
+  #
+  # @param slug_param [String, nil] the raw tenant_slug the surface carried
+  # @return [Tenant, nil]
+  def sign_on_tenant(slug_param)
+    return host_tenant if host_tenant
+
+    if slug_param.nil?
+      Tenant.default_sign_in_tenant
+    elsif slug_param.is_a?(String) && slug_param.present?
+      ActsAsTenant.without_tenant { Tenant.find_by(slug: slug_param) }
+    end
+  end
+
   # Points the session at the tenant a sign-on surface promised (#660) —
   # only for members; anyone else keeps the usual resolution.
   def pin_session_to_tenant(user, tenant)

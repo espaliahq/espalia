@@ -379,6 +379,18 @@ class Tenant < ApplicationRecord
     ActsAsTenant.without_tenant { find_by(custom_domain: domain) }
   end
 
+  # The tenant the instance's own sign-in assumes (DEFAULT_TENANT_SLUG,
+  # https://github.com/espaliahq/espalia/issues/12), or nil — also when the
+  # slug names no tenant, so a typo degrades to instance sign-in, never a 500.
+  #
+  # @return [Tenant, nil]
+  def self.default_sign_in_tenant
+    slug = Rails.application.config.x.default_tenant_slug
+    return nil if slug.blank?
+
+    ActsAsTenant.without_tenant { find_by(slug: slug) }
+  end
+
   # The hosts the instance itself answers on: the mailer/link host and the
   # OAuth issuer's. A tenant claiming one would pin the whole instance's
   # sign-in to itself. Best effort — a serving host configured nowhere
