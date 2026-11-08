@@ -369,7 +369,7 @@ jobs:
         env:
           GITLEAKS_VERSION: 8.24.3
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
+          curl -sSfL --retry 5 --retry-delay 15 --retry-all-errors "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz gitleaks
           ./gitleaks git --no-banner --redact .
 
   # Merges Dependabot's PRs once every job above has passed on the same head.
