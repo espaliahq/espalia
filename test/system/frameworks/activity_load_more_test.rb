@@ -9,6 +9,11 @@ require "application_system_test_case"
 class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
 
+  # The append is one server round-trip, and on a starved parallel runner it
+  # has twice outrun Capybara's 10s default while passing in isolation
+  # (issue #11) — so the growth assertion waits longer.
+  APPEND_WAIT = 30
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -61,16 +66,11 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_selector "#framework-activity-load-more button", text: "Load older"
     end
 
-    # Wait for the controller to attach before dispatching, then JS-dispatch
-    # the click (hover-revealed control; pointer clicks flake on CI).
-    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
-    page.execute_script(
-      "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
-    )
+    load_older_activity
 
     within "#suggestion-panel" do
       # Older entries appended (more than the first capped batch) and the count grew.
-      assert_selector "#framework-activity-list > li", minimum: cap + 1
+      assert_selector "#framework-activity-list > li", minimum: cap + 1, wait: APPEND_WAIT
       assert_no_text "#{cap} events"
     end
   end
@@ -93,19 +93,25 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_no_selector "#framework-activity-list > li", visible: true
     end
 
-    # Wait for the controller to attach before dispatching, then JS-dispatch
-    # the click (hover-revealed control; pointer clicks flake on CI).
-    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
-    page.execute_script(
-      "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
-    )
+    load_older_activity
 
     within "#suggestion-panel" do
       # The older batch appended (total grew past the first cap)…
-      assert_selector "#framework-activity-list > li", visible: :all, minimum: cap + 1
+      assert_selector "#framework-activity-list > li", visible: :all, minimum: cap + 1, wait: APPEND_WAIT
       # …and the appended entries honour the active "Suggestions" filter — still
       # nothing visible. Before the fix the new entries ignored the filter.
       assert_no_selector "#framework-activity-list > li", visible: true
     end
+  end
+
+  private
+
+  # Wait for the controller to attach before dispatching, then JS-dispatch
+  # the click (hover-revealed control; pointer clicks flake on CI).
+  def load_older_activity
+    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
+    page.execute_script(
+      "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
+    )
   end
 end
