@@ -2,7 +2,7 @@
 
 module RuboCop
   module Cop
-    module GrowthOs
+    module Espalia
       # Flags controller actions that instantiate a domain CommandHandler
       # directly. Controllers and the MCP server must dispatch through the
       # shared `Operations::*` layer so functionality parity stays in
@@ -25,7 +25,7 @@ module RuboCop
         MSG =
           "Controllers must dispatch writes through Operations::* (shared with the " \
           "MCP server), not %<handler>s directly. If this controller is mid-migration, " \
-          "add it to the Exclude: list under GrowthOs/ControllersMustUseOperations in " \
+          "add it to the Exclude: list under Espalia/ControllersMustUseOperations in " \
           ".rubocop.yml. See app/operations/base.rb."
 
         # Matches `<Anything>::CommandHandler.new`. Captures the const node so

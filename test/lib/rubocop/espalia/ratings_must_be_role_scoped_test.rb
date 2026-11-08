@@ -2,13 +2,13 @@
 
 require "test_helper"
 require "rubocop"
-require Rails.root.join("lib/rubocop/cop/growth_os/ratings_must_be_role_scoped")
+require Rails.root.join("lib/rubocop/cop/espalia/ratings_must_be_role_scoped")
 
-class RuboCop::Cop::GrowthOs::RatingsMustBeRoleScopedTest < ActiveSupport::TestCase
+class RuboCop::Cop::Espalia::RatingsMustBeRoleScopedTest < ActiveSupport::TestCase
   # @param source [String] Ruby source to inspect
   # @return [Array<String>] offense messages, in source order
   def offenses_for(source)
-    cop = RuboCop::Cop::GrowthOs::RatingsMustBeRoleScoped.new
+    cop = RuboCop::Cop::Espalia::RatingsMustBeRoleScoped.new
     processed = RuboCop::ProcessedSource.new(source, RUBY_VERSION.to_f)
     commissioner = RuboCop::Cop::Commissioner.new([ cop ])
     report = commissioner.investigate(processed)
@@ -84,7 +84,7 @@ class RuboCop::Cop::GrowthOs::RatingsMustBeRoleScopedTest < ActiveSupport::TestC
 
     should "respect an inline disable comment" do
       assert_empty offenses_for(<<~RUBY)
-        AssessmentLevelRating.where(person_id: id).count # rubocop:disable GrowthOs/RatingsMustBeRoleScoped
+        AssessmentLevelRating.where(person_id: id).count # rubocop:disable Espalia/RatingsMustBeRoleScoped
       RUBY
     end
   end

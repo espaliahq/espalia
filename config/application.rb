@@ -8,7 +8,7 @@ require "rails/all"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-module GrowthOs
+module Espalia
   class Application < Rails::Application
     # Below this a gzip frame costs about as much as it saves. Only consulted
     # when the response DECLARES its length: Rails leaves Content-Length to the

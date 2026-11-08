@@ -65,7 +65,7 @@ config/routes.rb             ← `/mcp`, `/oauth/*`, `/.well-known/*`
 MCP server both go through `Operations::*` — never direct
 `*::CommandHandler` calls. This is the load-bearing invariant for
 parity between the two interfaces and is enforced by the
-`GrowthOs/ControllersMustUseOperations` RuboCop cop. Existing controllers
+`Espalia/ControllersMustUseOperations` RuboCop cop. Existing controllers
 pre-dating the layer are grandfathered via `.rubocop.yml`'s `Exclude:`
 list and migrated one PR at a time.
 
@@ -431,7 +431,7 @@ Two automated guards:
   introduces it; intentional changes update the snapshot in the same
   commit.
 
-For controllers, the `GrowthOs/ControllersMustUseOperations` cop
+For controllers, the `Espalia/ControllersMustUseOperations` cop
 prevents direct `*::CommandHandler.new` calls; grandfathered
 controllers are listed in `.rubocop.yml`'s `Exclude:` (remove the
 entry when porting one).
@@ -864,7 +864,7 @@ recoverable; an MCP agent loop running unintended writes is not.
 | `test/integration/mcp_claude_cli_test.rb` | End-to-end with real `claude` CLI subprocess |
 | `test/jobs/mcp/prune_stale_clients_job_test.rb` | Prune scope + safety |
 | **Lint** | |
-| `lib/rubocop/cop/growth_os/controllers_must_use_operations.rb` | Controllers must dispatch through Operations |
+| `lib/rubocop/cop/espalia/controllers_must_use_operations.rb` | Controllers must dispatch through Operations |
 
 ## Keeping This Document Current
 

@@ -258,7 +258,7 @@ The gate exists because without one, next-level credit masks current-level gaps 
 
 - **One truth per cell.** `BehaviouralExpectation` is canonical per capability × ordinal; role illustrations bring it to life and are never what is rated. A rating made while reading another role's examples on a shared cell *is* the home rating. There is no second rating scope for reading a person against another role or level (a *lens*).
 - **Scope belongs to the reader, never the write.** Every reader filters by the role it is reading for, through `AssessmentLevelRating.within(scope)`; an unscoped read announces itself with `.across_all_roles`. A `via_role_id` stamp may record where a rating was made, for provenance only — it never decides whether the rating counts.
-- **The guard is mechanical.** One `RoleScope`, one `.within`, the `GrowthOs/RatingsMustBeRoleScoped` cop, and an "ignores ratings outside the assessed role" test per reader.
+- **The guard is mechanical.** One `RoleScope`, one `.within`, the `Espalia/RatingsMustBeRoleScoped` cop, and an "ignores ratings outside the assessed role" test per reader.
 - **Disclosure, freeze and completion are per role.** Starting alignment against a role discloses and freezes that role's cells; a cell is frozen once any started role's scope contains it; "Mark alignment complete" counts only that role's current-level cells.
 - **Writes still need an open cycle.** Between cycles a lens is read-only.
 - **The lens is private; declaring is shared.** Reading a person through another role writes nothing and notifies nobody. Starting alignment against it, or declaring an exploration, is what the other party sees.

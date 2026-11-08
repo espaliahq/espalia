@@ -10,7 +10,7 @@
 #
 # This is scaffolding only — no concrete subclasses ship in this PR.
 # Controllers will migrate to this layer one at a time; until they do,
-# the RuboCop cop `GrowthOs/ControllersMustUseOperations` grandfathers
+# the RuboCop cop `Espalia/ControllersMustUseOperations` grandfathers
 # them via the `Exclude:` list in `.rubocop.yml`.
 #
 # @example

@@ -90,7 +90,7 @@
 | `app/notifiers/{comment_reply,assessment_commented,team_assessment_commented}_notifier.rb` | Presentation per notification type — title, excerpted body + context line, cell deep link |
 | **Data** | |
 | `app/queries/assessments/role_scope.rb` | The ONE definition of the cells a role reads (ADR-22) — active bound capabilities × their expectations, plus the bindings scoring uses; every rating reader filters through it via `AssessmentLevelRating.within` |
-| `lib/rubocop/cop/growth_os/ratings_must_be_role_scoped.rb` | Fails CI on a rating query that never passes through `.within` or `.across_all_roles` |
+| `lib/rubocop/cop/espalia/ratings_must_be_role_scoped.rb` | Fails CI on a rating query that never passes through `.within` or `.across_all_roles` |
 | `app/models/assessments/matrix_data_builder.rb` | Single-role builder — ratings + 4 scoring perspectives + `performance_state` + next-level contributions + `current_level_complete`. Resolves the **assessed level** from the cycle's enrollment snapshot (same-role gate), not the live assignment level — see [ADR-19](../../architecture/adrs.md) |
 | `app/models/assessments/secondary_perspectives.rb` | The ONE list of the perspectives shown beside the viewer's own — each carrying its context, so a secondary annotation can be held to the coverage gate against its own ratings |
 | `app/models/assessments/viewer_context.rb` | The ONE `:self` / `:manager` / `:alignment` resolution — the web controller and the MCP read tools both call it, so a score can't be built from ratings the viewer may not see; a lens on another role never reads as `:alignment` |

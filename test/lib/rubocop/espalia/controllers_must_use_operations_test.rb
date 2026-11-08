@@ -2,17 +2,17 @@
 
 require "test_helper"
 require "rubocop"
-require Rails.root.join("lib/rubocop/cop/growth_os/controllers_must_use_operations")
+require Rails.root.join("lib/rubocop/cop/espalia/controllers_must_use_operations")
 
 # Unit tests for the custom cop that enforces the Operations layer as the
 # single write surface shared by controllers and the MCP server.
-class RuboCop::Cop::GrowthOs::ControllersMustUseOperationsTest < ActiveSupport::TestCase
+class RuboCop::Cop::Espalia::ControllersMustUseOperationsTest < ActiveSupport::TestCase
   # Runs the cop over a source string and returns the offense messages.
   #
   # @param source [String] Ruby source to inspect
   # @return [Array<String>] offense messages, in source order
   def offenses_for(source)
-    cop = RuboCop::Cop::GrowthOs::ControllersMustUseOperations.new
+    cop = RuboCop::Cop::Espalia::ControllersMustUseOperations.new
     processed = RuboCop::ProcessedSource.new(source, RUBY_VERSION.to_f)
     commissioner = RuboCop::Cop::Commissioner.new([ cop ])
     report = commissioner.investigate(processed)
@@ -86,7 +86,7 @@ class RuboCop::Cop::GrowthOs::ControllersMustUseOperationsTest < ActiveSupport::
 
     should "respect an inline disable comment" do
       messages = offenses_for(<<~RUBY)
-        Frameworks::CommandHandler.new.add_capability(id, cap) # rubocop:disable GrowthOs/ControllersMustUseOperations
+        Frameworks::CommandHandler.new.add_capability(id, cap) # rubocop:disable Espalia/ControllersMustUseOperations
       RUBY
       assert_empty messages
     end

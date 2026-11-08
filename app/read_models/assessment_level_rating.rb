@@ -58,7 +58,7 @@ class AssessmentLevelRating < ApplicationRecord
 
   # Ratings inside one role's scope, or inside each person's own scope
   # (ADR-22). Every reader that counts or scores ratings goes through this
-  # or through {.across_all_roles}; the `GrowthOs/RatingsMustBeRoleScoped`
+  # or through {.across_all_roles}; the `Espalia/RatingsMustBeRoleScoped`
   # cop enforces it.
   #
   # @param scope [Assessments::RoleScope, Hash{String => Assessments::RoleScope}]
