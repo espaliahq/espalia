@@ -57,13 +57,13 @@ class SlackDeliveryMethodTest < ActiveSupport::TestCase
 
   should "build the Open-in-Espalia button from the configured host, not a placeholder" do
     fake = nil
-    Rails.application.config.action_mailer.stub(:default_url_options, { host: "growthos.work", protocol: "https" }) do
+    Rails.application.config.action_mailer.stub(:default_url_options, { host: "espalia.example", protocol: "https" }) do
       fake = deliver_with_fake_slack
     end
     blocks = fake.posted.first[:blocks]
     button = blocks.flat_map { |b| b[:elements].to_a }.find { |e| e[:type] == "button" }
     assert_not_nil button, "expected an Open-in-Espalia button"
-    assert_includes button[:url], "growthos.work"
+    assert_includes button[:url], "espalia.example"
     assert_not_includes button[:url], "example.com"
   end
 

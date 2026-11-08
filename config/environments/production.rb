@@ -60,10 +60,11 @@ Rails.application.configure do
   # config.action_mailer.raise_delivery_errors = false
 
   # Host for absolute URLs in generated links — mailer templates AND outbound
-  # notification links (e.g. the Slack DM "Open in GrowthOS" button, which reads
-  # action_mailer.default_url_options[:host]). Defaults to the canonical
-  # production host; override with APP_HOST for other deployments.
-  app_host = ENV["APP_HOST"].presence || "growthos.work"
+  # notification links (e.g. the Slack DM "Open in Espalia" button, which reads
+  # action_mailer.default_url_options[:host]). Every deployment sets APP_HOST;
+  # the fallback is deliberately unroutable so a missing value shows up as
+  # espalia.example links, never as another deployment's host.
+  app_host = ENV["APP_HOST"].presence || "espalia.example"
   config.action_mailer.default_url_options = { host: app_host, protocol: "https" }
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.

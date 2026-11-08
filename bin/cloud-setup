@@ -115,8 +115,8 @@ RAILS_ENV=test bin/rails db:create >/dev/null
 # the seed also finds the HiBob credentials and runs a live HRIS sync (names whimsified,
 # emails real); without it, that sync is skipped.
 step "Development database"
-if [ -n "${GROWTHOS_MASTER_KEY:-}" ]; then
-  (umask 077 && printf '%s' "$GROWTHOS_MASTER_KEY" > config/master.key)
+if [ -n "${ESPALIA_MASTER_KEY:-${GROWTHOS_MASTER_KEY:-}}" ]; then
+  (umask 077 && printf '%s' "${ESPALIA_MASTER_KEY:-$GROWTHOS_MASTER_KEY}" > config/master.key)
 fi
 bin/rails db:prepare >/dev/null
 

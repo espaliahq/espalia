@@ -76,7 +76,7 @@ module Espalia
 
     # Compress our own HTML/JSON/JS responses.
     #
-    # growthos.work sits behind Cloudflare, which already compresses at the
+    # The reference deployment sits behind Cloudflare, which already compresses at the
     # edge (measured 2026-09-09: the sign-in page, 16,914 B identity vs 3,496 B
     # gzip). This covers the two paths that edge does not: a self-hosted
     # deployment with no proxy in front of it — an explicitly supported

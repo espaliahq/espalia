@@ -4,7 +4,7 @@ require "test_helper"
 
 # The app compresses its own HTML/JSON responses (#383).
 #
-# growthos.work is behind Cloudflare, which already compresses at the edge; this
+# The reference deployment is behind Cloudflare, which already compresses at the edge; this
 # covers the deployments that have no such edge (self-hosting is a supported
 # model) and the origin-to-edge hop, which carries the explorer's ~1 MB matrix
 # frame. See the Rack::Deflater comment in config/application.rb.
