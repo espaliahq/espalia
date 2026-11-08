@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [ main ]
+  # Fired by dependabot-auto-merge after its GITHUB_TOKEN merge, which GitHub's
+  # recursion guard stops from triggering the push run above.
+  workflow_dispatch:
 
 # Every job here is read-only (no git push/commit, no releases). Grant the
 # workflow token least privilege rather than the repo default.
@@ -175,8 +178,10 @@ jobs:
       # token absence: the test step would hand the token to the freshly
       # bumped dependency's own code, a supply-chain exfiltration channel,
       # so no Dependabot secret exists and none should be added — the bump
-      # gets its parity run on main right after the merge (ci.yml runs on
-      # push to main). On any other same-repo run an empty secret is a
+      # gets its parity run on main via the workflow_dispatch that
+      # dependabot-auto-merge fires after merging (its own GITHUB_TOKEN
+      # merge cannot trigger the push run). On any other same-repo run an
+      # empty secret is a
       # configuration loss, not a fork — fail loudly, or parity coverage
       # disappears silently. Job-level `if:` cannot read secrets, hence
       # this step.
@@ -383,6 +388,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -419,6 +425,7 @@ jobs:
           gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/reviews" -f event=APPROVE -f commit_id="$HEAD_SHA"
 
       - name: Merge the head CI tested
+        id: merge
         if: steps.commits.outputs.trusted == 'true'
         run: |
           # Retry to absorb the brief mergeability recompute after approval.
@@ -431,6 +438,9 @@ jobs:
             read -r state head <<< "$pr"
             if [ "$state" != "OPEN" ]; then
               echo "::notice::PR #$PR_NUMBER is $state; nothing to merge."
+              # A merge that lands but exits non-zero (say --delete-branch
+              # failed) reaches here as MERGED: still owed its parity run.
+              [ "$state" = "MERGED" ] && echo "merged=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "$head" != "$HEAD_SHA" ]; then
@@ -438,11 +448,29 @@ jobs:
               exit 0
             fi
             if gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
               echo "Merged on attempt $attempt"
               exit 0
             fi
             echo "Merge not ready (attempt $attempt); sleeping 10s…"
             sleep 10
           done
+          # The loop re-reads state only at its top: a fifth attempt that lands
+          # while exiting non-zero would otherwise lose its parity run.
+          state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state --jq .state || echo UNKNOWN)
+          if [ "$state" = "MERGED" ]; then
+            echo "::notice::PR #$PR_NUMBER merged on the final attempt despite a non-zero exit."
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "::error::PR #$PR_NUMBER still not mergeable after retries (unresolved conversations, or a policy not yet met)."
           exit 1
+
+      - name: Run the parity test on the merged main
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          # The GITHUB_TOKEN merge above cannot trigger the push run on main
+          # (GitHub's recursion guard), and that run is the only place the CLI
+          # parity test meets a Dependabot bump. workflow_dispatch is exempt
+          # from the guard, so fire the run the merge suppressed.
+          gh workflow run ci.yml --repo "$REPO" --ref main
