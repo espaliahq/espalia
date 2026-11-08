@@ -1,22 +1,19 @@
 # Render identifies blueprint resources by NAME: renaming one here makes the
 # next blueprint sync provision a fresh (empty) resource, not rename the old.
 # An existing deployment keeps its current names in its own copy of this file.
+# Render ignores `sync: false` inside an environment group, so the two
+# prompted secrets (RAILS_MASTER_KEY, APP_HOST) are declared per service.
 envVarGroups:
   - name: espalia-shared
     envVars:
       - key: RAILS_ENV
         value: production
-      # The host every generated link uses (config/environments/production.rb).
-      - key: APP_HOST
-        sync: false
       - key: RAILS_LOG_TO_STDOUT
         value: "true"
       - key: RAILS_SERVE_STATIC_FILES
         value: "true"
       - key: PGSSLMODE
         value: require
-      - key: RAILS_MASTER_KEY
-        sync: false
 
 services:
   - type: web
@@ -32,6 +29,11 @@ services:
     startCommand: bundle exec bin/thrust bin/rails server
     envVars:
       - fromGroup: espalia-shared
+      - key: RAILS_MASTER_KEY
+        sync: false
+      # The host every generated link uses (config/environments/production.rb).
+      - key: APP_HOST
+        sync: false
       - key: WEB_CONCURRENCY
         value: "2"
       - key: RAILS_MAX_THREADS
@@ -64,6 +66,11 @@ services:
     startCommand: bundle exec bin/jobs
     envVars:
       - fromGroup: espalia-shared
+      - key: RAILS_MASTER_KEY
+        sync: false
+      # The worker builds the same links (Slack DMs, mailers).
+      - key: APP_HOST
+        sync: false
       - key: JOB_CONCURRENCY
         value: "1"
       - key: RAILS_MAX_THREADS

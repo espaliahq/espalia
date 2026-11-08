@@ -154,7 +154,7 @@ The seed connects no HRIS: the demo tenant's people are synthetic. To exercise a
 
 Installed per tenant (OAuth v2, `Tenant#connect_slack!`). Outbound: Noticed
 notifications DM'd by `SlackDeliveryMethod` after the in-app copy's grace
-period. Inbound: `/growthos feedback` and the "Feedback on this message"
+period. Inbound: `/espalia feedback` and the "Feedback on this message"
 shortcut open a modal whose submission records evidence as the Slack user —
 identity by workspace id and the member's cached or email-resolved Slack id,
 writes through the same `Operations::Assessments::RecordEvidence` the web and
