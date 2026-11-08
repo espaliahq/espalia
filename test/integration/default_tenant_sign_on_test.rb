@@ -7,18 +7,17 @@ require "test_helper"
 # brands as that tenant and scopes a member's session to it, while explicit
 # sign-on URLs, custom domains and signed-in sessions behave as without it.
 class DefaultTenantSignOnTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @tenant = create(:tenant, name: "Null Island Systems", slug: "nullisland",
       product_name: "Ladder")
     @user = create(:user, password: "password123")
     ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: @user) }
+    @default_slug_was = Rails.application.config.x.default_tenant_slug
     Rails.application.config.x.default_tenant_slug = "nullisland"
   end
 
   teardown do
-    Rails.application.config.x.default_tenant_slug = nil
+    Rails.application.config.x.default_tenant_slug = @default_slug_was
   end
 
   context "the instance sign-in page with a default tenant" do
@@ -37,6 +36,32 @@ class DefaultTenantSignOnTest < ActionDispatch::IntegrationTest
       assert_equal @tenant.id, session[:current_tenant_id]
     end
 
+    should "scope a Google sign-in the same way as a password one" do
+      other = create(:tenant, name: "Driftwood")
+      # First membership elsewhere, so the usual resolution would pick it.
+      user = create(:user, email: "bea@example.com")
+      ActsAsTenant.with_tenant(other) { create(:tenant_user, tenant: other, user: user) }
+      ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: user) }
+      Rails.application.env_config["devise.mapping"] = Devise.mappings[:user]
+      OmniAuth.config.mock_auth[:google_oauth2] = OmniAuth::AuthHash.new(
+        provider: "google_oauth2",
+        uid: "uid-12",
+        info: { "email" => "bea@example.com", "email_verified" => true, "name" => "Bea" },
+        extra: { raw_info: { "email_verified" => true } }
+      )
+      Rails.application.env_config["omniauth.auth"] = OmniAuth.config.mock_auth[:google_oauth2]
+
+      # Straight to the callback, no tenant_slug anywhere — the instance
+      # sign-in's Google button with no explicit tenant.
+      get user_google_oauth2_omniauth_callback_path
+
+      assert_redirected_to root_path
+      assert_equal @tenant.id, session[:current_tenant_id]
+    ensure
+      Rails.application.env_config.delete("omniauth.auth")
+      Rails.application.env_config.delete("devise.mapping")
+    end
+
     should "leave a non-member's resolution alone" do
       outsider_tenant = create(:tenant, name: "Elsewhere Org")
       outsider = create(:user, password: "password123")
@@ -51,7 +76,7 @@ class DefaultTenantSignOnTest < ActionDispatch::IntegrationTest
 
   context "surfaces the default tenant must not touch" do
     should "lose to an explicit tenant sign-on URL" do
-      other = create(:tenant, name: "Driftwood", slug: "driftwood", product_name: "Rings")
+      create(:tenant, name: "Driftwood", slug: "driftwood", product_name: "Rings")
 
       get tenant_sign_in_path(tenant_slug: "driftwood")
 
