@@ -9,6 +9,12 @@ require "application_system_test_case"
 class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
 
+  # The feed's round-trips (the 250-entry first batch and the append) have
+  # outrun Capybara's 10s default on a starved parallel runner while passing
+  # in isolation (https://github.com/espaliahq/espalia/issues/11) — so the
+  # assertions that wait on them get longer.
+  APPEND_WAIT = 30
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @user = FactoryBot.create(:user, password: "password123")
@@ -56,21 +62,16 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
     cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
     within "#suggestion-panel" do
       # First batch is capped; the affordance signals there's more.
-      assert_selector "#framework-activity-list > li", count: cap
+      assert_selector "#framework-activity-list > li", count: cap, wait: APPEND_WAIT
       assert_text "#{cap} events"
       assert_selector "#framework-activity-load-more button", text: "Load older"
     end
 
-    # Wait for the controller to attach before dispatching, then JS-dispatch
-    # the click (hover-revealed control; pointer clicks flake on CI).
-    wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
-    page.execute_script(
-      "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
-    )
+    load_older_activity
 
     within "#suggestion-panel" do
       # Older entries appended (more than the first capped batch) and the count grew.
-      assert_selector "#framework-activity-list > li", minimum: cap + 1
+      assert_selector "#framework-activity-list > li", minimum: cap + 1, wait: APPEND_WAIT
       assert_no_text "#{cap} events"
     end
   end
@@ -81,11 +82,12 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
 
     cap = Frameworks::ActivityFeedQuery::STREAM_READ_LIMIT
     within "#suggestion-panel" do
-      assert_selector "#framework-activity-list > li", count: cap
+      assert_selector "#framework-activity-list > li", count: cap, wait: APPEND_WAIT
     end
 
     # Filter to "Suggestions" — the setup creates none (all padding is
     # structural capability_added), so every entry should hide.
+    wait_for_stimulus "framework-activity"
     page.execute_script(
       "document.querySelector(\"button[data-framework-activity-filter-param='suggestions']\").click()"
     )
@@ -93,19 +95,27 @@ class Frameworks::ActivityLoadMoreTest < ApplicationSystemTestCase
       assert_no_selector "#framework-activity-list > li", visible: true
     end
 
-    # Wait for the controller to attach before dispatching, then JS-dispatch
-    # the click (hover-revealed control; pointer clicks flake on CI).
+    load_older_activity
+
+    within "#suggestion-panel" do
+      # The older batch appended (total grew past the first cap)…
+      assert_selector "#framework-activity-list > li", visible: :all, minimum: cap + 1, wait: APPEND_WAIT
+      # …and the appended entries honour the active "Suggestions" filter — still
+      # nothing visible (hiding is per-entry client work, so it shares the
+      # starved-runner budget). Before the fix the new entries ignored the filter.
+      assert_no_selector "#framework-activity-list > li", visible: true, wait: APPEND_WAIT
+    end
+  end
+
+  private
+
+  # Wait for the controller to attach before dispatching, then JS-dispatch the
+  # click — Selenium's synthetic pointer clicks drop silently on starved CI
+  # (see testing.md), and that loss reads exactly like this flake.
+  def load_older_activity
     wait_for_stimulus "activity-more", scope: "#framework-activity-load-more"
     page.execute_script(
       "document.querySelector(\"#framework-activity-load-more button[data-action='activity-more#load']\").click()"
     )
-
-    within "#suggestion-panel" do
-      # The older batch appended (total grew past the first cap)…
-      assert_selector "#framework-activity-list > li", visible: :all, minimum: cap + 1
-      # …and the appended entries honour the active "Suggestions" filter — still
-      # nothing visible. Before the fix the new entries ignored the filter.
-      assert_no_selector "#framework-activity-list > li", visible: true
-    end
   end
 end
