@@ -36,7 +36,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
   end
 
-  class_attribute :browser_versions_logged, default: false
+  class << self
+    attr_accessor :browser_versions_logged
+  end
 
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
@@ -256,12 +258,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   # Once per worker, so the CI log shows which Chrome a run used.
   def log_browser_versions
-    return if self.class.browser_versions_logged
+    return if ApplicationSystemTestCase.browser_versions_logged
 
     ApplicationSystemTestCase.browser_versions_logged = true
     caps = page.driver.browser.capabilities
-    $stdout.puts "\n[system test] Chrome #{caps.browser_version}, " \
-                 "ChromeDriver #{caps["chrome"]&.fetch("chromedriverVersion", "unknown")}"
+    warn "[system test] Chrome #{caps.browser_version}, " \
+         "ChromeDriver #{caps["chrome"]&.fetch("chromedriverVersion", "unknown")}"
   end
 
   # Retries a block that makes the first Selenium call, rescuing the
