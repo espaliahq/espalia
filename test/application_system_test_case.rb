@@ -36,6 +36,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
   end
 
+  class_attribute :browser_versions_logged, default: false
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
@@ -96,6 +98,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     with_browser_retries do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
     end
+    log_browser_versions if ENV["CI"]
   end
 
   # Signs the given user in via the standard Devise form. Retries the form
@@ -243,6 +246,16 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # rather than raising lets that assertion decide, with its full wait.
     [ recovery_note("found no credential field to fill — the first submit may have landed, or " \
                     "the Devise form changed") ]
+  end
+
+  # Once per worker, so the CI log shows which Chrome a run used.
+  def log_browser_versions
+    return if self.class.browser_versions_logged
+
+    ApplicationSystemTestCase.browser_versions_logged = true
+    caps = page.driver.browser.capabilities
+    $stdout.puts "\n[system test] Chrome #{caps.browser_version}, " \
+                 "ChromeDriver #{caps["chrome"]&.fetch("chromedriverVersion", "unknown")}"
   end
 
   # Retries a block that makes the first Selenium call, rescuing the
