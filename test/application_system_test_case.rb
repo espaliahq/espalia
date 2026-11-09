@@ -97,6 +97,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   setup do
     with_browser_retries do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      keep_page_focused
     end
     log_browser_versions if ENV["CI"]
   end
@@ -246,6 +247,14 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # rather than raising lets that assertion decide, with its full wait.
     [ recovery_note("found no credential field to fill — the first submit may have landed, or " \
                     "the Devise form changed") ]
+  end
+
+  # A page whose window loses focus stops matching :focus and :focus-visible,
+  # fires no focus events and pauses requestAnimationFrame, so focus, drawer
+  # and dropdown tests fail together on CI (espaliahq/espalia#19). Focus
+  # emulation keeps the page focused and visible whatever the window does.
+  def keep_page_focused
+    page.driver.browser.execute_cdp("Emulation.setFocusEmulationEnabled", enabled: true)
   end
 
   # Once per worker, so the CI log shows which Chrome a run used.

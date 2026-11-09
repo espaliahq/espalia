@@ -556,6 +556,27 @@ page.execute_script(<<~JS)
 JS
 ```
 
+## Focus Needs a Focused Page — Focus Emulation Is On
+
+**`ApplicationSystemTestCase` turns on CDP focus emulation in every setup
+(`keep_page_focused`), so don't turn it off.** A page whose window loses focus
+stops matching `:focus` and `:focus-visible`, fires no `focus`/`focusout`
+events, and pauses `requestAnimationFrame`. Several unrelated tests then fail
+in the same run: a skip link that never reveals, a focus ring that "reads as
+mouse focus", a drawer that stays open when focus leaves it, a dropdown that
+ignores an outside click because its rAF-cleared guard never clears. Four of
+these hit one README-only PR in three runs
+([espaliahq/espalia#19](https://github.com/espaliahq/espalia/issues/19)).
+
+**Reproduce it by minimizing the window** after a `visit`
+(`Browser.getWindowForTarget`, then `Browser.setWindowBounds` with
+`windowState: "minimized"`): `document.hasFocus()` turns false and every
+symptom above follows. A second tab or window does not reproduce it, since
+headless Chrome keeps each one focused. A `resize_to` restores a minimized
+window, so minimize after any resize. On CI, each worker prints its Chrome and
+ChromeDriver versions once (`[system test] Chrome …`), so a new failure family
+can be matched to a browser update.
+
 ## Waiting for Lazy-Loaded Turbo Frames (NON-NEGOTIABLE)
 
 **When a page eager-loads Turbo Frames via `src:` and inner-content fallback, wait for those frames to finish their fetch before clicking inside them.** The fallback content is rendered immediately, but Turbo replaces it once the `src` fetch completes. A click between initial render and replacement can hit a stale link about to be removed from the DOM.
@@ -739,7 +760,9 @@ Three traps it already handles or that bit writing it:
   *Flake-Prone Click Guards*), and `press_tab` performs no native traversal.
   A script `element.focus()` on a page with no prior pointer input does match
   `:focus-visible` in Chrome, so focus-ring tests focus by script and assert
-  `matches(":focus-visible")` before measuring the ring.
+  `matches(":focus-visible")` before measuring the ring. That holds only while
+  the page has focus, which focus emulation guarantees (see *Focus Needs a
+  Focused Page*).
 
 ## Running One System-Test File — `bin/rails test <path>`
 
