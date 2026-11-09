@@ -17,20 +17,20 @@ class FocusEmulationSystemTest < ApplicationSystemTestCase
     assert_text "Home"
     minimize_window
 
-    state = page.evaluate_async_script(<<~JS)
-      const done = arguments[0];
-      const button = document.querySelector("#user-menu button");
-      button.focus();
-      const focus = { hasFocus: document.hasFocus(), focus: button.matches(":focus"),
-                      focusVisible: button.matches(":focus-visible") };
-      const timeout = setTimeout(() => done({ ...focus, frame: false }), 2000);
-      requestAnimationFrame(() => { clearTimeout(timeout); done({ ...focus, frame: true }) });
+    state = page.evaluate_script(<<~JS)
+      (() => {
+        const button = document.querySelector("#user-menu button");
+        button.focus();
+        requestAnimationFrame(() => { document.documentElement.dataset.animationFrame = "ran" });
+        return { hasFocus: document.hasFocus(), focus: button.matches(":focus"),
+                 focusVisible: button.matches(":focus-visible") };
+      })()
     JS
 
     assert state["hasFocus"], "the page lost focus with its window"
     assert state["focus"], "a script focus did not match :focus"
     assert state["focusVisible"], "a script focus did not match :focus-visible"
-    assert state["frame"], "requestAnimationFrame never fired"
+    assert_selector "html[data-animation-frame='ran']", visible: :all
   end
 
   private
