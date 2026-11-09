@@ -53,10 +53,10 @@ tenant brands its own instance: the product name is a tenant setting.
   it in from chat threads, pull requests and meeting notes, so reviews rest
   on receipts rather than recollection.
 - **AI-suggested placement** — feedback rarely arrives labelled with
-  capabilities. With a model configured (each tenant brings its own), Espalia
-  suggests where each new piece of feedback belongs in the framework and
-  whether it shows a capability demonstrated or a growth area; a person
-  accepts or dismisses each suggestion.
+  capabilities. Off by default: a tenant switches it on and brings its own
+  model, and Espalia then suggests where each new piece of feedback belongs
+  in the framework and whether it shows a capability demonstrated or a growth
+  area; a person accepts or dismisses each suggestion.
 - **Growth planning** — focus areas, growth plans and check-ins on each
   person's development stream.
 - **Calibration** — sessions that put ratings side by side and capture notes,
