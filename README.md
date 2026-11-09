@@ -8,10 +8,10 @@ and run the whole rhythm on them: continuous feedback and evidence,
 self-assessments, manager alignment conversations and growth planning.
 
 It exists because the alternatives go stale. A framework kept in a spreadsheet
-gets opened twice a year at review time and stops shaping anything in between,
-and the "big bang" review that follows is assembled that weekend from memory.
-Espalia keeps the expectations, the feedback, the evidence and the
-conversations in one place, all year round.
+gets opened twice a year at review time and stops shaping anything in between;
+the review that follows is a "big bang" built from memory. Espalia keeps the
+expectations, the feedback, the evidence and the conversations in one place,
+all year round.
 
 The name comes from *espalier*: a plant trained up a frame, tier by tier.
 
@@ -21,10 +21,10 @@ is three things at once — a cultural blueprint (what behaviours to reward), a
 performance map (what good looks like at each level) and a development roadmap
 (how to grow within or across roles).
 
-AI-native is a concrete claim here: everything the web UI does is also exposed
-over the [Model Context Protocol](https://modelcontextprotocol.io), so an AI assistant
-can author frameworks, collect evidence from wherever the work happened and
-prepare assessments on a person's behalf, under that person's own permissions.
+AI-native is a concrete claim here: the same operations that power the web UI
+are exposed over the [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP), so an AI assistant can author frameworks, collect evidence from
+wherever the work happened and prepare assessments on a person's behalf.
 Review prep becomes an afternoon of judgement instead of a weekend of
 archaeology.
 
@@ -49,10 +49,9 @@ tenant brands its own instance: the product name is a tenant setting.
   alignment conversations that formalise agreement, and assessment cycles that
   run a cohort through the process with progress tracking.
 - **Evidence** — collected continuously, linked to capabilities, requested
-  from peers, and carried across framework versions. Through an assistant
-  connected over MCP, evidence flows in from wherever the work happened —
-  chat threads, pull requests, meeting notes — so reviews rest on receipts
-  rather than recollection.
+  from peers, and carried across framework versions. An assistant can bring
+  it in from chat threads, pull requests and meeting notes, so reviews rest
+  on receipts rather than recollection.
 - **AI-suggested placement** — feedback rarely arrives labelled with
   capabilities. With a model configured (each tenant brings its own), Espalia
   suggests where each new piece of feedback belongs in the framework and
@@ -64,10 +63,9 @@ tenant brands its own instance: the product name is a tenant setting.
   flags and revisit requests.
 - **Reporting** — capability attainment, evidence coverage, cycle cohort
   views and promotion-readiness signals.
-- **MCP server** — the same operations that power the web UI, exposed over
-  MCP with OAuth, so an assistant acts with the person's own permissions and
-  nothing more. Importing an existing framework via MCP is the documented
-  onboarding path: [docs/import-your-framework.md](docs/import-your-framework.md).
+- **MCP server** — OAuth-gated, so an assistant acts with the person's own
+  permissions and nothing more. Importing an existing framework via MCP is
+  the documented onboarding path: [docs/import-your-framework.md](docs/import-your-framework.md).
 - **Integrations** — HRIS sync (HiBob today; adapter pattern for others),
   Slack notifications and feedback capture, a signed feedback exchange with
   peer systems, and optional AI assistance. All credentials are tenant-level,
