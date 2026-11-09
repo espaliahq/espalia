@@ -15,6 +15,16 @@ is three things at once — a cultural blueprint (what behaviours to reward), a
 performance map (what good looks like at each level) and a development roadmap
 (how to grow within or across roles).
 
+![The framework explorer](docs/screenshots/framework-explorer.png)
+
+*The framework explorer: what each capability looks like at every level, for
+the roles you choose to see.*
+
+Every screenshot in this README shows **Null Island Systems**, the fictional
+tenant that `bin/setup` seeds — the people, ratings and suggestions are all
+invented. Its navbar reads "Null Island Systems Ladder" because the demo
+tenant brands its own instance: the product name is a tenant setting.
+
 ## What it does
 
 - **Framework authoring** — roles, levels, capabilities and behavioural
@@ -41,6 +51,24 @@ performance map (what good looks like at each level) and a development roadmap
   Slack notifications and feedback capture, a signed feedback exchange with
   peer systems, and optional AI assistance. All credentials are tenant-level,
   entered through the UI and encrypted at rest.
+
+## A look around
+
+![The assessment view](docs/screenshots/assessment.png)
+
+*An assessment scores each capability against the person's level, names what
+blocks the level, and keeps the self and manager perspectives side by side.*
+
+![The suggested-edits review queue](docs/screenshots/suggested-edits.png)
+
+*Frameworks are edited collaboratively: collaborators suggest edits inline,
+and reviewers apply them tier by tier — examples lightly, canonical
+expectations with more care.*
+
+![Cohort progress for an assessment cycle](docs/screenshots/cycle-progress.png)
+
+*An assessment cycle tracks its cohort from self-assessment through manager
+assessment to alignment, without exposing anyone's ratings early.*
 
 ## Technology
 
@@ -126,7 +154,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go to
 ## History and license
 
 Espalia began life as **GrowthOS**, the internal growth platform at
-[me&u](https://www.meandu.com); you'll still see that name in places until the
-product name becomes configurable. MIT-licensed — see [LICENSE](LICENSE).
+[me&u](https://www.meandu.com); the product name is a tenant setting, so a
+deployment can keep its own. MIT-licensed — see [LICENSE](LICENSE).
 The Espalia name and mark are trademarked separately and not granted by the
 license.
