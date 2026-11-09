@@ -1,11 +1,17 @@
 # Espalia
 
-Espalia is an open-source, multi-tenant platform for operationalising career
-growth frameworks — and, over time, for capability-based team planning built
-on the same foundations. Organisations define their career paths (role
-families, roles, levels, capabilities, behavioural expectations) and use the
-platform to run self-assessments, manager alignment conversations, evidence
-collection and growth planning.
+Espalia is an open-source, multi-tenant, AI-native platform for career growth
+frameworks and continuous performance — and, over time, for capability-based
+team planning built on the same foundations. Organisations define their career
+paths (role families, roles, levels, capabilities, behavioural expectations)
+and run the whole rhythm on them: continuous feedback and evidence,
+self-assessments, manager alignment conversations and growth planning.
+
+It exists because the alternatives go stale. A framework kept in a spreadsheet
+gets opened twice a year at review time and stops shaping anything in between,
+and the "big bang" review that follows is assembled that weekend from memory.
+Espalia keeps the expectations, the feedback, the evidence and the
+conversations in one place, all year round.
 
 The name comes from *espalier*: a plant trained up a frame, tier by tier.
 
@@ -14,6 +20,13 @@ and culture is the sum of consistently demonstrated behaviours. A career path
 is three things at once — a cultural blueprint (what behaviours to reward), a
 performance map (what good looks like at each level) and a development roadmap
 (how to grow within or across roles).
+
+AI-native is a concrete claim here: everything the web UI does is also exposed
+over the [Model Context Protocol](https://modelcontextprotocol.io), so an AI assistant
+can author frameworks, collect evidence from wherever the work happened and
+prepare assessments on a person's behalf, under that person's own permissions.
+Review prep becomes an afternoon of judgement instead of a weekend of
+archaeology.
 
 ![The framework explorer](docs/screenshots/framework-explorer.png)
 
@@ -29,23 +42,31 @@ tenant brands its own instance: the product name is a tenant setting.
 
 - **Framework authoring** — roles, levels, capabilities and behavioural
   expectations, edited collaboratively with inline suggested edits (Google
-  Docs style), versioned with draft/publish semantics, and migrated safely
-  when the framework's shape changes. The full history is event-sourced.
+  Docs style, in the app or over MCP), versioned with draft/publish semantics,
+  and migrated safely when the framework's shape changes. The full history is
+  event-sourced.
 - **Assessments** — self-ratings and manager ratings against the framework,
   alignment conversations that formalise agreement, and assessment cycles that
   run a cohort through the process with progress tracking.
 - **Evidence** — collected continuously, linked to capabilities, requested
-  from peers, and carried across framework versions.
+  from peers, and carried across framework versions. Through an assistant
+  connected over MCP, evidence flows in from wherever the work happened —
+  chat threads, pull requests, meeting notes — so reviews rest on receipts
+  rather than recollection.
+- **AI-suggested placement** — feedback rarely arrives labelled with
+  capabilities. With a model configured (each tenant brings its own), Espalia
+  suggests where each new piece of feedback belongs in the framework and
+  whether it shows a capability demonstrated or a growth area; a person
+  accepts or dismisses each suggestion.
 - **Growth planning** — focus areas, growth plans and check-ins on each
   person's development stream.
 - **Calibration** — sessions that put ratings side by side and capture notes,
   flags and revisit requests.
 - **Reporting** — capability attainment, evidence coverage, cycle cohort
   views and promotion-readiness signals.
-- **MCP server** — the same operations that power the web UI are exposed over
-  the [Model Context Protocol](https://modelcontextprotocol.io), with OAuth,
-  so AI assistants can read and write frameworks, assessments and evidence on
-  a person's behalf. Importing an existing framework via MCP is the documented
+- **MCP server** — the same operations that power the web UI, exposed over
+  MCP with OAuth, so an assistant acts with the person's own permissions and
+  nothing more. Importing an existing framework via MCP is the documented
   onboarding path: [docs/import-your-framework.md](docs/import-your-framework.md).
 - **Integrations** — HRIS sync (HiBob today; adapter pattern for others),
   Slack notifications and feedback capture, a signed feedback exchange with
