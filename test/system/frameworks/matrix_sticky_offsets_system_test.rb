@@ -31,6 +31,7 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
   # enough above it that the expand scrolls at all (`scrolled` is asserted > 0).
   CAPABILITY_COUNT = 30
   TARGET_ROW_INDEX = 5
+  ROW_KEBAB = "button[aria-label='Capability actions']"
 
   # Everything the sticky assertions need, read in one round trip: where the
   # capability's name line sits, where the sticky stack ends, and — the same
@@ -257,7 +258,24 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
   # first because the kebab is `opacity: 0` until its cluster is revealed, and
   # Selenium refuses to click an element it considers not displayed.
   def click_row_kebab_for_real
-    row = find(target_row_selector)
+    reveal_row_kebab
+    # rubocop:disable SystemTests/FlakeProneClick
+    find(target_row_selector).find(ROW_KEBAB).click
+    # rubocop:enable SystemTests/FlakeProneClick
+  end
+
+  # A busy runner can lose the row's `:hover`, or re-render the row so Capybara
+  # reloads an unhovered one, and the kebab is hidden again; a lost hover never
+  # comes back by waiting (#21), so park and hover until the kebab shows.
+  def reveal_row_kebab
+    3.times do
+      row = find(target_row_selector)
+      park_and_hover(row)
+      return if row.has_selector?(ROW_KEBAB, wait: 2)
+    end
+  end
+
+  def park_and_hover(row)
     row.hover
     # Selenium scrolls an element into view before acting on it, aligned to the
     # BOTTOM of the scrollport — so hovering a tall `<tr>` drags its top (where
@@ -273,11 +291,8 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
     page.execute_script("arguments[0].scrollIntoView({ block: 'start' });", row)
     # The scroll leaves the pointer over a row further down, and once Chrome
     # recomputes `:hover` this row's kebab is `opacity: 0` again, so hover once
-    # more where the row now rests. Under load the recompute could beat the find.
+    # more where the row now rests.
     row.find("td", match: :first).hover
-    # rubocop:disable SystemTests/FlakeProneClick
-    row.find("button[aria-label='Capability actions']").click
-    # rubocop:enable SystemTests/FlakeProneClick
   end
 
   # The activity pane used to be an inline `w-80` sibling at 375 px, leaving the
