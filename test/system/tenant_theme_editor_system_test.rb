@@ -123,12 +123,10 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
 
   should "reach every choice and Custom's controls from the keyboard" do
     open_editor
-    find("input[type=radio][value=default]").send_keys(:right)
-    assert_selector "input[type=radio][value=bento]:checked"
+    arrow_right(from: "default", to: "bento")
     assert_equal "bento", html_theme
 
-    find("input[type=radio][value=bento]").send_keys(:right)
-    assert_selector "input[type=radio][value=custom]:checked"
+    arrow_right(from: "bento", to: "custom")
 
     reachable = page.evaluate_script(<<~JS)
       [...document.querySelectorAll("[data-theme-live-preview-target='field']")]
@@ -159,6 +157,14 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
 
     assert_equal true, dispatch_js_click("input[type=radio][name='tenant[theme]'][value='#{value}']")
     assert_selector rendered, visible: :all
+  end
+
+  # A real keypress, since the native arrow-key move is the subject. A starved runner can drop it, so
+  # it is sent again; send_keys refocuses `from` first, so a late first press can't move two steps.
+  def arrow_right(from:, to:)
+    click_with_retry(expect_selector: "input[type=radio][value=#{to}]:checked") do
+      find("input[type=radio][value=#{from}]").send_keys(:right)
+    end
   end
 
   def html_theme
