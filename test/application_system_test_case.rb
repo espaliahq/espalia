@@ -249,10 +249,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
                     "the Devise form changed") ]
   end
 
-  # A page whose window loses focus stops matching :focus and :focus-visible,
-  # fires no focus events and pauses requestAnimationFrame, so focus, drawer
-  # and dropdown tests fail together on CI (espaliahq/espalia#19). Focus
-  # emulation keeps the page focused and visible whatever the window does.
+  # See testing.md → "Focus Needs a Focused Page".
   def keep_page_focused
     page.driver.browser.execute_cdp("Emulation.setFocusEmulationEnabled", enabled: true)
   end
