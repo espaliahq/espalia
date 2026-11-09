@@ -36,6 +36,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
   end
 
+  class << self
+    attr_accessor :browser_versions_logged
+  end
+
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
 
@@ -95,7 +99,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   setup do
     with_browser_retries do
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
+      keep_page_focused
     end
+    log_browser_versions if ENV["CI"]
   end
 
   # Signs the given user in via the standard Devise form. Retries the form
@@ -243,6 +249,21 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # rather than raising lets that assertion decide, with its full wait.
     [ recovery_note("found no credential field to fill — the first submit may have landed, or " \
                     "the Devise form changed") ]
+  end
+
+  # See testing.md → "Focus Needs a Focused Page".
+  def keep_page_focused
+    page.driver.browser.execute_cdp("Emulation.setFocusEmulationEnabled", enabled: true)
+  end
+
+  # Once per worker, so the CI log shows which Chrome a run used.
+  def log_browser_versions
+    return if ApplicationSystemTestCase.browser_versions_logged
+
+    ApplicationSystemTestCase.browser_versions_logged = true
+    caps = page.driver.browser.capabilities
+    warn "[system test] Chrome #{caps.browser_version}, " \
+         "ChromeDriver #{caps["chrome"]&.fetch("chromedriverVersion", "unknown")}"
   end
 
   # Retries a block that makes the first Selenium call, rescuing the
