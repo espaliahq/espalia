@@ -474,6 +474,8 @@ The editor's own contract is `[data-editor-action]` on the host, `[data-editor-d
 
 **`fill_in` types one character at a time, and starved CI runners drop keystrokes.** This is nastier than a dropped click: the field looks filled, but a debounced typeahead runs against `"Ra"` instead of `"Raj"` and the failure surfaces much later as "no matches" — nothing points back at the typing. That is exactly how the calibration participant picker failed.
 
+**A value longer than 30 characters loses exactly its first four.** Capybara types only those four, appends the middle through JavaScript, then types the last three, so a dropped keystroke there costs the field its first word. `"Ran the incident call…"` saved as `"the incident call…"` ([#21](https://github.com/espaliahq/espalia/issues/21)).
+
 `js_fill_in` assigns the value and dispatches `input` + `change`, so Stimulus controllers still fire:
 
 ```ruby
