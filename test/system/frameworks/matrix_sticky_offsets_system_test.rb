@@ -49,7 +49,7 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
       const band = row.closest("tbody")
         .querySelector("tr[data-matrix-target='categoryHeader']");
       const line = row.querySelector(".mx-line");
-      const kebab = row.querySelector("button[aria-label='Capability actions']");
+      const kebab = row.querySelector(arguments[1]);
       if (!headerCell || !line) return null;
 
       const stackBottom = Math.max(
@@ -266,13 +266,14 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
 
   # A busy runner can lose the row's `:hover`, or re-render the row so Capybara
   # reloads an unhovered one, and the kebab is hidden again; a lost hover never
-  # comes back by waiting (#21), so park and hover until the kebab shows.
+  # comes back by waiting (espaliahq/espalia#21), so park and hover until it shows.
   def reveal_row_kebab
     3.times do
       row = find(target_row_selector)
       park_and_hover(row)
       return if row.has_selector?(ROW_KEBAB, wait: 2)
     end
+    flunk "the row's kebab stayed hidden through three hovers"
   end
 
   def park_and_hover(row)
@@ -320,7 +321,7 @@ class Frameworks::MatrixStickyOffsetsSystemTest < ApplicationSystemTestCase
     geometry = nil
 
     loop do
-      geometry = page.evaluate_script(GEOMETRY_PROBE_JS, target_row_selector)
+      geometry = page.evaluate_script(GEOMETRY_PROBE_JS, target_row_selector, ROW_KEBAB)
       return geometry if geometry && geometry == previous && geometry["scrolled"].positive?
       break if Time.current > deadline
 
