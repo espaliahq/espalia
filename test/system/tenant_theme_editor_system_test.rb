@@ -159,8 +159,8 @@ class TenantThemeEditorSystemTest < ApplicationSystemTestCase
     assert_selector rendered, visible: :all
   end
 
-  # A real keypress, since the native arrow-key move is the subject. A starved runner can drop it, so
-  # it is sent again; send_keys refocuses `from` first, so a late first press can't move two steps.
+  # A real keypress, since the native arrow-key move is the subject. A busy runner can drop it, so it
+  # is sent again from `from` if the next choice isn't checked within the landed-wait.
   def arrow_right(from:, to:)
     click_with_retry(expect_selector: "input[type=radio][value=#{to}]:checked") do
       find("input[type=radio][value=#{from}]").send_keys(:right)
