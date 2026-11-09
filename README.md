@@ -56,7 +56,8 @@ tenant brands its own instance: the product name is a tenant setting.
   capabilities. Off by default: a tenant switches it on and brings its own
   model, and Espalia then suggests where each new piece of feedback belongs
   in the framework and whether it shows a capability demonstrated or a growth
-  area; a person accepts or dismisses each suggestion.
+  area. Nothing is applied silently: each suggestion waits for a person, or
+  an assistant acting with their permissions, to accept or dismiss it.
 - **Growth planning** — focus areas, growth plans and check-ins on each
   person's development stream.
 - **Calibration** — sessions that put ratings side by side and capture notes,
