@@ -19,8 +19,8 @@
 #   value (some revising as they go), a third get part-way, a third leave
 #   the whole row inherited. That spread is the Carried column's whole point.
 # - **Managers who move.** A slice of each cycle's population changes rater
-#   between cycles — always to a sibling under the same department head, the
-#   realistic re-org, and recorded on the PersonDevelopment stream so
+#   between cycles — always to a sibling manager in the same department under
+#   the same head, the realistic re-org, and recorded on the PersonDevelopment stream so
 #   `RecordedReportingManager` (not the live org chart) is what the drill-in
 #   attributes by.
 # - **Some genuinely new work**, so a later cycle isn't purely inherited.
