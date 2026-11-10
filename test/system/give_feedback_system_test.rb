@@ -57,7 +57,8 @@ class GiveFeedbackSystemTest < ApplicationSystemTestCase
     assert_text "visible to Priya Patel, their managers, and workspace admins"
     assert_no_selector "[data-link-row]"
 
-    fill_in "What happened?", with: "Ran the incident call calmly and kept everyone informed."
+    # Asserted verbatim, so js_fill_in: a long fill_in types only its ends and can drop its first word.
+    js_fill_in "What happened?", with: "Ran the incident call calmly and kept everyone informed."
     # The header's "Give feedback" is still a visible button behind the overlay;
     # the submit is the form's.
     click_selector_with_js_fallback("form[action='/evidence_items'] button[type='submit']",
