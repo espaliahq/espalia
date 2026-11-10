@@ -1,18 +1,23 @@
 # README screenshots
 
-The images the top-level [README](../../README.md) shows. To retake or add one
-so it matches the set:
+The images the top-level [README](../../README.md) shows. A system test takes
+them all from the seeded demo tenant:
 
-- **Seeded data only.** Run `bin/setup`. Calibration needs
-  `bin/rails assessments:seed_calibration_activity` too: it closes the open
-  cycle, opens two more and leaves a live session to open.
-- **Sign in as someone with a person record.** The seeded admin has none, so
-  its Feedback page is empty. `marisol@nullisland.example` is a manager with
-  feedback on her reports. Logins are in the README's *Getting started*.
-- **1440×900 at 2× pixel ratio, light scheme.** In the Chrome MCP:
-  `emulate(viewport: "1440x900x2", colorScheme: "light")`.
-- **The set uses a Custom theme, not Default.** Under *Tenant admin → Theme*,
-  pick Custom with navbar `#2b2640` and brand `#a83265`. Put it back to
-  Default afterwards.
-- **Quantise before committing.** `pngquant --quality=80-95 --strip` takes a
-  capture from about 380 KB to about 100 KB.
+```bash
+README_SCREENSHOTS=1 bin/rails test test/system/marketing_flows_system_test.rb
+```
+
+[`marketing_flows_system_test.rb`](../../test/system/marketing_flows_system_test.rb)
+runs in every suite, so a flow that stops rendering fails CI. Without
+`README_SCREENSHOTS=1` it writes to `tmp/screenshots/readme/` and leaves
+these files alone. Only the flag overwrites them. Commit the results.
+
+- **Install `pngquant` first.** The test quantises each capture with it, taking
+  it from about 380 KB to about 100 KB. Without it the test warns and writes
+  the full-size file.
+- **To add a screen,** add a `capture_*` step to the test and an image to the
+  README. The test signs in as the right person, sets the 1440×900 @2x
+  viewport and the README's Custom theme for you.
+- **Expect pixel churn.** Times ("1s ago"), ratings and which capability a
+  piece of feedback lands on change from run to run, so every regeneration
+  rewrites every file. Regenerate when the screens change, not routinely.
