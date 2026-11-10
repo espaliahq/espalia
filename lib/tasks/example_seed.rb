@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The Null Island Systems demo tenant db/seeds.rb builds outside production:
-# ten people on @nullisland.example, the example framework (loaded from YAML
+# 21 people on @nullisland.example, the example framework (loaded from YAML
 # by frameworks:seed), an open cycle with ratings in every state a dashboard
 # distinguishes, evidence, pending suggestions and an open v2 draft. Every
 # step is idempotent, so re-seeding converges instead of duplicating.
@@ -18,24 +18,45 @@ class ExampleSeed
   PASSWORD = "password123"
 
   # key => [name, job title, department, manager key, role code, level ordinal, login?]
+  # Three engineering teams and one product-and-design team under a VP, so
+  # calibration has several raters to compare.
   PEOPLE = {
     "imogen"  => [ "Imogen Tidewell", "VP Product & Engineering", "Product & Engineering", nil, nil, nil, false ],
+    # Maps Platform
     "marisol" => [ "Marisol Vega", "Engineering Manager", "Engineering", "imogen", "EM", 3, true ],
     "beatrix" => [ "Beatrix Okafor", "Staff Engineer", "Engineering", "marisol", "E", 4, false ],
     "june"    => [ "June Park", "Senior Engineer", "Engineering", "marisol", "E", 3, false ],
     "theo"    => [ "Theo Okonkwo", "Engineer II", "Engineering", "marisol", "E", 2, true ],
     "anders"  => [ "Anders Lindqvist", "Engineer I", "Engineering", "marisol", "E", 1, false ],
+    # Routing & Mobile
+    "kofi"    => [ "Kofi Mensah", "Senior Engineering Manager", "Engineering", "imogen", "EM", 4, false ],
+    "priya"   => [ "Priya Raman", "Senior Engineer", "Engineering", "kofi", "E", 3, false ],
+    "diego"   => [ "Diego Alvarez", "Engineer II", "Engineering", "kofi", "E", 2, false ],
+    "hana"    => [ "Hana Sato", "Engineer II", "Engineering", "kofi", "E", 2, false ],
+    "mateus"  => [ "Mateus Costa", "Engineer I", "Engineering", "kofi", "E", 1, false ],
+    # Search & Data
+    "lena"    => [ "Lena Fischer", "Engineering Manager", "Engineering", "imogen", "EM", 3, false ],
+    "tomasz"  => [ "Tomasz Wójcik", "Senior Engineer", "Engineering", "lena", "E", 3, false ],
+    "amara"   => [ "Amara Eze", "Engineer II", "Engineering", "lena", "E", 2, false ],
+    "sofia"   => [ "Sofia Marchetti", "Engineer I", "Engineering", "lena", "E", 1, false ],
+    # Product & Design
     "falak"   => [ "Falak Noor", "Senior Product Manager", "Product", "imogen", "PM", 3, false ],
     "rafael"  => [ "Rafael Ibarra", "Product Manager", "Product", "falak", "PM", 2, false ],
+    "ines"    => [ "Ines Moreau", "Associate Product Manager", "Product", "falak", "PM", 1, false ],
     "sana"    => [ "Sana Haddad", "Senior Designer", "Product", "falak", "PD", 3, false ],
+    "kai"     => [ "Kai Tanaka", "Designer II", "Product", "falak", "PD", 2, false ],
     "colm"    => [ "Colm Byrne", "Designer I", "Product", "falak", "PD", 1, false ]
   }.freeze
 
-  # person key => rating state (see #rate)
+  # person key => rating state (see #rate). Lena, Sofia, Falak and Colm
+  # haven't started.
   RATING_STATES = {
     "june" => :aligned, "theo" => :both_complete, "beatrix" => :manager_partial,
     "anders" => :self_partial, "rafael" => :both_complete, "sana" => :self_complete,
-    "marisol" => :self_partial
+    "marisol" => :self_partial, "kofi" => :self_complete, "priya" => :aligned,
+    "diego" => :both_complete, "hana" => :self_complete, "mateus" => :self_partial,
+    "tomasz" => :manager_partial, "amara" => :both_complete, "ines" => :self_partial,
+    "kai" => :self_complete
   }.freeze
 
   def initialize(admin_user:, io: $stdout)

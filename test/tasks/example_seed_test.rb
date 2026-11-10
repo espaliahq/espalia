@@ -15,12 +15,12 @@ class ExampleSeedTest < ActiveSupport::TestCase
     tenant = ExampleSeed.new(admin_user: @admin, io: io).call
 
     counts = ActsAsTenant.with_tenant(tenant) { snapshot }
-    assert_equal 10, counts[:people]
-    assert_equal 9, counts[:assignments], "everyone but the VP is assigned"
-    assert_equal 9, counts[:enrollments]
+    assert_equal 21, counts[:people]
+    assert_equal 20, counts[:assignments], "everyone but the VP is assigned"
+    assert_equal 20, counts[:enrollments]
     assert_equal 0, counts[:snapshotless_enrollments], "every enrollment carries its role/level snapshot"
     assert_operator counts[:ratings], :>, 0
-    assert_equal 1, counts[:aligned], "one assessment is fully aligned"
+    assert_equal 2, counts[:aligned], "two assessments are fully aligned"
     assert_operator counts[:evidence], :>=, 7
     assert_equal 1, counts[:withdrawn_evidence]
     assert_equal 4, counts[:pending_suggestions]
