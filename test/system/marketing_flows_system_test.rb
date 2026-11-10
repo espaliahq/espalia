@@ -90,18 +90,23 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     visit evidence_report_conversation_path(theo.id)
     assert_text "INCIDENT RESPONSE"
     assert_text "Growth area"
-    page.execute_script(<<~JS)
-      window.scrollTo(0, document.documentElement.scrollHeight);
-      const card = [...document.querySelectorAll("main *")]
-        .find((el) => el.innerText?.trim().startsWith("INCIDENT RESPONSE"));
-      const thread = [...document.querySelectorAll("main *")]
-        .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight)
-        .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
-      if (card && thread) {
+    framed = page.evaluate_script(<<~JS)
+      (() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const card = [...document.querySelectorAll("main *")]
+          .find((el) => el.innerText?.trim().startsWith("INCIDENT RESPONSE"));
+        const thread = [...document.querySelectorAll("main *")]
+          .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight)
+          .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+        if (!card || !thread) return false;
         thread.scrollTop = 0;
         thread.scrollTop = card.getBoundingClientRect().top - thread.getBoundingClientRect().top - 40;
-      }
+        const box = thread.getBoundingClientRect();
+        const top = card.getBoundingClientRect().top;
+        return top >= box.top && top < box.top + box.height / 2;
+      })()
     JS
+    assert framed, "the feedback thread scrolls to the incident-response card"
     capture "feedback"
   end
 
@@ -109,10 +114,15 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     visit calibration_session_path(session, view: "divergence")
     assert_text "CAPABILITY DIVERGENCE"
     assert_text "Kofi Mensah"
-    page.execute_script(<<~JS)
-      const tabs = document.querySelector("[role='tablist']");
-      window.scrollTo(0, tabs.getBoundingClientRect().top + window.scrollY - 28);
+    framed = page.evaluate_script(<<~JS)
+      (() => {
+        const tabs = document.querySelector("[role='tablist']");
+        if (!tabs) return false;
+        window.scrollTo(0, tabs.getBoundingClientRect().top + window.scrollY - 28);
+        return window.scrollY > 0;
+      })()
     JS
+    assert framed, "the page scrolls to the calibration tabs"
     capture "calibration"
   end
 
