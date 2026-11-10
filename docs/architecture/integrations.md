@@ -263,16 +263,20 @@ Implemented today as a single global "Continue with Google" option on the sign-i
 
 Credentials live under `google:` in `config/credentials.yml.enc`. The strategy is always registered (with placeholder values if credentials are absent) so the OmniAuth middleware is installed in test and fresh-dev environments.
 
-### Known limitation: the callback host comes from the request
+### Known limitation: the callback URL comes from the request
 
-OmniAuth builds the callback URL it sends to the provider (`redirect_uri`) from the request's `Host`, `X-Forwarded-Host` or `Forwarded` header, and a client can forge all three ([GHSA-m27g-v28p-f9fx](https://github.com/omniauth/omniauth/security/advisories/GHSA-m27g-v28p-f9fx)). omniauth 2.2.0 can refuse unknown hosts, but only once `OmniAuth.config.allowed_hosts` or a `full_host` is set. Espalia sets neither, deliberately: sign-in has to work on the instance's own host (`APP_HOST`) and on every tenant's custom sign-in domain (`Tenant.for_host`). Production sets no `config.hosts` either, so Rails doesn't reject a forged host first.
+The callback URL sent to Google (`redirect_uri`) is whatever the request says it is, in two ways:
 
-**What protects sign-in today is Google, not Espalia.** Google returns a user only to a `redirect_uri` registered on the OAuth client, and refuses any other with an error. A forged host therefore produces a callback URL Google won't use. Until the fix below lands:
+- **From the host.** OmniAuth builds it from the request's `Host`, `X-Forwarded-Host` or `Forwarded` header, and a client can forge all three ([GHSA-m27g-v28p-f9fx](https://github.com/omniauth/omniauth/security/advisories/GHSA-m27g-v28p-f9fx)). omniauth 2.2.0 can refuse unknown hosts, but only once `OmniAuth.config.allowed_hosts` or a `full_host` is set, and Espalia sets neither. Production sets no `config.hosts` either.
+- **From a parameter.** `omniauth-google-oauth2` lets a `redirect_uri` request parameter override the callback when sign-in starts (`overridable_authorize_options`), and uses a `redirect_uri` parameter again in the callback's token exchange. Any host can therefore name any callback URL the OAuth client has registered.
 
-- **Register only the hosts you serve** on the Google OAuth client: `APP_HOST` and each tenant custom domain, each with `/users/auth/google_oauth2/callback`. One wildcard or stray entry and the protection is gone.
-- **Don't add a second OmniAuth strategy** (SAML, Microsoft, GitHub) without closing this first. Its provider may not check `redirect_uri` as strictly as Google does.
+**What protects sign-in today is Google's list of registered redirect URIs, and nothing in Espalia.** Google sends the authorization code only to a registered `redirect_uri`. Whoever controls any registered URL can receive a victim's code and redeem it on the real callback, which signs them in as the victim, and a `User` reaches every tenant they belong to. Until the fix below lands:
 
-**The fix, deferred:** give the strategy a `full_host` proc (2.2.0 accepts one per strategy, taking the Rack env). It returns the request's host when that host is `APP_HOST` or a tenant's custom domain, and the canonical host otherwise. A static `allowed_hosts` list can't follow custom domains that tenants add at runtime.
+- **Register only hosts the operator controls:** `APP_HOST`, with `/users/auth/google_oauth2/callback`. **Never register a tenant's custom sign-in domain.** Its DNS belongs to the tenant, who could point it elsewhere and collect codes. Google sign-in on a custom domain therefore fails at Google, and the tenant's people sign in with Google on `APP_HOST`, or with a password on their domain.
+- **No wildcards and no stale entries.** Remove a host from the client when the instance stops serving it.
+- **Don't add a second OmniAuth strategy** (SAML, Microsoft, GitHub) before the fix. Its provider may not check `redirect_uri` as strictly as Google.
+
+**The fix, deferred:** every Google sign-in goes through one operator-controlled callback. Pin the strategy's callback to `APP_HOST` (`redirect_uri:` option) and stop the request from overriding it in either phase: drop `redirect_uri` from `overridable_authorize_options`, and strip it from the callback's params. A sign-in started on a custom domain carries its tenant through `omniauth.params`, completes on `APP_HOST`, and hands back to the custom domain through a short-lived one-time token. It never registers the custom domain with Google.
 
 ### Auto-linking SSO users to Person records
 

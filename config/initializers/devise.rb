@@ -285,7 +285,7 @@ Devise.setup do |config|
   # signs in with the Devise email/password form instead, see
   # docs/guidelines/chrome-mcp.md. Leaving the host open is a known
   # limitation that Google's redirect_uri check covers today: see
-  # docs/architecture/integrations.md → "Known limitation: the callback host".
+  # docs/architecture/integrations.md → "Known limitation: the callback URL".
   #
   # Always register the strategy so the OmniAuth middleware is installed
   # (Devise wires it up only when `config.omniauth` runs) and the route

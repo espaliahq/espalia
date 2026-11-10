@@ -18,10 +18,11 @@ If you deploy it, track `main` and keep your instance current.
 
 ## Known limitations
 
-- **Google sign-in trusts the request's host for its callback URL.** Google's
-  own check of registered redirect URIs is what blocks a forged host today, so
-  register only the hosts you serve. Details and the planned fix:
-  [integrations.md → Known limitation: the callback host comes from the request](docs/architecture/integrations.md#known-limitation-the-callback-host-comes-from-the-request).
+- **Google sign-in takes its callback URL from the request.** Today only
+  Google's list of registered redirect URIs stops a forged one, so register
+  only `APP_HOST` on the OAuth client, never a tenant's custom domain. Details
+  and the planned fix:
+  [integrations.md → Known limitation: the callback URL comes from the request](docs/architecture/integrations.md#known-limitation-the-callback-url-comes-from-the-request).
 
 ## Scope
 
