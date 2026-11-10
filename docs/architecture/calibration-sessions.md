@@ -1137,9 +1137,9 @@ Shape as built:
 
 ### Dev data — a history, not a snapshot
 
-`assessments:seed_calibration_activity` populates the open cycle, then hands
-off to `CalibrationHistorySeed` (`lib/tasks/`, outside Zeitwerk's eager-load
-so it can't reach production).
+`assessments:seed_calibration_activity` runs `CalibrationActivitySeed`, which
+populates the open cycle, then hands off to `CalibrationHistorySeed` (both in
+`lib/tasks/`, outside Zeitwerk's eager-load so they can't reach production).
 
 The point of the second half: **carried ratings are a claim about a previous
 cycle, so they need one.** The single-cycle seed could only fake them by
