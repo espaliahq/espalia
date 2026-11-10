@@ -80,6 +80,12 @@ tenant brands its own instance: the product name is a tenant setting.
 *An assessment scores each capability against the person's level, names what
 blocks the level, and keeps the self and manager perspectives side by side.*
 
+![A manager's feedback thread for one report](docs/screenshots/feedback.png)
+
+*Feedback about a person collects in one thread. Each piece names the
+capability and level it speaks to, and whether it shows the capability or a
+growth area. A manager can ask a peer for more and see when they answer.*
+
 ![The suggested-edits review queue](docs/screenshots/suggested-edits.png)
 
 *Frameworks are edited collaboratively: collaborators suggest edits inline,
@@ -90,6 +96,12 @@ expectations with more care.*
 
 *An assessment cycle tracks its cohort from self-assessment through manager
 assessment to alignment, without exposing anyone's ratings early.*
+
+![A calibration session's drill-in on one capability](docs/screenshots/calibration.png)
+
+*Calibration puts every rating for one capability on a single scale, level by
+level, beside the expectation it was rated against. A solid dot has feedback
+behind it; an outlined one has none yet.*
 
 ## Technology
 
