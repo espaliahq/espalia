@@ -59,6 +59,9 @@ namespace :assessments do
         .where.not(role_id: nil)
         .to_a
       people = Person.where(id: enrollments.map(&:person_id)).index_by(&:id)
+      # Alignment freezes an assessment's ratings, so writing more would only fail.
+      aligned = AssessmentCycleProgress.where(cycle_id: cycle.cycle_id, status: %w[aligning aligned])
+        .pluck(:person_id).to_set
 
       bindings_by_role = FrameworkState::CapabilityRoleBinding
         .includes(:capability)
@@ -95,6 +98,7 @@ namespace :assessments do
       enrollments.each_with_index do |enrollment, index|
         person = people[enrollment.person_id]
         next stats[:skipped_no_person] += 1 unless person
+        next stats[:skipped_aligned] += 1 if aligned.include?(person.id)
 
         rater_id = RecordedReportingManager.manager_id_for(person.id, framework.framework_id) ||
                    person.manager_id
@@ -236,7 +240,7 @@ namespace :assessments do
            "(#{stats[:carried_ratings]} carried forward, " \
            "#{stats[:above_level_ratings]} above-level for the stars), " \
            "self ratings: #{stats[:self_ratings]}, evidence items: #{stats[:evidence_items]}"
-      skipped = stats.slice(:skipped_no_person, :skipped_no_manager, :skipped_no_capabilities)
+      skipped = stats.slice(:skipped_no_person, :skipped_aligned, :skipped_no_manager, :skipped_no_capabilities)
       puts "  Skipped: #{skipped.map { |k, v| "#{k}=#{v}" }.join(', ')}" if skipped.values.sum.positive?
       if history.any?
         puts "  History: #{history[:cycles_opened]} further cycle(s) opened, " \
