@@ -16,6 +16,14 @@ unless you'd rather stay anonymous.
 Espalia is pre-1.0 and has no tagged releases yet: fixes land on `main` only.
 If you deploy it, track `main` and keep your instance current.
 
+## Known limitations
+
+- **Google sign-in takes its callback URL from the request.** Today only
+  Google's list of registered redirect URIs stops a forged one, so register
+  only `APP_HOST` on the OAuth client, never a tenant's custom domain. Details
+  and the planned fix:
+  [integrations.md → Known limitation: the callback URL comes from the request](docs/architecture/integrations.md#known-limitation-the-callback-url-comes-from-the-request).
+
 ## Scope
 
 The application in this repository, its MCP server and OAuth flows, and the

@@ -263,6 +263,21 @@ Implemented today as a single global "Continue with Google" option on the sign-i
 
 Credentials live under `google:` in `config/credentials.yml.enc`. The strategy is always registered (with placeholder values if credentials are absent) so the OmniAuth middleware is installed in test and fresh-dev environments.
 
+### Known limitation: the callback URL comes from the request
+
+The callback URL sent to Google (`redirect_uri`) is whatever the request says it is, in two ways:
+
+- **From the host.** OmniAuth builds it from the request's `Host`, `X-Forwarded-Host` or `Forwarded` header, and a client can forge all three ([GHSA-m27g-v28p-f9fx](https://github.com/omniauth/omniauth/security/advisories/GHSA-m27g-v28p-f9fx)). omniauth 2.2.0 can refuse unknown hosts, but only once `OmniAuth.config.allowed_hosts` or a `full_host` is set, and Espalia sets neither. Production sets no `config.hosts` either.
+- **From a parameter.** `omniauth-google-oauth2` lets a `redirect_uri` request parameter override the callback when sign-in starts (`overridable_authorize_options`), and uses a `redirect_uri` parameter again in the callback's token exchange. Any host can therefore name any callback URL the OAuth client has registered.
+
+**What protects sign-in today is Google's list of registered redirect URIs, and nothing in Espalia.** Google sends the authorization code only to a registered `redirect_uri`. Whoever controls any registered URL can receive a victim's code and redeem it on the real callback, which signs them in as the victim, and a `User` reaches every tenant they belong to. Until the fix below lands:
+
+- **Register only hosts the operator controls:** `APP_HOST`, with `/users/auth/google_oauth2/callback`. **Never register a tenant's custom sign-in domain.** Its DNS belongs to the tenant, who could point it elsewhere and collect codes. Google sign-in on a custom domain therefore fails at Google, and the tenant's people sign in with Google on `APP_HOST`, or with a password on their domain.
+- **No wildcards and no stale entries.** Remove a host from the client when the instance stops serving it.
+- **Don't add a second OmniAuth strategy** (SAML, Microsoft, GitHub) before the fix. Its provider may not check `redirect_uri` as strictly as Google.
+
+**The fix, deferred:** every Google sign-in goes through one operator-controlled callback. Pin the strategy's callback to `APP_HOST` (`redirect_uri:` option) and stop the request from overriding it in either phase: drop `redirect_uri` from `overridable_authorize_options`, and strip it from the callback's params. A sign-in started on a custom domain carries its tenant through `omniauth.params`, completes on `APP_HOST`, and hands back to the custom domain through a short-lived one-time token. It never registers the custom domain with Google.
+
 ### Auto-linking SSO users to Person records
 
 [`ApplicationController#current_tenant_user`](../../app/controllers/application_controller.rb) auto-links a `TenantUser` to a `Person` by matching email when `person_id` is nil. This complements the HRIS sync's Pass 4 auto-link and gives instant linking on first login rather than waiting for the next scheduled sync. Google sign-in adds a third entry point: when a Google identity arrives for an email that exists as a `Person` but not yet as a `User`, the User+TenantUser are provisioned on the spot rather than waiting for either of the above.
