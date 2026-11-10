@@ -24,6 +24,12 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     @tenant.update!(theme: "custom", custom_theme: THEME)
   end
 
+  # The override outlives the test in the shared browser tab and beats
+  # resize_to, so every phone-size test after this one would render at 1440.
+  teardown do
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+  end
+
   should "capture every README screen from the seeded demo" do
     framework, theo, cycle = ActsAsTenant.with_tenant(@tenant) do
       framework = FrameworkState::Framework.first
