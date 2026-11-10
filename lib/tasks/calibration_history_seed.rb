@@ -30,8 +30,9 @@
 class CalibrationHistorySeed
   # Cycles to advance THROUGH, in order, after whatever open cycle the
   # tenant already has. Each is created only if absent, so re-running the
-  # seed converges on this history rather than growing it.
-  FUTURE_CYCLES = [ "Q2 2026 Review", "Q3 2026 Review" ].freeze
+  # seed converges on this history rather than growing it. The names follow
+  # ExampleSeed::CYCLE_NAME, so time runs forward through the history.
+  FUTURE_CYCLES = [ "Q1 2027 Capability Review", "Q2 2027 Capability Review" ].freeze
 
   # Share of each cycle's population that changes rater before the next one.
   # Taken by RANK, like the personas below: an independent draw per person
