@@ -33,6 +33,20 @@ class ExampleSeedTest < ActiveSupport::TestCase
     assert_equal counts, ActsAsTenant.with_tenant(rerun) { snapshot }, "a re-run converges"
   end
 
+  should "leave the demo cycle alone once the calibration seed has closed it" do
+    tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
+    ActsAsTenant.with_tenant(tenant) do
+      cycle = AssessmentCycle.find_by!(name: ExampleSeed::CYCLE_NAME)
+      AssessmentCycles::CommandHandler.new.close_cycle(cycle.cycle_id, closed_by: Person.find_by!(manager_id: nil).id)
+      # A person added to the seed since: the re-run sees them unenrolled.
+      AssessmentCycleEnrollment.where(cycle_id: cycle.cycle_id).first.delete
+    end
+
+    io = StringIO.new
+    ExampleSeed.new(admin_user: @admin, io: io).call
+    assert_match "is closed — leaving it alone", io.string
+  end
+
   private
 
   def snapshot

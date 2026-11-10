@@ -83,9 +83,14 @@ class ExampleSeed
       assign_people
       upsert_collaborators
       @cycle = define_cycle
-      enroll_everyone
-      seed_ratings
-      seed_evidence
+      if @cycle.status == "open"
+        enroll_everyone
+        seed_ratings
+        seed_evidence
+      else
+        # assessments:seed_calibration_activity closes it; a closed cycle refuses new enrolments.
+        @io.puts "'#{CYCLE_NAME}' is closed — leaving it alone. bin/rails db:seed:replant starts over."
+      end
       seed_suggestions
       open_draft
     end
