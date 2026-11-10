@@ -125,6 +125,18 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     end
   end
 
+  should "move a report only to a rater in their manager's department" do
+    mia, raj, sam = @ems
+    mia.update!(department: "Engineering")
+    raj.update!(department: "Engineering")
+    sam.update!(department: "Product")
+    seed = CalibrationHistorySeed.new(tenant: @tenant, framework: @framework, io: StringIO.new)
+
+    assert_equal raj, seed.send(:sibling_rater_for, @reports.find { |p| p.manager_id == mia.id })
+    assert_nil seed.send(:sibling_rater_for, @reports.find { |p| p.manager_id == sam.id }),
+      "a product report has no product sibling to move to"
+  end
+
   should "leave a live session on the current cycle" do
     stats = run_seed
 

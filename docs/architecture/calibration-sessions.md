@@ -1153,9 +1153,10 @@ provenance. What that buys the surfaces:
   guarantees all three states appear, where independent draws can leave a
   small tenant entirely coasting, which is precisely the demo the carried
   shares cannot make.
-- **Reporting-line moves** between cycles, always to a sibling under the
-  same department head (the re-org that actually happens, and one that keeps
-  everyone inside the facilitator's scope). Applied to the org chart AND
+- **Reporting-line moves** between cycles, always to a sibling manager in
+  the same department under the same head (the re-org that actually
+  happens, and one that keeps everyone inside the facilitator's scope; a
+  department with one manager moves nobody). Applied to the org chart AND
   recorded on the PersonDevelopment stream, so the drill-in attributes by
   the recorded fact.
 - **A live session on the current cycle**, because otherwise every visual

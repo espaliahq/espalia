@@ -160,8 +160,9 @@ class CalibrationHistorySeed
   end
 
   # A slice of the population changes rater between cycles — to a SIBLING
-  # under the same manager-of-managers, which is the re-org that actually
-  # happens and keeps everyone inside the facilitator's scope.
+  # in the same department under the same manager-of-managers, which is the
+  # re-org that actually happens and keeps everyone inside the facilitator's
+  # scope.
   #
   # Both halves matter: the live org chart moves, and the fact is recorded
   # on the person's stream, because manager-rating authority reads the
@@ -188,7 +189,10 @@ class CalibrationHistorySeed
     people.first([ (people.size * MOVER_SHARE).ceil, 1 ].max)
   end
 
-  # Another rater reporting to the same person as this one's current rater.
+  # Another rater in the same department, reporting to the same person as
+  # this one's current rater. Without the department, a VP's only other
+  # report takes everyone: the demo once moved every designer under an
+  # engineering manager.
   def sibling_rater_for(person)
     current = person.manager
     return nil unless current&.manager_id
@@ -196,7 +200,7 @@ class CalibrationHistorySeed
     # Ordered: an unordered read gives Postgres licence to return rows in a
     # different sequence per run, which would pick a different sibling and
     # break the convergence this class promises.
-    candidates = Person.where(manager_id: current.manager_id)
+    candidates = Person.where(manager_id: current.manager_id, department: current.department)
       .where.not(id: current.id).order(:id).to_a
     return nil if candidates.empty?
 
