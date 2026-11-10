@@ -16,6 +16,10 @@ class CalibrationActivitySeed
     @io = io
   end
 
+  # Rates the open cycle's population, advances the history and leaves a
+  # live session. Re-running converges.
+  #
+  # @return [void]
   def call
     raise "CalibrationActivitySeed is for development and test only." if Rails.env.production?
 
