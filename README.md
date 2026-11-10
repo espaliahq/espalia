@@ -97,11 +97,12 @@ expectations with more care.*
 *An assessment cycle tracks its cohort from self-assessment through manager
 assessment to alignment, without exposing anyone's ratings early.*
 
-![A calibration session's drill-in on one capability](docs/screenshots/calibration.png)
+![Capability divergence in a calibration session](docs/screenshots/calibration.png)
 
-*Calibration puts every rating for one capability on a single scale, level by
-level, beside the expectation it was rated against. A solid dot has feedback
-behind it; an outlined one has none yet.*
+*Calibration lines managers up capability by capability. Each dot is one
+manager's average rating, and a flag marks disagreement that survives each
+manager's usual leniency, which often means the expectation itself is
+unclear.*
 
 ## Technology
 
