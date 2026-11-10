@@ -100,8 +100,9 @@ class Views::Users::Sessions::NewView < Views::Base
   end
 
   def google_button
-    # The slug rides the QUERY string: OmniAuth copies request.GET (never the
-    # form body) into omniauth.params for the callback to scope by (#660).
+    # The slug rides the QUERY string, which OmniAuth copies into
+    # omniauth.params for the callback to scope by (#660); only since 2.2 does
+    # it copy the form body too.
     authorize_path = @tenant ? user_google_oauth2_omniauth_authorize_path(tenant_slug: @tenant.slug) : user_google_oauth2_omniauth_authorize_path
     form(
       action: authorize_path,
