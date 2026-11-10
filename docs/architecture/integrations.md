@@ -263,6 +263,17 @@ Implemented today as a single global "Continue with Google" option on the sign-i
 
 Credentials live under `google:` in `config/credentials.yml.enc`. The strategy is always registered (with placeholder values if credentials are absent) so the OmniAuth middleware is installed in test and fresh-dev environments.
 
+### Known limitation: the callback host comes from the request
+
+OmniAuth builds the callback URL it sends to the provider (`redirect_uri`) from the request's `Host`, `X-Forwarded-Host` or `Forwarded` header, and a client can forge all three ([GHSA-m27g-v28p-f9fx](https://github.com/omniauth/omniauth/security/advisories/GHSA-m27g-v28p-f9fx)). omniauth 2.2.0 can refuse unknown hosts, but only once `OmniAuth.config.allowed_hosts` or a `full_host` is set. Espalia sets neither, deliberately: sign-in has to work on the instance's own host (`APP_HOST`) and on every tenant's custom sign-in domain (`Tenant.for_host`). Production sets no `config.hosts` either, so Rails doesn't reject a forged host first.
+
+**What protects sign-in today is Google, not Espalia.** Google returns a user only to a `redirect_uri` registered on the OAuth client, and refuses any other with an error. A forged host therefore produces a callback URL Google won't use. Until the fix below lands:
+
+- **Register only the hosts you serve** on the Google OAuth client: `APP_HOST` and each tenant custom domain, each with `/users/auth/google_oauth2/callback`. One wildcard or stray entry and the protection is gone.
+- **Don't add a second OmniAuth strategy** (SAML, Microsoft, GitHub) without closing this first. Its provider may not check `redirect_uri` as strictly as Google does.
+
+**The fix, deferred:** give the strategy a `full_host` proc (2.2.0 accepts one per strategy, taking the Rack env). It returns the request's host when that host is `APP_HOST` or a tenant's custom domain, and the canonical host otherwise. A static `allowed_hosts` list can't follow custom domains that tenants add at runtime.
+
 ### Auto-linking SSO users to Person records
 
 [`ApplicationController#current_tenant_user`](../../app/controllers/application_controller.rb) auto-links a `TenantUser` to a `Person` by matching email when `person_id` is nil. This complements the HRIS sync's Pass 4 auto-link and gives instant linking on first login rather than waiting for the next scheduled sync. Google sign-in adds a third entry point: when a Google identity arrives for an email that exists as a `Person` but not yet as a `User`, the User+TenantUser are provisioned on the spot rather than waiting for either of the above.

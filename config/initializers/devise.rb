@@ -283,7 +283,9 @@ Devise.setup do |config|
   # browser on localhost. It is NOT reachable from the chrome-debug container
   # (there `localhost` is chrome-debug, not the app) — the Chrome MCP pass
   # signs in with the Devise email/password form instead, see
-  # docs/guidelines/chrome-mcp.md.
+  # docs/guidelines/chrome-mcp.md. Leaving the host open is a known
+  # limitation that Google's redirect_uri check covers today: see
+  # docs/architecture/integrations.md → "Known limitation: the callback host".
   #
   # Always register the strategy so the OmniAuth middleware is installed
   # (Devise wires it up only when `config.omniauth` runs) and the route
