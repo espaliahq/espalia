@@ -98,6 +98,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   setup do
     with_browser_retries do
+      clear_emulation
       page.driver.browser.manage.window.resize_to(*DESKTOP_SIZE)
       keep_page_focused
     end
@@ -249,6 +250,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # rather than raising lets that assertion decide, with its full wait.
     [ recovery_note("found no credential field to fill — the first submit may have landed, or " \
                     "the Devise form changed") ]
+  end
+
+  # See testing.md → "Clear Any CDP Emulation You Set".
+  def clear_emulation
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "", features: [])
   end
 
   # See testing.md → "Focus Needs a Focused Page".

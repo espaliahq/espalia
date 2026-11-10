@@ -589,10 +589,11 @@ tab across tests, and `Emulation.setDeviceMetricsOverride` beats the
 `resize_to` every later test relies on. The marketing-flows test once set a
 1440×900 override and left it. Every phone-size test that ran after it laid out
 at 1440 wide, and ten failed in ways that pointed at their own layouts. Only
-the run order linked them. Clear what you set in `teardown`
-(`Emulation.clearDeviceMetricsOverride`). To confirm a leak, run the suspect
-file with a victim under several `--seed` values and compare the orders that
-fail.
+the run order linked them. `ApplicationSystemTestCase`'s setup now calls
+`clear_emulation`, which clears the device metrics and emulated media before
+every test. Add any other CDP emulation you set there too. To confirm a leak,
+run the suspect file with a victim under several `--seed` values and compare
+the orders that fail.
 
 ## Waiting for Lazy-Loaded Turbo Frames (NON-NEGOTIABLE)
 
