@@ -14,7 +14,7 @@ require_relative "../../lib/tasks/calibration_activity_seed"
 # Otherwise they land in tmp/screenshots/readme/ for a look.
 class MarketingFlowsSystemTest < ApplicationSystemTestCase
   VIEWPORT = { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false }.freeze
-  # The README's colours: the demo tenant's own branding, not the Default theme.
+  # The README's colours, applied here only: ExampleSeed leaves the demo on Default.
   THEME = { "brand" => { "light" => "#a83265" }, "nav-surface" => { "light" => "#2b2640" } }.freeze
 
   setup do
