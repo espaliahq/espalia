@@ -74,6 +74,14 @@ class CalibrationHistorySeed
         next
       end
 
+      # Each advance closes one cycle, so a tenant with as many closures as
+      # the history has steps is done, whatever its cycles are called: a
+      # tenant seeded under older names must not grow a second history.
+      if AssessmentCycle.for_framework(@framework.framework_id).where(status: "closed").count >= FUTURE_CYCLES.size
+        @io.puts "  History already advanced — skipping '#{name}'."
+        next
+      end
+
       open_cycle = AssessmentCycle.for_framework(@framework.framework_id).open_cycles.first
       unless open_cycle
         @io.puts "  No open cycle to advance from — skipping '#{name}'."

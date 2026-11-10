@@ -125,6 +125,16 @@ class CalibrationHistorySeedTest < ActiveSupport::TestCase
     end
   end
 
+  should "not grow a history seeded under older cycle names" do
+    run_seed
+    AssessmentCycle.for_framework(@framework_id).where(name: CalibrationHistorySeed::FUTURE_CYCLES)
+      .each_with_index { |cycle, i| cycle.update_columns(name: "Old name #{i}") }
+
+    assert_no_difference -> { AssessmentCycle.for_framework(@framework_id).count } do
+      run_seed
+    end
+  end
+
   should "move a report only to a rater in their manager's department" do
     mia, raj, sam = @ems
     mia.update!(department: "Engineering")
