@@ -80,6 +80,21 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_nil radar.at_css("a[href='#cell-cap-Delivery-3'] [data-radar-blocked]")
     end
 
+    should "mark a blocking capability still unrated at the assessed level, near the centre" do
+      held = Assessments::CapabilityShape.new(
+        categories: [ { category: CATEGORY.new(category_id: "cat-Craft", name: "Craft"), person_level: 3,
+                        capabilities: [ { capability: CAP.new(stable_id: "cap-Quality", name: "Quality"),
+                                          cells: { 3 => { current_frequency: nil } } } ] } ],
+        merged_levels: E1_TO_E5, person_level: 3, context: :self,
+        scoring: { capability_scores: { "cap-Quality" => { score: 0.0, scorable: true, required: false } },
+                   capability_statuses: { "cap-Quality" => :blocked } }
+      )
+
+      [ :detailed, :compact ].each do |size|
+        assert render_radar(held, size: size).at_css("[data-radar-blocked]"), "expected a #{size} blocked marker"
+      end
+    end
+
     should "not call a blocking capability Required when its binding isn't" do
       held = shape({ "Craft" => { "Quality" => 0.75 } }, levels: E1_TO_E5, person_level: 3,
                    statuses: { "cap-Quality" => :blocked })

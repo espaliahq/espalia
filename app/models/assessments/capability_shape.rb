@@ -37,8 +37,11 @@ class Assessments::CapabilityShape
     @assessed_index = ladder.index { |l| l[:ordinal] == person_level }
   end
 
-  # @return [Array<Group>] framework order
+  # @return [Array<Group>] framework order; none when the assessed level is
+  #   not on the role's ladder
   def groups
+    return @groups ||= [] unless @assessed_index
+
     @groups ||= begin
       number = 0
       @categories.each_with_index.map do |category_data, i|
@@ -51,15 +54,16 @@ class Assessments::CapabilityShape
   end
 
   # @return [Array<Point>] framework order
-  def points = groups.flat_map(&:points)
+  def points = @points ||= groups.flat_map(&:points)
 
   # How far up the ladder a position sits: 0 at the first level met, 1 at the
-  # top. A one-level ladder's only level is its top.
+  # top. A one-level ladder has no climb, so it runs from none of its level to
+  # all of it.
   #
   # @param position [Numeric] a ladder position, as {Point#reached}
   # @return [Float]
   def fraction(position)
-    top.zero? ? 1.0 : position / top
+    top.zero? ? position + 1 : position / top
   end
 
   private
@@ -69,7 +73,7 @@ class Assessments::CapabilityShape
     silence = unscored_label(cap)
     position = silence ? nil : position_for(stable_id)
     Point.new(number: number, stable_id: stable_id, name: cap[:capability].name, hue: hue,
-              reached: position&.clamp(0.0, top), label: silence || label_for(position&.clamp(..top)),
+              reached: position&.clamp(top.zero? ? -1.0 : 0.0, top), label: silence || label_for(position&.clamp(..top)),
               required: @scoring.dig(:capability_scores, stable_id, :required) || false,
               blocked: @scoring.dig(:capability_statuses, stable_id) == :blocked)
   end

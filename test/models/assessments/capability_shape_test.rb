@@ -127,11 +127,17 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
       assert_equal [ 0.0, 0.5, 1.0 ], [ 0, 1, 2 ].map { |position| gapped.fraction(position) }
     end
 
-    should "treat a one-level ladder's only level as its top" do
-      one = shape({ "Product" => { "Discovery" => 1.0 } }, levels: PM.first(1), person_level: 10)
+    should "run a one-level ladder from nothing at the centre to its level met at the rim" do
+      one = shape({ "Product" => { "Discovery" => 1.0, "Pricing" => 0.4 } }, levels: PM.first(1), person_level: 10)
 
-      assert_in_delta 1.0, one.fraction(0), 0.001
-      assert_equal "PM1 met", point(one, "Discovery").label
+      assert_equal [ [ "PM1 met", 1.0 ], [ "40% of PM1", 0.4 ] ],
+                   one.points.map { |p| [ p.label, one.fraction(p.reached).round(2) ] }
+    end
+
+    should "place nothing when the assessed level isn't on the role's ladder" do
+      lost = shape({ "Product" => { "Discovery" => 1.0 } }, levels: PM, person_level: 30)
+
+      assert_empty lost.points
     end
 
     should "read its codes across gaps between ordinals" do

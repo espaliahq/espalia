@@ -8,6 +8,9 @@
 # `:detailed` is the capability map's, where each spoke is a link.
 class Views::Assessments::CapabilityRadar < Views::Base
   RADIUS = 100.0
+  # Where a blocking capability with no level yet carries its sign: off the
+  # centre along its own spoke, so several don't stack.
+  UNREACHED_MARK = 14.0
 
   # Written out per hue: Tailwind builds only class names it can read whole.
   SEGMENT = {
@@ -170,13 +173,15 @@ class Views::Assessments::CapabilityRadar < Views::Base
 
   def spoke_marks(s, point, i)
     s.g(data: (compact? ? { radar_spoke: point.number } : {})) do
-      next unless point.reached
-
-      x, y = xy(radius_for(point.reached), angle(i))
-      s.line(x1: 0, y1: 0, x2: x, y2: y, stroke_width: compact? ? 2.5 : 3, stroke_linecap: "round",
-             class: "#{SPOKE.fetch(point.hue)} group-hover/spoke:stroke-[5] group-focus-visible/spoke:stroke-[5] " \
-                    "group-data-[hot=true]/spoke:stroke-[5]")
-      s.circle(cx: x, cy: y, r: compact? ? 0 : 4, class: DOT.fetch(point.hue))
+      if point.reached
+        x, y = xy(radius_for(point.reached), angle(i))
+        s.line(x1: 0, y1: 0, x2: x, y2: y, stroke_width: compact? ? 2.5 : 3, stroke_linecap: "round",
+               class: "#{SPOKE.fetch(point.hue)} group-hover/spoke:stroke-[5] group-focus-visible/spoke:stroke-[5] " \
+                      "group-data-[hot=true]/spoke:stroke-[5]")
+        s.circle(cx: x, cy: y, r: compact? ? 0 : 4, class: DOT.fetch(point.hue))
+      else
+        x, y = xy(UNREACHED_MARK, angle(i))
+      end
       blocked_marker(s, x, y) if point.blocked
     end
   end

@@ -62,8 +62,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     ) do |modal|
       modal.body do
         p(class: "text-sm text-muted -mt-1 mb-4") do
-          "#{@subject}. At the radar's centre is #{@shape.codes.first} met, and each ring is the next level. " \
-            "Open a capability from its spoke or its lane."
+          "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
         end
         div(class: "grid gap-6 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-start") do
           div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
@@ -76,6 +75,12 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   private
+
+  def how_to_read
+    return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?
+
+    "At the radar's centre is #{@shape.codes.first} met, and each ring is the next level."
+  end
 
   def lanes
     axis

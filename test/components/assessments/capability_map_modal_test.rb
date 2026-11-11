@@ -9,7 +9,8 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
   E1_TO_E5 = (1..5).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
 
-  def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false }, statuses: {})
+  def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false }, statuses: {},
+                 levels: E1_TO_E5)
     scores = { "Delivery" => 1.5, "Quality" => 1.25, "Mentoring" => 1.0 }
     groups = { "Craft" => %w[Delivery Quality], "People" => %w[Mentoring] }
     categories = groups.map do |category, names|
@@ -20,7 +21,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
         end }
     end
     shape = Assessments::CapabilityShape.new(
-      categories: categories, merged_levels: E1_TO_E5, person_level: 3, context: :self,
+      categories: categories, merged_levels: levels, person_level: 3, context: :self,
       scoring: {
         capability_scores: scores.to_h { |n, s| [ "cap-#{n}", { score: s, scorable: true, required: false } ] },
         capability_statuses: statuses,
@@ -56,6 +57,17 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     assert_includes words(map.at_css("[data-capability-lane='2']")), "! Blocked"
     assert_not_includes words(map.at_css("[data-capability-lane='1']")), "! Blocked"
+  end
+
+  should "say how to read the radar from its centre on a ladder with levels to climb" do
+    assert_includes render_map.text, "At the radar's centre is E1 met, and each ring is the next level."
+  end
+
+  should "say a one-level ladder's rim is its level met" do
+    map = render_map(levels: [ { ordinal: 3, level_code: "E3" } ])
+
+    assert_includes map.text, "The radar's rim is E3 met."
+    assert_not_includes map.text, "centre is"
   end
 
   should "colour a category's score by its state, as the section header does" do
