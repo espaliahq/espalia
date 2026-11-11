@@ -527,6 +527,33 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_equal "Open capability map: 1 capability in 1 group", trigger["aria-label"]
     end
 
+    should "sit in the score's column, in the band that folds away as the page scrolls" do
+      hero = Nokogiri::HTML5.fragment(
+        render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.6, score: 1.6 })
+      )
+      column = hero.at_css("[data-hero-score]")
+
+      assert column.at_css("button[data-modal-target-id='#{Views::Assessments::ScoreExplainerModal::ID}']"),
+             "expected the score in the column"
+      assert column.at_css(".hero-collapsible button[data-modal-target-id='#{Views::Assessments::CapabilityMapModal::ID}']"),
+             "expected the radar in the column, folding away with the band"
+    end
+
+    should "stack under the score while the hero shows its gap list" do
+      html = render_gap_list(next_scores: { "cap-0" => 0.5, "cap-1" => 0.25, "cap-2" => 0.0 })
+      assert_includes html, "Gap to"
+
+      assert_equal "stacked", Nokogiri::HTML5.fragment(html).at_css("[data-hero-score]")["data-hero-score"]
+    end
+
+    should "sit beside the score when the hero has no gap list to show" do
+      html = render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.6, score: 1.6 },
+                         scores: {})
+      assert_not_includes html, "Gap to", "expected a hero with no gap list"
+
+      assert_equal "inline", Nokogiri::HTML5.fragment(html).at_css("[data-hero-score]")["data-hero-score"]
+    end
+
     should "wait, with the score, until enough is rated" do
       html = render_hero(state: :progressing, components: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0 },
                          cells: { 3 => { current_frequency: nil } })
