@@ -9,7 +9,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
   E1_TO_E5 = (1..5).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
 
-  def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false })
+  def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false }, statuses: {})
     scores = { "Delivery" => 1.5, "Quality" => 1.25, "Mentoring" => 1.0 }
     groups = { "Craft" => %w[Delivery Quality], "People" => %w[Mentoring] }
     categories = groups.map do |category, names|
@@ -23,7 +23,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
       categories: categories, merged_levels: E1_TO_E5, person_level: 3, context: :self,
       scoring: {
         capability_scores: scores.to_h { |n, s| [ "cap-#{n}", { score: s, scorable: true, required: false } ] },
-        capability_statuses: {},
+        capability_statuses: statuses,
         category_scores: { "cat-Craft" => { score: 1.38, scorable: true, state: :performing },
                            "cat-People" => { score: 1.0, scorable: true } }
       }
@@ -49,6 +49,13 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     assert_equal "a", lane.name
     assert_equal "#cell-cap-Delivery-3", lane["href"]
+  end
+
+  should "mark a lane whose capability blocks the score, in words" do
+    map = render_map(statuses: { "cap-Quality" => :blocked })
+
+    assert_includes words(map.at_css("[data-capability-lane='2']")), "! Blocked"
+    assert_not_includes words(map.at_css("[data-capability-lane='1']")), "! Blocked"
   end
 
   should "colour a category's score by its state, as the section header does" do

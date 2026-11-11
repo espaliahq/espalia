@@ -187,11 +187,11 @@ class Views::Assessments::CapabilityRadar < Views::Base
   end
 
   def spoke_name(point)
-    held = point.blocked ? ". Required, blocks the score" : ""
+    held = (point.required ? ". Required, blocks the score" : ". Blocks the score") if point.blocked
     "#{point.number}. #{point.name}, #{point.label}#{held}. Open the capability"
   end
 
-  # A Required capability whose gap blocks the score: a sign as well as a colour.
+  # A capability whose gap blocks the score: a sign as well as a colour.
   def blocked_marker(s, x, y)
     half = compact? ? 6 : 8
     s.g(transform: "translate(#{x} #{y})", data: { radar_blocked: true }) do

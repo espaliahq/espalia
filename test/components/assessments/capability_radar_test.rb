@@ -60,15 +60,23 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_equal "1", link.at_css("text").text
     end
 
-    should "mark a Required capability that blocks the score with a sign, not just a colour" do
+    should "mark a capability that blocks the score with a sign, not just a colour" do
       held = shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.25 } }, levels: E1_TO_E5, person_level: 3,
                    statuses: { "cap-Quality" => :blocked }, required: [ "Quality" ])
       radar = render_radar(held)
       quality = radar.at_css("a[href='#cell-cap-Quality-3']")
 
       assert_equal "!", quality.at_css("[data-radar-blocked] text").text
-      assert_includes quality["aria-label"], "Required, blocks the score"
+      assert_equal "2. Quality, E3 + 25% to E4. Required, blocks the score. Open the capability", quality["aria-label"]
       assert_nil radar.at_css("a[href='#cell-cap-Delivery-3'] [data-radar-blocked]")
+    end
+
+    should "not call a blocking capability Required when its binding isn't" do
+      held = shape({ "Craft" => { "Quality" => 0.75 } }, levels: E1_TO_E5, person_level: 3,
+                   statuses: { "cap-Quality" => :blocked })
+
+      assert_equal "1. Quality, E2 + 75% to E3. Blocks the score. Open the capability",
+                   render_radar(held).at_css("a[href='#cell-cap-Quality-3']")["aria-label"]
     end
 
     should "be a picture in the compact radar, with no links of its own" do

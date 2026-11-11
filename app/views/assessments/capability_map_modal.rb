@@ -124,7 +124,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         end
         span(class: "flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2") do
           span(class: "line-clamp-2") { point.name }
-          render Components::Kit::Badge.new("! Required", tone: :warning, size: :sm) if point.blocked
+          render Components::Kit::Badge.new("! Blocked", tone: :warning, size: :sm) if point.blocked
         end
       end
       track(point)
