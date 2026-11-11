@@ -136,6 +136,15 @@ Two practical notes:
 
 Browser support for `animation-timeline: scroll()` was at ~94% globally as of 2026 (Chrome/Edge 115+, Safari 26+, Firefox 137+). Browsers without it silently keep the middle band fully expanded — functional, just static.
 
+### Capability radar and map
+
+The scored header carries a **capability radar** between the verdict and the number: a segment per in-role category, a spoke per capability, a ring per level of the role's ladder. A spoke's length is the level the capability has reached, read from its own score on the hero's scale (100% is the assessed level met, so `level reached = place of the assessed level − 1 + score`), which keeps the radar, the card and the hero on one number. The centre is the first level met, the assessed level's ring is solid and the next level's dashed. `Assessments::CapabilityShape` does the arithmetic from `matrix_data`, so nothing assumes a category count, a level code or contiguous ordinals.
+
+- **The compact radar is one button.** At 112px the spokes sit too close to click one by one, so it opens the **capability map** (`CapabilityMapModal`, `Kit::Modal` `size: :"6xl"`), where each spoke is a numbered link and each capability also has a lane on a straight ladder with its level in words ("E3 + 60% to E4"). A spoke and its lane share the number, and `capability_map_controller.js` lights both on hover and focus. Spokes and lanes jump to the card through `continue-assessing`, closing the map first.
+- **It sits behind the coverage gate.** Only the scored header draws it, and a category's key percentage follows `RatedCount#category_score_unlocked?`, the rule the chip bar uses. An unrated capability, or one with no expectation at the assessed level, has no spoke length and says "Not rated" or "No expectation at E3" in its lane, as the card does.
+- **Colour is position, not identity.** Framework categories have no colour of their own, so the radar takes categorical hues by position (`CapabilityShape::HUES`), skipping red, which means a rating. More than seven categories repeat hues. A blocking Required capability carries a "!" sign on its spoke and lane, not colour alone.
+- **Root-mounted like the explainer.** The map lives on the page root so a frame reload never closes it, and every rating streams a fresh one (`TurboStreamHelpers#capability_map_stream`).
+
 ## The explanation layer
 
 The calibration screens have defined their vocabulary in-surface since they
