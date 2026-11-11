@@ -211,10 +211,12 @@ class Views::Assessments::CapabilityRadar < Views::Base
   end
 
   # Signs on spokes shorter than this would overlap their neighbours', so they
-  # sit here instead, where adjacent spokes are a sign's width (plus a gap) apart.
+  # sit here instead, where adjacent spokes are a sign's diagonal (plus a gap)
+  # apart: two squares side by side on a slant clear each other only there.
   def mark_floor
     @mark_floor ||= begin
-      apart = points.size > 1 ? (marker_half * 2 + 2) / (2 * Math.sin(Math::PI / points.size)) : 0
+      clearance = (marker_half * 2 * Math.sqrt(2)) + 2
+      apart = points.size > 1 ? clearance / (2 * Math.sin(Math::PI / points.size)) : 0
       apart.clamp(radius * MARK_FLOOR, radius * MARK_CEILING)
     end
   end

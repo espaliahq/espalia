@@ -125,10 +125,12 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
           g["transform"][/translate\((.+)\)/, 1].split.map(&:to_f)
         end
         width = size == :compact ? 12 : 16
-        closest = signs.combination(2).map { |(ax, ay), (bx, by)| Math.hypot(ax - bx, ay - by) }.min
+        overlapping = signs.combination(2).select do |(ax, ay), (bx, by)|
+          (ax - bx).abs < width && (ay - by).abs < width
+        end
 
         assert_equal 18, signs.size
-        assert_operator closest, :>=, width, "expected #{size} signs at least #{width} apart, got #{closest.round(1)}"
+        assert_empty overlapping, "expected no #{size} signs' squares to overlap"
       end
     end
 
