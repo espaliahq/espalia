@@ -213,8 +213,8 @@ class Views::Assessments::HeroSummary < Views::Base
       type: "button",
       class: "group/radar flex shrink-0 items-center gap-4 self-start rounded-lg p-1 pr-3 text-left " \
              "hover:bg-default-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-      aria: { label: "Capability map: #{shape.points.size} capabilities in #{shape.groups.size} groups. " \
-                     "Open the capability map" },
+      aria: { label: "Open capability map: #{shape.points.size} #{'capability'.pluralize(shape.points.size)} " \
+                     "in #{shape.groups.size} #{'group'.pluralize(shape.groups.size)}" },
       data: { action: "modal#open", modal_target_id: Views::Assessments::CapabilityMapModal::ID }
     ) do
       div(class: "size-24 shrink-0 sm:size-28") do
@@ -228,7 +228,8 @@ class Views::Assessments::HeroSummary < Views::Base
   end
 
   def radar_key(shape)
-    ul(class: "hidden grid-cols-[auto_auto] gap-x-5 gap-y-0.5 text-xs text-muted lg:grid") do
+    ul(class: "grid gap-x-5 gap-y-0.5 text-xs text-muted sm:hidden lg:grid lg:grid-cols-[auto_auto]",
+       data: { radar_key: true }) do
       shape.groups.each do |group|
         li(class: "flex items-center gap-1.5 whitespace-nowrap") do
           span(class: "size-2 shrink-0 rounded-xs #{Views::Assessments::CapabilityMapModal::FILL.fetch(group.hue)}")

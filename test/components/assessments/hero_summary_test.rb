@@ -524,7 +524,7 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert trigger, "expected the compact radar to open the capability map"
       assert_equal "modal#open", trigger["data-action"]
       assert trigger.at_css("svg[aria-hidden='true']"), "expected the compact radar inside the trigger"
-      assert_includes trigger["aria-label"], "Open the capability map"
+      assert_equal "Open capability map: 1 capability in 1 group", trigger["aria-label"]
     end
 
     should "wait, with the score, until enough is rated" do

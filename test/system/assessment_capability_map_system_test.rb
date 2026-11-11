@@ -92,6 +92,8 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
     should "open the map from the hero and jump from a lane to its capability on #{label}" do
       page.driver.browser.manage.window.resize_to(*size)
+      visit assessment_path(@assignment)
+      assert_selector "#{TRIGGER} [data-radar-key] li", text: "Influence", visible: true
       open_map
 
       within(MAP) do
