@@ -14,7 +14,7 @@ $stdout.sync = true
 # creates through the app (see docs/import-your-framework.md).
 #
 # Development and test get the Null Island Systems demo tenant (ExampleSeed):
-# the example framework, ten people, an open cycle, ratings, evidence,
+# the example framework, 21 people, an open cycle, ratings, evidence,
 # pending suggestions and an open draft.
 
 # See SeedAdmin for the contract: dev default, SEED_ADMIN_* override,

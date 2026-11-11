@@ -582,6 +582,19 @@ window, so minimize after any resize. On CI, each worker prints its Chrome and
 ChromeDriver versions once (`[system test] Chrome …`), so a new failure family
 can be matched to a browser update.
 
+## Clear Any CDP Emulation You Set
+
+**A CDP emulation outlives the test that set it.** Capybara reuses one browser
+tab across tests, and `Emulation.setDeviceMetricsOverride` beats the
+`resize_to` every later test relies on. The marketing-flows test once set a
+1440×900 override and left it. Every phone-size test that ran after it laid out
+at 1440 wide, and ten failed in ways that pointed at their own layouts. Only
+the run order linked them. `ApplicationSystemTestCase`'s setup now calls
+`clear_emulation`, which clears the device metrics and emulated media before
+every test. Add any other CDP emulation you set there too. To confirm a leak,
+run the suspect file with a victim under several `--seed` values and compare
+the orders that fail.
+
 ## Waiting for Lazy-Loaded Turbo Frames (NON-NEGOTIABLE)
 
 **When a page eager-loads Turbo Frames via `src:` and inner-content fallback, wait for those frames to finish their fetch before clicking inside them.** The fallback content is rendered immediately, but Turbo replaces it once the `src` fetch completes. A click between initial render and replacement can hit a stale link about to be removed from the DOM.

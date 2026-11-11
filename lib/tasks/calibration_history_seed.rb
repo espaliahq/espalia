@@ -19,8 +19,8 @@
 #   value (some revising as they go), a third get part-way, a third leave
 #   the whole row inherited. That spread is the Carried column's whole point.
 # - **Managers who move.** A slice of each cycle's population changes rater
-#   between cycles — always to a sibling under the same department head, the
-#   realistic re-org, and recorded on the PersonDevelopment stream so
+#   between cycles — always to a sibling manager in the same department under
+#   the same head, the realistic re-org, and recorded on the PersonDevelopment stream so
 #   `RecordedReportingManager` (not the live org chart) is what the drill-in
 #   attributes by.
 # - **Some genuinely new work**, so a later cycle isn't purely inherited.
@@ -30,8 +30,9 @@
 class CalibrationHistorySeed
   # Cycles to advance THROUGH, in order, after whatever open cycle the
   # tenant already has. Each is created only if absent, so re-running the
-  # seed converges on this history rather than growing it.
-  FUTURE_CYCLES = [ "Q2 2026 Review", "Q3 2026 Review" ].freeze
+  # seed converges on this history rather than growing it. The names follow
+  # ExampleSeed::CYCLE_NAME, so time runs forward through the history.
+  FUTURE_CYCLES = [ "Q1 2027 Capability Review", "Q2 2027 Capability Review" ].freeze
 
   # Share of each cycle's population that changes rater before the next one.
   # Taken by RANK, like the personas below: an independent draw per person
@@ -70,6 +71,14 @@ class CalibrationHistorySeed
       # history, and would skip the advance while reporting it as done.
       if AssessmentCycle.for_framework(@framework.framework_id).find_by(name: name)
         @io.puts "  '#{name}' already exists — skipping."
+        next
+      end
+
+      # Each advance closes one cycle, so a tenant with as many closures as
+      # the history has steps is done, whatever its cycles are called: a
+      # tenant seeded under older names must not grow a second history.
+      if AssessmentCycle.for_framework(@framework.framework_id).where(status: "closed").count >= FUTURE_CYCLES.size
+        @io.puts "  History already advanced — skipping '#{name}'."
         next
       end
 
@@ -160,8 +169,9 @@ class CalibrationHistorySeed
   end
 
   # A slice of the population changes rater between cycles — to a SIBLING
-  # under the same manager-of-managers, which is the re-org that actually
-  # happens and keeps everyone inside the facilitator's scope.
+  # in the same department under the same manager-of-managers, which is the
+  # re-org that actually happens and keeps everyone inside the facilitator's
+  # scope.
   #
   # Both halves matter: the live org chart moves, and the fact is recorded
   # on the person's stream, because manager-rating authority reads the
@@ -188,7 +198,10 @@ class CalibrationHistorySeed
     people.first([ (people.size * MOVER_SHARE).ceil, 1 ].max)
   end
 
-  # Another rater reporting to the same person as this one's current rater.
+  # Another rater in the same department, reporting to the same person as
+  # this one's current rater. Without the department, a VP's only other
+  # report takes everyone: the demo once moved every designer under an
+  # engineering manager.
   def sibling_rater_for(person)
     current = person.manager
     return nil unless current&.manager_id
@@ -196,7 +209,7 @@ class CalibrationHistorySeed
     # Ordered: an unordered read gives Postgres licence to return rows in a
     # different sequence per run, which would pick a different sibling and
     # break the convergence this class promises.
-    candidates = Person.where(manager_id: current.manager_id)
+    candidates = Person.where(manager_id: current.manager_id, department: current.department)
       .where.not(id: current.id).order(:id).to_a
     return nil if candidates.empty?
 
