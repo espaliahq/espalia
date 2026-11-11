@@ -7,10 +7,12 @@
 # `:compact` is the hero's glance, drawn as a picture inside its trigger;
 # `:detailed` is the capability map's, where each spoke is a link.
 class Views::Assessments::CapabilityRadar < Views::Base
-  RADIUS = 100.0
-  # Where a blocking capability with no level yet carries its sign: off the
-  # centre along its own spoke, so several don't stack.
-  UNREACHED_MARK = 14.0
+  # The detailed radar draws larger against the same marks, so the disc fills
+  # the map's column and the badges and strokes read finer.
+  RADIUS = { compact: 100.0, detailed: 150.0 }.freeze
+  # Where a blocking capability with no level yet carries its sign, as a share
+  # of the radius: off the centre along its own spoke, so several don't stack.
+  UNREACHED_MARK = 0.14
 
   # Written out per hue: Tailwind builds only class names it can read whole.
   SEGMENT = {
@@ -97,8 +99,8 @@ class Views::Assessments::CapabilityRadar < Views::Base
   def compact? = @size == :compact
 
   def view_box
-    pad = compact? ? 2 : 24
-    edge = RADIUS + pad
+    pad = compact? ? 2 : 30
+    edge = radius + pad
     "#{-edge} #{-edge} #{edge * 2} #{edge * 2}"
   end
 
@@ -110,19 +112,21 @@ class Views::Assessments::CapabilityRadar < Views::Base
     [ (radius * Math.cos(rad)).round(2), (radius * Math.sin(rad)).round(2) ]
   end
 
-  def radius_for(position) = RADIUS * @shape.fraction(position)
+  def radius = RADIUS.fetch(@size)
+
+  def radius_for(position) = radius * @shape.fraction(position)
 
   def segment(s, group)
     first = points.index(group.points.first)
     from = angle(first) - (180.0 / points.size)
     to = from + (group.points.size * 360.0 / points.size)
     attrs = { class: SEGMENT.fetch(group.hue), data: { radar_segment: group.name.to_s } }
-    return s.circle(r: RADIUS, **attrs) if group.points.size == points.size
+    return s.circle(r: radius, **attrs) if group.points.size == points.size
 
-    x0, y0 = xy(RADIUS, from)
-    x1, y1 = xy(RADIUS, to)
+    x0, y0 = xy(radius, from)
+    x1, y1 = xy(radius, to)
     large = to - from > 180 ? 1 : 0
-    s.path(d: "M0 0 L#{x0} #{y0} A#{RADIUS} #{RADIUS} 0 #{large} 1 #{x1} #{y1} Z", **attrs)
+    s.path(d: "M0 0 L#{x0} #{y0} A#{radius} #{radius} 0 #{large} 1 #{x1} #{y1} Z", **attrs)
   end
 
   def rings(s)
@@ -162,9 +166,9 @@ class Views::Assessments::CapabilityRadar < Views::Base
                 action: "click->modal#close click->continue-assessing#focus",
                 continue_assessing_capability_stable_id_value: point.stable_id,
                 continue_assessing_level_ordinal_value: @shape.person_level }) do
-      hit_x, hit_y = xy(RADIUS + 26, angle(i))
+      hit_x, hit_y = xy(radius + 26, angle(i))
       s.line(x1: 0, y1: 0, x2: hit_x, y2: hit_y, stroke: "transparent", stroke_width: 18)
-      rim_x, rim_y = xy(RADIUS, angle(i))
+      rim_x, rim_y = xy(radius, angle(i))
       s.line(x1: 0, y1: 0, x2: rim_x, y2: rim_y, stroke_width: 1, stroke_opacity: 0.25, class: SPOKE.fetch(point.hue))
       spoke_marks(s, point, i)
       number_badge(s, point, i)
@@ -180,7 +184,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
                       "group-data-[hot=true]/spoke:stroke-[5]")
         s.circle(cx: x, cy: y, r: compact? ? 0 : 4, class: DOT.fetch(point.hue))
       else
-        x, y = xy(UNREACHED_MARK, angle(i))
+        x, y = xy(radius * UNREACHED_MARK, angle(i))
       end
       blocked_marker(s, x, y) if point.blocked
     end
@@ -204,11 +208,11 @@ class Views::Assessments::CapabilityRadar < Views::Base
 
   # The number the capability's lane carries too, so a spoke can be found in the list.
   def number_badge(s, point, i)
-    x, y = xy(RADIUS + 14, angle(i))
-    s.circle(cx: x, cy: y, r: 9, stroke_width: 1,
+    x, y = xy(radius + 16, angle(i))
+    s.circle(cx: x, cy: y, r: 11, stroke_width: 1,
              class: "#{BADGE.fetch(point.hue)} group-hover/spoke:stroke-(--gos-focus-ring) " \
                     "group-focus-visible/spoke:stroke-(--gos-focus-ring) group-focus-visible/spoke:stroke-2")
-    s.text(x: x, y: (y + 3.5).round(2), text_anchor: "middle", font_size: 10, font_weight: 700,
+    s.text(x: x, y: (y + 4).round(2), text_anchor: "middle", font_size: 11, font_weight: 700,
            class: BADGE_TEXT.fetch(point.hue)) { point.number.to_s }
   end
 end

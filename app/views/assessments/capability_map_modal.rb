@@ -57,7 +57,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         p(class: "text-sm text-muted -mt-1 mb-4") do
           "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
         end
-        div(class: "grid gap-6 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] lg:items-start") do
+        div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start") do
           div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
             render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed)
           end
