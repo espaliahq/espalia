@@ -58,7 +58,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
     render Components::Kit::Modal.new(
       id: ID, title: "Capability map", size: :"6xl", standalone: false,
-      panel_data: { controller: "capability-map",
+      panel_data: { controller: "capability-map", capability_map_content_value: CONTENT_ID,
                     action: "mouseover->capability-map#light mouseout->capability-map#dim " \
                             "focusin->capability-map#light focusout->capability-map#dim" }
     ) do |modal|
