@@ -126,5 +126,11 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     JS
     assert_selector "#{MAP} [data-capability-lane='1'][data-hot='true']"
     assert_no_selector "#{MAP} [data-capability-lane='2'][data-hot='true']"
+
+    page.execute_script(<<~JS)
+      document.querySelector("#{MAP} svg [data-capability-map-key='1'] line")
+        .dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
+    JS
+    assert_no_selector "#{MAP} [data-hot='true']"
   end
 end

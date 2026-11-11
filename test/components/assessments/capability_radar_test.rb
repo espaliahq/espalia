@@ -43,6 +43,15 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_equal %w[E2 E3 E4 E5], radar.css("[data-radar-ring]").map { |r| r["data-radar-ring"] }
       assert_equal "E3", radar.at_css("[data-radar-ring-role='assessed']")["data-radar-ring"]
       assert_equal "E4", radar.at_css("[data-radar-ring-role='next']")["data-radar-ring"]
+      assert radar.at_css("[data-radar-ring-role='next']")["stroke-dasharray"], "expected the next ring dashed"
+      assert_nil radar.at_css("[data-radar-ring-role='assessed']")["stroke-dasharray"]
+    end
+
+    should "fill the whole circle for a framework with one category" do
+      radar = render_radar(shape({ "Craft" => { "Delivery" => 1.0, "Quality" => 1.0 } },
+                                 levels: E1_TO_E5, person_level: 3))
+
+      assert_equal "circle", radar.at_css("[data-radar-segment]").name
     end
   end
 

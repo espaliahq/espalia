@@ -19,7 +19,7 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
         person_level: person_level,
         capabilities: caps.keys.map do |name|
           { capability: CAP.new(stable_id: "cap-#{name}", name: name),
-            cells: { person_level => { current_frequency: rated ? "consistent" : nil } } }
+            cells: { person_level => { current_frequency: rated_for(rated, name) ? "consistent" : nil } } }
         end }
     end
     capability_scores = groups.values.reduce({}, :merge).to_h do |name, score|
@@ -33,6 +33,8 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
   end
 
   def point(shape, name) = shape.points.find { |p| p.name == name }
+
+  def rated_for(rated, name) = rated.is_a?(Hash) ? rated.fetch(name) : rated
 
   def with_category_score(rated:)
     shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.5 } }, rated: rated,
@@ -100,6 +102,14 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
   context "a category's score" do
     should "show once enough of the category is rated for the chip bar to score it" do
       assert_in_delta 1.56, with_category_score(rated: true).groups.first.score, 0.001
+    end
+
+    should "show at exactly half the category rated" do
+      half = shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.5 } },
+                   rated: { "Delivery" => true, "Quality" => false },
+                   category_scores: { "cat-Craft" => { score: 1.5, scorable: true } })
+
+      assert_in_delta 1.5, half.groups.first.score, 0.001
     end
 
     should "stay hidden while the chip bar would hold it back" do
