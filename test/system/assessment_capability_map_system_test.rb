@@ -116,6 +116,24 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_no_selector MAP, visible: true
   end
 
+  should "stay open, and update, when a rating lands while the map is open" do
+    open_map
+    assert_selector "#{MAP} [data-capability-lane='2']", text: "PM1 + 67% to PM2"
+    page.execute_script("document.getElementById('#{Views::Assessments::CapabilityMapModal::ID}').dataset.kept = 'yes'")
+
+    page.execute_script(<<~JS)
+      const form = [...document.querySelectorAll("form")].find((f) =>
+        f.querySelector("input[name='rating[capability_stable_id]'][value='#{@stable_ids.fetch('Prioritisation')}']") &&
+        f.querySelector("input[name='rating[level_ordinal]'][value='20']") &&
+        f.querySelector("input[name='rating[frequency]'][value='consistent']") &&
+        !f.querySelector("input[name='rating[confirm]'], input[name='rating[clear]']"))
+      form.requestSubmit()
+    JS
+
+    assert_selector "#{MAP}[data-kept='yes'] [data-capability-lane='2']", text: "PM2 met", visible: true
+    assert_equal "hidden", page.evaluate_script("document.body.style.overflow")
+  end
+
   should "light a spoke's lane while the spoke is pointed at" do
     open_map
     wait_for_stimulus "capability-map"

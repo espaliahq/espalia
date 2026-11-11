@@ -130,8 +130,9 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
           rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
         }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
         assert_response :success
-        stream = response.body[%r{<turbo-stream[^>]*target="capability-map-modal".*?</turbo-stream>}m]
-        assert_not_nil stream, "Expected the rating response to replace the capability map."
+        stream = response.body[%r{<turbo-stream action="update" target="capability-map-content".*?</turbo-stream>}m]
+        assert_not_nil stream, "Expected the rating response to update the capability map's contents, leaving an open map open."
+        assert_no_match %r{target="capability-map-modal"}, response.body
         Nokogiri::HTML5.fragment(stream).at_css("[data-capability-lane='1']").text
       end
 

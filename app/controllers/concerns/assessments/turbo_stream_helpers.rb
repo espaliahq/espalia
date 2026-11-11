@@ -143,8 +143,8 @@ module Assessments::TurboStreamHelpers
     )
   end
 
-  # The capability map after a rating; it sits outside the reloading frame
-  # (`Views::Assessments::CapabilityMapModal`).
+  # The capability map's contents after a rating; it sits outside the
+  # reloading frame, and an open map stays open (`Views::Assessments::CapabilityMapModal`).
   #
   # @param matrix_data [Hash] the rebuilt matrix data
   # @param primary [Hash] the viewer's primary scoring hash
@@ -152,11 +152,11 @@ module Assessments::TurboStreamHelpers
   # @return [Turbo::Streams::TagBuilder]
   def capability_map_stream(matrix_data, primary, context)
     whose = viewer_is_manager? ? (assessee_name || "This person") : nil
-    turbo_stream.replace(
-      Views::Assessments::CapabilityMapModal::ID,
+    turbo_stream.update(
+      Views::Assessments::CapabilityMapModal::CONTENT_ID,
       render_to_string(
         Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
-                                                   whose: whose),
+                                                   whose: whose, content_only: true),
         layout: false
       )
     )

@@ -5,12 +5,14 @@
 # lane share a number, and pointing at either lights both.
 #
 # Root-mounted like the score explainer, so the hero's trigger can sit inside
-# a frame that reloads on every rating without closing an open map; each
-# rating streams it afresh (`Assessments::TurboStreamHelpers`).
+# a frame that reloads on every rating without closing an open map. Each
+# rating streams fresh contents into `CONTENT_ID`, never a new overlay, so an
+# open map stays open (`Assessments::TurboStreamHelpers`).
 class Views::Assessments::CapabilityMapModal < Views::Base
   include Views::Assessments::Concerns::ScoreScale
 
   ID = "capability-map-modal"
+  CONTENT_ID = "capability-map-content"
 
   FILL = {
     1 => "bg-(--gos-category-1-strong)", 2 => "bg-(--gos-category-2-strong)",
@@ -27,49 +29,56 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   # @param scoring [Hash] the perspective the hero renders
   # @param context [Symbol] :self, :manager or :alignment
   # @param whose [String, nil] the assessee's name; nil when the viewer is the assessee
+  # @param content_only [Boolean] just what `CONTENT_ID` holds, for a stream
   # @return [Views::Assessments::CapabilityMapModal]
-  def self.for(matrix_data:, scoring:, context:, whose: nil)
+  def self.for(matrix_data:, scoring:, context:, whose: nil, content_only: false)
     code = matrix_data[:merged_levels].find { |l| l[:ordinal] == matrix_data[:person_level] }&.dig(:level_code)
     new(
       shape: Assessments::CapabilityShape.new(
         categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
         person_level: matrix_data[:person_level], context: context
       ),
-      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you"
+      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", content_only: content_only
     )
   end
 
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
   # @param assessed_as [String] the assessed ring's label, "you" or "assessed"
-  def initialize(shape:, subject:, assessed_as: "you")
+  # @param content_only [Boolean] render just what `CONTENT_ID` holds
+  def initialize(shape:, subject:, assessed_as: "you", content_only: false)
     @shape = shape
     @subject = subject
     @assessed_as = assessed_as
+    @content_only = content_only
   end
 
   def view_template
+    return content if @content_only
+
     render Components::Kit::Modal.new(
       id: ID, title: "Capability map", size: :"6xl", standalone: false,
       panel_data: { controller: "capability-map",
                     action: "mouseover->capability-map#light mouseout->capability-map#dim " \
                             "focusin->capability-map#light focusout->capability-map#dim" }
     ) do |modal|
-      modal.body do
-        p(class: "text-sm text-muted -mt-1 mb-4") do
-          "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
-        end
-        div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start") do
-          div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
-            render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed, assessed_as: @assessed_as)
-          end
-          div { lanes }
-        end
-      end
+      modal.body { div(id: CONTENT_ID) { content } }
     end
   end
 
   private
+
+  def content
+    p(class: "text-sm text-muted -mt-1 mb-4") do
+      "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
+    end
+    div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start") do
+      div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
+        render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed, assessed_as: @assessed_as)
+      end
+      div { lanes }
+    end
+  end
 
   def how_to_read
     return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?
