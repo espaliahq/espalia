@@ -115,6 +115,23 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the signs of blocking capabilities stuck at the first level apart, each on its own spoke" do
+      names = (1..18).map { |n| "Cap #{n}" }
+      held = shape({ "Craft" => names.to_h { |n| [ n, 0.0 ] } }, levels: E1_TO_E5, person_level: 2,
+                   statuses: names.to_h { |n| [ "cap-#{n}", :blocked ] })
+
+      [ :detailed, :compact ].each do |size|
+        signs = render_radar(held, size: size).css("[data-radar-blocked]").map do |g|
+          g["transform"][/translate\((.+)\)/, 1].split.map(&:to_f)
+        end
+        width = size == :compact ? 12 : 16
+        closest = signs.combination(2).map { |(ax, ay), (bx, by)| Math.hypot(ax - bx, ay - by) }.min
+
+        assert_equal 18, signs.size
+        assert_operator closest, :>=, width, "expected #{size} signs at least #{width} apart, got #{closest.round(1)}"
+      end
+    end
+
     should "not call a blocking capability Required when its binding isn't" do
       held = shape({ "Craft" => { "Quality" => 0.75 } }, levels: E1_TO_E5, person_level: 3,
                    statuses: { "cap-Quality" => :blocked })

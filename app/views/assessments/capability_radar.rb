@@ -10,9 +10,11 @@ class Views::Assessments::CapabilityRadar < Views::Base
   # The detailed radar draws larger against the same marks, so the disc fills
   # the map's column and the badges and strokes read finer.
   RADIUS = { compact: 100.0, detailed: 150.0 }.freeze
-  # Where a blocking capability with no level yet carries its sign, as a share
-  # of the radius: off the centre along its own spoke, so several don't stack.
-  UNREACHED_MARK = 0.14
+  # The nearest a blocked sign comes to the centre, as a share of the radius,
+  # so a capability with no level yet still shows its sign on its own spoke.
+  MARK_FLOOR = 0.14
+  # The farthest out the floor moves, however crowded the spokes.
+  MARK_CEILING = 0.6
 
   # Written out per hue: Tailwind builds only class names it can read whole.
   SEGMENT = {
@@ -201,12 +203,21 @@ class Views::Assessments::CapabilityRadar < Views::Base
                class: "#{SPOKE.fetch(point.hue)} group-hover/spoke:stroke-[5] group-focus-visible/spoke:stroke-[5] " \
                       "group-data-[hot=true]/spoke:stroke-[5]")
         s.circle(cx: x, cy: y, r: compact? ? 0 : 4, class: DOT.fetch(point.hue))
-      else
-        x, y = xy(radius * UNREACHED_MARK, angle(i))
       end
-      blocked_marker(s, x, y) if point.blocked
+      blocked_marker(s, *xy([ point.reached ? radius_for(point.reached) : 0, mark_floor ].max, angle(i))) if point.blocked
     end
   end
+
+  # Signs on spokes shorter than this would overlap their neighbours', so they
+  # sit here instead, where adjacent spokes are a sign's width (plus a gap) apart.
+  def mark_floor
+    @mark_floor ||= begin
+      apart = points.size > 1 ? (marker_half * 2 + 2) / (2 * Math.sin(Math::PI / points.size)) : 0
+      apart.clamp(radius * MARK_FLOOR, radius * MARK_CEILING)
+    end
+  end
+
+  def marker_half = compact? ? 6 : 8
 
   def spoke_name(point)
     held = (point.required ? ". Required, blocks the score" : ". Blocks the score") if point.blocked
@@ -215,7 +226,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
 
   # A capability whose gap blocks the score: a sign as well as a colour.
   def blocked_marker(s, x, y)
-    half = compact? ? 6 : 8
+    half = marker_half
     s.g(transform: "translate(#{x} #{y})", data: { radar_blocked: true }) do
       s.rect(x: -half, y: -half, width: half * 2, height: half * 2, rx: half / 2.0, stroke_width: 1.5,
              class: "fill-(--gos-warning-strong) stroke-(--gos-surface-overlay)")
