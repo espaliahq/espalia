@@ -106,6 +106,9 @@ class Views::Assessments::ManagerShowView < Views::Base
         emphasised: @matrix_data[:emphasised_capabilities],
         second_person: false
       )
+      render Views::Assessments::CapabilityMapModal.for(
+        matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: @assessee.name
+      )
       render_lens_role_modal(assessee_name: @assessee.name)
       render_exploration_modals(assessee_name: @assessee.name)
       render_start_lens_alignment_modal(assessee_name: @assessee.name, can_start_alignment: @can_start_lens_alignment)

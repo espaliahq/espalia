@@ -511,4 +511,27 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_includes html, "47%"
     end
   end
+
+  def radar_trigger(html)
+    Nokogiri::HTML5.fragment(html).at_css("button[data-modal-target-id='#{Views::Assessments::CapabilityMapModal::ID}']")
+  end
+
+  context "the capability radar" do
+    should "open the capability map from the header once there is a score" do
+      html = render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.6, score: 1.6 })
+      trigger = radar_trigger(html)
+
+      assert trigger, "expected the compact radar to open the capability map"
+      assert_equal "modal#open", trigger["data-action"]
+      assert trigger.at_css("svg[aria-hidden='true']"), "expected the compact radar inside the trigger"
+      assert_includes trigger["aria-label"], "Open the capability map"
+    end
+
+    should "wait, with the score, until enough is rated" do
+      html = render_hero(state: :progressing, components: { prior: 1.0, current: 0.0, next: 0.0, score: 0.0 },
+                         cells: { 3 => { current_frequency: nil } })
+
+      assert_nil radar_trigger(html)
+    end
+  end
 end

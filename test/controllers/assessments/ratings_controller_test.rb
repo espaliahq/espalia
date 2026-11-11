@@ -122,6 +122,23 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
         "the drawer must explain the score as it is now, not as the page loaded it"
     end
 
+    should "re-render the capability map so its lanes follow the rating" do
+      sign_in @user
+
+      lane = lambda do |frequency|
+        post assessment_ratings_path(@assignment), params: {
+          rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
+        }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+        assert_response :success
+        stream = response.body[%r{<turbo-stream[^>]*target="capability-map-modal".*?</turbo-stream>}m]
+        assert_not_nil stream, "Expected the rating response to replace the capability map."
+        Nokogiri::HTML5.fragment(stream).at_css("[data-capability-lane='1']").text
+      end
+
+      assert_includes lane.call("some"), "33% of E2"
+      assert_includes lane.call("consistent"), "E2 met"
+    end
+
     should "revise an existing self-rating" do
       # Create initial rating
       sign_in @user

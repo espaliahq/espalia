@@ -28,6 +28,24 @@ class Views::Assessments::CapabilityMapModal < Views::Base
 
   LANE_COLUMNS = "grid grid-cols-[minmax(0,1fr)_7.5rem] gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_8.5rem]"
 
+  # The map for the perspective a page or a rating stream is showing.
+  #
+  # @param matrix_data [Hash] `Assessments::MatrixDataBuilder#build`
+  # @param scoring [Hash] the perspective the hero renders
+  # @param context [Symbol] :self, :manager or :alignment
+  # @param whose [String, nil] the assessee's name; nil when the viewer is the assessee
+  # @return [Views::Assessments::CapabilityMapModal]
+  def self.for(matrix_data:, scoring:, context:, whose: nil)
+    code = matrix_data[:merged_levels].find { |l| l[:ordinal] == matrix_data[:person_level] }&.dig(:level_code)
+    new(
+      shape: Assessments::CapabilityShape.new(
+        categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
+        person_level: matrix_data[:person_level], context: context
+      ),
+      subject: "#{whose || 'You'} at #{code}"
+    )
+  end
+
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
   def initialize(shape:, subject:)

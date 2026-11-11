@@ -184,6 +184,7 @@ class Views::Assessments::HeroSummary < Views::Base
         gloss_and_secondaries
         middle_band
       end
+      capability_radar_trigger
       div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
         # The number defines itself where it is read, rather than in a help
         # page nobody opens (#414).
@@ -193,6 +194,46 @@ class Views::Assessments::HeroSummary < Views::Base
           score_bar(ratio)
           secondary_percents
           explainer_trigger
+        end
+      end
+    end
+  end
+
+  # The capability radar at a glance, with a key of the groups and their
+  # scores; it opens the root-mounted capability map. Only on the scored
+  # header, so it waits behind the same coverage gate as the number.
+  def capability_radar_trigger
+    shape = Assessments::CapabilityShape.new(
+      categories: @categories, scoring: primary_scoring, merged_levels: @merged_levels,
+      person_level: @person_level, context: @context
+    )
+    return if shape.points.empty?
+
+    button(
+      type: "button",
+      class: "group/radar flex shrink-0 items-center gap-4 self-start rounded-lg p-1 pr-3 text-left " \
+             "hover:bg-default-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+      aria: { label: "Capability map: #{shape.points.size} capabilities in #{shape.groups.size} groups. " \
+                     "Open the capability map" },
+      data: { action: "modal#open", modal_target_id: Views::Assessments::CapabilityMapModal::ID }
+    ) do
+      div(class: "size-24 shrink-0 sm:size-28") do
+        render Views::Assessments::CapabilityRadar.new(shape: shape, size: :compact)
+      end
+      div(class: "flex flex-col gap-1") do
+        radar_key(shape)
+        span(class: "text-xs font-semibold text-link group-hover/radar:underline") { "Open capability map →" }
+      end
+    end
+  end
+
+  def radar_key(shape)
+    ul(class: "hidden grid-cols-[auto_auto] gap-x-5 gap-y-0.5 text-xs text-muted lg:grid") do
+      shape.groups.each do |group|
+        li(class: "flex items-center gap-1.5 whitespace-nowrap") do
+          span(class: "size-2 shrink-0 rounded-xs #{Views::Assessments::CapabilityMapModal::FILL.fetch(group.hue)}")
+          plain group.name.to_s
+          span(class: "ml-auto pl-2 font-semibold text-default tabular-nums") { "#{percent(group.score)}%" } if group.score
         end
       end
     end

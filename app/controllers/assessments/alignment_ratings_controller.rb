@@ -208,6 +208,7 @@ class Assessments::AlignmentRatingsController < ApplicationController
         capability_name_html(cap_data, matrix_data, primary, :alignment)
       ),
       score_explainer_stream(matrix_data, primary, :alignment),
+      capability_map_stream(matrix_data, primary, :alignment),
       (turbo_stream.replace(
         "category-tabs",
         render_to_string(

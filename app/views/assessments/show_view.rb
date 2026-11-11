@@ -119,6 +119,9 @@ class Views::Assessments::ShowView < Views::Base
         emphasised: @matrix_data[:emphasised_capabilities],
         second_person: true
       )
+      render Views::Assessments::CapabilityMapModal.for(
+        matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: nil
+      )
       render_lens_role_modal(assessee_name: nil)
       render_exploration_modals(assessee_name: nil)
       render Views::Evidence::ModalShell.new if @viewer_person_id.present?

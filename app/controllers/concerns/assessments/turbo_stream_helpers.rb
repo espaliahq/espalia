@@ -143,6 +143,26 @@ module Assessments::TurboStreamHelpers
     )
   end
 
+  # The capability map, re-rendered after a rating. Root-mounted for the
+  # explainer's reason, so its lanes would otherwise keep the page's first
+  # numbers.
+  #
+  # @param matrix_data [Hash] the rebuilt matrix data
+  # @param primary [Hash] the viewer's primary scoring hash
+  # @param context [Symbol]
+  # @return [Turbo::Streams::TagBuilder]
+  def capability_map_stream(matrix_data, primary, context)
+    whose = viewer_is_manager? ? Person.find_by(id: @assignment.person_id)&.name : nil
+    turbo_stream.replace(
+      Views::Assessments::CapabilityMapModal::ID,
+      render_to_string(
+        Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
+                                                   whose: whose),
+        layout: false
+      )
+    )
+  end
+
   def explainer_subject
     return "Your score" unless viewer_is_manager?
 
