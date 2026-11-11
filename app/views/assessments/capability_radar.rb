@@ -69,6 +69,8 @@ class Views::Assessments::CapabilityRadar < Views::Base
   }.freeze
   RING_STROKE = { assessed: "stroke-(--gos-content-muted)", next: "stroke-(--gos-score-ahead)",
                   nil => "stroke-(--gos-border-default)" }.freeze
+  # The least a ring label's baseline sits from another's on the same side.
+  RING_LABEL_GAP = 12
   RING_LABEL = { assessed: "fill-(--gos-content-default) font-bold", next: "fill-(--gos-score-ahead) font-bold",
                  nil => "fill-(--gos-content-muted) font-medium" }.freeze
 
@@ -147,16 +149,32 @@ class Views::Assessments::CapabilityRadar < Views::Base
   end
 
   # Up the top of the radar, haloed so they read across spokes and segments.
-  # The rim's label sits inside it, clear of the number badges.
+  # The rim's label sits inside it, clear of the number badges. Rings too close
+  # to label apart keep the assessed and next labels (one moves left of the
+  # spoke) and drop the plain ones.
   def ring_labels(s)
-    @shape.codes.each_with_index.drop(1).each do |code, i|
-      role = ring_role(i)
-      y = i == @shape.codes.size - 1 ? -radius_for(i) + 11 : -(radius_for(i) + 3)
-      s.text(x: 4, y: y.round(2), font_size: 10,
-             class: "#{RING_LABEL.fetch(role)} stroke-(--gos-surface-overlay) [paint-order:stroke] " \
-                    "[stroke-width:3px] [stroke-linejoin:round]",
-             data: { radar_ring_label: code }) { [ code, ring_suffix(role) ].compact.join(" · ") }
+    placed = []
+    ring_label_candidates.each do |label|
+      clashes = ->(side) { placed.any? { |p| p[:side] == side && (p[:y] - label[:y]).abs < RING_LABEL_GAP } }
+      next unless (side = [ :right, (:left if label[:role]) ].compact.find { |option| !clashes.(option) })
+
+      placed << label.merge(side: side)
     end
+    placed.sort_by { |label| label[:index] }.each do |label|
+      s.text(x: label[:side] == :left ? -4 : 4, y: label[:y].round(2), font_size: 10,
+             text_anchor: ("end" if label[:side] == :left),
+             class: "#{RING_LABEL.fetch(label[:role])} stroke-(--gos-surface-overlay) [paint-order:stroke] " \
+                    "[stroke-width:3px] [stroke-linejoin:round]",
+             data: { radar_ring_label: label[:code] }) { [ label[:code], ring_suffix(label[:role]) ].compact.join(" · ") }
+    end
+  end
+
+  # The assessed and next rings' labels first, so they win any clash.
+  def ring_label_candidates
+    @shape.codes.each_with_index.drop(1).map do |code, i|
+      { code: code, index: i, role: ring_role(i),
+        y: i == @shape.codes.size - 1 ? -radius_for(i) + 11 : -(radius_for(i) + 3) }
+    end.partition { |label| label[:role] }.flatten
   end
 
   def ring_suffix(role) = { assessed: @assessed_as, next: "next" }[role]

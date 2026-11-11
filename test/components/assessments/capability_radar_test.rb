@@ -53,6 +53,27 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_equal [ "E2", "E3 · you", "E4 · next", "E5" ], radar.css("[data-radar-ring-label]").map(&:text)
     end
 
+    should "keep every ring label readable on a long ladder, dropping plain ones before the assessed or next" do
+      twelve = (1..12).map { |n| { ordinal: n, level_code: "E#{n}" } }
+      labels = render_radar(shape({ "Craft" => { "Delivery" => 1.0 } }, levels: twelve, person_level: 11))
+               .css("[data-radar-ring-label]")
+      # Roughly the box a 10-unit label covers: 6 units a character, baseline 2 above its bottom.
+      boxes = labels.map do |label|
+        x = label["x"].to_f
+        y = label["y"].to_f
+        width = label.text.length * 6
+        left = label["text-anchor"] == "end" ? x - width : x
+        { text: label.text, x: left..(left + width), y: (y - 8)..(y + 2) }
+      end
+      overlapping = boxes.combination(2).select do |a, b|
+        a[:x].begin < b[:x].end && b[:x].begin < a[:x].end && a[:y].begin < b[:y].end && b[:y].begin < a[:y].end
+      end
+
+      assert_includes labels.map(&:text), "E11 · you"
+      assert_includes labels.map(&:text), "E12 · next"
+      assert_empty overlapping.map { |a, b| [ a[:text], b[:text] ] }
+    end
+
     should "call the assessed ring the person's level, not yours, on someone else's map" do
       radar = render_radar(shape({ "Craft" => { "Delivery" => 1.5 } }, levels: E1_TO_E5, person_level: 3),
                            assessed_as: "assessed")
