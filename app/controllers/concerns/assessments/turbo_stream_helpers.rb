@@ -151,7 +151,7 @@ module Assessments::TurboStreamHelpers
   # @param context [Symbol]
   # @return [Turbo::Streams::TagBuilder]
   def capability_map_stream(matrix_data, primary, context)
-    whose = viewer_is_manager? ? Person.find_by(id: @assignment.person_id)&.name : nil
+    whose = viewer_is_manager? ? (assessee_name || "This person") : nil
     turbo_stream.replace(
       Views::Assessments::CapabilityMapModal::ID,
       render_to_string(
@@ -165,8 +165,13 @@ module Assessments::TurboStreamHelpers
   def explainer_subject
     return "Your score" unless viewer_is_manager?
 
-    assessee = Person.find_by(id: @assignment.person_id)
-    assessee ? "#{assessee.name}'s score" : "This score"
+    assessee_name ? "#{assessee_name}'s score" : "This score"
+  end
+
+  def assessee_name
+    return @assessee_name if defined?(@assessee_name)
+
+    @assessee_name = Person.find_by(id: @assignment.person_id)&.name
   end
 
   # @return [String] HTML
