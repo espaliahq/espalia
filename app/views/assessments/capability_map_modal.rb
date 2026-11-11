@@ -150,13 +150,12 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     end
   end
 
-  def steps = [ @shape.codes.size - 1, 1 ].max
-
-  def left(position) = "#{(position * 100.0 / steps).round(2)}%"
+  def left(position) = "#{(@shape.fraction(position) * 100).round(2)}%"
 
   def width_of_next_band
-    return "0%" if @shape.assessed_index + 1 >= @shape.codes.size
+    above = @shape.assessed_index + 1
+    return "0%" if above >= @shape.codes.size
 
-    "#{(100.0 / steps).round(2)}%"
+    "#{((@shape.fraction(above) - @shape.fraction(@shape.assessed_index)) * 100).round(2)}%"
   end
 end

@@ -53,6 +53,15 @@ class Assessments::CapabilityShape
   # @return [Array<Point>] framework order
   def points = groups.flat_map(&:points)
 
+  # How far up the ladder a position sits: 0 at the first level met, 1 at the
+  # top. A one-level ladder's only level is its top.
+  #
+  # @param position [Numeric] a ladder position, as {Point#reached}
+  # @return [Float]
+  def fraction(position)
+    top.zero? ? 1.0 : position / top
+  end
+
   private
 
   def point_for(cap, number, hue)

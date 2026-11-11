@@ -107,12 +107,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
     [ (radius * Math.cos(rad)).round(2), (radius * Math.sin(rad)).round(2) ]
   end
 
-  # How far out a level sits: the first level met at the centre, the top of
-  # the ladder at the rim.
-  def radius_for(position)
-    steps = @shape.codes.size - 1
-    steps.zero? ? RADIUS : RADIUS * position / steps
-  end
+  def radius_for(position) = RADIUS * @shape.fraction(position)
 
   def segment(s, group)
     first = points.index(group.points.first)

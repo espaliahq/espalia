@@ -111,6 +111,19 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
     PM = [ { ordinal: 10, level_code: "PM1" }, { ordinal: 20, level_code: "PM2" },
            { ordinal: 40, level_code: "PM4" } ].freeze
 
+    should "measure how far up the ladder a position sits by its steps, not its ordinals" do
+      gapped = shape({ "Product" => { "Discovery" => 1.0 } }, levels: PM, person_level: 20)
+
+      assert_equal [ 0.0, 0.5, 1.0 ], [ 0, 1, 2 ].map { |position| gapped.fraction(position) }
+    end
+
+    should "treat a one-level ladder's only level as its top" do
+      one = shape({ "Product" => { "Discovery" => 1.0 } }, levels: PM.first(1), person_level: 10)
+
+      assert_in_delta 1.0, one.fraction(0), 0.001
+      assert_equal "PM1 met", point(one, "Discovery").label
+    end
+
     should "read its codes across gaps between ordinals" do
       mid = point(shape({ "Product" => { "Discovery" => 1.5 } }, levels: PM, person_level: 20), "Discovery")
 
