@@ -1,4 +1,14 @@
-/** Lights every element sharing a `data-capability-map-key` while one is pointed at or focused. */
+/**
+ * Lights every element sharing a `data-capability-map-key` while one is pointed at or focused.
+ *
+ * @example
+ * <div data-controller="capability-map"
+ *      data-action="mouseover->capability-map#light mouseout->capability-map#dim
+ *                   focusin->capability-map#light focusout->capability-map#dim">
+ *   <a data-capability-map-key="3">spoke</a>
+ *   <a data-capability-map-key="3">lane</a>
+ * </div>
+ */
 
 import BaseController from "controllers/base_controller"
 
