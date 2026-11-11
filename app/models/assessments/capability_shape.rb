@@ -60,10 +60,12 @@ class Assessments::CapabilityShape
     silence = unscored_label(cap)
     position = silence ? nil : position_for(stable_id)
     Point.new(number: number, stable_id: stable_id, name: cap[:capability].name, hue: hue,
-              reached: position&.clamp(0.0, @codes.size - 1.0), label: silence || label_for(position),
+              reached: position&.clamp(0.0, top), label: silence || label_for(position&.clamp(..top)),
               required: @scoring.dig(:capability_scores, stable_id, :required) || false,
               blocked: @scoring.dig(:capability_statuses, stable_id) == :blocked)
   end
+
+  def top = @codes.size - 1.0
 
   def category_score(category_data)
     return unless category_score_unlocked?(category_data, @scoring, @context)

@@ -47,6 +47,13 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
       assert_equal "E3 + 60% to E4", reached.label
     end
 
+    should "stop at the top of the ladder, saying the top level is met, for a score that reaches past it" do
+      top = point(shape({ "Craft" => { "Delivery" => 3.5 } }), "Delivery")
+
+      assert_in_delta 4.0, top.reached, 0.001
+      assert_equal "E5 met", top.label
+    end
+
     should "have no level, and say so, while the viewer has not rated it at the assessed level" do
       unrated = point(shape({ "Craft" => { "Delivery" => 0.0 } }, rated: false), "Delivery")
 
