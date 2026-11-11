@@ -39,11 +39,8 @@ module Views::Assessments::Concerns::RatedCount
     { rated: rated, total: total }
   end
 
-  # The hero's coverage rule at category grain: a category's score shows
-  # once at least half of its assessed-level cells carry a rating (once
-  # every one is agreed, while an alignment is still agreeing them). The
-  # chip bar and the capability radar's key read it, so they agree with
-  # CategoryIndicators#unlocked? on the section header.
+  # Whether a category's score shows: half its assessed-level cells rated, or
+  # all agreed mid-alignment. The same rule as CategoryIndicators#unlocked?.
   #
   # @param category_data [Hash] one entry from `matrix_data[:categories]`
   # @param scoring [Hash] the perspective being shown

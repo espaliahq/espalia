@@ -143,9 +143,8 @@ module Assessments::TurboStreamHelpers
     )
   end
 
-  # The capability map, re-rendered after a rating. Root-mounted for the
-  # explainer's reason, so its lanes would otherwise keep the page's first
-  # numbers.
+  # The capability map after a rating; it sits outside the reloading frame
+  # (`Views::Assessments::CapabilityMapModal`).
   #
   # @param matrix_data [Hash] the rebuilt matrix data
   # @param primary [Hash] the viewer's primary scoring hash
