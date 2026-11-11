@@ -67,6 +67,10 @@ class ExampleSeed
     @cycles = AssessmentCycles::CommandHandler.new
   end
 
+  # Builds or converges the demo tenant. Re-running fills gaps rather than
+  # duplicating; a demo cycle the calibration seed has closed is left as is.
+  #
+  # @return [Tenant] the Null Island Systems tenant
   def call
     raise "ExampleSeed is for development and test only." if Rails.env.production?
 

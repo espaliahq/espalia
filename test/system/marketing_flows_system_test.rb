@@ -143,6 +143,8 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     write_screenshot(name, png)
   end
 
+  # Over the README's copy only when README_SCREENSHOTS is set, so an
+  # ordinary run never dirties the working tree.
   def write_screenshot(name, png)
     if ENV["README_SCREENSHOTS"].present?
       path = Rails.root.join("docs/screenshots/#{name}.png")
