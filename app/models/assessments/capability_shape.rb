@@ -12,7 +12,14 @@ class Assessments::CapabilityShape
   HUES = [ 1, 3, 4, 5, 7, 6, 8 ].freeze
 
   Group = Data.define(:name, :hue, :score, :points)
-  Point = Data.define(:number, :name, :hue, :reached, :label, :blocked)
+  Point = Data.define(:number, :stable_id, :name, :hue, :reached, :label, :required, :blocked)
+
+  # @return [Array<String>] the ladder's level codes, lowest first
+  attr_reader :codes
+  # @return [Integer] the assessed level's place in {#codes}
+  attr_reader :assessed_index
+  # @return [Integer] the assessed level's ordinal
+  attr_reader :person_level
 
   # @param categories [Array<Hash>] `matrix_data[:categories]`
   # @param scoring [Hash] the perspective the hero renders
@@ -48,11 +55,13 @@ class Assessments::CapabilityShape
   private
 
   def point_for(cap, number, hue)
+    stable_id = cap[:capability].stable_id
     silence = unscored_label(cap)
-    position = silence ? nil : position_for(cap[:capability].stable_id)
-    Point.new(number: number, name: cap[:capability].name, hue: hue,
+    position = silence ? nil : position_for(stable_id)
+    Point.new(number: number, stable_id: stable_id, name: cap[:capability].name, hue: hue,
               reached: position&.clamp(0.0, @codes.size - 1.0), label: silence || label_for(position),
-              blocked: @scoring.dig(:capability_statuses, cap[:capability].stable_id) == :blocked)
+              required: @scoring.dig(:capability_scores, stable_id, :required) || false,
+              blocked: @scoring.dig(:capability_statuses, stable_id) == :blocked)
   end
 
   def category_score(category_data)
