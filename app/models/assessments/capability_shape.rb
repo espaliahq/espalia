@@ -11,7 +11,7 @@ class Assessments::CapabilityShape
   # out: on the assessment page red means a rating.
   HUES = [ 1, 3, 4, 5, 7, 6, 8 ].freeze
 
-  Group = Data.define(:name, :hue, :score, :points)
+  Group = Data.define(:name, :hue, :score, :state, :points)
   Point = Data.define(:number, :stable_id, :name, :hue, :reached, :label, :required, :blocked)
 
   # @return [Array<String>] the ladder's level codes, lowest first
@@ -44,7 +44,8 @@ class Assessments::CapabilityShape
       @categories.each_with_index.map do |category_data, i|
         hue = HUES[i % HUES.size]
         points = category_data[:capabilities].map { |cap| point_for(cap, number += 1, hue) }
-        Group.new(name: category_data[:category]&.name, hue: hue, score: category_score(category_data), points: points)
+        Group.new(name: category_data[:category]&.name, hue: hue, score: category_score(category_data),
+                  state: category_result(category_data)&.dig(:state), points: points)
       end
     end
   end
@@ -67,7 +68,11 @@ class Assessments::CapabilityShape
   def category_score(category_data)
     return unless category_score_unlocked?(category_data, @scoring, @context)
 
-    @scoring.dig(:category_scores, category_data[:category].category_id, :score)
+    category_result(category_data)[:score]
+  end
+
+  def category_result(category_data)
+    @scoring.dig(:category_scores, category_data[:category]&.category_id)
   end
 
   # The card's two silences: no expectation at the assessed level, or none

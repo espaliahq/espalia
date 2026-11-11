@@ -24,7 +24,8 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
       scoring: {
         capability_scores: scores.to_h { |n, s| [ "cap-#{n}", { score: s, scorable: true, required: false } ] },
         capability_statuses: {},
-        category_scores: { "cat-Craft" => { score: 1.38, scorable: true }, "cat-People" => { score: 1.0, scorable: true } }
+        category_scores: { "cat-Craft" => { score: 1.38, scorable: true, state: :performing },
+                           "cat-People" => { score: 1.0, scorable: true } }
       }
     )
     Nokogiri::HTML5.fragment(Views::Assessments::CapabilityMapModal.new(shape: shape, subject: "Alex at E3").call)
@@ -48,5 +49,11 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     assert_equal "a", lane.name
     assert_equal "#cell-cap-Delivery-3", lane["href"]
+  end
+
+  should "colour a category's score by its state, as the section header does" do
+    craft = render_map.at_css("[data-capability-lane-group='Craft']")
+
+    assert craft.at_css(".text-score-performing", text: "138%"), "expected Craft's 138% in the performing tone"
   end
 end

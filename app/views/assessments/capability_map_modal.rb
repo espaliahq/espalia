@@ -26,7 +26,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     7 => "bg-category-7 text-category-7", 8 => "bg-category-8 text-category-8"
   }.freeze
 
-  LANE_COLUMNS = "grid grid-cols-[minmax(0,1fr)_7.5rem] gap-x-3 sm:grid-cols-[13rem_minmax(0,1fr)_8.5rem]"
+  LANE_COLUMNS = "grid grid-cols-[minmax(0,1fr)_7.5rem] gap-x-3 sm:grid-cols-[16rem_minmax(0,1fr)_8rem]"
 
   # The map for the perspective a page or a rating stream is showing.
   #
@@ -82,7 +82,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     @shape.groups.each do |group|
       div(class: "#{LANE_COLUMNS} items-center px-2 pt-4 pb-1", data: { capability_lane_group: group.name.to_s }) do
         span(class: "sm:col-span-2") { render Components::Kit::Tag.new(group.name.to_s, category: group.hue) }
-        span(class: "text-right text-sm font-bold tabular-nums text-score-ahead") do
+        span(class: "text-right text-sm font-bold tabular-nums #{tone_text(group.state)}", title: (state_label(group.state) if group.score)) do
           "#{percent(group.score)}%" if group.score
         end
       end
@@ -122,9 +122,9 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         span(class: "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold #{NUMBER.fetch(point.hue)}") do
           point.number.to_s
         end
-        span(class: "truncate") { point.name }
-        if point.blocked
-          render Components::Kit::Badge.new("! Required", tone: :warning, size: :sm)
+        span(class: "flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2") do
+          span(class: "line-clamp-2") { point.name }
+          render Components::Kit::Badge.new("! Required", tone: :warning, size: :sm) if point.blocked
         end
       end
       track(point)
