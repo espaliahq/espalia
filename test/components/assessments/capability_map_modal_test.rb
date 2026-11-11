@@ -70,6 +70,22 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
     assert_not_includes map.text, "centre is"
   end
 
+  should "label the assessed ring for whoever's map it is" do
+    matrix_data = { person_level: 3, merged_levels: E1_TO_E5,
+                    categories: [ { category: CATEGORY.new(category_id: "cat-Craft", name: "Craft"), person_level: 3,
+                                    capabilities: [ { capability: CAP.new(stable_id: "cap-Delivery", name: "Delivery"),
+                                                      cells: { 3 => { current_frequency: "consistent" } } } ] } ] }
+    scoring = { capability_scores: { "cap-Delivery" => { score: 1.0, scorable: true, required: false } } }
+    label = ->(whose) {
+      map = Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: scoring, context: :self,
+                                                       whose: whose)
+      Nokogiri::HTML5.fragment(map.call).at_css("[data-radar-ring-label='E3']").text
+    }
+
+    assert_equal "E3 · you", label.call(nil)
+    assert_equal "E3 · assessed", label.call("Alex")
+  end
+
   should "colour a category's score by its state, as the section header does" do
     craft = render_map.at_css("[data-capability-lane-group='Craft']")
 

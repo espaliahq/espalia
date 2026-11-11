@@ -67,12 +67,16 @@ class Views::Assessments::CapabilityRadar < Views::Base
   }.freeze
   RING_STROKE = { assessed: "stroke-(--gos-content-muted)", next: "stroke-(--gos-score-ahead)",
                   nil => "stroke-(--gos-border-default)" }.freeze
+  RING_LABEL = { assessed: "fill-(--gos-content-default) font-bold", next: "fill-(--gos-score-ahead) font-bold",
+                 nil => "fill-(--gos-content-muted) font-medium" }.freeze
 
   # @param shape [Assessments::CapabilityShape]
   # @param size [Symbol] :compact or :detailed
-  def initialize(shape:, size: :detailed)
+  # @param assessed_as [String] what the assessed level's ring label calls it
+  def initialize(shape:, size: :detailed, assessed_as: "you")
     @shape = shape
     @size = size
+    @assessed_as = assessed_as
   end
 
   def view_template
@@ -81,6 +85,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
       rings(s)
       web(s)
       points.each_with_index { |point, i| spoke(s, point, i) }
+      ring_labels(s) unless compact?
     end
   end
 
@@ -138,6 +143,19 @@ class Views::Assessments::CapabilityRadar < Views::Base
                data: { radar_ring: code, radar_ring_role: role })
     end
   end
+
+  # Up the top of the radar, haloed so they read across spokes and segments.
+  def ring_labels(s)
+    @shape.codes.each_with_index.drop(1).each do |code, i|
+      role = ring_role(i)
+      s.text(x: 4, y: -(radius_for(i) + 3).round(2), font_size: 10,
+             class: "#{RING_LABEL.fetch(role)} stroke-(--gos-surface-overlay) [paint-order:stroke] " \
+                    "[stroke-width:3px] [stroke-linejoin:round]",
+             data: { radar_ring_label: code }) { [ code, ring_suffix(role) ].compact.join(" · ") }
+    end
+  end
+
+  def ring_suffix(role) = { assessed: @assessed_as, next: "next" }[role]
 
   def ring_role(index)
     return :assessed if index == @shape.assessed_index

@@ -26,8 +26,8 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
     )
   end
 
-  def render_radar(shape, size: :detailed)
-    Nokogiri::HTML5.fragment(Views::Assessments::CapabilityRadar.new(shape: shape, size: size).call)
+  def render_radar(shape, size: :detailed, **options)
+    Nokogiri::HTML5.fragment(Views::Assessments::CapabilityRadar.new(shape: shape, size: size, **options).call)
   end
 
   E1_TO_E5 = (1..5).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
@@ -45,6 +45,26 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_equal "E4", radar.at_css("[data-radar-ring-role='next']")["data-radar-ring"]
       assert radar.at_css("[data-radar-ring-role='next']")["stroke-dasharray"], "expected the next ring dashed"
       assert_nil radar.at_css("[data-radar-ring-role='assessed']")["stroke-dasharray"]
+    end
+
+    should "label each ring above the first up the top spoke, naming the assessed and next levels" do
+      radar = render_radar(shape({ "Craft" => { "Delivery" => 1.5 } }, levels: E1_TO_E5, person_level: 3))
+
+      assert_equal [ "E2", "E3 · you", "E4 · next", "E5" ], radar.css("[data-radar-ring-label]").map(&:text)
+    end
+
+    should "call the assessed ring the person's level, not yours, on someone else's map" do
+      radar = render_radar(shape({ "Craft" => { "Delivery" => 1.5 } }, levels: E1_TO_E5, person_level: 3),
+                           assessed_as: "assessed")
+
+      assert_includes radar.css("[data-radar-ring-label]").map(&:text), "E3 · assessed"
+    end
+
+    should "leave the compact radar's rings unlabelled" do
+      radar = render_radar(shape({ "Craft" => { "Delivery" => 1.5 } }, levels: E1_TO_E5, person_level: 3),
+                           size: :compact)
+
+      assert_empty radar.css("[data-radar-ring-label]")
     end
 
     should "fill the whole circle for a framework with one category" do

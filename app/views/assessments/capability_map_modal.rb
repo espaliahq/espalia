@@ -35,15 +35,17 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
         person_level: matrix_data[:person_level], context: context
       ),
-      subject: "#{whose || 'You'} at #{code}"
+      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you"
     )
   end
 
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
-  def initialize(shape:, subject:)
+  # @param assessed_as [String] the assessed ring's label, "you" or "assessed"
+  def initialize(shape:, subject:, assessed_as: "you")
     @shape = shape
     @subject = subject
+    @assessed_as = assessed_as
   end
 
   def view_template
@@ -59,7 +61,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
         end
         div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start") do
           div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
-            render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed)
+            render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed, assessed_as: @assessed_as)
           end
           div { lanes }
         end
