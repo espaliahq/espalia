@@ -110,11 +110,12 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
           rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
         }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
         assert_response :success
-        response.body[%r{<turbo-stream[^>]*target="score-explainer-modal".*?</turbo-stream>}m]
+        assert_no_match %r{target="score-explainer-modal"}, response.body, "an open drawer must not be replaced"
+        response.body[%r{<turbo-stream action="update" target="score-explainer-content".*?</turbo-stream>}m]
       end
 
       some = explainer.call("some")
-      assert_not_nil some, "Expected the rating response to replace the explainer drawer."
+      assert_not_nil some, "Expected the rating response to update the explainer drawer's contents."
       assert_includes some, "How it adds up"
 
       consistent = explainer.call("consistent")

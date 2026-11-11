@@ -252,6 +252,14 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_includes lane.text, "E2 met"
     end
 
+    should "render the score explainer for the report, in the third person" do
+      sign_in @manager_user
+      get score_explainer_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes Nokogiri::HTML5.fragment(response.body).text, "Test User's score today"
+    end
+
     should "render manager assessment view for direct report" do
       sign_in @manager_user
       get assessment_path(@assignment)
@@ -550,6 +558,35 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       assert_not_includes response.body, "data-capability-lane"
+    end
+  end
+
+  context "GET /assessments/:id/score_explainer" do
+    should "render just the drawer's contents, as the frame the page reloads, on the viewer's own numbers" do
+      rate(@cap, "consistent")
+      sign_in @user
+      get score_explainer_assessment_path(@assignment)
+
+      assert_response :success
+      frame = Nokogiri::HTML5.fragment(response.body).at_css("turbo-frame##{Views::Assessments::ScoreExplainerModal::CONTENT_ID}")
+      assert frame, "expected the drawer's content frame"
+      assert_includes frame.text, "Your score today"
+      assert_includes frame.text, "How it adds up"
+      assert_not_includes response.body, %(id="#{Views::Assessments::ScoreExplainerModal::ID}"), "no overlay around it"
+    end
+
+    should "deny a viewer who may not see the assessment" do
+      other_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: other_user.email, name: "Outsider")
+        create(:tenant_user, tenant: @tenant, user: other_user, person: other)
+      end
+      rate(@cap, "consistent")
+      sign_in other_user
+      get score_explainer_assessment_path(@assignment)
+
+      assert_response :redirect
+      assert_not_includes response.body, "How it adds up"
     end
   end
 

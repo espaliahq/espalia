@@ -16,7 +16,7 @@ class AssessmentsController < ApplicationController
   SKIP_LEVEL_PAGE_SIZE = 12
 
   before_action :require_person
-  before_action :set_assignment, only: [ :show, :matrix, :scoring, :capability_card, :capability_map ]
+  before_action :set_assignment, only: [ :show, :matrix, :scoring, :capability_card, :capability_map, :score_explainer ]
 
   # GET /assessments
   def index
@@ -189,6 +189,24 @@ class AssessmentsController < ApplicationController
     render Views::Assessments::CapabilityMapModal.for(
       matrix_data: @matrix_data, scoring: hero_scoring, context: assessment_context,
       whose: manager_viewing? ? @assessee&.name || "This person" : nil, part: :frame
+    ), layout: false
+  end
+
+  # GET /assessments/:id/score_explainer
+  #
+  # The explainer's contents as the frame the page reloads when another
+  # viewer's rating arrives, as for the capability map.
+  def score_explainer
+    authorize @assignment, :scoring?
+    load_assessment_data
+    subject = if manager_viewing?
+      @assessee&.name ? "#{@assessee.name}'s score" : "This score"
+    else
+      "Your score"
+    end
+    render Views::Assessments::ScoreExplainerModal.for(
+      matrix_data: @matrix_data, scoring: hero_scoring, subject: subject,
+      second_person: !manager_viewing?, part: :frame
     ), layout: false
   end
 

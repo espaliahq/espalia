@@ -181,7 +181,11 @@ Three pieces, cheapest first:
    `matrix_data[:emphasised_capabilities]`, which the builder emits beside
    `categories`. The chips there carry no tips, since the rules list beneath
    defines both terms once. The drawer used to define "weight" for a list
-   the reader could not see.
+   the reader could not see. Like the capability map, only its content frame
+   ever changes, so an open drawer stays open with its focus and scroll: the
+   viewer's own rating streams into it, and someone else's makes
+   `assessment_sync_controller` reload it from
+   `GET /assessments/:id/score_explainer`, behind the hero's access check.
 
 `Views::Assessments::Glossary` is the single source of the wording, built per
 request rather than frozen as constants, because nearly every definition has

@@ -8,14 +8,36 @@
 #
 # Mounted once on the page root (`standalone: false`) so the trigger can sit
 # inside a Turbo Frame that reloads on every rating without taking the open
-# dialog down with it (framework-explorer.md Lesson 19). Nothing else
-# replaces it, which is why each rating streams it — see
-# `Assessments::TurboStreamHelpers`.
+# dialog down with it (framework-explorer.md Lesson 19). Only its content
+# frame ever changes: the viewer's own rating streams into it
+# (`Assessments::TurboStreamHelpers`), and someone else's makes
+# `assessment_sync_controller` reload it from `GET /assessments/:id/score_explainer`.
 class Views::Assessments::ScoreExplainerModal < Views::Base
   include Views::Assessments::Concerns::ScoreScale
   include Views::Assessments::Concerns::DefinedTerms
 
+  register_element :turbo_frame
+
   ID = "score-explainer-modal"
+  CONTENT_ID = "score-explainer-content"
+
+  # The drawer for the perspective a page, a rating stream or a reload is showing.
+  #
+  # @param matrix_data [Hash] `Assessments::MatrixDataBuilder#build`
+  # @param scoring [Hash] the perspective the hero renders
+  # @param subject [String] see {#initialize}
+  # @param second_person [Boolean] see {#initialize}
+  # @param part [Symbol] see {#initialize}
+  # @param src [String, nil] where the content frame reloads from
+  # @return [Views::Assessments::ScoreExplainerModal]
+  def self.for(matrix_data:, scoring:, subject:, second_person:, part: :modal, src: nil)
+    new(
+      components: scoring&.dig(:components), state: scoring&.dig(:performance_state), subject: subject,
+      merged_levels: matrix_data[:merged_levels], person_level: matrix_data[:person_level],
+      thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
+      emphasised: matrix_data[:emphasised_capabilities], second_person: second_person, part: part, src: src
+    )
+  end
 
   # @param components [Hash, nil] `{ prior:, current:, next:, score: }` for
   #   the subject being explained
@@ -29,8 +51,11 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
   # @param thresholds [Hash] the framework's own bands
   # @param emphasised [Array<Hash>] `matrix_data[:emphasised_capabilities]` —
   #   the capabilities whose binding changes how a rating lands
+  # @param part [Symbol] :modal for the page, :content for a stream into
+  #   `CONTENT_ID`, :frame for that frame on its own
+  # @param src [String, nil] where the content frame reloads from
   def initialize(components:, state:, subject:, merged_levels:, person_level:, emphasised:, thresholds: {},
-                 second_person: true)
+                 second_person: true, part: :modal, src: nil)
     @components = components
     @emphasised = emphasised
     @state = state
@@ -41,24 +66,38 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
     @meeting_threshold = thresholds[:meeting]
     @mastery_threshold = thresholds[:mastering]
     @second_person = second_person
+    @part = part
+    @src = src
   end
 
   def view_template
+    return content if @part == :content
+    return content_frame if @part == :frame
+
     render Components::Kit::Modal.new(
-      id: ID, title: "How is this calculated?", size: :lg, standalone: false
+      id: ID, title: "How is this calculated?", size: :lg, standalone: false,
+      panel_data: { controller: "dialog-refresh", dialog_refresh_content_value: CONTENT_ID }
     ) do |modal|
-      modal.body do
-        div(class: "space-y-5") do
-          arithmetic
-          counts_differently
-          rules
-          not_counted
-        end
-      end
+      modal.body { content_frame }
     end
   end
 
   private
+
+  # No `src`: it loads only when `assessment_sync_controller` points it at
+  # `reload_src` after someone else's rating, never on page load.
+  def content_frame
+    turbo_frame(id: CONTENT_ID, data: { reload_src: @src, assessment_sync_target: "dialogFrame" }) { content }
+  end
+
+  def content
+    div(class: "space-y-5") do
+      arithmetic
+      counts_differently
+      rules
+      not_counted
+    end
+  end
 
   # Plain chips, no tips: the rules list below defines both terms once, and a
   # tip per chip resent on every rating stream would carry the same sentence
@@ -103,7 +142,7 @@ class Views::Assessments::ScoreExplainerModal < Views::Base
       div(class: "flex items-center justify-between gap-3 pt-2 mt-1 " \
                  "border-t border-default") do
         span(class: "text-sm font-semibold text-default") { "Score" }
-        span(class: "text-sm font-bold tabular-nums #{tone_text(@state)}") do
+        span(class: "text-sm font-bold tabular-nums #{tone_text(@state)}", data: { explainer_score: true }) do
           "#{parts[:score]}%"
         end
       end

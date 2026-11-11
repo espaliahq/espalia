@@ -114,29 +114,19 @@ module Assessments::TurboStreamHelpers
     )
   end
 
-  # The explainer drawer, re-rendered after a rating.
-  #
-  # It is mounted on the page ROOT so an open dialog survives a frame
-  # reload — which also means nothing else replaces it, and without this
-  # its arithmetic would keep explaining the score the page loaded with
-  # while the hero beside it showed the new one.
+  # The explainer drawer's contents after a rating; it sits outside the
+  # reloading frame, and an open drawer stays open (`Views::Assessments::ScoreExplainerModal`).
   #
   # @param matrix_data [Hash] the rebuilt matrix data
   # @param primary [Hash] the viewer's primary scoring hash
   # @return [Turbo::Streams::TagBuilder]
   def score_explainer_stream(matrix_data, primary, _context)
-    turbo_stream.replace(
-      Views::Assessments::ScoreExplainerModal::ID,
+    turbo_stream.update(
+      Views::Assessments::ScoreExplainerModal::CONTENT_ID,
       render_to_string(
-        Views::Assessments::ScoreExplainerModal.new(
-          components: primary[:components],
-          state: primary[:performance_state],
-          subject: explainer_subject,
-          merged_levels: matrix_data[:merged_levels],
-          person_level: matrix_data[:person_level],
-          thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-          second_person: !viewer_is_manager?,
-          emphasised: matrix_data[:emphasised_capabilities]
+        Views::Assessments::ScoreExplainerModal.for(
+          matrix_data: matrix_data, scoring: primary, subject: explainer_subject,
+          second_person: !viewer_is_manager?, part: :content
         ),
         layout: false
       )

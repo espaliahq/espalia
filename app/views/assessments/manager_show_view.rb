@@ -96,15 +96,9 @@ class Views::Assessments::ManagerShowView < Views::Base
 
       # Root-mounted, so the hero's trigger can sit inside a frame that
       # reloads on every rating without taking an open dialog down with it.
-      render Views::Assessments::ScoreExplainerModal.new(
-        components: primary_scoring_components,
-        state: primary_scoring_state,
-        subject: "#{@assessee.name}'s score",
-        merged_levels: @matrix_data[:merged_levels],
-        person_level: @matrix_data[:person_level],
-        thresholds: Views::Assessments::Glossary.thresholds_from(@matrix_data),
-        emphasised: @matrix_data[:emphasised_capabilities],
-        second_person: false
+      render Views::Assessments::ScoreExplainerModal.for(
+        matrix_data: @matrix_data, scoring: primary_scoring, subject: "#{@assessee.name}'s score", second_person: false,
+        src: score_explainer_assessment_path(@assignment, lens_params)
       )
       render Views::Assessments::CapabilityMapModal.for(
         matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: @assessee.name,
@@ -129,10 +123,6 @@ class Views::Assessments::ManagerShowView < Views::Base
       else @matrix_data[:scoring]
       end
   end
-
-  def primary_scoring_components = primary_scoring[:components]
-
-  def primary_scoring_state = primary_scoring[:performance_state]
 
   def sticky_header
     # On md+ the whole header is sticky as one block. On mobile the

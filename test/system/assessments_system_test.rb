@@ -1997,6 +1997,59 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       end
     end
 
+    should "keep the drawer open and on the new numbers when the viewer's own rating lands behind it" do
+      rate_to_unlock_hero(frequency: "some")
+      visit assessment_path(@assignment)
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+      click_button_with_js_fallback("How is this calculated?", expect_text: "How it adds up")
+      before = explainer_score
+      page.execute_script("document.getElementById('#{EXPLAINER_ID}').dataset.kept = 'yes'")
+
+      assert_selector "form input[name='rating[capability_stable_id]'][value='#{@cap1_stable}']", visible: :all
+      page.execute_script(<<~JS)
+        [...document.querySelectorAll("form")].find((f) =>
+          f.querySelector("input[name='rating[capability_stable_id]'][value='#{@cap1_stable}']") &&
+          f.querySelector("input[name='rating[level_ordinal]'][value='2']") &&
+          f.querySelector("input[name='rating[frequency]'][value='consistent']") &&
+          !f.querySelector("input[name='rating[confirm]'], input[name='rating[clear]']")).requestSubmit()
+      JS
+
+      assert_selector "##{EXPLAINER_ID}[data-kept='yes'] [data-explainer-score]", visible: true
+      assert_no_selector "##{EXPLAINER_ID} [data-explainer-score]", text: before
+      assert_equal "hidden", page.evaluate_script("document.body.style.overflow")
+    end
+
+    should "update an open drawer, keeping its focus and scroll, when someone else's rating arrives" do
+      rate_to_unlock_hero(frequency: "some")
+      page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+      visit assessment_path(@assignment)
+      assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+      assert_selector "turbo-cable-stream-source[connected]", visible: :all
+      wait_for_stimulus "assessment-sync"
+      click_button_with_js_fallback("How is this calculated?", expect_text: "How it adds up")
+      wait_for_stimulus "dialog-refresh"
+      before = explainer_score
+      scrolled = page.evaluate_script(<<~JS)
+        (() => {
+          const drawer = document.getElementById("#{EXPLAINER_ID}")
+          drawer.dataset.kept = "yes"
+          drawer.querySelector("[aria-label='Close']").focus()
+          let scroller = document.getElementById("#{Views::Assessments::ScoreExplainerModal::CONTENT_ID}").parentElement
+          while (scroller.scrollHeight <= scroller.clientHeight) scroller = scroller.parentElement
+          scroller.dataset.scroller = "true"
+          scroller.scrollTop = 80
+          return scroller.scrollTop
+        })()
+      JS
+
+      rate_to_unlock_hero(frequency: "consistent")
+
+      assert_no_selector "##{EXPLAINER_ID} [data-explainer-score]", text: before
+      assert_selector "##{EXPLAINER_ID}[data-kept='yes'] [data-explainer-score]", visible: true
+      assert_selector "##{EXPLAINER_ID} [aria-label='Close']:focus"
+      assert_equal scrolled, page.evaluate_script("document.querySelector('[data-scroller]').scrollTop")
+    end
+
     should "define a scored term on hover and on keyboard focus" do
       rate_to_unlock_hero(frequency: "consistent")
       visit assessment_path(@assignment)
@@ -2238,6 +2291,10 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
   # Rates one current-level capability (cap1) so the assessment clears the
   # 50% coverage threshold (1 of 2 E2-bound caps) and the hero swaps from the
   # priming "rate to see your score" prompt to the real scoring hero.
+  EXPLAINER_ID = Views::Assessments::ScoreExplainerModal::ID
+
+  def explainer_score = find("##{EXPLAINER_ID} [data-explainer-score]").text
+
   def rate_to_unlock_hero(frequency: "consistent")
     ActsAsTenant.with_tenant(@tenant) do
       PersonDevelopment::CommandHandler.new.rate_self(
