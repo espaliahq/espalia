@@ -120,6 +120,8 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     open_map
     assert_selector "#{MAP} [data-capability-lane='2']", text: "PM1 + 67% to PM2"
     page.execute_script("document.getElementById('#{Views::Assessments::CapabilityMapModal::ID}').dataset.kept = 'yes'")
+    assert_selector "form input[name='rating[capability_stable_id]'][value='#{@stable_ids.fetch('Prioritisation')}']",
+                    visible: :all
 
     page.execute_script(<<~JS)
       const form = [...document.querySelectorAll("form")].find((f) =>
