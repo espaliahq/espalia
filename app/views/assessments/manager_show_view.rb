@@ -107,7 +107,8 @@ class Views::Assessments::ManagerShowView < Views::Base
         second_person: false
       )
       render Views::Assessments::CapabilityMapModal.for(
-        matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: @assessee.name
+        matrix_data: @matrix_data, scoring: primary_scoring, context: @context, whose: @assessee.name,
+        src: capability_map_assessment_path(@assignment, lens_params)
       )
       render_lens_role_modal(assessee_name: @assessee.name)
       render_exploration_modals(assessee_name: @assessee.name)

@@ -10,7 +10,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
   E1_TO_E5 = (1..5).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
 
   def render_map(rated: { "Delivery" => true, "Quality" => true, "Mentoring" => false }, statuses: {},
-                 levels: E1_TO_E5)
+                 levels: E1_TO_E5, src: nil)
     scores = { "Delivery" => 1.5, "Quality" => 1.25, "Mentoring" => 1.0 }
     groups = { "Craft" => %w[Delivery Quality], "People" => %w[Mentoring] }
     categories = groups.map do |category, names|
@@ -29,7 +29,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
                            "cat-People" => { score: 1.0, scorable: true } }
       }
     )
-    Nokogiri::HTML5.fragment(Views::Assessments::CapabilityMapModal.new(shape: shape, subject: "Alex at E3").call)
+    Nokogiri::HTML5.fragment(Views::Assessments::CapabilityMapModal.new(shape: shape, subject: "Alex at E3", src: src).call)
   end
 
   def words(node) = node.xpath(".//text()").map { |t| t.text.strip }.reject(&:empty?)
@@ -84,6 +84,15 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     assert_equal "E3 · you", label.call(nil)
     assert_equal "E3 · assessed", label.call("Alex")
+  end
+
+  should "hold its contents in a frame that reloads only when asked, so the overlay around it stays mounted" do
+    frame = render_map(src: "/assessments/1/capability_map").at_css("##{Views::Assessments::CapabilityMapModal::ID} turbo-frame")
+
+    assert_equal Views::Assessments::CapabilityMapModal::CONTENT_ID, frame["id"]
+    assert_equal "/assessments/1/capability_map", frame["data-reload-src"]
+    assert_nil frame["src"], "a src would load the map on every page view"
+    assert frame.at_css("[data-capability-lane='1']"), "expected the lanes inside the frame"
   end
 
   should "colour a category's score by its state, as the section header does" do

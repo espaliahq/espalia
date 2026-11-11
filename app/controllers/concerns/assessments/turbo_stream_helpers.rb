@@ -156,7 +156,7 @@ module Assessments::TurboStreamHelpers
       Views::Assessments::CapabilityMapModal::CONTENT_ID,
       render_to_string(
         Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
-                                                   whose: whose, content_only: true),
+                                                   whose: whose, part: :content),
         layout: false
       )
     )

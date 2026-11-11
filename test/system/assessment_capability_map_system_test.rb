@@ -63,7 +63,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
       pd_handler = PersonDevelopment::CommandHandler.new
       pd_handler.assign_to_framework(@person.id, framework_id, role_id, level_ids[20])
-      cycle_id = SecureRandom.uuid_v7
+      cycle_id = @cycle_id = SecureRandom.uuid_v7
       cycle_handler = AssessmentCycles::CommandHandler.new
       cycle_handler.define_cycle(cycle_id, framework_id, "H2 Review", "regular", 1, defined_by: @person.id)
       cycle_handler.enroll(cycle_id, @person.id, enrolled_by: @person.id)
@@ -136,6 +136,28 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     rate_behind_map("Prioritisation", "consistent")
 
     assert_selector "#{MAP}[data-kept='yes'] [data-capability-lane='2']", text: "PM2 met", visible: true
+    assert_equal "hidden", page.evaluate_script("document.body.style.overflow")
+  end
+
+  should "update an open map, keeping it open and its lane focused, when someone else's rating arrives" do
+    open_map
+    assert_selector "turbo-cable-stream-source[connected]", visible: :all
+    wait_for_stimulus "assessment-sync"
+    wait_for_stimulus "capability-map"
+    page.execute_script(<<~JS)
+      document.getElementById("#{Views::Assessments::CapabilityMapModal::ID}").dataset.kept = "yes"
+      document.querySelector("#{MAP} [data-capability-lane='2']").focus()
+    JS
+
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @assignment.framework_id, @stable_ids.fetch("Prioritisation"),
+        level_ordinal: 20, frequency: "consistent", cycle_id: @cycle_id
+      )
+    end
+
+    assert_selector "#{MAP}[data-kept='yes'] [data-capability-lane='2']", text: "PM2 met", visible: true
+    assert_selector "#{MAP} [data-capability-lane='2']:focus"
     assert_equal "hidden", page.evaluate_script("document.body.style.overflow")
   end
 

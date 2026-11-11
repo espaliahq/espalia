@@ -11,6 +11,8 @@
 class Views::Assessments::CapabilityMapModal < Views::Base
   include Views::Assessments::Concerns::ScoreScale
 
+  register_element :turbo_frame
+
   ID = "capability-map-modal"
   CONTENT_ID = "capability-map-content"
 
@@ -29,44 +31,55 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   # @param scoring [Hash] the perspective the hero renders
   # @param context [Symbol] :self, :manager or :alignment
   # @param whose [String, nil] the assessee's name; nil when the viewer is the assessee
-  # @param content_only [Boolean] just what `CONTENT_ID` holds, for a stream
+  # @param part [Symbol] see {#initialize}
+  # @param src [String, nil] where the content frame reloads from
   # @return [Views::Assessments::CapabilityMapModal]
-  def self.for(matrix_data:, scoring:, context:, whose: nil, content_only: false)
+  def self.for(matrix_data:, scoring:, context:, whose: nil, part: :modal, src: nil)
     code = matrix_data[:merged_levels].find { |l| l[:ordinal] == matrix_data[:person_level] }&.dig(:level_code)
     new(
       shape: Assessments::CapabilityShape.new(
         categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
         person_level: matrix_data[:person_level], context: context
       ),
-      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", content_only: content_only
+      subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", part: part, src: src
     )
   end
 
   # @param shape [Assessments::CapabilityShape]
   # @param subject [String] who and where, "Alex at E3"
   # @param assessed_as [String] the assessed ring's label, "you" or "assessed"
-  # @param content_only [Boolean] render just what `CONTENT_ID` holds
-  def initialize(shape:, subject:, assessed_as: "you", content_only: false)
+  # @param part [Symbol] :modal for the page, :content for a stream into
+  #   `CONTENT_ID`, :frame for that frame on its own
+  # @param src [String, nil] where the content frame reloads from
+  def initialize(shape:, subject:, assessed_as: "you", part: :modal, src: nil)
     @shape = shape
     @subject = subject
     @assessed_as = assessed_as
-    @content_only = content_only
+    @part = part
+    @src = src
   end
 
   def view_template
-    return content if @content_only
+    return content if @part == :content
+    return content_frame if @part == :frame
 
     render Components::Kit::Modal.new(
       id: ID, title: "Capability map", size: :"6xl", standalone: false,
-      panel_data: { controller: "capability-map", capability_map_content_value: CONTENT_ID,
+      panel_data: { controller: "capability-map dialog-refresh", dialog_refresh_content_value: CONTENT_ID,
                     action: "mouseover->capability-map#light mouseout->capability-map#dim " \
                             "focusin->capability-map#light focusout->capability-map#dim" }
     ) do |modal|
-      modal.body { div(id: CONTENT_ID) { content } }
+      modal.body { content_frame }
     end
   end
 
   private
+
+  # No `src`: it loads only when `assessment_sync_controller` points it at
+  # `reload_src` after someone else's rating, never on page load.
+  def content_frame
+    turbo_frame(id: CONTENT_ID, data: { reload_src: @src, assessment_sync_target: "dialogFrame" }) { content }
+  end
 
   def content
     p(class: "text-sm text-muted -mt-1 mb-4") do
@@ -122,7 +135,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
              "hover:bg-overlay-hover data-[hot=true]:bg-overlay-hover " \
              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus",
       title: point.name,
-      data: { capability_lane: point.number, capability_map_key: point.number,
+      data: { capability_lane: point.number, capability_map_key: point.number, refresh_focus: "lane-#{point.number}",
               controller: "continue-assessing",
               action: "click->modal#close click->continue-assessing#focus",
               continue_assessing_capability_stable_id_value: point.stable_id,

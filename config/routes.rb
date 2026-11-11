@@ -223,6 +223,8 @@ Rails.application.routes.draw do
       # One capability card at a newly picked level — a level-chip click
       # swaps that card instead of reloading the whole matrix (#488).
       get :capability_card
+      # The capability map's contents, reloaded when someone else's rating arrives.
+      get :capability_map
     end
     resources :ratings, only: [ :create ], controller: "assessments/ratings"
     resources :manager_ratings, only: [ :create ], controller: "assessments/manager_ratings"

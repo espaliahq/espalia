@@ -236,6 +236,22 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_select "[data-testid='unplaced-feedback-notice']", text: /about Test User is waiting/
     end
 
+    should "render the capability map for the report, read through the manager's ratings" do
+      ActsAsTenant.with_tenant(@tenant) do
+        PersonDevelopment::CommandHandler.new.rate_as_manager(
+          @person.id, @framework.framework_id, @cap.stable_id,
+          level_ordinal: 2, frequency: "consistent", cycle_id: @cycle_id, rated_by_id: @manager.id
+        )
+      end
+      sign_in @manager_user
+      get capability_map_assessment_path(@assignment)
+
+      assert_response :success
+      assert_includes response.body, "Test User at E2"
+      lane = Nokogiri::HTML5.fragment(response.body).at_css("[data-capability-lane='1']")
+      assert_includes lane.text, "E2 met"
+    end
+
     should "render manager assessment view for direct report" do
       sign_in @manager_user
       get assessment_path(@assignment)
@@ -505,6 +521,35 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :redirect
       assert_not_includes response.body, "Asks good questions"
+    end
+  end
+
+  context "GET /assessments/:id/capability_map" do
+    should "render just the map's contents, as the frame the page reloads, read through the viewer's ratings" do
+      rate(@cap, "consistent")
+      sign_in @user
+      get capability_map_assessment_path(@assignment)
+
+      assert_response :success
+      frame = Nokogiri::HTML5.fragment(response.body).at_css("turbo-frame##{Views::Assessments::CapabilityMapModal::CONTENT_ID}")
+      assert frame, "expected the map's content frame"
+      assert_includes frame.text, "You at E2"
+      assert_includes frame.at_css("[data-capability-lane='1']").text, "E2 met"
+      assert_not_includes response.body, %(id="#{Views::Assessments::CapabilityMapModal::ID}"), "no overlay around it"
+    end
+
+    should "deny a viewer who may not see the assessment" do
+      other_user = create(:user, password: "password123")
+      ActsAsTenant.with_tenant(@tenant) do
+        other = create(:person, tenant: @tenant, email: other_user.email, name: "Outsider")
+        create(:tenant_user, tenant: @tenant, user: other_user, person: other)
+      end
+      rate(@cap, "consistent")
+      sign_in other_user
+      get capability_map_assessment_path(@assignment)
+
+      assert_response :redirect
+      assert_not_includes response.body, "data-capability-lane"
     end
   end
 

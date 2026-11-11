@@ -201,7 +201,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
     s.a(href: "#cell-#{point.stable_id}-#{@shape.person_level}",
         class: "group/spoke cursor-pointer outline-hidden",
         aria: { label: spoke_name(point) },
-        data: { radar_spoke: point.number, capability_map_key: point.number,
+        data: { radar_spoke: point.number, capability_map_key: point.number, refresh_focus: "spoke-#{point.number}",
                 controller: "continue-assessing",
                 action: "click->modal#close click->continue-assessing#focus",
                 continue_assessing_capability_stable_id_value: point.stable_id,
