@@ -13,20 +13,29 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
+  #hovered = null
+  #focused = null
+
   light(event) {
-    this.#mark(event, true)
+    this.#track(event, true)
   }
 
   dim(event) {
-    this.#mark(event, false)
+    this.#track(event, false)
   }
 
-  #mark(event, on) {
+  /** Hover and focus are tracked apart, so the pointer leaving a focused spoke keeps it lit. */
+  #track(event, on) {
     const key = event.target.closest?.("[data-capability-map-key]")?.dataset.capabilityMapKey
     if (!key) return
 
-    this.element.querySelectorAll(`[data-capability-map-key="${key}"]`).forEach((el) => {
-      if (on) el.dataset.hot = "true"
+    const value = on ? key : null
+    if (event.type.startsWith("focus")) this.#focused = value
+    else this.#hovered = value
+
+    this.element.querySelectorAll("[data-capability-map-key]").forEach((el) => {
+      const hot = [ this.#hovered, this.#focused ].includes(el.dataset.capabilityMapKey)
+      if (hot) el.dataset.hot = "true"
       else delete el.dataset.hot
     })
   }

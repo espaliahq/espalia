@@ -133,4 +133,23 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     JS
     assert_no_selector "#{MAP} [data-hot='true']"
   end
+
+  should "keep a focused spoke's lane lit after the pointer leaves it" do
+    open_map
+    wait_for_stimulus "capability-map"
+
+    spoke_event = ->(type, klass) {
+      page.execute_script(<<~JS)
+        document.querySelector("#{MAP} svg [data-capability-map-key='1'] line")
+          .dispatchEvent(new #{klass}("#{type}", { bubbles: true }))
+      JS
+    }
+    spoke_event.call("focusin", "FocusEvent")
+    spoke_event.call("mouseover", "MouseEvent")
+    spoke_event.call("mouseout", "MouseEvent")
+    assert_selector "#{MAP} [data-capability-lane='1'][data-hot='true']"
+
+    spoke_event.call("focusout", "FocusEvent")
+    assert_no_selector "#{MAP} [data-hot='true']"
+  end
 end
