@@ -147,10 +147,12 @@ class Views::Assessments::CapabilityRadar < Views::Base
   end
 
   # Up the top of the radar, haloed so they read across spokes and segments.
+  # The rim's label sits inside it, clear of the number badges.
   def ring_labels(s)
     @shape.codes.each_with_index.drop(1).each do |code, i|
       role = ring_role(i)
-      s.text(x: 4, y: -(radius_for(i) + 3).round(2), font_size: 10,
+      y = i == @shape.codes.size - 1 ? -radius_for(i) + 11 : -(radius_for(i) + 3)
+      s.text(x: 4, y: y.round(2), font_size: 10,
              class: "#{RING_LABEL.fetch(role)} stroke-(--gos-surface-overlay) [paint-order:stroke] " \
                     "[stroke-width:3px] [stroke-linejoin:round]",
              data: { radar_ring_label: code }) { [ code, ring_suffix(role) ].compact.join(" · ") }
