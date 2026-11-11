@@ -19,13 +19,6 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     7 => "bg-(--gos-category-7-strong)", 8 => "bg-(--gos-category-8-strong)"
   }.freeze
 
-  NUMBER = {
-    1 => "bg-category-1 text-category-1", 2 => "bg-category-2 text-category-2",
-    3 => "bg-category-3 text-category-3", 4 => "bg-category-4 text-category-4",
-    5 => "bg-category-5 text-category-5", 6 => "bg-category-6 text-category-6",
-    7 => "bg-category-7 text-category-7", 8 => "bg-category-8 text-category-8"
-  }.freeze
-
   LANE_COLUMNS = "grid grid-cols-[minmax(0,1fr)_7.5rem] gap-x-3 sm:grid-cols-[16rem_minmax(0,1fr)_8rem]"
 
   # The map for the perspective a page or a rating stream is showing.
@@ -124,7 +117,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
               continue_assessing_capability_stable_id_value: point.stable_id,
               continue_assessing_level_ordinal_value: @shape.person_level }) do
       span(class: "flex min-w-0 items-center gap-2") do
-        span(class: "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold #{NUMBER.fetch(point.hue)}") do
+        span(class: "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold #{Components::Kit::Tag::CATEGORIES.fetch(point.hue)}") do
           point.number.to_s
         end
         span(class: "flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2") do
