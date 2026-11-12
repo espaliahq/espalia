@@ -163,6 +163,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   def axis_tone(index)
+    return unless @shape.assessed_index
     return "font-bold text-default" if index == @shape.assessed_index
     "font-bold text-score-ahead" if index == @shape.assessed_index + 1
   end

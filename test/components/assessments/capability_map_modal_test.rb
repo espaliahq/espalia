@@ -77,10 +77,24 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
     end
   end
 
-  should "offer no zoom on a ladder of three levels" do
+  should "offer no zoom on a ladder of three levels, which shows whole" do
     map = render_map(levels: E1_TO_E5.first(3), zoom: nil)
 
     assert_empty toggles(map)
+    assert_equal %w[E2 E3], map.css("[data-radar-ring]").map { |r| r["data-radar-ring"] }
+  end
+
+  should "offer no zoom when the assessed level isn't on the role's ladder" do
+    map = render_map(levels: E1_TO_E8.reject { |l| l[:ordinal] == 3 }, zoom: nil)
+
+    assert_empty toggles(map)
+  end
+
+  should "still say where a capability past the rim stands" do
+    map = render_map(levels: E1_TO_E8, zoom: "E2")
+
+    assert_equal "width: 100.0%", bar_width(map, 1)
+    assert_includes words(map.at_css("[data-capability-lane='1']")), "E3 + 50% to E4"
   end
 
   should "show the radar beside a lane per capability, grouped under each category with its score" do

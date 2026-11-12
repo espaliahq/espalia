@@ -71,17 +71,19 @@ class Assessments::CapabilityShape
   def points = @points ||= groups.flat_map(&:points)
 
   # @return [Boolean] whether the ladder is long enough to zoom into
-  def zoomable? = @codes.size > ZOOM_SPAN + 1
+  def zoomable? = !@assessed_index.nil? && @codes.size > ZOOM_SPAN + 1
 
   # @return [String, nil] the level zoomed to; nil for the whole ladder
   def zoom = @zoom_index && @codes[@zoom_index]
 
   # @return [Range<Integer>] the places in {#codes} from the centre to the rim
   def window
-    return 0..top.to_i unless @zoom_index
-
-    centre = (@zoom_index - 1).clamp(0, @codes.size - 1 - ZOOM_SPAN)
-    centre..(centre + ZOOM_SPAN)
+    @window ||= if @zoom_index
+      centre = (@zoom_index - 1).clamp(0, @codes.size - 1 - ZOOM_SPAN)
+      centre..(centre + ZOOM_SPAN)
+    else
+      0..top.to_i
+    end
   end
 
   # How far from the centre to the rim a position sits, held at the centre

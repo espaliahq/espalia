@@ -183,6 +183,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
   def ring_suffix(role) = { assessed: @assessed_as, next: "next" }[role]
 
   def ring_role(index)
+    return unless @shape.assessed_index
     return :assessed if index == @shape.assessed_index
     :next if index == @shape.assessed_index + 1
   end
