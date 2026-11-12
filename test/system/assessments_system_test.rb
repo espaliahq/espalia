@@ -2005,6 +2005,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
       before = explainer_score
       page.execute_script("document.getElementById('#{EXPLAINER_ID}').dataset.kept = 'yes'")
 
+      assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
       assert_selector "form input[name='rating[capability_stable_id]'][value='#{@cap1_stable}']", visible: :all
       page.execute_script(<<~JS)
         [...document.querySelectorAll("form")].find((f) =>

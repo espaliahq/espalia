@@ -88,6 +88,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   # Submits a self-rating through the matrix's own form while the map covers it.
   def rate_behind_map(name, frequency)
     stable_id = @stable_ids.fetch(name)
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     assert_selector "form input[name='rating[capability_stable_id]'][value='#{stable_id}']", visible: :all
     page.execute_script(<<~JS)
       [...document.querySelectorAll("form")].find((f) =>
