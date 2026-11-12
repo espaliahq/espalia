@@ -3,7 +3,7 @@
 # @label Modal
 class Kit::ModalPreview < Lookbook::Preview
   # @param title text
-  # @param size select { choices: [sm, md, lg, xl, 2xl, 3xl] }
+  # @param size select { choices: [sm, md, lg, xl, 2xl, 3xl, 6xl] }
   # @param dismiss_on_outside_click toggle
   def playground(title: "Manage delegates", size: :md, dismiss_on_outside_click: false)
     render Components::Kit::Modal.new(
@@ -86,7 +86,16 @@ class Kit::ModalPreview < Lookbook::Preview
     render Components::Kit::Modal.new(id: "modal-3xl", title: "Feedback / evidence", size: :"3xl") do |modal|
       modal.trigger { "Add evidence" }
       modal.body do
-        modal.p(class: "text-sm text-muted") { "The widest size, 768px: the evidence and request-evidence forms." }
+        modal.p(class: "text-sm text-muted") { "768px: the evidence and request-evidence forms." }
+      end
+    end
+  end
+
+  def six_extra_large
+    render Components::Kit::Modal.new(id: "modal-6xl", title: "Capability map", size: :"6xl") do |modal|
+      modal.trigger { "Open capability map" }
+      modal.body do
+        modal.p(class: "text-sm text-muted") { "The widest size, 1152px: a body laid out in two columns, such as a chart beside its list." }
       end
     end
   end

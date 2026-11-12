@@ -110,16 +110,35 @@ class Assessments::RatingsControllerTest < ActionDispatch::IntegrationTest
           rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
         }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
         assert_response :success
-        response.body[%r{<turbo-stream[^>]*target="score-explainer-modal".*?</turbo-stream>}m]
+        assert_no_match %r{target="score-explainer-modal"}, response.body, "an open drawer must not be replaced"
+        response.body[%r{<turbo-stream action="update" target="score-explainer-content".*?</turbo-stream>}m]
       end
 
       some = explainer.call("some")
-      assert_not_nil some, "Expected the rating response to replace the explainer drawer."
+      assert_not_nil some, "Expected the rating response to update the explainer drawer's contents."
       assert_includes some, "How it adds up"
 
       consistent = explainer.call("consistent")
       assert_not_equal percents_in(some), percents_in(consistent),
         "the drawer must explain the score as it is now, not as the page loaded it"
+    end
+
+    should "re-render the capability map so its lanes follow the rating" do
+      sign_in @user
+
+      lane = lambda do |frequency|
+        post assessment_ratings_path(@assignment), params: {
+          rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: frequency }
+        }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+        assert_response :success
+        stream = response.body[%r{<turbo-stream action="update" target="capability-map-content".*?</turbo-stream>}m]
+        assert_not_nil stream, "Expected the rating response to update the capability map's contents, leaving an open map open."
+        assert_no_match %r{target="capability-map-modal"}, response.body
+        Nokogiri::HTML5.fragment(stream).at_css("[data-capability-lane='1']").text
+      end
+
+      assert_includes lane.call("some"), "33% of E2"
+      assert_includes lane.call("consistent"), "E2 met"
     end
 
     should "revise an existing self-rating" do

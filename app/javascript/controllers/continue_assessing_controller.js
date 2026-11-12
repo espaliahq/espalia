@@ -11,13 +11,17 @@
 //    data-action="click->continue-assessing#focus"
 //    data-continue-assessing-capability-stable-id-value="<stable_id>"
 //    data-continue-assessing-level-ordinal-value="<ordinal>">Continue assessing</a>
+//
+// `data-continue-assessing-focus-card-value="true"` also moves focus to the
+// card, for a jump from a dialog whose invoker may have folded out of view.
 
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
   static values = {
     capabilityStableId: String,
-    levelOrdinal: Number
+    levelOrdinal: Number,
+    focusCard: Boolean
   }
 
   focus(event) {
@@ -25,7 +29,8 @@ export default class extends BaseController {
     window.dispatchEvent(new CustomEvent("assessment:focus-unrated", {
       detail: {
         capabilityStableId: this.capabilityStableIdValue,
-        levelOrdinal: this.levelOrdinalValue
+        levelOrdinal: this.levelOrdinalValue,
+        focusCard: this.focusCardValue
       }
     }))
   }

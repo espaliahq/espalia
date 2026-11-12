@@ -61,7 +61,7 @@ class Views::Assessments::CategoryChipBar < Views::Base
               action: "click->category-nav#scrollTo" }
     }
     attrs[:aria] = { current: "page" } if active
-    unlocked = category_unlocked?(cat_data)
+    unlocked = category_score_unlocked?(cat_data, @scoring, @context)
     a(**attrs) do
       status_dot(result) if unlocked
       plain category.name
@@ -99,23 +99,5 @@ class Views::Assessments::CategoryChipBar < Views::Base
     span(class: "hidden lg:inline text-[10px] font-mono tabular-nums text-muted group-aria-[current=page]:text-inverse/70") do
       "#{counts[:rated]}/#{counts[:total]}"
     end
-  end
-
-  # The hero's coverage rule at category grain: a score only shows once at
-  # least half of the category's assessed-level cells carry a rating (once
-  # every one is agreed, while an alignment is still agreeing them).
-  # Must stay in step with CategoryIndicators#unlocked? — the chip and the
-  # section header are the same category, and a chip showing a red 0% for
-  # a category the header declines to score is the worse of the two lies.
-  def category_unlocked?(cat_data)
-    result = @scoring.dig(:category_scores, cat_data[:category].category_id)
-    return false unless result && result[:scorable]
-
-    counts = category_rated_count(cat_data, @context)
-    return true if counts[:total].zero?
-
-    counts[:rated] >= Views::Assessments::HeroSummary.unlock_target_for(
-      counts[:total], awaiting_agreement: cat_data[:awaiting_agreement] || false
-    )
   end
 end

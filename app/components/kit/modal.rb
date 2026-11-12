@@ -29,12 +29,13 @@ class Components::Kit::Modal < Components::Base
     lg: "max-w-lg",
     xl: "max-w-xl",
     "2xl": "max-w-2xl",
-    "3xl": "max-w-3xl"
+    "3xl": "max-w-3xl",
+    "6xl": "max-w-6xl"
   }.freeze
 
   # @param id [String] DOM id for the dialog overlay
   # @param title [String] heading text
-  # @param size [Symbol] :sm, :md, :lg, :xl, :"2xl" or :"3xl"
+  # @param size [Symbol] :sm, :md, :lg, :xl, :"2xl", :"3xl" or :"6xl"
   # @param header [Boolean] false drops the title bar and the panel's padding, for a body that
   #   draws its own heading and ×; the title still names the dialog
   # @param standalone [Boolean] render an own `modal` controller + trigger slot

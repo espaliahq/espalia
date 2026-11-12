@@ -38,4 +38,23 @@ module Views::Assessments::Concerns::RatedCount
     end
     { rated: rated, total: total }
   end
+
+  # Whether a category's score shows: half its assessed-level cells rated, or
+  # all agreed mid-alignment. The same rule as CategoryIndicators#unlocked?.
+  #
+  # @param category_data [Hash] one entry from `matrix_data[:categories]`
+  # @param scoring [Hash] the perspective being shown
+  # @param context [Symbol] :self, :manager, or :alignment
+  # @return [Boolean]
+  def category_score_unlocked?(category_data, scoring, context)
+    result = scoring.dig(:category_scores, category_data[:category]&.category_id)
+    return false unless result && result[:scorable]
+
+    counts = category_rated_count(category_data, context)
+    return true if counts[:total].zero?
+
+    counts[:rated] >= Views::Assessments::HeroSummary.unlock_target_for(
+      counts[:total], awaiting_agreement: category_data[:awaiting_agreement] || false
+    )
+  end
 end

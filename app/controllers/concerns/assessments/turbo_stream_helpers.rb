@@ -114,30 +114,39 @@ module Assessments::TurboStreamHelpers
     )
   end
 
-  # The explainer drawer, re-rendered after a rating.
-  #
-  # It is mounted on the page ROOT so an open dialog survives a frame
-  # reload — which also means nothing else replaces it, and without this
-  # its arithmetic would keep explaining the score the page loaded with
-  # while the hero beside it showed the new one.
+  # The explainer drawer's contents after a rating; it sits outside the
+  # reloading frame, and an open drawer stays open (`Views::Assessments::ScoreExplainerModal`).
   #
   # @param matrix_data [Hash] the rebuilt matrix data
   # @param primary [Hash] the viewer's primary scoring hash
   # @return [Turbo::Streams::TagBuilder]
   def score_explainer_stream(matrix_data, primary, _context)
-    turbo_stream.replace(
-      Views::Assessments::ScoreExplainerModal::ID,
+    turbo_stream.update(
+      Views::Assessments::ScoreExplainerModal::CONTENT_ID,
       render_to_string(
-        Views::Assessments::ScoreExplainerModal.new(
-          components: primary[:components],
-          state: primary[:performance_state],
-          subject: explainer_subject,
-          merged_levels: matrix_data[:merged_levels],
-          person_level: matrix_data[:person_level],
-          thresholds: Views::Assessments::Glossary.thresholds_from(matrix_data),
-          second_person: !viewer_is_manager?,
-          emphasised: matrix_data[:emphasised_capabilities]
+        Views::Assessments::ScoreExplainerModal.for(
+          matrix_data: matrix_data, scoring: primary, subject: explainer_subject,
+          second_person: !viewer_is_manager?, part: :content
         ),
+        layout: false
+      )
+    )
+  end
+
+  # The capability map's contents after a rating; it sits outside the
+  # reloading frame, and an open map stays open (`Views::Assessments::CapabilityMapModal`).
+  #
+  # @param matrix_data [Hash] the rebuilt matrix data
+  # @param primary [Hash] the viewer's primary scoring hash
+  # @param context [Symbol]
+  # @return [Turbo::Streams::TagBuilder]
+  def capability_map_stream(matrix_data, primary, context)
+    whose = viewer_is_manager? ? (assessee_name || "This person") : nil
+    turbo_stream.update(
+      Views::Assessments::CapabilityMapModal::CONTENT_ID,
+      render_to_string(
+        Views::Assessments::CapabilityMapModal.for(matrix_data: matrix_data, scoring: primary, context: context,
+                                                   whose: whose, part: :content),
         layout: false
       )
     )
@@ -146,8 +155,13 @@ module Assessments::TurboStreamHelpers
   def explainer_subject
     return "Your score" unless viewer_is_manager?
 
-    assessee = Person.find_by(id: @assignment.person_id)
-    assessee ? "#{assessee.name}'s score" : "This score"
+    assessee_name ? "#{assessee_name}'s score" : "This score"
+  end
+
+  def assessee_name
+    return @assessee_name if defined?(@assessee_name)
+
+    @assessee_name = Person.find_by(id: @assignment.person_id)&.name
   end
 
   # @return [String] HTML

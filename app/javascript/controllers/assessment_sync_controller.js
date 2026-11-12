@@ -11,6 +11,8 @@
 //     <turbo-frame id="assessment-matrix" data-assessment-sync-target="frame" src="...">
 //       <table data-controller="matrix">...</table>
 //     </turbo-frame>
+//     <turbo-frame id="capability-map-content" data-assessment-sync-target="dialogFrame"
+//                  data-reload-src="/assessments/:id/capability_map">...</turbo-frame>
 //   </div>
 
 import BaseController from "controllers/base_controller"
@@ -19,7 +21,7 @@ import BaseController from "controllers/base_controller"
 const LENS_PARAMS = ["as_role", "as_level", "cycle_id"]
 
 export default class extends BaseController {
-  static targets = ["signal", "frame", "scoringFrame", "activityFrame"]
+  static targets = ["signal", "frame", "scoringFrame", "activityFrame", "dialogFrame"]
 
   connect() {
     super.connect()
@@ -182,6 +184,18 @@ export default class extends BaseController {
         this.scoringFrameTarget.src = ""
         this.scoringFrameTarget.src = updatedSrc
       }
+    }
+
+    // Root-mounted dialogs (the capability map, the score explainer) sit
+    // outside every frame above, so their contents reload here. Each frame
+    // carries no `src` until now, so it never loads on page load.
+    if (!skipMatrixAndScoring) {
+      this.dialogFrameTargets.forEach((frame) => {
+        const src = frame.dataset.reloadSrc
+        if (!src) return
+        frame.src = ""
+        frame.src = this.#mergeLensParams(src)
+      })
     }
 
     // Reload the activity feed frame so newly-landed events surface

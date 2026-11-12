@@ -102,6 +102,21 @@ class Assessments::ManagerRatingsControllerTest < ActionDispatch::IntegrationTes
       end
     end
 
+    should "re-render the capability map for the report, read through the manager's ratings" do
+      sign_in @manager_user
+      post assessment_manager_ratings_path(@report_assignment), params: {
+        rating: { capability_stable_id: @cap.stable_id, level_ordinal: 2, frequency: "consistent" }
+      }, headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+      assert_response :success
+      stream = response.body[%r{<turbo-stream action="update" target="capability-map-content".*?</turbo-stream>}m]
+      assert_not_nil stream, "Expected the manager rating response to update the capability map's contents, leaving an open map open."
+      assert_no_match %r{target="capability-map-modal"}, response.body
+      map = Nokogiri::HTML5.fragment(stream)
+      assert_includes map.text, "Report at E2"
+      assert_includes map.at_css("[data-capability-lane='1']").text, "E2 met"
+    end
+
     should "include scoring panel in turbo stream response" do
       sign_in @manager_user
       post assessment_manager_ratings_path(@report_assignment), params: {

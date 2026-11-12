@@ -175,6 +175,11 @@ input[type="week"] {
     animation-range: 0 240px;
   }
 
+  /* A control reached by keyboard while the band is folded shows the band again. */
+  .hero-collapsible:has(:focus-visible) {
+    animation: none;
+  }
+
   @keyframes hero-collapse {
     to {
       grid-template-rows: 0fr;

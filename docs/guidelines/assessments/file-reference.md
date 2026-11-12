@@ -11,6 +11,9 @@
 | `app/views/assessments/manager_show_view.rb` | Manager assessment shell — same shape, different H1 + action cluster |
 | `app/views/assessments/index_view.rb` | Assessment list (own + direct reports) |
 | `app/views/assessment_guides/show_view.rb` | "How assessments work" — the illustrated walk through one cycle (`/assessments/how-it-works`) |
+| `app/models/assessments/capability_shape.rb` | The capability radar's data: each capability's level reached on the role's ladder, its group, hue and number (see [*Capability radar and map*](scoring.md)) |
+| `app/views/assessments/capability_radar.rb` | The radar SVG, `:compact` in the hero and `:detailed` (spokes as links) in the map |
+| `app/views/assessments/capability_map_modal.rb` | The capability map: the radar beside a lane per capability, root-mounted; its content frame is streamed on the viewer's own rating and reloaded from `GET /assessments/:id/capability_map` on someone else's |
 | `app/views/assessments/status_pill.rb` | Header status pill — In Progress / N to confirm / Assessment Complete / Aligning / Aligned; Turbo-replaceable (`id="assessment-status-pill"`) |
 | `app/components/shared/to_confirm_chip.rb` | The dashed amber "to confirm" chip — status pill, card name row, list cards, the hero and category links |
 | `app/controllers/assessments/carried_ratings_controller.rb` | A category's carried ratings: the review page (GET) and the bulk confirm (POST → `ConfirmCarriedRatings`) |
@@ -42,7 +45,7 @@
 | `app/views/assessments/verdict_panel.rb` | The middle band's state panel: a `Kit::Card` inset with the verdict's edge and heading. The vocabulary settings preview renders it too |
 | `app/views/assessments/glossary.rb` | The assessment vocabulary — built per request so every definition names the viewer's level codes, the framework's configured bands and the tenant's words; `SCALE_SENTENCE` is shared with the calibration glossary |
 | `app/views/assessments/concerns/defined_terms.rb` | `defined_term(key)` — renders a scored term with its definition attached, through `Kit::DefinitionTip` (hover AND keyboard); `weight_chip` / `required_chip` — the ONE drawing of the binding chips the card, the hero gap list and the explainer share |
-| `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count |
+| `app/views/assessments/score_explainer_modal.rb` | "How is this calculated?" — the viewer's own arithmetic first, then the rules, then what doesn't count. Root-mounted; its content frame is streamed on the viewer's own rating and reloaded from `GET /assessments/:id/score_explainer` on someone else's |
 | `app/views/assessments/state_labels.rb` | The ONE reader of a state's word — the tenant's own if it set one, else the word Espalia ships (#415) |
 | `app/operations/operations/tenants/update_scoring_vocabulary.rb` | Shared web + MCP operation — rename the performance states for a tenant (labels only; the states and thresholds are untouched) |
 | `app/views/assessments/concerns/score_scale.rb` | The ONE score vocabulary every altitude reads — tone by state, state words, level codes relative to the assessed level, the band count the bar draws |

@@ -58,8 +58,8 @@ class Components::Kit::ModalTest < ActiveSupport::TestCase
   end
 
   context "Components::Kit::Modal sizes and header" do
-    should "offer three wider sizes" do
-      %i[xl 2xl 3xl].each do |size|
+    should "offer four wider sizes" do
+      %i[xl 2xl 3xl 6xl].each do |size|
         html = Components::Kit::Modal.new(id: "m", title: "T", size: size, standalone: false).call { |m| m.body { } } # rubocop:disable Lint/EmptyBlock
         assert_includes html, "max-w-#{size}"
       end

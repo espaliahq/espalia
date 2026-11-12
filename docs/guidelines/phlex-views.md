@@ -75,7 +75,7 @@ Each component owns its radius and shadow ([theming.md → Radius and shadow](th
 
 - **A grey panel inside a card:** `Kit::Card` `variant: :inset`. Add `density: :compact` for a list or grouped fields; compact also suits a small card of its own. `edge:` swaps its border for a state's, as the hero's verdict panel does.
 - **A clickable card:** `Kit::Card` `href:` renders an `a` with one hover and focus treatment, so it can't hold other links. `interactive: true` gives a `div` the same look, and `data-focused="true"` holds it on.
-- **A wide modal, or one whose body draws its own heading and ×:** `Kit::Modal` `size: :xl`, `:"2xl"` or `:"3xl"` (the evidence modals, 768px), and `header: false`. The title still names the dialog.
+- **A wide modal, or one whose body draws its own heading and ×:** `Kit::Modal` `size: :xl`, `:"2xl"` or `:"3xl"` (the evidence modals, 768px), `:"6xl"` for a body laid out in two columns (the capability map, 1152px), and `header: false`. The title still names the dialog.
 - **A controller that must wrap the whole modal body** (a lazy frame's `frame-error`, `submit-fallback`): pass it as `Kit::Modal` `panel_data:`. The evidence shells do.
 
 ### Extending Kit

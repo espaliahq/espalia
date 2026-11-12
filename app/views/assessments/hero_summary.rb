@@ -146,15 +146,28 @@ class Views::Assessments::HeroSummary < Views::Base
   # the number + bar rather than below the whole row — a full-width band
   # under the taller right column left a blank block beside the headline.
   def middle_band
-    config = state_panel_config
-    return unless config && (config[:items].any? || config[:gap_list])
+    return unless info_box?
 
+    config = state_panel_config
     div(class: "hero-collapsible") do
       div do
         div(class: "pt-3") { state_panel(config) }
       end
     end
   end
+
+  # The state panel under the headline: shown when there is a gap to list.
+  def info_box?
+    config = state_panel_config
+    !!(config && (config[:items].any? || config[:gap_list]))
+  end
+
+  # The radar stacks under the score beside a tall info box, and sits beside
+  # the score when the headline stands alone. Narrower screens always stack it.
+  SCORE_COLUMN = {
+    stacked: "flex flex-col gap-3 sm:shrink-0 sm:items-end",
+    inline: "flex flex-col gap-3 sm:shrink-0 sm:items-end lg:flex-row-reverse lg:items-start lg:gap-6"
+  }.freeze
 
   def header_row
     ratio = primary_scoring[:performance_ratio] || 0.0
@@ -184,15 +197,61 @@ class Views::Assessments::HeroSummary < Views::Base
         gloss_and_secondaries
         middle_band
       end
-      div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end sm:shrink-0") do
-        # The number defines itself where it is read, rather than in a help
-        # page nobody opens (#414).
-        defined_term(:score, label: "#{pct}%", align: :right,
-                     trigger_class: "text-4xl font-bold leading-none #{performance_color}")
-        div(class: "text-right") do
-          score_bar(ratio)
-          secondary_percents
-          explainer_trigger
+      placement = info_box? ? :stacked : :inline
+      div(class: SCORE_COLUMN.fetch(placement), data: { hero_score: placement.to_s }) do
+        div(class: "flex items-end justify-between gap-3 sm:flex-col sm:items-end") do
+          # The number defines itself where it is read, rather than in a help
+          # page nobody opens (#414).
+          defined_term(:score, label: "#{pct}%", align: :right,
+                       trigger_class: "text-4xl font-bold leading-none #{performance_color}")
+          div(class: "text-right") do
+            score_bar(ratio)
+            secondary_percents
+            explainer_trigger
+          end
+        end
+        # Folds away with the middle band, so the sticky header stays short.
+        div(class: "hero-collapsible") { div { capability_radar_trigger } }
+      end
+    end
+  end
+
+  # The capability radar at a glance, with a key of the groups and their
+  # scores; it opens the root-mounted capability map. Only on the scored
+  # header, so it waits behind the same coverage gate as the number.
+  def capability_radar_trigger
+    shape = Assessments::CapabilityShape.new(
+      categories: @categories, scoring: primary_scoring, merged_levels: @merged_levels,
+      person_level: @person_level, context: @context
+    )
+    return if shape.points.empty?
+
+    button(
+      type: "button",
+      class: "group/radar flex max-w-full shrink-0 items-center gap-3 rounded-lg p-1 pr-3 text-left " \
+             "hover:bg-default-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+      aria: { label: "Open capability map: #{shape.points.size} #{'capability'.pluralize(shape.points.size)} " \
+                     "in #{shape.groups.size} #{'group'.pluralize(shape.groups.size)}" },
+      data: { action: "modal#open", modal_target_id: Views::Assessments::CapabilityMapModal::ID }
+    ) do
+      div(class: "size-24 shrink-0") do
+        render Views::Assessments::CapabilityRadar.new(shape: shape, size: :compact)
+      end
+      div(class: "flex min-w-0 flex-col gap-1") do
+        radar_key(shape)
+        span(class: "text-xs font-semibold text-link group-hover/radar:underline") { "Open capability map →" }
+      end
+    end
+  end
+
+  def radar_key(shape)
+    ul(class: "grid gap-y-0.5 text-xs text-muted sm:hidden lg:grid",
+       data: { radar_key: true }) do
+      shape.groups.each do |group|
+        li(class: "flex min-w-0 items-center gap-1.5") do
+          span(class: "size-2 shrink-0 rounded-xs #{Views::Assessments::CapabilityMapModal::FILL.fetch(group.hue)}")
+          span(class: "min-w-0 truncate") { group.name.to_s }
+          span(class: "ml-auto pl-2 font-semibold text-default tabular-nums") { "#{percent(group.score)}%" } if group.score
         end
       end
     end
