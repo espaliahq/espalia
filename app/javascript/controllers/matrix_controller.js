@@ -1046,7 +1046,8 @@ export default class extends BaseController {
         if (!settled) return
         applyScrollMargin(settled)
         scrollTo(settled, "instant")
-        if (!document.activeElement || document.activeElement === document.body) focus(settled)
+        const focusLost = !document.activeElement || document.activeElement === document.body
+        if (settled !== card && !card.isConnected && focusLost) focus(settled)
       }, 600)
     }
 

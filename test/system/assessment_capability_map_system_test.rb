@@ -123,6 +123,17 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_selector "#{TRIGGER}:focus", visible: :all
   end
 
+  should "leave focus alone when the reader drops it straight after a jump from the map" do
+    open_map
+    click_selector_with_js_fallback("#{MAP} [data-capability-lane='3']", expect_selector: "#{focused_card('Stakeholders')}:focus")
+    # After the modal's last focus-return pass (300ms after the click), before the matrix's settle pass (600ms after the card).
+    sleep 0.35
+    page.execute_script("document.activeElement.blur()")
+
+    sleep 1
+    assert_no_selector "#{focused_card('Stakeholders')}:focus"
+  end
+
   should "show the folded band again while the radar trigger has keyboard focus" do
     visit assessment_path(@assignment)
     assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
@@ -234,6 +245,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   def open_map
     visit assessment_path(@assignment)
     assert_selector TRIGGER
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     wait_for_stimulus "modal"
     click_selector_with_js_fallback(TRIGGER, expect_selector: "#{MAP} [data-capability-lane]")
   end
