@@ -228,7 +228,7 @@ class Views::Assessments::HeroSummary < Views::Base
 
     button(
       type: "button",
-      class: "group/radar flex shrink-0 items-center gap-3 rounded-lg p-1 pr-3 text-left " \
+      class: "group/radar flex max-w-full shrink-0 items-center gap-3 rounded-lg p-1 pr-3 text-left " \
              "hover:bg-default-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
       aria: { label: "Open capability map: #{shape.points.size} #{'capability'.pluralize(shape.points.size)} " \
                      "in #{shape.groups.size} #{'group'.pluralize(shape.groups.size)}" },
@@ -237,7 +237,7 @@ class Views::Assessments::HeroSummary < Views::Base
       div(class: "size-24 shrink-0") do
         render Views::Assessments::CapabilityRadar.new(shape: shape, size: :compact)
       end
-      div(class: "flex flex-col gap-1") do
+      div(class: "flex min-w-0 flex-col gap-1") do
         radar_key(shape)
         span(class: "text-xs font-semibold text-link group-hover/radar:underline") { "Open capability map →" }
       end
@@ -248,9 +248,9 @@ class Views::Assessments::HeroSummary < Views::Base
     ul(class: "grid gap-y-0.5 text-xs text-muted sm:hidden lg:grid",
        data: { radar_key: true }) do
       shape.groups.each do |group|
-        li(class: "flex items-center gap-1.5 whitespace-nowrap") do
+        li(class: "flex min-w-0 items-center gap-1.5") do
           span(class: "size-2 shrink-0 rounded-xs #{Views::Assessments::CapabilityMapModal::FILL.fetch(group.hue)}")
-          plain group.name.to_s
+          span(class: "min-w-0 truncate") { group.name.to_s }
           span(class: "ml-auto pl-2 font-semibold text-default tabular-nums") { "#{percent(group.score)}%" } if group.score
         end
       end

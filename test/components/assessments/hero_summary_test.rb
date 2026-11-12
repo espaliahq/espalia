@@ -527,6 +527,16 @@ class Views::Assessments::HeroSummaryTest < ActiveSupport::TestCase
       assert_equal "Open capability map: 1 capability in 1 group", trigger["aria-label"]
     end
 
+    should "let a long category name in the key truncate, so the trigger never outgrows the card" do
+      html = render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.6, score: 1.6 })
+      trigger = radar_trigger(html)
+      name = trigger.at_css("[data-radar-key] li > span.truncate")
+
+      assert_includes trigger["class"].split, "max-w-full"
+      assert name, "expected each key row's name in a truncating span"
+      assert_includes name["class"].split, "min-w-0"
+    end
+
     should "sit in the score's column, in the band that folds away as the page scrolls" do
       hero = Nokogiri::HTML5.fragment(
         render_hero(state: :mastering, components: { prior: 1.0, current: 1.0, next: 0.6, score: 1.6 })
