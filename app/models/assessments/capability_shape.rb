@@ -11,7 +11,14 @@ class Assessments::CapabilityShape
   # out: on the assessment page red means a rating.
   HUES = [ 1, 3, 4, 5, 7, 6, 8 ].freeze
 
+  # A category's segment: its name, categorical `hue`, `score` (nil until
+  # the coverage gate opens), scoring `state` and its {Point}s.
   Group = Data.define(:name, :hue, :score, :state, :points)
+
+  # A capability's spoke: its 1-based `number` across the map, `reached` (a
+  # ladder position from the first level met, nil when unrated or with no
+  # expectation), `label` (where it stands in words), whether its binding is
+  # `required`, and whether it `blocked` the score.
   Point = Data.define(:number, :stable_id, :name, :hue, :reached, :label, :required, :blocked)
 
   # @return [Array<String>] the ladder's level codes, lowest first
