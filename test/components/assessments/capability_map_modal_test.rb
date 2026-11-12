@@ -50,6 +50,7 @@ class Views::Assessments::CapabilityMapModalTest < ActiveSupport::TestCase
 
     assert_equal "a", lane.name
     assert_equal "#cell-cap-Delivery-3", lane["href"]
+    assert_equal "_top", lane["data-turbo-frame"], "the map's content frame must not capture the jump"
   end
 
   should "mark a lane whose capability blocks the score, in words" do

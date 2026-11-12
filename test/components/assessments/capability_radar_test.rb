@@ -108,6 +108,7 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert link, "expected the Delivery spoke to link to its E3 cell"
       assert_equal "1. Delivery, E3 + 50% to E4. Open the capability", link["aria-label"]
       assert_equal "1", link.at_css("text").text
+      assert_equal "_top", link["data-turbo-frame"], "the map's content frame must not capture the jump"
     end
 
     should "mark a capability that blocks the score with a sign, not just a colour" do

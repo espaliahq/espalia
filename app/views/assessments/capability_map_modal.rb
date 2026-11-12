@@ -136,7 +136,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus",
       title: point.name,
       data: { capability_lane: point.number, capability_map_key: point.number, refresh_focus: "lane-#{point.number}",
-              controller: "continue-assessing",
+              turbo_frame: "_top", controller: "continue-assessing",
               action: "click->modal#close click->continue-assessing#focus",
               continue_assessing_capability_stable_id_value: point.stable_id,
               continue_assessing_level_ordinal_value: @shape.person_level }) do
