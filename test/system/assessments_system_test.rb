@@ -2042,6 +2042,7 @@ class AssessmentsSystemTest < ApplicationSystemTestCase
           return scroller.scrollTop
         })()
       JS
+      assert_operator scrolled, :>, 0, "the drawer must scroll on a phone, or keeping its scroll proves nothing"
 
       rate_to_unlock_hero(frequency: "consistent")
 

@@ -174,6 +174,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
         return scroller.scrollTop
       })()
     JS
+    assert_operator scrolled, :>, 0, "the map must scroll on a phone, or keeping its scroll proves nothing"
 
     rate_behind_map("Prioritisation", "consistent")
 
