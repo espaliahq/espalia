@@ -1,0 +1,5 @@
+<div role="group" aria-label="Zoom to a level" class="flex flex-wrap items-center gap-1 rounded-2xl border border-default bg-default p-4">
+  <% levels.each do |level| %>
+    <%= render Components::Kit::Chip.new(level, pressed: level == selected, size: :sm) %>
+  <% end %>
+</div>

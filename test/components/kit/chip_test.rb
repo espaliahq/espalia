@@ -25,6 +25,13 @@ class Components::Kit::ChipTest < ActiveSupport::TestCase
       assert render_chip(disabled: true).key?("disabled")
     end
 
+    should "come in a small size for a dense row, still a 24px target" do
+      classes = render_chip("E3", size: :sm)["class"].split
+
+      assert_includes classes, "min-h-6"
+      assert_not_includes classes, "min-h-8"
+    end
+
     should "keep a caller's aria and data alongside aria-pressed" do
       chip = render_chip(data: { action: "filter#toggle" }, aria: { controls: "results" })
 
