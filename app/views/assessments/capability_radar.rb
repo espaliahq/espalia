@@ -184,15 +184,24 @@ class Views::Assessments::CapabilityRadar < Views::Base
     :next if index == @shape.assessed_index + 1
   end
 
-  # The web joins the capabilities that have a level; an unrated one has none.
-  def web(s)
-    corners = points.each_with_index.filter_map do |point, i|
-      xy(radius_for(point.reached), angle(i)).join(",") if point.reached
-    end
-    return if corners.size < 2
+  WEB = { stroke_opacity: 0.55, stroke_width: 1.25, stroke_linejoin: "round", data: { radar_web: true } }.freeze
 
-    s.polygon(points: corners.join(" "), fill_opacity: 0.07, stroke_opacity: 0.55, stroke_width: 1.25,
-              stroke_linejoin: "round", class: "fill-(--gos-content-default) stroke-(--gos-content-default)")
+  # The web joins neighbouring capabilities that have a level. It is filled
+  # only when every one has, and breaks at an unrated one rather than claim
+  # progress across its spoke.
+  def web(s)
+    corners = points.each_with_index.map { |point, i| xy(radius_for(point.reached), angle(i)).join(",") if point.reached }
+    if corners.all?
+      return if corners.size < 2
+
+      return s.polygon(points: corners.join(" "), fill_opacity: 0.07, **WEB,
+                       class: "fill-(--gos-content-default) stroke-(--gos-content-default)")
+    end
+
+    gap = corners.index(nil)
+    corners.rotate(gap).slice_when { |a, b| a.nil? || b.nil? }.map(&:compact).select { |run| run.size > 1 }.each do |run|
+      s.polyline(points: run.join(" "), fill: "none", **WEB, class: "stroke-(--gos-content-default)")
+    end
   end
 
   def spoke(s, point, i)

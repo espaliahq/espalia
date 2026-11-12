@@ -8,13 +8,13 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
   CAP = Struct.new(:stable_id, :name, keyword_init: true)
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
 
-  def shape(groups, levels:, person_level:, statuses: {}, required: [])
+  def shape(groups, levels:, person_level:, statuses: {}, required: [], unrated: [])
     categories = groups.map do |category_name, caps|
       { category: CATEGORY.new(category_id: "cat-#{category_name}", name: category_name),
         person_level: person_level,
         capabilities: caps.keys.map do |name|
           { capability: CAP.new(stable_id: "cap-#{name}", name: name),
-            cells: { person_level => { current_frequency: "consistent" } } }
+            cells: { person_level => { current_frequency: ("consistent" unless unrated.include?(name)) } } }
         end }
     end
     scores = groups.values.reduce({}, :merge).to_h do |name, score|
@@ -45,6 +45,30 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
       assert_equal "E4", radar.at_css("[data-radar-ring-role='next']")["data-radar-ring"]
       assert radar.at_css("[data-radar-ring-role='next']")["stroke-dasharray"], "expected the next ring dashed"
       assert_nil radar.at_css("[data-radar-ring-role='assessed']")["stroke-dasharray"]
+    end
+
+    should "fill the web only once every capability has a level" do
+      web = render_radar(shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.2 }, "People" => { "Mentoring" => 1.0 } },
+                               levels: E1_TO_E5, person_level: 3)).css("[data-radar-web]")
+
+      assert_equal %w[polygon], web.map(&:name)
+      assert_equal 3, web.first["points"].split.size
+    end
+
+    should "break the web at an unrated capability rather than fill across its spoke" do
+      web = render_radar(shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 1.2, "Testing" => 0.0 },
+                                 "People" => { "Mentoring" => 1.0, "Hiring" => 1.4 } },
+                               levels: E1_TO_E5, person_level: 3, unrated: %w[Testing])).css("[data-radar-web]")
+
+      assert_equal %w[polyline], web.map(&:name), "expected one open run, from Mentoring round to Quality"
+      assert_equal 4, web.first["points"].split.size
+    end
+
+    should "draw no web from rated capabilities that no neighbour joins" do
+      web = render_radar(shape({ "Craft" => { "Delivery" => 1.5, "Quality" => 0.0, "Testing" => 1.2, "Hiring" => 0.0 } },
+                               levels: E1_TO_E5, person_level: 3, unrated: %w[Quality Hiring])).css("[data-radar-web]")
+
+      assert_empty web
     end
 
     should "label each ring above the first up the top spoke, naming the assessed and next levels" do
