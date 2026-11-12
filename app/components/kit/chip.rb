@@ -21,7 +21,7 @@ class Components::Kit::Chip < Components::Base
            "disabled:aria-pressed:border-emphasized disabled:aria-pressed:bg-default"
 
   # `:sm` fits a dense row, such as level headings over a scale, and keeps the 24px floor.
-  TOGGLE_SIZES = { md: "min-h-8 px-3 text-[13px]", sm: "min-h-6 px-1.5 text-xs" }.freeze
+  TOGGLE_SIZES = { md: "min-h-8 px-3 text-[13px]", sm: "min-h-6 px-1 text-xs" }.freeze
 
   REMOVABLE = "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-default " \
               "bg-neutral-subtle pr-1 pl-3 text-[13px] font-medium whitespace-nowrap text-default"
