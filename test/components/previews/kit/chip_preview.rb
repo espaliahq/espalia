@@ -8,8 +8,14 @@ class Kit::ChipPreview < Lookbook::Preview
   # @param pressed toggle
   # @param removable toggle
   # @param disabled toggle
-  def playground(label: "This cycle", pressed: false, removable: false, disabled: false)
-    render Chip.new(label, pressed: pressed, remove: ({} if removable), disabled: disabled)
+  # @param size select [md, sm]
+  def playground(label: "This cycle", pressed: false, removable: false, disabled: false, size: :md)
+    render Chip.new(label, pressed: pressed, remove: ({} if removable), disabled: disabled, size: size.to_sym)
+  end
+
+  # Small toggles for a dense row, such as level headings over a scale
+  def small
+    render_with_template(locals: { levels: %w[E1 E2 E3 E4 E5], selected: "E3" })
   end
 
   # Rest, selected, and each disabled, on a card and on the page. Hover and focus with the pointer and Tab.

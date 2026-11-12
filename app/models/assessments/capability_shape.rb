@@ -7,6 +7,10 @@
 class Assessments::CapabilityShape
   include Views::Assessments::Concerns::RatedCount
 
+  # Levels from the radar's centre to its rim when zoomed: the zoomed level
+  # sits on the middle ring, with one level either side.
+  ZOOM_SPAN = 2
+
   # Categorical hues in the order categories take them. Red (2) is left
   # out: on the assessment page red means a rating.
   HUES = [ 1, 3, 4, 5, 7, 6, 8 ].freeze
@@ -33,7 +37,9 @@ class Assessments::CapabilityShape
   # @param merged_levels [Array<Hash>] the role's ladder, `{ ordinal:, level_code: }`
   # @param person_level [Integer] the assessed level's ordinal
   # @param context [Symbol] :self, :manager or :alignment
-  def initialize(categories:, scoring:, merged_levels:, person_level:, context:)
+  # @param zoom [String, Symbol, nil] the level code to zoom to, `:all` for the
+  #   whole ladder, or nil (or a code not on the ladder) for the assessed level
+  def initialize(categories:, scoring:, merged_levels:, person_level:, context:, zoom: nil)
     @categories = categories
     @scoring = scoring
     @context = context
@@ -42,6 +48,7 @@ class Assessments::CapabilityShape
     ladder = merged_levels.sort_by { |l| l[:ordinal] }
     @codes = ladder.map { |l| l[:level_code] }
     @assessed_index = ladder.index { |l| l[:ordinal] == person_level }
+    @zoom_index = (@codes.index(zoom) || @assessed_index if zoom != :all && zoomable?)
   end
 
   # @return [Array<Group>] framework order; none when the assessed level is
@@ -63,14 +70,32 @@ class Assessments::CapabilityShape
   # @return [Array<Point>] framework order
   def points = @points ||= groups.flat_map(&:points)
 
-  # How far up the ladder a position sits: 0 at the first level met, 1 at the
-  # top. A one-level ladder has no climb, so it runs from none of its level to
-  # all of it.
+  # @return [Boolean] whether the ladder is long enough to zoom into
+  def zoomable? = !@assessed_index.nil? && @codes.size > ZOOM_SPAN + 1
+
+  # @return [String, nil] the level zoomed to; nil for the whole ladder
+  def zoom = @zoom_index && @codes[@zoom_index]
+
+  # @return [Range<Integer>] the places in {#codes} from the centre to the rim
+  def window
+    @window ||= if @zoom_index
+      centre = (@zoom_index - 1).clamp(0, @codes.size - 1 - ZOOM_SPAN)
+      centre..(centre + ZOOM_SPAN)
+    else
+      0..top.to_i
+    end
+  end
+
+  # How far from the centre to the rim a position sits, held at the centre
+  # or the rim past either edge. A one-level ladder has no climb, so it runs from none of its
+  # level to all of it.
   #
   # @param position [Numeric] a ladder position, as {Point#reached}
   # @return [Float]
   def fraction(position)
-    top.zero? ? position + 1 : position / top
+    return position + 1 if top.zero?
+
+    ((position - window.begin) / (window.end - window.begin).to_f).clamp(0.0, 1.0)
   end
 
   private

@@ -85,7 +85,7 @@ end
 |---|---|---|
 | `Kit::Badge` | A status or count. Square. | `Badge.new("Aligned", tone: :success)` |
 | `Kit::Tag` | A classification: level, role family, category. Fully rounded. | `Tag.new("Delivery", category: capability.stable_id)` |
-| `Kit::Chip` | A toggle that filters or picks, or a removable pick | `Chip.new("This cycle", pressed: true)` |
+| `Kit::Chip` | A toggle that filters or picks, or a removable pick | `Chip.new("This cycle", pressed: true)`; `size: :sm` for a dense row |
 | `Kit::DefinitionTip` | A term whose definition shows on hover and keyboard focus | `DefinitionTip.new("Self-gap", definition: "…", id: "deftip-self-gap")` |
 
 A tag's `category:` hashes a stable key to one of eight hues, so the same category keeps its colour on every screen. Chips stay neutral; selected is a heavier neutral fill, never brand.

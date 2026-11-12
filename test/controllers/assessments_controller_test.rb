@@ -546,6 +546,24 @@ class AssessmentsControllerTest < ActionDispatch::IntegrationTest
       assert_not_includes response.body, %(id="#{Views::Assessments::CapabilityMapModal::ID}"), "no overlay around it"
     end
 
+    should "zoom to the level asked for, or out to the whole ladder, and to the assessed level otherwise" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:framework_level, role_id: @role.role_id, ordinal: 3, title: "Senior", code: "E3")
+        create(:framework_level, role_id: @role.role_id, ordinal: 4, title: "Staff", code: "E4")
+      end
+      rate(@cap, "consistent")
+      sign_in @user
+      pressed = ->(zoom) {
+        get capability_map_assessment_path(@assignment, zoom: zoom)
+        assert_response :success
+        Nokogiri::HTML5.fragment(response.body).css("[aria-pressed='true']").map { |t| t.text.strip }
+      }
+
+      assert_equal %w[E2], pressed.call(nil)
+      assert_equal %w[E4], pressed.call("E4")
+      assert_equal [ "All levels" ], pressed.call("all")
+    end
+
     should "deny a viewer who may not see the assessment" do
       other_user = create(:user, password: "password123")
       ActsAsTenant.with_tenant(@tenant) do
