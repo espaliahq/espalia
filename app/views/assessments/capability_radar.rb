@@ -139,7 +139,7 @@ class Views::Assessments::CapabilityRadar < Views::Base
   end
 
   def rings(s)
-    @shape.codes.each_with_index.drop(1).each do |code, i|
+    ring_levels.each do |code, i|
       role = ring_role(i)
       s.circle(r: radius_for(i).round(2), fill: "none", stroke_width: role ? 1.5 : 0.75,
                stroke_dasharray: role == :next ? "5 4" : nil,
@@ -171,11 +171,14 @@ class Views::Assessments::CapabilityRadar < Views::Base
 
   # The assessed and next rings' labels first, so they win any clash.
   def ring_label_candidates
-    @shape.codes.each_with_index.drop(1).map do |code, i|
+    ring_levels.map do |code, i|
       { code: code, index: i, role: ring_role(i),
-        y: i == @shape.codes.size - 1 ? -radius_for(i) + 11 : -(radius_for(i) + 3) }
+        y: i == @shape.window.end ? -radius_for(i) + 11 : -(radius_for(i) + 3) }
     end.partition { |label| label[:role] }.flatten
   end
+
+  # A ring per level out from the centre, which is the window's first level met.
+  def ring_levels = @shape.window.drop(1).map { |i| [ @shape.codes[i], i ] }
 
   def ring_suffix(role) = { assessed: @assessed_as, next: "next" }[role]
 

@@ -8,7 +8,7 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
   CAP = Struct.new(:stable_id, :name, keyword_init: true)
   CATEGORY = Struct.new(:category_id, :name, keyword_init: true)
 
-  def shape(groups, levels:, person_level:, statuses: {}, required: [], unrated: [])
+  def shape(groups, levels:, person_level:, statuses: {}, required: [], unrated: [], zoom: :all)
     categories = groups.map do |category_name, caps|
       { category: CATEGORY.new(category_id: "cat-#{category_name}", name: category_name),
         person_level: person_level,
@@ -22,7 +22,7 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
     end
     Assessments::CapabilityShape.new(
       categories: categories, merged_levels: levels, person_level: person_level, context: :self,
-      scoring: { capability_scores: scores, capability_statuses: statuses }
+      scoring: { capability_scores: scores, capability_statuses: statuses }, zoom: zoom
     )
   end
 
@@ -31,6 +31,36 @@ class Views::Assessments::CapabilityRadarTest < ActiveSupport::TestCase
   end
 
   E1_TO_E5 = (1..5).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
+  E1_TO_E8 = (1..8).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
+
+  # How far a spoke's mark sits from the centre, in the radar's own units.
+  def reach(radar, number)
+    line = radar.at_css("[data-radar-spoke='#{number}'] line[stroke-linecap]")
+    Math.hypot(line["x2"].to_f, line["y2"].to_f).round
+  end
+
+  context "zoomed to the assessed level" do
+    setup do
+      @zoomed = shape({ "Craft" => { "Delivery" => 1.0, "Quality" => 2.5, "Testing" => 0.0 } },
+                      levels: E1_TO_E8, person_level: 3, zoom: nil)
+    end
+
+    should "draw the rings from the level below to the level above, with the assessed level halfway out" do
+      radar = render_radar(@zoomed)
+
+      assert_equal %w[E3 E4], radar.css("[data-radar-ring]").map { |r| r["data-radar-ring"] }
+      assert_equal [ "E3 · you", "E4 · next" ], radar.css("[data-radar-ring-label]").map(&:text)
+      assert_equal [ 75, 150, 0 ], [ 1, 2, 3 ].map { |number| reach(radar, number) },
+                   "expected E3 met halfway out, E4 + 50% held at the rim and E2 met at the centre"
+    end
+
+    should "zoom the hero's compact radar the same way" do
+      radar = render_radar(@zoomed, size: :compact)
+
+      assert_equal %w[E3 E4], radar.css("[data-radar-ring]").map { |r| r["data-radar-ring"] }
+      assert_equal 50, reach(radar, 1)
+    end
+  end
 
   context "its structure" do
     should "draw a segment per category, a spoke per capability and a ring per level above the first" do

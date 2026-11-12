@@ -13,7 +13,8 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
 
   # @param groups [Hash{String => Hash{String => Float}}] category name =>
   #   capability name => score on the hero's scale
-  def shape(groups, levels: E1_TO_E5, person_level: 3, rated: true, statuses: {}, extra: {}, category_scores: {})
+  def shape(groups, levels: E1_TO_E5, person_level: 3, rated: true, statuses: {}, extra: {}, category_scores: {},
+            zoom: nil)
     categories = groups.map do |category_name, caps|
       { category: CATEGORY.new(category_id: "cat-#{category_name}", name: category_name),
         person_level: person_level,
@@ -29,8 +30,12 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
                 category_scores: category_scores }
 
     Assessments::CapabilityShape.new(categories: categories, scoring: scoring, merged_levels: levels,
-                                     person_level: person_level, context: :self)
+                                     person_level: person_level, context: :self, zoom: zoom)
   end
+
+  E1_TO_E8 = (1..8).map { |n| { ordinal: n, level_code: "E#{n}" } }.freeze
+
+  def zoomed(zoom = nil) = shape({ "Craft" => { "Delivery" => 1.0 } }, levels: E1_TO_E8, person_level: 3, zoom: zoom)
 
   def point(shape, name) = shape.points.find { |p| p.name == name }
 
@@ -151,6 +156,36 @@ class Assessments::CapabilityShapeTest < ActiveSupport::TestCase
 
       assert_in_delta 0.0, short.reached, 0.001
       assert_equal "60% of PM1", short.label
+    end
+  end
+
+  context "the zoom on a long ladder" do
+    should "open at the assessed level, from the level below met at the centre to the level above at the rim" do
+      assert_equal [ 0.0, 0.0, 0.5, 0.75, 1.0, 1.0 ],
+                   [ 0, 1, 2, 2.5, 3, 5 ].map { |position| zoomed.fraction(position) }
+    end
+
+    should "span the whole ladder when zoomed out" do
+      assert_equal [ 0.0, 0.29, 1.0 ], [ 0, 2, 7 ].map { |position| zoomed(:all).fraction(position).round(2) }
+    end
+
+    should "centre on another level when zoomed to it, keeping two levels in view at either end of the ladder" do
+      assert_equal "E6", zoomed("E6").zoom
+      assert_equal [ 4, 5, 6 ], zoomed("E6").window.to_a
+      assert_equal [ 0, 1, 2 ], zoomed("E1").window.to_a
+      assert_equal [ 5, 6, 7 ], zoomed("E8").window.to_a
+    end
+
+    should "fall back to the assessed level for a level the ladder doesn't have" do
+      assert_equal "E3", zoomed("E11").zoom
+    end
+
+    should "not zoom a ladder of three levels" do
+      short = shape({ "Craft" => { "Delivery" => 1.0 } }, levels: E1_TO_E5.first(3), person_level: 2)
+
+      assert_not short.zoomable?
+      assert_nil short.zoom
+      assert_equal [ 0, 1, 2 ], short.window.to_a
     end
   end
 end
