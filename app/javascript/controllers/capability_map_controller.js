@@ -20,16 +20,12 @@ export default class extends BaseController {
   #focused = null
 
   zoom({ params: { zoom } }) {
-    const frame = this.#frame()
-    if (!frame?.dataset.reloadSrc) return
-
-    frame.src = this.#withZoom(frame.dataset.reloadSrc, zoom)
+    const frame = this.#keepZoom(zoom)
+    if (frame) frame.src = frame.dataset.reloadSrc
   }
 
-  /** Each render of the contents stamps its zoom on the frame's reload source, so a reload after someone else's rating keeps it. */
   viewTargetConnected(view) {
-    const frame = this.#frame()
-    if (frame?.dataset.reloadSrc) frame.dataset.reloadSrc = this.#withZoom(frame.dataset.reloadSrc, view.dataset.zoom)
+    this.#keepZoom(view.dataset.zoom)
   }
 
   light(event) {
@@ -40,14 +36,15 @@ export default class extends BaseController {
     this.#track(event, false)
   }
 
-  #frame() {
-    return this.element.querySelector("turbo-frame[data-reload-src]")
-  }
+  /** Writes the zoom into the content frame's reload source, so a reload after someone else's rating keeps it. */
+  #keepZoom(zoom) {
+    const frame = this.element.querySelector("turbo-frame[data-reload-src]")
+    if (!frame) return null
 
-  #withZoom(src, zoom) {
-    const url = new URL(src, window.location.origin)
+    const url = new URL(frame.dataset.reloadSrc, window.location.origin)
     url.searchParams.set("zoom", zoom)
-    return `${url.pathname}${url.search}`
+    frame.dataset.reloadSrc = `${url.pathname}${url.search}`
+    return frame
   }
 
   /** Hover and focus are tracked apart, so the pointer leaving a focused spoke keeps it lit. */

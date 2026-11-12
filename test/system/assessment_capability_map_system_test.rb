@@ -267,9 +267,27 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
     within(MAP) do
       assert_selector "#{zoom_toggle('PM4')}[aria-pressed='true']:focus"
-      assert_selector "[data-capability-lane='2']", text: "PM1 + 67% to PM2"
       assert_no_selector "[data-radar-ring='PM2']", visible: :all
+      assert_selector "[data-capability-lane='1'] span[style='width: 0.0%']", visible: :all
     end
+  end
+
+  should "keep a level's zoom when someone else's rating lands" do
+    open_map
+    assert_selector "turbo-cable-stream-source[connected]", visible: :all
+    wait_for_stimulus "assessment-sync"
+    wait_for_stimulus "capability-map"
+    click_selector_with_js_fallback("#{MAP} #{zoom_toggle('PM4')}", expect_selector: "#{MAP} [data-radar-ring='PM5']")
+
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @assignment.framework_id, @stable_ids.fetch("Prioritisation"),
+        level_ordinal: 20, frequency: "consistent", cycle_id: @cycle_id
+      )
+    end
+
+    assert_selector "#{MAP} [data-capability-lane='2']", text: "PM2 met", visible: true
+    assert_selector "#{MAP} #{zoom_toggle('PM4')}[aria-pressed='true']", visible: true
   end
 
   should "zoom out to every level from under the radar on a phone, and stay zoomed out when someone else's rating lands" do
@@ -293,6 +311,10 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_selector "#{MAP} [data-capability-lane='2']", text: "PM2 met", visible: true
     assert_selector "#{MAP} #{zoom_toggle('all')}[aria-pressed='true']", visible: true
     assert_selector "#{MAP} [data-radar-ring='PM5']", visible: :all
+
+    click_selector_with_js_fallback("#{MAP} #{zoom_toggle('all')}[aria-pressed='true']",
+                                    expect_selector: "#{MAP} #{zoom_toggle('all')}[aria-pressed='false']")
+    assert_no_selector "#{MAP} [data-radar-ring='PM5']", visible: :all
   end
 
   private
