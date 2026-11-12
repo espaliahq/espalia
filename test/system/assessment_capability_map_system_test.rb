@@ -12,11 +12,12 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   MAP = "##{Views::Assessments::CapabilityMapModal::ID}".freeze
   TRIGGER = "button[data-modal-target-id='#{Views::Assessments::CapabilityMapModal::ID}']".freeze
 
-  # Rated at PM2, the assessed level.
+  # Rated at PM2, the assessed level, except Negotiation.
   CAPABILITIES = {
     "Discovery" => [ "Product sense", "consistent" ],
     "Prioritisation" => [ "Product sense", "occasional" ],
-    "Stakeholders" => [ "Influence", "consistent" ]
+    "Stakeholders" => [ "Influence", "consistent" ],
+    "Negotiation" => [ "Influence", nil ]
   }.freeze
 
   setup do
@@ -68,6 +69,8 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       cycle_handler.define_cycle(cycle_id, framework_id, "H2 Review", "regular", 1, defined_by: @person.id)
       cycle_handler.enroll(cycle_id, @person.id, enrolled_by: @person.id)
       CAPABILITIES.each do |name, (_, frequency)|
+        next unless frequency
+
         pd_handler.rate_self(@person.id, framework_id, @stable_ids.fetch(name),
                              level_ordinal: 20, frequency: frequency, cycle_id: cycle_id)
       end
@@ -87,13 +90,23 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
       within(MAP) do
         assert_text "You at PM2"
-        assert_selector "[data-capability-lane]", count: 3
+        assert_selector "[data-capability-lane]", count: 4
         assert_selector "[data-capability-lane-group]", text: "Influence"
         assert_selector "[data-capability-lane='2']", text: "PM1 + 67% to PM2"
       end
 
       click_selector_with_js_fallback("#{MAP} [data-capability-lane='3']", expect_selector: focused_card("Stakeholders"))
       assert_no_selector MAP, visible: true
+    end
+  end
+
+  should "break the radar's web at an unrated capability, which its lane calls not rated" do
+    open_map
+
+    within(MAP) do
+      assert_selector "[data-capability-lane='4']", text: "Not rated"
+      assert_no_selector "svg polygon[data-radar-web]", visible: :all
+      assert_selector "svg polyline[data-radar-web]", count: 1, visible: :all
     end
   end
 
