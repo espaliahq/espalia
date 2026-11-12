@@ -182,8 +182,8 @@ class AssessmentsController < ApplicationController
   # GET /assessments/:id/capability_map
   #
   # The map's contents as the frame the page reloads when another viewer's
-  # rating arrives, or when the viewer zooms (`?zoom=` a level code, or `all`);
-  # the overlay around it stays mounted, so an open map stays open.
+  # rating arrives, or at another `?zoom=` (a level code, or `all`); the
+  # overlay around it stays mounted, so an open map stays open.
   def capability_map
     authorize @assignment, :scoring?
     load_assessment_data
