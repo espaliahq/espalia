@@ -18,6 +18,9 @@ these files alone. Only the flag overwrites them. Commit the results.
 - **To add a screen,** add a `capture_*` step to the test and an image to the
   README. The test signs in as the right person, sets the 1440×900 @2x
   viewport and the README's Custom theme for you.
+- **Regenerate in the PR that changes a screen.** A PR that adds or changes
+  what one of these screens shows commits fresh images
+  ([issue-delivery.md, ground rule 11](../guidelines/issue-delivery.md#ground-rules)).
 - **Expect pixel churn.** Times ("1s ago"), ratings and which capability a
   piece of feedback lands on change from run to run, so every regeneration
   rewrites every file. Regenerate when the screens change, not routinely.
