@@ -78,31 +78,6 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     sign_in_as(@user)
   end
 
-  def open_map
-    visit assessment_path(@assignment)
-    assert_selector TRIGGER
-    wait_for_stimulus "modal"
-    click_selector_with_js_fallback(TRIGGER, expect_selector: "#{MAP} [data-capability-lane]")
-  end
-
-  # Submits a self-rating through the matrix's own form while the map covers it.
-  def rate_behind_map(name, frequency)
-    stable_id = @stable_ids.fetch(name)
-    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
-    assert_selector "form input[name='rating[capability_stable_id]'][value='#{stable_id}']", visible: :all
-    page.execute_script(<<~JS)
-      [...document.querySelectorAll("form")].find((f) =>
-        f.querySelector("input[name='rating[capability_stable_id]'][value='#{stable_id}']") &&
-        f.querySelector("input[name='rating[level_ordinal]'][value='20']") &&
-        f.querySelector("input[name='rating[frequency]'][value='#{frequency}']") &&
-        !f.querySelector("input[name='rating[confirm]'], input[name='rating[clear]']")).requestSubmit()
-    JS
-  end
-
-  def focused_card(name)
-    "[data-matrix-target='card'][data-capability-stable-id='#{@stable_ids.fetch(name)}'][data-focused='true']"
-  end
-
   [ [ "desktop", DESKTOP_SIZE ], [ "mobile", MOBILE_SIZE ] ].each do |label, size|
     should "open the map from the hero and jump from a lane to its capability on #{label}" do
       page.driver.browser.manage.window.resize_to(*size)
@@ -244,6 +219,31 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   end
 
   private
+
+  def open_map
+    visit assessment_path(@assignment)
+    assert_selector TRIGGER
+    wait_for_stimulus "modal"
+    click_selector_with_js_fallback(TRIGGER, expect_selector: "#{MAP} [data-capability-lane]")
+  end
+
+  # Submits a self-rating through the matrix's own form while the map covers it.
+  def rate_behind_map(name, frequency)
+    stable_id = @stable_ids.fetch(name)
+    assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
+    assert_selector "form input[name='rating[capability_stable_id]'][value='#{stable_id}']", visible: :all
+    page.execute_script(<<~JS)
+      [...document.querySelectorAll("form")].find((f) =>
+        f.querySelector("input[name='rating[capability_stable_id]'][value='#{stable_id}']") &&
+        f.querySelector("input[name='rating[level_ordinal]'][value='20']") &&
+        f.querySelector("input[name='rating[frequency]'][value='#{frequency}']") &&
+        !f.querySelector("input[name='rating[confirm]'], input[name='rating[clear]']")).requestSubmit()
+    JS
+  end
+
+  def focused_card(name)
+    "[data-matrix-target='card'][data-capability-stable-id='#{@stable_ids.fetch(name)}'][data-focused='true']"
+  end
 
   # Retries the block until it returns truthy, failing with the message after Capybara's wait.
   def wait_until(message)
