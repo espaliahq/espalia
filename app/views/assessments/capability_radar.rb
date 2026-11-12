@@ -205,7 +205,8 @@ class Views::Assessments::CapabilityRadar < Views::Base
                 turbo_frame: "_top", controller: "continue-assessing",
                 action: "click->modal#close click->continue-assessing#focus",
                 continue_assessing_capability_stable_id_value: point.stable_id,
-                continue_assessing_level_ordinal_value: @shape.person_level }) do
+                continue_assessing_level_ordinal_value: @shape.person_level,
+                continue_assessing_focus_card_value: true }) do
       hit_x, hit_y = xy(radius + 26, angle(i))
       s.line(x1: 0, y1: 0, x2: hit_x, y2: hit_y, stroke: "transparent", stroke_width: 18)
       rim_x, rim_y = xy(radius, angle(i))

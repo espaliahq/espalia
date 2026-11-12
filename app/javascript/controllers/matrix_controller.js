@@ -1002,7 +1002,7 @@ export default class extends BaseController {
   // don't reload (card-header click, URL deep-link on connect) so
   // the scroll fires on the next animation frame against the current
   // DOM instead of waiting for a frame-load that never arrives.
-  #scrollCardUnderHeader(stableId, { awaitFrameLoad = true } = {}) {
+  #scrollCardUnderHeader(stableId, { awaitFrameLoad = true, focusCard = false } = {}) {
     const frame = awaitFrameLoad
       ? (this.element.closest("turbo-frame") || this.element.querySelector("turbo-frame"))
       : null
@@ -1029,16 +1029,24 @@ export default class extends BaseController {
       window.scrollTo({ top: target, behavior })
     }
 
+    const focus = (card) => {
+      if (!focusCard || card.contains(document.activeElement)) return
+      if (!card.hasAttribute("tabindex")) card.setAttribute("tabindex", "-1")
+      card.focus({ preventScroll: true })
+    }
+
     const scroll = () => {
       const card = findCard()
       if (!card) return
       applyScrollMargin(card)
       scrollTo(card, "smooth")
+      focus(card)
       setTimeout(() => {
         const settled = findCard()
         if (!settled) return
         applyScrollMargin(settled)
         scrollTo(settled, "instant")
+        focus(settled)
       }, 600)
     }
 
@@ -1115,7 +1123,7 @@ export default class extends BaseController {
   // a different turbo frame so direct click->matrix actions can't
   // reach this controller.
   focusUnrated(event) {
-    const { capabilityStableId, levelOrdinal } = event.detail || {}
+    const { capabilityStableId, levelOrdinal, focusCard = false } = event.detail || {}
     if (!capabilityStableId || typeof levelOrdinal !== "number") return
 
     this.currentFocus = {
@@ -1136,7 +1144,7 @@ export default class extends BaseController {
     // to. `#scrollCardUnderHeader` accounts for both the unified and
     // section-header heights and waits for the frame reload before
     // measuring.
-    this.#scrollCardUnderHeader(capabilityStableId)
+    this.#scrollCardUnderHeader(capabilityStableId, { focusCard })
   }
 
   // Clicking a pending-change squiggle (inline diff / ghost entry) opens that

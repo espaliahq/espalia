@@ -130,6 +130,28 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_no_selector MAP, visible: true
   end
 
+  should "move focus to the capability's card after a jump from the map" do
+    open_map
+    page.execute_script(%(document.querySelector("#{MAP} [data-capability-lane='3']").focus()))
+    click_selector_with_js_fallback("#{MAP} [data-capability-lane='3']", expect_selector: focused_card("Stakeholders"))
+
+    assert_selector "#{focused_card('Stakeholders')}:focus"
+  end
+
+  should "show the folded band again while the radar trigger has keyboard focus" do
+    visit assessment_path(@assignment)
+    assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
+    band_height = "Math.round(document.querySelector(\"#{TRIGGER}\").closest('.hero-collapsible').getBoundingClientRect().height)"
+    page.execute_script("window.scrollTo(0, 400)")
+    wait_until("the band folds") { page.evaluate_script(band_height).zero? }
+
+    page.execute_script("document.querySelector(\"#{TRIGGER}\").focus()")
+    wait_until("the band unfolds") { page.evaluate_script(band_height).positive? }
+
+    page.execute_script("document.querySelector(\"#{TRIGGER}\").blur()")
+    wait_until("the band folds again") { page.evaluate_script(band_height).zero? }
+  end
+
   should "stay open, and update, when a rating lands while the map is open" do
     open_map
     assert_selector "#{MAP} [data-capability-lane='2']", text: "PM1 + 67% to PM2"
@@ -219,5 +241,12 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
 
     spoke_event.call("focusout", "FocusEvent")
     assert_no_selector "#{MAP} [data-hot='true']"
+  end
+
+  private
+
+  # Retries the block until it returns truthy, failing with the message after Capybara's wait.
+  def wait_until(message)
+    page.document.synchronize { yield || raise(Capybara::ExpectationNotMet, "timed out waiting until #{message}") }
   end
 end

@@ -139,7 +139,8 @@ class Views::Assessments::CapabilityMapModal < Views::Base
               turbo_frame: "_top", controller: "continue-assessing",
               action: "click->modal#close click->continue-assessing#focus",
               continue_assessing_capability_stable_id_value: point.stable_id,
-              continue_assessing_level_ordinal_value: @shape.person_level }) do
+              continue_assessing_level_ordinal_value: @shape.person_level,
+              continue_assessing_focus_card_value: true }) do
       span(class: "flex min-w-0 items-center gap-2") do
         span(class: "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold #{Components::Kit::Tag::CATEGORIES.fetch(point.hue)}") do
           point.number.to_s
