@@ -1,5 +1,6 @@
 /**
- * Lights every element sharing a `data-capability-map-key` while one is pointed at or focused.
+ * Lights every element sharing a `data-capability-map-key` while one is pointed at or focused,
+ * and zooms the map by reloading its content frame at another `zoom`.
  *
  * @example
  * <div data-controller="capability-map"
@@ -13,8 +14,23 @@
 import BaseController from "controllers/base_controller"
 
 export default class extends BaseController {
+  static targets = ["view"]
+
   #hovered = null
   #focused = null
+
+  zoom({ params: { zoom } }) {
+    const frame = this.#frame()
+    if (!frame?.dataset.reloadSrc) return
+
+    frame.src = this.#withZoom(frame.dataset.reloadSrc, zoom)
+  }
+
+  /** Each render of the contents stamps its zoom on the frame's reload source, so a reload after someone else's rating keeps it. */
+  viewTargetConnected(view) {
+    const frame = this.#frame()
+    if (frame?.dataset.reloadSrc) frame.dataset.reloadSrc = this.#withZoom(frame.dataset.reloadSrc, view.dataset.zoom)
+  }
 
   light(event) {
     this.#track(event, true)
@@ -22,6 +38,16 @@ export default class extends BaseController {
 
   dim(event) {
     this.#track(event, false)
+  }
+
+  #frame() {
+    return this.element.querySelector("turbo-frame[data-reload-src]")
+  }
+
+  #withZoom(src, zoom) {
+    const url = new URL(src, window.location.origin)
+    url.searchParams.set("zoom", zoom)
+    return `${url.pathname}${url.search}`
   }
 
   /** Hover and focus are tracked apart, so the pointer leaving a focused spoke keeps it lit. */

@@ -33,13 +33,14 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   # @param whose [String, nil] the assessee's name; nil when the viewer is the assessee
   # @param part [Symbol] see {#initialize}
   # @param src [String, nil] where the content frame reloads from
+  # @param zoom [String, Symbol, nil] see `Assessments::CapabilityShape#initialize`
   # @return [Views::Assessments::CapabilityMapModal]
-  def self.for(matrix_data:, scoring:, context:, whose: nil, part: :modal, src: nil)
+  def self.for(matrix_data:, scoring:, context:, whose: nil, part: :modal, src: nil, zoom: nil)
     code = matrix_data[:merged_levels].find { |l| l[:ordinal] == matrix_data[:person_level] }&.dig(:level_code)
     new(
       shape: Assessments::CapabilityShape.new(
         categories: matrix_data[:categories], scoring: scoring, merged_levels: matrix_data[:merged_levels],
-        person_level: matrix_data[:person_level], context: context
+        person_level: matrix_data[:person_level], context: context, zoom: zoom
       ),
       subject: "#{whose || 'You'} at #{code}", assessed_as: whose ? "assessed" : "you", part: part, src: src
     )
@@ -85,9 +86,11 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     p(class: "text-sm text-muted -mt-1 mb-4") do
       "#{@subject}. #{how_to_read} Open a capability from its spoke or its lane."
     end
-    div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start") do
+    div(class: "grid gap-6 lg:grid-cols-[minmax(20rem,29rem)_minmax(0,1fr)] lg:items-start",
+        data: { capability_map_target: "view", zoom: @shape.zoom || "all" }) do
       div(class: "mx-auto w-full max-w-sm lg:sticky lg:top-0 lg:max-w-none") do
         render Views::Assessments::CapabilityRadar.new(shape: @shape, size: :detailed, assessed_as: @assessed_as)
+        zoom_out_toggle if @shape.zoomable?
       end
       div { lanes }
     end
@@ -96,7 +99,25 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   def how_to_read
     return "The radar's rim is #{@shape.codes.first} met." if @shape.codes.one?
 
-    "At the radar's centre is #{@shape.codes.first} met, and each ring is the next level."
+    centre, rim = @shape.codes.values_at(@shape.window.begin, @shape.window.end)
+    rim_note = ", up to #{rim} at the rim" if @shape.zoom
+    "At the radar's centre is #{centre} met, and each ring is the next level#{rim_note}."
+  end
+
+  # Pressed while the whole ladder shows; pressing it again returns to the
+  # assessed level. The one zoom control on a phone, where the headings hide.
+  def zoom_out_toggle
+    div(class: "mt-2") do
+      zoom_toggle("All levels", pressed: @shape.zoom.nil?, to: @shape.zoom ? "all" : @shape.codes[@shape.assessed_index],
+                                key: "all")
+    end
+  end
+
+  # A level toggle zooms to its level; pressed, it zooms back out.
+  def zoom_toggle(label, pressed:, to:, key:)
+    render Components::Kit::Chip.new(label, pressed: pressed, size: :sm,
+                                            data: { action: "capability-map#zoom", capability_map_zoom_param: to,
+                                                    refresh_focus: "zoom-#{key}" })
   end
 
   def lanes
@@ -113,14 +134,31 @@ class Views::Assessments::CapabilityMapModal < Views::Base
   end
 
   def axis
-    div(class: "#{LANE_COLUMNS} px-2 text-[11px] text-muted", aria: { hidden: "true" }) do
+    div(class: "#{LANE_COLUMNS} items-center px-2 text-[11px] text-muted") do
       span(class: "hidden sm:block")
-      div(class: "relative hidden h-4 sm:block") do
-        @shape.codes.each_with_index do |code, i|
-          span(class: [ "absolute -translate-x-1/2 tabular-nums", axis_tone(i) ], style: "left: #{left(i)}") { code }
+      @shape.zoomable? ? level_toggles : level_labels
+      span(class: "col-start-2 text-right sm:col-start-3") { "Level reached" }
+    end
+  end
+
+  def level_labels
+    div(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
+      @shape.window.each do |i|
+        span(class: [ "absolute -translate-x-1/2 tabular-nums", axis_tone(i) ], style: "left: #{left(i)}") do
+          @shape.codes[i]
         end
       end
-      span(class: "col-start-2 text-right sm:col-start-3") { "Level reached" }
+    end
+  end
+
+  def level_toggles
+    div(class: "relative hidden h-6 sm:block", role: "group", aria: { label: "Zoom the map to a level" }) do
+      @shape.window.each do |i|
+        code = @shape.codes[i]
+        span(class: "absolute -translate-x-1/2", style: "left: #{left(i)}") do
+          zoom_toggle(code, pressed: code == @shape.zoom, to: code == @shape.zoom ? "all" : code, key: code)
+        end
+      end
     end
   end
 
@@ -159,7 +197,7 @@ class Views::Assessments::CapabilityMapModal < Views::Base
     span(class: "relative hidden h-4 sm:block", aria: { hidden: "true" }) do
       span(class: "absolute inset-y-0 rounded-sm bg-overlay-muted",
            style: "left: #{left(@shape.assessed_index)}; width: #{width_of_next_band}")
-      @shape.codes.each_index do |i|
+      @shape.window.each do |i|
         span(class: "absolute inset-y-0.5 w-px bg-(--gos-border-subtle)", style: "left: #{left(i)}")
       end
       span(class: "absolute inset-x-0 top-[7px] h-0.5 rounded-full bg-neutral-subtle")

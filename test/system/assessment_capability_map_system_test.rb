@@ -3,8 +3,8 @@
 require "application_system_test_case"
 
 # The capability radar in the hero, and the map it opens, on a framework
-# shaped nothing like the default: two categories, a ladder with its own codes
-# and a gap between ordinals.
+# shaped nothing like the default: two categories, a ladder with its own codes,
+# a gap between ordinals and one level more than the map zooms to.
 class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
   DESKTOP_SIZE = [ 1400, 1400 ].freeze
   MOBILE_SIZE  = [ 375, 812 ].freeze
@@ -37,7 +37,7 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
       role_id = SecureRandom.uuid_v7
       handler.add_role_family(framework_id, rf_id, "Product")
       handler.add_role(framework_id, role_id, rf_id, "Product Manager", "PM", "ic")
-      levels = { 10 => "PM1", 20 => "PM2", 40 => "PM4" }
+      levels = { 10 => "PM1", 20 => "PM2", 40 => "PM4", 50 => "PM5" }
       level_ids = levels.to_h { |ordinal, _| [ ordinal, SecureRandom.uuid_v7 ] }
       levels.each_with_index do |(ordinal, code), i|
         handler.add_level(framework_id, level_ids[ordinal], role_id, ordinal, "Level #{code}", code, is_entry: i.zero?)
@@ -253,7 +253,51 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_no_selector "#{MAP} [data-hot='true']"
   end
 
+  should "zoom the radar and bars to a level picked above the lanes, keeping focus on its toggle" do
+    open_map
+    wait_for_stimulus "capability-map"
+    within(MAP) do
+      assert_selector "[data-radar-ring]", count: 2, visible: :all
+      assert_no_selector "[data-radar-ring='PM5']", visible: :all
+      assert_selector "#{zoom_toggle('PM2')}[aria-pressed='true']"
+    end
+
+    page.execute_script(%(document.querySelector("#{MAP} #{zoom_toggle('PM4')}").focus()))
+    click_selector_with_js_fallback("#{MAP} #{zoom_toggle('PM4')}", expect_selector: "#{MAP} [data-radar-ring='PM5']")
+
+    within(MAP) do
+      assert_selector "#{zoom_toggle('PM4')}[aria-pressed='true']:focus"
+      assert_selector "[data-capability-lane='2']", text: "PM1 + 67% to PM2"
+      assert_no_selector "[data-radar-ring='PM2']", visible: :all
+    end
+  end
+
+  should "zoom out to every level from under the radar on a phone, and stay zoomed out when someone else's rating lands" do
+    page.driver.browser.manage.window.resize_to(*MOBILE_SIZE)
+    open_map
+    assert_selector "turbo-cable-stream-source[connected]", visible: :all
+    wait_for_stimulus "assessment-sync"
+    wait_for_stimulus "capability-map"
+    assert_no_selector "#{MAP} #{zoom_toggle('PM2')}", visible: true
+
+    click_selector_with_js_fallback("#{MAP} #{zoom_toggle('all')}", expect_selector: "#{MAP} [data-radar-ring='PM5']")
+    assert_selector "#{MAP} #{zoom_toggle('all')}[aria-pressed='true']", visible: true
+
+    ActsAsTenant.with_tenant(@tenant) do
+      PersonDevelopment::CommandHandler.new.rate_self(
+        @person.id, @assignment.framework_id, @stable_ids.fetch("Prioritisation"),
+        level_ordinal: 20, frequency: "consistent", cycle_id: @cycle_id
+      )
+    end
+
+    assert_selector "#{MAP} [data-capability-lane='2']", text: "PM2 met", visible: true
+    assert_selector "#{MAP} #{zoom_toggle('all')}[aria-pressed='true']", visible: true
+    assert_selector "#{MAP} [data-radar-ring='PM5']", visible: :all
+  end
+
   private
+
+  def zoom_toggle(key) = "[data-refresh-focus='zoom-#{key}']"
 
   def open_map
     visit assessment_path(@assignment)
