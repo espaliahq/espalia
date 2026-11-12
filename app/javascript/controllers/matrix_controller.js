@@ -1046,7 +1046,7 @@ export default class extends BaseController {
         if (!settled) return
         applyScrollMargin(settled)
         scrollTo(settled, "instant")
-        focus(settled)
+        if (!document.activeElement || document.activeElement === document.body) focus(settled)
       }, 600)
     }
 

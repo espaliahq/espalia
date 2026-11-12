@@ -113,6 +113,16 @@ class AssessmentCapabilityMapSystemTest < ApplicationSystemTestCase
     assert_selector "#{focused_card('Stakeholders')}:focus"
   end
 
+  should "leave focus where the reader moves it straight after a jump from the map" do
+    open_map
+    click_selector_with_js_fallback("#{MAP} [data-capability-lane='3']", expect_selector: "#{focused_card('Stakeholders')}:focus")
+    page.execute_script("document.querySelector(\"#{TRIGGER}\").focus()")
+
+    # Past the matrix's settle pass, which once took focus back to the card.
+    sleep 1
+    assert_selector "#{TRIGGER}:focus", visible: :all
+  end
+
   should "show the folded band again while the radar trigger has keyboard focus" do
     visit assessment_path(@assignment)
     assert_selector "turbo-frame#assessment-scoring[complete]", visible: :all
