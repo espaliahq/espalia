@@ -124,8 +124,9 @@ names the succession and its successors, and its members move rather than leave:
   date, so they appear in the "in no team" tray for someone to place. The handler never
   guesses.
 - **Placements are not stored on the structure events.** They are ordinary membership
-  commands issued with the split, sharing its cause. The split screen (5.6) and applying
-  a plan (7.3) supply the names.
+  commands issued with the split, sharing its cause. The split step in the unit drawer
+  (5.6, [#138](https://github.com/espaliahq/espalia/issues/138)) and applying a plan
+  (7.3) supply the names. The drawer's step lists who will be in no team before it applies.
 
 A plan applies a succession through `OrgGraph::StructureCommandHandler#apply_succession`,
 built with the approval as its `cause_id:`. In one transaction it moves the people the plan
