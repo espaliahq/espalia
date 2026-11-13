@@ -2,7 +2,7 @@
 
 # Custom error hierarchy for HiBob API interactions.
 #
-# Used by {Hris::Hibob::Client} and handled by {HrisSyncJob}
+# Raised by {Hris::Hibob::Client} and {Hris::Hibob::Adapter}, and handled by {HrisSyncJob}
 # for retry/discard decisions.
 #
 module Hris::Hibob::Errors
