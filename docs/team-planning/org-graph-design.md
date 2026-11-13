@@ -539,8 +539,9 @@ Someone can state the succession. The screen says which kind each field is.
   the one it has. A new parent is written only when two syncs in a row read the same
   one; the first reading waits in `hris_unit_parent_proposals`.
 - **Brakes.** Ended memberships and retired units each stop at the absence brake people
-  have: more than 10% and more than five, and none of that kind is written. A sync that
-  can't read the field lists mirrors nothing.
+  have: more than 10% and more than five, and none of that kind is written. The members a
+  retiring unit still holds count as ended memberships, so a tripped membership brake
+  holds those retirements back too. A sync that can't read the field lists mirrors nothing.
 - **One cause per change.** Each unit change and each person's membership change is its
   own correlation, written by SYSTEM with the HRIS as provider and dated the sync's day.
 

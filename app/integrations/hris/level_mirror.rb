@@ -23,7 +23,8 @@
 #
 # Retirements and ended memberships each have their own brake, as
 # {Hris::BaseAdapter::ABSENCE_BRAKE} has for people: over it, none of that
-# kind is written and the result says why.
+# kind is written and the result says why. A retiring unit's members count
+# as ended memberships.
 #
 # Every unit-level change and every person's membership change is its own
 # cause, written by SYSTEM with the HRIS as provider, dated the sync's day.
@@ -72,8 +73,9 @@ class Hris::LevelMirror
     @read_parents = Set.new
     plans.each { |level_plan| mirror_units(level_plan) }
     forget_unread_parents
-    write_memberships(plans)
-    retire_units(plans)
+    retiring = retiring_units(plans)
+    retiring = [] unless write_memberships(plans, retiring)
+    retire_units(plans, retiring)
   end
 
   private
@@ -195,13 +197,21 @@ class Hris::LevelMirror
     @proposals.reject { |unit_id, _| @read_parents.include?(unit_id) }.each_key { |unit_id| @proposals.delete(unit_id).destroy! }
   end
 
-  def write_memberships(plans)
+  # A retiring unit's remaining members are ended with it, so they count
+  # against the brake too, and a tripped brake holds those retirements back.
+  #
+  # @return [Boolean] false when the brake held the endings back
+  def write_memberships(plans, retiring)
     changes = plans.flat_map { |level_plan| membership_changes(level_plan) }
     ends, others = changes.partition { |change| change[:action] == :end }
-    held = OrgMembership.where(provider: @provider, unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).count
-    ends = [] if braked?(ends.size, held, "memberships would end", "no membership was ended")
+    moved_out = others.filter_map { |change| change[:person].id if change[:action] == :move }
+    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).where.not(person_id: moved_out).count
+    held = OrgMembership.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).count
+    braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
+    ends = [] if braked
 
     (others + ends).each { |change| write_membership(change) }
+    !braked
   end
 
   def membership_changes(level_plan)
@@ -237,10 +247,15 @@ class Hris::LevelMirror
     @result[:errors] << { person_id: person_id, error: e.message }
   end
 
-  def retire_units(plans)
-    retiring = plans.reverse.flat_map do |level_plan|
+  def retiring_units(plans)
+    plans.reverse.flat_map do |level_plan|
       @units.fetch(level_plan.level.id).values.reject { |unit| kept?(level_plan, unit) }
     end
+  end
+
+  def retire_units(plans, retiring)
+    return if retiring.empty?
+
     live = plans.sum { |level_plan| @units.fetch(level_plan.level.id).size }
     return if braked?(retiring.size, live, "mirrored units would retire", "no unit was retired")
 

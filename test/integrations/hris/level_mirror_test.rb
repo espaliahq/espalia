@@ -215,13 +215,26 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_match(/memberships would end/, result[:errors].sole[:error])
     end
 
+    should "retire no unit whose retirement would end more memberships than the brake allows" do
+      crowd = Array.new(8) { |index| recorded_person("hb-crowd-#{index}") }
+      mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
+      @catalogue[1] = team_field(%w[t2 Search])
+
+      result = mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
+
+      assert OrgUnit.live.exists?(external_ref: "work.department/t1")
+      assert(crowd.all? { team_membership(it) })
+      assert_match(/8 of 16 memberships would end/, result[:errors].sole[:error])
+    end
+
     should "retire no unit when more would retire than the brake allows" do
       @catalogue[1] = team_field(*Array.new(8) { |index| [ "t#{index}", "Team #{index}" ] })
-      mirror(Array.new(8) { |index| [ recorded_person("hb-team-#{index}"), { division: "d1", team: "t#{index}" } ] }.to_h)
+      people = Array.new(8) { |index| recorded_person("hb-team-#{index}") }
+      mirror(people.each_with_index.to_h { |person, index| [ person, { division: "d1", team: "t#{index}" } ] })
       @catalogue[1] = team_field(%w[t99 Other])
-      result = mirror({})
+      result = mirror(people.to_h { [ it, { division: "d1", team: "t99" } ] })
 
-      assert_equal 8, OrgUnit.live.where(level_id: @team).count
+      assert_equal 8, OrgUnit.live.where(level_id: @team).where.not(external_ref: "work.department/t99").count
       assert_match(/mirrored units would retire/, result[:errors].sole[:error])
     end
   end
