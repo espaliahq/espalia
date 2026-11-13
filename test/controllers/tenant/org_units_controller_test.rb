@@ -48,6 +48,13 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert_includes drawer.text, "No one owns this unit yet."
     end
 
+    should "offer as parents only the units a level above" do
+      get edit_tenant_org_unit_path(@org[:platform])
+
+      assert_equal [ "None (top level)", "Engineering" ],
+                   drawer.css("select#org-unit-parent option").map(&:text).map(&:strip)
+    end
+
     should "show an HRIS unit's name and parent as read-only, naming the provider" do
       ActsAsTenant.with_tenant(@tenant) do
         OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)

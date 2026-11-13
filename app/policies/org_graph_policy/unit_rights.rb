@@ -27,14 +27,16 @@ class OrgGraphPolicy::UnitRights
   # @return [Boolean]
   def add_members? = @policy.edit_unit?(@unit)
 
-  # Where the unit may move: any live unit outside its own subtree that the
-  # viewer may put a unit under.
+  # Where the unit may move: any live unit at a higher level, outside its own
+  # subtree, that the viewer may put a unit under.
   #
   # @return [Array<OrgUnit>] in tree order
   def parent_choices
     @parent_choices ||= begin
       subtree = [ @unit, *@overview.descendants_of(@unit) ]
-      @overview.in_tree_order.reject { |unit| subtree.include?(unit) }.select { |unit| @policy.create_unit?(unit) }
+      @overview.in_tree_order.select do |unit|
+        above?(unit) && subtree.exclude?(unit) && @policy.create_unit?(unit)
+      end
     end
   end
 
@@ -57,4 +59,10 @@ class OrgGraphPolicy::UnitRights
       unit != @unit && @policy.move_membership?(membership.person, @unit, unit)
     end
   end
+
+  private
+
+  def above?(unit) = level_index(unit) < level_index(@unit)
+
+  def level_index(unit) = @overview.levels.index { |level| level.id == unit.level_id }
 end
