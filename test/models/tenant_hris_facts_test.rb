@@ -54,4 +54,15 @@ class TenantHrisFactsTest < ActiveSupport::TestCase
       assert_equal "espalia", providers["title"]
     end
   end
+
+  should "keep the saved settings when claiming fails" do
+    failing = Object.new
+    def failing.claim_facts(*, **) = raise("stream unavailable")
+
+    OrgGraph::StructureCommandHandler.stub(:new, failing) do
+      @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true }, service_user_id: "user", api_token: "token")
+    end
+
+    assert_equal "hibob", @tenant.reload.hris_config.provider
+  end
 end

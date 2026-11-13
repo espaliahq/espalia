@@ -37,4 +37,18 @@ class OrgGraphClaimHrisFactsTaskTest < ActiveSupport::TestCase
     assert_equal events.size, Rails.configuration.event_store.read.of_type(OrgGraph::Events::FactProviderSet).count
     assert(events.all? { |event| event.metadata[:acting_via] == "system" })
   end
+
+  should "report a tenant that fails and still claim for the others" do
+    other = create(:tenant, :with_hibob_config)
+    real = Tenant.instance_method(:claim_hris_facts!)
+    connected_id = @connected.id
+    Tenant.define_method(:claim_hris_facts!) { id == connected_id ? raise("stream unavailable") : real.bind_call(self) }
+
+    out = run_task
+
+    assert_match "[#{@connected.id}] failed: RuntimeError: stream unavailable", out
+    assert_equal "hibob", provider_for(other, "manager")
+  ensure
+    Tenant.define_method(:claim_hris_facts!, real)
+  end
 end

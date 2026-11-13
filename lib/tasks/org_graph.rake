@@ -10,6 +10,11 @@ namespace :org_graph do
 
           claimed = tenant.claim_hris_facts!
           puts "[#{tenant.id}] #{claimed.any? ? "claimed #{claimed.join(", ")}" : "nothing new to claim"}"
+        rescue => e
+          # One tenant's stream must not block a deploy for every tenant. Its
+          # sync reports each refused person until a later run or save claims.
+          Rails.error.report(e, handled: true, context: { tenant_id: tenant.id })
+          puts "[#{tenant.id}] failed: #{e.class}: #{e.message}"
         end
       end
     end

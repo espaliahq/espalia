@@ -258,7 +258,7 @@ class Tenant < ApplicationRecord
       )
       save!
     end
-    claim_hris_facts!
+    claim_hris_facts_after_save
   end
 
   # Hands the HRIS the person facts it supplies by default
@@ -426,6 +426,14 @@ class Tenant < ApplicationRecord
   end
 
   private
+
+  # The settings are saved by now, so a failed claim is reported rather than
+  # raised; predeploy and the next save claim again.
+  def claim_hris_facts_after_save
+    claim_hris_facts!
+  rescue => e
+    Rails.error.report(e, handled: true, context: { tenant_id: id })
+  end
 
   def custom_domain_is_not_the_instance_host
     return if custom_domain.blank?
