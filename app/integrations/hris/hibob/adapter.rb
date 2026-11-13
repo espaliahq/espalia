@@ -155,10 +155,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # HiBob marks a leaver `isActive: false`; a hire yet to start is active.
+  # An empty response would protect nobody, so it raises instead.
   #
   # @return [Array<String>]
+  # @raise [Hris::Hibob::Errors::UnexpectedResponseError] when HiBob returns no one
   def active_external_ids
-    fetch_employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
+    employees = fetch_employees
+    unexpected!("returned no employees") if employees.blank?
+
+    employees.reject { it["isActive"] == false }.filter_map { it["id"].presence&.to_s }
   end
 
   # A bare custom-column id, the form stored before the picker, as its path.
@@ -338,7 +343,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       return nil
     end
     unless person
-      person = Person.find_by(email: attrs[:email])
+      person = Person.where(forgotten_at: nil).find_by(email: attrs[:email]) if attrs[:email].present?
       if person&.external_id.present?
         result[:errors] << {
           external_id: attrs[:external_id],
@@ -466,9 +471,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # A forgotten person comes back only as a new record, and only once they
-  # are back at work: neither a leaver nor a hire yet to start is recorded.
+  # are back at work: neither a leaver, a hire yet to start, nor one with no
+  # start date is recorded.
   def back_at_work?(attrs, started_on)
-    org_graph_status(attrs[:status], started_on, Date.current) == "employed"
+    started_on.present? && org_graph_status(attrs[:status], started_on, Date.current) == "employed"
   end
 
   # HiBob marks a hire active before they start, so a start date still ahead

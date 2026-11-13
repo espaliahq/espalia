@@ -43,6 +43,26 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_nil Person.find_by(external_id: "bob-001")
     end
 
+    should "stay skipped while HiBob holds no start date for them" do
+      forget_row("bob-001")
+      @employees.find { it["id"] == "bob-001" }["work"].delete("startDate")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_nil Person.find_by(external_id: "bob-001")
+    end
+
+    should "not be adopted by a new hire whose email HiBob leaves blank" do
+      forgotten = forget_row("bob-003")
+      @employees.find { it["id"] == "bob-001" }["email"] = nil
+
+      build_adapter(@employees).sync_people
+
+      assert_nil forgotten.reload.external_id
+      assert_nil forgotten.email
+    end
+
     should "come back as a new person, unlinked from the forgotten one, once back at work" do
       forgotten = forget_row("bob-001")
 
@@ -85,6 +105,10 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
 
       assert_equal ids - inactive, build_adapter(@fixture["employees"]).active_external_ids
       assert_not_empty inactive
+    end
+
+    should "refuse an empty response, which would spare nobody" do
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) { build_adapter([]).active_external_ids }
     end
   end
 
