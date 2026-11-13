@@ -99,6 +99,24 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       )
       assert_includes client.default_fields, "work.customColumns.column_test_id"
     end
+
+    should "request a level field stored as its path unchanged" do
+      client = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t",
+                                       level_field_id: "work.customColumns.column_test_id")
+
+      assert_equal 1, client.default_fields.count("work.customColumns.column_test_id")
+    end
+  end
+
+  context ".field_path" do
+    should "prefix a bare custom-column id and keep a path or a blank" do
+      assert_equal "work.customColumns.column_1", Hris::Hibob::Client.field_path("column_1")
+      assert_equal "work.department", Hris::Hibob::Client.field_path("work.department")
+      assert_nil Hris::Hibob::Client.field_path("")
+      assert_nil Hris::Hibob::Client.field_path(nil)
+      assert_equal "/work/title", Hris::Hibob::Client.field_path("/work/title")
+      assert_equal "employeeLevel", Hris::Hibob::Client.field_path("employeeLevel")
+    end
   end
 
   context "#get_fields" do

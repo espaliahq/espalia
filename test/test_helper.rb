@@ -7,6 +7,7 @@ require_relative "support/explorer_write_stream_assertions"
 require_relative "support/out_of_scope_ratings"
 require_relative "support/role_lens_fixture"
 require_relative "support/feedback_exchange_producer_helpers"
+require_relative "support/offline_hibob"
 
 OmniAuth.config.test_mode = true
 OmniAuth.config.logger = Rails.logger

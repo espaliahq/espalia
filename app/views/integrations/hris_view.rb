@@ -4,7 +4,7 @@
 #
 # Four sections rendered as cards:
 #  1. Configuration — provider, credential presence, sync enable flag,
-#     custom level column id, last sync timestamp, and a "Sync now" button.
+#     level field, last sync timestamp, and a "Sync now" button.
 #  2. Unmapped titles — HRIS titles no mapping covers, each with a "Map…"
 #     action (#436). The sync skips these people without a word, so this
 #     card is the only place the gap shows.
@@ -39,13 +39,14 @@ class Views::Integrations::HrisView < Views::Base
   #   titles, and whether a level column is configured — see
   #   {Views::Integrations::HrisMappingModal}
   # @param can_edit_mappings [Boolean]
+  # @param hris_connected [Boolean] whether the level field picker can read the HRIS
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_secrets_stored:, person_rows:, role_mapping_rows:,
                  form_config: nil, can_edit_connection: false, errors: [],
                  unmapped_titles: [], mapping_options: {}, can_edit_mappings: false,
-                 user: nil, current_tenant: nil, tenants: [])
+                 hris_connected: false, user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_secrets_stored = hris_secrets_stored
     @form_config = form_config || hris_config
@@ -56,6 +57,7 @@ class Views::Integrations::HrisView < Views::Base
     @unmapped_titles = unmapped_titles
     @mapping_options = mapping_options
     @can_edit_mappings = can_edit_mappings
+    @hris_connected = hris_connected
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -124,7 +126,7 @@ class Views::Integrations::HrisView < Views::Base
       { term: "Sync enabled", detail: yes_no(@hris_config.sync_enabled?) },
       { term: "Last synced", detail: last_synced_label },
       { term: "Credentials", detail: yes_no(@hris_secrets_stored["service_user_id"] && @hris_secrets_stored["api_token"]) },
-      { term: "Level column id", detail: @hris_config.level_field_id.presence || "\u2014" },
+      { term: "Level field", detail: @hris_config.level_field_id.presence || "\u2014" },
       { term: "Webhook secret", detail: yes_no(@hris_secrets_stored["webhook_secret"]) }
     ]
   end
@@ -175,10 +177,7 @@ class Views::Integrations::HrisView < Views::Base
             secret_field(:webhook_secret, "Webhook secret", stored: @hris_secrets_stored["webhook_secret"],
                          empty_placeholder: "Paste the value from the HRIS",
                          hint: "Verifies inbound HRIS webhooks. Only needed when the HRIS sends them.")
-            text_field(:level_field_id, "Level column id", value: @form_config.level_field_id,
-                       placeholder: "column_1234567890123",
-                       hint: "The HRIS custom column holding each person's level ordinal. " \
-                             "Leave blank when titles carry their level in the role mappings.")
+            level_field
             switch_field(:sync_enabled, "Sync enabled", @form_config.sync_enabled?,
                          hint: "While on, the recurring sync imports people, roles and levels from the HRIS.")
 
@@ -203,6 +202,21 @@ class Views::Integrations::HrisView < Views::Base
         plain "The stored credentials are removed and the sync stops. " \
               "The provider, role mappings and level column stay, so a reconnect only needs new credentials."
       end
+    end
+  end
+
+  # The frame is asked for the value in the form, not the stored one, so a
+  # rejected save keeps the field the admin chose.
+  def level_field
+    current = @form_config.level_field_id
+    if @hris_connected
+      render Views::Integrations::HrisLevelFieldFrame.new(
+        current:, src: tenant_hris_level_field_path(current: current.to_s)
+      )
+    else
+      render Views::Integrations::HrisLevelFieldFrame.new(
+        current:, problem: Views::Integrations::HrisLevelFieldFrame::NOT_CONNECTED
+      )
     end
   end
 

@@ -27,7 +27,7 @@ class HrisSyncJob < ApplicationJob
   def perform(tenant)
     return unless tenant.hris_config.configured?(tenant)
 
-    adapter = resolve_adapter(tenant)
+    adapter = Hris::BaseAdapter.for(tenant, correlation_id: job_id)
     result = adapter.sync_people
 
     Rails.logger.info(
@@ -52,21 +52,5 @@ class HrisSyncJob < ApplicationJob
     return if skipped.empty?
 
     Rails.logger.warn("[HrisSyncJob] Assignments skipped for tenant #{tenant.id}: #{skipped.join(' ')}")
-  end
-
-  # Resolves the correct adapter based on the tenant's HRIS provider.
-  #
-  # Passes this job's `job_id` as the adapter's correlation id so every
-  # event the sync emits shares one traceable id (see {AuditMetadata}).
-  #
-  # @param tenant [Tenant]
-  # @return [Integrations::Hris::BaseAdapter]
-  def resolve_adapter(tenant)
-    case tenant.hris_config.provider
-    when "hibob"
-      Hris::Hibob::Adapter.new(tenant, correlation_id: job_id)
-    else
-      raise "Unknown HRIS provider: #{tenant.hris_config.provider}"
-    end
   end
 end
