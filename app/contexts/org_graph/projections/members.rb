@@ -16,7 +16,7 @@ class OrgGraph::Projections::Members
 
   # @return [Array<Class>]
   def self.handled_events
-    [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ]
+    [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -32,11 +32,18 @@ class OrgGraph::Projections::Members
       case event
       when OrgGraph::Events::MembershipSet then handle_membership_set(event.data)
       when OrgGraph::Events::MembershipEnded then OrgMembership.where(event.data.slice(:person_id, :unit_id)).delete_all
+      when OrgGraph::Events::MembershipMoved then handle_membership_moved(event.data)
       end
     end
   end
 
   private
+
+  def handle_membership_moved(data)
+    OrgMembership.where(person_id: data[:person_id], unit_id: data[:from_unit_id]).delete_all
+    OrgMembership.find_or_initialize_by(data.slice(:person_id, :unit_id))
+                 .update!(**data.slice(:allocation, :role, :provider, :effective_on), member_since: data[:effective_on])
+  end
 
   def handle_membership_set(data)
     membership = OrgMembership.find_or_initialize_by(data.slice(:person_id, :unit_id))

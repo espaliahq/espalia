@@ -101,6 +101,40 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ], stream_events.drop(1).map(&:class)
     end
 
+    should "move a membership to another unit as one event, keeping its terms" do
+      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **PROVENANCE)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01", moved_by_id: @person_id)
+      moved = stream_events.last
+
+      assert_kind_of OrgGraph::Events::MembershipMoved, moved
+      assert_equal [ @squad, @retired, 0.5, "Engineer", "hibob", "2026-12-01" ],
+                   moved.data.values_at(:from_unit_id, :unit_id, :allocation, :role, :provider, :effective_on)
+      assert_raises(RuntimeError, match: /Not a member/) { @handler.end_membership(@person_id, @squad, **PROVENANCE) }
+    end
+
+    should "end the old membership instead when the person is already in the destination" do
+      @handler.set_membership(@person_id, @squad, **PROVENANCE)
+      @handler.set_membership(@person_id, @retired, allocation: 0.3, **PROVENANCE)
+      @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-12-01")
+
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
+      assert_equal @squad, stream_events.last.data[:unit_id]
+    end
+
+    should "refuse a move to a missing unit, the same unit, or before the membership began" do
+      @handler.set_membership(@person_id, @squad, **PROVENANCE)
+
+      assert_raises(RuntimeError, match: /Unit not found/) do
+        @handler.move_membership(@person_id, @squad, SecureRandom.uuid_v7, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /unit it is in/) do
+        @handler.move_membership(@person_id, @squad, @squad, effective_on: "2026-12-01")
+      end
+      assert_raises(RuntimeError, match: /before it begins/) do
+        @handler.move_membership(@person_id, @squad, @retired, effective_on: "2026-10-01")
+      end
+    end
+
     should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
       @handler.set_membership(@person_id, @retired, **PROVENANCE)
       OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")

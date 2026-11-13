@@ -81,12 +81,24 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     end
   end
 
+  should "move a member to another unit, starting the new membership on the move date" do
+    as_tenant do
+      @handler.move_membership(@grace.id, @payments, @platform, effective_on: "2026-05-01")
+      moved = OrgMembership.find_by!(person_id: @grace.id, unit_id: @platform)
+
+      assert_not OrgMembership.exists?(person_id: @grace.id, unit_id: @payments)
+      assert_equal [ "hibob", Date.new(2026, 5, 1), Date.new(2026, 5, 1) ],
+                   [ moved.provider, moved.member_since, moved.effective_on ]
+    end
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do
         @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "hibob", effective_on: "2026-04-01")
         @handler.end_membership(@ada.id, @platform, **PROVENANCE)
         @handler.set_membership(@ada.id, @platform, role: "Reviewer", provider: "espalia", effective_on: "2026-07-01")
+        @handler.move_membership(@grace.id, @payments, @platform, effective_on: "2026-08-01")
       end
 
       before = snapshot_read_models(OrgGraph::Projections::Members, @tenant)

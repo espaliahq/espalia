@@ -183,6 +183,36 @@ class OrgGraph::PersonAggregate
       ended_by_id: ended_by_id, plan_change_id: plan_change_id)))
   end
 
+  # Moves the person's membership of one unit to another, keeping its terms.
+  # A person already in the destination keeps that membership, and the one
+  # they came from ends instead.
+  #
+  # @param from_unit_id [String] a unit they are a member of
+  # @param unit_id [String] the live unit they move to
+  # @param effective_on [Date, String]
+  # @param moved_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil]
+  # @raise [RuntimeError] if the person is not a member, or it would move before it began
+  def move_membership(from_unit_id, unit_id, effective_on:, moved_by_id: nil, plan_change_id: nil)
+    ensure_recorded!
+    from_unit_id = validated_unit(from_unit_id)
+    unit_id = validated_unit(unit_id)
+    membership = @memberships[from_unit_id]
+    raise "Not a member of this unit" unless membership
+    raise "A membership can't move to the unit it is in" if from_unit_id == unit_id
+
+    if @memberships.key?(unit_id)
+      return end_membership(from_unit_id, provider: membership[:provider], effective_on:, ended_by_id: moved_by_id,
+                                          plan_change_id:)
+    end
+
+    data = provenance(membership[:provider], effective_on)
+    raise "A membership can't move before it begins" if data[:effective_on] < membership[:since]
+
+    apply(OrgGraph::Events::MembershipMoved.new(data: data.merge(from_unit_id: from_unit_id, unit_id: unit_id,
+      **membership.slice(:allocation, :role), moved_by_id: moved_by_id, plan_change_id: plan_change_id)))
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
@@ -352,5 +382,11 @@ class OrgGraph::PersonAggregate
 
   on OrgGraph::Events::MembershipEnded do |event|
     @memberships.delete(event.data[:unit_id])
+  end
+
+  on OrgGraph::Events::MembershipMoved do |event|
+    data = event.data
+    @memberships.delete(data[:from_unit_id])
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: data[:effective_on])
   end
 end
