@@ -52,13 +52,20 @@ class Hris::LevelMirror
   # @param result [Hash] the sync's running tally
   # @param levels [Array<OrgTaxonomyLevel>] the levels to mirror, as {.levels} gives them
   # @param today [Date]
-  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current)
+  # @param cause_id [String, nil] one cause for every write, as a handover
+  #   writes; by default each change is its own
+  # @param brake [Boolean] false for a handover, whose admin has confirmed
+  #   what it ends
+  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current,
+                 cause_id: nil, brake: true)
     @provider = provider
     @levels = levels
     @fields = catalogue.index_by(&:id)
     @readings = readings
     @result = result
     @today = today
+    @cause_id = cause_id
+    @brake = brake
     @units = {}
   end
 
@@ -199,18 +206,20 @@ class Hris::LevelMirror
 
   # A retiring unit's remaining members are ended with it, so they count
   # against the brake too, and a tripped brake holds those retirements back.
+  # Moves go first: one that fails leaves its person in the unit, to be
+  # counted with the rest.
   #
   # @return [Boolean] false when the brake held the endings back
   def write_memberships(plans, retiring)
     changes = plans.flat_map { |level_plan| membership_changes(level_plan) }
     ends, others = changes.partition { |change| change[:action] == :end }
-    leaving = changes.filter_map { |change| [ change[:person].id, change[:from] ] if change[:from] }.to_set
-    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).pluck(:person_id, :unit_id).count { !leaving.include?(it) }
     held = OrgMembership.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).count
-    braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
-    ends = [] if braked
+    written = others.select { |change| write_membership(change) }
 
-    (others + ends).each { |change| write_membership(change) }
+    leaving = (written + ends).filter_map { |change| [ change[:person].id, change[:from] ] if change[:from] }.to_set
+    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).pluck(:person_id, :unit_id).count { !leaving.include?(it) }
+    braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
+    ends.each { |change| write_membership(change) } unless braked
     !braked
   end
 
@@ -235,7 +244,7 @@ class Hris::LevelMirror
   end
 
   def write_membership(change)
-    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: SecureRandom.uuid_v7)
+    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: cause_id)
     person_id = change[:person].id
     case change[:action]
     when :set then people.set_membership(person_id, change[:to], provider: @provider, effective_on: @today)
@@ -243,8 +252,10 @@ class Hris::LevelMirror
     when :end then people.end_membership(person_id, change[:from], provider: @provider, effective_on: @today)
     end
     counted
+    true
   rescue => e
     @result[:errors] << { person_id: person_id, error: e.message }
+    false
   end
 
   def retiring_units(plans)
@@ -280,7 +291,7 @@ class Hris::LevelMirror
   end
 
   def braked?(count, of, what, outcome)
-    return false unless count > Hris::BaseAdapter::ABSENCE_BRAKE[:people] && count > of * Hris::BaseAdapter::ABSENCE_BRAKE[:share]
+    return false unless @brake && Hris::BaseAdapter.over_brake?(count, of)
 
     @result[:errors] << { error: "#{count} of #{of} #{what}, more than #{(Hris::BaseAdapter::ABSENCE_BRAKE[:share] * 100).round}% " \
                                  "and #{Hris::BaseAdapter::ABSENCE_BRAKE[:people]}, so #{outcome}" }
@@ -294,8 +305,10 @@ class Hris::LevelMirror
   def reference(level_plan, key) = "#{level_plan.field.id}/#{key}"
 
   def structure
-    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: SecureRandom.uuid_v7)
+    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: cause_id)
   end
+
+  def cause_id = @cause_id || SecureRandom.uuid_v7
 
   def counted = @result[:org_graph_events] += 1
 end

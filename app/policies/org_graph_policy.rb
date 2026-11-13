@@ -22,6 +22,12 @@ class OrgGraphPolicy < ApplicationPolicy
   # @return [Boolean]
   def show? = tenant_member?
 
+  # The Units view and its MCP read. Admins only while the Org Graph's
+  # screens are unfinished; it opens to {#show?} once they are (#80).
+  #
+  # @return [Boolean]
+  def show_units? = tenant_admin?
+
   # The taxonomy, the providers, units at the root, and people's facts.
   #
   # @return [Boolean]
