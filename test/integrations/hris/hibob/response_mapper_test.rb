@@ -176,9 +176,20 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_nil Hris::Hibob::ResponseMapper.new({ "payroll" => { "employment" => { "fte" => 0 } } }).org_graph_facts[:fte]
     end
 
+    should "leave out FTE and type when HiBob sends only one, so neither is compared" do
+      assert_empty Hris::Hibob::ResponseMapper.new({ "payroll" => { "employment" => { "fte" => 80 } } }).org_graph_facts
+      assert_empty Hris::Hibob::ResponseMapper.new({ "payroll" => { "employment" => { "type" => "4411" } } }).org_graph_facts
+    end
+
+    should "drop an FTE that rounds to nothing" do
+      employee = { "payroll" => { "employment" => { "fte" => "0.001", "type" => "4411" } } }
+
+      assert_nil Hris::Hibob::ResponseMapper.new(employee).org_graph_facts[:fte]
+    end
+
     should "read the flat payload shape" do
       employee = { "/work/site" => { "value" => "Sydney" }, "/payroll/employment/fte" => { "value" => 50 },
-                   "/work/startDate" => { "value" => "2024-02-01" } }
+                   "/payroll/employment/type" => { "value" => "4411" }, "/work/startDate" => { "value" => "2024-02-01" } }
 
       assert_equal({ site: "Sydney", country: nil, fte: 0.5, employment_type: nil, started_on: "2024-02-01" },
         Hris::Hibob::ResponseMapper.new(employee).org_graph_facts)

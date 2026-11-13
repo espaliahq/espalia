@@ -71,7 +71,8 @@ class Hris::Hibob::ResponseMapper
   # The site, employment and dates the Org Graph records, keyed as
   # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
   # the payload carries its field, so one HiBob withholds (the service user
-  # can't read it) is never compared; a field it sends blank, or a value the
+  # can't read it) is never compared, and FTE and type are written only when
+  # both arrive, since they travel together; a field it sends blank, or a value the
   # Org Graph can't hold (an FTE outside 1–100, a date that isn't ISO 8601), is
   # nil. HiBob gives a site no country, so country is always absent.
   #
@@ -80,7 +81,7 @@ class Hris::Hibob::ResponseMapper
   def org_graph_facts
     facts = {}
     facts.merge!(site: label(%w[work site]), country: nil) if supplied?(%w[work site])
-    if supplied?(%w[payroll employment fte]) || supplied?(%w[payroll employment type])
+    if supplied?(%w[payroll employment fte]) && supplied?(%w[payroll employment type])
       facts.merge!(fte: fraction(value(%w[payroll employment fte])),
         employment_type: human_readable(%w[payroll employment type]))
     end
@@ -172,7 +173,10 @@ class Hris::Hibob::ResponseMapper
   # @return [Float, nil]
   def fraction(percent)
     number = Float(percent.to_s, exception: false)
-    number && (number / 100).round(4) if number&.positive? && number <= 100
+    return nil unless number && number <= 100
+
+    fraction = (number / 100).round(4)
+    fraction if fraction.positive?
   end
 
   # @return [String, nil]
