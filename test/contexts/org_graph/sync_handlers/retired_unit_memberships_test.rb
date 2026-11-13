@@ -96,6 +96,18 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
     assert_equal "2026-08-15", person_events(@grace).last.data[:effective_on]
   end
 
+  should "close a membership after its latest change when a later one was backdated" do
+    as_tenant do
+      @people.set_membership(@ada.id, @payments, allocation: 0.4, **ESPALIA, effective_on: "2026-09-01")
+      @people.set_membership(@ada.id, @payments, allocation: 0.3, **ESPALIA, effective_on: "2026-08-10")
+      @structure.retire_unit(@payments, effective_on: "2026-08-20")
+    end
+
+    ended = person_events(@ada).last
+    assert_kind_of OrgGraph::Events::MembershipEnded, ended
+    assert_equal "2026-09-01", ended.data[:effective_on]
+  end
+
   context "a retirement through a succession" do
     should "move every member to the one successor of a merge, writing no MembershipEnded" do
       as_tenant do

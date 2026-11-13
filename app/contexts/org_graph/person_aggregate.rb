@@ -243,6 +243,14 @@ class OrgGraph::PersonAggregate
       **membership.slice(:allocation, :role), moved_by_id: moved_by_id, plan_change_id: plan_change_id)))
   end
 
+  # @param unit_id [String]
+  # @return [Date, nil] the latest date a change to this membership took
+  #   effect, which a backdated change leaves in place
+  def membership_changed_on(unit_id)
+    changed_on = @memberships.dig(unit_id.to_s.downcase, :changed_on)
+    changed_on && Date.iso8601(changed_on.to_s)
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
