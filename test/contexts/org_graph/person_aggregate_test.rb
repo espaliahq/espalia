@@ -21,6 +21,7 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
 
   def every_kind_of_event
     record(employment_status: "pending", title: "Engineer", manager_id: @manager_id, fte: 1)
+    @aggregate.change_start_date(PROVENANCE[:effective_on], provider: "hibob")
     @aggregate.join(**PROVENANCE)
     @aggregate.change_title("Senior Engineer", **PROVENANCE)
     @aggregate.change_level("L4", **PROVENANCE)
@@ -48,7 +49,7 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       ]
 
       kinds = every_kind_of_event.each { |event| assert_empty event.data.keys - allowed, event.class.name }.map(&:class)
-      assert_equal 10, kinds.uniq.size
+      assert_equal 11, kinds.uniq.size
     end
   end
 
@@ -284,6 +285,50 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
     should "refuse a status it does not know" do
       record
       assert_raises(RuntimeError) { @aggregate.match_status("retired", **PROVENANCE) }
+    end
+
+    should "join on the start date and leave on the termination date the provider holds" do
+      record(employment_status: "pending")
+      @aggregate.match_status("employed", **PROVENANCE, started_on: "2026-10-20")
+      @aggregate.match_status("left", **PROVENANCE, left_on: "2026-10-31")
+
+      assert_equal [ "2026-10-20", "2026-10-31" ], events.drop(1).map { |e| e.data[:effective_on] }
+    end
+
+    should "never move an employed person back to pending" do
+      record
+      @aggregate.match_status("pending", **PROVENANCE)
+
+      assert_equal [ OrgGraph::Events::PersonRecorded ], events.map(&:class)
+    end
+  end
+
+  context "#change_start_date" do
+    should "supply a start date once, effective on that date, and correct a different one" do
+      record
+      @aggregate.change_start_date("2023-01-15", provider: "hibob")
+      @aggregate.change_start_date(Date.new(2023, 1, 15), provider: "hibob")
+      @aggregate.change_start_date("2023-02-01", provider: "hibob")
+
+      assert_equal [ [ "2023-01-15", "2023-01-15" ], [ "2023-02-01", "2023-02-01" ] ],
+        events.drop(1).map { |e| e.data.values_at(:effective_on, :started_on) }
+    end
+
+    should "write nothing for a blank date or the one the record holds" do
+      record(started_on: "2023-01-15")
+      @aggregate.change_start_date(nil, provider: "hibob")
+      @aggregate.change_start_date("2023-01-15", provider: "hibob")
+
+      assert_equal 1, events.size
+    end
+
+    should "hold the new start date when checking a leaving date" do
+      record
+      @aggregate.change_start_date("2026-11-10", provider: "hibob")
+
+      assert_raises(RuntimeError, match: /leave before they start/) do
+        @aggregate.leave(provider: "hibob", effective_on: "2026-11-01")
+      end
     end
   end
 

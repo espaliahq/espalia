@@ -212,20 +212,44 @@ class OrgGraph::PersonAggregate
   end
 
   # Moves a recorded person to the status a provider reports, for a provider
-  # that gives the status without its date. One that matches writes nothing,
-  # so a repeat sync never moves the date of the last change.
+  # that gives the status without a status-change date. One that matches
+  # writes nothing, so a repeat sync never moves the date of the last change.
+  # A join is effective on the start date and a leaving on the termination
+  # date when the provider holds them, else on `effective_on`. A reported
+  # `pending` never moves someone back from employed.
   #
   # @param employment_status [String] one of {EMPLOYMENT_STATUSES}
   # @param provider [String] one of {PROVIDERS}
-  # @param effective_on [Date, String]
-  def match_status(employment_status, provider:, effective_on:)
+  # @param effective_on [Date, String] the sync's date
+  # @param started_on [Date, String, nil]
+  # @param left_on [Date, String, nil]
+  def match_status(employment_status, provider:, effective_on:, started_on: nil, left_on: nil)
     return if employment_status == @employment_status
 
     case employment_status
-    when "left" then leave(provider:, effective_on:)
-    when "employed" then @employment_status == "pending" ? join(provider:, effective_on:) : return_to_work(provider:, effective_on:)
+    when "pending" then nil
+    when "left" then leave(provider:, effective_on: left_on.presence || effective_on)
+    when "employed"
+      if @employment_status == "pending"
+        join(provider:, effective_on: started_on.presence || effective_on)
+      else
+        return_to_work(provider:, effective_on:)
+      end
     else raise "Can't move from #{@employment_status} to #{employment_status}"
     end
+  end
+
+  # Supplies or corrects the start date of someone already recorded. Blank or
+  # unchanged writes nothing.
+  #
+  # @param started_on [Date, String, nil]
+  # @param provider [String] one of {PROVIDERS}
+  def change_start_date(started_on, provider:)
+    ensure_recorded!
+    started_on = normalize_date(started_on, :started_on)
+    return if started_on.nil? || started_on == @started_on
+
+    apply(OrgGraph::Events::StartDateChanged.new(data: provenance(provider, started_on).merge(started_on:)))
   end
 
   # @param facts [Hash] the keywords {#apply_facts} takes besides provenance
@@ -365,6 +389,10 @@ class OrgGraph::PersonAggregate
       @facts.merge!(changed)
       @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
     end
+  end
+
+  on OrgGraph::Events::StartDateChanged do |event|
+    @started_on = event.data[:started_on]
   end
 
   on OrgGraph::Events::MembershipSet do |event|

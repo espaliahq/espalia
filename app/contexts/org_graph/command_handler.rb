@@ -39,24 +39,31 @@ class OrgGraph::CommandHandler
 
   # What a provider's sync calls for each person it returns, in one load of
   # their stream: the first time, it records them with the facts as they
-  # stand; after that, it moves their status if it differs and applies each
-  # fact that differs. A leaver's facts are not compared.
+  # stand; after that, it moves their status if it differs, then supplies or
+  # corrects their start date and applies each fact that differs. A leaver's
+  # facts are not compared.
   #
   # @param person_id [String]
   # @param provider [String]
-  # @param effective_on [Date, String]
-  # @param employment_status [String] "employed" or "left"
+  # @param effective_on [Date, String] the sync's date
+  # @param employment_status [String] "pending", "employed" or "left"
+  # @param started_on [Date, String, nil] the start date the provider holds
+  # @param left_on [Date, String, nil] the leaving date the provider holds
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
-  def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
+  def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
     written = 0
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
       if person.recorded?
-        person.match_status(employment_status, provider:, effective_on:)
-        person.apply_facts(provider:, effective_on:, **facts) unless employment_status == "left"
+        person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
+        unless employment_status == "left"
+          person.change_start_date(started_on, provider:)
+          person.apply_facts(provider:, effective_on:, **facts)
+        end
       else
-        person.record(person_id, provider:, effective_on:, employment_status:, **facts)
+        left_on = nil unless employment_status == "left"
+        person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, **facts)
       end
       written = person.unpublished_events.count
     end

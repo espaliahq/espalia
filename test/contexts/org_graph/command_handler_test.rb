@@ -84,6 +84,40 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::PersonReturned, OrgGraph::Events::TitleChanged ], stream_events.drop(1).map(&:class)
     end
 
+    should "record the start date, and a leaver's leaving date, with the person" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15", left_on: "2026-12-01")
+      other = SecureRandom.uuid_v7
+      @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2026-10-31")
+
+      assert_equal [ "2023-01-15", nil ], stream_events.first.data.values_at(:started_on, :left_on)
+      leaver = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(other)).first
+      assert_equal "2026-10-31", leaver.data[:left_on]
+    end
+
+    should "supply a start date the stream lacks, once" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+
+      assert_equal 1, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      assert_kind_of OrgGraph::Events::StartDateChanged, stream_events.last
+    end
+
+    should "keep a future starter pending, then join them on their start date" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+      @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-21", employment_status: "employed", started_on: "2026-11-20")
+
+      assert_equal [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::PersonJoined ], stream_events.map(&:class)
+      assert_equal "2026-11-20", stream_events.last.data[:effective_on]
+    end
+
+    should "date a leaving by the termination date the provider holds" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-31")
+
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-10-31" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
     should "refuse half a pair on the first sync as on every later one" do
       assert_raises(ArgumentError) do
         @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", site: "Sydney")
