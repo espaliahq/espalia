@@ -24,7 +24,7 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
   end
 
   class StubComparison < OrgGraph::Comparison
-    def unit_marks(unit) = unit.name == "Platform" ? [ "was Core" ] : []
+    def unit_marks(unit) = { "Platform" => [ "was Core" ], "Engineering" => [ "moved" ] }.fetch(unit.name, [])
 
     def people_changes(unit)
       unit.name == "Platform" ? [ PersonChange.new(name: "Brook Tamsin", text: "joined 5 Nov") ] : []
@@ -109,6 +109,7 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     assert_includes tree_link.text, "was Core"
     card = page.css("[id^='unit-']").find { it.at_css("h4")&.text == "Platform" }
     assert_includes card.text, "was Core"
+    assert_includes page.at_css("#org-graph-unit").parent.text, "moved"
     assert_equal "Brook Tamsin joined 5 Nov", card.at_css("[aria-label='Since 1 Oct in Platform'] li").text.squish
   end
 end

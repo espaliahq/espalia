@@ -22,6 +22,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       end
       div(class: "flex flex-wrap items-center gap-x-3 gap-y-1") do
         h3(id: "org-graph-unit", class: "text-lg font-semibold text-default") { @unit.name }
+        @comparison.unit_marks(@unit).each { render Components::Kit::Badge.new(it, tone: :info) }
         unless @unit.held_by_espalia?
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
