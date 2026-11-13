@@ -50,7 +50,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
-  #   :skipped_no_title
+  #   :skipped_no_title, :split_units (mirrored units whose people sit under different parents)
   def sync_people
     @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     employees = fetch_employees
@@ -64,6 +64,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         manager_links = {}
         touched_person_ids = []
         org_graph_facts = {}
+        mirror_readings = {}
         projected = tenant.org_graph_people_projected?
 
         # Pass 1: Upsert all employees
@@ -84,6 +85,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
             touched_person_ids << person.id
             org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
                                         status: attrs[:status] }.compact.merge(mapper.org_graph_facts)
+            mirror_readings[person] = mapper unless attrs[:status] == "inactive"
           end
         rescue => e
           result[:errors] << {
@@ -101,6 +103,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
         # Pass 2b: Record new people in the Org Graph, then write each fact that differs
         record_org_graph_differences(org_graph_facts, managers, result)
+
+        # Pass 2d: Mirror the structure levels HiBob provides, from each person's field
+        mirror_structure_levels(mirror_readings, result)
 
         absent = absent_people(employees.filter_map { it["id"] }, result)
         leaving = Person.where(id: absent.where(status: "active").pluck(:id))
@@ -265,9 +270,17 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         service_user_id: creds.service_user_id,
         api_token: creds.api_token,
         level_field_id: config.level_field_id,
-        mapped_fields:
+        mapped_fields:,
+        structure_fields: mirrored_levels.map(&:provider_field)
       )
     end
+  end
+
+  # The levels whose units this sync mirrors, top first.
+  #
+  # @return [Array<OrgTaxonomyLevel>]
+  def mirrored_levels
+    @mirrored_levels ||= ActsAsTenant.with_tenant(tenant) { Hris::LevelMirror.levels(provider_name) }
   end
 
   # The fields the tenant's Org Graph mapping names for HiBob.
@@ -292,6 +305,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       unchanged: 0,
       skipped_no_title: 0,
       errors: [],
+      split_units: [],
       unmapped_titles: Set.new,
       missing_roles: Set.new,
       missing_levels: Set.new,
@@ -385,6 +399,26 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
+    end
+  end
+
+  # A failed catalogue read mirrors nothing, so no unit retires for want of
+  # its list.
+  #
+  # @param readings [Hash{Person => Hris::Hibob::ResponseMapper}] current people
+  # @param result [Hash] running tally
+  def mirror_structure_levels(readings, result)
+    return if mirrored_levels.empty?
+
+    catalogue = begin
+      fetch_field_catalogue
+    rescue Hris::Hibob::Errors::Error => e
+      result[:errors] << { error: "HiBob's field lists could not be read, so no structure level was mirrored: #{e.message}" }
+      return
+    end
+
+    with_hris_event_context do
+      Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:).call
     end
   end
 

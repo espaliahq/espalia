@@ -1286,6 +1286,36 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "mirroring a structure level" do
+    setup do
+      @team_level = SecureRandom.uuid_v7
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      structure.define_taxonomy([ { level_id: @team_level, name: "Team" } ], effective_on: "2026-01-01")
+      structure.set_level_provider(@team_level, "hibob", field: "work.department", effective_on: "2026-01-01")
+    end
+
+    should "place each person in the unit their record names" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { [ Hris::Field.new(id: "work.department", name: "Department", kind: :text) ] }
+
+      adapter.sync_people
+
+      engineering = OrgUnit.live.find_by!(level_id: @team_level, external_ref: "work.department/Engineering")
+      alice = Person.find_by!(external_id: "bob-001")
+      assert OrgMembership.exists?(person_id: alice.id, unit_id: engineering.id, provider: "hibob")
+    end
+
+    should "mirror nothing when HiBob's field lists can't be read" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "timeout") }
+
+      result = adapter.sync_people
+
+      assert_not OrgUnit.exists?(level_id: @team_level)
+      assert(result[:errors].any? { it[:error].include?("no structure level was mirrored") })
+    end
+  end
+
   private
 
   def org_graph_events
