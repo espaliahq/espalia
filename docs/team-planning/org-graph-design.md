@@ -563,7 +563,8 @@ screen (6.9) hosts them.
   which moves its members there, or retired. The comparison also lists values with no
   unit, people whose value differs from their unit, people the HRIS sends blank, and
   people added by hand. Those may stand: the switch moves, ends or keeps them as a sync
-  would.
+  would. A value matches one unit only, and a unit that can't retire today (it has live
+  sub-units, or a change dated later) blocks the switch until someone deals with it.
 - **One cause, one transaction.** The switch records the field as the level's source,
   gives each matched unit its value (`UnitHandedOver`), writes each succession and
   retirement, hands the HRIS the memberships of the people it reads, and mirrors the
