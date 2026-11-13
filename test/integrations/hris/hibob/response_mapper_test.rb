@@ -340,6 +340,22 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
         assert_equal unreadable + withheld, skipped
       end
 
+      should "count a country beside an unreadable site as unreadable, since the sync skips the pair" do
+        employee = { "work" => { "site" => %w[1 2] }, "address" => { "country" => "AU" } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped)
+
+        assert_predicate mapper.field_value("address.country", kind: :text, alongside: "site"), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:country)
+      end
+
+      should "count a text field in a shape it doesn't know as unreadable, as the sync skips it" do
+        employee = { "work" => { "customColumns" => { "column_cc" => { "name" => "Platform" } } } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: { cost_centre: "column_cc" })
+
+        assert_predicate mapper.field_value("column_cc", kind: :text), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:cost_centre)
+      end
+
       should "read a root field, which HiBob returns at the top level" do
         assert_equal({ cost_centre: "cc-17" },
           Hris::Hibob::ResponseMapper.new({ "costCentre" => "cc-17" }, mapped_fields: { cost_centre: "root.costCentre" }).org_graph_facts)

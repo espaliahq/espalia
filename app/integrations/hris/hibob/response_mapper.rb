@@ -77,9 +77,9 @@ class Hris::Hibob::ResponseMapper
   # The site, cost centre, employment and dates the Org Graph records, keyed as
   # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
   # the payload carries its field, so one HiBob withholds (the service user
-  # can't read it) is never compared, and nor is one in a shape Espalia can't
-  # read, such as an array where a list id should be. A pair travels together, so FTE and type
-  # are written only when both arrive, and so are a site and a mapped country.
+  # can't read it) is never compared, and nor is one Espalia can't read
+  # ({#readable?}). A pair travels together, so FTE and type are written only
+  # when both arrive, and so are a site and a mapped country.
   # A field it sends blank, or a value the Org Graph can't hold (an FTE outside
   # 1–100, a date that isn't ISO 8601), is nil. HiBob gives a site no country,
   # so country is nil until the mapping names a field for it, and cost centre
@@ -123,16 +123,17 @@ class Hris::Hibob::ResponseMapper
   # @param field_id [String] the field's catalogue id
   # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
   # @param alongside [String, nil] a fact the sync writes this one only with,
-  #   as country travels with site; a record withholding it withholds this too
+  #   as country travels with site; a record withholding it withholds this
+  #   too, and one Espalia can't read makes this unreadable, as the sync skips both
   # @return [Hris::FieldValue]
   def field_value(field_id, kind:, alongside: nil)
     path = path_of(field_id)
     return Hris::FieldValue.withheld unless supplied?(path)
     return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
+    return Hris::FieldValue.unreadable if unreadable_list?(path)
+    return Hris::FieldValue.unreadable if alongside && unreadable_list?(FACT_PATHS.fetch(alongside))
 
     if kind == :list
-      return Hris::FieldValue.unreadable if unreadable_list?(path)
-
       item = list_value(path)
       return Hris::FieldValue.blank if item.nil?
 
@@ -186,8 +187,9 @@ class Hris::Hibob::ResponseMapper
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
 
-  # A list value in a shape Espalia does not know: a hash or an array where an
-  # id should be, or a flat wrapper with no "value" key.
+  # A value in a shape Espalia does not know, whatever the field's kind: a hash
+  # or an array where an id or text should be, or a flat wrapper with no
+  # "value" key.
   def unreadable_list?(path)
     raw = value(path)
     return true if raw.is_a?(Hash) || raw.is_a?(Array)
