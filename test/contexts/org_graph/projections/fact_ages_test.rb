@@ -13,21 +13,25 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant, org_graph_config: { staleness_days: 30 })
     @handler = OrgGraph::CommandHandler.new
-    level = SecureRandom.uuid_v7
-    @payments = SecureRandom.uuid_v7
-    @platform = SecureRandom.uuid_v7
+    departments, squads = SecureRandom.uuid_v7, SecureRandom.uuid_v7
+    @payments, @platform, @engineering = Array.new(3) { SecureRandom.uuid_v7 }
 
     travel_to START
     as_tenant do
-      @ada, @grace, @lead = create_list(:person, 3, tenant: @tenant)
+      @ada, @grace, @lead = (1..3).map { |n| create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-#{n}") }
       structure = OrgGraph::StructureCommandHandler.new
-      structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
-      structure.create_unit(@payments, "Payments", level_id: level, effective_on: "2026-01-01")
-      structure.create_unit(@platform, "Platform", level_id: level, effective_on: "2026-01-01")
-      [ @ada, @grace, @lead ].each { |person| @handler.record_person(person.id, **HIBOB, employment_status: "employed", title: "Engineer") }
+      structure.define_taxonomy([ { level_id: departments, name: "Department" }, { level_id: squads, name: "Squad" } ],
+        effective_on: "2026-01-01")
+      structure.set_level_provider(departments, "hibob", effective_on: "2026-01-01")
+      structure.claim_facts([ "employment_status" ], "hibob", effective_on: "2026-01-01")
+      structure.create_unit(@engineering, "Engineering", level_id: departments, effective_on: "2026-01-01",
+        provider: "hibob", external_ref: "d-1")
+      structure.create_unit(@payments, "Payments", level_id: squads, effective_on: "2026-01-01")
+      structure.create_unit(@platform, "Platform", level_id: squads, effective_on: "2026-01-01")
+      [ @ada, @grace, @lead ].each { |person| @handler.record_person(person.id, **HIBOB, employment_status: "employed") }
 
       @handler.set_membership(@ada.id, @payments, **ESPALIA, set_by_id: @lead.id)
-      @handler.set_membership(@grace.id, @payments, **HIBOB)
+      @handler.set_membership(@grace.id, @engineering, **HIBOB)
     end
   end
 
@@ -43,6 +47,10 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     end
   end
 
+  def hand_title_to(provider)
+    OrgGraph::StructureCommandHandler.new.set_fact_provider("title", provider, effective_on: Date.current)
+  end
+
   def stale(now: Time.current)
     as_tenant { OrgFactAge.stale(@tenant, now: now).map { |row| [ row.person_id, row.fact, row.unit_id ] } }
   end
@@ -51,18 +59,22 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     ada = age(@ada, "membership", @payments)
 
     assert_equal [ START, START, @lead.id, nil ], [ ada.changed_at, ada.checked_at, ada.checked_by_id, ada.confirmed_at ]
-    assert_nil age(@grace, "membership", @payments)
+    assert_nil age(@grace, "membership", @engineering)
     assert_nil age(@ada, "title")
   end
 
-  should "follow a person fact as it moves to Espalia, to another provider, and is cleared" do
+  should "follow a person fact as it passes to another provider and back, and is cleared" do
     as_tenant { @handler.change_title(@ada.id, "Lead", **ESPALIA) }
     assert_equal START, age(@ada, "title").changed_at
 
-    as_tenant { @handler.change_title(@ada.id, "Lead", **HIBOB) }
+    as_tenant do
+      hand_title_to("hibob")
+      @handler.change_title(@ada.id, "Lead", **HIBOB)
+    end
     assert_nil age(@ada, "title")
 
     as_tenant do
+      hand_title_to("espalia")
       @handler.change_title(@ada.id, "Lead", **ESPALIA)
       @handler.change_title(@ada.id, nil, **ESPALIA)
     end
@@ -120,16 +132,19 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
   end
 
   should "start a moved membership's age again in its new unit" do
+    design = SecureRandom.uuid_v7
     travel_to START + 4.days
     as_tenant do
+      OrgGraph::StructureCommandHandler.new.create_unit(design, "Design", level_id: OrgUnit.find(@engineering).level_id,
+        effective_on: "2026-01-01", provider: "hibob", external_ref: "d-2")
       @handler.move_membership(@ada.id, @payments, @platform, effective_on: Date.current, moved_by_id: @grace.id)
-      @handler.move_membership(@grace.id, @payments, @platform, effective_on: Date.current)
+      @handler.move_membership(@grace.id, @engineering, design, effective_on: Date.current)
     end
 
     moved = age(@ada, "membership", @platform)
     assert_nil age(@ada, "membership", @payments)
     assert_equal [ START + 4.days, @grace.id ], [ moved.changed_at, moved.checked_by_id ]
-    assert_nil age(@grace, "membership", @platform)
+    assert_nil age(@grace, "membership", design)
   end
 
   context ".stale" do

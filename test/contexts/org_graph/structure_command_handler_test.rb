@@ -344,8 +344,18 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
         assert_equal "hibob", structure_events.last.data[:previous_provider]
         assert_no_difference -> { structure_events.size } do
           @handler.set_fact_provider("title", "espalia", effective_on: @today + 2)
-          @handler.set_fact_provider("manager", "espalia", effective_on: @today)
         end
+      end
+    end
+
+    should "write a first choice of Espalia once, so a later claim knows someone chose" do
+      as_tenant do
+        assert_difference -> { structure_events.size }, 1 do
+          @handler.set_fact_provider("manager", "espalia", effective_on: @today)
+          @handler.set_fact_provider("manager", "espalia", effective_on: @today + 1)
+        end
+        assert_equal %w[espalia espalia], structure_events.last.data.values_at(:provider, :previous_provider)
+        assert_equal [], @handler.claim_facts(%w[manager], "hibob", effective_on: @today)
       end
     end
 
@@ -593,6 +603,127 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_raises(RuntimeError) do
         succeed([ @department ], [ create_unit(SecureRandom.uuid_v7, "Platform", level: "Department") ],
                 retire_predecessors: true)
+      end
+    end
+  end
+
+  context "#claim_facts" do
+    should "hand each unset fact to the provider and report what it claimed" do
+      claimed = as_tenant { @handler.claim_facts(%w[title level], "hibob", effective_on: @today, set_by_id: @actor) }
+
+      assert_equal %w[title level], claimed
+      assert_equal %w[title level], structure_events.select { it.is_a?(OrgGraph::Events::FactProviderSet) }.map { it.data[:fact] }
+      as_tenant { assert_equal "hibob", OrgFactProvider.provider_for("level") }
+    end
+
+    should "leave a fact whose provider was ever chosen, so a re-run only reaches new facts" do
+      as_tenant do
+        @handler.claim_facts(%w[title], "hibob", effective_on: @today)
+        @handler.set_fact_provider("title", "espalia", effective_on: @today)
+
+        assert_equal %w[site], @handler.claim_facts(%w[title site], "hibob", effective_on: @today)
+        assert_equal [], @handler.claim_facts(%w[title site], "hibob", effective_on: @today)
+        assert_equal "espalia", OrgFactProvider.provider_for("title")
+      end
+    end
+
+    should "refuse a fact it doesn't know" do
+      assert_raises(ArgumentError) { as_tenant { @handler.claim_facts(%w[department], "hibob", effective_on: @today) } }
+    end
+  end
+
+  context "effective dates" do
+    setup do
+      create_unit(@department, "Engineering", level: "Department")
+      create_unit(@team, "Payments", level: "Team", parent_id: @department)
+    end
+
+    should "refuse a change dated before the unit was created" do
+      as_tenant do
+        assert_raises(RuntimeError, match: /created on 2026-11-01/) do
+          @handler.rename_unit(@team, "Billing", effective_on: "2026-10-31")
+        end
+        assert_raises(RuntimeError, match: /created on 2026-11-01/) do
+          @handler.move_unit(@team, nil, effective_on: "2026-10-31")
+        end
+      end
+    end
+
+    should "accept a backdated change after creation, and refuse a retirement before it" do
+      as_tenant do
+        @handler.rename_unit(@team, "Billing", effective_on: "2026-12-01")
+        @handler.move_unit(@team, nil, effective_on: "2026-11-15")
+
+        assert_equal "2026-11-15", structure_events.last.data[:effective_on]
+        assert_raises(RuntimeError, match: /retire before its last change on 2026-12-01/) do
+          @handler.retire_unit(@team, effective_on: "2026-11-20")
+        end
+        assert_nothing_raised { @handler.retire_unit(@team, effective_on: "2026-12-01") }
+      end
+    end
+
+    should "refuse to place a unit beneath a parent before the parent existed" do
+      later = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.create_unit(later, "Platform", level_id: level_id("Department"), effective_on: "2027-01-01")
+
+        assert_raises(RuntimeError, match: /parent unit was created on 2027-01-01/) do
+          @handler.create_unit(@squad, "Ledger", level_id: level_id("Squad"), parent_id: later, effective_on: "2026-12-01")
+        end
+        assert_raises(RuntimeError, match: /parent unit was created on 2027-01-01/) do
+          @handler.move_unit(@team, later, effective_on: "2026-12-01")
+        end
+        assert_nothing_raised { @handler.move_unit(@team, later, effective_on: "2027-01-01") }
+      end
+    end
+
+    should "refuse to retire a unit before a sub-unit arrived beneath it or left" do
+      later = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.create_unit(@squad, "Ledger", level_id: level_id("Squad"), parent_id: @team, effective_on: "2026-12-01")
+        @handler.create_unit(later, "Treasury", level_id: level_id("Team"), parent_id: @department, effective_on: "2026-11-01")
+        @handler.move_unit(@squad, later, effective_on: "2027-01-01")
+
+        assert_raises(RuntimeError, match: /last change on 2027-01-01/) do
+          @handler.retire_unit(@team, effective_on: "2026-12-15")
+        end
+        assert_nothing_raised { @handler.retire_unit(@team, effective_on: "2027-01-01") }
+      end
+    end
+
+    should "refuse to retire a unit before its last sub-unit retired" do
+      as_tenant do
+        @handler.create_unit(@squad, "Ledger", level_id: level_id("Squad"), parent_id: @team, effective_on: "2026-11-01")
+        @handler.retire_unit(@squad, effective_on: "2027-03-01")
+
+        assert_raises(RuntimeError, match: /last change on 2027-03-01/) do
+          @handler.retire_unit(@team, effective_on: "2027-02-01")
+        end
+      end
+    end
+
+    should "refuse a succession dated before a unit it names was created" do
+      successor = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.create_unit(successor, "Ledger", level_id: level_id("Team"), parent_id: @department, effective_on: "2027-02-01")
+
+        assert_raises(RuntimeError, match: /can't predate Ledger, created on 2027-02-01/) do
+          @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @team ], successor_ids: [ successor ],
+                                     effective_on: "2026-12-01")
+        end
+      end
+    end
+
+    should "refuse a succession that retires a predecessor before its last change" do
+      successor = SecureRandom.uuid_v7
+      create_unit(successor, "Ledger", level: "Team", parent_id: @department)
+      as_tenant do
+        @handler.rename_unit(@team, "Billing", effective_on: "2026-12-01")
+
+        assert_raises(RuntimeError, match: /last change on 2026-12-01/) do
+          @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @team ], successor_ids: [ successor ],
+                                     effective_on: "2026-11-15", retire_predecessors: true)
+        end
       end
     end
   end

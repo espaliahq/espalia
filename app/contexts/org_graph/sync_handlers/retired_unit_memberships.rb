@@ -14,8 +14,10 @@
 # RES stamps every event published here with the retirement as its
 # causation_id, so each change carries the retirement as its cause.
 #
-# A membership that began after the retirement date closes on the day it
-# began, since none can close before it starts.
+# A membership that began or changed after the retirement date closes on the
+# day of that change, since none can close before its last change. The date
+# comes from the member's stream: the projection keeps the latest event's
+# date, which a backdated change moves earlier.
 #
 # NEVER replayed on projection rebuild: it dispatches person commands. It is
 # subscribed, not registered in `Projections::Registry::REPLAYABLE`.
@@ -37,9 +39,11 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
     successor_ids = Array(data[:successor_ids])
     successor_id = successor_ids.first if successor_ids.one?
     commands = OrgGraph::CommandHandler.new
+    repository = OrgGraph::Repository.new
 
     OrgMembership.where(unit_id: data[:unit_id]).to_a.each do |membership|
-      effective_on = [ Date.iso8601(data[:effective_on]), membership.member_since ].max
+      changed_on = repository.load_person(membership.person_id).membership_changed_on(data[:unit_id])
+      effective_on = [ Date.iso8601(data[:effective_on]), membership.member_since, changed_on ].compact.max
       options = { effective_on: effective_on, plan_change_id: data[:plan_change_id] }
 
       if successor_id
