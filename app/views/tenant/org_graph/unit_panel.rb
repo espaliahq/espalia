@@ -22,7 +22,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       end
       div(class: "flex flex-wrap items-center gap-x-3 gap-y-1") do
         h3(id: "org-graph-unit", class: "text-lg font-semibold text-default") { @unit.name }
-        @comparison.unit_marks(@unit).each { render Components::Kit::Badge.new(it, tone: :info) }
+        @comparison.unit_marks(@unit).each { render Components::Kit::Badge.new(it, tone: :info) } unless own_card?
         unless @unit.held_by_espalia?
           render Components::Kit::Badge.new("From #{provider_label(@unit)}, read-only", leading_icon: :lock)
         end
@@ -33,6 +33,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
           plain "Edit unit"
         end
       end
+      people_changes(@unit) unless own_card?
 
       div(class: "@container mt-4") do
         div(class: "grid grid-cols-1 @2xl:grid-cols-2 gap-4") do
@@ -43,6 +44,10 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   end
 
   private
+
+  # A unit with teams beneath it and no one directly in it has no card of its
+  # own, so its marks and people changes show under its heading instead.
+  def own_card? = @overview.cards.first&.id == @unit.id
 
   def unit_summary
     beneath = @overview.descendants_of(@unit).group_by { |child| @overview.level_of(child) }.filter_map do |level, units|

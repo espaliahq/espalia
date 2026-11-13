@@ -27,7 +27,8 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     def unit_marks(unit) = { "Platform" => [ "was Core" ], "Engineering" => [ "moved" ] }.fetch(unit.name, [])
 
     def people_changes(unit)
-      unit.name == "Platform" ? [ PersonChange.new(name: "Brook Tamsin", text: "joined 5 Nov") ] : []
+      { "Platform" => [ PersonChange.new(name: "Brook Tamsin", text: "joined 5 Nov") ],
+        "Engineering" => [ PersonChange.new(name: "Cyril Moss", text: "left 31 Oct") ] }.fetch(unit.name, [])
     end
 
     def window_label = "Since 1 Oct"
@@ -40,14 +41,14 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     build_org_graph(@tenant)
   end
 
-  def render_page(tenant: @tenant, **slots)
+  def render_page(tenant: @tenant, selected_unit_id: nil, **slots)
     ActsAsTenant.with_tenant(tenant) do
       controller = ApplicationController.new
       controller.request = ActionDispatch::TestRequest.create
       user = @user
       controller.define_singleton_method(:current_user) { user }
       view = Views::Tenant::OrgGraph::ShowView.new(
-        overview: OrgGraph::UnitsOverview.new, user: @user, current_tenant: tenant, **slots
+        overview: OrgGraph::UnitsOverview.new(selected_unit_id:), user: @user, current_tenant: tenant, **slots
       )
       Nokogiri::HTML5(controller.view_context.render(view))
     end
@@ -111,5 +112,21 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     assert_includes card.text, "was Core"
     assert_includes page.at_css("#org-graph-unit").parent.text, "moved"
     assert_equal "Brook Tamsin joined 5 Nov", card.at_css("[aria-label='Since 1 Oct in Platform'] li").text.squish
+  end
+
+  should "show the changes of an opened unit with no card of its own under its heading" do
+    section = render_page(comparison: StubComparison.new).at_css("section[aria-labelledby=org-graph-unit]")
+
+    assert_includes section.at_css("#org-graph-unit").parent.text, "moved"
+    assert_equal "Cyril Moss left 31 Oct", section.at_css("[aria-label='Since 1 Oct in Engineering'] li").text.squish
+    assert_nil section.at_css("[id^='unit-'] [aria-label='Since 1 Oct in Engineering']")
+  end
+
+  should "mark an opened unit with a card of its own once, on the card" do
+    platform = ActsAsTenant.with_tenant(@tenant) { OrgUnit.find_by!(name: "Platform") }
+    page = render_page(comparison: StubComparison.new, selected_unit_id: platform.id)
+
+    refute_includes page.at_css("#org-graph-unit").parent.text, "was Core"
+    assert_includes page.at_css("#unit-#{platform.id}").text, "was Core"
   end
 end
