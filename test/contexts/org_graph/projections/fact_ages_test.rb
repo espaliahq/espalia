@@ -119,6 +119,19 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     assert_nil age(@ada, "membership", @payments)
   end
 
+  should "start a moved membership's age again in its new unit" do
+    travel_to START + 4.days
+    as_tenant do
+      @handler.move_membership(@ada.id, @payments, @platform, effective_on: Date.current, moved_by_id: @grace.id)
+      @handler.move_membership(@grace.id, @payments, @platform, effective_on: Date.current)
+    end
+
+    moved = age(@ada, "membership", @platform)
+    assert_nil age(@ada, "membership", @payments)
+    assert_equal [ START + 4.days, @grace.id ], [ moved.changed_at, moved.checked_by_id ]
+    assert_nil age(@grace, "membership", @platform)
+  end
+
   context ".stale" do
     should "list the facts past the tenant's threshold, oldest first" do
       as_tenant { @handler.set_membership(@ada.id, @platform, **ESPALIA) }

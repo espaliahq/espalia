@@ -33,7 +33,8 @@ class OrgGraph::Projections::FactAges
   def self.handled_events
     FACT_EVENTS + [
       OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonReturned,
-      OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::FactConfirmed
+      OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::MembershipMoved,
+      OrgGraph::Events::FactConfirmed
     ]
   end
 
@@ -53,6 +54,7 @@ class OrgGraph::Projections::FactAges
       when OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonReturned then rows(event, LEFT).delete_all
       when OrgGraph::Events::MembershipSet then handle_membership_set(event)
       when OrgGraph::Events::MembershipEnded then rows(event, membership, event.data[:unit_id]).delete_all
+      when OrgGraph::Events::MembershipMoved then handle_membership_moved(event)
       when OrgGraph::Events::FactConfirmed then handle_confirmed(event)
       end
     end
@@ -77,6 +79,16 @@ class OrgGraph::Projections::FactAges
     return rows(event, membership, data[:unit_id]).delete_all unless data[:provider] == "espalia"
 
     changed(event, membership, data[:unit_id], data.slice(:allocation, :role), checked_by_id: data[:set_by_id])
+  end
+
+  # A move places the person in a unit nobody has confirmed them in yet, so
+  # its age starts again there.
+  def handle_membership_moved(event)
+    data = event.data
+    rows(event, membership, data[:from_unit_id]).delete_all
+    return unless data[:provider] == "espalia"
+
+    changed(event, membership, data[:unit_id], data.slice(:allocation, :role), checked_by_id: data[:moved_by_id])
   end
 
   def handle_confirmed(event)
