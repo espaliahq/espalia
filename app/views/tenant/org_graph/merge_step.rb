@@ -14,7 +14,7 @@ class Views::Tenant::OrgGraph::MergeStep < Views::Tenant::OrgGraph::UnitStep
   def body
     count = memberships.size
     p(class: "text-sm text-default") do
-      moves = count.zero? ? "No one is in #{@unit.name}" : "#{people(count)} in #{@unit.name} move to it with their role and allocation"
+      moves = count.zero? ? "No one is in #{@unit.name}" : "#{people(count)} in #{@unit.name} #{count == 1 ? 'moves' : 'move'} to it with their role and allocation"
       "Choose the unit that carries on. #{moves}, and #{@unit.name} retires."
     end
     people_list(memberships, label: "People moving from #{@unit.name}") if count.positive?

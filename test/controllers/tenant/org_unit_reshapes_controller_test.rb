@@ -75,6 +75,7 @@ class Tenant::OrgUnitReshapesControllerTest < ActionDispatch::IntegrationTest
     should "move everyone to the unit that carries on" do
       get new_tenant_org_unit_merge_path(@org[:payments])
 
+      assert_includes drawer.text, "1 person in Payments moves to it"
       targets = labels("select#org-unit-merge-into option").drop(1).map { it.delete("\u2003") }
       assert_includes targets, "Platform"
       assert_not_includes targets, "Payments"
