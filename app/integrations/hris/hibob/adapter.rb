@@ -45,6 +45,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
   #   :skipped_no_title
   def sync_people
+    @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     employees = fetch_employees
     result = build_initial_result
 
@@ -439,7 +440,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # context: acting_via :hris + the sync's correlation_id on every event's
   # metadata, plus the tenant id the projections and replayer rely on.
   def with_hris_event_context(&block)
-    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
+    AuditMetadata.with(acting_via: :hris, correlation_id: @sync_correlation_id || correlation_id.presence || SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
         Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
       end

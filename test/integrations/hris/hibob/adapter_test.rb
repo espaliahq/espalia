@@ -970,6 +970,14 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
             new_events.map { |e| [ e.class, *e.data.values_at(:person_id, :effective_on, :provider) ] }
         end
 
+        should "share one correlation id between the leaving and the sync's other changes" do
+          employees = with_employee("bob-002") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
+          build_adapter(employees.reject { it["id"] == "bob-001" }).sync_people
+
+          assert_equal [ OrgGraph::Events::PersonLeft, OrgGraph::Events::TitleChanged ].to_set, new_events.to_set(&:class)
+          assert_equal 1, new_events.map { it.metadata[:correlation_id] }.uniq.size
+        end
+
         should "deactivate at once and write the PersonLeft on the next sync when the first write fails" do
           handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
           handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
