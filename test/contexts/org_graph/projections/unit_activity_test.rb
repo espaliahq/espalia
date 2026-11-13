@@ -153,6 +153,20 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     assert_no_match(/7/, [ over.before, over.after ].to_json)
   end
 
+  should "read the field of a handover written before the event named it from the unit's reference" do
+    as_tenant do
+      Rails.configuration.event_store.publish(
+        OrgGraph::Events::UnitHandedOver.new(data: { unit_id: @payments, provider: "hibob", previous_provider: "espalia",
+                                                     external_ref: "work.team/7", previous_external_ref: nil,
+                                                     effective_on: "2026-02-01", handed_over_by_id: nil },
+                                             metadata: { tenant_id: @tenant.id }),
+        stream_name: EventStreamNaming.org_structure_stream(tenant: @tenant)
+      )
+    end
+
+    assert_equal({ "provider" => "hibob", "field" => "work.team" }, feed(@payments).first.after)
+  end
+
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do

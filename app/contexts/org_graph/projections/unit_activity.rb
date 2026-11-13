@@ -62,8 +62,8 @@ class OrgGraph::Projections::UnitActivity
       [ [ data[:unit_id], { after: data.slice(:succession_id, :successor_ids) } ] ]
     when OrgGraph::Events::UnitSucceeded then succession_entries(data)
     when OrgGraph::Events::UnitHandedOver
-      [ [ data[:unit_id], { subject: "provider", before: source(data[:previous_provider], data[:previous_external_ref]),
-                            after: source(data[:provider], data[:external_ref]) } ] ]
+      [ [ data[:unit_id], { subject: "provider", before: source(data, :previous_provider, :previous_field, :previous_external_ref),
+                            after: source(data, :provider, :field, :external_ref) } ] ]
     when OrgGraph::Events::UnitOwnerAdded
       [ [ data[:unit_id], owner(data, after: { owner: true }) ] ]
     when OrgGraph::Events::UnitOwnerRemoved
@@ -83,9 +83,12 @@ class OrgGraph::Projections::UnitActivity
     (data[:predecessor_ids] + data[:successor_ids]).uniq.map { |unit_id| [ unit_id, { after: after } ] }
   end
 
-  # A unit's reference is "<field path>/<value>", and the value stays out of
-  # the feed: a field can name people.
-  def source(provider, external_ref) = { provider:, field: external_ref&.split("/", 2)&.first }
+  # The value stays out of the feed, as a field can name people. A handover
+  # written before the event named its field reads it from the unit's
+  # reference, "<field path>/<value>".
+  def source(data, provider, field, external_ref)
+    { provider: data[provider], field: data.key?(field) ? data[field] : data[external_ref]&.split("/", 2)&.first }
+  end
 
   def owner(data, **values)
     { subject: "owner:#{data[:person_id]}", person_id: data[:person_id], **values }

@@ -162,6 +162,15 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_nil membership(@staff[3])
     end
 
+    should "read in each unit's feed as one handover, leading with it and leaving out the provider-only moves" do
+      hand_over!(resolutions: { @legacy => @search })
+
+      assert_equal "handed it to HiBob, read from work.team, moved 1 person out, and added 1 person",
+        OrgUnitActivity.feed(@payments).first.summary
+      assert_match(/\Ahanded it to HiBob, read from work\.team, replaced Legacy with Search/, OrgUnitActivity.feed(@search).first.summary)
+      assert_not_includes OrgUnitActivity.feed(@search).first.summary, "changed the terms"
+    end
+
     should "refuse a comparison that has gone stale, writing nothing" do
       fingerprint = compare(matches: @matches, resolutions: retire_legacy).fingerprint
       @values["hb-0"] = item("8", "Search")

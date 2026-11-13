@@ -71,7 +71,7 @@ Use when the rebuild fits comfortably inside the predeploy window (small to medi
 
 #### Recorded: `org_graph/unit_activity` v3 (a handover in the unit's feed, [#122](https://github.com/espaliahq/espalia/issues/122))
 
-Path A: `REBUILD_ON_DEPLOY=org_graph/unit_activity`, removed once the deploy is live. The rebuild adds one entry for each `UnitHandedOver` already in the store, under its handover's cause, and changes no other row: entry ids derive from the event and the unit, so they stay put. A tenant that has never handed a level over reads exactly as before. The seeded dev database holds no Org Graph events, so there was nothing to time; the projection reads only Org Graph streams, so the window scales with each tenant's Org Graph history, not its assessments. While it runs, unit feeds read as empty.
+Path A: `REBUILD_ON_DEPLOY=org_graph/unit_activity`, removed once the deploy is live. The rebuild adds one entry for each `UnitHandedOver` already in the store, under its handover's cause, and changes no other row: entry ids derive from the event and the unit, so they stay put. The new entry changes how that cause reads. A handover that read "changed the terms of 5 people" now reads "handed it to HiBob, read from work.team", since moving members to the new provider on the same terms earns no phrase of its own. A tenant that has never handed a level over reads exactly as before. The seeded dev database holds no Org Graph events, so there was nothing to time; the projection reads only Org Graph streams, so the window scales with each tenant's Org Graph history, not its assessments. While it runs, unit feeds read as empty.
 
 #### Recorded: `person_development/current_assessment` v8 (per-role alignment, ADR-22)
 
