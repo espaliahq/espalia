@@ -166,12 +166,14 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   end
 
   # A leaving ends the leaver's memberships the same day, and those show on the
-  # leaving line. A membership a leaving didn't end still names its unit.
+  # leaving line. A leaving that ended none names the units the person is in today.
   def leaver_units(change)
     ended = @changes.select { it.kind == :membership_ended && it.person_id == change.person_id && it.effective_on == change.effective_on }
+    return ended.map(&:unit_id).uniq if ended.any?
+
     @leaver_memberships ||= OrgMembership.where(person_id: @changes.select { it.kind == :left }.map(&:person_id))
                                          .pluck(:person_id, :unit_id).group_by(&:first)
-    (ended.map(&:unit_id) + @leaver_memberships.fetch(change.person_id, []).map(&:last)).uniq
+    @leaver_memberships.fetch(change.person_id, []).map(&:last)
   end
 
   def left_with?(change)

@@ -104,6 +104,19 @@ class OrgGraph::DateComparisonTest < ActiveSupport::TestCase
     assert_equal [ "Ada Quill moved in from Core Platform 20 Oct" ], lines(comparison, :checkout)
   end
 
+  should "say a leaver left only the units the leaving ended, after they return to another" do
+    reorganise
+    as_tenant do
+      @handler.return_to_work(@org[:cyril].id, **ESPALIA, effective_on: "2026-11-06")
+      @handler.set_membership(@org[:cyril].id, @org[:platform], **ESPALIA, effective_on: "2026-11-06", allocation: 1.0)
+    end
+    travel_to TODAY
+    comparison = compare("2026-10-01")
+
+    assert_includes lines(comparison, :checkout), "Cyril Moss left 31 Oct"
+    assert_equal [ "Cyril Moss joined 6 Nov" ], lines(comparison, :platform).grep(/Cyril/)
+  end
+
   should "name a forgotten person as a former member" do
     reorganise
     travel_to TODAY
