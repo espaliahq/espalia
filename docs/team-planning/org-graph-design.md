@@ -271,7 +271,7 @@ can be added later, at the cost of gaps in history.
 | # | Answer |
 |---|---|
 | R1 | The existing person id. Identifiers stay in the `people` row. |
-| R2 | The person stream, written by the sync. Country and FTE need adding to what the sync reads, as does any field a structure level names. |
+| R2 | The person stream, written by the sync. The sync must also bring in site and country, FTE and employment type, and start date, and any field a structure level names. |
 | R3 | The structure stream, with its own history and succession, and membership events in the person stream. |
 | R4 | The history projection. |
 | R5 | A provider and a confirmation on every event. |

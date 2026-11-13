@@ -38,7 +38,7 @@ flowchart LR
     s12[1.2 Sync writes differences]
     s13[1.3 First sync records all]
     s14[1.4 People columns projected]
-    s15[1.5 Read country and FTE]
+    s15[1.5 Read site, FTE, start date]
     s16[1.6 Missing person has left]
   end
   subgraph E2[E2 Structure and membership]
@@ -136,7 +136,7 @@ work sets the length of the plan.
 | 1.2 | Sync compares each row with the current projection and writes only differences | 1.1 |
 | 1.3 | First sync writes `PersonRecorded` for everyone | 1.2 |
 | 1.4 | Non-identifier `people` columns become a projection of the stream | 1.1 |
-| 1.5 | Sync reads country and FTE | 1.2 |
+| 1.5 | Sync brings in site and country, FTE and employment type, and start date | 1.2 |
 | 1.6 | A person missing from the HRIS gets `PersonLeft` | 1.2 |
 
 ### E2 Structure and membership

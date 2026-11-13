@@ -116,9 +116,8 @@ everything can be changed for the sake of the plan without touching the source.
   decides.
 - **Guardrails are shown, not enforced.** A tenant can state the rules it expects plans to
   meet: the budget, how strictly positions must follow it, limits on span or level mix. A plan
-  that breaks one says where and by how much, and carries on. Tenant validation only
-  becomes binding if a plan is ever submitted for approval, which is a later workflow.
-  Until then nothing stops a planner trying the thing the organisation would not sign.
+  that breaks one says where and by how much, and carries on. Tenant validation
+  becomes binding only when a plan is approved. Until then nothing stops a planner trying the thing the organisation would not sign.
 
 ### Describe structure, demand and people separately
 
@@ -409,6 +408,8 @@ against the Org Graph, each one always has a status:
 - **Done.** The Org Graph now matches it. It is no longer a difference, and the plan
   shrinks towards what is still to do.
 - **Pending.** Not yet true. It is carried forward.
+- **Raised.** Pending, and someone has recorded that the change was asked for in the
+  system that owns it.
 - **Conflicting.** The Org Graph went somewhere else: the person planned to move has left,
   the position was filled by someone other than planned. The change is kept, flagged, and
   waits for a decision: restate it, or clear it.
@@ -434,8 +435,8 @@ changes, and a person or an agent raises each one in the system that owns it, wi
 own authority there. Espalia can note that a change was raised. It never treats one as
 done until the Org Graph says so.
 
-HRIS teams map to units the way HRIS titles map to roles. A team name with no mapping is
-shown for someone to map, never guessed. Where Espalia holds a finer structure beneath an
+A level of the structure the HRIS provides is mirrored as it is: each value of the chosen
+field is a unit, and nobody maps one by hand. Where Espalia holds a finer structure beneath an
 HRIS team, and the HRIS then moves the person to a different team, the finer placement is
 a conflict like any other.
 

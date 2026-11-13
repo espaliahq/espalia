@@ -31,7 +31,8 @@ answer each one, and so we can see the smallest record that unblocks planning.
 | R7 | Forgetting a person, announced as an event that projections can act on. |
 
 Not required for a first version: reasons for a change, pay from an integration,
-positions from an applicant tracking system, and mapping of HRIS team names to units.
+positions from an applicant tracking system, and mapping an HRIS team by hand onto a unit
+Espalia already holds.
 
 The budget is not asked of the Org Graph. See *The headcount budget*.
 
