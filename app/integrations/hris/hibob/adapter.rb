@@ -90,6 +90,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       # Pass 2b: Record new people in the Org Graph, then write each fact that differs
       record_org_graph_differences(org_graph_facts, managers, result)
 
+      # Pass 2c: Leave, in the Org Graph, everyone the response no longer holds
+      record_org_graph_absences(employees, result)
+
       # Pass 3: Deactivate people no longer in HRIS
       deactivate_removed(employees, result)
 
@@ -332,6 +335,25 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
           employment_status: org_graph_status(person, row[:started_on], today),
           started_on: row[:started_on], left_on: row[:terminated_on], **facts)
+      rescue => e
+        result[:errors] << { person_id: person.id, error: e.message }
+      end
+    end
+  end
+
+  # A person HiBob stops returning has left, dated by the sync that first
+  # misses them. An empty response reads as a failed sync rather than
+  # everyone leaving at once, so it writes nothing.
+  def record_org_graph_absences(employees, result)
+    current_external_ids = employees.filter_map { |e| e["id"] }
+    return if current_external_ids.empty?
+
+    with_hris_event_context do
+      handler = OrgGraph::CommandHandler.new
+      today = Date.current
+
+      Person.where(hris_source: "hibob").where.not(external_id: current_external_ids).find_each do |person|
+        result[:org_graph_events] += handler.record_absence(person.id, provider: provider_name, effective_on: today)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end

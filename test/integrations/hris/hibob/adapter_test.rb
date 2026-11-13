@@ -926,6 +926,56 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal 1, result[:role_changed]
         assert_operator person_development_event_count, :>, pd_before
       end
+
+      context "when HiBob no longer returns someone" do
+        setup do
+          @without_bob = @fixture["employees"].reject { it["id"] == "bob-001" }
+        end
+
+        should "write a PersonLeft dated by the first sync to miss them, and none on later days" do
+          first = build_adapter(@without_bob).sync_people
+          second = travel(1.day) { build_adapter(@without_bob).sync_people }
+
+          assert_empty first[:errors]
+          assert_equal [ 1, 0 ], [ first[:org_graph_events], second[:org_graph_events] ]
+          assert_equal [ [ OrgGraph::Events::PersonLeft, @people["bob-001"].id, Date.current.iso8601, "hibob" ] ],
+            new_events.map { |e| [ e.class, *e.data.values_at(:person_id, :effective_on, :provider) ] }
+        end
+
+        should "write nothing for a leaver HiBob already showed as inactive" do
+          result = travel(1.day) { build_adapter(@fixture["employees"].reject { it["id"] == "bob-003" }).sync_people }
+
+          assert_empty result[:errors]
+          assert_empty new_events
+        end
+
+        should "write nothing for anyone when HiBob returns nobody" do
+          result = build_adapter([]).sync_people
+
+          assert_equal 0, result[:org_graph_events]
+          assert_empty new_events
+        end
+
+        should "write nothing for anyone when the fetch fails" do
+          adapter = Hris::Hibob::Adapter.new(@tenant)
+          failing = Object.new
+          failing.define_singleton_method(:search_people) { |**| raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "down") }
+          adapter.instance_variable_set(:@client, failing)
+
+          assert_raises(Hris::Hibob::Errors::ApiError) { adapter.sync_people }
+          assert_empty new_events
+        end
+
+        should "write a PersonReturned on the same stream when they come back" do
+          build_adapter(@without_bob).sync_people
+          result = build_adapter(@fixture["employees"]).sync_people
+
+          assert_empty result[:errors]
+          assert_equal [ OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonReturned ],
+            Rails.configuration.event_store.read.stream(stream_of(@people["bob-001"])).to_a.drop(1).map(&:class)
+          assert_equal @people["bob-001"].id, ActsAsTenant.with_tenant(@tenant) { Person.find_by(external_id: "bob-001").id }
+        end
+      end
     end
   end
 
