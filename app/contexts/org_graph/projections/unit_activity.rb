@@ -15,7 +15,7 @@ class OrgGraph::Projections::UnitActivity
 
   # Bump when `reset!` or any handler would write different state from the
   # same event payload than before.
-  CODE_VERSION = 1
+  CODE_VERSION = 2
 
   ACTOR_KEYS = %i[created_by_id renamed_by_id moved_by_id retired_by_id stated_by_id added_by_id removed_by_id
                   set_by_id ended_by_id].freeze
@@ -107,7 +107,10 @@ class OrgGraph::Projections::UnitActivity
       learned_at: event.timestamp,
       causation_id: event.metadata[:causation_id],
       correlation_id: event.metadata[:correlation_id],
+      cause_id: event.metadata[:correlation_id] || event.event_id,
       changes_back_id: data[:changed_back_id],
+      plan_id: data[:plan_id],
+      plan_change_id: data[:plan_change_id],
       **attributes
     )
   end

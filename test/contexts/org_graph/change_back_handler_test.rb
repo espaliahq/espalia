@@ -188,4 +188,119 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     change_back(latest(@payments), actor: actor_for(@lead))
     assert_equal @lead.id, latest(@payments).actor_id
   end
+
+  context "#change_back_group" do
+    setup do
+      @grace = as_tenant { create(:person, tenant: @tenant) }
+      as_tenant do
+        @handler.record_person(@grace.id, **ESPALIA, employment_status: "employed")
+        [ @ada, @grace ].each { |person| @handler.set_membership(person.id, @payments, **ESPALIA) }
+      end
+    end
+
+    should "reverse every part, newest first, under one new cause" do
+      as_tenant do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01")
+        request.move_membership(@ada.id, @platform, @engineering, effective_on: "2026-02-01")
+        request.end_membership(@grace.id, @payments, **ESPALIA)
+      end
+
+      change_back_group("request-1")
+
+      assert membership(@ada, @payments)
+      assert_nil membership(@ada, @engineering)
+      assert membership(@grace, @payments)
+      parts = as_tenant { OrgUnitActivity.caused_by("request-1").to_a }
+      assert parts.all?(&:changed_back?)
+      inverses = as_tenant { OrgUnitActivity.where(changes_back_id: parts.map(&:event_id)).distinct.pluck(:correlation_id) }
+      assert_equal 1, inverses.size
+      assert_not_equal "request-1", inverses.first
+    end
+
+    should "write the inverses under the request's cause when there is one" do
+      as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1").end_membership(@ada.id, @payments, **ESPALIA) }
+
+      AuditMetadata.with(acting_via: :web, correlation_id: "request-2") { change_back_group("request-1") }
+
+      assert_equal "request-2", latest(@payments).cause_id
+    end
+
+    should "refuse once one part has been changed back alone, and point to changing back the rest one at a time" do
+      as_tenant do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        [ @ada, @grace ].each { |person| request.end_membership(person.id, @payments, **ESPALIA) }
+      end
+      change_back(as_tenant { OrgUnitActivity.caused_by("request-1").first })
+
+      assert_raises(RuntimeError, match: "one entry at a time") { change_back_group("request-1") }
+    end
+
+    should "refuse an approved split as a whole, naming the part that can't be changed back" do
+      billing = SecureRandom.uuid_v7
+      as_tenant do
+        @structure.create_unit(billing, "Billing", level_id: @squads, effective_on: "2026-01-01")
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM, cause_id: "approval-1").apply_succession(
+          SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ billing, @platform ],
+          placements: { @ada.id => billing, @grace.id => @platform }, effective_on: "2026-07-01"
+        )
+      end
+
+      assert_raises(RuntimeError, match: "can't be changed back") { change_back_group("approval-1") }
+      assert membership(@ada, billing)
+      assert_not(as_tenant { OrgUnitActivity.caused_by("approval-1").any?(&:changed_back?) })
+    end
+
+    should "refuse the whole group once a change from outside it has overtaken any part" do
+      as_tenant do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        request.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01")
+        request.move_membership(@grace.id, @payments, @platform, effective_on: "2026-02-01")
+        @handler.set_membership(@grace.id, @platform, **ESPALIA, allocation: 0.5)
+      end
+
+      assert_raises(RuntimeError, match: "later change") { change_back_group("request-1") }
+      assert membership(@ada, @platform)
+    end
+
+    should "refuse a group still being written, rather than reverse a part it holds no lock for" do
+      request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+      as_tenant { request.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01") }
+      repository = OrgGraph::Repository.new
+      grace, payments, platform = @grace, @payments, @platform
+      repository.define_singleton_method(:lock_person) do |person_id|
+        super(person_id)
+        request.move_membership(grace.id, payments, platform, effective_on: "2026-02-01") if person_id != grace.id
+      end
+
+      assert_raises(RuntimeError, match: "still being written") do
+        as_tenant { OrgGraph::ChangeBackHandler.new(actor: SYSTEM, repository:).change_back_group("request-1") }
+      end
+      assert membership(@ada, @platform)
+    end
+
+    should "lock the structure before any person, and the people in a fixed order" do
+      as_tenant do
+        OrgGraph::StructureCommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+          .rename_unit(@payments, "Payments Core", effective_on: "2026-02-01")
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        [ @grace, @ada ].each { |person| request.move_membership(person.id, @payments, @platform, effective_on: "2026-02-01") }
+      end
+      repository = OrgGraph::Repository.new
+      locked = []
+      repository.define_singleton_method(:lock_stream) do |stream|
+        locked << stream
+        super(stream)
+      end
+
+      as_tenant { OrgGraph::ChangeBackHandler.new(actor: SYSTEM, repository:).change_back_group("request-1") }
+
+      people = [ @ada, @grace ].map(&:id).sort.map { |id| EventStreamNaming.person_stream(id, tenant: @tenant) }
+      assert_equal [ EventStreamNaming.org_structure_stream(tenant: @tenant), *people ], locked.uniq.first(3)
+    end
+  end
+
+  def change_back_group(cause_id, actor: SYSTEM)
+    as_tenant { OrgGraph::ChangeBackHandler.new(actor:).change_back_group(cause_id) }
+  end
 end

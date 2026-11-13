@@ -26,6 +26,9 @@ class OrgUnitActivity < ApplicationRecord
   belongs_to :person, optional: true
   belongs_to :actor, class_name: "Person", optional: true
 
+  # Every event carries a correlation id; the event's own id stands in for one
+  # recorded without.
+
   # A unit's activity, newest first by when the Org Graph learned of it.
   #
   # @param unit_id [String]
@@ -34,11 +37,38 @@ class OrgUnitActivity < ApplicationRecord
     where(unit_id: unit_id.to_s.downcase).order(position: :desc)
   end
 
+  # A unit's activity with the entries of one cause folded into one group,
+  # newest first by each group's latest entry. A page never splits a group.
+  #
+  # @param unit_id [String]
+  # @param page [Integer] from 1; anything lower reads as 1
+  # @param per_page [Integer] groups per page
+  # @return [Array<OrgUnitActivity::Group>]
+  def self.feed(unit_id, page: 1, per_page: 25)
+    causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(:cause_id)
+                              .offset((page.to_i.clamp(1..) - 1) * per_page).limit(per_page).pluck(:cause_id)
+    parts = for_unit(unit_id).where(cause_id: causes).group_by(&:cause_id)
+    causes.map { |cause| OrgUnitActivity::Group.new(parts.fetch(cause)) }
+  end
+
+  # Every entry, in any unit, written under one cause.
+  #
+  # @param cause_id [String]
+  # @return [ActiveRecord::Relation<OrgUnitActivity>]
+  def self.caused_by(cause_id)
+    where(cause_id: cause_id.to_s).order(position: :desc)
+  end
+
   # @return [Boolean]
   def reversible? = REVERSIBLE.include?(event_type)
 
+  # @param apart_from [String, nil] a cause whose own later changes don't count
   # @return [Boolean] true when nothing has changed the same fact since
-  def latest? = !self.class.where(unit_id:, subject:).where(position: (position + 1)..).exists?
+  def latest?(apart_from: nil)
+    later = self.class.where(unit_id:, subject:).where(position: (position + 1)..)
+    later = later.where.not(cause_id: apart_from) if apart_from
+    !later.exists?
+  end
 
   # @return [Boolean]
   def changed_back? = changed_back_by_id.present?
