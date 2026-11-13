@@ -344,8 +344,18 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
         assert_equal "hibob", structure_events.last.data[:previous_provider]
         assert_no_difference -> { structure_events.size } do
           @handler.set_fact_provider("title", "espalia", effective_on: @today + 2)
-          @handler.set_fact_provider("manager", "espalia", effective_on: @today)
         end
+      end
+    end
+
+    should "write a first choice of Espalia once, so a later claim knows someone chose" do
+      as_tenant do
+        assert_difference -> { structure_events.size }, 1 do
+          @handler.set_fact_provider("manager", "espalia", effective_on: @today)
+          @handler.set_fact_provider("manager", "espalia", effective_on: @today + 1)
+        end
+        assert_equal %w[espalia espalia], structure_events.last.data.values_at(:provider, :previous_provider)
+        assert_equal [], @handler.claim_facts(%w[manager], "hibob", effective_on: @today)
       end
     end
 

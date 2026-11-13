@@ -123,7 +123,9 @@ class OrgGraph::StructureAggregate
     }))
   end
 
-  # Sets who supplies a kind of person fact. An unchanged provider writes nothing.
+  # Sets who supplies a kind of person fact. An unchanged provider writes
+  # nothing, but the first choice is always written, Espalia included, so a
+  # later {#claim_facts} knows someone chose.
   #
   # @param fact [String, Symbol] one of {FACTS}
   # @param provider [String] one of {PROVIDERS}
@@ -135,8 +137,9 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Unknown fact: #{fact}" unless FACTS.include?(fact)
 
     provider = require_provider(provider)
+    return if @fact_providers[fact] == provider
+
     previous = @fact_providers.fetch(fact, ESPALIA)
-    return if provider == previous
 
     apply(OrgGraph::Events::FactProviderSet.new(data: {
       fact: fact,

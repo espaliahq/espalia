@@ -14,6 +14,16 @@ class TenantHrisFactsTest < ActiveSupport::TestCase
   end
 
   context "connecting an HRIS" do
+    should "leave a fact an admin chose for Espalia before connecting" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new.set_fact_provider("title", "espalia", effective_on: Date.current)
+      end
+      @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true }, service_user_id: "user", api_token: "token")
+
+      assert_equal "espalia", providers["title"]
+      assert_equal "hibob", providers["level"]
+    end
+
     should "hand it the facts it supplies by default, and nothing else" do
       @tenant.update_hris!(settings: { provider: "hibob", sync_enabled: true }, service_user_id: "user", api_token: "token")
 
