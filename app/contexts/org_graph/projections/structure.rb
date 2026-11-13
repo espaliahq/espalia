@@ -107,7 +107,7 @@ class OrgGraph::Projections::Structure
   end
 
   def handle_level_provider_set(data)
-    OrgTaxonomyLevel.find(data[:level_id]).update!(provider: data[:provider], provider_effective_on: data[:effective_on])
+    OrgTaxonomyLevel.find(data[:level_id]).update!(provider: data[:provider], provider_field: data[:field], provider_effective_on: data[:effective_on])
   end
 
   def handle_fact_provider_set(data)

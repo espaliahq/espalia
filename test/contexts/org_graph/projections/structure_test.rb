@@ -53,6 +53,18 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
       end
     end
 
+    should "keep the field a level's units are read from, nil until one is named" do
+      as_tenant do
+        assert_nil OrgTaxonomyLevel.find(@department_level).provider_field
+
+        @handler.set_level_provider(@department_level, "hibob", field: "work.custom.department_x", effective_on: "2026-02-01")
+        assert_equal "work.custom.department_x", OrgTaxonomyLevel.find(@department_level).provider_field
+
+        @handler.set_level_provider(@department_level, "hibob", field: "work.department", effective_on: "2026-03-01")
+        assert_equal "work.department", OrgTaxonomyLevel.find(@department_level).provider_field
+      end
+    end
+
     should "keep each fact's current provider, Espalia until one is set" do
       as_tenant do
         @handler.set_fact_provider("title", "hibob", effective_on: "2026-02-01")

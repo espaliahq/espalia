@@ -5,7 +5,8 @@
 # Projected from TaxonomyDefined by {OrgGraph::Projections::Structure}. The
 # primary key is the event-carried level id, kept through a rename; position
 # orders the levels top first. Its provider supplies the level's units, and is
-# Espalia until LevelProviderSet names another.
+# Espalia until LevelProviderSet names another, with the HRIS field
+# (provider_field) each person's unit at the level is read from.
 #
 class OrgTaxonomyLevel < ApplicationRecord
   acts_as_tenant :tenant
