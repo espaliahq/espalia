@@ -55,7 +55,7 @@ class CalibrationSessions::ParticipantCandidates
   # inside their own subtree (themselves included — a facilitator who
   # directly manages ICs may sit in the room as a rater too).
   def manager_scope
-    scope = Person.where(id: Person.where.not(manager_id: nil).select(:manager_id).distinct)
+    scope = Person.where(forgotten_at: nil).where(id: Person.where.not(manager_id: nil).select(:manager_id).distinct)
     return scope if @admin
     return Person.none unless @viewer
 
