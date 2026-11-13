@@ -37,7 +37,7 @@ class Views::Integrations::HrisFieldPreviewFrameTest < ActiveSupport::TestCase
 
     html = render_frame(target: "country", preview:)
 
-    assert_equal "Team as the country", html.at_css("h3").text
+    assert_equal "Team as the country", html.at_css("h2").text
     assert_equal({ "Have a value" => "3", "Would change" => "2", "Blank" => "1", "Withheld by their record" => "0" },
                  html.css("dl > div").to_h { [ it.at_css("dt").text, it.at_css("dd").text ] })
     assert_empty html.css("li")

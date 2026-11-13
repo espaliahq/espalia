@@ -46,7 +46,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select FRAME do
-        assert_select "h3", text: "Team as the level"
+        assert_select "h2", text: "Team as the level"
         assert_select "li", count: 2
         assert_select "li", text: /Payments\s*1 person/
       end
@@ -56,7 +56,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
     should "count a fact's values" do
       get_preview(target: "cost_centre")
 
-      assert_select "#{FRAME} h3", text: "Team as the cost centre"
+      assert_select "#{FRAME} h2", text: "Team as the cost centre"
       assert_select "#{FRAME} dd", text: "2", minimum: 1
       assert_select "#{FRAME} li", count: 0
     end
@@ -65,7 +65,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
       get_preview(frame: false)
 
       assert_select "h1", text: "Preview an HRIS field"
-      assert_select "#{FRAME} h3", text: "Team as the level"
+      assert_select "#{FRAME} h2", text: "Team as the level"
     end
 
     should "say why for a field the HRIS does not have" do
@@ -108,7 +108,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
       get_preview(adapter: FakeAdapter.new(nil, RuntimeError.new("the HRIS was read")))
 
       assert_select FRAME, text: /don't have access/
-      assert_select "h3", count: 0
+      assert_select "h2", count: 0
     end
   end
 end
