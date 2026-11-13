@@ -171,7 +171,9 @@ be reconstructed.
 ## Reading as of an instant (R4)
 
 Each fact has two times: when it took effect, and when the Org Graph learned it. A history
-projection keeps one row per fact per period of validity. From it:
+projection keeps one row per fact, per period of validity, per time learned. A correction
+adds a row with a later learned time. It never overwrites the row it corrects, or the Org
+Graph could no longer say what it knew before. From it:
 
 - `as_of(instant)` gives the roster and structure the Org Graph knew at that instant.
 - `changes_between(a, b)` lists the facts that differ.
@@ -259,6 +261,11 @@ The likely answer is to list it for someone to resolve, as a disagreement is.
   row and `PersonForgotten` is written.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
+- The sync must not undo it. An HRIS often keeps returning a person long after they
+  leave, and a sync that upserts every row it is given would write the name back. The
+  row keeps a keyed hash of the external id, enough to recognise the person and nothing
+  to identify them by. The sync skips a row that matches a forgotten person. If the HRIS
+  shows them employed again, they are recorded as a new person.
 
 Operational facts are retained. In a small organisation they can still point to one
 person: the only principal designer in a team is identifiable without a name. We accept
