@@ -73,9 +73,9 @@ class OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
         @structure.rename_unit(@payments, "Payments core", effective_on: "2026-03-01")
       end
 
-      assert_not person_events(@ada).last.data.key?(:plan_id)
-      assert_nil structure_events.last.data[:plan_id]
-      assert_nil structure_events.last.data[:plan_change_id]
+      [ person_events(@ada).last, structure_events.last ].each do |event|
+        assert_empty event.data.slice(:plan_id, :plan_change_id)
+      end
     end
   end
 
