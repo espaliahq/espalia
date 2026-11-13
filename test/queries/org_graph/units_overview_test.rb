@@ -66,6 +66,17 @@ class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
     end
   end
 
+  should "count and list only active members, as the tray does" do
+    ActsAsTenant.with_tenant(@tenant) do
+      @org[:dot].update!(status: "inactive")
+      view = OrgGraph::UnitsOverview.new
+
+      assert_equal 0, view.headcount(unit(:payments))
+      assert_equal 3, view.headcount(unit(:engineering))
+      assert_empty view.members_of(unit(:payments))
+    end
+  end
+
   should "hold nothing for a tenant with no structure" do
     ActsAsTenant.with_tenant(create(:tenant)) do
       view = OrgGraph::UnitsOverview.new

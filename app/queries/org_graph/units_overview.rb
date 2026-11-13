@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # What the Org Graph's Units view reads: the live unit tree, each unit's
-# members, and the active people in no live unit.
+# active members, and the active people in no live unit. Leaving ends no
+# membership, so a leaver's rows stay; they count nowhere here.
 #
 # Loads the tenant's whole live structure in four queries and walks it in
 # memory. A unit's headcount counts each person once across the unit and
@@ -19,7 +20,8 @@ class OrgGraph::UnitsOverview
     @levels = OrgTaxonomyLevel.top_first.to_a
     @units = OrgUnit.live.to_a.index_by(&:id)
     @children = @units.values.group_by(&:parent_id).transform_values { |units| units.sort_by(&:name) }
-    @memberships = OrgMembership.in_live_units.includes(:person).to_a.group_by(&:unit_id)
+    @memberships = OrgMembership.in_live_units.joins(:person).merge(Person.active)
+                                .includes(:person).to_a.group_by(&:unit_id)
     @selected_unit_id = selected_unit_id
   end
 
@@ -60,7 +62,7 @@ class OrgGraph::UnitsOverview
   # @param unit [OrgUnit]
   # @return [Array<OrgMembership>] the unit's own members, by name
   def members_of(unit)
-    @memberships.fetch(unit.id, []).select(&:person).sort_by { |membership| membership.person.name }
+    @memberships.fetch(unit.id, []).sort_by { |membership| membership.person.name }
   end
 
   # @param membership [OrgMembership]
