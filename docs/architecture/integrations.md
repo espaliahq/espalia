@@ -21,7 +21,7 @@ HrisSyncAllTenantsJob (recurring, every 6h)
             └─ Hris::Hibob::ResponseMapper (pure JSON → Person attrs)
 ```
 
-- **`Hris::BaseAdapter`** — abstract interface with `sync_people`, `fetch_employees`, `provider_name`. New providers subclass this.
+- **`Hris::BaseAdapter`** — abstract interface with `sync_people`, `fetch_employees`, `field_catalogue` (over each provider's `fetch_field_catalogue`), `provider_name`. New providers subclass this.
 - **`Hris::Hibob::Client`** — Faraday-based HTTP client. Per-instance credentials (no global state). Handles cursor pagination, exponential-backoff retries, and raises typed errors (`AuthenticationError`, `RateLimitError`, `ApiError`).
 - **`Hris::Hibob::ResponseMapper`** — pure data-mapping with no side effects. Transforms HiBob JSON into flat `Person`-compatible attribute hashes. Easy to test with fixtures.
 - **`Hris::Hibob::Adapter`** — orchestrator that runs the 5-pass sync inside a transaction.

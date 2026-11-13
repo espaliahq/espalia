@@ -1,0 +1,10 @@
+[
+  { "id": "root.id", "categoryId": "root", "name": "Employee ID", "jsonPath": "root.id", "type": "text", "historical": false },
+  { "id": "work.title", "categoryId": "work", "name": "Job title", "jsonPath": "work.title", "type": "list", "typeData": { "listId": "title" }, "historical": true },
+  { "id": "work.department", "categoryId": "work", "name": "Department", "jsonPath": "work.department", "type": "list", "typeData": { "listId": "department" }, "historical": true },
+  { "id": "column_1700000000001", "categoryId": "work", "name": "Squad", "jsonPath": "work.customColumns.column_1700000000001", "type": "hierarchy-list", "typeData": { "listId": "squads" }, "historical": true },
+  { "id": "column_1700000000002", "categoryId": "work", "name": "Level", "jsonPath": "work.customColumns.column_1700000000002", "type": "text", "historical": true },
+  { "id": "work.reportsTo", "categoryId": "work", "name": "Reports to", "jsonPath": "work.reportsTo", "type": "employee-reference", "historical": true },
+  { "id": "work.site", "categoryId": "work", "name": "Site", "jsonPath": "work.site", "type": "list", "typeData": { "listId": "site" }, "historical": true },
+  { "categoryId": "work", "name": "Field with no path", "type": "text" }
+]

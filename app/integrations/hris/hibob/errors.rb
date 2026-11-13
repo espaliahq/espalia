@@ -2,7 +2,7 @@
 
 # Custom error hierarchy for HiBob API interactions.
 #
-# Used by {Hris::Hibob::Client} and handled by {HrisSyncJob}
+# Raised by {Hris::Hibob::Client} and {Hris::Hibob::Adapter}, and handled by {HrisSyncJob}
 # for retry/discard decisions.
 #
 module Hris::Hibob::Errors
@@ -22,6 +22,9 @@ module Hris::Hibob::Errors
       super("Rate limited. Retry after #{retry_after}s")
     end
   end
+
+  # Raised when HiBob answers 2xx with a body of the wrong shape.
+  class UnexpectedResponseError < Error; end
 
   # Raised on HTTP 4xx/5xx after retries exhausted.
   class ApiError < Error

@@ -10,12 +10,13 @@ app/
   integrations/
     hris/
       base_adapter.rb                  # Abstract interface (Hris::BaseAdapter)
+      field.rb                         # Hris::Field — one catalogue field: id, name, :list or :text
       dev_name_whimsifier.rb           # Dev-only deterministic name pseudonymizer
       hibob/
         client.rb                      # Hris::Hibob::Client — Faraday HTTP
         adapter.rb                     # Hris::Hibob::Adapter — 5-pass sync
         response_mapper.rb             # Hris::Hibob::ResponseMapper — pure mapping
-        errors.rb                      # Hris::Hibob::Errors::{AuthenticationError,RateLimitError,ApiError}
+        errors.rb                      # Hris::Hibob::Errors::{AuthenticationError,RateLimitError,ApiError,UnexpectedResponseError}
         webhook_validator.rb           # HMAC-SHA512 signature verification
   models/
     hris_config.rb                     # StoreModel for Tenant.hris_config
@@ -128,6 +129,17 @@ Three places now surface it:
 
 A sync runs for a while, and a mapping can change underneath it. The adapter stamps `last_synced_at` on a freshly locked, reloaded tenant (`stamp_last_synced`) rather than saving the `config` it read up front, which would write the old mappings back. Any new write to `hris_config` from a long-running path must do the same; the mapping Operations lock the tenant row too.
 
+## The field catalogue
+
+`adapter.field_catalogue` returns the HRIS's fields as `Hris::Field`s, so a settings screen can offer them by name and nobody pastes a field id ([org-graph-design.md → Which HRIS field a fact comes from](../team-planning/org-graph-design.md#which-hris-field-a-fact-comes-from)). Each field has:
+
+- **`id`**: the path the people API takes. For HiBob that is the field's `jsonPath`, such as `work.department` or `work.customColumns.column_1700000000001`. `HrisConfig#level_field_id` still holds the bare column id; a picker that writes it must strip the prefix, or the config must move to the full path.
+- **`name`**: the label HiBob shows.
+- **`kind`**: `:list` when the value comes from a named list and so has an id of its own (HiBob types `list`, `multi-list`, `hierarchy-list`), else `:text`. Dates, numbers and employee references are `:text`, since their values carry no id.
+- **`values`**: a list field's `Hris::Field::Value`s (`id`, `name`), read from `GET /company/named-lists` by the field's `typeData.listId`. A hierarchy list is flattened, an archived value is dropped with its children, and a value with no id is dropped. The named lists are fetched only when some field is a list. A list HiBob did not return leaves the field a list with no values.
+
+The base adapter caches the catalogue per tenant and HRIS account for an hour (`FIELD_CATALOGUE_TTL`), as plain hashes under a key that names `Hris::Field::SHAPE`, so a deploy that changes the shape never reads an old entry; providers implement only the uncached `fetch_field_catalogue`. **An HRIS failure raises** (the client's `Errors::*`, or `Errors::UnexpectedResponseError` for a body of the wrong shape) **and caches nothing**, so a caller never mistakes an outage for a tenant with no fields. HiBob documents the named lists as an array of `{ name, items }`; the adapter also reads an object keyed by list name, and a list's entries under `values` when it has no `items`, since no live response has confirmed the shape yet. A list with neither array raises. Test with `test/fixtures/files/hibob/people_fields_response.json` and `named_lists_response.json`; the test environment's null cache store means a caching test swaps in a `MemoryStore`.
+
 ## Adding a new HRIS field to the sync
 
 To pull an additional field (e.g. employment type, cost center, location) through into `Person`:
@@ -153,6 +165,10 @@ class Hris::Bamboohr::Adapter < Hris::BaseAdapter
 
   def fetch_employees
     client.list_employees
+  end
+
+  def fetch_field_catalogue
+    # Map the provider's field metadata to Hris::Field, each :list or :text
   end
 
   private
