@@ -135,6 +135,47 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     end
   end
 
+  context "#org_graph_facts" do
+    should "read site, FTE, employment type and dates from a fixture employee" do
+      facts = Hris::Hibob::ResponseMapper.new(@fixture["employees"][0]).org_graph_facts
+
+      assert_equal({ site: "Melbourne", country: nil, fte: 1.0, employment_type: "Permanent", started_on: "2023-01-15" }, facts)
+    end
+
+    should "read the termination date" do
+      assert_equal "2026-10-31", Hris::Hibob::ResponseMapper.new(@fixture["employees"][2]).org_graph_facts[:terminated_on]
+    end
+
+    should "turn a part-time percentage into a fraction and keep HiBob's own type label" do
+      employee = { "payroll" => { "employment" => { "fte" => 80, "type" => "77" } },
+                   "humanReadable" => { "payroll" => { "employment" => { "type" => " Fixed term (casual) " } } } }
+
+      facts = Hris::Hibob::ResponseMapper.new(employee).org_graph_facts
+
+      assert_in_delta 0.8, facts[:fte]
+      assert_equal "Fixed term (casual)", facts[:employment_type]
+    end
+
+    should "record a field HiBob sends blank as absent" do
+      employee = { "work" => { "site" => "", "startDate" => nil }, "payroll" => { "employment" => { "fte" => nil, "type" => "" } } }
+
+      assert_equal({ site: nil, country: nil, fte: nil, employment_type: nil, started_on: nil },
+        Hris::Hibob::ResponseMapper.new(employee).org_graph_facts)
+    end
+
+    should "leave out a field HiBob does not send, so it is never compared" do
+      assert_empty Hris::Hibob::ResponseMapper.new({ "id" => "1", "work" => { "title" => "Engineer" } }).org_graph_facts
+    end
+
+    should "read the flat payload shape" do
+      employee = { "/work/site" => { "value" => "Sydney" }, "/payroll/employment/fte" => { "value" => 50 },
+                   "/work/startDate" => { "value" => "2024-02-01" } }
+
+      assert_equal({ site: "Sydney", country: nil, fte: 0.5, employment_type: nil, started_on: "2024-02-01" },
+        Hris::Hibob::ResponseMapper.new(employee).org_graph_facts)
+    end
+  end
+
   context "#list_values" do
     should "pair the stored id with the label from a nested payload" do
       employee = {

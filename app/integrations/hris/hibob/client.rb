@@ -22,6 +22,7 @@ class Hris::Hibob::Client
     root.isActive
     work.title work.department work.reportsTo work.site work.startDate
     work.isManager
+    payroll.employment.fte payroll.employment.type internal.terminationDate
   ].freeze
 
   # @param service_user_id [String] HiBob service user ID

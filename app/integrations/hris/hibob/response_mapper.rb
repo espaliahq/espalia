@@ -68,6 +68,25 @@ class Hris::Hibob::ResponseMapper
     employee.dig("humanReadable", "work", "customColumns", level_field_id).to_s.strip.presence
   end
 
+  # The site, employment and dates the Org Graph records, keyed as
+  # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
+  # the payload carries its field, so one HiBob withholds (the service user
+  # can't read it) is never compared; a field it sends blank is nil. HiBob gives
+  # a site no country, so country is always absent.
+  #
+  # @return [Hash] any of :site with :country, :fte with :employment_type,
+  #   :started_on and :terminated_on
+  def org_graph_facts
+    facts = {}
+    facts.merge!(site: label(%w[work site]), country: nil) if supplied?(%w[work site])
+    if supplied?(%w[payroll employment fte]) || supplied?(%w[payroll employment type])
+      facts.merge!(fte: fraction(value(%w[payroll employment fte])), employment_type: label(%w[payroll employment type]))
+    end
+    facts[:started_on] = value(%w[work startDate]).presence if supplied?(%w[work startDate])
+    facts[:terminated_on] = value(%w[internal terminationDate]).presence if supplied?(%w[internal terminationDate])
+    facts
+  end
+
   # The list fields' item ids beside their labels, keyed like the attributes they sit
   # beside. A blank field is left out.
   #
@@ -113,6 +132,41 @@ class Hris::Hibob::ResponseMapper
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
+
+  # @param path [Array<String>]
+  def supplied?(path)
+    parent = employee.dig(*path[0..-2])
+    (parent.is_a?(Hash) && parent.key?(path.last)) || employee.key?(flat_key(path))
+  end
+
+  # The machine value, from either payload shape.
+  #
+  # @param path [Array<String>]
+  def value(path)
+    parent = employee.dig(*path[0..-2])
+    return parent[path.last] if parent.is_a?(Hash) && parent.key?(path.last)
+
+    flat = employee[flat_key(path)]
+    flat.is_a?(Hash) ? flat["value"] : flat
+  end
+
+  # The label HiBob shows, falling back to the machine value.
+  #
+  # @param path [Array<String>]
+  # @return [String, nil]
+  def label(path)
+    (employee.dig("humanReadable", *path).presence || value(path)).to_s.strip.presence
+  end
+
+  # HiBob gives FTE as a percentage.
+  #
+  # @return [Float, nil]
+  def fraction(percent)
+    number = Float(percent.to_s, exception: false)
+    number && (number / 100).round(4)
+  end
+
+  def flat_key(path) = "/#{path.join('/')}"
 
   # @return [String, nil]
   def build_name

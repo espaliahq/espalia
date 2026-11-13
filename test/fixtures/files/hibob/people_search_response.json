@@ -31,6 +31,17 @@
           "customColumns": {
             "column_test_id": "5"
           }
+        },
+        "payroll": {
+          "employment": {
+            "type": "Permanent"
+          }
+        }
+      },
+      "payroll": {
+        "employment": {
+          "fte": 100,
+          "type": "4411"
         }
       }
     },
@@ -94,6 +105,9 @@
             "column_test_id": "1"
           }
         }
+      },
+      "internal": {
+        "terminationDate": "2026-10-31"
       }
     }
   ]
