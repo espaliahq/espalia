@@ -54,6 +54,15 @@ class HrisConfig
       tenant.hris_secrets.complete?
   end
 
+  # Whether Espalia can talk to the HRIS: a provider it knows, with its
+  # credentials stored. Unlike {#configured?}, the sync need not be on.
+  #
+  # @param tenant [Tenant] the parent tenant to check credentials on
+  # @return [Boolean]
+  def connected?(tenant)
+    PROVIDERS.include?(provider) && tenant.hris_secrets.complete?
+  end
+
   # The mapping a title resolves to, or nil when no mapping lists it.
   #
   # @param title [String, nil]

@@ -64,6 +64,15 @@ class Hris::BaseAdapter
     cached.map { Hris::Field.from_h(it) }
   end
 
+  # The catalogue id a stored field reference stands for, so a value saved in
+  # an older form still matches its field.
+  #
+  # @param field_id [String, nil]
+  # @return [String, nil]
+  def catalogue_id(field_id)
+    field_id.presence
+  end
+
   # Fetches the field catalogue from the HRIS API, uncached.
   #
   # @return [Array<Hris::Field>]

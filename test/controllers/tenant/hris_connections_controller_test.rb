@@ -36,6 +36,22 @@ class Tenant::HrisConnectionsControllerTest < ActionDispatch::IntegrationTest
       assert_nil @tenant.hris_secrets.webhook_secret
     end
 
+    should "keep the stored level field when the form posts none, as when its picker failed to render" do
+      @tenant.update_hris!(settings: { level_field_id: "work.customColumns.column_9" })
+
+      patch tenant_hris_connection_path, params: { hris_connection: connection[:hris_connection].except(:level_field_id) }
+
+      assert_equal "work.customColumns.column_9", @tenant.reload.hris_config.level_field_id
+    end
+
+    should "clear the level field when the form posts None" do
+      @tenant.update_hris!(settings: { level_field_id: "work.customColumns.column_9" })
+
+      patch tenant_hris_connection_path, params: connection(level_field_id: "")
+
+      assert_nil @tenant.reload.hris_config.level_field_id
+    end
+
     should "keep a stored credential when its field is blank" do
       @tenant.update_hris!(service_user_id: "svc-1", api_token: "tok-secret")
 

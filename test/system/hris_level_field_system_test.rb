@@ -25,6 +25,7 @@ class HrisLevelFieldSystemTest < ApplicationSystemTestCase
   def with_catalogue(fields = FIELDS, error: nil, &)
     adapter = Object.new
     adapter.define_singleton_method(:field_catalogue) { error ? raise(error) : fields }
+    adapter.define_singleton_method(:catalogue_id) { |field_id| field_id }
     Hris::BaseAdapter.stub(:for, adapter, &)
   end
 

@@ -39,13 +39,14 @@ class Views::Integrations::HrisView < Views::Base
   #   titles, and whether a level column is configured — see
   #   {Views::Integrations::HrisMappingModal}
   # @param can_edit_mappings [Boolean]
+  # @param hris_connected [Boolean] whether the level field picker can read the HRIS
   # @param user [User, nil]
   # @param current_tenant [Tenant, nil]
   # @param tenants [Array<Tenant>]
   def initialize(hris_config:, hris_secrets_stored:, person_rows:, role_mapping_rows:,
                  form_config: nil, can_edit_connection: false, errors: [],
                  unmapped_titles: [], mapping_options: {}, can_edit_mappings: false,
-                 user: nil, current_tenant: nil, tenants: [])
+                 hris_connected: false, user: nil, current_tenant: nil, tenants: [])
     @hris_config = hris_config
     @hris_secrets_stored = hris_secrets_stored
     @form_config = form_config || hris_config
@@ -56,6 +57,7 @@ class Views::Integrations::HrisView < Views::Base
     @unmapped_titles = unmapped_titles
     @mapping_options = mapping_options
     @can_edit_mappings = can_edit_mappings
+    @hris_connected = hris_connected
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -203,18 +205,19 @@ class Views::Integrations::HrisView < Views::Base
     end
   end
 
+  # The frame is asked for the value in the form, not the stored one, so a
+  # rejected save keeps the field the admin chose.
   def level_field
-    if hris_connected?
-      render Views::Integrations::HrisLevelFieldFrame.new(current: @form_config.level_field_id,
-                                                          src: tenant_hris_level_field_path)
+    current = @form_config.level_field_id
+    if @hris_connected
+      render Views::Integrations::HrisLevelFieldFrame.new(
+        current:, src: tenant_hris_level_field_path(current: current.to_s)
+      )
     else
-      render Views::Integrations::HrisLevelFieldFrame.new(current: @form_config.level_field_id,
-                                                          problem: Views::Integrations::HrisLevelFieldFrame::NOT_CONNECTED)
+      render Views::Integrations::HrisLevelFieldFrame.new(
+        current:, problem: Views::Integrations::HrisLevelFieldFrame::NOT_CONNECTED
+      )
     end
-  end
-
-  def hris_connected?
-    @hris_config.provider.present? && @hris_secrets_stored["service_user_id"] && @hris_secrets_stored["api_token"]
   end
 
   def provider_field

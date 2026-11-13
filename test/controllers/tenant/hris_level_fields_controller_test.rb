@@ -13,6 +13,7 @@ class Tenant::HrisLevelFieldsControllerTest < ActionDispatch::IntegrationTest
   # Answers `field_catalogue` as an adapter would, or raises the given error.
   FakeAdapter = Struct.new(:fields, :error) do
     def field_catalogue = error ? raise(error) : fields
+    def catalogue_id(field_id) = field_id
   end
 
   setup do
@@ -30,6 +31,10 @@ class Tenant::HrisLevelFieldsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def options = css_select("select#hris_connection_level_field_id option")
+
+  def stub_catalogue(adapter)
+    adapter.define_singleton_method(:field_catalogue) { FIELDS }
+  end
 
   context "as a tenant admin" do
     setup { sign_in @admin_user }
@@ -61,6 +66,31 @@ class Tenant::HrisLevelFieldsControllerTest < ActionDispatch::IntegrationTest
       kept = options.find { it["selected"] }
       assert_equal "work.customColumns.column_gone", kept["value"]
       assert_match "no longer in the HRIS", kept.text
+    end
+
+    should "select the value the page's form holds, which after a rejected save is the admin's choice" do
+      Hris::BaseAdapter.stub(:for, FakeAdapter.new(FIELDS)) do
+        get tenant_hris_level_field_path(current: "work.department")
+      end
+
+      assert_equal "work.department", options.find { it["selected"] }["value"]
+    end
+
+    should "match a level field stored as a bare column id to its field" do
+      @tenant.update_hris!(settings: { level_field_id: "column_2" })
+
+      Hris::BaseAdapter.stub(:for, Hris::Hibob::Adapter.new(@tenant).tap { stub_catalogue(it) }) { get tenant_hris_level_field_path }
+
+      assert_equal "work.customColumns.column_2", options.find { it["selected"] }["value"]
+      assert_no_match "no longer in the HRIS", response.body
+    end
+
+    should "keep the value and say so when reading the catalogue fails in any other way" do
+      get_frame(FakeAdapter.new(nil, NoMethodError.new("undefined method for nil")))
+
+      assert_response :success
+      assert_select "input[type=hidden][name='hris_connection[level_field_id]'][value='work.customColumns.column_test_id']"
+      assert_includes response.body, "did not answer as expected"
     end
 
     should "keep the stored value with the reason when the HRIS fails" do

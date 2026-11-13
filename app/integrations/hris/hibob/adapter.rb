@@ -109,6 +109,14 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     client.search_people(show_inactive: true)
   end
 
+  # A bare custom-column id, the form stored before the picker, as its path.
+  #
+  # @param field_id [String, nil]
+  # @return [String, nil]
+  def catalogue_id(field_id)
+    Hris::Hibob::Client.field_path(field_id)
+  end
+
   # Reads HiBob's field metadata and named lists into the catalogue.
   #
   # @return [Array<Hris::Field>]
