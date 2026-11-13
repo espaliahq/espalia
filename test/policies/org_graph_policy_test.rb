@@ -27,6 +27,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       policy = policy_for(AuthorizationContext.new(user: create(:user), tenant_user: nil, person: @lead))
 
       assert_not policy.show?
+      assert_not policy.show_units?
       assert_not policy.edit_structure?
       assert_not policy.edit_unit?(unit(@engineering_id))
       assert_not policy.edit_membership?(@report, unit(@product_id))
@@ -38,6 +39,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       policy = policy_for(context_for(@other))
 
       assert policy.show?
+      assert_not policy.show_units?
       assert_not policy.edit_structure?
       assert_not policy.create_unit?(nil)
       assert_not policy.edit_unit?(unit(@engineering_id))
@@ -50,6 +52,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       policy = policy_for(context_for(@other, role: :admin))
 
       assert_full_rights policy
+      assert policy.show_units?
     end
   end
 
@@ -58,6 +61,7 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       policy = policy_for(context_for(@other, org_graph_editor: true))
 
       assert_full_rights policy
+      assert_not policy.show_units?, "the Units view is for admins until the Org Graph's screens are done"
     end
   end
 

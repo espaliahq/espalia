@@ -97,6 +97,11 @@ class Operations::Assessments::FeedbackRecipientsTest < ActiveSupport::TestCase
     should "offer the manager, peers and reports with assignments when no query is given" do
       assert_equal [ "Morgan Manager", "Priya Peer", "Rafael Report" ], names(call_op)
     end
+
+    should "leave out forgotten neighbours" do
+      [ @manager, @peer ].each { |person| person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
+      assert_equal [ "Rafael Report" ], names(call_op)
+    end
   end
 
   context "policy" do

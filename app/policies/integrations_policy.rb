@@ -31,6 +31,10 @@ class IntegrationsPolicy < ApplicationPolicy
   # @return [Boolean]
   def disconnect_hris? = tenant_admin?
 
+  # Hand a structure level to an HRIS field, or back to Espalia.
+  # @return [Boolean]
+  def hand_over_hris_level? = tenant_admin?
+
   # Remove the AI model's API key (suggestions go off with it).
   # @return [Boolean]
   def remove_ai_key? = tenant_admin?

@@ -35,6 +35,13 @@ class OrgGraph::Repository
     @repository.load(OrgGraph::PersonAggregate.new, EventStreamNaming.person_stream(person_id))
   end
 
+  # Loads the tenant's structure aggregate without storing anything.
+  #
+  # @return [OrgGraph::StructureAggregate]
+  def load_structure
+    @repository.load(OrgGraph::StructureAggregate.new, EventStreamNaming.org_structure_stream)
+  end
+
   # Loads the tenant's structure aggregate, yields it, and stores any new events.
   #
   # @param plan [OrgGraph::PlanReference, nil] stamped on every event written
