@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_170001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -772,6 +772,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170000) do
     t.index ["tenant_id", "fact"], name: "index_org_fact_providers_on_tenant_id_and_fact", unique: true
   end
 
+  create_table "org_leavers", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "person_id", null: false
+    t.date "left_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "left_on"], name: "index_org_leavers_on_tenant_id_and_left_on"
+    t.index ["tenant_id", "person_id"], name: "index_org_leavers_on_tenant_id_and_person_id", unique: true
+  end
+
   create_table "org_memberships", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "unit_id", null: false
@@ -1077,6 +1087,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170000) do
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "org_fact_ages", "tenants"
   add_foreign_key "org_fact_providers", "tenants"
+  add_foreign_key "org_leavers", "tenants"
   add_foreign_key "org_memberships", "tenants"
   add_foreign_key "org_taxonomy_levels", "tenants"
   add_foreign_key "org_unit_activities", "tenants"

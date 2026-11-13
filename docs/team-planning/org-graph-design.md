@@ -588,6 +588,19 @@ result for each kind of id separately.
 
 - A tenant sets a retention period for people who have left. The default is seven years from the
   leaving date. "Never" is allowed.
+  - The period is `Tenant#org_graph_config.retention_years`, beside the staleness threshold. Nil
+    means never. It is a setting, not an event: nothing replays it, and 8.2 records each person
+    it forgets.
+  - Only a tenant admin may change it, through `Operations::Tenants::UpdateRetentionPeriod`.
+    An Org Graph editor may not. How long to keep a leaver is the organisation's
+    data-protection decision, not a change to its structure.
+  - `OrgLeaver.due_to_be_forgotten(tenant)` returns the person ids of the leavers whose
+    period has ended, and nothing else. The leaving date is the latest `PersonLeft`'s, so a corrected date counts.
+    For a person the HRIS stopped returning, it is the day the sync noticed. Someone who
+    returns drops off the list. A leaver whose rehire has not started yet stays on it, since
+    the sync writes nothing until they start, so 8.2 checks the HRIS before it erases anyone.
+  - `org_graph/leavers` reads event types production already holds, so its first deploy sets
+    `REBUILD_ON_DEPLOY=org_graph/leavers` to fill it.
 - At the end of the period, or on request, the identifiers are erased from the `people`
   row and `PersonForgotten` is written.
 - Only a person who has left can be forgotten. A request about someone still employed is

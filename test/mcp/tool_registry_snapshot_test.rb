@@ -2646,6 +2646,27 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "tenants_update_retention_period",
+        "description" => "Set how many years after a person leaves the active tenant forgets their identifiers " \
+                         "(default 7), or never forget them.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "retention_years" => { "type" => "integer" },
+            "never" => { "type" => "boolean" }
+          },
+          "required" => [],
+          "additionalProperties" => false,
+          "if" => { "properties" => { "never" => { "const" => true } }, "required" => [ "never" ] },
+          "then" => { "not" => { "required" => [ "retention_years" ] } }
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "tenants_update_scoring_vocabulary",
         "description" => "Rename the performance states for the active tenant (display labels only — the scoring states and thresholds are unchanged). Blank restores the default word.",
         "inputSchema" => {

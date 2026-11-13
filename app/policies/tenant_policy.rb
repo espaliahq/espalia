@@ -17,6 +17,13 @@ class TenantPolicy < ApplicationPolicy
   #   framework and has its own bar)
   def update_scoring_vocabulary? = tenant_admin?
 
+  # An admin's alone, and not an Org Graph editor's: how long a leaver's
+  # identifiers are kept is the organisation's data-protection decision,
+  # not a change to its structure.
+  #
+  # @return [Boolean] whether the viewer can set how long leavers are kept
+  def update_retention_period? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.
