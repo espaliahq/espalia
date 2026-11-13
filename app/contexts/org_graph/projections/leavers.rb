@@ -17,8 +17,7 @@ class OrgGraph::Projections::Leavers
 
   # @return [Array<Class>]
   def self.handled_events
-    [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonJoined,
-      OrgGraph::Events::PersonReturned ]
+    [ OrgGraph::Events::PersonRecorded, OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonReturned ]
   end
 
   # Truncates every read model this projection writes, scoped to one tenant.
@@ -34,9 +33,9 @@ class OrgGraph::Projections::Leavers
       data = event.data
       case event
       when OrgGraph::Events::PersonRecorded
-        data[:employment_status] == "left" ? left(data, data[:left_on] || data[:effective_on]) : returned(data)
+        left(data, data[:left_on] || data[:effective_on]) if data[:employment_status] == "left"
       when OrgGraph::Events::PersonLeft then left(data, data[:effective_on])
-      else returned(data)
+      when OrgGraph::Events::PersonReturned then returned(data)
       end
     end
   end
