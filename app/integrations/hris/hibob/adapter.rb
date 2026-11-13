@@ -73,7 +73,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         attrs = Hris::DevNameWhimsifier.call(mapper.call)
         manager_ext_id = mapper.manager_external_id
 
-        person = upsert_person(projected ? attrs.except(*PROJECTED_ATTRS) : attrs, result)
+        person = upsert_person(attrs, result, projected:)
         if person
           external_id_map[attrs[:external_id]] = person
           manager_links[person] = manager_ext_id if manager_ext_id.present?
@@ -270,10 +270,15 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # different identity (a rehire under a new id, say), so the row is
   # skipped and reported rather than merged into their history.
   #
+  # For a tenant cut over to the Org Graph, a new person's row starts with
+  # HiBob's title and status, so a leaver is never briefly active; from then
+  # on their stream writes both.
+  #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
+  # @param projected [Boolean] whether the tenant is cut over to the Org Graph
   # @return [Person, nil] the created or updated person, nil when skipped or invalid
-  def upsert_person(attrs, result)
+  def upsert_person(attrs, result, projected: false)
     person = Person.find_by(external_id: attrs[:external_id])
     unless person
       person = Person.find_by(email: attrs[:email])
@@ -289,7 +294,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     person ||= Person.new
     is_new = person.new_record?
 
-    person.assign_attributes(attrs.except(:hris_raw_data))
+    person.assign_attributes(attrs.except(:hris_raw_data, *(PROJECTED_ATTRS if projected && !is_new)))
     person.hris_raw_data = attrs[:hris_raw_data]
     person.hris_source = "hibob"
 
@@ -363,7 +368,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # Pass 3 for a tenant cut over to the Org Graph: each person leaves in their
-  # stream, and the projection marks them inactive.
+  # stream, and the projection marks them inactive. Someone the Org Graph
+  # never recorded is recorded as having left, with the facts on their row.
   #
   # @param stale_people [ActiveRecord::Relation<Person>]
   # @param result [Hash] running tally
@@ -371,7 +377,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new
       stale_people.find_each do |person|
-        handler.leave(person.id, provider: provider_name, effective_on: Date.current)
+        handler.sync_person(person.id, provider: provider_name, effective_on: Date.current, employment_status: "left",
+                                       title: person.job_title, manager_id: (person.manager_id unless person.manager_id == person.id))
         result[:deactivated] += 1
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }

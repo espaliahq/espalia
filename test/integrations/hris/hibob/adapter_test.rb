@@ -878,6 +878,27 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", @alice.reload.status
       end
 
+      should "create a newcomer HiBob shows as inactive as inactive, even if recording them fails" do
+        leaver = @fixture["employees"].first.deep_dup.merge("id" => "bob-004", "email" => "dana@example.com", "isActive" => false)
+        failing = Object.new
+        def failing.sync_person(*, **) = raise("recording failed")
+
+        result = OrgGraph::CommandHandler.stub(:new, failing) { build_adapter(@fixture["employees"] + [ leaver ]).sync_people }
+
+        assert_includes result[:errors].map { it[:error] }, "recording failed"
+        assert_equal "inactive", Person.find_by!(external_id: "bob-004").status
+      end
+
+      should "record someone with no stream as having left when HiBob stops returning them" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst")
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ "left", "Analyst" ], recorded(stray).values_at(:employment_status, :title)
+        assert_equal "inactive", stray.reload.status
+      end
+
       should "hand the columns back to the sync once reverted" do
         @alice.update_columns(job_title: "Stale")
         OrgGraph::PeopleCutover.new(@tenant).revert!
