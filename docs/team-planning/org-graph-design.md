@@ -253,8 +253,8 @@ that finds nothing changed writes nothing.
 
 A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
 that misses them. An empty response is a failed sync and leaves no one. Someone who comes
-back keeps their stream and gets `PersonReturned`. Their memberships are ended by a
-handler, with the leaving date. A new person appears with no membership. No position is
+back keeps their stream and gets `PersonReturned`. Their memberships are to be ended by a
+handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
 The first sync after this ships writes `PersonRecorded` for everyone. Nothing earlier can
