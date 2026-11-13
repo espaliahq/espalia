@@ -75,6 +75,11 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::Projections::CalibrationSessions.handled_events
   )
 
+  event_store.subscribe(
+    OrgGraph::Projections::Structure.new,
+    to: OrgGraph::Projections::Structure.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice

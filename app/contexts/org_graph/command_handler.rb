@@ -19,6 +19,24 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) { |person| person.record(person_id, **facts) }
   end
 
+  # Applies the facts a provider supplies for one person in one load of their
+  # stream. A person the Org Graph has not recorded yet is left alone: the
+  # first sync records them (story 1.3).
+  #
+  # @param person_id [String]
+  # @param provider [String]
+  # @param effective_on [Date, String]
+  # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
+  # @return [Integer] how many events were written
+  def apply_facts(person_id, provider:, effective_on:, **facts)
+    written = 0
+    @repository.with_person(person_id) do |person|
+      person.apply_facts(provider:, effective_on:, **facts)
+      written = person.unpublished_events.count
+    end
+    written
+  end
+
   # @param person_id [String]
   # @param provider [String]
   # @param effective_on [Date, String] their start date

@@ -98,6 +98,26 @@ provider's own reference for it, so a rename in the HRIS is recognised as a rena
 Membership is a fact about a person, so it lives in the person's stream. A unit's
 members are a projection.
 
+`OrgGraph::StructureAggregate` holds these rules:
+
+- **A change comes from the unit's own provider.** A command names its provider, which
+  defaults to Espalia, and a unit refuses a change from any other. So an HRIS team
+  rejects an edit made in Espalia and still takes the sync's rename.
+- **A parent sits at a higher level**, is live, and is never the unit itself or a unit
+  beneath it. A unit with live sub-units can't be retired.
+- **Levels an HRIS supplies sit above every level Espalia holds**, for top-level units
+  as much as for a parent and its child.
+- **A mirrored unit carries its reference, and one Espalia holds has none.** Two live
+  units never mirror the same reference.
+- **A taxonomy level keeps its id through a rename.** A level that still holds a unit
+  can't be dropped, and the levels in use keep their order.
+- **An unchanged name, parent or taxonomy writes nothing**, so a sync that finds no
+  difference adds no event.
+
+`OrgGraph::Projections::Structure` projects the current tree into `org_units` and
+`org_taxonomy_levels`. The history that reads "was X" is in the stream:
+`UnitRenamed` carries the previous name, and the history projection (R4) will read it.
+
 ### The shape of the organisation has a history too
 
 A reorganisation changes the units themselves: what exists, what each is called, where

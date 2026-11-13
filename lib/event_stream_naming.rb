@@ -16,6 +16,9 @@
 #   EventStreamNaming.assessment_cycle_stream("cycle-uuid")
 #   # => "tenant-<tenant-uuid>/AssessmentCycle-cycle-uuid"
 #
+#   EventStreamNaming.org_structure_stream
+#   # => "tenant-<tenant-uuid>/OrgStructure"
+#
 module EventStreamNaming
   # Returns the stream name for a Framework aggregate.
   #
@@ -67,6 +70,16 @@ module EventStreamNaming
   # @raise [ArgumentError] if no tenant context is available
   def self.person_stream(person_id, tenant: ActsAsTenant.current_tenant)
     "#{tenant_prefix(tenant)}/Person-#{person_id}"
+  end
+
+  # Returns the stream name for a tenant's Org Graph structure: one stream per
+  # tenant, holding its taxonomy and every unit's life.
+  #
+  # @param tenant [Tenant, nil] override tenant (defaults to ActsAsTenant.current_tenant)
+  # @return [String] the tenant-namespaced stream name
+  # @raise [ArgumentError] if no tenant context is available
+  def self.org_structure_stream(tenant: ActsAsTenant.current_tenant)
+    "#{tenant_prefix(tenant)}/OrgStructure"
   end
 
   # Extracts the tenant ID from a stream name.

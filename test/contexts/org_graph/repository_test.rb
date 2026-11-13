@@ -20,4 +20,19 @@ class OrgGraph::RepositoryTest < ActiveSupport::TestCase
       end
     end
   end
+  context "#with_structure" do
+    should "raise without a tenant context" do
+      ActsAsTenant.without_tenant do
+        assert_raises(ArgumentError) { OrgGraph::Repository.new.with_structure { } }
+      end
+    end
+
+    should "yield the tenant's structure aggregate" do
+      ActsAsTenant.with_tenant(create(:tenant)) do
+        OrgGraph::Repository.new.with_structure do |structure|
+          assert_kind_of OrgGraph::StructureAggregate, structure
+        end
+      end
+    end
+  end
 end
