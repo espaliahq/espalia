@@ -238,6 +238,36 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_equal @actor, event.data[:set_by_id]
     end
 
+    should "name the HRIS field the level's units are read from" do
+      provide("Department", "hibob", field: " work.custom.department_x ")
+
+      assert_equal "work.custom.department_x", structure_events.last.data[:field]
+    end
+
+    should "change only the field when the same provider names a new one" do
+      provide("Department", "hibob", field: "work.department")
+
+      assert_difference -> { structure_events.size }, 1 do
+        provide("Department", "hibob", field: "work.custom.department_x")
+        provide("Department", "hibob", field: "work.custom.department_x")
+        provide("Department", "hibob")
+      end
+      event = structure_events.last
+      assert_equal [ "hibob", "hibob", "work.custom.department_x" ], event.data.values_at(:provider, :previous_provider, :field)
+    end
+
+    should "clear the field when the level moves back to Espalia" do
+      provide("Department", "hibob", field: "work.department")
+      provide("Department", "espalia")
+
+      assert_nil structure_events.last.data[:field]
+    end
+
+    should "refuse a field for a level Espalia holds" do
+      error = assert_raises(ArgumentError) { provide("Team", "espalia", field: "work.department") }
+      assert_match "HRIS provider", error.message
+    end
+
     should "write nothing for an unchanged provider, Espalia included" do
       provide("Department", "hibob")
 

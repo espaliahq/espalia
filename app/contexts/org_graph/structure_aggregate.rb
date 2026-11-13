@@ -38,6 +38,7 @@ class OrgGraph::StructureAggregate
     @levels = []
     @units = {}
     @level_providers = {}
+    @level_fields = {}
     @fact_providers = {}
     @fact_fields = {}
     @successions = {}
@@ -92,8 +93,10 @@ class OrgGraph::StructureAggregate
     end
   end
 
-  # Sets who supplies a taxonomy level's units. An unchanged provider writes
-  # nothing.
+  # Sets who supplies a taxonomy level's units and, for an HRIS, the field
+  # each person's unit at that level is read from. Moving the level to another
+  # provider clears its field; restating the same provider with a new field
+  # changes only the field. An unchanged setting writes nothing.
   #
   # A level that still holds live units keeps its provider: switching it is a
   # handover, which compares the two first. Levels an HRIS provides sit above
@@ -102,25 +105,32 @@ class OrgGraph::StructureAggregate
   # @param level_id [String] a level in the current taxonomy
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
+  # @param field [String, nil] the HRIS field id, such as
+  #   "work.custom.department_x"; nil keeps the current one for the same provider
   # @param set_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] if the provider is unknown
+  # @raise [ArgumentError] if the provider is unknown, or a field is named for Espalia
   # @raise [RuntimeError] if the level is unknown, holds live units, or would
   #   break the order of providers
-  def set_level_provider(level_id, provider, effective_on:, set_by_id: nil)
+  def set_level_provider(level_id, provider, effective_on:, field: nil, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
+    field = require_level_field(provider, field)
     raise "Level is not in the taxonomy" unless level_index(level_id)
 
     previous = level_provider(level_id)
-    return if provider == previous
-    raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
+    if provider == previous
+      return if field.nil? || field == @level_fields[level_id]
+    else
+      raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
 
-    ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+      ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+    end
 
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id: level_id,
       provider: provider,
       previous_provider: previous,
+      field: field,
       effective_on: iso_date(effective_on),
       set_by_id: set_by_id
     }))
@@ -387,10 +397,12 @@ class OrgGraph::StructureAggregate
   on OrgGraph::Events::TaxonomyDefined do |event|
     @levels = event.data[:levels].map { |level| level.to_h.symbolize_keys.slice(:level_id, :name) }
     @level_providers = @level_providers.slice(*level_ids(@levels))
+    @level_fields = @level_fields.slice(*level_ids(@levels))
   end
 
   on OrgGraph::Events::LevelProviderSet do |event|
     @level_providers[event.data[:level_id]] = event.data[:provider]
+    @level_fields[event.data[:level_id]] = event.data[:field]
   end
 
   on OrgGraph::Events::FactProviderSet do |event|
@@ -601,6 +613,13 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
 
     provider
+  end
+
+  def require_level_field(provider, field)
+    field = field.to_s.strip.presence
+    raise ArgumentError, "A field needs an HRIS provider, not #{ESPALIA}" if field && provider == ESPALIA
+
+    field
   end
 
   # @return [Hash{String => String}]
