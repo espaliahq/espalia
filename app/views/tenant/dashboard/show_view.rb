@@ -21,6 +21,11 @@ class Views::Tenant::Dashboard::ShowView < Views::Base
       description: "Manage tenant memberships and framework collaborator roles."
     },
     {
+      label: "Org Graph",
+      path: :tenant_org_graph_path,
+      description: "Units, their members, and the people in no team."
+    },
+    {
       label: "Integrations",
       path: :tenant_integrations_path,
       description: "HRIS sync and other external systems."

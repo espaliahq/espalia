@@ -26,12 +26,13 @@ class Components::Shell::TenantAdminLayout < Components::Base
     { key: :theme,        label: "Theme",        href: "/tenant/theme" },
     { key: :vocabulary,   label: "Vocabulary",   href: "/tenant/vocabulary" },
     { key: :users,        label: "Users",        href: "/tenant/users" },
+    { key: :org_graph,    label: "Org Graph",    href: "/tenant/org_graph" },
     { key: :integrations, label: "Integrations", href: "/tenant/integrations" },
     { key: :feedback_export, label: "Feedback export", href: "/tenant/feedback_exports/new" }
   ].freeze
 
   # @param active_section [Symbol] one of :dashboard, :theme, :vocabulary,
-  #   :users, :integrations, :feedback_export
+  #   :users, :org_graph, :integrations, :feedback_export
   # @param user [User]
   # @param current_tenant [Tenant]
   # @param tenants [Array<Tenant>]
