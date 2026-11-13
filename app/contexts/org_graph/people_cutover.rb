@@ -23,6 +23,9 @@ class OrgGraph::PeopleCutover
   # @!attribute applied [Boolean] whether the tenant is now cut over
   Report = Data.define(:recorded, :failed, :differences, :applied)
 
+  # The kinds of fact {row_facts} records.
+  RECORDED_FACTS = %w[employment_status title manager].freeze
+
   # Holds off a cut-over of the tenant while the block runs, so a sync that
   # read the flag at its start finishes before the flag can change. Any
   # number of holders can overlap. The tenant is reloaded once the lock is
@@ -52,10 +55,22 @@ class OrgGraph::PeopleCutover
   # @param person [Person]
   # @return [Hash] keywords for {OrgGraph::CommandHandler#record_person}
   def self.row_facts(person)
-    held = person.external_id.present? && OrgGraph::PersonAggregate::PROVIDERS.include?(person.hris_source)
-    { provider: held ? person.hris_source : "espalia", effective_on: Date.current,
+    { provider: provider_for(person), effective_on: Date.current,
       employment_status: OrgGraph::Projections::PeopleColumns.employment_status(person.status),
       title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id }
+  end
+
+  # The provider {OrgGraph::CommandHandler} lets record the person: their
+  # HRIS, while it carries their external id and holds each fact recorded,
+  # and otherwise Espalia. Facts split between the two can't be recorded in
+  # one command, and the refusal names the fact.
+  #
+  # @param person [Person]
+  # @return [String]
+  def self.provider_for(person)
+    source = person.hris_source if person.external_id.present?
+    held = RECORDED_FACTS.all? { OrgFactProvider.provider_for(it) == source }
+    held ? source : OrgGraph::StructureAggregate::ESPALIA
   end
 
   # @param tenant [Tenant]

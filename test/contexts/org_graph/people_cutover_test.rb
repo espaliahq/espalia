@@ -72,6 +72,18 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     assert_equal "hibob", stream(@by_hand).sole.data[:provider]
   end
 
+  should "record a person whose HRIS does not hold their facts as Espalia's" do
+    as_tenant do
+      @by_hand.update!(external_id: "bob-3", hris_source: "hibob")
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      OrgGraph::PeopleCutover::RECORDED_FACTS.each { structure.set_fact_provider(it, "espalia", effective_on: "2026-11-01") }
+    end
+
+    assert @cutover.run(apply: true).applied
+
+    assert_equal "espalia", stream(@by_hand).sole.data[:provider]
+  end
+
   context "a row the stream disagrees with" do
     setup { as_tenant { @synced.update_columns(job_title: "Staff engineer") } }
 

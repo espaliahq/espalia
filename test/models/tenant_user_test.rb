@@ -102,6 +102,20 @@ class TenantUserTest < ActiveSupport::TestCase
 
         assert_equal 1, person_stream(@existing).size
       end
+
+      should "keep the link and report it when recording fails" do
+        failing = Object.new
+        def failing.record_person(*, **) = raise("hibob supplies title; change it there")
+        reported = []
+
+        Rails.error.stub(:report, ->(error, **) { reported << error.message }) do
+          OrgGraph::CommandHandler.stub(:new, failing) { assert_equal @existing, @tenant_user.ensure_person! }
+        end
+
+        assert_equal @existing.id, @tenant_user.reload.person_id
+        assert_equal [ "hibob supplies title; change it there" ], reported
+        assert_empty person_stream(@existing)
+      end
     end
   end
 
