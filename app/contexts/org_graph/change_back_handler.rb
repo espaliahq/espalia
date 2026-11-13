@@ -17,6 +17,7 @@ class OrgGraph::ChangeBackHandler
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
   def initialize(actor:, repository: OrgGraph::Repository.new)
+    @repository = repository
     @people = OrgGraph::CommandHandler.new(actor:, repository:)
     @structure = OrgGraph::StructureCommandHandler.new(actor:, repository:)
   end
@@ -38,10 +39,15 @@ class OrgGraph::ChangeBackHandler
 
   private
 
-  # Locks every unit's row for the change, so a second request waits and
-  # then sees the first one's inverse.
+  # Takes the stream lock every ordinary write to the fact takes, then reads
+  # the entry afresh, so no change can land between the checks and the inverse.
   def lock(entry)
-    OrgUnitActivity.where(event_id: entry.event_id).order(:id).lock.to_a.find { |row| row.id == entry.id }
+    if entry.subject.to_s.start_with?("membership:")
+      @repository.lock_person(entry.person_id)
+    else
+      @repository.lock_structure
+    end
+    OrgUnitActivity.find(entry.id)
   end
 
   # Rolls back an inverse the aggregate turned into something else, or skipped

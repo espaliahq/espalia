@@ -142,6 +142,22 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     assert_raises(RuntimeError, match: "later change") { change_back(latest(@platform)) }
   end
 
+  should "check for a later change only once it holds the lock ordinary writes take" do
+    as_tenant { @structure.rename_unit(@payments, "Payments Core", effective_on: "2026-02-01") }
+    renamed = latest(@payments)
+    repository = OrgGraph::Repository.new
+    structure = @structure
+    repository.define_singleton_method(:lock_structure) do
+      structure.rename_unit(renamed.unit_id, "Payments Next", effective_on: "2026-02-01")
+      super()
+    end
+
+    assert_raises(RuntimeError, match: "later change") do
+      as_tenant { OrgGraph::ChangeBackHandler.new(actor: SYSTEM, repository:).change_back(renamed) }
+    end
+    assert_not renamed.reload.changed_back?
+  end
+
   should "refuse a change another provider supplied" do
     hibob_unit = SecureRandom.uuid_v7
     as_tenant do

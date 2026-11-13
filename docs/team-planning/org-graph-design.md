@@ -260,6 +260,11 @@ wherever the change itself would be. It is refused, too:
 - when the aggregate would write something else, such as ending a moved membership
   because the person has since left.
 
+Every write to a stream holds a lock on it until its transaction ends: the person's stream
+for a membership, the tenant's structure stream for the rest. A change-back takes that lock
+before it checks anything, so no change to the fact can land between the checks and the
+inverse.
+
 The feed starts from the Org Graph's first event, so a deploy that adds it rebuilds it
 (`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
 history a membership's earlier terms would be missing.
