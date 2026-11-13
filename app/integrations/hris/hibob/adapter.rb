@@ -392,14 +392,20 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   def deactivate_in_org_graph(stale_people, result)
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      recorded = OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set
       stale_people.find_each do |person|
-        handler.sync_person(person.id, provider: provider_name, effective_on: Date.current, employment_status: "left",
-                                       title: person.job_title, manager_id: (person.manager_id unless person.manager_id == person.id))
+        # A recorded leaver sends no facts, so Espalia holding one can't refuse the departure.
+        facts = recorded.include?(person.id) ? {} : first_record_facts(person)
+        handler.sync_person(person.id, provider: provider_name, effective_on: Date.current, employment_status: "left", **facts)
         result[:deactivated] += 1
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
     end
+  end
+
+  def first_record_facts(person)
+    { title: person.job_title, manager_id: (person.manager_id unless person.manager_id == person.id) }
   end
 
   # Pass 3b: enforces the invariant "an inactive person holds no live
