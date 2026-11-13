@@ -13,6 +13,8 @@ class HrisSyncJob < ApplicationJob
   SKIP_KEYS = %i[unmapped_titles missing_roles missing_levels missing_ordinals].freeze
 
   queue_as :default
+  # Sync now pressed during a scheduled run would race it to record each new person.
+  limits_concurrency to: 1, key: ->(tenant) { tenant.id }, duration: 1.hour
 
   retry_on Hris::Hibob::Errors::RateLimitError, wait: :polynomially_longer, attempts: 5
   retry_on Hris::Hibob::Errors::ApiError, wait: :polynomially_longer, attempts: 3
