@@ -154,8 +154,8 @@ so each projection decides for itself.
   person past their date is forgotten again on the next run. The date is worked out
   from the leaving date, which the restored events still hold or the next sync records
   again. Where the HRIS no longer returns the person, the sync dates their leaving from
-  the day it notices, so they are forgotten one period after the restore, later than
-  they were due. Two cases need a person:
+  the day it notices, so they are forgotten one period after that day, later than they
+  were due. Two cases need a person:
   someone forgotten on request before their date, and a deleted plan, which comes back
   and has to be deleted again. A deployment that restores a backup should check for
   both.
