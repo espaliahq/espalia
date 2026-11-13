@@ -54,6 +54,14 @@ class Person < ApplicationRecord
   # constraint holds every forgotten row to it, so a pluck reads it too.
   FORMER_MEMBER = "Former member"
 
+  # The stand-in stays whole, so a greeting never reads "Former".
+  #
+  # @param name [String, nil]
+  # @return [String, nil]
+  def self.first_name(name)
+    name == FORMER_MEMBER ? name : name.to_s.split.first.presence
+  end
+
   # @return [Boolean] whether {OrgGraph::Forgetting} erased this person's identifiers
   def forgotten? = forgotten_at.present?
   validates :status, inclusion: { in: %w[active inactive] }

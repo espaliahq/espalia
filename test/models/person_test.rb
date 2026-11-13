@@ -22,6 +22,14 @@ class PersonTest < ActiveSupport::TestCase
     end
   end
 
+  context ".first_name" do
+    should "take the first word of a name, and keep the stand-in whole" do
+      assert_equal "Alex", Person.first_name("Alex Chen")
+      assert_equal Person::FORMER_MEMBER, Person.first_name(Person::FORMER_MEMBER)
+      assert_nil Person.first_name(nil)
+    end
+  end
+
   context "a forgotten person" do
     setup do
       @tenant = create(:tenant)
