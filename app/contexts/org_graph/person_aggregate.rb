@@ -142,7 +142,8 @@ class OrgGraph::PersonAggregate
 
   # Applies the facts a provider supplies, writing one event for each that
   # differs. A fact left out is not compared, so a provider that does not
-  # supply a fact never clears it.
+  # supply a fact never clears it. A person not yet recorded writes nothing,
+  # once the facts have been checked.
   #
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
@@ -152,6 +153,9 @@ class OrgGraph::PersonAggregate
   def apply_facts(provider:, effective_on:, **facts)
     unknown = facts.keys - FACT_KEYS
     raise ArgumentError, "Unknown facts: #{unknown.join(", ")}" if unknown.any?
+    pair(facts, :site, :country) if facts.key?(:site) || facts.key?(:country)
+    pair(facts, :fte, :employment_type) if facts.key?(:fte) || facts.key?(:employment_type)
+    return unless recorded?
 
     when_given = { provider:, effective_on: }
     change_title(facts[:title], **when_given) if facts.key?(:title)

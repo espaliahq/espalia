@@ -21,7 +21,7 @@ class OrgGraph::CommandHandler
 
   # Applies the facts a provider supplies for one person in one load of their
   # stream. A person the Org Graph has not recorded yet is left alone: the
-  # first sync records them (#48).
+  # first sync records them (story 1.3).
   #
   # @param person_id [String]
   # @param provider [String]
@@ -31,8 +31,6 @@ class OrgGraph::CommandHandler
   def apply_facts(person_id, provider:, effective_on:, **facts)
     written = 0
     @repository.with_person(person_id) do |person|
-      next unless person.recorded?
-
       person.apply_facts(provider:, effective_on:, **facts)
       written = person.unpublished_events.count
     end

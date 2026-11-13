@@ -72,7 +72,9 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal 0, @handler.apply_facts(@person_id, **PROVENANCE, title: nil)
     end
 
-    should "refuse a fact it does not name, or half a pair" do
+    should "refuse a fact it does not name, or half a pair, recorded or not" do
+      assert_raises(ArgumentError) { @handler.apply_facts(@person_id, **PROVENANCE, department: "Design") }
+
       @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed")
 
       assert_raises(ArgumentError) { @handler.apply_facts(@person_id, **PROVENANCE, department: "Design") }
