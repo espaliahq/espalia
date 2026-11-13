@@ -45,6 +45,14 @@ class Tenant < ApplicationRecord
   serialize :slack_credentials, coder: JSON
   encrypts :slack_credentials
 
+  # Whether the Org Graph person streams write this tenant's `job_title`,
+  # `manager_id` and `status`, rather than the HRIS sync (story 1.4).
+  #
+  # @return [Boolean]
+  def org_graph_people_projected?
+    org_graph_people_projected_at.present?
+  end
+
   # Whether feedback recorded here is sent to the model for placement
   # suggestions. Off until the data-handling decision (plan D2) is made, and
   # never switched on by seeds. The switch lives in {#ai_config}; a tenant
