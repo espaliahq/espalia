@@ -128,6 +128,14 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       assert_equal 1, client.default_fields.count("work.site")
     end
 
+    should "request the field each mirrored level is read from" do
+      client = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t",
+                                       structure_fields: %w[work.department column_division])
+
+      assert_equal 1, client.default_fields.count("work.department")
+      assert_includes client.default_fields, "work.customColumns.column_division"
+    end
+
     should "request a level field stored as its path unchanged" do
       client = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t",
                                        level_field_id: "work.customColumns.column_test_id")

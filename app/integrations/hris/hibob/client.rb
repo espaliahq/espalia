@@ -37,18 +37,22 @@ class Hris::Hibob::Client
   #   bare custom-column id. When set, every search requests it.
   # @param mapped_fields [Hash{String => String}] the fields the tenant's
   #   mapping names, by the part of a fact each holds. Every search requests them.
-  def initialize(service_user_id:, api_token:, level_field_id: nil, mapped_fields: {})
+  # @param structure_fields [Array<String>] the field each mirrored structure
+  #   level is read from. Every search requests them.
+  def initialize(service_user_id:, api_token:, level_field_id: nil, mapped_fields: {}, structure_fields: [])
     @service_user_id = service_user_id
     @api_token = api_token
     @level_field_id = level_field_id
     @mapped_fields = mapped_fields
+    @structure_fields = structure_fields
   end
 
-  # The base fields, the level field when configured, and the mapped fields.
+  # The base fields, the level field when configured, the mapped fields and
+  # the mirrored levels' fields.
   #
   # @return [Array<String>]
   def default_fields
-    extra = [ @level_field_id, *@mapped_fields.values ].filter_map { |field_id| self.class.field_path(field_id) }
+    extra = [ @level_field_id, *@mapped_fields.values, *@structure_fields ].filter_map { |field_id| self.class.field_path(field_id) }
     (BASE_FIELDS + extra).uniq
   end
 
