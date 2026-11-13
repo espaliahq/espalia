@@ -281,6 +281,17 @@ setting replaces the first version's check on each unit. A level that holds live
 keeps its provider until a handover (6.8) moves it. A new level names its provider when
 the taxonomy adds it, so a level can be added above one an HRIS provides.
 
+The kinds of person fact, each naming the events it covers:
+
+| Kind | Events |
+|---|---|
+| `employment_status` | `PersonJoined`, `PersonLeft`, `PersonReturned`, `StartDateChanged` |
+| `title`, `level`, `manager`, `cost_centre` | `TitleChanged`, `LevelChanged`, `ManagerChanged`, `CostCentreChanged` |
+| `site` | `SiteChanged` (site and country) |
+| `employment` | `EmploymentChanged` (FTE and type) |
+
+The HiBob sync writes `employment_status`, `title`, `level`, `manager`, `site` and `employment`. Each must name the HRIS as its provider, or its writes are refused. `cost_centre` stays Espalia's until the field mapping (6.4) names a field.
+
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
 value becomes the Org Graph.
