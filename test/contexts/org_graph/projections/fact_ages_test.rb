@@ -147,6 +147,13 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     assert_nil age(@grace, "membership", design)
   end
 
+  should "refuse to confirm a fact another provider supplies" do
+    as_tenant { hand_title_to("hibob") }
+
+    assert_raises(RuntimeError, match: "hibob supplies title") { confirm(@ada, "title") }
+    assert_raises(RuntimeError, match: "hibob supplies this unit") { confirm(@grace, "membership", unit_id: @engineering) }
+  end
+
   context ".stale" do
     should "list the facts past the tenant's threshold, oldest first" do
       as_tenant { @handler.set_membership(@ada.id, @platform, **ESPALIA) }

@@ -235,7 +235,11 @@ keeps it so, so each one shows its age.
 - **`FactConfirmed` says a fact still holds**, and who said so. It names the fact, a
   membership by its unit or a person fact by its key, and never copies the value, so a
   confirmation can't disagree with the fact. Only a fact Espalia holds, for someone who
-  hasn't left, can be confirmed, and a membership only in a live unit.
+  hasn't left, can be confirmed, and a membership only in a live unit. Like any person
+  command, a confirmation is refused once the tenant hands the fact or the unit to an
+  HRIS, even before the next sync rewrites it.
+- **A handover ends a fact's age.** The HRIS's next write names it as the provider, and
+  the fact drops out of `org_fact_ages`.
 - **A fact is stale** when nobody has changed or confirmed it within the tenant's
   threshold, `Tenant#org_graph_config.staleness_days`, a quarter by default.
 - **Age runs from when the Org Graph learned of a change**, not from its effective date,
