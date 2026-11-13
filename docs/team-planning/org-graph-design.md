@@ -320,7 +320,7 @@ inactive but still employed in the Org Graph. The next sync that misses them wri
 again; then the one after tries.
 
 Leaving ends every open membership on the leaving date (story 2.5).
-`OrgGraph::SyncHandlers::LeaverMemberships` runs on `PersonLeft`, as the system, in the leaving's
+`OrgGraph::SyncHandlers::LeaverMemberships` runs on `PersonLeft`, as the system, and ends each from the person's stream in the leaving's
 transaction, with the leaving as each end's cause. A membership that changed after a backdated
 leaving ends on the day it changed. A later `PersonLeft` that corrects the date ends nothing again.
 A returner comes back with no membership, and a new person appears with none. No position is

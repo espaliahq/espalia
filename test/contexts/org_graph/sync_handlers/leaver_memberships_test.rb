@@ -77,31 +77,36 @@ class OrgGraph::SyncHandlers::LeaverMembershipsTest < ActiveSupport::TestCase
     assert_equal({ @payments => "2026-08-01", @billing => "2026-07-01" }, ended)
   end
 
-  should "end the memberships of someone the HRIS sync marks as left" do
+  should "end the memberships of someone the absence pass marks as left" do
     as_tenant { @people.record_absence(@grace.id, provider: "espalia", effective_on: "2026-05-04") }
 
     ended = person_events(@grace).grep(OrgGraph::Events::MembershipEnded).sole
     assert_equal [ @payments, "2026-05-04" ], ended.data.values_at(:unit_id, :effective_on)
   end
 
-  should "roll the leaving back with every membership end when one fails" do
-    commands = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-    calls = 0
-    end_membership = commands.method(:end_membership)
-    commands.define_singleton_method(:end_membership) do |*args, **options|
-      raise "member command failed" if (calls += 1) == 2
-
-      end_membership.call(*args, **options)
+  should "end the memberships of someone a sync reports as left, on their termination date" do
+    as_tenant do
+      @people.sync_person(@grace.id, provider: "espalia", effective_on: "2026-05-04",
+                                     employment_status: "left", left_on: "2026-04-30")
     end
 
-    OrgGraph::CommandHandler.stub(:new, commands) do
-      assert_raises(RuntimeError, match: /member command failed/) do
-        as_tenant { @people.leave(@ada.id, provider: "espalia", effective_on: "2026-06-30") }
+    ended = person_events(@grace).grep(OrgGraph::Events::MembershipEnded).sole
+    assert_equal [ @payments, "2026-04-30" ], ended.data.values_at(:unit_id, :effective_on)
+  end
+
+  should "roll the leaving back when its memberships can't be ended" do
+    failing = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    failing.define_singleton_method(:end_memberships) { |*, **| raise "member command failed" }
+
+    as_tenant do
+      OrgGraph::CommandHandler.stub(:new, failing) do
+        assert_raises(RuntimeError, match: /member command failed/) do
+          @people.leave(@ada.id, provider: "espalia", effective_on: "2026-06-30")
+        end
       end
     end
 
     assert_not(ada_events.any?(OrgGraph::Events::PersonLeft))
-    assert_not(ada_events.any?(OrgGraph::Events::MembershipEnded))
     as_tenant { assert_equal 2, OrgMembership.where(person_id: @ada.id).count }
   end
 

@@ -220,6 +220,18 @@ class OrgGraph::PersonAggregate
       ended_by_id: ended_by_id)))
   end
 
+  # Ends every open membership, each on `effective_on` or on its last change
+  # if later, since none can end before it. Each ends as its own provider.
+  #
+  # @param effective_on [Date, String]
+  def end_memberships(effective_on:)
+    ensure_recorded!
+    on = normalize_date(effective_on, :effective_on)
+    @memberships.to_a.each do |unit_id, membership|
+      end_membership(unit_id, provider: membership[:provider], effective_on: [ on, membership[:changed_on].to_s ].max)
+    end
+  end
+
   # Moves the person's membership of one unit to another, keeping its terms
   # and when it began, since the destination carries on from the unit they
   # were in. A person already in the destination keeps that membership, and a

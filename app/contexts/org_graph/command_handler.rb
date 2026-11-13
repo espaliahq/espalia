@@ -229,6 +229,16 @@ class OrgGraph::CommandHandler
     with_person(person_id, plan) { |person| person.end_membership(unit_id, **attributed(options, :ended_by_id)) }
   end
 
+  # Ends every open membership a person has, as the system does when they
+  # leave. See {OrgGraph::PersonAggregate#end_memberships}.
+  #
+  # @param person_id [String]
+  # @param effective_on [Date, String]
+  def end_memberships(person_id, effective_on:, **plan)
+    authorize_structure!
+    with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.end_memberships(effective_on:) }
+  end
+
   # Moves a person's membership to a live unit, keeping its terms.
   #
   # @param person_id [String]
