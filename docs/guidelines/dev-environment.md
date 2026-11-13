@@ -29,7 +29,7 @@ from the Claude process, not from `~/.bashrc`, and `/root/.local/bin` is already
 the image's Ruby and chromedriver. The script symlinks Ruby, Bundler, the gems' executables and
 the chromedriver there.
 
-**The environment provides three things.** Network access to the hosts the script downloads
+**The environment provides two things.** Network access to the hosts the script downloads
 from: `cache.ruby-lang.org` (Ruby), `storage.googleapis.com` (chromedriver), `rubygems.org`
 (gems), and `archive.ubuntu.com` and `security.ubuntu.com` (any missing system package). `LANG=C.UTF-8`, without which
 Ruby reads files as US-ASCII. No secrets: the repo has no credentials file, so there is no

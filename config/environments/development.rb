@@ -89,12 +89,11 @@ Rails.application.configure do
   # applies in development.
   config.hosts << "rails-app"
 
-  # A fresh clone has no master.key, so the credentials file (which normally
-  # carries active_record_encryption) is unreadable — yet the encrypted
-  # tenant-credential columns still need keys. Derive stable, local-only keys
-  # from the development secret_key_base (tmp/local_secret.txt) so bin/setup
-  # and the app work with no secrets at all. A checkout WITH the key keeps the
-  # shared keys, so an existing dev database stays readable.
+  # The repo ships no credentials file, yet the encrypted tenant-credential
+  # columns still need keys. Derive stable, local-only keys from the
+  # development secret_key_base (tmp/local_secret.txt) so bin/setup and the
+  # app work with no secrets at all. Credentials that do carry
+  # active_record_encryption take precedence.
   if Rails.application.credentials.active_record_encryption.blank?
     config.active_record.encryption.primary_key = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-primary")
     config.active_record.encryption.deterministic_key = Digest::SHA256.hexdigest("#{Rails.application.secret_key_base}:ar-deterministic")
