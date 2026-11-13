@@ -129,15 +129,10 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   end
 
   def unit_summary(unit)
-    beneath = descendants(unit).group_by(&:level_id).filter_map do |level_id, units|
-      level = @overview.levels.find { |candidate| candidate.id == level_id }
+    beneath = @overview.descendants_of(unit).group_by { |child| @overview.level_of(child) }.filter_map do |level, units|
       level && pluralize_level(units.size, level.name)
     end
     [ people(@overview.headcount(unit)), *beneath ].join(", ")
-  end
-
-  def descendants(unit)
-    @overview.children_of(unit).flat_map { |child| [ child, *descendants(child) ] }
   end
 
   def unit_card(unit)

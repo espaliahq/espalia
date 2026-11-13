@@ -19,20 +19,16 @@ class Operations::OrgGraph::Units < Operations::Base
   # @return [Hash] levels, units and the people in no unit
   def perform
     overview = ::OrgGraph::UnitsOverview.new
-    unplaced = overview.unplaced.pluck(:id)
+    unplaced = overview.unplaced.map(&:id)
 
     {
       levels: overview.levels.map { |level| { id: level.id, name: level.name } },
-      units: tree(overview, overview.roots).map { |unit| unit_payload(overview, unit) },
+      units: overview.in_tree_order.map { |unit| unit_payload(overview, unit) },
       in_no_unit: { count: unplaced.size, person_ids: unplaced }
     }
   end
 
   private
-
-  def tree(overview, units)
-    units.flat_map { |unit| [ unit, *tree(overview, overview.children_of(unit)) ] }
-  end
 
   def unit_payload(overview, unit)
     {

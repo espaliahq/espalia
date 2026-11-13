@@ -77,6 +77,16 @@ class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
     end
   end
 
+  should "treat a live unit whose parent is not live as a root, so it stays reachable" do
+    ActsAsTenant.with_tenant(@tenant) do
+      unit(:checkout).update_columns(retired_on: Date.new(2026, 3, 1))
+      view = OrgGraph::UnitsOverview.new
+
+      assert_equal %w[Engineering Payments], view.roots.map(&:name)
+      assert_equal %w[Engineering Platform Payments], view.in_tree_order.map(&:name)
+    end
+  end
+
   should "hold nothing for a tenant with no structure" do
     ActsAsTenant.with_tenant(create(:tenant)) do
       view = OrgGraph::UnitsOverview.new

@@ -19,7 +19,8 @@ class OrgGraph::UnitsOverview
   def initialize(selected_unit_id: nil)
     @levels = OrgTaxonomyLevel.top_first.to_a
     @units = OrgUnit.live.to_a.index_by(&:id)
-    @children = @units.values.group_by(&:parent_id).transform_values { |units| units.sort_by(&:name) }
+    @children = @units.values.group_by { |unit| @units.key?(unit.parent_id) ? unit.parent_id : nil }
+                      .transform_values { |units| units.sort_by(&:name) }
     @memberships = OrgMembership.in_live_units.joins(:person).merge(Person.active)
                                 .includes(:person).to_a.group_by(&:unit_id)
     @selected_unit_id = selected_unit_id
@@ -28,12 +29,24 @@ class OrgGraph::UnitsOverview
   # @return [Boolean]
   def any_units? = @units.any?
 
-  # @return [Array<OrgUnit>] live units with no parent, by name
+  # @return [Array<OrgUnit>] live units with no live parent, by name
   def roots = children_of(nil)
 
   # @param unit [OrgUnit, nil]
   # @return [Array<OrgUnit>] its live sub-units, by name
   def children_of(unit) = @children.fetch(unit&.id, [])
+
+  # @param unit [OrgUnit]
+  # @return [Array<OrgUnit>] every live unit beneath it, in tree order
+  def descendants_of(unit)
+    children_of(unit).flat_map { |child| [ child, *descendants_of(child) ] }
+  end
+
+  # @return [Array<OrgUnit>] every live unit, depth first, siblings by name:
+  #   the order the tree shows them
+  def in_tree_order
+    roots.flat_map { |root| [ root, *descendants_of(root) ] }
+  end
 
   # @return [OrgUnit, nil]
   def selected
@@ -54,10 +67,7 @@ class OrgGraph::UnitsOverview
 
   # @param unit [OrgUnit]
   # @return [Integer] distinct people in the unit and every unit beneath it
-  def headcount(unit)
-    @headcounts ||= {}
-    @headcounts[unit.id] ||= people_within(unit).size
-  end
+  def headcount(unit) = people_within(unit).size
 
   # @param unit [OrgUnit]
   # @return [Array<OrgMembership>] the unit's own members, by name
@@ -83,17 +93,18 @@ class OrgGraph::UnitsOverview
     own + children
   end
 
-  # @return [ActiveRecord::Relation<Person>] active people in no live unit, by name
+  # @return [Array<Person>] active people in no live unit, by name
   def unplaced
-    @unplaced ||= Person.active.in_no_unit.order(:name)
+    @unplaced ||= Person.active.in_no_unit.order(:name).to_a
   end
 
   private
 
   def people_within(unit)
-    ids = @memberships.fetch(unit.id, []).map(&:person_id)
-    children_of(unit).each { |child| ids.concat(people_within(child).to_a) }
-    ids.to_set
+    @people_within ||= {}
+    @people_within[unit.id] ||= children_of(unit).reduce(@memberships.fetch(unit.id, []).to_set(&:person_id)) do |ids, child|
+      ids | people_within(child)
+    end
   end
 
   def units_by_person
