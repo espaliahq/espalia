@@ -55,4 +55,39 @@ class TenantUserTest < ActiveSupport::TestCase
       end
     end
   end
+
+  context "#ensure_person!" do
+    setup do
+      @tenant_user = ActsAsTenant.with_tenant(@tenant) { create(:tenant_user, tenant: @tenant, user: @user, person: nil) }
+    end
+
+    should "start no stream while the HRIS sync writes the tenant's people" do
+      person = @tenant_user.ensure_person!
+
+      assert_empty person_stream(person)
+    end
+
+    should "record a new person as Espalia's once the tenant is cut over to the Org Graph" do
+      @tenant.update!(org_graph_people_projected_at: Time.current)
+
+      recorded = person_stream(@tenant_user.ensure_person!).sole
+
+      assert_kind_of OrgGraph::Events::PersonRecorded, recorded
+      assert_equal [ "espalia", "employed" ], recorded.data.values_at(:provider, :employment_status)
+    end
+
+    should "leave an existing person's stream alone" do
+      @tenant.update!(org_graph_people_projected_at: Time.current)
+      existing = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, email: @user.email) }
+
+      assert_equal existing, @tenant_user.ensure_person!
+      assert_empty person_stream(existing)
+    end
+  end
+
+  private
+
+  def person_stream(person)
+    Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id, tenant: @tenant)).to_a
+  end
 end

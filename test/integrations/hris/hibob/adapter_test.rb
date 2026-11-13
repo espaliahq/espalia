@@ -846,6 +846,47 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_operator person_development_event_count, :>, pd_before
       end
     end
+
+    context "once the tenant is cut over to the Org Graph" do
+      setup do
+        assert OrgGraph::PeopleCutover.new(@tenant).run(apply: true).applied
+        @alice = @people["bob-001"]
+      end
+
+      should "leave the title, manager and status to the streams, writing none of them itself" do
+        @alice.update_columns(job_title: "Stale", manager_id: nil, status: "inactive")
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ "Stale", nil, "inactive" ], @alice.reload.slice(:job_title, :manager_id, :status).values
+      end
+
+      should "write a new title through its event" do
+        employees = with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
+
+        build_adapter(employees).sync_people
+
+        assert_equal "Staff Engineer", @alice.reload.job_title
+      end
+
+      should "record a leaving for someone HiBob stops returning, which marks them inactive" do
+        result = build_adapter(@fixture["employees"].reject { it["id"] == "bob-001" }).sync_people
+
+        assert_equal 1, result[:deactivated]
+        assert_kind_of OrgGraph::Events::PersonLeft, Rails.configuration.event_store.read.stream(stream_of(@alice)).last
+        assert_equal "inactive", @alice.reload.status
+      end
+
+      should "hand the columns back to the sync once reverted" do
+        @alice.update_columns(job_title: "Stale")
+        OrgGraph::PeopleCutover.new(@tenant).revert!
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal "Software Engineer", @alice.reload.job_title
+      end
+    end
   end
 
   private

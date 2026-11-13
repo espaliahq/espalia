@@ -21,6 +21,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # HiBob field types whose values come from a named list, each with an id.
   LIST_TYPES = %w[list multi-list hierarchy-list].freeze
 
+  # The columns {OrgGraph::Projections::PeopleColumns} writes once a tenant is cut over.
+  PROJECTED_ATTRS = %i[job_title status].freeze
+
   # @return [String]
   def provider_name
     "hibob"
@@ -39,6 +42,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # 5. Assign (or reassign) active people to framework roles/levels via
   #    role_mappings (inactive people are skipped — Pass 3b owns them)
   #
+  # Once the tenant is cut over to the Org Graph, passes 1 to 3 leave
+  # `job_title`, `manager_id` and `status` alone: Pass 2b's events write them
+  # through {OrgGraph::Projections::PeopleColumns}, and Pass 3 records a leaving.
+  #
   # @return [Hash] summary with :created, :updated, :deactivated, :offboarded, :org_graph_events,
   #   :skipped_inactive, :assigned,
   #   :role_changed, :level_changed, :unchanged, :errors,
@@ -54,6 +61,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       manager_links = {}
       touched_person_ids = []
       org_graph_facts = {}
+      projected = tenant.org_graph_people_projected?
 
       # Pass 1: Upsert all employees
       employees.each do |raw_employee|
@@ -65,12 +73,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         attrs = Hris::DevNameWhimsifier.call(mapper.call)
         manager_ext_id = mapper.manager_external_id
 
-        person = upsert_person(attrs, result)
+        person = upsert_person(projected ? attrs.except(*PROJECTED_ATTRS) : attrs, result)
         if person
           external_id_map[attrs[:external_id]] = person
           manager_links[person] = manager_ext_id if manager_ext_id.present?
           touched_person_ids << person.id
-          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id }.compact
+          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
+                                      status: attrs[:status] }.compact
         end
       rescue => e
         result[:errors] << {
@@ -80,11 +89,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         }
       end
 
-      # Pass 2: Resolve manager relationships
+      # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
       manager_links.each do |person, manager_ext_id|
         manager = managers[manager_ext_id]
         person.update!(manager: manager) if manager && person.manager_id != manager.id
-      end
+      end unless projected
 
       # Pass 2b: Record new people in the Org Graph, then write each fact that differs
       record_org_graph_differences(org_graph_facts, managers, result)
@@ -310,7 +319,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # left uncompared. A change in employment status is written too; a
   # leaver's other facts are not compared.
   #
-  # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
+  # @param rows [Hash{Person => Hash}] title, level, manager_external_id and
+  #   HiBob's status per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once
   # @param result [Hash] running tally
   def record_org_graph_differences(rows, managers, result)
@@ -326,7 +336,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
           facts[:manager_id] = manager.id
         end
 
-        status = person.status == "inactive" ? "left" : "employed"
+        status = row[:status] == "inactive" ? "left" : "employed"
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
           employment_status: status, **facts)
       rescue => e
@@ -344,9 +354,28 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     stale_people = Person.where(hris_source: "hibob", status: "active")
                          .where.not(external_id: current_external_ids)
 
+    return deactivate_in_org_graph(stale_people, result) if tenant.org_graph_people_projected?
+
     stale_people.find_each do |person|
       person.update!(status: "inactive")
       result[:deactivated] += 1
+    end
+  end
+
+  # Pass 3 for a tenant cut over to the Org Graph: each person leaves in their
+  # stream, and the projection marks them inactive.
+  #
+  # @param stale_people [ActiveRecord::Relation<Person>]
+  # @param result [Hash] running tally
+  def deactivate_in_org_graph(stale_people, result)
+    with_hris_event_context do
+      handler = OrgGraph::CommandHandler.new
+      stale_people.find_each do |person|
+        handler.leave(person.id, provider: provider_name, effective_on: Date.current)
+        result[:deactivated] += 1
+      rescue => e
+        result[:errors] << { person_id: person.id, error: e.message }
+      end
     end
   end
 

@@ -43,12 +43,15 @@ class TenantUser < ApplicationRecord
     return person if person_id.present?
 
     ActsAsTenant.with_tenant(tenant) do
-      linked = Person.create_or_find_by!(tenant: tenant, email: user.email) do |p|
-        p.name = self.class.derive_person_name(user.email)
-        p.status = "active"
+      transaction do
+        linked = Person.create_or_find_by!(tenant: tenant, email: user.email) do |p|
+          p.name = self.class.derive_person_name(user.email)
+          p.status = "active"
+        end
+        record_in_org_graph(linked) if linked.previously_new_record? && tenant.org_graph_people_projected?
+        update!(person: linked)
+        linked
       end
-      update!(person: linked)
-      linked
     end
   end
 
@@ -61,5 +64,14 @@ class TenantUser < ApplicationRecord
     local = email.to_s.split("@", 2).first.to_s.split("+", 2).first.to_s
     parts = local.split(/[._\-]/).reject(&:empty?)
     parts.map(&:capitalize).join(" ").presence || email
+  end
+
+  private
+
+  # A tenant cut over to the Org Graph projects its people's status from
+  # their streams, so a person created here starts one, held by Espalia.
+  def record_in_org_graph(person)
+    OrgGraph::CommandHandler.new.record_person(person.id, provider: "espalia", effective_on: Date.current,
+                                                          employment_status: "employed")
   end
 end
