@@ -538,6 +538,31 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#claim_facts" do
+    should "hand each unset fact to the provider and report what it claimed" do
+      claimed = as_tenant { @handler.claim_facts(%w[title level], "hibob", effective_on: @today, set_by_id: @actor) }
+
+      assert_equal %w[title level], claimed
+      assert_equal %w[title level], structure_events.select { it.is_a?(OrgGraph::Events::FactProviderSet) }.map { it.data[:fact] }
+      as_tenant { assert_equal "hibob", OrgFactProvider.provider_for("level") }
+    end
+
+    should "leave a fact whose provider was ever chosen, so a re-run only reaches new facts" do
+      as_tenant do
+        @handler.claim_facts(%w[title], "hibob", effective_on: @today)
+        @handler.set_fact_provider("title", "espalia", effective_on: @today)
+
+        assert_equal %w[site], @handler.claim_facts(%w[title site], "hibob", effective_on: @today)
+        assert_equal [], @handler.claim_facts(%w[title site], "hibob", effective_on: @today)
+        assert_equal "espalia", OrgFactProvider.provider_for("title")
+      end
+    end
+
+    should "refuse a fact it doesn't know" do
+      assert_raises(ArgumentError) { as_tenant { @handler.claim_facts(%w[department], "hibob", effective_on: @today) } }
+    end
+  end
+
   context "effective dates" do
     setup do
       create_unit(@department, "Engineering", level: "Department")

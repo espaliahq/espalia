@@ -28,6 +28,13 @@ class OrgGraph::StructureCommandHandler
     @repository.with_structure { |structure| structure.set_fact_provider(fact, provider, **options) }
   end
 
+  # @see OrgGraph::StructureAggregate#claim_facts
+  def claim_facts(facts, provider, **options)
+    claimed = []
+    @repository.with_structure { |structure| claimed = structure.claim_facts(facts, provider, **options) }
+    claimed
+  end
+
   # @see OrgGraph::StructureAggregate#create_unit
   def create_unit(unit_id, name, **options)
     @repository.with_structure { |structure| structure.create_unit(unit_id, name, **options) }

@@ -258,6 +258,22 @@ class Tenant < ApplicationRecord
       )
       save!
     end
+    claim_hris_facts!
+  end
+
+  # Hands the HRIS the person facts it supplies by default
+  # ({OrgGraph::StructureAggregate::HRIS_FACTS}), once it is configured. A
+  # fact whose provider was ever chosen keeps it, so this is safe to repeat;
+  # disconnecting hands nothing back, as that is a handover.
+  #
+  # @return [Array<String>] the facts claimed
+  def claim_hris_facts!
+    return [] unless hris_config.configured?(self)
+
+    ActsAsTenant.with_tenant(self) do
+      OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, hris_config.provider,
+                                                        effective_on: Date.current)
+    end
   end
 
   # Sever the HRIS connection: credentials gone, sync off. The config —

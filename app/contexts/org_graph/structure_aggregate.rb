@@ -23,6 +23,9 @@ class OrgGraph::StructureAggregate
   UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
   # The kinds of person fact a provider supplies, one per family of person event.
   FACTS = %w[employment_status title level manager cost_centre site employment].freeze
+  # The facts an HRIS supplies unless someone chose otherwise. The sync writes
+  # these, and connecting an HRIS claims them for it.
+  HRIS_FACTS = %w[employment_status title level manager].freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :created_on, :changed_on,
                     keyword_init: true)
@@ -142,6 +145,21 @@ class OrgGraph::StructureAggregate
       effective_on: iso_date(effective_on),
       set_by_id: set_by_id
     }))
+  end
+
+  # Hands each fact nobody has chosen a provider for to this one. A fact whose
+  # provider was ever set, to anyone, keeps it, so running this again only
+  # reaches facts added to the list since.
+  #
+  # @param facts [Array<String, Symbol>] each one of {FACTS}
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @return [Array<String>] the facts it claimed
+  def claim_facts(facts, provider, effective_on:, set_by_id: nil)
+    unclaimed = facts.map(&:to_s).uniq.reject { |fact| @fact_providers.key?(fact) }
+    unclaimed.each { |fact| set_fact_provider(fact, provider, effective_on:, set_by_id:) }
+    unclaimed.select { |fact| @fact_providers[fact] == provider }
   end
 
   # Creates a unit.

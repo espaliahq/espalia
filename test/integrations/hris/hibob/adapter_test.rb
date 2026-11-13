@@ -6,6 +6,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant, :with_hibob_config)
     ActsAsTenant.current_tenant = @tenant
+    @tenant.claim_hris_facts!
 
     @fixture = JSON.parse(
       File.read(Rails.root.join("test/fixtures/files/hibob/people_search_response.json"))
@@ -851,7 +852,8 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   private
 
   def org_graph_events
-    Rails.configuration.event_store.read.of_type(OrgGraph::Events.constants.map { OrgGraph::Events.const_get(it) }).to_a
+    settings = [ OrgGraph::Events::FactProviderSet, OrgGraph::Events::LevelProviderSet ]
+    Rails.configuration.event_store.read.of_type(OrgGraph::Events.constants.map { OrgGraph::Events.const_get(it) } - settings).to_a
   end
 
   def new_events
