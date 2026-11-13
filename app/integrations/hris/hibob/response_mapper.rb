@@ -14,6 +14,9 @@
 #   # => "456"
 #
 class Hris::Hibob::ResponseMapper
+  # A list field's value: the list item's id, which survives a rename, and its label.
+  ListValue = Data.define(:id, :label)
+
   # Maps a single HiBob employee hash to Person attributes.
   #
   # @param employee [Hash] raw employee data from HiBob API
@@ -65,6 +68,18 @@ class Hris::Hibob::ResponseMapper
     employee.dig("humanReadable", "work", "customColumns", level_field_id).to_s.strip.presence
   end
 
+  # The list fields' item ids beside their labels, keyed like the attributes they sit
+  # beside. A blank field is left out.
+  #
+  # @return [Hash{Symbol => ListValue}]
+  def list_values
+    {
+      department: list_value(%w[work department]),
+      job_title: list_value(%w[work title]),
+      level: (list_value([ "work", "customColumns", level_field_id ]) if level_field_id.present?)
+    }.compact
+  end
+
   private
 
   attr_reader :employee, :level_field_id
@@ -83,6 +98,20 @@ class Hris::Hibob::ResponseMapper
     return nil if raw.nil?
 
     Integer(raw, exception: false)
+  end
+
+  # HiBob returns a list field either nested (`work.department`) or flat
+  # (`"/work/department" => { "value" => id }`); the label is only ever in the nested
+  # `humanReadable` node.
+  #
+  # @param path [Array<String>]
+  # @return [ListValue, nil]
+  def list_value(path)
+    flat = employee["/#{path.join('/')}"]
+    id = employee.dig(*path).presence || (flat.is_a?(Hash) ? flat["value"] : flat).presence
+    return nil if id.nil? || id.is_a?(Hash)
+
+    ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
 
   # @return [String, nil]

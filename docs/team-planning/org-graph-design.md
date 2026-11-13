@@ -265,8 +265,8 @@ The HiBob adapter is most of the way there, and the gaps are small.
   field per tenant is already supported, for the level. The requested set becomes the
   fields the tenant's mapping names.
 - The level field is set by pasting its raw id. The picker replaces that.
-- It asks for both the stored value and the display text, and maps only the text. The
-  id survives only in the raw payload. It needs to keep the value's id beside the text.
+- It asks for both the stored value and the display text. The mapper reads them as a
+  pair (`ResponseMapper#list_values`), but the sync still writes only the text.
 
 Open question: a unit whose people sit under two different units at the level above.
 The likely answer is to list it for someone to resolve, as a disagreement is.
