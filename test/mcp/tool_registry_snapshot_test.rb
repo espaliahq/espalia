@@ -2733,6 +2733,59 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_confirm_fact",
+        "description" => "Confirm that a fact Espalia holds about a person is still true, so it is no longer stale. " \
+                         "A membership names its unit in unit_id; any other fact is the person's own. " \
+                         "A fact an HRIS supplies is confirmed by each sync and can't be confirmed here.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "fact" => {
+              "type" => "string",
+              "enum" => %w[title level manager_id cost_centre site country fte employment_type membership]
+            },
+            "unit_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "person_id", "fact" ],
+          "additionalProperties" => false,
+          "allOf" => [
+            {
+              "if" => { "properties" => { "fact" => { "const" => "membership" } }, "required" => [ "fact" ] },
+              "then" => {
+                "required" => [ "unit_id" ],
+                "properties" => { "unit_id" => { "minLength" => 1, "pattern" => "\\S" } }
+              }
+            },
+            {
+              "if" => {
+                "properties" => {
+                  "fact" => { "enum" => %w[title level manager_id cost_centre site country fte employment_type] }
+                },
+                "required" => [ "fact" ]
+              },
+              "then" => { "not" => { "required" => [ "unit_id" ] } }
+            }
+          ]
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_move_member",
         "description" => "Move a person's membership of one unit to another live unit, keeping its role and " \
                          "allocation, from effective_on (today by default). A membership an HRIS supplies moves in " \
