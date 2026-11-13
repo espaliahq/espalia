@@ -64,6 +64,14 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     end
   end
 
+  should "move a membership's start earlier when a set is backdated" do
+    as_tenant do
+      @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "hibob", effective_on: "2026-01-15")
+
+      assert_equal Date.new(2026, 1, 15), OrgMembership.find_by!(person: @grace).member_since
+    end
+  end
+
   should "list the people in no live unit" do
     as_tenant do
       assert_equal [ @linus.id ], Person.in_no_unit.pluck(:id)

@@ -40,7 +40,8 @@ class OrgGraph::Projections::Members
 
   def handle_membership_set(data)
     membership = OrgMembership.find_or_initialize_by(data.slice(:person_id, :unit_id))
-    membership.member_since ||= data[:effective_on]
+    effective_on = Date.iso8601(data[:effective_on])
+    membership.member_since = [ membership.member_since, effective_on ].compact.min
     membership.update!(data.slice(:allocation, :role, :provider, :effective_on))
   end
 end

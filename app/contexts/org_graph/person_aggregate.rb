@@ -346,7 +346,7 @@ class OrgGraph::PersonAggregate
 
   on OrgGraph::Events::MembershipSet do |event|
     data = event.data
-    since = @memberships.dig(data[:unit_id], :since) || data[:effective_on]
+    since = [ @memberships.dig(data[:unit_id], :since), data[:effective_on] ].compact.min
     @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since)
   end
 

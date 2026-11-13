@@ -349,6 +349,13 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_raises(RuntimeError, match: /has left/) { @aggregate.set_membership(@squad, **PROVENANCE) }
     end
 
+    should "count a membership from a backdated set, so a corrected start is honoured" do
+      @aggregate.set_membership(@squad, allocation: 1, provider: "hibob", effective_on: "2026-03-01")
+      @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-02-01")
+
+      assert_nothing_raised { @aggregate.end_membership(@squad, provider: "hibob", effective_on: "2026-02-15") }
+    end
+
     should "place a hire before they start, and refuse a person not yet recorded" do
       pending = OrgGraph::PersonAggregate.new
       assert_raises(RuntimeError, match: /not recorded/) { pending.set_membership(@squad, **PROVENANCE) }
