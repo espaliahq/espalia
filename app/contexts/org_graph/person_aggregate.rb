@@ -139,6 +139,9 @@ class OrgGraph::PersonAggregate
     raise "Invalid reason: #{reason}" unless FORGETTING_REASONS.include?(reason)
     raise "A request needs the person who asked" if reason == "request" && requested_by_id.blank?
 
+    # Leaving ends them, but a failed handler can leave one open, and nothing
+    # can end it once they are forgotten.
+    end_memberships(effective_on:) if @memberships.any?
     apply(OrgGraph::Events::PersonForgotten.new(data: provenance(OrgGraph::StructureAggregate::ESPALIA, effective_on).merge(
       reason: reason, retention_years: retention_years, requested_by_id: requested_by_id
     )))

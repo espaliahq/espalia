@@ -551,6 +551,20 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
                      retention_years: 7, requested_by_id: nil }, forgotten.data)
     end
 
+    should "end a membership leaving left open before the erasure" do
+      squad = SecureRandom.uuid_v7
+      member = OrgGraph::PersonAggregate.new
+      member.record(@person_id, **PROVENANCE, employment_status: "employed")
+      member.set_membership(squad, **PROVENANCE)
+      member.leave(**PROVENANCE)
+
+      member.forget(effective_on: "2033-06-01", reason: "retention")
+
+      ended, forgotten = member.unpublished_events.to_a.last(2)
+      assert_equal [ OrgGraph::Events::MembershipEnded, OrgGraph::Events::PersonForgotten ], [ ended.class, forgotten.class ]
+      assert_equal squad, ended.data[:unit_id]
+    end
+
     should "name who asked for a request" do
       assert_raises(RuntimeError, match: /who asked/) { @aggregate.forget(effective_on: "2027-01-01", reason: "request") }
 
