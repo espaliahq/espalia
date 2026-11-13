@@ -89,6 +89,10 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
   # @return [Array<PersonChange>]
   def people_changes(unit) = people_by_unit.fetch(unit.id, [])
 
+  # @param date [Date]
+  # @return [String] e.g. "5 Nov", with the year when it isn't this year
+  def day(date) = I18n.l(date, format: date.year == @today.year ? "%-d %b" : "%-d %b %Y")
+
   # A unit retired in the window, which today's tree no longer shows.
   Retirement = Data.define(:name, :last_day, :successors, :withdrawn)
 
@@ -109,7 +113,8 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
     end
   end
 
-  # A unit new in the window is only "new": its first name and parent are part of it.
+  # A unit new in the window is "new" rather than renamed or moved: its first
+  # name and parent are part of it. A succession it takes part in still shows.
   def unit_marks_from(changes)
     created = changes.find { it.kind == :unit_created }
     return [ [ created.unit_id, withdrawn("new", created) ] ] if created
@@ -219,6 +224,4 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
 
     value.values_at("parent_id", "predecessor_ids", "successor_ids").flatten.compact
   end
-
-  def day(date) = I18n.l(date, format: date.year == @today.year ? "%-d %b" : "%-d %b %Y")
 end

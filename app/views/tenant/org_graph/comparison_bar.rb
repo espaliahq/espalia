@@ -136,5 +136,5 @@ class Views::Tenant::OrgGraph::ComparisonBar < Views::Base
     retirement.withdrawn ? "#{text} (withdrawn)" : text
   end
 
-  def day(date) = I18n.l(date, format: date.year == @today.year ? "%-d %b" : "%-d %b %Y")
+  def day(date) = @comparison.day(date)
 end
