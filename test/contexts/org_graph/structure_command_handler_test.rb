@@ -329,6 +329,49 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#hand_over_level" do
+    setup do
+      create_unit(@department, "Product", level: "Department")
+      @other = create_unit(SecureRandom.uuid_v7, "Platform", level: "Department")
+    end
+
+    should "set the level's provider and field, then hand over each matched unit" do
+      hand_over(@department => "work.department/1", @other => "work.department/2")
+
+      assert_equal %w[LevelProviderSet UnitHandedOver UnitHandedOver], structure_events.last(3).map { it.class.name.demodulize }
+      assert_equal "work.department", structure_events[-3].data[:field]
+      unit = as_tenant { OrgUnit.find(@department) }
+      assert_equal [ "hibob", "work.department/1" ], [ unit.provider, unit.external_ref ]
+      assert_equal "hibob", as_tenant { OrgTaxonomyLevel.find(level_id("Department")).provider }
+    end
+
+    should "refuse while a live unit is unmatched, naming it" do
+      error = assert_raises(RuntimeError) { hand_over(@department => "work.department/1") }
+
+      assert_match(/Match or resolve every unit first: Platform/, error.message)
+    end
+
+    should "refuse two units becoming the same value" do
+      assert_raises(RuntimeError) { hand_over(@department => "work.department/1", @other => "work.department/1") }
+    end
+
+    should "refuse a level Espalia does not hold" do
+      hand_over(@department => "work.department/1", @other => "work.department/2")
+
+      assert_raises(RuntimeError) { hand_over(@department => "work.department/1", @other => "work.department/2") }
+    end
+
+    should "hand the level back, keeping its units and clearing their references" do
+      hand_over(@department => "work.department/1", @other => "work.department/2")
+      as_tenant { @handler.hand_back_level(level_id("Department"), effective_on: @today) }
+
+      unit = as_tenant { OrgUnit.find(@department) }
+      assert_equal [ "espalia", nil ], [ unit.provider, unit.external_ref ]
+      assert_nil as_tenant { OrgTaxonomyLevel.find(level_id("Department")).provider_field }
+      assert_nil unit.retired_on
+    end
+  end
+
   context "#define_taxonomy with a new level's provider" do
     setup do
       provide("Department", "hibob")
@@ -871,6 +914,12 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
   def provide(level, provider, **options)
     as_tenant { @handler.set_level_provider(level_id(level), provider, effective_on: @today, **options) }
+  end
+
+  def hand_over(matches)
+    as_tenant do
+      @handler.hand_over_level(level_id("Department"), "hibob", field: "work.department", matches:, effective_on: @today)
+    end
   end
 
   def structure_events

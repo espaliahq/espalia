@@ -43,6 +43,18 @@ class OrgGraph::StructureCommandHandler
     with_structure(plan) { |structure| structure.set_level_provider(level_id, provider, **attributed(options, :set_by_id)) }
   end
 
+  # @see OrgGraph::StructureAggregate#hand_over_level
+  def hand_over_level(level_id, provider, **options)
+    authorize_structure!
+    with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_over_level(level_id, provider, **attributed(options, :set_by_id)) }
+  end
+
+  # @see OrgGraph::StructureAggregate#hand_back_level
+  def hand_back_level(level_id, **options)
+    authorize_structure!
+    with_structure(OrgGraph::PlanReference.new) { |structure| structure.hand_back_level(level_id, **attributed(options, :set_by_id)) }
+  end
+
   # @see OrgGraph::StructureAggregate#set_fact_provider
   def set_fact_provider(fact, provider, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
