@@ -117,7 +117,72 @@ class OrgGraph::StructureCommandHandler
     end
   end
 
+  # Applies a split, a merge or a replacement, as approving a plan does: moves
+  # each person `placements` names to their successor, records the succession
+  # and retires the predecessors, all in one transaction. A merge or a
+  # replacement then moves every other member to its one successor; a split
+  # ends their membership, as {OrgGraph::SyncHandlers::RetiredUnitMemberships}
+  # does. Build the handler with the approval as its `cause_id:`, so every
+  # event shares it.
+  #
+  # @param succession_id [String]
+  # @param predecessor_ids [Array<String>]
+  # @param successor_ids [Array<String>]
+  # @param effective_on [Date, String]
+  # @param placements [Hash{String => String}] person id => the successor
+  #   they move to
+  # @param options [Hash] other keywords accepted by
+  #   {OrgGraph::StructureAggregate#record_succession}
+  # @raise [ArgumentError] if a placement names a unit outside the successors,
+  #   or a person who isn't a member of exactly one predecessor
+  def apply_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, placements: {}, **options)
+    plan, options = OrgGraph::PlanReference.extract(options)
+    options = attributed(options, :stated_by_id)
+    ActiveRecord::Base.transaction do
+      authorize_succession!([ predecessor_ids, successor_ids ])
+      applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
+      moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
+      place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
+      with_structure(plan) do |structure|
+        structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
+                                                   **options, retire_predecessors: true)
+      end
+    end
+  end
+
   private
+
+  # Checks every placement before any is written. Once the succession is
+  # recorded, someone already in their successor and in no predecessor was
+  # placed when the plan was last applied.
+  def placement_moves(placements, predecessor_ids, successor_ids, applied:)
+    predecessor_ids, successor_ids = [ predecessor_ids, successor_ids ].map { |ids| ids.map { |id| id.to_s.downcase } }
+    held = OrgMembership.where(person_id: placements.keys, unit_id: predecessor_ids + successor_ids)
+                        .group_by(&:person_id)
+
+    placements.filter_map do |person_id, successor_id|
+      successor_id = successor_id.to_s.downcase
+      raise ArgumentError, "A placement must name one of the successors" unless successor_ids.include?(successor_id)
+
+      memberships = held.fetch(person_id.to_s.downcase, [])
+      from = memberships.select { |membership| predecessor_ids.include?(membership.unit_id) }
+      next if applied && from.empty? && memberships.any? { |membership| membership.unit_id == successor_id }
+      raise ArgumentError, "Only a member of one predecessor can be placed" unless from.one?
+
+      [ from.first, successor_id ]
+    end
+  end
+
+  # As the system, since the succession's check already covers each move:
+  # whoever may change every unit in it may move a member between them.
+  def place(moves, effective_on, plan, moved_by_id:)
+    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: @cause_id, repository: @repository)
+    moves.each do |membership, successor_id|
+      on = OrgGraph::SyncHandlers::RetiredUnitMemberships.leaving_on(membership, on: effective_on, repository: @repository)
+      people.move_membership(membership.person_id, membership.unit_id, successor_id,
+                             effective_on: on, moved_by_id: moved_by_id, **plan.to_h)
+    end
+  end
 
   def with_structure(plan, &block)
     @repository.with_structure(plan:, cause_id: @cause_id, &block)

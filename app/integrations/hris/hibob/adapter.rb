@@ -52,6 +52,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #   :unmapped_titles, :missing_roles, :missing_levels, :missing_ordinals,
   #   :skipped_no_title
   def sync_people
+    @sync_correlation_id = correlation_id.presence || SecureRandom.uuid_v7
     employees = fetch_employees
     result = build_initial_result
 
@@ -69,7 +70,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         employees.each do |raw_employee|
           mapper = Hris::Hibob::ResponseMapper.new(
             raw_employee,
-            level_field_id: config.level_field_id
+            level_field_id: config.level_field_id,
+            mapped_fields:
           )
           # Dev-only PII guard — pass-through outside development.
           attrs = Hris::DevNameWhimsifier.call(mapper.call)
@@ -100,8 +102,14 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         # Pass 2b: Record new people in the Org Graph, then write each fact that differs
         record_org_graph_differences(org_graph_facts, managers, result)
 
+        absent = absent_people(employees.filter_map { it["id"] }, result)
+        leaving = Person.where(id: absent.where(status: "active").pluck(:id))
+
+        # Pass 2c: Leave, in the Org Graph, everyone the response no longer holds
+        record_org_graph_absences(absent, result)
+
         # Pass 3: Deactivate people no longer in HRIS
-        deactivate_removed(employees, result)
+        deactivate_removed(leaving, result)
 
         # Pass 3b: Offboard every inactive person still participating —
         # withdraw from open cycles, remove framework assignments
@@ -238,9 +246,17 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       Hris::Hibob::Client.new(
         service_user_id: creds.service_user_id,
         api_token: creds.api_token,
-        level_field_id: config.level_field_id
+        level_field_id: config.level_field_id,
+        mapped_fields:
       )
     end
+  end
+
+  # The fields the tenant's Org Graph mapping names for HiBob.
+  #
+  # @return [Hash{String => String}]
+  def mapped_fields
+    @mapped_fields ||= ActsAsTenant.with_tenant(tenant) { OrgFactProvider.fields_for(provider_name) }
   end
 
   # @return [Hash] result hash seeded with zero counters and empty sets
@@ -338,7 +354,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       today = Date.current
 
       rows.each do |person, row|
-        facts = row.slice(:title, :level, :site, :country, :fte, :employment_type)
+        facts = row.slice(:title, :level, :cost_centre, :site, :country, :fte, :employment_type)
         if row[:manager_external_id].nil?
           facts[:manager_id] = nil
         elsif (manager = managers[row[:manager_external_id]]) && manager != person
@@ -348,6 +364,24 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
         result[:org_graph_events] += handler.sync_person(person.id, provider: provider_name, effective_on: today,
           employment_status: org_graph_status(row[:status], row[:started_on], today),
           started_on: row[:started_on], left_on: row[:terminated_on], **facts)
+      rescue => e
+        result[:errors] << { person_id: person.id, error: e.message }
+      end
+    end
+  end
+
+  # A person HiBob stops returning has left, dated by the sync that first
+  # misses them.
+  #
+  # @param absent [ActiveRecord::Relation<Person>] from {#absent_people}
+  # @param result [Hash] running tally
+  def record_org_graph_absences(absent, result)
+    with_hris_event_context do
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      today = Date.current
+
+      absent.find_each do |person|
+        result[:org_graph_events] += handler.record_absence(person.id, provider: provider_name, effective_on: today)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
@@ -368,24 +402,20 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Marks HRIS-sourced people as inactive if they no longer appear in the response.
   #
-  # @param employees [Array<Hash>] current HiBob employees
+  # @param leaving [ActiveRecord::Relation<Person>] the absent people who were active before Pass 2c
   # @param result [Hash] running tally
-  def deactivate_removed(employees, result)
-    current_external_ids = employees.map { |e| e["id"] }.compact
-    stale_people = Person.where(hris_source: "hibob", status: "active")
-                         .where.not(external_id: current_external_ids)
+  def deactivate_removed(leaving, result)
+    return deactivate_in_org_graph(leaving, result) if tenant.org_graph_people_projected?
 
-    return deactivate_in_org_graph(stale_people, result) if tenant.org_graph_people_projected?
-
-    stale_people.find_each do |person|
+    leaving.find_each do |person|
       person.update!(status: "inactive")
       result[:deactivated] += 1
     end
   end
 
-  # Pass 3 for a tenant cut over to the Org Graph: each person leaves in their
-  # stream, and the projection marks them inactive. Someone the Org Graph
-  # never recorded is recorded as having left, with the facts on their row.
+  # Pass 3 for a tenant cut over to the Org Graph: Pass 2c has already left
+  # everyone recorded, so this counts them and records anyone the Org Graph
+  # never saw as having left, with the facts on their row.
   #
   # @param stale_people [ActiveRecord::Relation<Person>]
   # @param result [Hash] running tally
@@ -394,10 +424,11 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       recorded = OrgGraph::Projections::PeopleColumns.recorded_person_ids(tenant).to_set
       stale_people.find_each do |person|
-        # A recorded leaver sends no facts, so Espalia holding one can't refuse the departure.
-        facts = recorded.include?(person.id) ? {} : first_record_facts(person)
-        handler.sync_person(person.id, provider: provider_name, effective_on: Date.current, employment_status: "left", **facts)
-        result[:deactivated] += 1
+        unless recorded.include?(person.id)
+          handler.sync_person(person.id, provider: provider_name, effective_on: Date.current,
+            employment_status: "left", **first_record_facts(person))
+        end
+        result[:deactivated] += 1 if person.reload.status == "inactive"
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
       end
@@ -465,7 +496,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # context: acting_via :hris + the sync's correlation_id on every event's
   # metadata, plus the tenant id the projections and replayer rely on.
   def with_hris_event_context(&block)
-    AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
+    AuditMetadata.with(acting_via: :hris, correlation_id: @sync_correlation_id || correlation_id.presence || SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
         Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
       end

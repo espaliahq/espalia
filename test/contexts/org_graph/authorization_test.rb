@@ -65,7 +65,11 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
       assert_kind_of Pundit::NotAuthorizedError, error
       assert_match "Only a tenant admin or an Org Graph editor", error.message
+      assert_raises(OrgGraph::Authorization::Refused) do
+        structure(@actor).set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "root.id" }, effective_on: "2026-02-01")
+      end
       assert_raises(OrgGraph::Authorization::Refused) { people(@actor).change_title(@report.id, "Lead", **ESPALIA) }
+      assert_raises(OrgGraph::Authorization::Refused) { people(@actor).record_absence(@report.id, **ESPALIA) }
     end
 
     should "be refused a unit, naming it" do
@@ -101,11 +105,13 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
       should "change anything Espalia holds" do
         structure(@actor).set_fact_provider("title", "espalia", effective_on: "2026-02-01")
+        structure(@actor).set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "root.id" }, effective_on: "2026-02-01")
         structure(@actor).create_unit(SecureRandom.uuid_v7, "Design", level_id: @department, effective_on: "2026-02-01")
         structure(@actor).move_unit(@payments_id, @product_id, effective_on: "2026-02-01")
         people(@actor).change_title(@report.id, "Lead", **ESPALIA)
         people(@actor).set_membership(@report.id, @product_id, **ESPALIA)
 
+        assert_equal({ "cost_centre" => "root.id" }, OrgFactProvider.fields_for("hibob"))
         assert_equal @product_id, OrgUnit.find(@payments_id).parent_id
         assert OrgMembership.exists?(person_id: @report.id, unit_id: @product_id)
       end

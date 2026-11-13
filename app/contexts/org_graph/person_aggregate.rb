@@ -104,6 +104,22 @@ class OrgGraph::PersonAggregate
     move_status(OrgGraph::Events::PersonLeft, to: "left", from: %w[pending employed], provider:, effective_on:)
   end
 
+  # A person the provider stopped returning has left, from the first sync
+  # that missed them. Someone already left, or never recorded, is left alone,
+  # since each sync dates the absence afresh and would otherwise move the
+  # leaving date. An employed person whose start date has since moved ahead
+  # leaves on it, as nobody leaves before they start.
+  #
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String] the sync's date
+  def leave_when_absent(provider:, effective_on:)
+    return unless recorded? && !left?
+
+    left_on = normalize_date(effective_on, :effective_on)
+    left_on = @started_on if @employment_status == "employed" && @started_on && left_on && left_on < @started_on
+    leave(provider:, effective_on: left_on)
+  end
+
   # A person who had left is employed again.
   #
   # @param provider [String] one of {PROVIDERS}

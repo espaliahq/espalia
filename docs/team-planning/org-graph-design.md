@@ -97,7 +97,7 @@ Dates for the status events and the start date:
 - **`PersonReturned` is effective on the start date when it falls after the leaving**, else the sync's date, since an HRIS may still hold a returner's first start. A leaver whose rehire has not started yet stays left, and their facts are not compared until they return.
 - **`StartDateChanged` supplies or corrects the start date of someone recorded and not left**, effective on that date. `PersonRecorded` carries the start date when the HRIS sends one.
 - **The history projection reads employment as beginning on the start date** when one is held, not on the day the sync first saw the person.
-- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country.
+- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country. Once one is mapped, a site is compared only when HiBob sends both.
 
 ### One structure stream per tenant
 
@@ -123,6 +123,12 @@ names the succession and its successors, and its members move rather than leave:
 - **Placements are not stored on the structure events.** They are ordinary membership
   commands issued with the split, sharing its cause. The split screen (5.6) and applying
   a plan (7.3) supply the names.
+
+A plan applies a succession through `OrgGraph::StructureCommandHandler#apply_succession`,
+built with the approval as its `cause_id:`. In one transaction it moves the people the plan
+names, records the succession and retires the predecessors, so every event shares the
+approval and the plan change. The approver must be able to change every unit in it. A
+placement outside the successors, or for someone in no predecessor, applies nothing.
 
 `OrgGraph::SyncHandlers::RetiredUnitMemberships` does this when a unit retires, in each
 member's own stream. Every `MembershipEnded` or `MembershipMoved` it writes has the
@@ -290,8 +296,40 @@ Today the adapter assigns attributes and saves. Instead it compares each incomin
 with the Org Graph's current projection and issues a command for each difference. A sync
 that finds nothing changed writes nothing.
 
-A person who disappears from the HRIS gets `PersonLeft`. Their memberships are ended by a
-handler, with the leaving date. A new person appears with no membership. No position is
+A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
+that misses them. For someone recorded as employed whose start date is still ahead, it
+is dated by that start date, since nobody leaves before they start; a pending hire who
+disappears leaves on the date of the sync. Someone who comes back keeps their stream and
+gets `PersonReturned`; the earlier `PersonLeft` stays in history as what we believed then.
+
+A failed or partial sync marks no missing person as left, in the Org Graph or in
+`Person.status`, so both read the same set of absent people. Someone HiBob still returns
+as inactive is Pass 2b's, and leaves whatever the brake decides. A sync is failed or partial when any of these holds
+([#51](https://github.com/espaliahq/espalia/issues/51#issuecomment-6856499516)):
+
+- a page request fails;
+- the response is empty;
+- a page has no employee list;
+- the employed people missing from the response are more than 10% of the tenant's
+  employed HRIS-held people **and** more than 5 people (the brake). People already
+  inactive in `Person.status` do not count towards it. The sync result reports the
+  count and the thresholds.
+
+A response that passes those tests and omits a few people, at or below the brake, is not
+partial: those people have left. The brake is deliberate: a partial response looks
+exactly like a mass leaving, and a leaving stays in history. The next sync decides
+afresh. There is no override or per-tenant setting; a story for a manual override can
+follow if a real mass leaving ever needs one.
+
+One gap remains. If the Org Graph write fails for one person, the sync still marks them
+inactive, so Pass 3b still offboards them from open cycles and framework assignments on
+time. For a while the two disagree: the person is
+inactive but still employed in the Org Graph. The next sync that misses them writes the
+`PersonLeft`, dated that day, unless that sync is empty, trips the brake or fails the write
+again; then the one after tries.
+
+A leaver's memberships are to be ended by a
+handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
 The first sync after this ships writes `PersonRecorded` for everyone. Nothing earlier can
@@ -379,6 +417,8 @@ overwritten those columns on `people`; it is not a handover. A fact whose provid
 ever chosen keeps it, so a re-run reaches only facts added to the list since.
 Disconnecting hands nothing back: that is a handover too.
 
+The field a fact is read from is part of the same setting: `FactProviderSet` carries `fields`, so naming a field names its provider too. Cost centre and a site's country can be mapped today.
+
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
 value becomes the Org Graph.
@@ -417,9 +457,8 @@ Someone can state the succession. The screen says which kind each field is.
 The HiBob adapter is most of the way there, and the gaps are small.
 
 - It can already read the field catalogue and the named lists. Nothing calls either yet.
-- It requests a fixed set of fields, with department the only structural one. One extra
-  field per tenant is already supported, for the level. The requested set becomes the
-  fields the tenant's mapping names.
+- It requests a fixed set of fields, with department the only structural one, plus the
+  level field and the fields the tenant's mapping names (6.4).
 - The level field is set by pasting its raw id. The picker replaces that.
 - It asks for both the stored value and the display text. The mapper reads them as a
   pair (`ResponseMapper#list_values`), but the sync still writes only the text.

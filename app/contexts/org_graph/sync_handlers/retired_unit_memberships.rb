@@ -28,6 +28,18 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
     [ OrgGraph::Events::UnitRetired ]
   end
 
+  # The day a member leaves a retiring unit: the retirement's, or the day
+  # their membership began or last changed, if later.
+  #
+  # @param membership [OrgMembership]
+  # @param on [Date, String] the retirement date
+  # @param repository [OrgGraph::Repository]
+  # @return [Date]
+  def self.leaving_on(membership, on:, repository:)
+    changed_on = repository.load_person(membership.person_id).membership_changed_on(membership.unit_id)
+    [ Date.iso8601(on.to_s), membership.member_since, changed_on ].compact.max
+  end
+
   # @param event [OrgGraph::Events::UnitRetired]
   def call(event)
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) { handle(event.data) }
@@ -42,8 +54,7 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
     repository = OrgGraph::Repository.new
 
     OrgMembership.where(unit_id: data[:unit_id]).to_a.each do |membership|
-      changed_on = repository.load_person(membership.person_id).membership_changed_on(data[:unit_id])
-      effective_on = [ Date.iso8601(data[:effective_on]), membership.member_since, changed_on ].compact.max
+      effective_on = self.class.leaving_on(membership, on: data[:effective_on], repository:)
       options = { effective_on: effective_on, **data.slice(:plan_id, :plan_change_id) }
 
       if successor_id
