@@ -20,13 +20,19 @@ class OrgFactAge < ApplicationRecord
   belongs_to :checked_by, class_name: "Person", optional: true
 
   # The facts nobody has changed or confirmed within the tenant's threshold,
-  # oldest first. A leaver's facts are never stale.
+  # oldest first. A leaver's facts are never stale, nor a membership of a
+  # retired unit.
   #
   # @param tenant [Tenant]
   # @param now [Time]
   # @return [ActiveRecord::Relation<OrgFactAge>]
   def self.stale(tenant, now: Time.current)
-    where(tenant:, person_left: false)
+    leavers = where(tenant:, fact: OrgGraph::Projections::FactAges::LEFT).select(:person_id)
+    retired = OrgUnit.where(tenant:).where.not(retired_on: nil).select(:id)
+
+    where(tenant:, unit_id: nil).or(where(tenant:).where.not(unit_id: retired))
+      .where.not(fact: OrgGraph::Projections::FactAges::LEFT)
+      .where.not(person_id: leavers)
       .where(checked_at: ...tenant.org_graph_config.stale_before(now))
       .order(:checked_at, :id)
   end

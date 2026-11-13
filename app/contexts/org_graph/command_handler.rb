@@ -145,12 +145,14 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
   end
 
-  # Records that a fact Espalia holds about a person is still true.
+  # Records that a fact Espalia holds about a person is still true. A
+  # membership is confirmed only in a live unit.
   #
   # @param person_id [String]
   # @param fact [String, Symbol]
   # @param options [Hash] keywords accepted by {OrgGraph::FactConfirmation#confirm_fact}
   def confirm_fact(person_id, fact, **options)
+    ensure_live_unit!(options[:unit_id]) if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
     @repository.with_person(person_id) { |person| person.confirm_fact(fact, **options) }
   end
 

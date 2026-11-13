@@ -89,6 +89,30 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
     assert_equal %w[site title], as_tenant { OrgFactAge.where(person: newcomer).order(:fact).pluck(:fact) }
   end
 
+  should "keep a pair's unchanged half at its age" do
+    as_tenant { @handler.change_site(@ada.id, site: "Sydney", country: "Australia", **ESPALIA) }
+    travel_to START + 5.days
+    confirm(@ada, "country")
+
+    travel_to START + 9.days
+    as_tenant { @handler.change_site(@ada.id, site: "Hobart", country: "Australia", **ESPALIA) }
+
+    assert_equal [ START, START + 5.days ], age(@ada, "country").slice(:changed_at, :confirmed_at).values
+    assert_equal [ START + 9.days, nil ], age(@ada, "site").slice(:changed_at, :confirmed_at).values
+  end
+
+  should "credit a membership to whoever set it, and a person fact to nobody the event names" do
+    as_tenant { @handler.change_title(@ada.id, "Lead", **ESPALIA) }
+
+    assert_equal @lead.id, age(@ada, "membership", @payments).checked_by_id
+    assert_nil age(@ada, "title").checked_by_id
+  end
+
+  should "age only the person facts it lists, which match the ones a confirmation can name" do
+    assert_equal OrgGraph::PersonAggregate.confirmable_facts - [ "membership" ],
+      OrgGraph::Projections::FactAges::PERSON_FACTS.map(&:to_s)
+  end
+
   should "drop a membership's age when it ends" do
     as_tenant { @handler.end_membership(@ada.id, @payments, **ESPALIA) }
 
@@ -131,6 +155,24 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
       assert_equal [ [ @ada.id, "membership", @payments ] ], stale
     end
 
+    should "never list a fact Espalia writes for someone after they left" do
+      as_tenant do
+        @handler.leave(@grace.id, **HIBOB)
+        @handler.change_title(@grace.id, "Alumni", **ESPALIA)
+      end
+      travel_to START + 31.days
+
+      assert_equal [ [ @ada.id, "membership", @payments ] ], stale
+    end
+
+    should "never list a membership of a retired unit, nor confirm one" do
+      as_tenant { OrgGraph::StructureCommandHandler.new.retire_unit(@payments, effective_on: "2026-02-10") }
+      travel_to START + 31.days
+
+      assert_empty stale
+      assert_raises(RuntimeError, match: /retired/) { confirm(@ada, "membership", unit_id: @payments) }
+    end
+
     should "use the tenant's own threshold" do
       travel_to START + 31.days
       @tenant.update!(org_graph_config: { staleness_days: 90 })
@@ -147,7 +189,7 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
       as_tenant { @handler.leave(@grace.id, **HIBOB) }
 
       before = snapshot_read_models(OrgGraph::Projections::FactAges, @tenant)
-      assert_equal 2, before[:fact_ages].size
+      assert_equal 3, before[:fact_ages].size
 
       OrgGraph::Projections::FactAges.reset!(tenant: @tenant)
       as_tenant { assert_equal 0, OrgFactAge.count }

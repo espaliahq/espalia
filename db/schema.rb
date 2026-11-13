@@ -750,11 +750,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_140002) do
     t.uuid "person_id", null: false
     t.string "fact", null: false
     t.uuid "unit_id"
+    t.jsonb "value"
     t.datetime "changed_at", null: false
     t.datetime "confirmed_at"
     t.datetime "checked_at", null: false
     t.uuid "checked_by_id"
-    t.boolean "person_left", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["tenant_id", "checked_at"], name: "index_org_fact_ages_on_tenant_id_and_checked_at"

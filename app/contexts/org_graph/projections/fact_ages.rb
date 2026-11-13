@@ -1,36 +1,38 @@
 # frozen_string_literal: true
 
 # Synchronous projection of when each fact Espalia holds about a person was
-# last changed or confirmed, from the person streams (#81).
+# last changed or confirmed, from the person streams.
 #
 # Writes `org_fact_ages`, and nothing else writes it. A fact moves to another
 # provider or is cleared, and its row goes. Ages run from when the Org Graph
-# learned of the change, the event's own timestamp, so a backdated fact does
-# not arrive already stale.
+# learned of a change, the event's own timestamp, so a backdated fact does not
+# arrive already stale. A leaver is marked by a row whose fact is "left", so a
+# fact Espalia writes for them later still reads as a leaver's.
 #
 class OrgGraph::Projections::FactAges
   # Stable identifier used as the natural key in `projection_versions.name`.
   PROJECTION_NAME = "org_graph/fact_ages"
 
   # Bump when `reset!` or any handler would write different state from the
-  # same event payload than before.
+  # same event payload than before. That includes a change to {PERSON_FACTS}.
   CODE_VERSION = 1
+
+  # The person facts it ages. Its own list, so a fact the aggregate gains is
+  # aged only once someone adds it here and bumps {CODE_VERSION}.
+  PERSON_FACTS = %i[title level manager_id cost_centre site country fte employment_type].freeze
+  LEFT = "left"
 
   FACT_EVENTS = [
     OrgGraph::Events::PersonRecorded, OrgGraph::Events::TitleChanged, OrgGraph::Events::LevelChanged,
     OrgGraph::Events::ManagerChanged, OrgGraph::Events::CostCentreChanged, OrgGraph::Events::SiteChanged,
     OrgGraph::Events::EmploymentChanged
   ].freeze
-  STATUS_EVENTS = {
-    OrgGraph::Events::PersonLeft => true,
-    OrgGraph::Events::PersonJoined => false,
-    OrgGraph::Events::PersonReturned => false
-  }.freeze
-  private_constant :FACT_EVENTS, :STATUS_EVENTS
+  private_constant :FACT_EVENTS
 
   # @return [Array<Class>]
   def self.handled_events
-    FACT_EVENTS + STATUS_EVENTS.keys + [
+    FACT_EVENTS + [
+      OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonReturned,
       OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded, OrgGraph::Events::FactConfirmed
     ]
   end
@@ -47,9 +49,10 @@ class OrgGraph::Projections::FactAges
     ActsAsTenant.with_tenant(Tenant.find(event.metadata[:tenant_id])) do
       case event
       when *FACT_EVENTS then handle_facts(event)
-      when *STATUS_EVENTS.keys then for_person(event).update_all(person_left: STATUS_EVENTS.fetch(event.class))
+      when OrgGraph::Events::PersonLeft then mark_left(event)
+      when OrgGraph::Events::PersonJoined, OrgGraph::Events::PersonReturned then rows(event, LEFT).delete_all
       when OrgGraph::Events::MembershipSet then handle_membership_set(event)
-      when OrgGraph::Events::MembershipEnded then fact(event, membership, event.data[:unit_id]).delete_all
+      when OrgGraph::Events::MembershipEnded then rows(event, membership, event.data[:unit_id]).delete_all
       when OrgGraph::Events::FactConfirmed then handle_confirmed(event)
       end
     end
@@ -59,47 +62,46 @@ class OrgGraph::Projections::FactAges
 
   def membership = OrgGraph::FactConfirmation::MEMBERSHIP
 
-  def person_facts
-    OrgGraph::PersonAggregate.confirmable_facts - [ membership ]
-  end
-
   def handle_facts(event)
     data = event.data
-    left = data[:employment_status] == "left" if event.is_a?(OrgGraph::Events::PersonRecorded)
-    person_facts.each do |key|
-      next unless data.key?(key.to_sym)
+    mark_left(event) if event.is_a?(OrgGraph::Events::PersonRecorded) && data[:employment_status] == "left"
 
-      if data[:provider] == "espalia" && !data[key.to_sym].nil?
-        changed(event, key, nil, checked_by_id: event.metadata[:actor_id], person_left: left)
-      else
-        fact(event, key, nil).delete_all
-      end
-    end
+    given = PERSON_FACTS.select { |key| data.key?(key) }
+    held = data[:provider] == "espalia" ? given.reject { |key| data[key].nil? } : []
+    rows(event, (given - held).map(&:to_s)).delete_all if given != held
+    held.each { |key| changed(event, key.to_s, nil, data[key], checked_by_id: nil) }
   end
 
   def handle_membership_set(event)
     data = event.data
-    return fact(event, membership, data[:unit_id]).delete_all unless data[:provider] == "espalia"
+    return rows(event, membership, data[:unit_id]).delete_all unless data[:provider] == "espalia"
 
-    changed(event, membership, data[:unit_id], checked_by_id: data[:set_by_id] || event.metadata[:actor_id])
+    changed(event, membership, data[:unit_id], data.slice(:allocation, :role), checked_by_id: data[:set_by_id])
   end
 
   def handle_confirmed(event)
     data = event.data
-    fact(event, data[:fact], data[:unit_id]).update_all(
+    rows(event, data[:fact], data[:unit_id]).update_all(
       confirmed_at: event.timestamp, checked_at: event.timestamp, checked_by_id: data[:confirmed_by_id],
       updated_at: Time.current
     )
   end
 
-  def changed(event, key, unit_id, checked_by_id:, person_left: nil)
+  def mark_left(event)
+    OrgFactAge.find_or_initialize_by(person_id: event.data[:person_id], fact: LEFT, unit_id: nil)
+      .update!(changed_at: event.timestamp, checked_at: event.timestamp)
+  end
+
+  # A pair event names both halves, so an unchanged half keeps its age.
+  def changed(event, key, unit_id, value, checked_by_id:)
     row = OrgFactAge.find_or_initialize_by(person_id: event.data[:person_id], fact: key, unit_id: unit_id)
-    row.person_left = person_left unless person_left.nil?
-    row.update!(changed_at: event.timestamp, confirmed_at: nil, checked_at: event.timestamp,
+    return if row.persisted? && row.value == value.as_json
+
+    row.update!(value: value, changed_at: event.timestamp, confirmed_at: nil, checked_at: event.timestamp,
       checked_by_id: checked_by_id)
   end
 
-  def for_person(event) = OrgFactAge.where(person_id: event.data[:person_id])
-
-  def fact(event, key, unit_id) = for_person(event).where(fact: key, unit_id: unit_id)
+  def rows(event, fact, unit_id = nil)
+    OrgFactAge.where(person_id: event.data[:person_id], fact: fact, unit_id: unit_id)
+  end
 end
