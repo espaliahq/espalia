@@ -13,6 +13,7 @@
 #   bin/rails "events:projections:rebuild[frameworks/published_state]"
 #   bin/rails "events:projections:rebuild[frameworks/published_state,<tenant_id>]"
 #   bin/rails "events:projections:rebuild_if_stale[frameworks/published_state]"   # what predeploy runs
+#   bin/rails events:projections:stamp_if_no_events                              # predeploy, before verify
 #   bin/rails "events:projections:mark_rebuilt[frameworks/published_state]"
 #   bin/rails "events:projections:mark_rebuilt[frameworks/published_state,4]"  # Path B promotion
 #
@@ -140,6 +141,31 @@ namespace :events do
         else
           puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — rebuilding."
           Rake::Task["events:projections:rebuild"].invoke(name)
+        end
+      end
+    end
+
+    # What predeploy runs before `verify`. A projection whose handled events do
+    # not exist yet has nothing to replay, so its rebuild would only stamp it.
+    # Doing that here means a newly registered projection ships without a
+    # REBUILD_ON_DEPLOY step; one with any history still needs a real rebuild.
+    desc "Stamp every projection behind CODE_VERSION that has no handled events to replay (predeploy)."
+    task stamp_if_no_events: :environment do
+      event_store = Rails.configuration.event_store
+
+      Projections::Registry.classes.each do |klass|
+        name = klass::PROJECTION_NAME
+
+        ProjectionVersion.with_operation_lock(name) do
+          applied = ProjectionVersion.find_by(name: name)&.version
+          next if applied && applied >= klass::CODE_VERSION
+
+          events = klass.handled_events
+          next if events.any? && event_store.read.of_type(events).limit(1).to_a.any?
+
+          ProjectionVersion.promote!(name, klass::CODE_VERSION)
+          puts "#{name}: applied=#{applied || '(never rebuilt)'} code=#{klass::CODE_VERSION} — " \
+               "no handled events to replay, stamped."
         end
       end
     end

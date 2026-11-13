@@ -22,6 +22,7 @@ Use this when a code change makes a projection's current read model state incons
 
 Every replayable projection declares `CODE_VERSION` (integer). The `projection_versions(name PK, version, applied_at)` table records the last version each projection was rebuilt at. Predeploy ([bin/render-predeploy](../../bin/render-predeploy)) runs `events:projections:verify` after migrations — if any projection's `CODE_VERSION` constant exceeds the row in `projection_versions`, predeploy exits non-zero and Render aborts the deploy.
 
+Just before `verify`, `events:projections:stamp_if_no_events` stamps any projection that is behind while none of its handled events exist in the store. A rebuild would replay nothing, so a newly registered projection over new event types needs no deploy step.
 The version is a human-decided signal: bump it when handler logic or `reset!` semantics change in a way that requires reprocessing past events. See [event-sourcing.md](../guidelines/event-sourcing.md) for bump rules.
 
 ## When you need a rebuild
@@ -32,6 +33,7 @@ The version is a human-decided signal: bump it when handler logic or `reset!` se
 | Added a column whose value depends on past events | Yes — bump `CODE_VERSION` |
 | Changed handler logic (different field written, new derivation) | Yes — bump `CODE_VERSION` |
 | Added a new projection that needs historical state | Yes — initial backfill |
+| Added a new projection whose event types have no events yet | No — predeploy stamps it |
 | Renamed an event field | No — add an upcaster |
 | New read-model index | No — DDL only, predeploy covers it |
 

@@ -62,9 +62,16 @@ else
   log "step 3: REBUILD_ON_DEPLOY not set, skipping"
 fi
 
-# 4. Hard fail if any projection's persisted version is older than its
+# 4. Stamp any projection that is behind but has no handled events in the
+#    store: replaying nothing would only stamp it. This lets a newly
+#    registered projection deploy without REBUILD_ON_DEPLOY.
+log "step 4: events:projections:stamp_if_no_events"
+rake events:projections:stamp_if_no_events
+log "step 4: done"
+
+# 5. Hard fail if any projection's persisted version is older than its
 #    current CODE_VERSION constant. This is the predeploy guard — see
 #    `docs/runbooks/projection-rebuild.md` for the resolution flow.
-log "step 4: events:projections:verify"
+log "step 5: events:projections:verify"
 rake events:projections:verify
-log "step 4: done — predeploy complete"
+log "step 5: done — predeploy complete"
