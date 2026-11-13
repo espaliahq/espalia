@@ -65,6 +65,21 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       end
     end
 
+    should "not merge a row into a person who holds another HRIS id, and report it" do
+      old = ActsAsTenant.with_tenant(@tenant) do
+        create(:person, tenant: @tenant, external_id: "bob-old", hris_source: "hibob", status: "inactive",
+               email: "alice@example.com", name: "Alice Before")
+      end
+
+      result = build_adapter(@fixture["employees"]).sync_people
+
+      assert_equal [ [ "bob-001", "Email belongs to a person with another HRIS id (bob-old); not merged" ] ],
+        result[:errors].map { it.values_at(:external_id, :error) }
+      old.reload
+      assert_equal [ "bob-old", "inactive", "Alice Before" ], [ old.external_id, old.status, old.name ]
+      assert_empty Rails.configuration.event_store.read.stream(stream_of(old)).to_a
+    end
+
     should "resolve manager relationships" do
       adapter = build_adapter(@fixture["employees"])
       adapter.sync_people

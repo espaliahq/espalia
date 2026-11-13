@@ -247,16 +247,29 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Upserts a single Person from mapped attributes.
   #
-  # Matches by external_id first, then falls back to email. This handles
-  # people who were manually created before HRIS sync was configured.
+  # Matches by external_id first, then falls back to email. The email match
+  # claims only a person with no external id: one created by hand before the
+  # sync was set up. A person who already holds another external id is a
+  # different identity (a rehire under a new id, say), so the row is
+  # skipped and reported rather than merged into their history.
   #
   # @param attrs [Hash] Person-compatible attributes
   # @param result [Hash] running tally of sync results
-  # @return [Person, nil] the created or updated person, nil on validation failure
+  # @return [Person, nil] the created or updated person, nil when skipped or invalid
   def upsert_person(attrs, result)
-    person = Person.find_by(external_id: attrs[:external_id]) ||
-             Person.find_by(email: attrs[:email]) ||
-             Person.new
+    person = Person.find_by(external_id: attrs[:external_id])
+    unless person
+      person = Person.find_by(email: attrs[:email])
+      if person&.external_id.present?
+        result[:errors] << {
+          external_id: attrs[:external_id],
+          email: attrs[:email],
+          error: "Email belongs to a person with another HRIS id (#{person.external_id}); not merged"
+        }
+        return nil
+      end
+    end
+    person ||= Person.new
     is_new = person.new_record?
 
     person.assign_attributes(attrs.except(:hris_raw_data))
@@ -286,8 +299,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # does not supply is left out, never cleared. A manager is read from the
   # row itself, so a lost manager is recorded even though Pass 2 never
   # clears one; a manager the sync cannot find, or the person themself, is
-  # left uncompared. Once recorded, inactive people are skipped: their
-  # leaving is story 1.6's.
+  # left uncompared. A change in employment status is written too; a
+  # leaver's other facts are not compared.
   #
   # @param rows [Hash{Person => Hash}] title, level and manager_external_id per person
   # @param managers [Hash{String => Person, nil}] each manager external id, resolved once

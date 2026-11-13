@@ -85,7 +85,7 @@ where it came from a plan, a reference to the plan's change.
 
 Two rules hold for the status events:
 
-- **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id.
+- **`PersonReturned` is only for the same person.** The HRIS must show the same external id, and the person must not have been forgotten. Anyone else is a new person with a new id. The sync never merges a row into a person by email when that person already holds another external id: it skips the row and reports it for an admin to resolve.
 - **Returning restores no memberships.** A returner comes back with none, like a new person.
 
 ### One structure stream per tenant
