@@ -42,11 +42,14 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
           render @sidebar if @sidebar
         end
       else
-        div(class: "mt-6 space-y-6") do
-          render Components::Kit::EmptyState.new(title: "No units yet") do
-            "Units appear here once the Org Graph holds the organisation's structure."
+        div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
+          div(class: "flex-1 min-w-0 space-y-6") do
+            render Components::Kit::EmptyState.new(title: "No units yet") do
+              "Units appear here once the Org Graph holds the organisation's structure."
+            end
+            tray
           end
-          tray
+          render @sidebar if @sidebar
         end
       end
 

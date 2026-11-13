@@ -71,4 +71,11 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     assert_includes sidebar.text, "sidebar body"
     assert_equal page.at_css("#org-graph-unit").ancestors("div.flex-1").first.parent, sidebar.parent
   end
+
+  should "keep a sidebar handed in when the graph has no units yet" do
+    page = render_page(tenant: create(:tenant), sidebar: StubSidebar.new)
+
+    assert_includes page.text, "No units yet"
+    assert page.at_css("aside##{Views::Tenant::OrgGraph::Sidebar::ID}")
+  end
 end
