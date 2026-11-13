@@ -110,6 +110,17 @@ class OrgGraph::Projections::UnitActivityTest < ActiveSupport::TestCase
     assert_equal [ retired.event_id, successor ], [ moved.causation_id, moved.other_unit_id ]
   end
 
+  should "name the plan change an entry's event was applied from, and none for a direct edit" do
+    as_tenant do
+      @handler.set_membership(@ada.id, @payments, **ESPALIA)
+      @structure.rename_unit(@payments, "Payments Core", effective_on: "2026-02-01", plan_id: "plan-7", plan_change_id: "change-3")
+    end
+
+    renamed, set, = feed(@payments)
+    assert_equal %w[plan-7 change-3], [ renamed.plan_id, renamed.plan_change_id ]
+    assert_nil set.plan_id
+  end
+
   should "know whether an entry is still its fact's latest change" do
     as_tenant do
       @handler.set_membership(@ada.id, @payments, **ESPALIA)

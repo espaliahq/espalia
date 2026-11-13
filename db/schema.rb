@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -820,6 +820,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170000) do
     t.uuid "changed_back_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "plan_id"
+    t.string "plan_change_id"
     t.index ["tenant_id", "event_id", "unit_id"], name: "idx_on_tenant_id_event_id_unit_id_e1d30b18ce", unique: true
     t.index ["tenant_id", "unit_id", "position"], name: "idx_on_tenant_id_unit_id_position_0480dd5559"
     t.index ["tenant_id", "unit_id", "subject", "position"], name: "idx_on_tenant_id_unit_id_subject_position_932e79679d"
