@@ -5,7 +5,8 @@
 # unit drawer (5.3) and the person drawer (5.2) each render inside one.
 #
 # Closing is a link back to the Units view, so the drawer needs no script
-# to open or shut; on a phone it takes the whole screen.
+# to open or shut. On a phone it takes the whole screen, and
+# `drawer-isolation` makes the page behind it inert.
 class Views::Tenant::OrgGraph::Drawer < Views::Base
   ID = "org-graph-drawer"
 
@@ -23,11 +24,13 @@ class Views::Tenant::OrgGraph::Drawer < Views::Base
       id: ID,
       class: "fixed inset-0 z-30 flex flex-col bg-default lg:inset-y-0 lg:left-auto lg:w-[30rem] " \
              "lg:border-l lg:border-default lg:shadow-lifted",
-      aria: { labelledby: "#{ID}-title" }
+      aria: { labelledby: "#{ID}-title" },
+      data: { controller: "drawer-isolation" }
     ) do
       header(class: "flex items-start gap-3 border-b border-default px-5 py-4") do
         div(class: "min-w-0 flex-1") do
-          h2(id: "#{ID}-title", class: "text-lg font-semibold text-default") { @title }
+          h2(id: "#{ID}-title", class: "text-lg font-semibold text-default focus:outline-hidden",
+             tabindex: "-1", data: { drawer_isolation_target: "title" }) { @title }
           p(class: "text-sm text-muted") { @subtitle } if @subtitle
         end
         render Components::Kit::Button.new(variant: :ghost, icon: true, href: @close_href, aria_label: "Close") do
