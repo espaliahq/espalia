@@ -52,13 +52,20 @@ class Hris::LevelMirror
   # @param result [Hash] the sync's running tally
   # @param levels [Array<OrgTaxonomyLevel>] the levels to mirror, as {.levels} gives them
   # @param today [Date]
-  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current)
+  # @param cause_id [String, nil] one cause for every write, as a handover
+  #   writes; by default each change is its own
+  # @param brake [Boolean] false for a handover, whose admin has confirmed
+  #   what it ends
+  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current,
+                 cause_id: nil, brake: true)
     @provider = provider
     @levels = levels
     @fields = catalogue.index_by(&:id)
     @readings = readings
     @result = result
     @today = today
+    @cause_id = cause_id
+    @brake = brake
     @units = {}
   end
 
@@ -237,7 +244,7 @@ class Hris::LevelMirror
   end
 
   def write_membership(change)
-    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: SecureRandom.uuid_v7)
+    people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: cause_id)
     person_id = change[:person].id
     case change[:action]
     when :set then people.set_membership(person_id, change[:to], provider: @provider, effective_on: @today)
@@ -284,7 +291,7 @@ class Hris::LevelMirror
   end
 
   def braked?(count, of, what, outcome)
-    return false unless count > Hris::BaseAdapter::ABSENCE_BRAKE[:people] && count > of * Hris::BaseAdapter::ABSENCE_BRAKE[:share]
+    return false unless @brake && count > Hris::BaseAdapter::ABSENCE_BRAKE[:people] && count > of * Hris::BaseAdapter::ABSENCE_BRAKE[:share]
 
     @result[:errors] << { error: "#{count} of #{of} #{what}, more than #{(Hris::BaseAdapter::ABSENCE_BRAKE[:share] * 100).round}% " \
                                  "and #{Hris::BaseAdapter::ABSENCE_BRAKE[:people]}, so #{outcome}" }
@@ -298,8 +305,10 @@ class Hris::LevelMirror
   def reference(level_plan, key) = "#{level_plan.field.id}/#{key}"
 
   def structure
-    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: SecureRandom.uuid_v7)
+    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: cause_id)
   end
+
+  def cause_id = @cause_id || SecureRandom.uuid_v7
 
   def counted = @result[:org_graph_events] += 1
 end
