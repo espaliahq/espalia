@@ -255,7 +255,7 @@ class OrgGraph::Forgetting
           next false
         end
 
-        scrub_notifications(person.id, person.read_attribute(:name))
+        scrub_notifications(person.id, person.name)
         drop_notifications_to(person)
         scrub_exchange_ledger(person.email)
         scrub_reports_raw_data(person.external_id)
@@ -287,7 +287,7 @@ class OrgGraph::Forgetting
   def erase_identifiers(person)
     now = Time.current
     digest = self.class.digest(@tenant, person.hris_source, person.external_id) if person.external_id.present?
-    person.update_columns(name: nil, email: nil, external_id: nil, hris_raw_data: nil,
+    person.update_columns(name: Person::FORMER_MEMBER, email: nil, external_id: nil, hris_raw_data: nil,
                           forgotten_external_id_digest: digest, forgotten_at: now, updated_at: now)
     TenantUser.where(person_id: person.id)
       .update_all(person_id: nil, user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)

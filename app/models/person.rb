@@ -47,20 +47,14 @@ class Person < ApplicationRecord
   end
 
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :forgotten?
-  validates :name, presence: true, unless: :forgotten?
+  validates :name, presence: true
 
-  # What every screen shows for a person whose identifiers were erased.
+  # The name {OrgGraph::Forgetting} stores in place of an erased one. A check
+  # constraint holds every forgotten row to it, so a pluck reads it too.
   FORMER_MEMBER = "Former member"
 
   # @return [Boolean] whether {OrgGraph::Forgetting} erased this person's identifiers
   def forgotten? = forgotten_at.present?
-
-  # A forgotten row holds no name, so a screen that reads one shows them as
-  # a former member rather than failing. Queries that pluck the column still
-  # read nil.
-  #
-  # @return [String, nil]
-  def name = forgotten? ? FORMER_MEMBER : super
   validates :status, inclusion: { in: %w[active inactive] }
 
   # The User used to deliver a notification directed at this person, lazily

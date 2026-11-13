@@ -1484,7 +1484,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   # @return [Hris::Hibob::Adapter]
   def forget_row(external_id)
     person = create(:person, tenant: @tenant, hris_source: "hibob")
-    person.update_columns(name: nil, email: nil, forgotten_at: Time.current, status: "inactive",
+    person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current, status: "inactive",
                           forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", external_id))
     person
   end
