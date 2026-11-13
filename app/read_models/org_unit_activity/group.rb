@@ -4,6 +4,8 @@
 # moves, endings and succession of one approved split, read as one change.
 #
 # Built by {OrgUnitActivity.feed}. An entry alone in its cause is a group of one.
+# It holds one unit's parts only; {OrgGraph::ChangeBackHandler#change_back_group}
+# reverses the cause in every unit.
 #
 class OrgUnitActivity::Group
   MEMBERSHIP_PHRASES = {

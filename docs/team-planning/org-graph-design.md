@@ -282,7 +282,9 @@ wherever the change itself would be. It is refused, too:
 entry of one cause, across every unit it touched, newest first, so a later part never
 blocks an earlier one. Every part must pass the checks above, and a later change counts
 against a part only when it came from outside the group. One refused part refuses the lot
-and writes nothing. An approved succession is always refused, since it retires a unit. The
+and writes nothing. Once one part has been changed back alone, the rest go back one entry
+at a time. A unit's feed shows only that unit's parts of a cause, but changing the group
+back reverses the cause in every unit it touched, so the sidebar (5.4) must say so. An approved succession is always refused, since it retires a unit. The
 inverses share one new cause, so the change-back reads as one entry too.
 
 Every write to a stream holds a lock on it until its transaction ends: the person's stream
