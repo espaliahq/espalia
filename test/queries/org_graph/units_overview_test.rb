@@ -87,6 +87,23 @@ class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
     end
   end
 
+  should "ignore memberships of a unit created after the units were read" do
+    ActsAsTenant.with_tenant(@tenant) do
+      payments = @org[:payments]
+      calls = 0
+      first_read_misses_payments = lambda do
+        calls += 1
+        calls == 1 ? OrgUnit.where(retired_on: nil).where.not(id: payments) : OrgUnit.where(retired_on: nil)
+      end
+
+      view = OrgUnit.stub(:live, first_read_misses_payments) { OrgGraph::UnitsOverview.new }
+      brook = view.members_of(unit(:platform)).find { |m| m.person_id == @org[:brook].id }
+
+      assert_equal %w[Checkout], view.other_units_of(brook).map(&:name)
+      assert_equal 3, view.headcount(unit(:engineering))
+    end
+  end
+
   should "hold nothing for a tenant with no structure" do
     ActsAsTenant.with_tenant(create(:tenant)) do
       view = OrgGraph::UnitsOverview.new

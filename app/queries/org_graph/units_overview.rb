@@ -21,7 +21,7 @@ class OrgGraph::UnitsOverview
     @units = OrgUnit.live.to_a.index_by(&:id)
     @children = @units.values.group_by { |unit| @units.key?(unit.parent_id) ? unit.parent_id : nil }
                       .transform_values { |units| units.sort_by(&:name) }
-    @memberships = OrgMembership.in_live_units.joins(:person).merge(Person.active)
+    @memberships = OrgMembership.where(unit_id: @units.keys).joins(:person).merge(Person.active)
                                 .includes(:person).to_a.group_by(&:unit_id)
     @selected_unit_id = selected_unit_id
   end
