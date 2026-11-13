@@ -4,8 +4,9 @@
 # counted from each one's leaving date. Seven years until a tenant sets
 # another period; `never` keeps them for ever.
 #
-# Approval is :in_app, as for the tenant's other settings: shortening the
-# period makes leavers due to be forgotten, which can't be undone.
+# Approval is :in_app, as for the tenant's other settings. Shortening the
+# period only changes who is due; forgetting them is a separate,
+# destructive step.
 class Operations::Tenants::UpdateRetentionPeriod < Operations::Base
   description "Set how many years after a person leaves the active tenant forgets their identifiers " \
               "(default 7), or never forget them."
@@ -17,6 +18,7 @@ class Operations::Tenants::UpdateRetentionPeriod < Operations::Base
   forbids_when :retention_years, if: :never, equals: true,
                                  message: "retention_years can't be given with never"
 
+  # @raise [Pundit::NotAuthorizedError] unless the caller is a tenant admin
   def policy_check
     authorize ActsAsTenant.current_tenant, :update_retention_period?, policy_class: TenantPolicy
   end
@@ -27,11 +29,13 @@ class Operations::Tenants::UpdateRetentionPeriod < Operations::Base
     raise ParameterError, "give retention_years, or never: true" if years.nil? && !params[:never]
 
     tenant = ActsAsTenant.current_tenant
-    config = tenant.org_graph_config.dup
-    config.retention_years = years
-    raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
+    tenant.with_lock do
+      config = tenant.org_graph_config.dup
+      config.retention_years = years
+      raise ParameterError, config.errors.full_messages.to_sentence unless config.valid?
 
-    tenant.update!(org_graph_config: config)
+      tenant.update!(org_graph_config: config)
+    end
     { tenant_id: tenant.id, retention_years: tenant.org_graph_config.retention_years }
   end
 end
