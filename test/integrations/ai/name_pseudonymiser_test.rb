@@ -167,5 +167,16 @@ class Ai::NamePseudonymiserTest < ActiveSupport::TestCase
 
       assert_equal "Person 1 thanked Morgan Reid.", text
     end
+
+    should "leave out forgotten people, so the word former goes through" do
+      tenant = create(:tenant)
+      ActsAsTenant.with_tenant(tenant) do
+        create(:person, tenant: tenant, name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+      end
+
+      text = Ai::NamePseudonymiser.for(tenant).pseudonymise("Helped my former team, as a Former member.")
+
+      assert_equal "Helped my former team, as a Former member.", text
+    end
   end
 end

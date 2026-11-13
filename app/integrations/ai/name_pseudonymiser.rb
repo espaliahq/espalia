@@ -40,7 +40,7 @@ class Ai::NamePseudonymiser
   # @param tenant [Tenant]
   # @return [Ai::NamePseudonymiser]
   def self.for(tenant)
-    new(ActsAsTenant.with_tenant(tenant) { Person.order(:id).pluck(:id, :name) })
+    new(ActsAsTenant.with_tenant(tenant) { Person.remembered.order(:id).pluck(:id, :name) })
   end
 
   # @param people [Array<Array(String, String)>] [id, name] pairs

@@ -726,6 +726,10 @@ result for each kind of id separately.
   back. They are removed there first.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
+  - The row's name becomes "Former member" (story 8.3), and a check constraint holds every
+    forgotten row to it. Read models join `people` for names rather than copying them, so every
+    screen, export, MCP read and report shows the stand-in, a raw pluck included.
+    `test/integration/forgotten_person_audit_test.rb` walks every MCP read to keep it so.
   - `org_graph/leavers` drops the person, so they leave the due list. The other Org Graph
     projections hold ids and no identifiers, so they keep their rows unchanged. The history
     projection (3.1) handles `PersonForgotten` from its first version.

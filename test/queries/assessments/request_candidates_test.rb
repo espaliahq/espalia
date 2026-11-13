@@ -56,6 +56,14 @@ class Assessments::RequestCandidatesTest < ActiveSupport::TestCase
       assert_not_includes ids, @stranger.id
     end
 
+    should "leave out forgotten neighbours" do
+      [ @manager, @peer ].each { |person| person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current) }
+      ids = query.suggestions.map { |c| c.person.id }
+      assert_not_includes ids, @manager.id
+      assert_not_includes ids, @peer.id
+      assert_includes ids, @report.id
+    end
+
     should "flag a suggestion that already has a pending request on this cell" do
       pending_request_from(@peer)
       peer = query.suggestions.find { |c| c.person.id == @peer.id }

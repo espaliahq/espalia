@@ -54,7 +54,6 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
 
       assert_equal OrgGraph::Forgetting::Report.new(count: 1, person_ids: [ @leaver.id ]), report
       row = @leaver.reload
-      assert_nil row.read_attribute(:name)
       assert_nil row.email
       assert_nil row.external_id
       assert_nil row.hris_raw_data

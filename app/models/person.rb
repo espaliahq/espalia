@@ -26,6 +26,7 @@ class Person < ApplicationRecord
   scope :inactive, -> { where(status: "inactive") }
   scope :hris_managed, -> { where.not(hris_source: nil) }
   scope :forgotten, -> { where.not(forgotten_at: nil) }
+  scope :remembered, -> { where(forgotten_at: nil) }
   scope :in_no_unit, -> { where.not(id: OrgMembership.in_live_units.select(:person_id)) }
 
   # The one way to find a Person from an identity another system holds: the
@@ -47,20 +48,22 @@ class Person < ApplicationRecord
   end
 
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :forgotten?
-  validates :name, presence: true, unless: :forgotten?
+  validates :name, presence: true
 
-  # What every screen shows for a person whose identifiers were erased.
+  # The name {OrgGraph::Forgetting} stores in place of an erased one. A check
+  # constraint holds every forgotten row to it, so a pluck reads it too.
   FORMER_MEMBER = "Former member"
+
+  # The stand-in stays whole, so a greeting never reads "Former".
+  #
+  # @param name [String, nil]
+  # @return [String, nil]
+  def self.first_name(name)
+    name == FORMER_MEMBER ? name : name.to_s.split.first.presence
+  end
 
   # @return [Boolean] whether {OrgGraph::Forgetting} erased this person's identifiers
   def forgotten? = forgotten_at.present?
-
-  # A forgotten row holds no name, so a screen that reads one shows them as
-  # a former member rather than failing. Queries that pluck the column still
-  # read nil.
-  #
-  # @return [String, nil]
-  def name = forgotten? ? FORMER_MEMBER : super
   validates :status, inclusion: { in: %w[active inactive] }
 
   # The User used to deliver a notification directed at this person, lazily
