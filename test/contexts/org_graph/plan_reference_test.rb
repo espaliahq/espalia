@@ -114,6 +114,16 @@ class OrgGraph::PlanReferenceTest < ActiveSupport::TestCase
 
       assert_equal %w[approval-1 request-2], person_events(@ada).last(2).map { |event| event.metadata[:correlation_id] }
     end
+
+    should "treat a blank cause as none" do
+      blank = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, cause_id: "")
+
+      AuditMetadata.with(acting_via: :web, correlation_id: "request-1") do
+        AuditMetadata.wrap_event_store { as_tenant { blank.change_title(@ada.id, "Staff engineer", **ESPALIA) } }
+      end
+
+      assert_equal "request-1", person_events(@ada).last.metadata[:correlation_id]
+    end
   end
 
   private

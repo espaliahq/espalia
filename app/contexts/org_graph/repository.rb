@@ -57,6 +57,6 @@ class OrgGraph::Repository
     tenant = ActsAsTenant.current_tenant
     raise ArgumentError, "No tenant context available" unless tenant
 
-    @event_store.with_metadata({ tenant_id: tenant.id, correlation_id: cause_id }.compact, &block)
+    @event_store.with_metadata({ tenant_id: tenant.id, correlation_id: cause_id.presence }.compact, &block)
   end
 end
