@@ -70,8 +70,7 @@ class OrgGraph::AsOf
   private
 
   def periods
-    knowledge = @known_on ? OrgFactPeriod.known_at(@known_on.in_time_zone("UTC").end_of_day) : OrgFactPeriod.current
-    day = knowledge.in_effect_on(@date)
+    day = OrgFactPeriod.known_on(@known_on).in_effect_on(@date)
     day.where(subject_type: OrgGraph::Projections::History::PERSON, fact: PERSON_FACTS + %w[membership])
       .or(day.where(subject_type: OrgGraph::Projections::History::UNIT, fact: UNIT_FACTS))
       .pluck(:subject_type, :subject_id, :fact, :key, :value, :provider)
