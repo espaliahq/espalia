@@ -35,8 +35,8 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
       assert_equal [ @ada, @grace ].map(&:id).sort, payments.members.pluck(:id).sort
 
       ada = payments.memberships.find_by!(person: @ada)
-      assert_equal [ BigDecimal("0.6"), "Tech lead", "espalia" ], [ ada.allocation, ada.role, ada.provider ]
-      assert_equal BigDecimal("0.4"), OrgUnit.find(@platform).memberships.find_by!(person: @ada).allocation
+      assert_equal [ 0.6, "Tech lead", "espalia" ], [ ada.allocation, ada.role, ada.provider ]
+      assert_in_delta 0.4, OrgUnit.find(@platform).memberships.find_by!(person: @ada).allocation
       assert_nil payments.memberships.find_by!(person: @grace).allocation
     end
   end
@@ -45,11 +45,22 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
     as_tenant do
       @handler.set_membership(@ada.id, @payments, allocation: 1, provider: "espalia", effective_on: "2026-05-01")
       ada = OrgMembership.find_by!(person: @ada, unit_id: @payments)
-      assert_equal [ Date.new(2026, 2, 1), Date.new(2026, 5, 1), BigDecimal("1") ], [ ada.member_since, ada.effective_on, ada.allocation ]
+      assert_equal [ Date.new(2026, 2, 1), Date.new(2026, 5, 1), 1.0 ], [ ada.member_since, ada.effective_on, ada.allocation ]
 
       @handler.end_membership(@ada.id, @payments, provider: "espalia", effective_on: "2026-06-30")
       assert_equal [ @grace.id ], OrgUnit.find(@payments).members.pluck(:id)
       assert_equal [ @platform ], OrgMembership.where(person: @ada).pluck(:unit_id)
+    end
+  end
+
+  should "hold the allocation exactly as the event does" do
+    as_tenant do
+      @handler.set_membership(@linus.id, @platform, allocation: 1.0 / 3, **PROVENANCE)
+      stored = OrgMembership.find_by!(person: @linus).allocation
+
+      assert_equal 1.0 / 3, stored
+      assert_nothing_raised { @handler.set_membership(@linus.id, @platform, allocation: stored, **PROVENANCE) }
+      assert_equal 1, OrgMembership.where(person: @linus).count
     end
   end
 

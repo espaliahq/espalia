@@ -7,7 +7,7 @@ class CreateOrgMemberships < ActiveRecord::Migration[8.1]
       t.references :tenant, type: :uuid, null: false, foreign_key: true, index: false
       t.uuid :unit_id, null: false
       t.uuid :person_id, null: false
-      t.decimal :allocation, precision: 5, scale: 4
+      t.float :allocation
       t.string :role
       t.string :provider, null: false
       t.date :member_since, null: false

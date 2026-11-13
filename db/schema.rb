@@ -749,7 +749,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_054001) do
     t.uuid "tenant_id", null: false
     t.uuid "unit_id", null: false
     t.uuid "person_id", null: false
-    t.decimal "allocation", precision: 5, scale: 4
+    t.float "allocation"
     t.string "role"
     t.string "provider", null: false
     t.date "member_since", null: false
