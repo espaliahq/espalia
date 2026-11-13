@@ -57,6 +57,29 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_includes response.body, "4 people, 2 teams, 2 squads"
     end
 
+    should "warn about the people in no team only while someone is in it" do
+      org = build_org_graph(@tenant)
+      tray_link = "nav[aria-labelledby='org-graph-tree-label'] a[href='#in-no-team']"
+
+      get tenant_org_graph_path
+      page = Nokogiri::HTML5(response.body)
+      assert_includes page.at_css(tray_link)["class"].split, "text-warning"
+      assert_includes page.at_css("#in-no-team")["class"].split, "border-warning"
+
+      ActsAsTenant.with_tenant(@tenant) do
+        handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        Person.active.in_no_unit.each do |person|
+          handler.record_person(person.id, **OrgGraphFixture::PROVENANCE, employment_status: "employed") unless person == org[:ezra]
+          handler.set_membership(person.id, org[:platform], **OrgGraphFixture::PROVENANCE)
+        end
+      end
+      get tenant_org_graph_path
+      page = Nokogiri::HTML5(response.body)
+      assert_not_includes page.at_css(tray_link)["class"].split, "text-warning"
+      assert_not_includes page.at_css("#in-no-team")["class"].split, "border-warning"
+      assert_not_includes page.at_css("#in-no-team-heading")["class"].split, "text-warning"
+    end
+
     should "count only the direct members on the opened unit's own card" do
       org = build_org_graph(@tenant)
       ActsAsTenant.with_tenant(@tenant) do
