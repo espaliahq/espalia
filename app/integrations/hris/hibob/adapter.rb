@@ -155,7 +155,20 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
     unexpected!("named lists response is not a list") unless lists&.all?(Hash)
 
-    lists.to_h { |list| [ list["name"].to_s, list_values(list["items"]) ] }
+    lists.to_h { |list| [ list["name"].to_s, list_values(list_entries(list)) ] }
+  end
+
+  # HiBob documents a list's entries under `items`; its per-list example
+  # shows `values`. A list with neither array is a body of the wrong shape,
+  # such as an error, and must not read as a list with no values.
+  #
+  # @param list [Hash]
+  # @return [Array<Hash>]
+  def list_entries(list)
+    entries = list.key?("items") ? list["items"] : list["values"]
+    unexpected!("named list #{list["name"].inspect} has no items") unless entries.is_a?(Array)
+
+    entries
   end
 
   # Flattens a hierarchy list, so a value at any depth can be chosen. An

@@ -578,6 +578,22 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal [ "Software Engineer", "Engineering Manager" ], title.values.map(&:name)
     end
 
+    should "read a list's entries from values when it has no items" do
+      keyed = { "title" => { "values" => [ { "id" => 101, "name" => "Software Engineer" } ] } }
+
+      title = catalogue_adapter(named_lists: keyed).fetch_field_catalogue.find { it.id == "work.title" }
+
+      assert_equal [ Hris::Field::Value.new(id: "101", name: "Software Engineer") ], title.values
+    end
+
+    should "keep a list HiBob returned with no entries as a list with no values" do
+      @named_lists.first["items"] = []
+
+      title = catalogue_adapter.fetch_field_catalogue.find { it.id == "work.title" }
+
+      assert_empty title.values
+    end
+
     should "leave out a list value with no id, since nothing could refer to it" do
       @named_lists.first["items"] << { "value" => "No id", "name" => "No id", "archived" => false }
 
@@ -618,6 +634,9 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         "oops",
         [ "department" ],
         { "department" => [ { "id" => 1 } ] },
+        { "error" => { "message" => "unavailable" } },
+        [ { "name" => "title" } ],
+        [ { "name" => "title", "items" => nil } ],
         [ { "name" => "title", "items" => "Software Engineer" } ],
         [ { "name" => "title", "items" => [ "Software Engineer" ] } ]
       ].each do |named_lists|
