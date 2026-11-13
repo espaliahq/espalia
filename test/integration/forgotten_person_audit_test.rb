@@ -11,7 +11,6 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
 
   # Reads that cannot meet a forgotten person, with the reason.
   EXEMPT = {
-    "frameworks_suggestion_get" => "names its author through people.name, as frameworks_recent_activity does here",
     "integrations_hris_field_preview" => "reads the live HRIS, which no longer holds a forgotten person"
   }.freeze
 
@@ -41,6 +40,8 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     reads = Operations::Registry.all.select { |op| op.category == :read }
     unwalked = reads.map { |op| Operations::Registry.tool_name_for(op) } - params_by_tool.keys - EXEMPT.keys
     assert_empty unwalked, "walk these reads here, or exempt them with a reason"
+    stale = params_by_tool.keys + EXEMPT.keys - reads.map { |op| Operations::Registry.tool_name_for(op) }
+    assert_empty stale, "these reads are gone: drop them here"
 
     reached = reads.filter_map do |op|
       tool = Operations::Registry.tool_name_for(op)
@@ -58,6 +59,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "assessments_comments_list"
     assert_includes reached, "calibration_sessions_get"
     assert_includes reached, "reporting_cycle_cohort"
+    assert_includes reached, "frameworks_suggestion_get"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
   end
 
@@ -87,6 +89,25 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         facilitator_id: @lead.id, participant_ids: [ @quinn.id ], calibrant_person_ids: [ @alex.id ]
       )
     end
+
+    suggest_as_quinn
+  end
+
+  def suggest_as_quinn
+    handler = Frameworks::CommandHandler.new
+    @suggested_framework_id = SecureRandom.uuid_v7
+    capability_id = SecureRandom.uuid_v7
+    category_id = SecureRandom.uuid_v7
+    @suggestion_id = SecureRandom.uuid_v7
+    handler.create_framework(@suggested_framework_id, "Design")
+    handler.add_capability_category(@suggested_framework_id, category_id, "Craft")
+    handler.add_capability(@suggested_framework_id, capability_id, SecureRandom.uuid_v7, category_id, "Critique")
+    handler.add_collaborator(@suggested_framework_id, @quinn.id.to_s, "owner", added_by: @lead.id.to_s)
+    handler.publish_version(@suggested_framework_id, "seed")
+    handler.suggest_edit(@suggested_framework_id, @suggestion_id, "capability", capability_id,
+                         "description", "Gives specific feedback", @quinn.id.to_s, mode: :suggesting)
+    handler.comment_on_suggestion(@suggested_framework_id, @suggestion_id, SecureRandom.uuid_v7,
+                                  body: "Open to edits", author_id: @quinn.id.to_s)
   end
 
   # The row as OrgGraph::Forgetting#erase_identifiers leaves it.
@@ -122,6 +143,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "frameworks_get" => framework,
         "frameworks_list" => {},
         "frameworks_recent_activity" => framework,
+        "frameworks_suggestion_get" => { framework_id: @suggested_framework_id, suggestion_id: @suggestion_id },
         "integrations_ai_model_status" => {},
         "integrations_feedback_exchange_status" => {},
         "integrations_hris_titles" => {},
