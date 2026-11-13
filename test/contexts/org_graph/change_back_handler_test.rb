@@ -64,17 +64,21 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 3, 1), latest(@payments).effective_on
   end
 
-  should "refuse to move back someone who has since left, and write nothing" do
+  should "refuse to move back, or bring back, someone who has since left, and write nothing" do
     as_tenant do
       @handler.set_membership(@ada.id, @payments, **ESPALIA)
       @handler.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01")
       @handler.leave(@ada.id, **ESPALIA)
     end
-    moved = latest(@platform)
+    moved = as_tenant { OrgUnitActivity.for_unit(@platform).find_by!(event_type: "MembershipMoved") }
+    ended = latest(@platform)
 
-    assert_raises(RuntimeError, match: "can't move back") { change_back(moved) }
-    assert membership(@ada, @platform)
+    assert_equal "MembershipEnded", ended.event_type
+    assert_raises(RuntimeError, match: "A later change has replaced this one") { change_back(moved) }
+    assert_raises(RuntimeError, match: "can't join a unit") { change_back(ended) }
+    assert_nil membership(@ada, @platform)
     assert_not moved.reload.changed_back?
+    assert_not ended.reload.changed_back?
   end
 
   should "restore a membership's earlier terms, or the membership itself once ended" do

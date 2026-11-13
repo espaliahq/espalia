@@ -155,7 +155,8 @@ person who has left can't join a unit, and a membership can only be set in a liv
 `MembershipMoved` carries a membership to another unit with its allocation, role and
 start, so a move is one fact and the person is never ended and added again. A person
 already in the destination keeps the membership they have there. For them, and for a
-person who has left, the membership they came from ends instead.
+person who has left, the membership they came from ends instead. Leaving ends every membership
+on the leaving date; see [How the sync writes](#how-the-sync-writes).
 
 `OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
@@ -374,9 +375,13 @@ delays offboarding by one sync and is reported in the result's errors. The next 
 decides absence afresh and writes the `PersonLeft`, which marks them inactive, and Pass 3b
 offboards them.
 
-A leaver's memberships are to be ended by a
-handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
-created for anyone automatically.
+Leaving ends every open membership on the leaving date (story 2.5).
+`OrgGraph::SyncHandlers::LeaverMemberships` runs on `PersonLeft`, as the system, and ends each from the person's stream in the leaving's
+transaction, with the leaving as each end's cause. A membership that changed after a backdated
+leaving ends on the day it changed. A later `PersonLeft` that corrects the date ends nothing again.
+A returner comes back with no membership, and a new person appears with none. No position is
+created for anyone automatically. A leaver who was a unit's only owner leaves it flagged as having
+none, as [Who may change it](#who-may-change-it) describes; leaving writes no ownership event.
 
 The first sync after this ships writes `PersonRecorded` for everyone. Nothing earlier can
 be reconstructed.

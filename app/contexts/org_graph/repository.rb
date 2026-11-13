@@ -61,7 +61,9 @@ class OrgGraph::Repository
   private
 
   # The stream's expected version catches a write only between load and store,
-  # so a caller that checks a read model first needs this lock to hold.
+  # so a caller that checks a read model first needs this lock to hold. The
+  # transaction also holds the sync handlers the write sets off, since RES
+  # commits the events before its subscribers run.
   def with_locked_stream(stream, cause_id)
     with_tenant_metadata(cause_id) do
       ActiveRecord::Base.transaction do
