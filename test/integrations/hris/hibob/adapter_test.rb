@@ -694,6 +694,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal Date.current.iso8601, alice[:effective_on]
     end
 
+    should "mark every Org Graph event as the HRIS sync's, sharing one correlation id" do
+      metadata = org_graph_events.map(&:metadata)
+
+      assert(metadata.all? { it[:acting_via] == "hris" })
+      assert_equal 1, metadata.map { it[:correlation_id] }.uniq.compact.size
+    end
+
     should "record a person HiBob shows as inactive as having left" do
       assert_equal "left", recorded(@people["bob-003"])[:employment_status]
     end

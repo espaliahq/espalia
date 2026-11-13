@@ -387,7 +387,9 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # metadata, plus the tenant id the projections and replayer rely on.
   def with_hris_event_context(&block)
     AuditMetadata.with(acting_via: :hris, correlation_id: correlation_id.presence || SecureRandom.uuid_v7) do
-      Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
+      AuditMetadata.wrap_event_store do
+        Rails.configuration.event_store.with_metadata(tenant_id: tenant.id, &block)
+      end
     end
   end
 
