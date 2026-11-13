@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Authorizes tenant-administration surfaces — the admin dashboard at
-# /tenant, the theme editor at /tenant/theme, and the feedback export. Tenant members are
+# /tenant, the theme editor at /tenant/theme, the feedback export and the
+# Org Graph. Tenant members are
 # denied; only tenant administrators (TenantUser#admin?) and global
 # admins (User#global_admin?) can view or update.
 #
@@ -23,6 +24,12 @@ class TenantPolicy < ApplicationPolicy
   #
   # @return [Boolean] whether the viewer can set how long leavers are kept
   def update_retention_period? = tenant_admin?
+
+  # Admins only while the Org Graph is unfinished; the design opens reading
+  # it to the whole tenant.
+  #
+  # @return [Boolean] whether the viewer can see the Org Graph's units
+  def show_org_graph? = tenant_admin?
 
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
