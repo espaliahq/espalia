@@ -951,6 +951,19 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
             new_events.map { |e| [ e.class, *e.data.values_at(:person_id, :effective_on, :provider) ] }
         end
 
+        should "deactivate at once and write the PersonLeft on the next sync when the first write fails" do
+          handler = OrgGraph::CommandHandler.new
+          handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
+          failed = OrgGraph::CommandHandler.stub(:new, handler) { build_adapter(@without_bob).sync_people }
+          retried = travel(1.day) { build_adapter(@without_bob).sync_people }
+
+          assert_equal [ "event store down" ], failed[:errors].map { it[:error] }
+          assert_equal "inactive", @people["bob-001"].reload.status
+          assert_empty retried[:errors]
+          assert_equal [ [ OrgGraph::Events::PersonLeft, Date.tomorrow.iso8601 ] ],
+            new_events.map { |e| [ e.class, e.data[:effective_on] ] }
+        end
+
         should "write nothing for a leaver HiBob already showed as inactive" do
           result = travel(1.day) { build_adapter(@fixture["employees"].reject { it["id"] == "bob-003" }).sync_people }
 
