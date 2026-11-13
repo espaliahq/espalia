@@ -17,7 +17,7 @@ class Operations::Integrations::HandBackHrisLevel < Operations::Base
   parameter :fingerprint, String, required: true, allow_blank: false
 
   def policy_check
-    authorize :integrations, :show?
+    authorize :integrations, :hand_over_hris_level?
   end
 
   # @return [Hash] what was handed back

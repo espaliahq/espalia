@@ -41,6 +41,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.update_feedback_exchange?
       assert_not policy.test_feedback_exchange?
       assert_not policy.disconnect_feedback_exchange?
+      assert_not policy.hand_over_hris_level?
     end
   end
 
@@ -78,6 +79,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.update_feedback_exchange?
       assert policy.test_feedback_exchange?
       assert policy.disconnect_feedback_exchange?
+      assert policy.hand_over_hris_level?
     end
   end
 
@@ -106,6 +108,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert policy.update_feedback_exchange?
       assert policy.test_feedback_exchange?
       assert policy.disconnect_feedback_exchange?
+      assert policy.hand_over_hris_level?
     end
   end
 
@@ -124,6 +127,7 @@ class IntegrationsPolicyTest < ActiveSupport::TestCase
       assert_not policy.disconnect_hris?
       assert_not policy.remove_ai_key?
       assert_not policy.disconnect_feedback_exchange?
+      assert_not policy.hand_over_hris_level?
       assert_not policy.update_ai_model?
       assert_not policy.test_ai_model?
       assert_not policy.update_feedback_exchange?

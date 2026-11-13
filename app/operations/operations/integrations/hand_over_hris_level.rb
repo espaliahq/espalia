@@ -28,7 +28,7 @@ class Operations::Integrations::HandOverHrisLevel < Operations::Base
   parameter :confirm_units_retired, Integer
 
   def policy_check
-    authorize :integrations, :show?
+    authorize :integrations, :hand_over_hris_level?
   end
 
   # @return [Hash] the comparison the handover wrote
