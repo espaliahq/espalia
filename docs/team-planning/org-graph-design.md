@@ -124,6 +124,12 @@ names the succession and its successors, and its members move rather than leave:
   commands issued with the split, sharing its cause. The split screen (5.6) and applying
   a plan (7.3) supply the names.
 
+A plan applies a succession through `OrgGraph::StructureCommandHandler#apply_succession`,
+built with the approval as its `cause_id:`. In one transaction it moves the people the plan
+names, records the succession and retires the predecessors, so every event shares the
+approval and the plan change. The approver must be able to change every unit in it. A
+placement outside the successors, or for someone in no predecessor, applies nothing.
+
 `OrgGraph::SyncHandlers::RetiredUnitMemberships` does this when a unit retires, in each
 member's own stream. Every `MembershipEnded` or `MembershipMoved` it writes has the
 retirement as its cause. A plain retirement ends every open membership in the unit on
