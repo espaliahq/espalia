@@ -198,22 +198,26 @@ class OrgGraph::ChangesBetween
     with_joiners_facts(changes, knowledge)
   end
 
-  # A joiner's title, level, memberships and other facts are often recorded
-  # while they are pending, before the window opens, and as_of shows none of
-  # them until the person joins, so a joining carries them all.
+  # A joiner's title, level, memberships, units owned and other facts are
+  # often recorded while they are pending, before the window opens, and as_of
+  # shows none of them until the person joins, so a joining carries them all.
   def with_joiners_facts(changes, knowledge)
     joiners = changes.select { it.kind == :joined }
     return changes if joiners.empty?
 
-    rows = knowledge.where(subject_type: PERSON, subject_id: joiners.map(&:person_id).uniq,
-                           fact: OrgGraph::AsOf::PERSON_FACTS + %w[membership] - %w[employment_status]).to_a
+    ids = joiners.map(&:person_id).uniq
+    rows = knowledge.where(subject_type: PERSON, subject_id: ids,
+                           fact: OrgGraph::AsOf::PERSON_FACTS + %w[membership] - %w[employment_status])
+                    .or(knowledge.where(subject_type: UNIT, fact: "owner", key: ids)).to_a
     changes.map do |change|
       next change unless change.kind == :joined
 
-      held = rows.select { it.subject_id == change.person_id && it.value && covers?(it, change.effective_on) }
-      memberships, facts = held.partition { it.fact == "membership" }
+      held = rows.select { it.value && covers?(it, change.effective_on) }
+      owned, held = held.partition { it.fact == "owner" && it.key == change.person_id }
+      memberships, facts = held.select { it.subject_id == change.person_id }.partition { it.fact == "membership" }
       after = facts.map(&:value).reduce(change.after, :merge)
-      change.with(after: after.merge("memberships" => memberships.sort_by(&:key).to_h { [ it.key, it.value ] }))
+      change.with(after: after.merge("memberships" => memberships.sort_by(&:key).to_h { [ it.key, it.value ] },
+                                     "owned_unit_ids" => owned.map(&:subject_id).sort))
     end
   end
 
