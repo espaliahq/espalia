@@ -252,25 +252,34 @@ with the Org Graph's current projection and issues a command for each difference
 that finds nothing changed writes nothing.
 
 A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
-that misses them. Someone who comes back keeps their stream and gets `PersonReturned`;
+that misses them, or by their start date if that is still ahead, since nobody leaves
+before they start. Someone who comes back keeps their stream and gets `PersonReturned`;
 the earlier `PersonLeft` stays in history as what we believed then.
 
-A failed or partial sync leaves no one, in the Org Graph or in `Person.status`, so the
-two cannot disagree about who left. A sync is failed or partial when any of these holds
+A failed or partial sync leaves no one, in the Org Graph or in `Person.status`, so both
+read the same set of absent people. A sync is failed or partial when any of these holds
 ([#51](https://github.com/espaliahq/espalia/issues/51#issuecomment-6856499516)):
 
 - a page request fails;
 - the response is empty;
 - a page has no employee list;
-- the people missing from the response are more than 10% of the tenant's employed
-  HRIS-held people **and** more than 5 people (the brake). The sync result reports the
+- the employed people missing from the response are more than 10% of the tenant's
+  employed HRIS-held people **and** more than 5 people (the brake). People already
+  inactive in `Person.status` do not count towards it. The sync result reports the
   count and the thresholds.
 
 A response that passes those tests and omits a few people, at or below the brake, is not
 partial: those people have left. The brake is deliberate: a partial response looks
 exactly like a mass leaving, and a leaving stays in history. The next sync decides
 afresh. There is no override or per-tenant setting; a story for a manual override can
-follow if a real mass leaving ever needs one. A leaver's memberships are to be ended by a
+follow if a real mass leaving ever needs one.
+
+One gap remains. If the Org Graph write fails for one person, the sync still marks them
+inactive, so a leaver loses access on time. For a while the two disagree: the person is
+inactive but still employed in the Org Graph. The next sync that misses them writes the
+`PersonLeft`, dated that day.
+
+A leaver's memberships are to be ended by a
 handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
