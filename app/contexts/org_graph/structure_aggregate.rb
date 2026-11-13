@@ -17,6 +17,7 @@
 #
 class OrgGraph::StructureAggregate
   include AggregateRoot
+  prepend OrgGraph::PlanReference::Stamping
 
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS

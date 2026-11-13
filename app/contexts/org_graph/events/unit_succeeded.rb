@@ -11,6 +11,7 @@
 #   @option data [Array<String>] :successor_ids the units that carry on from them
 #   @option data [String] :effective_on ISO 8601 date it took effect
 #   @option data [String, nil] :stated_by_id person_id of the actor
+#   @option data [String, nil] :plan_id the plan it was applied from
 #   @option data [String, nil] :plan_change_id the plan change it was applied from
 #
 class OrgGraph::Events::UnitSucceeded < RubyEventStore::Event

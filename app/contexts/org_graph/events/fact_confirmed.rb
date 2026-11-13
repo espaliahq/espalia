@@ -13,6 +13,8 @@
 #   @option data [String] :fact a person fact key (`title`, `manager_id`, …) or `membership`
 #   @option data [String, nil] :unit_id the unit, for a membership
 #   @option data [String] :confirmed_by_id person_id of whoever confirmed it
+#   @option data [String, nil] :plan_id the plan it was applied from
+#   @option data [String, nil] :plan_change_id the plan change it was applied from
 #
 class OrgGraph::Events::FactConfirmed < RubyEventStore::Event
 end

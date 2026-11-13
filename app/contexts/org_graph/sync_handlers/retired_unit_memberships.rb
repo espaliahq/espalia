@@ -44,7 +44,7 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
     OrgMembership.where(unit_id: data[:unit_id]).to_a.each do |membership|
       changed_on = repository.load_person(membership.person_id).membership_changed_on(data[:unit_id])
       effective_on = [ Date.iso8601(data[:effective_on]), membership.member_since, changed_on ].compact.max
-      options = { effective_on: effective_on, plan_change_id: data[:plan_change_id] }
+      options = { effective_on: effective_on, **data.slice(:plan_id, :plan_change_id) }
 
       if successor_id
         commands.move_membership(membership.person_id, data[:unit_id], successor_id,

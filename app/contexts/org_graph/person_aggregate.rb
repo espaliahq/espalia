@@ -13,6 +13,7 @@
 #
 class OrgGraph::PersonAggregate
   include AggregateRoot
+  prepend OrgGraph::PlanReference::Stamping
   include OrgGraph::FactConfirmation
 
   PROVIDERS = (HrisConfig::PROVIDERS + %w[espalia]).freeze
