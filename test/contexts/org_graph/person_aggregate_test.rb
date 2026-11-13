@@ -91,6 +91,20 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "store a date-time as its date" do
+      [ Time.zone.parse("2026-11-01 23:30"), DateTime.new(2026, 11, 1, 10) ].each do |moment|
+        aggregate = OrgGraph::PersonAggregate.new
+        aggregate.record(@person_id, provider: "hibob", effective_on: moment, employment_status: "employed")
+        assert_equal "2026-11-01", aggregate.unpublished_events.first.data[:effective_on]
+      end
+    end
+
+    should "refuse a leaving date before the start date" do
+      assert_raises(RuntimeError, match: /leave before they start/) do
+        record(employment_status: "left", started_on: "2026-01-10", left_on: "2025-12-01")
+      end
+    end
+
     should "refuse a person as their own manager" do
       assert_raises(RuntimeError, match: /manage themselves/) { record(manager_id: @person_id) }
     end
@@ -140,6 +154,21 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_equal [ "Senior Engineer", "Engineer" ], events.drop(1).map { |e| e.data[:title] }
     end
 
+    should "write the same value again when another provider supplies it" do
+      record(title: "Lead")
+      @aggregate.change_title("Lead", provider: "espalia", effective_on: "2026-11-02")
+
+      assert_equal "espalia", events.last.data[:provider]
+      assert_kind_of OrgGraph::Events::TitleChanged, events.last
+    end
+
+    should "treat a blank FTE as none" do
+      record(fte: 1)
+      @aggregate.change_employment(fte: "", employment_type: nil, **PROVENANCE)
+
+      assert_nil events.last.data[:fte]
+    end
+
     should "validate its provenance even when nothing changed" do
       record(title: "Engineer")
       assert_raises(RuntimeError, match: /Unknown provider/) do
@@ -167,9 +196,32 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
         events.map(&:class)
     end
 
+    should "let a hire who never started leave" do
+      record(employment_status: "pending")
+      @aggregate.leave(**PROVENANCE)
+
+      assert_kind_of OrgGraph::Events::PersonLeft, events.last
+    end
+
+    should "write a corrected date as a new event, and a repeated one as nothing" do
+      record
+      @aggregate.leave(provider: "hibob", effective_on: "2026-11-30")
+      @aggregate.leave(provider: "hibob", effective_on: "2026-11-30")
+      @aggregate.leave(provider: "hibob", effective_on: "2026-12-15")
+
+      assert_equal [ "2026-11-30", "2026-12-15" ], events.drop(1).map { |e| e.data[:effective_on] }
+    end
+
+    should "write nothing when joining someone recorded as employed" do
+      record
+      @aggregate.join(**PROVENANCE)
+
+      assert_equal [ OrgGraph::Events::PersonRecorded ], events.map(&:class)
+    end
+
     should "refuse a move the status does not allow" do
       record(employment_status: "pending")
-      assert_raises(RuntimeError, match: /from pending to left/) { @aggregate.leave(**PROVENANCE) }
+      assert_raises(RuntimeError, match: /from pending to employed/) { @aggregate.return_to_work(**PROVENANCE) }
 
       left = OrgGraph::PersonAggregate.new
       left.record(@person_id, **PROVENANCE, employment_status: "left")

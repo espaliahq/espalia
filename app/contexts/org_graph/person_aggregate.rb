@@ -22,7 +22,9 @@ class OrgGraph::PersonAggregate
   def initialize
     @person_id = nil
     @employment_status = nil
+    @last_status_change = nil
     @facts = {}
+    @fact_providers = {}
   end
 
   # Records the person for the first time, with the facts as they stood.
@@ -49,11 +51,15 @@ class OrgGraph::PersonAggregate
     raise "Person id can't be blank" if person_id.blank?
     raise "Invalid employment status: #{employment_status}" unless EMPLOYMENT_STATUSES.include?(employment_status)
 
+    started_on = normalize_date(started_on, :started_on)
+    left_on = normalize_date(left_on, :left_on)
+    raise "A person can't leave before they start" if started_on && left_on && left_on < started_on
+
     @person_id = person_id
     apply(OrgGraph::Events::PersonRecorded.new(data: provenance(provider, effective_on).merge(
       employment_status: employment_status,
-      started_on: normalize_date(started_on, :started_on),
-      left_on: normalize_date(left_on, :left_on),
+      started_on: started_on,
+      left_on: left_on,
       title: label(title),
       level: label(level),
       manager_id: validated_manager(manager_id),
@@ -65,43 +71,31 @@ class OrgGraph::PersonAggregate
     )))
   end
 
-  # A person who had not yet started has joined. No-op if already employed.
+  # A person who had not yet started has joined.
   #
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String] their start date
   # @raise [RuntimeError] unless the person is pending or employed
   def join(provider:, effective_on:)
-    ensure_recorded!
-    data = provenance(provider, effective_on)
-    return if transition!(from: "pending", to: "employed")
-
-    apply(OrgGraph::Events::PersonJoined.new(data: data))
+    move_status(OrgGraph::Events::PersonJoined, to: "employed", from: %w[pending], provider:, effective_on:)
   end
 
-  # A person has left. No-op if already left.
+  # A person has left, or a hire who never started has dropped out.
   #
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String] their leaving date
-  # @raise [RuntimeError] unless the person is employed or left
+  # @raise [RuntimeError] unless the person has been recorded
   def leave(provider:, effective_on:)
-    ensure_recorded!
-    data = provenance(provider, effective_on)
-    return if transition!(from: "employed", to: "left")
-
-    apply(OrgGraph::Events::PersonLeft.new(data: data))
+    move_status(OrgGraph::Events::PersonLeft, to: "left", from: %w[pending employed], provider:, effective_on:)
   end
 
-  # A person who had left is employed again. No-op if already employed.
+  # A person who had left is employed again.
   #
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String] their return date
   # @raise [RuntimeError] unless the person has left or is employed
   def return_to_work(provider:, effective_on:)
-    ensure_recorded!
-    data = provenance(provider, effective_on)
-    return if transition!(from: "left", to: "employed")
-
-    apply(OrgGraph::Events::PersonReturned.new(data: data))
+    move_status(OrgGraph::Events::PersonReturned, to: "employed", from: %w[left], provider:, effective_on:)
   end
 
   # @param title [String, nil] the new title, or nil for none
@@ -149,19 +143,28 @@ class OrgGraph::PersonAggregate
     raise "Person not recorded" unless recorded?
   end
 
-  # Returns true when the person is already in the target status (nothing to
-  # write), false when the move is allowed, and raises otherwise.
-  def transition!(from:, to:)
-    return true if @employment_status == to
-    raise "Can't move from #{@employment_status} to #{to}" unless @employment_status == from
+  # Already in the target status, the call writes nothing, unless it repeats the
+  # last status event with a different date: that is a corrected date, and the
+  # correction is written as a new event rather than lost.
+  def move_status(event_class, to:, from:, provider:, effective_on:)
+    ensure_recorded!
+    data = provenance(provider, effective_on)
 
-    false
+    if @employment_status == to
+      return unless @last_status_change&.first == event_class && @last_status_change.last != data[:effective_on]
+    elsif !from.include?(@employment_status)
+      raise "Can't move from #{@employment_status} to #{to}"
+    end
+
+    apply(event_class.new(data: data))
   end
 
+  # A value the person already holds, from the same provider, writes nothing.
+  # The effective date is not compared: a sync dates every comparison today.
   def change(event_class, provider, effective_on, **facts)
     ensure_recorded!
     data = provenance(provider, effective_on)
-    return if facts.all? { |key, value| @facts[key] == value }
+    return if facts.all? { |key, value| @facts[key] == value && @fact_providers[key] == provider }
 
     apply(event_class.new(data: data.merge(facts)))
   end
@@ -178,8 +181,8 @@ class OrgGraph::PersonAggregate
   def normalize_date(value, name)
     return nil if value.blank?
 
-    (value.is_a?(Date) ? value : Date.iso8601(value.to_s)).iso8601
-  rescue Date::Error
+    (value.is_a?(String) ? Date.iso8601(value) : value.to_date).iso8601
+  rescue Date::Error, NoMethodError
     raise "Invalid #{name}: #{value}"
   end
 
@@ -195,7 +198,7 @@ class OrgGraph::PersonAggregate
   end
 
   def validated_fte(fte)
-    return nil if fte.nil?
+    return nil if fte.blank?
 
     value = Float(fte)
     raise "FTE must be greater than 0 and at most 1: #{fte}" unless value.positive? && value <= 1
@@ -211,18 +214,18 @@ class OrgGraph::PersonAggregate
     @person_id = event.data[:person_id]
     @employment_status = event.data[:employment_status]
     @facts = event.data.slice(*FACT_KEYS)
+    @fact_providers = FACT_KEYS.index_with(event.data[:provider])
   end
 
-  on OrgGraph::Events::PersonJoined do |_event|
-    @employment_status = "employed"
-  end
-
-  on OrgGraph::Events::PersonLeft do |_event|
-    @employment_status = "left"
-  end
-
-  on OrgGraph::Events::PersonReturned do |_event|
-    @employment_status = "employed"
+  {
+    OrgGraph::Events::PersonJoined => "employed",
+    OrgGraph::Events::PersonLeft => "left",
+    OrgGraph::Events::PersonReturned => "employed"
+  }.each do |event_class, status|
+    on event_class do |event|
+      @employment_status = status
+      @last_status_change = [ event_class, event.data[:effective_on] ]
+    end
   end
 
   [
@@ -230,7 +233,9 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::CostCentreChanged, OrgGraph::Events::SiteChanged, OrgGraph::Events::EmploymentChanged
   ].each do |event_class|
     on event_class do |event|
-      @facts.merge!(event.data.slice(*FACT_KEYS))
+      changed = event.data.slice(*FACT_KEYS)
+      @facts.merge!(changed)
+      @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
     end
   end
 end
