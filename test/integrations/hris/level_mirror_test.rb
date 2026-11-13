@@ -91,6 +91,17 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_equal "espalia", OrgMembership.find_by!(person_id: hand_added.id).provider
     end
 
+    should "not give a second membership to someone Espalia placed, once the HRIS starts sending them" do
+      hand_added = create(:person, tenant: @tenant)
+      @people.record_person(hand_added.id, provider: "espalia", effective_on: "2026-11-01", employment_status: "employed")
+      @people.set_membership(hand_added.id, unit("work.department/t1").id, provider: "espalia", effective_on: "2026-11-01")
+      hand_added.update!(hris_source: "hibob", external_id: "hb-late")
+
+      mirror(hand_added => { division: "d1", team: "t2" })
+
+      assert_equal [ "espalia" ], OrgMembership.where(person_id: hand_added.id).pluck(:provider)
+    end
+
     should "write each person's change as its own cause, by SYSTEM, from the HRIS, dated today" do
       mirror(@staff[0] => { division: "d1", team: "t2" }, @staff[1] => { division: "d1", team: "t2" })
 
@@ -107,6 +118,22 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       result = mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2", team: "t1" })
 
       assert_equal [ "Payments" ], result[:split_units].map { it[:name] }
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+    end
+
+    should "list a new unit whose people disagree, and create it with no parent" do
+      result = mirror(@staff[0] => { division: "d1", team: "t1" }, @staff[1] => { division: "d2", team: "t1" })
+
+      assert_equal [ "Payments" ], result[:split_units].map { it[:name] }
+      assert_nil unit("work.department/t1").parent_id
+    end
+
+    should "start over when a sync between two readings reads no parent" do
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      mirror(@staff[0] => { team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+
       assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
     end
 
@@ -145,12 +172,21 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
     should "retire no unit when more would retire than the brake allows" do
       @catalogue[1] = team_field(*Array.new(8) { |index| [ "t#{index}", "Team #{index}" ] })
       mirror(Array.new(8) { |index| [ recorded_person("hb-team-#{index}"), { division: "d1", team: "t#{index}" } ] }.to_h)
-      @catalogue[1] = team_field
+      @catalogue[1] = team_field(%w[t99 Other])
       result = mirror({})
 
       assert_equal 8, OrgUnit.live.where(level_id: @team).count
       assert_match(/mirrored units would retire/, result[:errors].sole[:error])
     end
+  end
+
+  should "skip a list level whose items the HRIS didn't send, retiring nothing" do
+    mirror(@staff[0] => { division: "d1", team: "t1" })
+    @catalogue[1] = team_field
+    result = mirror(@staff[0] => { division: "d1", team: "t1" })
+
+    assert OrgUnit.live.exists?(external_ref: "work.department/t1")
+    assert_match(/sent no items for Department/, result[:errors].sole[:error])
   end
 
   should "skip a level whose field the HRIS no longer has, and say so" do

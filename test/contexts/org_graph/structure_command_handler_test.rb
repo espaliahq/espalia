@@ -294,6 +294,14 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       assert_match "hand it over", error.message
     end
 
+    should "refuse a new field for a level that holds units read from the old one" do
+      provide("Department", "hibob", field: "work.department")
+      create_unit(@department, "Engineering", level: "Department", provider: "hibob", external_ref: "work.department/1")
+
+      error = assert_raises(RuntimeError) { provide("Department", "hibob", field: "work.custom.department_x") }
+      assert_match "hand it over", error.message
+    end
+
     should "allow it once the level's units are retired" do
       create_unit(@department, "Engineering", level: "Department")
       as_tenant { @handler.retire_unit(@department, effective_on: @today) }

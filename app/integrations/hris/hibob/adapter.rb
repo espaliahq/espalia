@@ -418,7 +418,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     end
 
     with_hris_event_context do
-      Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:).call
+      Hris::LevelMirror.new(provider: provider_name, catalogue:, readings:, result:, levels: mirrored_levels).call
     end
   end
 

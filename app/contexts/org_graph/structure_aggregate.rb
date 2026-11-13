@@ -109,8 +109,8 @@ class OrgGraph::StructureAggregate
   #   "work.custom.department_x"; nil keeps the current one for the same provider
   # @param set_by_id [String, nil] person_id of the actor
   # @raise [ArgumentError] if the provider is unknown, or a field is named for Espalia
-  # @raise [RuntimeError] if the level is unknown, holds live units, or would
-  #   break the order of providers
+  # @raise [RuntimeError] if the level is unknown, holds live units while its
+  #   provider or field changes, or would break the order of providers
   def set_level_provider(level_id, provider, effective_on:, field: nil, set_by_id: nil)
     level_id = require_id(level_id, "Level id")
     provider = require_provider(provider)
@@ -120,6 +120,8 @@ class OrgGraph::StructureAggregate
     previous = level_provider(level_id)
     if provider == previous
       return if field.nil? || field == @level_fields[level_id]
+
+      raise "Level still holds units read from another field; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
     else
       raise "Level still holds units from #{previous}; hand it over instead" if live_units.any? { |unit| unit.level_id == level_id }
 

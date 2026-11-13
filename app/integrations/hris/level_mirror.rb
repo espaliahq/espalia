@@ -12,13 +12,14 @@
 #   ends what a retired unit still holds.
 # - **Memberships.** A value sets or moves the person's membership at the
 #   level; a value sent blank ends it; a record that withholds the field
-#   changes nothing for that person. A membership Espalia holds is never
-#   touched, since only a person the HRIS doesn't know can have one.
+#   changes nothing for that person. A person Espalia holds a membership
+#   for at the level is left alone.
 # - **Parents.** A unit sits under the unit at the level above that all its
 #   people with a value there share. A unit whose people disagree keeps its
-#   parent and is listed in the result's :split_units. A parent changes only
-#   when two syncs in a row read the same one ({HrisUnitParentProposal}).
-#   A new unit takes the parent read when it is created.
+#   parent, or is created with none, and is listed in the result's
+#   :split_units. A parent changes only when two syncs in a row read the same
+#   one ({HrisUnitParentProposal}). A new unit takes the parent read when it
+#   is created.
 #
 # Retirements and ended memberships each have their own brake, as
 # {Hris::BaseAdapter::ABSENCE_BRAKE} has for people: over it, none of that
@@ -39,9 +40,11 @@ class Hris::LevelMirror
   # @param readings [Hash{Person => #field_value}] each current person's
   #   record, read through the provider's mapper; a leaver is left out
   # @param result [Hash] the sync's running tally
+  # @param levels [Array<OrgTaxonomyLevel>] the levels to mirror, as {.levels} gives them
   # @param today [Date]
-  def initialize(provider:, catalogue:, readings:, result:, today: Date.current)
+  def initialize(provider:, catalogue:, readings:, result:, levels: self.class.levels(provider), today: Date.current)
     @provider = provider
+    @levels = levels
     @fields = catalogue.index_by(&:id)
     @readings = readings
     @result = result
@@ -51,12 +54,12 @@ class Hris::LevelMirror
 
   # @return [void]
   def call
-    levels = self.class.levels(@provider)
-    return if levels.empty?
+    return if @levels.empty?
 
     taxonomy = OrgTaxonomyLevel.top_first.pluck(:id)
-    plans = levels.filter_map { |level| plan(level, taxonomy) }
+    plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
+    @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).index_by(&:unit_id)
     plans.each { |level_plan| mirror_units(level_plan) }
     write_memberships(plans)
     retire_units(plans)
@@ -70,6 +73,11 @@ class Hris::LevelMirror
     field = @fields[level.provider_field]
     unless field
       @result[:errors] << { error: "#{@provider} has no field #{level.provider_field} for the #{level.name} level, so it was not mirrored" }
+      return
+    end
+    # A list whose items HiBob didn't send would read every value as archived.
+    if field.list? && field.values.empty?
+      @result[:errors] << { error: "#{@provider} sent no items for #{field.name}, so the #{level.name} level was not mirrored" }
       return
     end
 
@@ -119,8 +127,11 @@ class Hris::LevelMirror
   end
 
   def create(level_plan, ref, name, parent)
-    parent = nil if parent == :split
     unit_id = SecureRandom.uuid_v7
+    if parent == :split
+      parent = nil
+      @result[:split_units] << { unit_id:, name: }
+    end
     structure.create_unit(unit_id, name, level_id: level_plan.level.id, parent_id: parent, provider: @provider,
                           external_ref: ref, effective_on: @today)
     counted
@@ -135,10 +146,10 @@ class Hris::LevelMirror
   end
 
   def reparent(unit, parent)
-    proposal = HrisUnitParentProposal.find_by(unit_id: unit.id)
-    return if parent.nil?
-
-    if parent == :split
+    proposal = @proposals[unit.id]
+    if parent.nil?
+      proposal&.destroy!
+    elsif parent == :split
       proposal&.destroy!
       @result[:split_units] << { unit_id: unit.id, name: unit.name }
     elsif parent == unit.parent_id
@@ -163,11 +174,13 @@ class Hris::LevelMirror
 
   def membership_changes(level_plan)
     units = @units.fetch(level_plan.level.id)
-    current = OrgMembership.where(provider: @provider, unit_id: OrgUnit.where(level_id: level_plan.level.id))
-                           .group_by(&:person_id)
+    current = OrgMembership.in_live_units.where(unit_id: OrgUnit.where(level_id: level_plan.level.id)).group_by(&:person_id)
 
     level_plan.values.filter_map do |person, value|
-      membership = current[person.id]&.first
+      memberships = current.fetch(person.id, [])
+      next if memberships.any? { it.provider != @provider }
+
+      membership = memberships.first
       if value.value?
         target = units[reference(level_plan, value.key)]
         next if target.nil? || membership&.unit_id == target.id
@@ -201,6 +214,7 @@ class Hris::LevelMirror
 
     retiring.each do |unit|
       structure.retire_unit(unit.id, provider: @provider, effective_on: @today)
+      @proposals[unit.id]&.destroy!
       counted
     rescue => e
       @result[:errors] << { unit_id: unit.id, error: e.message }
