@@ -113,6 +113,27 @@ class Hris::Hibob::ResponseMapper
     }.compact
   end
 
+  # What this person's record holds for one field: a list field's item id
+  # and label, or a text field's text.
+  #
+  # @param field_id [String] the field's catalogue id
+  # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
+  # @return [Hris::FieldValue]
+  def field_value(field_id, kind:)
+    path = path_of(field_id)
+    return Hris::FieldValue.withheld unless supplied?(path)
+
+    if kind == :list
+      item = list_value(path)
+      return Hris::FieldValue.blank if item.nil?
+
+      Hris::FieldValue.new(state: :value, id: item.id, label: item.label || item.id)
+    else
+      text = label(path)
+      text ? Hris::FieldValue.new(state: :value, label: text) : Hris::FieldValue.blank
+    end
+  end
+
   private
 
   attr_reader :employee, :level_field_id, :mapped_fields
