@@ -21,7 +21,7 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
       end
       [ @ada, @grace ].each { |person| @people.record_person(person.id, **ESPALIA, employment_status: "employed") }
       @people.set_membership(@ada.id, @payments, allocation: 0.6, role: "Tech lead", **ESPALIA)
-      @people.set_membership(@grace.id, @payments, provider: "hibob", effective_on: "2026-02-01")
+      @people.set_membership(@grace.id, @payments, **ESPALIA)
       @people.set_membership(@grace.id, @billing, **ESPALIA)
     end
   end
@@ -39,10 +39,10 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
       as_tenant { assert_not OrgMembership.exists?(unit_id: @payments) }
     end
 
-    should "end each membership as its own provider holds it, leaving the person's other memberships" do
+    should "end each membership as its provider, leaving the person's other memberships" do
       grace_ended = person_events(@grace).find { |event| event.is_a?(OrgGraph::Events::MembershipEnded) }
 
-      assert_equal "hibob", grace_ended.data[:provider]
+      assert_equal "espalia", grace_ended.data[:provider]
       as_tenant { assert OrgMembership.exists?(person_id: @grace.id, unit_id: @billing) }
     end
 
@@ -83,6 +83,29 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
     end
 
     assert_equal "2026-09-01", person_events(@ada).last.data[:effective_on]
+  end
+
+  should "close a membership whose terms changed after a backdated retirement on the day they changed" do
+    as_tenant do
+      @people.set_membership(@ada.id, @payments, allocation: 0.4, **ESPALIA, effective_on: "2026-09-01")
+      @people.set_membership(@grace.id, @payments, allocation: 0.4, **ESPALIA, effective_on: "2026-08-15")
+      @structure.retire_unit(@payments, effective_on: "2026-08-01")
+    end
+
+    assert_equal "2026-09-01", person_events(@ada).last.data[:effective_on]
+    assert_equal "2026-08-15", person_events(@grace).last.data[:effective_on]
+  end
+
+  should "close a membership after its latest change when a later one was backdated" do
+    as_tenant do
+      @people.set_membership(@ada.id, @payments, allocation: 0.4, **ESPALIA, effective_on: "2026-09-01")
+      @people.set_membership(@ada.id, @payments, allocation: 0.3, **ESPALIA, effective_on: "2026-08-10")
+      @structure.retire_unit(@payments, effective_on: "2026-08-20")
+    end
+
+    ended = person_events(@ada).last
+    assert_kind_of OrgGraph::Events::MembershipEnded, ended
+    assert_equal "2026-09-01", ended.data[:effective_on]
   end
 
   context "a retirement through a succession" do

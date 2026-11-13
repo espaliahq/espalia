@@ -18,6 +18,8 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 
 **No deploy step.** No migration runs, and no projection needs a rebuild. No projection reads the events this sync writes yet; 1.4 adds that.
 
+**The HRIS must hold the facts it writes.** Each person command is refused unless its provider holds the fact. Predeploy's `org_graph:claim_hris_facts` hands each configured HRIS its default facts (employment status, title, level, manager, site and employment) before the first sync on a release, and saving the HRIS settings does the same. If a sync's `errors` read `espalia supplies title; change it there`, someone handed that fact to Espalia on purpose, or the person carries no `hibob` external id; set it back with `OrgGraph::StructureCommandHandler#set_fact_provider` only if that was a mistake. The task is safe to run again by hand: `bin/rails org_graph:claim_hris_facts`.
+
 ## Steps
 
 1. Deploy as usual.

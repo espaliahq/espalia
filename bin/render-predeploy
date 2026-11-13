@@ -70,4 +70,11 @@ fi
 #    process runs both, so the app boots once.
 log "step 4: events:projections:stamp_if_no_events, events:projections:verify"
 rake events:projections:stamp_if_no_events events:projections:verify
-log "step 4: done — predeploy complete"
+log "step 4: done"
+
+# 5. Hand each configured HRIS the person facts it supplies by default, so the
+#    sync's writes are accepted from the first run on this release. Runs after
+#    the verify gate, so a failed deploy writes no events. Idempotent.
+log "step 5: org_graph:claim_hris_facts"
+rake org_graph:claim_hris_facts
+log "step 5: done — predeploy complete"

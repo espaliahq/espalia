@@ -25,7 +25,7 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
 
       @handler.set_membership(@ada.id, @payments, allocation: 0.6, role: "Tech lead", **PROVENANCE)
       @handler.set_membership(@ada.id, @platform, allocation: 0.4, **PROVENANCE)
-      @handler.set_membership(@grace.id, @payments, provider: "hibob", effective_on: "2026-03-01")
+      @handler.set_membership(@grace.id, @payments, provider: "espalia", effective_on: "2026-03-01")
     end
   end
 
@@ -66,7 +66,7 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
 
   should "move a membership's start earlier when a set is backdated" do
     as_tenant do
-      @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "hibob", effective_on: "2026-01-15")
+      @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "espalia", effective_on: "2026-01-15")
 
       assert_equal Date.new(2026, 1, 15), OrgMembership.find_by!(person: @grace).member_since
     end
@@ -87,7 +87,7 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
       moved = OrgMembership.find_by!(person_id: @grace.id, unit_id: @platform)
 
       assert_not OrgMembership.exists?(person_id: @grace.id, unit_id: @payments)
-      assert_equal [ "hibob", Date.new(2026, 3, 1), Date.new(2026, 5, 1) ],
+      assert_equal [ "espalia", Date.new(2026, 3, 1), Date.new(2026, 5, 1) ],
                    [ moved.provider, moved.member_since, moved.effective_on ]
     end
   end
@@ -95,7 +95,7 @@ class OrgGraph::Projections::MembersTest < ActiveSupport::TestCase
   context "rebuild contract" do
     should "reset! + replay produce identical read-model state, including the stable ids" do
       as_tenant do
-        @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "hibob", effective_on: "2026-04-01")
+        @handler.set_membership(@grace.id, @payments, allocation: 0.5, provider: "espalia", effective_on: "2026-04-01")
         @handler.end_membership(@ada.id, @platform, **PROVENANCE)
         @handler.set_membership(@ada.id, @platform, role: "Reviewer", provider: "espalia", effective_on: "2026-07-01")
         @handler.move_membership(@grace.id, @payments, @platform, effective_on: "2026-08-01")
