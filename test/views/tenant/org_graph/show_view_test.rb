@@ -26,14 +26,14 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     build_org_graph(@tenant)
   end
 
-  def render_page(**slots)
-    ActsAsTenant.with_tenant(@tenant) do
+  def render_page(tenant: @tenant, **slots)
+    ActsAsTenant.with_tenant(tenant) do
       controller = ApplicationController.new
       controller.request = ActionDispatch::TestRequest.create
       user = @user
       controller.define_singleton_method(:current_user) { user }
       view = Views::Tenant::OrgGraph::ShowView.new(
-        overview: OrgGraph::UnitsOverview.new, user: @user, current_tenant: @tenant, **slots
+        overview: OrgGraph::UnitsOverview.new, user: @user, current_tenant: tenant, **slots
       )
       Nokogiri::HTML5(controller.view_context.render(view))
     end
@@ -53,6 +53,14 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     assert_equal "Platform", drawer.at_css("##{Views::Tenant::OrgGraph::Drawer::ID}-title").text
     assert_equal "/back", drawer.at_css("a[aria-label='Close']")["href"]
     assert_includes drawer.text, "drawer body"
+  end
+
+  should "isolate a drawer that covers the page, and let focus land on its title" do
+    drawer = render_page(drawer: StubDrawer.new).at_css("aside##{Views::Tenant::OrgGraph::Drawer::ID}")
+
+    assert_equal "drawer-isolation", drawer["data-controller"]
+    title = drawer.at_css("[data-drawer-isolation-target='title']")
+    assert_equal "-1", title["tabindex"]
   end
 
   should "render a sidebar handed in beside the opened unit" do
