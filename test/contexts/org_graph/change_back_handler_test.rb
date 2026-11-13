@@ -214,6 +214,14 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
       assert_not_equal "request-1", inverses.first
     end
 
+    should "write the inverses under the request's cause when there is one" do
+      as_tenant { OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1").end_membership(@ada.id, @payments, **ESPALIA) }
+
+      AuditMetadata.with(acting_via: :web, correlation_id: "request-2") { change_back_group("request-1") }
+
+      assert_equal "request-2", latest(@payments).cause_id
+    end
+
     should "refuse an approved split as a whole, naming the part that can't be changed back" do
       billing = SecureRandom.uuid_v7
       as_tenant do

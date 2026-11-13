@@ -34,24 +34,26 @@ class OrgGraph::ChangeBackHandler
   # Changes back every entry written under one cause, such as one approved
   # plan change, newest first, under one new cause. Refused as a whole unless
   # every part can be changed back; a later change from inside the same cause
-  # doesn't count against an earlier part, as it is reversed first.
+  # doesn't count against an earlier part, as it is reversed first. The inverses
+  # share the request's cause, or a new one outside a request.
   #
   # @param cause_id [String] as {OrgUnitActivity::Group#cause_id}
   # @param effective_on [Date, String, nil] as for {#change_back}
   # @raise [RuntimeError] if any part can't be changed back
   # @raise [OrgGraph::Authorization::Refused] if the actor can't make every inverse change
   def change_back_group(cause_id, effective_on: nil)
-    reverse(effective_on:, apart_from: cause_id) { OrgUnitActivity.caused_by(cause_id) }
+    inverse_cause = AuditMetadata.current[:correlation_id] || SecureRandom.uuid_v7
+    reverse(effective_on:, apart_from: cause_id, inverse_cause:) { OrgUnitActivity.caused_by(cause_id) }
   end
 
   private
 
-  def reverse(effective_on:, apart_from: nil, &rows)
+  def reverse(effective_on:, apart_from: nil, inverse_cause: nil, &rows)
     ActiveRecord::Base.transaction do
       lock(rows.call)
       entries = rows.call.to_a
       ensure_reversible!(entries, apart_from:)
-      build_handlers(cause_id: SecureRandom.uuid_v7)
+      build_handlers(cause_id: inverse_cause)
       entries.uniq(&:event_id).each do |entry|
         options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
         send(:"undo_#{entry.event_type.underscore}", entry, options)
