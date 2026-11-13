@@ -21,12 +21,15 @@ export default class extends BaseController {
     this.media = window.matchMedia(COVERS_PAGE)
     this.boundApply = this.apply.bind(this)
     this.media.addEventListener("change", this.boundApply)
+    this.boundRelease = this.release.bind(this)
+    document.addEventListener("turbo:before-cache", this.boundRelease)
     this.apply()
     if (this.media.matches && this.hasTitleTarget) this.titleTarget.focus()
   }
 
   disconnect() {
     this.media.removeEventListener("change", this.boundApply)
+    document.removeEventListener("turbo:before-cache", this.boundRelease)
     this.release()
     super.disconnect()
   }
