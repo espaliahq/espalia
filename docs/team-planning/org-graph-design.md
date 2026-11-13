@@ -453,10 +453,36 @@ An admin can choose another.
   compared as above, and the disagreements are listed.
 
 A list field keeps a unit through a rename. Its values have ids of their own, so the
-unit's external reference is the value's id, and a new label is `UnitRenamed`: the
-history reads "was X". A free-text field has only its text. A renamed value there looks
+unit's external reference is the value's id, prefixed with the field's path
+(`work.department/261985129`) so two levels' values can never collide. A new label is
+`UnitRenamed`: the history reads "was X". A free-text field has only its text, which
+becomes the reference in the same way. A renamed value there looks
 like one unit emptying and another appearing, and the Org Graph does not infer a link.
 Someone can state the succession. The screen says which kind each field is.
+
+#### How a sync mirrors a level (6.7)
+
+`Hris::LevelMirror` runs after the people are recorded, one level at a time, top first.
+
+- **Withheld is not blank.** A record that leaves the field out changes nothing for that
+  person. A field sent empty ends their membership at the level.
+- **Units come and go with the list.** A value someone holds is created as a unit. A
+  list item that is archived or gone retires its unit, and the memberships it held end
+  with it. A text value retires once nobody holds it and no record withheld the field.
+- **A hand-added person keeps their place.** Espalia may put someone the HRIS doesn't
+  know into a mirrored unit, and the sync never touches that membership.
+- **A parent needs every voice and two syncs.** A unit sits under the unit above only
+  when all its people with a value there agree. A unit nobody reads a parent for keeps
+  the one it has. A new parent is written only when two syncs in a row read the same
+  one; the first reading waits in `hris_unit_parent_proposals`.
+- **Brakes.** Ended memberships and retired units each stop at the absence brake people
+  have: more than 10% and more than five, and none of that kind is written. A sync that
+  can't read the field lists mirrors nothing.
+- **One cause per change.** Each unit change and each person's membership change is its
+  own correlation, written by SYSTEM with the HRIS as provider and dated the sync's day.
+
+A unit whose people sit under different units above keeps its parent and is listed in
+the sync's result as split, for someone to resolve. Espalia never picks a majority.
 
 #### What the sync needs for this
 
@@ -467,10 +493,11 @@ The HiBob adapter is most of the way there, and the gaps are small.
   level field and the fields the tenant's mapping names (6.4).
 - The level field is set by pasting its raw id. The picker replaces that.
 - It asks for both the stored value and the display text. The mapper reads them as a
-  pair (`ResponseMapper#list_values`), but the sync still writes only the text.
+  pair (`ResponseMapper#field_value`), and the mirror keys units on the stored id.
+- It requests the field each mirrored level names, beside the others.
 
-Open question: a unit whose people sit under two different units at the level above.
-The likely answer is to list it for someone to resolve, as a disagreement is.
+A unit whose people sit under two different units at the level above keeps its parent
+and is listed for someone to resolve, as a disagreement is (settled in 6.7).
 
 #### Are HiBob's list values stable ids?
 

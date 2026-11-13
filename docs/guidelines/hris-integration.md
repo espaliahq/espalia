@@ -178,6 +178,10 @@ The HiBob adapter passes `fields_for("hibob")` to the client, which requests eac
 
 Take each path from the catalogue (`#field_catalogue`), never typed, so the search names only fields HiBob knows.
 
+### A structure level read from a field
+
+A level the HRIS provides can name its field: `LevelProviderSet` carries `field`, projected as `OrgTaxonomyLevel#provider_field`. `Hris::LevelMirror.levels(provider)` lists those levels, the client requests each field, and after the people are recorded the adapter hands `Hris::LevelMirror` the catalogue and each current person's `ResponseMapper`. The mirror reads a person's value through `ResponseMapper#field_value`, which tells a value, a blank and a withheld field apart; keep that distinction in any new provider's mapper, since a withheld field must change nothing. Units are referenced as `"<field path>/<value id or text>"`. The rules are in [org-graph-design.md → How a sync mirrors a level](../team-planning/org-graph-design.md#how-a-sync-mirrors-a-level-67). The mirror is provider-agnostic: a new adapter calls it the same way.
+
 ## Adding a new HRIS provider
 
 Subclass `Hris::BaseAdapter` under `app/integrations/hris/<provider>/`:
