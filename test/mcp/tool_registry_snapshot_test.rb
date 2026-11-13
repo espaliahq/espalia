@@ -2630,6 +2630,93 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_set_fact_provider",
+        "description" => "Set who supplies one kind of person fact from today: \"espalia\", or the connected HRIS. Facts: employment_status, title, level, manager, cost_centre, site, employment. For an HRIS, fields names the HRIS field to read a part from (cost_centre: cost_centre; site: country); leave it out to keep the fields already chosen. Moving a fact to another provider clears its fields. Writes nothing when nothing changes.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "fact" => {
+              "type" => "string",
+              "enum" => [
+                "employment_status",
+                "title",
+                "level",
+                "manager",
+                "cost_centre",
+                "site",
+                "employment"
+              ]
+            },
+            "provider" => {
+              "type" => "string",
+              "enum" => [ "hibob", "espalia" ]
+            },
+            "fields" => {
+              "type" => "object",
+              "properties" => {
+                "cost_centre" => {
+                  "type" => "string"
+                },
+                "country" => {
+                  "type" => "string"
+                }
+              },
+              "additionalProperties" => false
+            }
+          },
+          "required" => [ "fact", "provider" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_set_level_provider",
+        "description" => "Set who supplies an Org Graph structure level from today: \"espalia\", or the connected HRIS reading the level's units from field. Only a level with no live units; to move a level that holds units, compare and hand it over with integrations_hris_level_handover. Levels an HRIS supplies sit above the ones Espalia holds.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "provider" => {
+              "type" => "string",
+              "enum" => [ "hibob", "espalia" ]
+            },
+            "field" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "level_id", "provider" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_sources",
+        "description" => "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact with its provider and the fields an HRIS reads it from, each structure level (top first) with its provider, field and number of live units, and the staleness threshold with how many facts Espalia holds are stale, by fact.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_units",
         "description" => "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
                          "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \
