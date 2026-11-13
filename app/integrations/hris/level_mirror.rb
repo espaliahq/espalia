@@ -204,8 +204,8 @@ class Hris::LevelMirror
   def write_memberships(plans, retiring)
     changes = plans.flat_map { |level_plan| membership_changes(level_plan) }
     ends, others = changes.partition { |change| change[:action] == :end }
-    moved_out = others.filter_map { |change| change[:person].id if change[:action] == :move }
-    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).where.not(person_id: moved_out).count
+    leaving = changes.filter_map { |change| [ change[:person].id, change[:from] ] if change[:from] }.to_set
+    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).pluck(:person_id, :unit_id).count { !leaving.include?(it) }
     held = OrgMembership.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).count
     braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
     ends = [] if braked
