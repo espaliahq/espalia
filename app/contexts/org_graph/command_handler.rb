@@ -145,6 +145,15 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
   end
 
+  # Records that a fact Espalia holds about a person is still true.
+  #
+  # @param person_id [String]
+  # @param fact [String, Symbol]
+  # @param options [Hash] keywords accepted by {OrgGraph::FactConfirmation#confirm_fact}
+  def confirm_fact(person_id, fact, **options)
+    @repository.with_person(person_id) { |person| person.confirm_fact(fact, **options) }
+  end
+
   private
 
   # Reads the structure projection, which is written synchronously with the

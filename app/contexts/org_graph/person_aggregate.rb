@@ -13,6 +13,7 @@
 #
 class OrgGraph::PersonAggregate
   include AggregateRoot
+  include OrgGraph::FactConfirmation
 
   PROVIDERS = (HrisConfig::PROVIDERS + %w[espalia]).freeze
   EMPLOYMENT_STATUSES = %w[pending employed left].freeze
