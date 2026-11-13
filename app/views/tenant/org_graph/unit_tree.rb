@@ -26,7 +26,7 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
         href: "##{@tray_id}",
         class: [
           "mt-2 flex items-center justify-between rounded-md px-2 py-1.5 text-sm font-medium hover:bg-default-hover",
-          @overview.unplaced.any? ? "text-warning" : "text-muted"
+          @overview.unplaced.any? ? "text-warning" : "text-default"
         ]
       ) do
         span { "In no team" }

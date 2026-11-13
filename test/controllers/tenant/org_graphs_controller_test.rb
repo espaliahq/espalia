@@ -65,11 +65,12 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       page = Nokogiri::HTML5(response.body)
       assert_includes page.at_css(tray_link)["class"].split, "text-warning"
       assert_includes page.at_css("#in-no-team")["class"].split, "border-warning"
+      assert_includes page.at_css("#in-no-team-heading")["class"].split, "text-warning"
 
       ActsAsTenant.with_tenant(@tenant) do
         handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
         Person.active.in_no_unit.each do |person|
-          handler.record_person(person.id, **OrgGraphFixture::PROVENANCE, employment_status: "employed") unless person == org[:ezra]
+          handler.record_person(person.id, **OrgGraphFixture::PROVENANCE, employment_status: "employed") unless org.value?(person)
           handler.set_membership(person.id, org[:platform], **OrgGraphFixture::PROVENANCE)
         end
       end
