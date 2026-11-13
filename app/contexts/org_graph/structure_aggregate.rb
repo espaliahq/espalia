@@ -74,7 +74,9 @@ class OrgGraph::StructureAggregate
   # @raise [ArgumentError, RuntimeError] if any invariant above fails
   def create_unit(unit_id, name, level_id:, effective_on:, parent_id: nil, provider: ESPALIA,
                   external_ref: nil, created_by_id: nil, plan_change_id: nil)
-    require_id(unit_id, "Unit id")
+    unit_id = require_id(unit_id, "Unit id")
+    level_id = require_id(level_id, "Level id")
+    parent_id = require_id(parent_id, "Parent id") if parent_id
     raise "Unit already exists" if @units.key?(unit_id)
 
     name = require_name(name)
@@ -112,6 +114,7 @@ class OrgGraph::StructureAggregate
   # @param plan_change_id [String, nil]
   def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil, plan_change_id: nil)
     unit = editable_unit!(unit_id, provider)
+    unit_id = unit.unit_id
     name = require_name(name)
     return if name == unit.name
 
@@ -137,6 +140,8 @@ class OrgGraph::StructureAggregate
   # @param plan_change_id [String, nil]
   def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, plan_change_id: nil)
     unit = editable_unit!(unit_id, provider)
+    unit_id = unit.unit_id
+    parent_id = require_id(parent_id, "Parent id") if parent_id
     return if parent_id == unit.parent_id
 
     ensure_placeable!(unit.provider, unit.level_id, parent_id)
@@ -161,6 +166,7 @@ class OrgGraph::StructureAggregate
   # @param plan_change_id [String, nil]
   def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
     unit = editable_unit!(unit_id, provider)
+    unit_id = unit.unit_id
     raise "Move or retire its sub-units first" if live_units.any? { |child| child.parent_id == unit_id }
 
     apply(OrgGraph::Events::UnitRetired.new(data: {
@@ -199,7 +205,7 @@ class OrgGraph::StructureAggregate
   private
 
   def editable_unit!(unit_id, provider)
-    unit = @units[unit_id]
+    unit = @units[unit_id.to_s.downcase]
     raise "Unit not found" unless unit
     raise "Unit is retired" if unit.retired
     raise "#{unit.provider} supplies this unit; change it there" unless require_provider(provider) == unit.provider
@@ -247,7 +253,7 @@ class OrgGraph::StructureAggregate
   def require_id(id, label)
     raise ArgumentError, "#{label} must be a UUID" unless UUID.match?(id.to_s)
 
-    id.to_s
+    id.to_s.downcase
   end
 
   def require_name(name)

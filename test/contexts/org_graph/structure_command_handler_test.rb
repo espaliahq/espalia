@@ -144,6 +144,14 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "treat a UUID in upper case as the same unit" do
+      create_unit(@team, "Payments", level: "Team")
+
+      assert_raises(RuntimeError) { create_unit(@team.upcase, "Payments again", level: "Team") }
+      as_tenant { @handler.rename_unit(@team.upcase, "Money", effective_on: @today) }
+      assert_equal @team, structure_events.last.data[:unit_id]
+    end
+
     should "refuse an unknown provider" do
       assert_raises(ArgumentError) do
         create_unit(@department, "Engineering", level: "Department", provider: "workday", external_ref: "d-1")
