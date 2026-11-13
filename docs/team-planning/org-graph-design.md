@@ -199,6 +199,26 @@ the unit, because a cross-functional team has no single line to derive it from. 
 unit's last owner leaves, the unit is flagged and inherits its parent's owners until
 someone is named.
 
+### Keeping a fact current
+
+An HRIS keeps its own facts fresh. A fact Espalia holds stays true only while someone
+keeps it so, so each one shows its age.
+
+- **`FactConfirmed` says a fact still holds**, and who said so. It names the fact, a
+  membership by its unit or a person fact by its key, and never copies the value, so a
+  confirmation can't disagree with the fact. Only a fact Espalia holds, for someone who
+  hasn't left, can be confirmed.
+- **A fact is stale** when nobody has changed or confirmed it within the tenant's
+  threshold, `Tenant#org_graph_config.staleness_days`, a quarter by default.
+- **Age runs from when the Org Graph learned of a change**, not from its effective date,
+  so a membership backdated to last year doesn't arrive already stale.
+- `OrgGraph::Projections::FactAges` keeps each fact's last change and confirmation in
+  `org_fact_ages`, and `OrgFactAge.stale(tenant)` lists the stale ones, oldest first. A
+  leaver's facts are never listed.
+
+The flags and confirm buttons are 5.5. Units' own facts, their names and parents, have no
+confirmation yet.
+
 ### What happens to `people`
 
 The identifier columns stay as they are: mutable, written by the sync, and the only place
