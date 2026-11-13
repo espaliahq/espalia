@@ -54,7 +54,7 @@ class OrgUnitActivity::Group
   def succession_summary(after)
     names = unit_names(after.values_at("predecessor_ids", "successor_ids").flatten)
     predecessors, successors = after.values_at("predecessor_ids", "successor_ids").map do |ids|
-      ids.map { |id| names.fetch(id, "an unnamed unit") }.to_sentence
+      ids.map { |id| names.fetch(id, "an unnamed unit") }.sort.to_sentence
     end
     case [ after["predecessor_ids"].one?, after["successor_ids"].one? ]
     when [ true, true ] then "replaced #{predecessors} with #{successors}"
