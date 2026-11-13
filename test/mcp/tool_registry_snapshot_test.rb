@@ -2649,6 +2649,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_update_staleness_threshold",
+        "description" => "Set how many days a fact Espalia holds about a person (a title, a manager, a membership) may go without a change or a confirmation before it counts as stale. The default is 90; at most 3650.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "staleness_days" => {
+              "type" => "integer"
+            }
+          },
+          "required" => [ "staleness_days" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "reporting_capability_attainment",
         "description" => "Aggregate capability attainment for an assessment cycle across the caller's " \
           "org subtree (admins see the whole cycle): per role and role family, the share " \
