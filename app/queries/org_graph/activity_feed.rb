@@ -19,6 +19,9 @@ class OrgGraph::ActivityFeed
     # @return [Boolean]
     def changeable? = refusal.nil?
 
+    # @return [Boolean] whether changing it back reaches past its one part here
+    def whole_cause? = parts.many? || unit_count > 1
+
     # @return [String] the part itself when alone, so it names who it moved
     def headline = parts.one? ? parts.first.description : group.summary.upcase_first
   end
@@ -75,8 +78,10 @@ class OrgGraph::ActivityFeed
     parts = group.parts.map do |entry|
       Part.new(entry:, description: describe(entry), by: self.class.by(entry), refusal: @change_back.refusal(entry))
     end
-    refusal = group.parts.one? ? parts.first.refusal : @change_back.group_refusal(group.cause_id)
-    Item.new(group:, parts:, refusal:, unit_count: unit_counts.fetch(group.cause_id, 1))
+    unit_count = unit_counts.fetch(group.cause_id, 1)
+    whole_cause = parts.many? || unit_count > 1
+    refusal = whole_cause ? @change_back.group_refusal(group.cause_id) : parts.first.refusal
+    Item.new(group:, parts:, refusal:, unit_count:)
   end
 
   def describe(entry)

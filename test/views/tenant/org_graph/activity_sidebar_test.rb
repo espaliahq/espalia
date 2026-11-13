@@ -66,6 +66,21 @@ class Views::Tenant::OrgGraph::ActivitySidebarTest < ActiveSupport::TestCase
     assert_includes group.text, "This changes it back in all 3 units it touched."
   end
 
+  should "change one part back by its cause when that cause reached other units too" do
+    as_tenant do
+      handler(cause_id: "request-2").move_membership(@org[:cyril].id, @org[:checkout], @org[:platform],
+                                                     effective_on: "2026-02-01")
+    end
+
+    group = render_sidebar(@org[:platform]).at_css("ol > li")
+
+    assert_equal "Moved Cyril Moss in from Checkout", group.at_css("p").text
+    form = group.at_css("form")
+    assert_equal [ "request-2", "Change it all back" ], [ form.at_css("input[name='cause_id']")["value"], form.text.strip ]
+    assert_nil form.at_css("input[name='entry_id']")
+    assert_includes group.text, "This changes it back in all 2 units it touched."
+  end
+
   should "show a plan reference, and mark a change already changed back" do
     entry = as_tenant do
       handler.set_membership(@org[:ezra].id, @org[:platform], provider: "espalia", effective_on: "2026-02-01",
