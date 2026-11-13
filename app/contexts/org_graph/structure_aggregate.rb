@@ -175,7 +175,9 @@ class OrgGraph::StructureAggregate
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
     }))
-    units.sort_by(&:name).each { |unit| apply(handed_over(unit, provider, matches.fetch(unit.unit_id), effective_on, set_by_id)) }
+    units.sort_by(&:name).each do |unit|
+      apply(handed_over(unit, provider, matches.fetch(unit.unit_id), effective_on, set_by_id, field:, previous_field: nil))
+    end
   end
 
   # Hands a level an HRIS provides back to Espalia. Units and memberships stay
@@ -194,13 +196,15 @@ class OrgGraph::StructureAggregate
     previous = level_provider(level_id)
     raise "Espalia already holds this level" if previous == ESPALIA
 
+    previous_field = @level_fields[level_id]
+
     effective_on = iso_date(effective_on)
     ensure_hris_levels_on_top!(level_ids(@levels), level_id => ESPALIA)
     apply(OrgGraph::Events::LevelProviderSet.new(data: {
       level_id:, provider: ESPALIA, previous_provider: previous, field: nil, effective_on:, set_by_id:
     }))
     live_units.select { |unit| unit.level_id == level_id }.sort_by(&:name).each do |unit|
-      apply(handed_over(unit, ESPALIA, nil, effective_on, set_by_id))
+      apply(handed_over(unit, ESPALIA, nil, effective_on, set_by_id, field: nil, previous_field:))
     end
   end
 
@@ -576,13 +580,13 @@ class OrgGraph::StructureAggregate
     unit
   end
 
-  def handed_over(unit, provider, external_ref, effective_on, handed_over_by_id)
+  def handed_over(unit, provider, external_ref, effective_on, handed_over_by_id, field:, previous_field:)
     if external_ref && live_units.any? { |other| other.provider == provider && other.external_ref == external_ref }
       raise "A live unit already mirrors #{provider} #{external_ref}"
     end
 
     OrgGraph::Events::UnitHandedOver.new(data: {
-      unit_id: unit.unit_id, provider:, previous_provider: unit.provider, external_ref:,
+      unit_id: unit.unit_id, provider:, previous_provider: unit.provider, field:, previous_field:, external_ref:,
       previous_external_ref: unit.external_ref, effective_on: [ effective_on, unit.changed_on ].max, handed_over_by_id:
     })
   end
