@@ -226,6 +226,15 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       end
     end
 
+    should "write a status repeated by another provider as a handover" do
+      record
+      @aggregate.leave(provider: "hibob", effective_on: "2026-11-30")
+      @aggregate.leave(provider: "espalia", effective_on: "2026-11-30")
+      @aggregate.leave(provider: "espalia", effective_on: "2026-11-30")
+
+      assert_equal [ "hibob", "espalia" ], events.drop(1).map { |e| e.data[:provider] }
+    end
+
     should "write nothing when joining someone recorded as employed" do
       record
       @aggregate.join(**PROVENANCE)

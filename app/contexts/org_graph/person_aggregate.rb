@@ -145,14 +145,15 @@ class OrgGraph::PersonAggregate
   end
 
   # Already in the target status, the call writes nothing, unless it repeats the
-  # last status event with a different date: that is a corrected date, and the
-  # correction is written as a new event rather than lost.
+  # last status event with a different date or provider: a corrected date or a
+  # handover, written as a new event rather than lost.
   def move_status(event_class, to:, from:, provider:, effective_on:)
     ensure_recorded!
     data = provenance(provider, effective_on)
 
     if @employment_status == to
-      return unless @last_status_change&.first == event_class && @last_status_change.last != data[:effective_on]
+      return unless @last_status_change&.first == event_class
+      return if @last_status_change.last == data.values_at(:effective_on, :provider)
     elsif !from.include?(@employment_status)
       raise "Can't move from #{@employment_status} to #{to}"
     elsif @employment_status == "employed" && to == "left" && @started_on && data[:effective_on] < @started_on
@@ -228,7 +229,7 @@ class OrgGraph::PersonAggregate
   }.each do |event_class, status|
     on event_class do |event|
       @employment_status = status
-      @last_status_change = [ event_class, event.data[:effective_on] ]
+      @last_status_change = [ event_class, event.data.values_at(:effective_on, :provider) ]
       @started_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonJoined
     end
   end
