@@ -19,6 +19,9 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
 
   setup do
     Rails.application.load_tasks if Rake::Task.tasks.empty?
+    # A one-file run doesn't rebuild Tailwind, and classes added since the last
+    # build would capture unstyled: an SVG with no fill class paints solid black.
+    Rake::Task["tailwindcss:build"].invoke if ENV["README_SCREENSHOTS"].present?
     @admin = create(:user, email: SeedAdmin::DEV_EMAIL, password: TEST_PASSWORD, global_admin: true)
     @tenant = ExampleSeed.new(admin_user: @admin, io: StringIO.new).call
     @tenant.update!(theme: "custom", custom_theme: THEME)

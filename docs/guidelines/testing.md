@@ -801,6 +801,11 @@ bin/rails test test/system/{assessments,manager_assessments}_system_test.rb
 bin/rails test:system                                                 # deliberately all of them
 ```
 
+**A one-file run doesn't rebuild Tailwind.** After a pull that adds classes,
+run `bin/rails tailwindcss:build` first, or the page renders against the old
+`app/assets/builds/tailwind.css`. Text assertions still pass; only a screenshot
+shows it, and an SVG with no fill class paints solid black.
+
 ## A `def` Inside a `context` Block Is Invisible to `should`
 
 Shoulda's `should` blocks are `instance_exec`'d against the test instance, but
