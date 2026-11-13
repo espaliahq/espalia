@@ -27,6 +27,7 @@ class OrgGraph::PersonAggregate
     @left_from = nil
     @facts = {}
     @fact_providers = {}
+    @memberships = {}
   end
 
   # Records the person for the first time, with the facts as they stood.
@@ -133,6 +134,53 @@ class OrgGraph::PersonAggregate
   def change_employment(fte:, employment_type:, provider:, effective_on:)
     change(OrgGraph::Events::EmploymentChanged, provider, effective_on,
       fte: validated_fte(fte), employment_type: label(employment_type))
+  end
+
+  # Places the person in a unit, or changes their terms there. Each unit holds
+  # one membership per person; the same terms from the same provider write
+  # nothing. A hire who has not started yet can be placed ahead of their start.
+  #
+  # @param unit_id [String] UUID of a live unit
+  # @param allocation [Numeric, nil] greater than 0 and at most 1; nil when unstated
+  # @param role [String, nil] the role played in the unit
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil] the plan change it was applied from
+  # @raise [RuntimeError] if the person has left, or a value is invalid
+  def set_membership(unit_id, provider:, effective_on:, allocation: nil, role: nil, set_by_id: nil, plan_change_id: nil)
+    ensure_recorded!
+    raise "A person who has left can't join a unit" if @employment_status == "left"
+
+    unit_id = validated_unit(unit_id)
+    data = provenance(provider, effective_on)
+    terms = { allocation: validated_fraction(allocation, "Allocation"), role: label(role) }
+    current = @memberships[unit_id]
+    return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider)
+
+    apply(OrgGraph::Events::MembershipSet.new(data: data.merge(unit_id: unit_id, **terms,
+      set_by_id: set_by_id, plan_change_id: plan_change_id)))
+  end
+
+  # Ends the person's membership of one unit.
+  #
+  # @param unit_id [String]
+  # @param provider [String] one of {PROVIDERS}
+  # @param effective_on [Date, String] the last day of the membership
+  # @param ended_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil]
+  # @raise [RuntimeError] if the person is not a member, or it would end before it began
+  def end_membership(unit_id, provider:, effective_on:, ended_by_id: nil, plan_change_id: nil)
+    ensure_recorded!
+    unit_id = validated_unit(unit_id)
+    membership = @memberships[unit_id]
+    raise "Not a member of this unit" unless membership
+
+    data = provenance(provider, effective_on)
+    raise "A membership can't end before it begins" if data[:effective_on] < membership[:since]
+
+    apply(OrgGraph::Events::MembershipEnded.new(data: data.merge(unit_id: unit_id,
+      ended_by_id: ended_by_id, plan_change_id: plan_change_id)))
   end
 
   # @return [Boolean] whether the Org Graph has seen this person yet
@@ -242,14 +290,24 @@ class OrgGraph::PersonAggregate
   end
 
   def validated_fte(fte)
-    return nil if fte.blank?
+    validated_fraction(fte, "FTE")
+  end
 
-    value = Float(fte)
-    raise "FTE must be greater than 0 and at most 1: #{fte}" unless value.positive? && value <= 1
+  def validated_fraction(value, name)
+    return nil if value.blank?
 
-    value
+    fraction = Float(value)
+    raise "#{name} must be greater than 0 and at most 1: #{value}" unless fraction.positive? && fraction <= 1
+
+    fraction
   rescue ArgumentError, TypeError
-    raise "Invalid FTE: #{fte}"
+    raise "Invalid #{name}: #{value}"
+  end
+
+  def validated_unit(unit_id)
+    raise "Unit id must be a UUID: #{unit_id}" unless OrgGraph::StructureAggregate::UUID.match?(unit_id.to_s)
+
+    unit_id.to_s.downcase
   end
 
   # ── Event handlers ──
@@ -284,5 +342,15 @@ class OrgGraph::PersonAggregate
       @facts.merge!(changed)
       @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
     end
+  end
+
+  on OrgGraph::Events::MembershipSet do |event|
+    data = event.data
+    since = @memberships.dig(data[:unit_id], :since) || data[:effective_on]
+    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(since: since)
+  end
+
+  on OrgGraph::Events::MembershipEnded do |event|
+    @memberships.delete(event.data[:unit_id])
   end
 end
