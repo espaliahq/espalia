@@ -71,10 +71,12 @@ class TenantUser < ApplicationRecord
 
   # A tenant cut over to the Org Graph projects its people's columns from
   # their streams, so a person who has none starts one from their row. The
-  # tenant lock keeps a cut-over from slipping in between.
+  # tenant lock keeps a cut-over from slipping in between. The system records
+  # them, as it creates their row: most calls come from a member's own first
+  # sign-in, and only an admin or an Org Graph editor may record a person.
   def record_in_org_graph(person)
     return if Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id, tenant: tenant)).first
 
-    OrgGraph::CommandHandler.new.record_person(person.id, **OrgGraph::PeopleCutover.row_facts(person))
+    OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).record_person(person.id, **OrgGraph::PeopleCutover.row_facts(person))
   end
 end

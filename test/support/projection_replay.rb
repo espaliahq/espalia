@@ -111,6 +111,7 @@ module ProjectionReplayHelpers
           taxonomy_levels: rows(OrgTaxonomyLevel, stable_id: true),
           units:           rows(OrgUnit, stable_id: true),
           fact_providers:  rows(OrgFactProvider, stable_id: true),
+          unit_owners:     rows(OrgUnitOwner, stable_id: true),
           # A link's natural key is (succession_id, predecessor_id, successor_id).
           successions:     rows(OrgUnitSuccession)
         }
@@ -122,6 +123,9 @@ module ProjectionReplayHelpers
       when "OrgGraph::Projections::PeopleColumns"
         # Only the projected columns; the sync owns the rest of the row.
         { people: rows(Person.select(:id, *OrgGraph::Projections::PeopleColumns::COLUMNS), stable_id: true) }
+      when "OrgGraph::Projections::FactAges"
+        # The PK derives from the person and the fact — assert it survives reset! + replay.
+        { fact_ages: rows(OrgFactAge, stable_id: true) }
 
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"

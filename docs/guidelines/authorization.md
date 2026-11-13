@@ -155,6 +155,50 @@ manager-chain (`Person#managed_by?`) plus `tenant_admin?` — wider than the dir
 manager because a skip-level or HR may set one up. Delegate writes are still
 fully attributed (`rated_by_id`), and the rating event carries `via_delegation`.
 
+### Org Graph Permissions
+
+`OrgGraphPolicy` (authorize against `:org_graph`) says who may change units and
+memberships. Every predicate that names a unit takes it as an argument, since
+Pundit's `authorize` passes none.
+
+| Action | Who |
+|--------|-----|
+| See the Org Graph (`show?`) | Any tenant member |
+| The taxonomy, providers, person facts and their confirmation, a root unit (`edit_structure?`, `create_unit?(nil)`) | A tenant admin or an Org Graph editor (`TenantUser#org_graph_editor`) |
+| Rename, retire or own a unit, or add a unit beneath it (`edit_unit?`, `create_unit?(parent)`) | The above, or an active owner of that unit or any unit above it |
+| Move a unit (`move_unit?(unit, new_parent)`) | Rights over the unit and over its new parent; a move to the root needs `edit_structure?` |
+| Record a succession (`record_succession?(units)`) | Rights over every unit it names |
+| Set, end or confirm a membership (`edit_membership?(member, unit)`) | Anyone in the member's manager chain, or whoever holds rights over the unit |
+| Move a membership (`move_membership?(member, from, to)`) | The manager chain, or rights over both units |
+
+Ownership inherits downward: owning Payments gives rights over every squad
+beneath it, even one with owners of its own. Owners and managers lose their
+rights once their `Person` is no longer active. A unit or person the Org Graph
+doesn't hold is left to admins and editors, except that the manager chain can
+still end a membership of a unit that is gone.
+
+The commands check the policy too, as a second layer behind the controller's
+own `authorize :org_graph, …`, which every action still calls. Every handler
+names its actor. A person's context is checked against every command it runs,
+and recorded as the person who made each change:
+
+```ruby
+OrgGraph::StructureCommandHandler.new(actor: pundit_user).rename_unit(unit_id, "Pay", effective_on:)
+OrgGraph::CommandHandler.new(actor: pundit_user).set_membership(person_id, unit_id, provider:, effective_on:)
+```
+
+A refused command raises `OrgGraph::Authorization::Refused`, a
+`Pundit::NotAuthorizedError` whose message names who may make the change.
+`ApplicationController` handles it like any other refusal and shows its own
+generic flash; a controller that wants the reason on screen rescues it and
+shows `error.message`, as `Assessments::RatingsController` does.
+
+The system's own writes pass `OrgGraph::Authorization::SYSTEM`: the HRIS sync,
+a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
+acting, so nothing is checked. A handler built with no actor, or with `nil`,
+raises `ArgumentError`, so a screen that forgets to pass one fails instead of
+skipping the check. Pass `SYSTEM` only where no person drives the write.
+
 ## Policy Conventions
 
 ### File locations

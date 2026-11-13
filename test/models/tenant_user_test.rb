@@ -80,6 +80,8 @@ class TenantUserTest < ActiveSupport::TestCase
       setup do
         @tenant.update!(org_graph_people_projected_at: Time.current)
         @existing = ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+            .claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, "hibob", effective_on: "2026-11-01")
           create(:person, tenant: @tenant, email: @user.email, job_title: "Analyst", external_id: "bob-1", hris_source: "hibob")
         end
       end
@@ -92,8 +94,8 @@ class TenantUserTest < ActiveSupport::TestCase
 
       should "leave one who already has a stream alone" do
         ActsAsTenant.with_tenant(@tenant) do
-          OrgGraph::CommandHandler.new.record_person(@existing.id, provider: "hibob", effective_on: "2026-11-01",
-                                                                   employment_status: "employed")
+          OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+            .record_person(@existing.id, provider: "hibob", effective_on: "2026-11-01", employment_status: "employed")
         end
 
         @tenant_user.ensure_person!

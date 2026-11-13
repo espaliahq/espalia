@@ -3,11 +3,23 @@
 # Handles commands for Org Graph person aggregates.
 #
 # Each method loads the person's stream, runs the command, and stores the
-# resulting events. Every command names its provider and effective date.
+# resulting events. Every command names its provider and effective date, and
+# is refused unless that provider supplies what it changes: a fact's provider
+# is the tenant's setting for its kind, for people who carry that provider's
+# external id, and Espalia for anyone else; a membership's is its unit's own.
+#
+# Each handler names its actor and refuses what {OrgGraphPolicy} doesn't let
+# that actor change. See {OrgGraph::Authorization}.
 #
 class OrgGraph::CommandHandler
+  include OrgGraph::Authorization
+
+  # @param actor [AuthorizationContext, Object] who is acting, checked against
+  #   {OrgGraphPolicy}, or {OrgGraph::Authorization::SYSTEM}, which is not
   # @param repository [OrgGraph::Repository]
-  def initialize(repository: OrgGraph::Repository.new)
+  # @raise [ArgumentError] without an actor
+  def initialize(actor:, repository: OrgGraph::Repository.new)
+    @actor = actor!(actor)
     @repository = repository
   end
 
@@ -16,6 +28,8 @@ class OrgGraph::CommandHandler
   # @param person_id [String] UUID of the person
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#record}
   def record_person(person_id, **facts)
+    authorize_structure!
+    ensure_provides!(person_id, facts[:provider], *facts.keys)
     @repository.with_person(person_id) { |person| person.record(person_id, **facts) }
   end
 
@@ -29,6 +43,8 @@ class OrgGraph::CommandHandler
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
   def apply_facts(person_id, provider:, effective_on:, **facts)
+    authorize_structure!
+    ensure_provides!(person_id, provider, *facts.keys)
     written = 0
     @repository.with_person(person_id) do |person|
       person.apply_facts(provider:, effective_on:, **facts)
@@ -39,24 +55,38 @@ class OrgGraph::CommandHandler
 
   # What a provider's sync calls for each person it returns, in one load of
   # their stream: the first time, it records them with the facts as they
-  # stand; after that, it moves their status if it differs and applies each
-  # fact that differs. A leaver's facts are not compared.
+  # stand; after that, it supplies or corrects their start date, moves their
+  # status if it differs, then applies each fact that differs. A returner's
+  # start date waits until they are back. A leaver's
+  # facts are not compared, even while a rehire waits for their start date.
+  # A leaving date before the start date contradicts it and is dropped.
   #
   # @param person_id [String]
   # @param provider [String]
-  # @param effective_on [Date, String]
-  # @param employment_status [String] "employed" or "left"
+  # @param effective_on [Date, String] the sync's date
+  # @param employment_status [String] "pending", "employed" or "left"
+  # @param started_on [Date, String, nil] the start date the provider holds
+  # @param left_on [Date, String, nil] the leaving date the provider holds
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
-  def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
+  def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :employment_status, *facts.keys)
     written = 0
+    left_on = nil if leaves_before_start?(left_on, started_on)
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
       if person.recorded?
-        person.match_status(employment_status, provider:, effective_on:)
-        person.apply_facts(provider:, effective_on:, **facts) unless employment_status == "left"
+        was_left = person.left?
+        person.change_start_date(started_on, provider:) unless was_left
+        person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
+        unless person.left?
+          person.change_start_date(started_on, provider:) if was_left
+          person.apply_facts(provider:, effective_on:, **facts)
+        end
       else
-        person.record(person_id, provider:, effective_on:, employment_status:, **facts)
+        left_on = nil unless employment_status == "left"
+        person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, **facts)
       end
       written = person.unpublished_events.count
     end
@@ -67,6 +97,8 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their start date
   def join(person_id, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.join(provider:, effective_on:) }
   end
 
@@ -74,6 +106,8 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their leaving date
   def leave(person_id, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.leave(provider:, effective_on:) }
   end
 
@@ -81,30 +115,40 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their return date
   def return_to_work(person_id, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.return_to_work(provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param title [String, nil]
   def change_title(person_id, title, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :title)
     @repository.with_person(person_id) { |person| person.change_title(title, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param level [String, nil] the provider's level, before any framework mapping
   def change_level(person_id, level, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :level)
     @repository.with_person(person_id) { |person| person.change_level(level, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param manager_id [String, nil] person_id of the new manager, or nil for none
   def change_manager(person_id, manager_id, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :manager_id)
     @repository.with_person(person_id) { |person| person.change_manager(manager_id, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param cost_centre [String, nil]
   def change_cost_centre(person_id, cost_centre, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :cost_centre)
     @repository.with_person(person_id) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
   end
 
@@ -112,6 +156,8 @@ class OrgGraph::CommandHandler
   # @param site [String, nil]
   # @param country [String, nil]
   def change_site(person_id, site:, country:, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :site)
     @repository.with_person(person_id) { |person| person.change_site(site:, country:, provider:, effective_on:) }
   end
 
@@ -119,6 +165,8 @@ class OrgGraph::CommandHandler
   # @param fte [Numeric, nil]
   # @param employment_type [String, nil]
   def change_employment(person_id, fte:, employment_type:, provider:, effective_on:)
+    authorize_structure!
+    ensure_provides!(person_id, provider, :fte)
     @repository.with_person(person_id) do |person|
       person.change_employment(fte:, employment_type:, provider:, effective_on:)
     end
@@ -129,10 +177,12 @@ class OrgGraph::CommandHandler
   # @param person_id [String]
   # @param unit_id [String] a live unit in the tenant's structure
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#set_membership}
-  # @raise [RuntimeError] if the unit does not exist or is retired
+  # @raise [RuntimeError] if the unit does not exist or is retired, or another
+  #   provider supplies it
   def set_membership(person_id, unit_id, **options)
-    ensure_live_unit!(unit_id)
-    @repository.with_person(person_id) { |person| person.set_membership(unit_id, **options) }
+    authorize_membership!(person_id, unit_id)
+    ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider])
+    @repository.with_person(person_id) { |person| person.set_membership(unit_id, **attributed(options, :set_by_id)) }
   end
 
   # Ends a person's membership of one unit. A retired unit's memberships can
@@ -142,7 +192,10 @@ class OrgGraph::CommandHandler
   # @param unit_id [String]
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#end_membership}
   def end_membership(person_id, unit_id, **options)
-    @repository.with_person(person_id) { |person| person.end_membership(unit_id, **options) }
+    authorize_membership!(person_id, unit_id)
+    unit = find_unit(unit_id)
+    ensure_provides_unit!(unit, options[:provider]) if unit
+    @repository.with_person(person_id) { |person| person.end_membership(unit_id, **attributed(options, :ended_by_id)) }
   end
 
   # Moves a person's membership to a live unit, keeping its terms.
@@ -151,19 +204,77 @@ class OrgGraph::CommandHandler
   # @param from_unit_id [String]
   # @param unit_id [String] a live unit in the tenant's structure
   # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#move_membership}
-  # @raise [RuntimeError] if the destination does not exist or is retired
+  # @raise [RuntimeError] if the destination does not exist or is retired, or
+  #   another provider supplies it than the one that supplied the membership
   def move_membership(person_id, from_unit_id, unit_id, **options)
-    ensure_live_unit!(unit_id)
-    @repository.with_person(person_id) { |person| person.move_membership(from_unit_id, unit_id, **options) }
+    authorize_move_membership!(person_id, from_unit_id, unit_id)
+    unit = ensure_live_unit!(unit_id)
+    membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
+    ensure_provides_unit!(unit, membership.provider) if membership
+    @repository.with_person(person_id) do |person|
+      person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
+    end
+  end
+
+  # Records that a fact Espalia holds about a person is still true. A
+  # membership is confirmed only in a live unit, by whoever may change it; any
+  # other fact by whoever may change people's facts.
+  #
+  # @param person_id [String]
+  # @param fact [String, Symbol]
+  # @param options [Hash] keywords accepted by {OrgGraph::FactConfirmation#confirm_fact}
+  # @raise [RuntimeError] if another provider supplies the fact or the unit
+  def confirm_fact(person_id, fact, **options)
+    if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
+      authorize_membership!(person_id, options[:unit_id])
+      ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA)
+    else
+      authorize_structure!
+      ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
+    end
+    @repository.with_person(person_id) { |person| person.confirm_fact(fact, **attributed(options, :confirmed_by_id)) }
   end
 
   private
 
+  def leaves_before_start?(left_on, started_on)
+    left_on.present? && started_on.present? && left_on.to_date < started_on.to_date
+  rescue Date::Error, NoMethodError
+    false
+  end
+
   # Reads the structure projection, which is written synchronously with the
   # structure stream, rather than replaying that stream for every person.
   def ensure_live_unit!(unit_id)
-    unit = OrgUnit.find_by(id: unit_id.to_s.downcase)
+    unit = find_unit(unit_id)
     raise "Unit not found" unless unit
     raise "Unit is retired" if unit.retired?
+
+    unit
+  end
+
+  # Reads the fact providers the structure projection writes, as above. A
+  # provider holds a fact only for people who carry its external id: anyone
+  # else, added by hand or with an account, is Espalia's for every fact.
+  def ensure_provides!(person_id, provider, *keys)
+    kinds = keys.filter_map { |key| OrgGraph::PersonAggregate::FACT_KINDS[key] }.uniq
+    return if kinds.empty?
+
+    source = Person.where(id: person_id).where.not(external_id: nil).pick(:hris_source)
+    kinds.each do |kind|
+      holder = OrgFactProvider.provider_for(kind)
+      holder = OrgGraph::StructureAggregate::ESPALIA unless holder == source
+      raise "#{holder} supplies #{kind}; change it there" unless holder == provider.to_s
+    end
+  end
+
+  def find_unit(unit_id)
+    OrgUnit.find_by(id: unit_id.to_s.downcase)
+  end
+
+  # A unit keeps the provider it was created with, which was its level's then,
+  # so a retired unit's members can still be ended after its level changes hands.
+  def ensure_provides_unit!(unit, provider)
+    raise "#{unit.provider} supplies this unit; change its members there" unless unit.provider == provider.to_s
   end
 end

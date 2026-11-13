@@ -127,7 +127,7 @@ class OrgGraph::PeopleCutover
   end
 
   def record_unrecorded
-    handler = OrgGraph::CommandHandler.new(repository: OrgGraph::Repository.new(event_store: @event_store))
+    handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM, repository: OrgGraph::Repository.new(event_store: @event_store))
     recorded = []
     failed = {}
 

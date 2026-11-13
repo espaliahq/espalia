@@ -6,15 +6,19 @@ Use this when the Org Graph person stream reaches a tenant that already syncs fr
 
 The next HiBob sync writes `PersonRecorded` for every person HiBob returns, inactive people included. Each one has:
 
-- title, level (only when the tenant has a level column) and manager, as HiBob holds them that day;
-- employment status `employed`, or `left` for a person HiBob shows as inactive;
+- title, level (only when the tenant has a level column), manager, site, FTE, employment type and start date, as HiBob holds them that day;
+- employment status `employed`; `pending` for a hire whose start date is still ahead; or `left`, with the termination date, for a person HiBob shows as inactive;
 - provider `hibob`, effective the day of the sync.
 
 Every later sync writes only what changed: a person HiBob now shows as inactive gets `PersonLeft`, one active again gets `PersonReturned`, and a changed title, level or manager gets its event. Person Development is untouched, and so is everything a user sees.
 
+**A tenant recorded before site, FTE, employment type and start dates arrived** gets them on its next sync: up to three events per person (`SiteChanged`, `EmploymentChanged`, `StartDateChanged`), then quiet again. FTE and employment type need the service user to read HiBob's payroll fields; without that permission HiBob leaves them out and nothing is written for them. Each leaver HiBob holds a termination date for (`internal.terminationDate`, which needs the same kind of read access) also gets a `PersonLeft` on that date, correcting the sync day the first sync used.
+
 **Who is not recorded.** People HiBob does not return are not recorded: someone added by hand, or deactivated by an earlier sync because they had left HiBob altogether. Their history starts if HiBob returns them again.
 
 **No deploy step.** No migration runs, and no projection needs a rebuild. Until the tenant is cut over ([org-graph-people-cutover.md](org-graph-people-cutover.md)), no projection writes `people` from these events.
+
+**The HRIS must hold the facts it writes.** Each person command is refused unless its provider holds the fact. Predeploy's `org_graph:claim_hris_facts` hands each configured HRIS its default facts (employment status, title, level, manager, site and employment) before the first sync on a release, and saving the HRIS settings does the same. If a sync's `errors` read `espalia supplies title; change it there`, someone handed that fact to Espalia on purpose, or the person carries no `hibob` external id; set it back with `OrgGraph::StructureCommandHandler#set_fact_provider` only if that was a mistake. The task is safe to run again by hand: `bin/rails org_graph:claim_hris_facts`.
 
 ## Steps
 
@@ -41,7 +45,7 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 
    The two numbers should match, less anyone HiBob stopped returning before the deploy.
 
-5. Run the sync again, or wait for the next one. Its `org_graph_events=` should be 0, or close to it if someone's title, level or manager changed in between.
+5. Run the sync again, or wait for the next one. Its `org_graph_events=` should be 0, or close to it if someone's facts or status changed in between.
 
 ## If it goes wrong
 
@@ -51,7 +55,8 @@ The events are immutable, and a person's first `PersonRecorded` is their startin
 tenant = Tenant.find("<tenant id>")
 ActsAsTenant.with_tenant(tenant) do
   person = Person.find("<person id>")
-  OrgGraph::CommandHandler.new.change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
+  OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    .change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
 end
 ```
 

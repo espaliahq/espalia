@@ -5,8 +5,10 @@ require "test_helper"
 class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::CommandHandler.new
+    @handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     as_tenant do
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        .claim_facts(OrgGraph::StructureAggregate::HRIS_FACTS, "hibob", effective_on: "2026-11-01")
       @lead = create(:person, tenant: @tenant, job_title: "Lead", external_id: "bob-1", hris_source: "hibob")
       @synced = create(:person, tenant: @tenant, job_title: "Engineer", manager: @lead, external_id: "bob-2", hris_source: "hibob")
       @by_hand = create(:person, tenant: @tenant, job_title: "Contractor", status: "inactive")
@@ -112,7 +114,7 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
   should "report a database error on one person and still finish the run" do
     as_tenant { @second_by_hand = create(:person, tenant: @tenant) }
     failing_id = [ @by_hand.id, @second_by_hand.id ].min
-    real = OrgGraph::CommandHandler.new
+    real = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     flaky = Object.new
     flaky.define_singleton_method(:record_person) do |id, **facts|
       ActiveRecord::Base.connection.execute("SELECT 1/0") if id == failing_id

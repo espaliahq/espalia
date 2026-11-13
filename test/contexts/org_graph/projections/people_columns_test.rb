@@ -6,11 +6,11 @@ require_relative "../../../support/projection_replay"
 class OrgGraph::Projections::PeopleColumnsTest < ActiveSupport::TestCase
   include ProjectionReplayHelpers
 
-  PROVENANCE = { provider: "hibob", effective_on: "2026-02-01" }.freeze
+  PROVENANCE = { provider: "espalia", effective_on: "2026-02-01" }.freeze
 
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::CommandHandler.new
+    @handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     as_tenant do
       @ada, @grace = create_list(:person, 2, tenant: @tenant, job_title: "Engineer")
     end
@@ -54,11 +54,11 @@ class OrgGraph::Projections::PeopleColumnsTest < ActiveSupport::TestCase
         @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer", manager_id: @grace.id)
         @handler.change_title(@ada.id, nil, **PROVENANCE)
         @handler.change_manager(@ada.id, nil, **PROVENANCE)
-        @handler.leave(@ada.id, provider: "hibob", effective_on: "2026-03-01")
+        @handler.leave(@ada.id, provider: "espalia", effective_on: "2026-03-01")
       end
       assert_equal [ nil, nil, "inactive" ], columns(@ada)
 
-      as_tenant { @handler.return_to_work(@ada.id, provider: "hibob", effective_on: "2026-04-01") }
+      as_tenant { @handler.return_to_work(@ada.id, provider: "espalia", effective_on: "2026-04-01") }
       assert_equal "active", columns(@ada).last
     end
 
@@ -77,7 +77,7 @@ class OrgGraph::Projections::PeopleColumnsTest < ActiveSupport::TestCase
         @handler.record_person(@ada.id, **PROVENANCE, employment_status: "employed", title: "Designer", manager_id: @grace.id)
         @handler.record_person(@grace.id, **PROVENANCE, employment_status: "employed", title: "Lead")
         @handler.change_title(@ada.id, "Senior designer", **PROVENANCE)
-        @handler.leave(@grace.id, provider: "hibob", effective_on: "2026-03-01")
+        @handler.leave(@grace.id, provider: "espalia", effective_on: "2026-03-01")
       end
       before = snapshot_read_models(OrgGraph::Projections::PeopleColumns, @tenant)
 

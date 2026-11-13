@@ -19,6 +19,7 @@ class Projections::RegistryTest < ActiveSupport::TestCase
           org_graph/structure
           org_graph/members
           org_graph/people_columns
+          org_graph/fact_ages
         ].sort,
         Projections::Registry.names.sort
       )

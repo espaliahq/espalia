@@ -23,6 +23,14 @@ class OrgGraph::Repository
     end
   end
 
+  # Loads a person's aggregate without storing anything.
+  #
+  # @param person_id [String] UUID of the person
+  # @return [OrgGraph::PersonAggregate]
+  def load_person(person_id)
+    @repository.load(OrgGraph::PersonAggregate.new, EventStreamNaming.person_stream(person_id))
+  end
+
   # Loads the tenant's structure aggregate, yields it, and stores any new events.
   #
   # @yield [OrgGraph::StructureAggregate] the loaded aggregate
