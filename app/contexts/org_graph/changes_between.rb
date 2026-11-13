@@ -129,8 +129,9 @@ class OrgGraph::ChangesBetween
   # withdrawn.
   def learned_changes
     opened, closed = [ @from, @to ].map { it.in_time_zone("UTC").end_of_day }
-    inside = ->(column) { OrgFactPeriod.where("#{column} > ? AND #{column} <= ?", opened, closed) }
-    touched = facts(inside.("learned_at").or(inside.("superseded_at")))
+    periods = OrgFactPeriod.arel_table
+    inside = ->(column) { OrgFactPeriod.where(periods[column].gt(opened).and(periods[column].lteq(closed))) }
+    touched = facts(inside.(:learned_at).or(inside.(:superseded_at)))
               .distinct.pluck(:subject_type, :subject_id, :fact, :key).to_set
     return [] if touched.empty?
 
