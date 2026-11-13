@@ -169,14 +169,15 @@ class OrgGraph::StructureAggregate
   def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
     unit = retirable_unit!(unit_id, provider)
 
-    apply(retirement(unit, effective_on:, retired_by_id:, plan_change_id:))
+    apply(retirement(unit, effective_on: iso_date(effective_on), retired_by_id:, plan_change_id:))
   end
 
   # States that the successors carry on from the predecessors: a split, a
   # merge or a replacement. Nothing else ever links two units.
   #
-  # Restating a succession exactly writes nothing. A unit can't come to
-  # precede itself, so no chain of successions loops back.
+  # Restating a succession exactly writes nothing, apart from retiring any
+  # predecessor still live when asked to. A unit can't come to precede
+  # itself, so no chain of successions loops back.
   #
   # @param succession_id [String] UUID for the succession
   # @param predecessor_ids [Array<String>] units that came before, live or retired
@@ -194,27 +195,30 @@ class OrgGraph::StructureAggregate
     succession_id = require_id(succession_id, "Succession id")
     predecessor_ids = require_ids(predecessor_ids, "predecessor")
     successor_ids = require_ids(successor_ids, "successor")
-    succession = { predecessor_ids: predecessor_ids.sort, successor_ids: successor_ids.sort }
-    return if @successions[succession_id] == succession
-
-    raise "Succession already exists" if @successions.key?(succession_id)
-    raise ArgumentError, "A unit can't succeed itself" if predecessor_ids.intersect?(successor_ids)
-    raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
-    raise "A successor must be live" if successor_ids.any? { |id| @units[id].retired }
-    raise "A unit can't come to precede itself" if predecessor_ids.any? { |id| preceded_by(id).intersect?(successor_ids) }
-
     effective_on = iso_date(effective_on)
+    succession = { predecessor_ids: predecessor_ids.sort, successor_ids: successor_ids.sort, effective_on: effective_on }
+    restated = @successions[succession_id] == succession
+    raise "Succession already exists" if @successions.key?(succession_id) && !restated
+
+    unless restated
+      raise ArgumentError, "A unit can't succeed itself" if predecessor_ids.intersect?(successor_ids)
+      raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
+      raise "A successor must be live" if successor_ids.any? { |id| @units[id].retired }
+      raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
+    end
+
     retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
     retiring = retiring.sort_by { |unit| -level_index(unit.level_id) }
     retiring.each { |unit| retirable_unit!(unit.unit_id, provider, retiring: retiring) }
 
-    apply(OrgGraph::Events::UnitSucceeded.new(data: {
-      succession_id: succession_id,
-      **succession,
-      effective_on: effective_on,
-      stated_by_id: stated_by_id,
-      plan_change_id: plan_change_id
-    }))
+    unless restated
+      apply(OrgGraph::Events::UnitSucceeded.new(data: {
+        succession_id: succession_id,
+        **succession,
+        stated_by_id: stated_by_id,
+        plan_change_id: plan_change_id
+      }))
+    end
     retiring.each do |unit|
       apply(retirement(unit, effective_on:, retired_by_id: stated_by_id, plan_change_id:,
                              succession_id:, successor_ids: succession[:successor_ids]))
@@ -246,7 +250,7 @@ class OrgGraph::StructureAggregate
   end
 
   on OrgGraph::Events::UnitSucceeded do |event|
-    @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids).symbolize_keys
+    @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids, :effective_on).symbolize_keys
   end
 
   private
@@ -276,7 +280,7 @@ class OrgGraph::StructureAggregate
     OrgGraph::Events::UnitRetired.new(data: {
       unit_id: unit.unit_id,
       provider: unit.provider,
-      effective_on: iso_date(effective_on),
+      effective_on: effective_on,
       retired_by_id: retired_by_id,
       plan_change_id: plan_change_id,
       succession_id: succession_id,
@@ -284,17 +288,18 @@ class OrgGraph::StructureAggregate
     })
   end
 
-  # Every unit the given one carries on from, however far back.
-  def preceded_by(unit_id, seen = Set.new)
-    @successions.each_value do |succession|
-      next unless succession[:successor_ids].include?(unit_id)
+  # Every unit the given ones carry on from, however far back.
+  def preceded_by(unit_ids)
+    seen = Set.new
+    pending = unit_ids.dup
+    while (unit_id = pending.pop)
+      @successions.each_value do |succession|
+        next unless succession[:successor_ids].include?(unit_id)
 
-      (succession[:predecessor_ids] - seen.to_a).each do |id|
-        seen << id
-        preceded_by(id, seen)
+        succession[:predecessor_ids].each { |id| pending << id if seen.add?(id) }
       end
     end
-    seen.to_a
+    seen
   end
 
   # Levels an HRIS supplies sit above every level Espalia holds, whether or

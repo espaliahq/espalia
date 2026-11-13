@@ -18,8 +18,8 @@ class OrgUnit < ApplicationRecord
                                inverse_of: :successor, dependent: nil
   has_many :successor_links, class_name: "OrgUnitSuccession", foreign_key: :predecessor_id,
                              inverse_of: :predecessor, dependent: nil
-  has_many :predecessors, through: :predecessor_links
-  has_many :successors, through: :successor_links
+  has_many :predecessors, -> { distinct }, through: :predecessor_links
+  has_many :successors, -> { distinct }, through: :successor_links
 
   scope :live, -> { where(retired_on: nil) }
   scope :roots, -> { where(parent_id: nil) }

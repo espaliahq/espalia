@@ -118,6 +118,17 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_empty OrgUnit.find(@payments).successors
       end
     end
+
+    should "list a predecessor once when two successions link the same pair" do
+      as_tenant do
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing ], successor_ids: [ @payments ],
+                                                         effective_on: "2026-08-01")
+        @handler.record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @billing, @ledger ], successor_ids: [ @payments ],
+                                                         effective_on: "2026-09-01")
+
+        assert_equal [ @billing, @ledger ].sort, OrgUnit.find(@payments).predecessors.pluck(:id).sort
+      end
+    end
   end
 
   context "rebuild contract" do

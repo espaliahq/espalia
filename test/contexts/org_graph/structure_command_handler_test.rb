@@ -354,6 +354,20 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
 
       assert_no_difference(-> { structure_events.size }) { succeed([ @payments ], [ @billing.upcase ], id: id) }
       assert_raises(RuntimeError) { succeed([ @payments ], [ @ledger ], id: id) }
+      assert_raises(RuntimeError) do
+        as_tenant do
+          @handler.record_succession(id, predecessor_ids: [ @payments ], successor_ids: [ @billing ], effective_on: @today + 1)
+        end
+      end
+    end
+
+    should "retire the predecessors when a stated succession is restated with retirement" do
+      id = succeed([ @payments ], [ @billing ])
+
+      succeed([ @payments ], [ @billing ], id: id, retire_predecessors: true)
+
+      assert_equal [ OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitRetired ], structure_events.last(2).map(&:class)
+      assert_equal id, structure_events.last.data[:succession_id]
     end
 
     should "refuse a unit succeeding itself, a missing or retired successor, or an empty side" do
