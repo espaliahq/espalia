@@ -135,6 +135,10 @@ Rails.application.routes.draw do
     resource :hris_connection, only: [ :update, :destroy ],
       path: "integrations/hris/connection", controller: "hris_connections"
 
+    # The connection form's level field picker, a lazy frame (#67).
+    resource :hris_level_field, only: :show,
+      path: "integrations/hris/level_field", controller: "hris_level_fields"
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],

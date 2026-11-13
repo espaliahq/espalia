@@ -14,9 +14,9 @@
 class HrisConfig
   include StoreModel::Model
 
-  # Only providers HrisSyncJob#resolve_adapter can dispatch to: a provider
+  # Only providers Hris::BaseAdapter.for can dispatch to: a provider
   # listed here but not there would save fine and then crash every sync.
-  # A new provider joins this list, PROVIDER_LABELS and the job together.
+  # A new provider joins this list, PROVIDER_LABELS and that factory together.
   PROVIDERS = %w[hibob].freeze
 
   # Display names for {PROVIDERS}, the one place a provider is spelled for
@@ -52,6 +52,15 @@ class HrisConfig
     provider.present? &&
       sync_enabled? &&
       tenant.hris_secrets.complete?
+  end
+
+  # Whether Espalia can talk to the HRIS: a provider it knows, with its
+  # credentials stored. Unlike {#configured?}, the sync need not be on.
+  #
+  # @param tenant [Tenant] the parent tenant to check credentials on
+  # @return [Boolean]
+  def connected?(tenant)
+    PROVIDERS.include?(provider) && tenant.hris_secrets.complete?
   end
 
   # The mapping a title resolves to, or nil when no mapping lists it.
