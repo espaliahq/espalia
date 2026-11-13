@@ -71,6 +71,15 @@ class Operations::Tenants::ScheduledForgettingTest < ActiveSupport::TestCase
       assert_not config.scheduled_forgetting
     end
 
+    should "count under the retention period saved now, not the one the request loaded" do
+      Tenant.find(@tenant.id).update!(org_graph_config: { retention_years: 30 })
+
+      assert_raises(Operations::Base::ParameterError) do
+        call(Operations::Tenants::EnableScheduledForgetting, confirm_count: 1)
+      end
+      assert_not config.scheduled_forgetting
+    end
+
     should "refuse while the tenant keeps leavers for ever" do
       @tenant.update!(org_graph_config: { retention_years: nil })
 
