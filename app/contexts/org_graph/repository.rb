@@ -61,7 +61,9 @@ class OrgGraph::Repository
   private
 
   # The stream's expected version catches a write only between load and store,
-  # so a caller that checks a read model first needs this lock to hold.
+  # so a caller that checks a read model first needs this lock to hold. The
+  # transaction also holds the sync handlers the write sets off, since RES
+  # commits the events before its subscribers run.
   def with_locked_stream(stream, cause_id)
     with_tenant_metadata(cause_id) do
       ActiveRecord::Base.transaction do
@@ -77,15 +79,11 @@ class OrgGraph::Repository
   end
 
   # A cause replaces the request's correlation id, so every event one plan
-  # approval writes, a sync handler's included, reads as one change. One
-  # transaction holds the write and the sync handlers it sets off, since RES
-  # commits the events before its subscribers run.
+  # approval writes, a sync handler's included, reads as one change.
   def with_tenant_metadata(cause_id, &block)
     tenant = ActsAsTenant.current_tenant
     raise ArgumentError, "No tenant context available" unless tenant
 
-    ActiveRecord::Base.transaction do
-      @event_store.with_metadata({ tenant_id: tenant.id, correlation_id: cause_id.presence }.compact, &block)
-    end
+    @event_store.with_metadata({ tenant_id: tenant.id, correlation_id: cause_id.presence }.compact, &block)
   end
 end
