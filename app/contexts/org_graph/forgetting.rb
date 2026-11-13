@@ -227,7 +227,12 @@ class OrgGraph::Forgetting
   def scrub_notifications(name)
     return if name.blank?
 
-    events = tenant_events
+    named = NAME_PARAMS.map { |key| Noticed::Event.sanitize_sql_array([ "params->>? = ?", key, name ]) } +
+            NAME_LIST_PARAMS.map { |key| Noticed::Event.sanitize_sql_array([ "jsonb_exists(params->?, ?)", key, name ]) }
+    ids = tenant_events.where(named.join(" OR ")).pluck(:id)
+    return if ids.empty?
+
+    events = Noticed::Event.where(id: ids)
     NAME_PARAMS.each do |key|
       events.where("params->>? = ?", key, name)
         .update_all([ "params = jsonb_set(params, ARRAY[?], 'null'::jsonb)", key ])
