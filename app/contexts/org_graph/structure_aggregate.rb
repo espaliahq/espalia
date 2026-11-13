@@ -532,6 +532,16 @@ class OrgGraph::StructureAggregate
     @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids, :effective_on).symbolize_keys
   end
 
+
+  # The date of a unit's last change, the one it can't retire before: its
+  # own edits, its owners, and sub-units arriving beneath it or leaving.
+  #
+  # @param unit_id [String]
+  # @return [Date, nil] nil for a unit the structure doesn't hold
+  def unit_changed_on(unit_id)
+    changed_on = @units[unit_id.to_s.downcase]&.changed_on
+    changed_on && Date.iso8601(changed_on.to_s)
+  end
   private
 
   def live_unit!(unit_id)

@@ -112,6 +112,12 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_equal [ "it changes on 2027-01-01" ], compare(matches: @matches, resolutions: retire_legacy).blocked.pluck(:reason)
     end
 
+    should "block a unit whose owner changes after today" do
+      @structure.add_unit_owner(@legacy, @staff[3].id, effective_on: "2027-01-01")
+
+      assert_equal [ "it changes on 2027-01-01" ], compare(matches: @matches, resolutions: retire_legacy).blocked.pluck(:reason)
+    end
+
     should "change its fingerprint when the HRIS changes" do
       before = compare(matches: @matches).fingerprint
       @values["hb-0"] = item("8", "Search")

@@ -51,7 +51,8 @@ class Hris::LevelHandover
     field = catalogue_field(field_id)
     values = read(field)
     Comparer.new(@level, field, provider, values, units, memberships, matches.to_h.stringify_keys,
-                 resolutions.to_h.stringify_keys, sub_units:, today: @today).call
+                 resolutions.to_h.stringify_keys, sub_units:, structure: OrgGraph::Repository.new.load_structure,
+                 today: @today).call
   end
 
   # @param field_id [String]
@@ -199,7 +200,7 @@ class Hris::LevelHandover
 
   # Sets the field's values against the level, for {#compare}.
   class Comparer
-    def initialize(level, field, provider, values, units, memberships, matches, resolutions, sub_units:, today:)
+    def initialize(level, field, provider, values, units, memberships, matches, resolutions, sub_units:, structure:, today:)
       @level = level
       @field = field
       @provider = provider
@@ -209,6 +210,7 @@ class Hris::LevelHandover
       @matches = matches
       @resolutions = resolutions
       @sub_units = sub_units
+      @structure = structure
       @today = today
     end
 
@@ -317,7 +319,7 @@ class Hris::LevelHandover
       end
     end
 
-    def last_change(unit) = [ unit.created_on, unit.name_effective_on, unit.parent_effective_on ].compact.max
+    def last_change(unit) = @structure.unit_changed_on(unit.id) || unit.created_on
 
     def item_keys = @item_keys ||= item_rows.map { it[:key] }.to_set
 
