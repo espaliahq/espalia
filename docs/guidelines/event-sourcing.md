@@ -30,7 +30,7 @@ Rails.configuration.event_store.with_metadata(tenant_id: tenant.id) do
 end
 ```
 
-All three aggregate repositories ([frameworks](../../app/contexts/frameworks/repository.rb), [person_development](../../app/contexts/person_development/repository.rb), [assessment_cycles](../../app/contexts/assessment_cycles/repository.rb)) already do this. Projections and the rebuild Replayer rely on `event.metadata[:tenant_id]` to scope operations. An event without it is invisible to per-tenant rebuilds.
+All four aggregate repositories ([frameworks](../../app/contexts/frameworks/repository.rb), [person_development](../../app/contexts/person_development/repository.rb), [assessment_cycles](../../app/contexts/assessment_cycles/repository.rb), [org_graph](../../app/contexts/org_graph/repository.rb)) already do this. Projections and the rebuild Replayer rely on `event.metadata[:tenant_id]` to scope operations. An event without it is invisible to per-tenant rebuilds.
 
 Tests must obey the same invariant — either via the repository (which wraps automatically), or by passing `metadata: { tenant_id: @tenant.id }` when constructing raw events.
 
