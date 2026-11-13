@@ -1096,6 +1096,24 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal "inactive", @alice.reload.status
       end
 
+      should "leave a leaver active and report it when the absence write fails, and offboard them on the next sync" do
+        without_alice = @fixture["employees"].reject { it["id"] == "bob-001" }
+        handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
+
+        failed = OrgGraph::CommandHandler.stub(:new, handler) { build_adapter(without_alice).sync_people }
+
+        assert_equal [ "event store down" ], failed[:errors].map { it[:error] }
+        assert_equal 0, failed[:deactivated]
+        assert_equal "active", @alice.reload.status
+
+        retried = travel(1.day) { build_adapter(without_alice).sync_people }
+
+        assert_empty retried[:errors]
+        assert_equal 1, retried[:deactivated]
+        assert_equal "inactive", @alice.reload.status
+      end
+
       should "create a newcomer HiBob shows as inactive as inactive, even if recording them fails" do
         leaver = @fixture["employees"].first.deep_dup.merge("id" => "bob-004", "email" => "dana@example.com", "isActive" => false)
         failing = Object.new

@@ -37,7 +37,7 @@ The deploy that ships this projection needs `REBUILD_ON_DEPLOY=org_graph/people_
 
    Add `ACCEPT_STREAM=1` to take the stream's values for the differences the dry run listed. It ends `cut over: yes` when it has kept the cut-over.
 
-4. Run a sync. `errors=` should be 0. A title, manager or status HiBob changed now reaches the row through its event, and someone HiBob stops returning gets `PersonLeft`.
+4. Run a sync. `errors=` should be 0. A title, manager or status HiBob changed now reaches the row through its event, and someone HiBob stops returning gets `PersonLeft`. After cut-over a failed absence write delays offboarding by one sync and is reported: the person stays active with an entry in `errors`, and the next sync writes their `PersonLeft`. Before cut-over the sync marks them inactive at once.
 
 ## Reverting
 
