@@ -25,7 +25,7 @@ class OrgGraph::ForgetDueLeaversJob < ApplicationJob
   # One tenant's failure, such as an HRIS that doesn't answer, must not stop
   # the others; that tenant's leavers stay due for tomorrow.
   def forget_in(tenant)
-    report = OrgGraph::Forgetting.new(tenant).forget_due
+    report = OrgGraph::Forgetting.new(tenant).forget_due(scheduled: true)
     Rails.logger.info("[OrgGraph::Forgetting] scheduled tenant=#{tenant.id} reason=retention " \
                       "count=#{report.count} person_ids=#{report.person_ids.join(',')}")
   rescue => e

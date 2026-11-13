@@ -24,6 +24,9 @@ class OrgGraph::Forgetting
   # A forgetting the guards don't allow.
   class Refused < StandardError; end
 
+  # The tenant turned scheduled forgetting off while a scheduled run was going.
+  class ScheduleTurnedOff < StandardError; end
+
   # The digest key is missing, so nobody can be forgotten, and a sync can't
   # recognise anyone already forgotten.
   class KeyMissing < StandardError
@@ -87,15 +90,22 @@ class OrgGraph::Forgetting
   end
 
   # Forgets every leaver whose retention period has ended and whom the HRIS
-  # doesn't show as employed or starting again.
+  # doesn't show as employed or starting again. Each person is checked again
+  # against the tenant's settings as they stand when their turn comes, so a
+  # longer retention period spares them, and a scheduled run stops once the
+  # schedule is off.
   #
   # @param on [Date]
+  # @param scheduled [Boolean] whether the daily schedule is running this
   # @return [Report] who was forgotten
   # @raise [KeyMissing] before anything is erased
-  def forget_due(on: Date.current)
+  def forget_due(on: Date.current, scheduled: false)
     self.class.key!
-    years = @tenant.org_graph_config.retention_years
-    Report.of(candidates(on).select { |person_id| erase_due(person_id, on:, retention_years: years) })
+    forgotten = []
+    candidates(on).each { |person_id| forgotten << person_id if erase_due(person_id, on:, scheduled:) }
+    Report.of(forgotten)
+  rescue ScheduleTurnedOff
+    Report.of(forgotten)
   end
 
   # Forgets one leaver at a tenant admin's request. A leaver not yet due is
@@ -108,21 +118,22 @@ class OrgGraph::Forgetting
   # @param on [Date]
   # @return [Boolean] whether this call forgot them; false when they already were
   # @raise [Pundit::NotAuthorizedError] unless the requester is a tenant admin
-  # @raise [Refused] for anyone not due without `before_due`, or whom the HRIS still employs
+  # @raise [Refused] for anyone not due without `before_due`, or whom the HRIS
+  #   still employs, and for a requester with no tenant membership to record
   # @raise [KeyMissing]
   def forget(person_id, requested_by:, before_due: false, on: Date.current)
     self.class.key!
     raise Pundit::NotAuthorizedError, "Only a tenant admin can forget a person" unless
       TenantPolicy.new(requested_by, @tenant).forget_person?
+    requested_by_id = requested_by.tenant_user&.id
+    raise Refused, "The request must come from a tenant member, so the event can name who asked" unless requested_by_id
     return false if within_tenant { Person.find(person_id).forgotten? }
 
     due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:) }.include?(person_id)
     raise Refused, "This person is not due to be forgotten; say before_due to forget them now" unless due || before_due
     raise Refused, "The HRIS still shows this person as employed or starting" unless candidate_ids([ person_id ]).any?
 
-    erase(person_id, on:, reason: due ? "retention" : "request",
-                     retention_years: @tenant.org_graph_config.retention_years,
-                     requested_by_id: requested_by.tenant_user.id)
+    erase(person_id, on:, reason: due ? "retention" : "request", requested_by_id:)
   end
 
   private
@@ -148,20 +159,31 @@ class OrgGraph::Forgetting
   end
 
   # One person who can't be forgotten must not hold up those due after them.
-  def erase_due(person_id, on:, retention_years:)
-    erase(person_id, on:, reason: "retention", retention_years:)
+  def erase_due(person_id, on:, scheduled:)
+    erase(person_id, on:, reason: "retention", scheduled:)
+  rescue ScheduleTurnedOff
+    raise
   rescue => e
     Rails.error.report(e, context: { tenant_id: @tenant.id, person_id: })
     Rails.logger.error("[OrgGraph::Forgetting] tenant=#{@tenant.id} person=#{person_id} failed: #{e.class}")
     false
   end
 
-  def erase(person_id, on:, reason:, retention_years:, requested_by_id: nil)
+  # The tenant row is read under a share lock, so its retention period and
+  # schedule can't change until this person is done.
+  def erase(person_id, on:, reason:, requested_by_id: nil, scheduled: false)
     within_tenant do
       Person.transaction do
         hold_off_syncs
+        config = Tenant.lock("FOR SHARE").find(@tenant.id).org_graph_config
+        raise ScheduleTurnedOff if scheduled && !config.scheduled_forgetting
         person = Person.lock.find(person_id)
         next false if person.forgotten?
+        if reason == "retention" && !due?(person_id, config, on)
+          raise Refused, "This person is no longer due to be forgotten" if requested_by_id
+
+          next false
+        end
 
         scrub_notifications(person.id, person.read_attribute(:name))
         drop_notifications_to(person)
@@ -169,12 +191,18 @@ class OrgGraph::Forgetting
         scrub_reports_raw_data(person.external_id)
         AuditMetadata.wrap_event_store do
           OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-            .forget_person(person_id, effective_on: on, reason:, retention_years:, requested_by_id:)
+            .forget_person(person_id, effective_on: on, reason:, retention_years: config.retention_years,
+                                      requested_by_id:)
         end
         erase_identifiers(person)
         true
       end
     end
+  end
+
+  def due?(person_id, config, on)
+    cutoff = config.forget_left_on_or_before(on)
+    cutoff.present? && OrgLeaver.where(tenant: @tenant, person_id:, left_on: ..cutoff).exists?
   end
 
   # Every HRIS sync holds this lock shared for its whole run, and checks once

@@ -104,7 +104,7 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       forgetting.forget_due(on: TODAY)
 
       assert_no_difference -> { Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(@leaver.id)).count } do
-        assert_equal false, forgetting.send(:erase, @leaver.id, on: TODAY, reason: "retention", retention_years: 7)
+        assert_equal false, forgetting.send(:erase, @leaver.id, on: TODAY, reason: "retention")
       end
     end
 
@@ -117,14 +117,54 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
     end
 
     should "roll the person back whole when the last step fails" do
-      TenantUser.stub(:where, ->(*) { raise ActiveRecord::StatementInvalid, "boom" }) do
-        assert_equal 0, forgetting.forget_due(on: TODAY).count
+      member = create(:tenant_user, tenant: @tenant, person: @leaver)
+      run = forgetting
+      erase_identifiers = run.method(:erase_identifiers)
+      failing = lambda do |person|
+        erase_identifiers.call(person)
+        raise ActiveRecord::StatementInvalid, "boom"
       end
 
+      run.stub(:erase_identifiers, failing) { assert_equal 0, run.forget_due(on: TODAY).count }
+
       assert_not @leaver.reload.forgotten?
-      assert_equal "Pat Example hb-1", @leaver.name
+      assert_equal [ "Pat Example hb-1", "hb-1" ], [ @leaver.name, @leaver.external_id ]
+      assert_equal [ @leaver.id, nil ], [ member.reload.person_id, member.forgotten_at ]
       assert_not_instance_of OrgGraph::Events::PersonForgotten, last_event(@leaver)
       assert OrgLeaver.where(person_id: @leaver.id).exists?
+    end
+
+    should "spare a leaver whose retention period grew after the run began" do
+      run = forgetting
+      due = run.dry_run(on: TODAY).person_ids
+      Tenant.find(@tenant.id).tap { it.org_graph_config.retention_years = 10 }.save!
+
+      report = run.stub(:candidates, due) { run.forget_due(on: TODAY) }
+
+      assert_equal 0, report.count
+      assert_not @leaver.reload.forgotten?
+    end
+
+    should "record the retention period in force when the person was forgotten" do
+      Tenant.find(@tenant.id).tap { it.org_graph_config.retention_years = 6 }.save!
+
+      forgetting.forget_due(on: TODAY)
+
+      assert_equal 6, last_event(@leaver).data[:retention_years]
+    end
+
+    should "stop a scheduled run once the schedule is turned off" do
+      second = leaver("hb-4", left_on: "2026-09-01")
+      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = true }.save!
+      run = forgetting
+      due = run.dry_run(on: TODAY).person_ids
+      Tenant.find(@tenant.id).tap { it.org_graph_config.scheduled_forgetting = false }.save!
+
+      report = run.stub(:candidates, due) { run.forget_due(on: TODAY, scheduled: true) }
+
+      assert_equal 0, report.count
+      assert_not second.reload.forgotten?
+      assert_not @leaver.reload.forgotten?
     end
 
     should "leave nothing elsewhere that names or reaches them" do
@@ -232,6 +272,13 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert forgetting.forget(@leaver.id, requested_by: @admin, on: TODAY)
       assert_equal({ reason: "retention", requested_by_id: @admin.tenant_user.id },
         last_event(@leaver).data.slice(:reason, :requested_by_id))
+    end
+
+    should "refuse a global admin with no membership here, as the event could name nobody" do
+      context = AuthorizationContext.new(user: create(:user, global_admin: true), tenant_user: nil, person: nil)
+
+      assert_raises(OrgGraph::Forgetting::Refused) { forgetting.forget(@leaver.id, requested_by: context, on: TODAY) }
+      assert_not @leaver.reload.forgotten?
     end
 
     should "answer false, not refuse, for someone already forgotten" do
