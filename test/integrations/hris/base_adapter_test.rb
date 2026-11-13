@@ -19,12 +19,11 @@ class Hris::BaseAdapterTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant, :with_hibob_config)
-    @previous_cache = Rails.cache
-    Rails.cache = ActiveSupport::Cache::MemoryStore.new
   end
 
-  teardown do
-    Rails.cache = @previous_cache
+  # The test environment's null store caches nothing.
+  def run(...)
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) { super }
   end
 
   context "#field_catalogue" do
@@ -61,6 +60,16 @@ class Hris::BaseAdapterTest < ActiveSupport::TestCase
       adapter.field_catalogue
 
       assert_equal 1, adapter.fetches
+    end
+
+    should "serve a cached catalogue with the same frozen values as a fresh one" do
+      adapter = CountingAdapter.new(@tenant)
+      fresh = adapter.field_catalogue
+
+      cached = adapter.field_catalogue
+
+      assert_equal fresh, cached
+      assert cached.all? { it.values.frozen? }
     end
 
     should "raise an HRIS error and cache nothing, so the next call tries again" do

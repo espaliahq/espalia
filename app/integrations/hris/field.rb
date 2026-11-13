@@ -24,6 +24,16 @@ class Hris::Field < Data.define(:id, :name, :kind, :values)
 
   KINDS = %i[list text].freeze
 
+  # Part of the cache key, so a catalogue cached by code with another shape
+  # is never read back.
+  SHAPE = [ *members, *Value.members ].join(",").freeze
+
+  # @param hash [Hash] as {#to_h} gives it
+  # @return [Hris::Field]
+  def self.from_h(hash)
+    new(**hash.merge(values: hash.fetch(:values).map { Value.new(**it) }))
+  end
+
   # @param id [String]
   # @param name [String]
   # @param kind [Symbol] :list or :text
@@ -33,6 +43,9 @@ class Hris::Field < Data.define(:id, :name, :kind, :values)
 
     super(id:, name:, kind:, values: values.freeze)
   end
+
+  # @return [Hash] plain data, its values included, safe to cache
+  def to_h = super.merge(values: values.map(&:to_h))
 
   # @return [Boolean]
   def list? = kind == :list

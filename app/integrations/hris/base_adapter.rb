@@ -45,9 +45,10 @@ class Hris::BaseAdapter
   #
   # @return [Array<Hris::Field>]
   def field_catalogue
-    Rails.cache.fetch(field_catalogue_cache_key, expires_in: FIELD_CATALOGUE_TTL) do
-      fetch_field_catalogue
+    cached = Rails.cache.fetch(field_catalogue_cache_key, expires_in: FIELD_CATALOGUE_TTL) do
+      fetch_field_catalogue.map(&:to_h)
     end
+    cached.map { Hris::Field.from_h(it) }
   end
 
   # Fetches the field catalogue from the HRIS API, uncached.
@@ -70,7 +71,7 @@ class Hris::BaseAdapter
   # never serves the old account's fields.
   def field_catalogue_cache_key
     account = Digest::SHA256.hexdigest(tenant.hris_secrets.service_user_id.to_s).first(16)
-    [ "hris", "field_catalogue", tenant.id, provider_name, account ]
+    [ "hris", "field_catalogue", tenant.id, provider_name, account, Hris::Field::SHAPE ]
   end
 
   attr_reader :tenant, :config, :correlation_id
