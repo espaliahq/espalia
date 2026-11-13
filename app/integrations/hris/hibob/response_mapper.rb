@@ -55,6 +55,16 @@ class Hris::Hibob::ResponseMapper
     reports_to["id"]
   end
 
+  # The level as HiBob shows it, before any mapping to a framework: the
+  # Org Graph's level fact.
+  #
+  # @return [String, nil] nil when no level column is configured or it is blank
+  def level_label
+    return nil if level_field_id.blank?
+
+    employee.dig("humanReadable", "work", "customColumns", level_field_id).to_s.strip.presence
+  end
+
   private
 
   attr_reader :employee, :level_field_id
@@ -69,10 +79,10 @@ class Hris::Hibob::ResponseMapper
   def extract_level_ordinal
     return nil if level_field_id.blank?
 
-    raw = employee.dig("humanReadable", "work", "customColumns", level_field_id)
-    return nil if raw.blank?
+    raw = level_label
+    return nil if raw.nil?
 
-    Integer(raw.to_s, exception: false)
+    Integer(raw, exception: false)
   end
 
   # @return [String, nil]

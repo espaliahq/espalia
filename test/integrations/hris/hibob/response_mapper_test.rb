@@ -99,6 +99,19 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     end
   end
 
+  context "#level_label" do
+    should "read the level as HiBob shows it, even when it is no ordinal" do
+      employee = { "humanReadable" => { "work" => { "customColumns" => { "column_test_id" => " Senior " } } } }
+
+      assert_equal "Senior", Hris::Hibob::ResponseMapper.new(employee, level_field_id: "column_test_id").level_label
+    end
+
+    should "be nil without a level column or a value" do
+      assert_nil Hris::Hibob::ResponseMapper.new(@fixture["employees"].first).level_label
+      assert_nil Hris::Hibob::ResponseMapper.new({}, level_field_id: "column_test_id").level_label
+    end
+  end
+
   context "#manager_external_id" do
     should "extract manager ID from reportsTo object" do
       employee = @fixture["employees"][0]
