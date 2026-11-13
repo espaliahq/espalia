@@ -410,10 +410,12 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::UnitOwnerAdded do |event|
     @units.fetch(event.data[:unit_id]).owner_ids << event.data[:person_id]
+    touch(event.data[:unit_id], event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitOwnerRemoved do |event|
     @units.fetch(event.data[:unit_id]).owner_ids.delete(event.data[:person_id])
+    touch(event.data[:unit_id], event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitRenamed do |event|

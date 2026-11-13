@@ -1053,6 +1053,153 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         end
       end
     end
+
+    context "once the tenant is cut over to the Org Graph" do
+      setup do
+        assert OrgGraph::PeopleCutover.new(@tenant).run(apply: true).applied
+        @alice = @people["bob-001"]
+      end
+
+      should "leave the title, manager and status to the streams, writing none of them itself" do
+        @alice.update_columns(job_title: "Stale", manager_id: nil, status: "inactive")
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ "Stale", nil, "inactive" ], @alice.reload.slice(:job_title, :manager_id, :status).values
+      end
+
+      should "write a new title through its event" do
+        employees = with_employee("bob-001") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
+
+        build_adapter(employees).sync_people
+
+        assert_equal "Staff Engineer", @alice.reload.job_title
+      end
+
+      should "record a leaving for someone HiBob stops returning, which marks them inactive" do
+        result = build_adapter(@fixture["employees"].reject { it["id"] == "bob-001" }).sync_people
+
+        assert_equal 1, result[:deactivated]
+        assert_kind_of OrgGraph::Events::PersonLeft, Rails.configuration.event_store.read.stream(stream_of(@alice)).last
+        assert_equal "inactive", @alice.reload.status
+      end
+
+      should "record a leaving even when Espalia holds the title and manager" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+
+        result = build_adapter(@fixture["employees"].reject { it["id"] == "bob-001" }).sync_people
+
+        assert_equal 1, result[:deactivated]
+        assert_kind_of OrgGraph::Events::PersonLeft, Rails.configuration.event_store.read.stream(stream_of(@alice)).last
+        assert_equal "inactive", @alice.reload.status
+      end
+
+      should "leave a leaver active and report it when the absence write fails, and offboard them on the next sync" do
+        without_alice = @fixture["employees"].reject { it["id"] == "bob-001" }
+        handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
+
+        failed = OrgGraph::CommandHandler.stub(:new, handler) { build_adapter(without_alice).sync_people }
+
+        assert_equal [ "event store down" ], failed[:errors].map { it[:error] }
+        assert_equal 0, failed[:deactivated]
+        assert_equal "active", @alice.reload.status
+
+        retried = travel(1.day) { build_adapter(without_alice).sync_people }
+
+        assert_empty retried[:errors]
+        assert_equal 1, retried[:deactivated]
+        assert_equal "inactive", @alice.reload.status
+      end
+
+      should "record a leaving HiBob reports while Espalia holds the title and manager" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+
+        result = build_adapter(with_employee("bob-001") { |e| e["isActive"] = false }).sync_people
+
+        assert_not_includes result[:errors].pluck(:person_id), @alice.id
+        assert_kind_of OrgGraph::Events::PersonLeft, Rails.configuration.event_store.read.stream(stream_of(@alice)).last
+        assert_equal "inactive", @alice.reload.status
+      end
+
+      should "create a newcomer HiBob shows as inactive as inactive, even if recording them fails" do
+        leaver = @fixture["employees"].first.deep_dup.merge("id" => "bob-004", "email" => "dana@example.com", "isActive" => false)
+        failing = Object.new
+        def failing.sync_person(*, **) = raise("recording failed")
+
+        result = OrgGraph::CommandHandler.stub(:new, failing) { build_adapter(@fixture["employees"] + [ leaver ]).sync_people }
+
+        assert_includes result[:errors].map { it[:error] }, "recording failed"
+        assert_equal "inactive", Person.find_by!(external_id: "bob-004").status
+      end
+
+      should "record someone with no stream as having left when HiBob stops returning them" do
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst")
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_empty result[:errors]
+        assert_equal [ "left", "Analyst" ], recorded(stray).values_at(:employment_status, :title)
+        assert_equal "inactive", stray.reload.status
+      end
+
+      should "record someone with no stream as having left when Espalia holds their title and manager" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst", manager: @alice)
+
+        result = build_adapter(@fixture["employees"]).sync_people
+
+        assert_not_includes result[:errors].pluck(:person_id), stray.id
+        assert_equal 1, result[:deactivated]
+        assert_equal 3, Rails.configuration.event_store.read.stream(stream_of(stray)).count
+        assert_operator result[:org_graph_events], :>=, 3
+        assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+      end
+
+      should "record nothing for a stray leaver when keeping their manager fails, and record them on the next sync" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        %w[title manager].each { handler.set_fact_provider(it, "espalia", effective_on: Date.current) }
+        stray = create(:person, tenant: @tenant, external_id: "bob-009", hris_source: "hibob", job_title: "Analyst", manager: @alice)
+        real_new = OrgGraph::CommandHandler.method(:new)
+        failing_new = lambda do |**kwargs|
+          real_new.call(**kwargs).tap { |h| h.define_singleton_method(:change_manager) { |*, **| raise "manager write failed" } }
+        end
+
+        result = OrgGraph::CommandHandler.stub(:new, failing_new) { build_adapter(@fixture["employees"]).sync_people }
+
+        assert_includes result[:errors], { person_id: stray.id, error: "manager write failed" }
+        assert_equal 0, Rails.configuration.event_store.read.stream(stream_of(stray)).count
+        assert_equal [ "active", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal [ "inactive", "Analyst", @alice.id ], stray.reload.values_at(:status, :job_title, :manager_id)
+      end
+
+      should "hand the columns back to the sync once reverted" do
+        @alice.update_columns(job_title: "Stale")
+        OrgGraph::PeopleCutover.new(@tenant).revert!
+
+        build_adapter(@fixture["employees"]).sync_people
+
+        assert_equal "Software Engineer", @alice.reload.job_title
+      end
+    end
+
+    should "see a cut-over that commits after the job loaded its tenant" do
+      adapter = build_adapter(@fixture["employees"])
+      assert OrgGraph::PeopleCutover.new(Tenant.find(@tenant.id)).run(apply: true).applied
+      alice = @people["bob-001"]
+      alice.update_columns(job_title: "Stale")
+
+      adapter.sync_people
+
+      assert_equal "Stale", alice.reload.job_title
+    end
   end
 
   context "#sync_people absence brake" do
