@@ -139,6 +139,10 @@ Rails.application.routes.draw do
     resource :hris_level_field, only: :show,
       path: "integrations/hris/level_field", controller: "hris_level_fields"
 
+    # What an HRIS field would give as a level or a fact, read-only (#107).
+    resource :hris_field_preview, only: :show,
+      path: "integrations/hris/field_preview", controller: "hris_field_previews"
+
     # Map / unmap one HRIS job title to a framework role (#436). The title
     # travels as a form field — titles carry spaces, slashes and brackets.
     resource :hris_title_mapping, only: [ :create, :destroy ],

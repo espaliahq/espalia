@@ -157,6 +157,7 @@ Before an admin chooses the field a level or a fact comes from, `Integrations::H
 - **Only the people the sync writes for**: active, from that HRIS, with a row in Espalia. A withheld person is never compared.
 - **"Would change" reads the person's stream** (`OrgGraph::PersonAggregate#fact`), because `org_fact_ages` keeps only facts Espalia provides. That is one stream read per person, fine for a preview an admin asks for.
 - MCP clients call `integrations_hris_field_preview`, which returns counts and unit labels, never a person.
+- On the web, `Tenant::HrisFieldPreviewsController` renders `Views::Integrations::HrisFieldPreviewFrame` at `/tenant/integrations/hris/field_preview?field_id=…&target=…`, the panel the field settings screen (6.9) will load as a lazy frame. A plain visit wraps it in a page of its own. Each HRIS error becomes a sentence in the frame, as the level field picker does.
 
 ## Adding a new HRIS field to the sync
 
