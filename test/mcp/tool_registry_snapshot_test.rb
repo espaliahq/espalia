@@ -2621,6 +2621,71 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_add_member",
+        "description" => "Place a person in a live unit of the Org Graph, from effective_on (today by default), with " \
+                         "an optional role and allocation (greater than 0, at most 1). A person can be in several " \
+                         "units. A unit an HRIS supplies takes only people that HRIS doesn't hold; place the others " \
+                         "in the HRIS. Someone already in the unit is refused.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "role" => {
+              "type" => "string"
+            },
+            "allocation" => {
+              "type" => "number"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_add_unit_owner",
+        "description" => "Name a person as an owner of a live unit in the Org Graph, from effective_on (today by " \
+                         "default). An owner may change the unit and every unit beneath it, so this grants " \
+                         "permissions. Units an HRIS supplies take owners too.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_as_of",
         "description" => "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
           "level, owners and direct member count, and the number of employed people. A future " \
@@ -2651,6 +2716,44 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_changes_between",
+        "description" => "What changed in the Org Graph between two UTC dates: joiners (with every fact and " \
+          "membership and the units they own on their first day), leavers, person " \
+          "fact changes (title, level, manager, cost centre, site, employment), memberships " \
+          "started, ended or changed, moves between units, and units created, renamed, moved, " \
+          "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \
+          "effect after from, up to and including to; known_on reads what the Org Graph knew " \
+          "at 23:59:59 UTC on that date, not in the tenant's local time. by \"learned\" lists " \
+          "what the Org Graph learned after 23:59:59 UTC on from, up to 23:59:59 UTC on to, " \
+          "whatever date it took effect, so backdated corrections show, and a change it " \
+          "no longer believes comes back withdrawn. A change's effective_on is the first day " \
+          "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind, " \
+          "with withdrawn changes counted apart; mode \"full\" lists every change. People are " \
+          "named by id only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "from" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                        "description" => "UTC date, YYYY-MM-DD. The day before the window opens." },
+            "to" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                      "description" => "UTC date, YYYY-MM-DD. The window's last day." },
+            "by" => { "type" => "string", "enum" => %w[effective learned] },
+            "known_on" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                            "description" => "UTC date, YYYY-MM-DD. By effective date only; omit for what is known now." },
+            "mode" => { "type" => "string", "enum" => %w[summary full] }
+          },
+          "required" => %w[from to],
+          "additionalProperties" => false,
+          "if" => { "properties" => { "by" => { "const" => "learned" } }, "required" => %w[by] },
+          "then" => { "not" => { "required" => %w[known_on] } }
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_editors",
         "description" => "List who may change the whole Org Graph: the Org Graph editors an admin chose, and the tenant's admins, who always may. Each with a person id and name. Admins only.",
         "inputSchema" => {
@@ -2666,6 +2769,70 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_move_member",
+        "description" => "Move a person's membership of one unit to another live unit, keeping its role and " \
+                         "allocation, from effective_on (today by default). A membership an HRIS supplies moves in " \
+                         "the HRIS, not here.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "from_unit_id" => {
+              "type" => "string"
+            },
+            "unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "person_id", "from_unit_id", "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_move_unit",
+        "description" => "Move a unit in the Org Graph beneath another live unit at a higher level, or to the top " \
+                         "when parent_id is omitted, from effective_on (today by default). Only a unit Espalia holds " \
+                         "can be moved here. Moving a unit changes who inherits its ownership, so the caller needs " \
+                         "rights on the unit and where it lands.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "parent_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "org_graph_remove_editor",
         "description" => "Stop a person being an Org Graph editor. They keep their rights over units they own and their reports' memberships. An admin's rights can't be removed this way. Returns the list as org_graph_editors reads it.",
         "inputSchema" => {
@@ -2678,6 +2845,93 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             }
           },
           "required" => [ "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_remove_member",
+        "description" => "End a person's membership of a unit in the Org Graph; effective_on (today by default) is " \
+                         "their last day in it. A membership an HRIS supplies ends in the HRIS, not here.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "person_id" => {
+              "type" => "string"
+            },
+            "unit_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "person_id", "unit_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_remove_unit_owner",
+        "description" => "Remove a person from a live unit's owners in the Org Graph, from effective_on (today by " \
+                         "default). This takes away their rights over the unit and the units beneath it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "person_id" => {
+              "type" => "string"
+            }
+          },
+          "required" => [ "unit_id", "person_id" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "org_graph_rename_unit",
+        "description" => "Rename a unit in the Org Graph, from effective_on (today by default). Only a unit Espalia " \
+                         "holds can be renamed here; one an HRIS supplies is renamed in the HRIS. Refused unless the " \
+                         "caller is a tenant admin, an Org Graph editor or an owner of the unit or a unit above it.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "effective_on" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "unit_id" => {
+              "type" => "string"
+            },
+            "name" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "unit_id", "name" ],
           "additionalProperties" => false
         },
         "annotations" => {
