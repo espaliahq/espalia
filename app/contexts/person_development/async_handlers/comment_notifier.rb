@@ -81,6 +81,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
       author_name: comment.author&.name,
       body: comment.body,
       context: context,
+      feedback_author_id: evidence_author_id(comment),
       url: url,
       comment_id: comment.id
     ).deliver(user)
@@ -117,6 +118,14 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
     return nil if comment.evidence_id.nil?
 
     Person.where(id: EvidenceItem.where(id: comment.evidence_id).select(:author_id)).pick(:name)
+  end
+
+  # Beside the context line, which names this person, so forgetting them can
+  # find it.
+  def evidence_author_id(comment)
+    return nil if comment.evidence_id.nil?
+
+    EvidenceItem.where(id: comment.evidence_id).pick(:author_id)
   end
 
   def capability_name(comment)

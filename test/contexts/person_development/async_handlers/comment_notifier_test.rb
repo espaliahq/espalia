@@ -128,6 +128,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifierTest < ActiveSupport::Tes
         .find { |n| n.inbox_title == "Morgan commented on your assessment" }
       assert_not_nil notification
       assert_equal "Jordan's feedback · L2 — “Strong signal”", notification.inbox_body
+      assert_equal peer.id, notification.event.params[:feedback_author_id]
     end
   end
 

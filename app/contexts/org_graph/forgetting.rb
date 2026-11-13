@@ -52,6 +52,9 @@ class OrgGraph::Forgetting
                   "requester_name" => "requester_id", "responder_name" => "responder_id",
                   "started_by_name" => "started_by_id" }.freeze
   NAME_LIST_PARAMS = { "skipped_names" => "skipped_ids" }.freeze
+  # A comment notification's context opens "<name>'s feedback" when the
+  # thread hangs off someone's evidence.
+  FEEDBACK_CONTEXT = "'s feedback"
 
   # Removes the manager a stored HiBob payload names, in both its shapes.
   WITHOUT_REPORTS_TO = "hris_raw_data = hris_raw_data #- '{work,reportsTo}' #- '{humanReadable,work,reportsTo}'"
@@ -257,6 +260,7 @@ class OrgGraph::Forgetting
   # id. One written before 8.2 holds only the name, so there the match is on
   # the name within the tenant, and a namesake loses theirs too.
   def scrub_notifications(person_id, name)
+    scrub_feedback_contexts(person_id, name)
     ids = tenant_events.where(notification_matches(person_id, name).join(" OR ")).pluck(:id)
     return if ids.empty?
 
@@ -270,6 +274,18 @@ class OrgGraph::Forgetting
       events.where(legacy_listed_name(names_key, ids_key, name))
         .update_all([ "params = jsonb_set(params, ARRAY[?], (params->?) - ?)", names_key, names_key, name ])
     end
+  end
+
+  def scrub_feedback_contexts(person_id, name)
+    named = sql("params->>'feedback_author_id' = ? AND strpos(params->>'context', ?) > 0", person_id, FEEDBACK_CONTEXT)
+    if name.present?
+      named += " OR " + sql("NOT jsonb_exists(params, 'feedback_author_id') AND starts_with(params->>'context', ?)",
+                            name + FEEDBACK_CONTEXT)
+    end
+    tenant_events.where(named).update_all(sql(<<~SQL.squish, Person::FORMER_MEMBER + FEEDBACK_CONTEXT, FEEDBACK_CONTEXT))
+      params = jsonb_set(params, '{context}',
+        to_jsonb(? || substr(params->>'context', strpos(params->>'context', ?) + #{FEEDBACK_CONTEXT.length})))
+    SQL
   end
 
   def notification_matches(person_id, name)

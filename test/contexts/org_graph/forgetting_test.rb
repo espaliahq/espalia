@@ -218,6 +218,21 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_equal [ "Someone Else" ], listed.reload.params[:skipped_names]
       assert_equal "Pat Example hb-1", other_tenant.reload.params[:author_name]
     end
+
+    should "rename them in the context line of a comment on their feedback" do
+      namesake = create(:person, tenant: @tenant)
+      theirs = notify(feedback_author_id: @leaver.id, context: "#{@leaver.name}'s feedback · Delivery · L2")
+      namesakes = notify(feedback_author_id: namesake.id, context: "#{@leaver.name}'s feedback · Delivery · L2")
+      legacy = notify(context: "#{@leaver.name}'s feedback · Delivery · L2")
+      unrelated = notify(context: "Delivery · L2")
+
+      forgetting.forget_due(on: TODAY)
+
+      assert_equal "Former member's feedback · Delivery · L2", theirs.reload.params[:context]
+      assert_equal "Pat Example hb-1's feedback · Delivery · L2", namesakes.reload.params[:context]
+      assert_equal "Former member's feedback · Delivery · L2", legacy.reload.params[:context]
+      assert_equal "Delivery · L2", unrelated.reload.params[:context]
+    end
   end
 
   context "notifications written from now on" do

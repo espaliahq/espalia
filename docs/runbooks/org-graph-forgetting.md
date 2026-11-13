@@ -68,4 +68,6 @@ So the real time to forget includes the backup retention period. Each deployment
 
 Every notification written from now on carries the person id beside each name it copies, in its params, and the scrub matches on that id. Only notifications written before story 8.2 hold a name with no id. For those legacy rows alone the scrub matches the name within the tenant, so a colleague with the same name loses theirs from those old notifications too, which then read "A colleague" or a similar stand-in. Notifications in other tenants are untouched.
 
+A comment on someone's feedback carries a context line that opens "<name>'s feedback". It carries `feedback_author_id` beside it, and forgetting that person rewrites the opening to "Former member's feedback". An older one without the id is matched on the name, as above.
+
 A new notifier that copies a person's name must put the id beside it and add the pair to `OrgGraph::Forgetting::NAME_PARAMS`. A list of names beside a list of ids, such as `skipped_names` and `skipped_ids`, goes in `NAME_LIST_PARAMS` instead.
