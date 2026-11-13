@@ -352,7 +352,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       handler = OrgGraph::CommandHandler.new
       today = Date.current
 
-      Person.where(hris_source: "hibob").where.not(external_id: current_external_ids).find_each do |person|
+      Person.where(hris_source: provider_name).where.not(external_id: current_external_ids).find_each do |person|
         result[:org_graph_events] += handler.record_absence(person.id, provider: provider_name, effective_on: today)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
