@@ -5,6 +5,7 @@ require "test_helper"
 class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
   ESPALIA = { provider: "espalia" }.freeze
   SYSTEM = OrgGraph::Authorization::SYSTEM
+  HIBOB = { provider: "hibob", employment_status: "employed" }.freeze
 
   setup do
     @tenant = create(:tenant, org_graph_people_projected_at: Time.current)
@@ -42,10 +43,19 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
 
   def changes(from, to) = as_tenant { OrgGraph::ChangesBetween.new(context: @context, from: on(from), to: on(to)).call }
 
-  def history(fact, date, key: "")
+  def history(fact, date, key: "") = history_for(@ada, fact, date, key:)
+
+  def history_for(person, fact, date, key: "")
     as_tenant do
       OrgFactPeriod.current.in_effect_on(on(date))
-                   .where(subject_type: "person", subject_id: @ada.id, fact:, key:).pick(:value)
+                   .where(subject_type: "person", subject_id: person.id, fact:, key:).pick(:value)
+    end
+  end
+
+  def hibob_person
+    as_tenant do
+      @structure.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
+      create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-grace")
     end
   end
 
@@ -112,12 +122,8 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
     end
 
     should "leave the sync nothing to write when the HRIS still holds the later fact" do
-      grace = as_tenant do
-        @structure.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
-        create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-grace")
-      end
-      hibob = { provider: "hibob", employment_status: "employed" }
-      sync = ->(date, title) { later(date) { @handler.sync_person(grace.id, **hibob, effective_on: date, title:) } }
+      grace = hibob_person
+      sync = ->(date, title) { later(date) { @handler.sync_person(grace.id, **HIBOB, effective_on: date, title:) } }
 
       sync.call("2026-02-01", "Engineer")
       sync.call("2026-03-01", "Senior Engineer")
@@ -145,6 +151,48 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal "Lead Engineer", history("title", "2026-04-15")["title"]
       assert_equal "Lead Engineer", as_of("2026-04-15").people.sole.title
       assert_equal "Lead Engineer", live_title
+    end
+
+    should "write a backdated fact that matches the later one, so history moves its start back" do
+      later("2026-03-01") do
+        @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-03-01")
+        @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8)
+      end
+      later("2026-04-15") do
+        @handler.change_title(@ada.id, "Senior Engineer", **ESPALIA, effective_on: "2026-02-20")
+        @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-20", allocation: 0.8)
+      end
+
+      assert_equal "Senior Engineer", history("title", "2026-02-25")["title"]
+      assert_equal "Senior Engineer", as_of("2026-02-25").people.sole.title
+      assert_equal 0.8, history("membership", "2026-02-25", key: @payments)["allocation"]
+      assert_equal({ @payments => 0.8 }, allocations_as_of("2026-02-25"))
+    end
+
+    should "leave the sync nothing to write while a later-dated fact waits to take effect" do
+      grace = hibob_person
+      sync = ->(date, title) { later(date) { @handler.sync_person(grace.id, **HIBOB, effective_on: date, title:) } }
+
+      sync.call("2026-02-01", "Engineer")
+      later("2026-04-15") { @handler.change_title(grace.id, "Senior Engineer", provider: "hibob", effective_on: "2026-05-01") }
+
+      assert_equal [ 0, 0 ], [ sync.call("2026-04-16", "Engineer"), sync.call("2026-04-17", "Engineer") ]
+      assert_equal "Engineer", as_of("2026-04-17").people.find { it.id == grace.id }.title
+      assert_equal "Senior Engineer", history_for(grace, "title", "2026-05-01")["title"]
+    end
+
+    should "change back a backdated membership change even when the later terms match the ones it restores" do
+      later("2026-03-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8) }
+      later("2026-04-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-04-01", allocation: 0.5) }
+      later("2026-04-15") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-10", allocation: 1.0) }
+
+      later("2026-04-16") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+      end
+
+      assert_equal [ 0.5, 0.8, 0.5 ],
+                   %w[2026-02-15 2026-03-15 2026-04-16].map { history("membership", it, key: @payments)["allocation"] }
+      assert_equal({ @payments => 0.5 }, live_allocations)
     end
 
     should "change back the backdated membership change and leave the later terms" do

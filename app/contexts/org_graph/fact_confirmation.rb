@@ -56,8 +56,8 @@ module OrgGraph::FactConfirmation
 
       @memberships.dig(unit_id, :provider) == "espalia"
     else
-      key = fact.to_sym
-      !@facts[key].nil? && @fact_providers[key] == "espalia"
+      held = @fact_points[fact.to_sym]&.last
+      !held&.value.nil? && held.provider == "espalia"
     end
   end
 end

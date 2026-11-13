@@ -37,9 +37,7 @@ class OrgGraph::PersonAggregate
     @started_on = nil
     @left_on = nil
     @left_from = nil
-    @facts = {}
-    @fact_providers = {}
-    @fact_dates = {}
+    @fact_points = {}
     @memberships = {}
     @membership_ends = {}
     @forgotten = false
@@ -218,7 +216,8 @@ class OrgGraph::PersonAggregate
     data = provenance(provider, effective_on)
     terms = { allocation: validated_fraction(allocation, "Allocation"), role: label(role) }
     current = @memberships[unit_id]
-    return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider)
+    return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider) &&
+              data[:effective_on] >= current[:changed_on]
 
     ended_on = @membership_ends[unit_id]
     if ended_on && data[:effective_on] < ended_on
@@ -314,9 +313,10 @@ class OrgGraph::PersonAggregate
   end
 
   # @param key [Symbol, String] one of the person facts, such as :cost_centre
-  # @return [Object, nil] what the Org Graph holds for it now
-  def fact(key)
-    @facts[key.to_sym]
+  # @param on [Date, String] the day to read it for
+  # @return [Object, nil] what the Org Graph holds for it that day
+  def fact(key, on: Date.current)
+    fact_point(key.to_sym, normalize_date(on, :on))&.value
   end
 
   # @return [Boolean] whether the Org Graph has seen this person yet
@@ -470,10 +470,27 @@ class OrgGraph::PersonAggregate
   def change(event_class, provider, effective_on, **facts)
     ensure_recorded!
     data = provenance(provider, effective_on)
-    return if facts.all? { |key, value| @facts[key] == value && @fact_providers[key] == provider }
+    return if facts.all? { |key, value| fact_point(key, data[:effective_on])&.then { [ it.value, it.provider ] } == [ value, provider ] }
 
     apply(event_class.new(data: data.merge(facts)))
   end
+
+  FactPoint = Data.define(:on, :value, :provider)
+  private_constant :FactPoint
+
+  # Each fact keeps its dated values, so a backdated one fills in the days
+  # before a later one without replacing it, and a later one on the same date
+  # replaces the earlier.
+  def hold_facts(data, keys)
+    keys.each do |key|
+      points = (@fact_points[key] ||= [])
+      points.reject! { it.on == data[:effective_on] }
+      points << FactPoint.new(on: data[:effective_on], value: data[key], provider: data[:provider])
+      points.sort_by!(&:on)
+    end
+  end
+
+  def fact_point(key, on) = @fact_points[key]&.reverse_each&.find { it.on <= on }
 
   def provenance(provider, effective_on)
     raise "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
@@ -531,9 +548,8 @@ class OrgGraph::PersonAggregate
     @employment_status = event.data[:employment_status]
     @started_on = event.data[:started_on]
     @left_on = event.data[:left_on]
-    @facts = event.data.slice(*FACT_KEYS)
-    @fact_providers = FACT_KEYS.index_with(event.data[:provider])
-    @fact_dates = FACT_KEYS.index_with(event.data[:effective_on])
+    @fact_points = {}
+    hold_facts(event.data, FACT_KEYS)
   end
 
   {
@@ -555,10 +571,7 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::CostCentreChanged, OrgGraph::Events::SiteChanged, OrgGraph::Events::EmploymentChanged
   ].each do |event_class|
     on event_class do |event|
-      changed = event.data.slice(*FACT_KEYS).reject { |key, _| @fact_dates[key].to_s > event.data[:effective_on].to_s }
-      @facts.merge!(changed)
-      @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
-      @fact_dates.merge!(changed.keys.index_with(event.data[:effective_on]))
+      hold_facts(event.data, event.data.keys & FACT_KEYS)
     end
   end
 
