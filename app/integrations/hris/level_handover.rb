@@ -254,7 +254,9 @@ class Hris::LevelHandover
 
     def normalise(text) = text.to_s.unicode_normalize(:nfkc).downcase.squish
 
-    def matched_key(membership) = @matches[membership.unit_id]
+    # The key the member's unit has after the switch: its own match, or the
+    # match of the unit it is succeeded into.
+    def matched_key(membership) = @matches[membership.unit_id] || @matches[@resolutions[membership.unit_id]]
 
     def differing
       @memberships.filter_map do |membership|

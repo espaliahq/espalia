@@ -66,6 +66,13 @@ class Hris::LevelHandoverTest < ActiveSupport::TestCase
       assert_nil comparison.items.find { it[:key] == "9" }[:unit_id]
     end
 
+    should "compare a member of a succeeded unit with the successor's value" do
+      @values["hb-3"] = item("8", "Search")
+
+      assert_not_includes compare(matches: @matches, resolutions: { @legacy => @search }).differing.pluck(:person_id), @staff[3].id
+      assert_includes compare(matches: @matches, resolutions: { @legacy => @payments }).differing.pluck(:person_id), @staff[3].id
+    end
+
     should "leave a unit unresolved until it is retired or succeeded into a matched unit" do
       assert_equal [ "Legacy" ], compare(matches: @matches).unresolved
       assert_equal [ "Legacy" ], compare(matches: @matches, resolutions: { @legacy => @legacy }).unresolved
