@@ -69,7 +69,7 @@ class OrgUnitActivity::Group
   def unit_names(ids) = OrgUnit.where(id: ids).pluck(:id, :name).to_h
 
   def membership_phrases
-    counts = parts.filter_map { |part| membership_change(part) }.tally
+    counts = parts.filter_map { |part| membership_change(part)&.then { [ it, part.person_id ] } }.uniq.map(&:first).tally
     MEMBERSHIP_PHRASES.filter_map do |change, phrase|
       count = counts[change] or next
       format(phrase, "#{count} #{'person'.pluralize(count)}")

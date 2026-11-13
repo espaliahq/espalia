@@ -58,6 +58,15 @@ class OrgUnitActivityTest < ActiveSupport::TestCase
       assert_equal "moved 2 people in", feed(@platform).first.summary
     end
 
+    should "count people rather than changes, so one person's two changes read as one" do
+      as_tenant do
+        terms = people(cause_id: "request-1")
+        [ 0.5, 0.8 ].each { |allocation| terms.set_membership(@people.first.id, @payments, **ESPALIA, allocation:) }
+      end
+
+      assert_equal "changed the terms of 1 person", feed(@payments).first.summary
+    end
+
     should "page by entry, so a page never splits one cause" do
       as_tenant do
         moves = people(cause_id: "request-1")
