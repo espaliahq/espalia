@@ -231,6 +231,33 @@ when they leave the company and their `people` row goes inactive. That is read w
 owners are asked for, so leaving writes no ownership event. A unit nobody up its chain
 owns is flagged too (`OrgUnit#needs_owner?`).
 
+### What changed in a unit
+
+`OrgGraph::Projections::UnitActivity` writes one entry per change to a unit or to one of
+its memberships into `org_unit_activities`, and `OrgUnitActivity.for_unit(unit_id)` lists
+them newest first. Each entry says who made the change, or which provider supplied it,
+what it changed from and to, when it took effect and when the Org Graph learned it. A move
+between units is an entry in each, naming the other. A succession is an entry in every
+unit it names. Entries keep their event's `causation_id` and `correlation_id`, so the
+moves a retirement causes can be shown as one (7.2).
+
+**Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
+with a new event that carries `changed_back_id`, the event it reverses. Nothing is
+deleted: the feed keeps both, and marks the original with the change that undid it. Ending
+a membership puts it back on its earlier terms, a rename takes back the old name, and a
+move goes back where it came from. The inverse takes effect today unless the caller names
+a date, and goes through the ordinary handlers under the same actor, so it is refused
+wherever the change itself would be. It is refused, too:
+
+- for a change another provider supplied, which belongs in that provider;
+- for a change already changed back;
+- for one a later change to the same fact has overtaken, in any unit it touched, so a
+  correction never silently undoes someone else's;
+- for creating, retiring or succeeding a unit, which reshape the structure rather than
+  change one fact.
+
+The sidebar that shows this is 5.4.
+
 ### Keeping a fact current
 
 An HRIS keeps its own facts fresh. A fact Espalia holds stays true only while someone
