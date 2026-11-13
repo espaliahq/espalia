@@ -95,6 +95,16 @@ Rails.configuration.to_prepare do
     to: OrgGraph::Projections::FactAges.handled_events
   )
 
+  event_store.subscribe(
+    OrgGraph::Projections::UnitActivity.new,
+    to: OrgGraph::Projections::UnitActivity.handled_events
+  )
+
+  event_store.subscribe(
+    OrgGraph::Projections::Leavers.new,
+    to: OrgGraph::Projections::Leavers.handled_events
+  )
+
   # ── Synchronous cross-stream sync handlers ──
   # NOTE: PersonEnrollmentSync dispatches PersonDevelopment commands,
   # so it MUST NOT be registered as a projection — running it twice
@@ -172,6 +182,14 @@ Rails.configuration.to_prepare do
   event_store.subscribe(
     OrgGraph::SyncHandlers::RetiredUnitMemberships.new,
     to: OrgGraph::SyncHandlers::RetiredUnitMemberships.handled_events
+  )
+
+  # LeaverMemberships ends a leaver's memberships in their own stream.
+  # Dispatches OrgGraph person commands, so it MUST NOT be registered as a
+  # projection.
+  event_store.subscribe(
+    OrgGraph::SyncHandlers::LeaverMemberships.new,
+    to: OrgGraph::SyncHandlers::LeaverMemberships.handled_events
   )
 
   # ── Async handlers (via SolidQueue) ──

@@ -130,7 +130,7 @@ class Hris::Hibob::ResponseMapper
     return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
 
     if kind == :list
-      return Hris::FieldValue.unreadable if value(path).is_a?(Hash) || value(path).is_a?(Array)
+      return Hris::FieldValue.unreadable if unreadable_list?(path)
 
       item = list_value(path)
       return Hris::FieldValue.blank if item.nil?
@@ -183,6 +183,19 @@ class Hris::Hibob::ResponseMapper
     return nil if id.nil? || id.is_a?(Hash)
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
+  end
+
+  # A list value in a shape Espalia does not know: a hash or an array where an
+  # id should be, or a flat wrapper with no "value" key.
+  def unreadable_list?(path)
+    raw = value(path)
+    return true if raw.is_a?(Hash) || raw.is_a?(Array)
+
+    parent = parent_of(path)
+    return false if parent.is_a?(Hash) && parent.key?(path.last)
+
+    flat = employee[flat_key(path)]
+    flat.is_a?(Hash) && !flat.key?("value")
   end
 
   # @param path [Array<String>]

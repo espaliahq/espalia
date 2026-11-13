@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_170100) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_190100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -783,6 +783,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170100) do
     t.index ["tenant_id", "fact"], name: "index_org_fact_providers_on_tenant_id_and_fact", unique: true
   end
 
+  create_table "org_leavers", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "person_id", null: false
+    t.date "left_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "left_on"], name: "index_org_leavers_on_tenant_id_and_left_on"
+    t.index ["tenant_id", "person_id"], name: "index_org_leavers_on_tenant_id_and_person_id", unique: true
+  end
+
   create_table "org_memberships", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "unit_id", null: false
@@ -809,6 +819,37 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170100) do
     t.date "provider_effective_on"
     t.string "provider_field"
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
+  end
+
+  create_table "org_unit_activities", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "unit_id", null: false
+    t.uuid "event_id", null: false
+    t.string "event_type", null: false
+    t.bigint "position", null: false
+    t.string "subject"
+    t.uuid "person_id"
+    t.uuid "other_unit_id"
+    t.uuid "actor_id"
+    t.string "provider"
+    t.jsonb "before"
+    t.jsonb "after"
+    t.date "effective_on"
+    t.datetime "learned_at", null: false
+    t.string "causation_id"
+    t.string "correlation_id"
+    t.uuid "changes_back_id"
+    t.uuid "changed_back_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "plan_id"
+    t.string "plan_change_id"
+    t.string "cause_id"
+    t.index ["tenant_id", "cause_id"], name: "index_org_unit_activities_on_tenant_id_and_cause_id"
+    t.index ["tenant_id", "event_id", "unit_id"], name: "idx_on_tenant_id_event_id_unit_id_e1d30b18ce", unique: true
+    t.index ["tenant_id", "unit_id", "cause_id"], name: "idx_on_tenant_id_unit_id_cause_id_edeaf670d0"
+    t.index ["tenant_id", "unit_id", "position"], name: "idx_on_tenant_id_unit_id_position_0480dd5559"
+    t.index ["tenant_id", "unit_id", "subject", "position"], name: "idx_on_tenant_id_unit_id_subject_position_932e79679d"
   end
 
   create_table "org_unit_owners", id: :uuid, default: nil, force: :cascade do |t|
@@ -1064,8 +1105,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_170100) do
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "org_fact_ages", "tenants"
   add_foreign_key "org_fact_providers", "tenants"
+  add_foreign_key "org_leavers", "tenants"
   add_foreign_key "org_memberships", "tenants"
   add_foreign_key "org_taxonomy_levels", "tenants"
+  add_foreign_key "org_unit_activities", "tenants"
   add_foreign_key "org_unit_owners", "tenants"
   add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"

@@ -243,7 +243,8 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param renamed_by_id [String, nil]
-  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil)
+  # @param changed_back_id [String, nil] the event this changes back
+  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil, changed_back_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     name = require_name(name)
@@ -256,7 +257,8 @@ class OrgGraph::StructureAggregate
       previous_name: unit.name,
       provider: unit.provider,
       effective_on: effective_on,
-      renamed_by_id: renamed_by_id
+      renamed_by_id: renamed_by_id,
+      changed_back_id: changed_back_id
     }))
   end
 
@@ -268,7 +270,8 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param moved_by_id [String, nil]
-  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil)
+  # @param changed_back_id [String, nil] the event this changes back
+  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, changed_back_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     parent_id = require_id(parent_id, "Parent id") if parent_id
@@ -283,7 +286,8 @@ class OrgGraph::StructureAggregate
       previous_parent_id: unit.parent_id,
       provider: unit.provider,
       effective_on: effective_on,
-      moved_by_id: moved_by_id
+      moved_by_id: moved_by_id,
+      changed_back_id: changed_back_id
     }))
   end
 
@@ -364,16 +368,17 @@ class OrgGraph::StructureAggregate
   # @param person_id [String] UUID of the owner
   # @param effective_on [Date, String]
   # @param added_by_id [String, nil] person_id of the actor
+  # @param changed_back_id [String, nil] the event this changes back
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil)
+  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil, changed_back_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return if unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerAdded.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      added_by_id: added_by_id
+      added_by_id: added_by_id, changed_back_id: changed_back_id
     }))
   end
 
@@ -383,16 +388,17 @@ class OrgGraph::StructureAggregate
   # @param person_id [String]
   # @param effective_on [Date, String]
   # @param removed_by_id [String, nil] person_id of the actor
+  # @param changed_back_id [String, nil] the event this changes back
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil)
+  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil, changed_back_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return unless unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerRemoved.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      removed_by_id: removed_by_id
+      removed_by_id: removed_by_id, changed_back_id: changed_back_id
     }))
   end
 
@@ -424,10 +430,12 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::UnitOwnerAdded do |event|
     @units.fetch(event.data[:unit_id]).owner_ids << event.data[:person_id]
+    touch(event.data[:unit_id], event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitOwnerRemoved do |event|
     @units.fetch(event.data[:unit_id]).owner_ids.delete(event.data[:person_id])
+    touch(event.data[:unit_id], event.data[:effective_on])
   end
 
   on OrgGraph::Events::UnitRenamed do |event|

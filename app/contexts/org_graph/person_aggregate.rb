@@ -176,9 +176,10 @@ class OrgGraph::PersonAggregate
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
   # @param set_by_id [String, nil] person_id of the actor
+  # @param changed_back_id [String, nil] the event this changes back
   # @raise [RuntimeError] if the person has left, a value is invalid, or it
   #   would restart before the last membership ended
-  def set_membership(unit_id, provider:, effective_on:, allocation: nil, role: nil, set_by_id: nil)
+  def set_membership(unit_id, provider:, effective_on:, allocation: nil, role: nil, set_by_id: nil, changed_back_id: nil)
     ensure_recorded!
     raise "A person who has left can't join a unit" if @employment_status == "left"
 
@@ -194,7 +195,7 @@ class OrgGraph::PersonAggregate
     end
 
     apply(OrgGraph::Events::MembershipSet.new(data: data.merge(unit_id: unit_id, **terms,
-      set_by_id: set_by_id)))
+      set_by_id: set_by_id, changed_back_id: changed_back_id)))
   end
 
   # Ends the person's membership of one unit.
@@ -203,9 +204,10 @@ class OrgGraph::PersonAggregate
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String] the last day of the membership
   # @param ended_by_id [String, nil] person_id of the actor
+  # @param changed_back_id [String, nil]
   # @raise [RuntimeError] if the person is not a member, or it would end
   #   before the membership's last change
-  def end_membership(unit_id, provider:, effective_on:, ended_by_id: nil)
+  def end_membership(unit_id, provider:, effective_on:, ended_by_id: nil, changed_back_id: nil)
     ensure_recorded!
     unit_id = validated_unit(unit_id)
     membership = @memberships[unit_id]
@@ -217,7 +219,19 @@ class OrgGraph::PersonAggregate
     end
 
     apply(OrgGraph::Events::MembershipEnded.new(data: data.merge(unit_id: unit_id,
-      ended_by_id: ended_by_id)))
+      ended_by_id: ended_by_id, changed_back_id: changed_back_id)))
+  end
+
+  # Ends every open membership, each on `effective_on` or on its last change
+  # if later, since none can end before it. Each ends as its own provider.
+  #
+  # @param effective_on [Date, String]
+  def end_memberships(effective_on:)
+    ensure_recorded!
+    on = normalize_date(effective_on, :effective_on)
+    @memberships.to_a.each do |unit_id, membership|
+      end_membership(unit_id, provider: membership[:provider], effective_on: [ on, membership[:changed_on].to_s ].max)
+    end
   end
 
   # Moves the person's membership of one unit to another, keeping its terms
@@ -230,8 +244,9 @@ class OrgGraph::PersonAggregate
   # @param unit_id [String] the live unit they move to
   # @param effective_on [Date, String]
   # @param moved_by_id [String, nil] person_id of the actor
+  # @param changed_back_id [String, nil]
   # @raise [RuntimeError] if the person is not a member, or it would move before it began
-  def move_membership(from_unit_id, unit_id, effective_on:, moved_by_id: nil)
+  def move_membership(from_unit_id, unit_id, effective_on:, moved_by_id: nil, changed_back_id: nil)
     ensure_recorded!
     from_unit_id = validated_unit(from_unit_id)
     unit_id = validated_unit(unit_id)
@@ -240,7 +255,8 @@ class OrgGraph::PersonAggregate
     raise "A membership can't move to the unit it is in" if from_unit_id == unit_id
 
     if @memberships.key?(unit_id) || @employment_status == "left"
-      return end_membership(from_unit_id, provider: membership[:provider], effective_on:, ended_by_id: moved_by_id)
+      return end_membership(from_unit_id, provider: membership[:provider], effective_on:, ended_by_id: moved_by_id,
+                                          changed_back_id:)
     end
 
     data = provenance(membership[:provider], effective_on)
@@ -254,7 +270,8 @@ class OrgGraph::PersonAggregate
     end
 
     apply(OrgGraph::Events::MembershipMoved.new(data: data.merge(from_unit_id: from_unit_id, unit_id: unit_id,
-      **membership.slice(:allocation, :role), moved_by_id: moved_by_id)))
+      **membership.slice(:allocation, :role), moved_by_id: moved_by_id,
+      changed_back_id: changed_back_id)))
   end
 
   # @param unit_id [String]

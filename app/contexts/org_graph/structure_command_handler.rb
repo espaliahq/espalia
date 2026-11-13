@@ -139,6 +139,7 @@ class OrgGraph::StructureCommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     options = attributed(options, :stated_by_id)
     ActiveRecord::Base.transaction do
+      @repository.lock_structure # before any person's, the order retire_unit takes them in
       authorize_succession!([ predecessor_ids, successor_ids ])
       applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
       moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)

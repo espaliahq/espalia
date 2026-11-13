@@ -758,6 +758,22 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse a retirement dated before an owner was added or removed" do
+      owner = SecureRandom.uuid_v7
+      as_tenant do
+        @handler.add_unit_owner(@team, owner, effective_on: "2026-12-01")
+
+        assert_raises(RuntimeError, match: /retire before its last change on 2026-12-01/) do
+          @handler.retire_unit(@team, effective_on: "2026-11-15")
+        end
+
+        @handler.remove_unit_owner(@team, owner, effective_on: "2026-12-10")
+        assert_raises(RuntimeError, match: /retire before its last change on 2026-12-10/) do
+          @handler.retire_unit(@team, effective_on: "2026-12-05")
+        end
+      end
+    end
+
     should "refuse to place a unit beneath a parent before the parent existed" do
       later = SecureRandom.uuid_v7
       as_tenant do

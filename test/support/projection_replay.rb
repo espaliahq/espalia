@@ -127,6 +127,13 @@ module ProjectionReplayHelpers
         # The PK derives from the person and the fact — assert it survives reset! + replay.
         { fact_ages: rows(OrgFactAge, stable_id: true) }
 
+      when "OrgGraph::Projections::UnitActivity"
+        # The PK derives from the event and the unit — assert it survives reset! + replay.
+        { unit_activities: rows(OrgUnitActivity, stable_id: true) }
+      when "OrgGraph::Projections::Leavers"
+        # The PK derives from the person — assert it survives reset! + replay.
+        { leavers: rows(OrgLeaver, stable_id: true) }
+
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"
       end

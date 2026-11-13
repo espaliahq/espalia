@@ -38,7 +38,7 @@ class Views::Integrations::HrisFieldPreviewFrame < Views::Base
 
   def summary
     div(class: "space-y-4") do
-      h3(class: "text-base font-semibold text-default [overflow-wrap:anywhere]") do
+      h2(class: "text-base font-semibold text-default [overflow-wrap:anywhere]") do
         plain "#{@preview.dig(:field, :name)} as the #{TARGET_NAMES.fetch(@target, @target)}"
       end
       p(class: "text-sm text-muted") do
