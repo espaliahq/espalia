@@ -690,7 +690,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   context "#sync_people when Espalia holds a fact the sync supplies" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do
-        OrgGraph::StructureCommandHandler.new.set_fact_provider("title", "espalia", effective_on: Date.current)
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("title", "espalia", effective_on: Date.current)
       end
       @result = build_adapter(@fixture["employees"]).sync_people
     end
