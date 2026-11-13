@@ -12,12 +12,15 @@ class StoreHrisLevelFieldAsCatalogueId < ActiveRecord::Migration[8.1]
   end
 
   PREFIX = "work.customColumns."
+  BARE_CUSTOM_COLUMN = /\Acolumn_[^.\/]+\z/
 
   def up
-    changed = rewrite_level_fields { |id| id.include?(".") ? id : "#{PREFIX}#{id}" }
+    changed = rewrite_level_fields { |id| id.match?(BARE_CUSTOM_COLUMN) ? "#{PREFIX}#{id}" : id }
     say "#{changed} HRIS level #{'field'.pluralize(changed)} moved to the catalogue id"
   end
 
+  # A built-in field chosen with the picker since (`work.title`) has no bare
+  # form, and the old client would not find it; it is left for an admin.
   def down
     changed = rewrite_level_fields { |id| id.delete_prefix(PREFIX) }
     say "#{changed} HRIS level #{'field'.pluralize(changed)} moved back to the bare column id"

@@ -29,8 +29,11 @@ class StoreHrisLevelFieldAsCatalogueIdTest < ActiveSupport::TestCase
     path = stored({ "level_field_id" => "work.customColumns.column_1" })
     blank = stored({ "level_field_id" => "" })
     missing = stored({ "provider" => "hibob" })
+    slashed = stored({ "level_field_id" => "/work/title" })
 
     migrate(:up)
+
+    assert_equal({ "level_field_id" => "/work/title" }, config_of(slashed))
 
     assert_equal({ "level_field_id" => "work.customColumns.column_1" }, config_of(path))
     assert_equal({ "level_field_id" => "" }, config_of(blank))

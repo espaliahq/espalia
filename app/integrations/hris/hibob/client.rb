@@ -20,6 +20,7 @@ class Hris::Hibob::Client
   # A level field stored before #67 is a bare custom-column id. Since then it
   # is the catalogue id, the field's full path.
   CUSTOM_COLUMN_PREFIX = "work.customColumns."
+  BARE_CUSTOM_COLUMN = /\Acolumn_[^.\/]+\z/
 
   BASE_FIELDS = %w[
     root.id root.email root.firstName root.surname root.displayName
@@ -49,15 +50,15 @@ class Hris::Hibob::Client
     fields
   end
 
-  # The field's path as the people API takes it, from a path or a bare
-  # custom-column id.
+  # The field's path as the people API takes it. Only a bare custom-column id
+  # (`column_…`) gains a prefix; anything else is already the field's id.
   #
   # @param field_id [String, nil]
   # @return [String, nil]
   def self.field_path(field_id)
     return if field_id.blank?
 
-    field_id.include?(".") ? field_id : "#{CUSTOM_COLUMN_PREFIX}#{field_id}"
+    field_id.match?(BARE_CUSTOM_COLUMN) ? "#{CUSTOM_COLUMN_PREFIX}#{field_id}" : field_id
   end
 
   # Fetches all employees via POST /people/search with cursor-based pagination.

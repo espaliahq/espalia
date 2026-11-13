@@ -69,7 +69,8 @@ class Hris::Hibob::ResponseMapper
   def extract_level_ordinal
     return nil if level_field_id.blank?
 
-    path = Hris::Hibob::Client.field_path(level_field_id).split(".")
+    # HiBob returns root fields (`root.email`) at the top level, not under `root`.
+    path = Hris::Hibob::Client.field_path(level_field_id).delete_prefix("root.").split(".")
     raw = path.reduce(employee["humanReadable"]) { |node, key| node[key] if node.is_a?(Hash) }
     return nil if raw.blank?
 

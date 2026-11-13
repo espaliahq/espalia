@@ -88,6 +88,12 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_equal 4, Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.level")[:hris_level_ordinal]
     end
 
+    should "read a root field from the top of humanReadable, where HiBob puts it" do
+      employee = { "id" => "bob-9", "humanReadable" => { "grade" => "3" } }
+
+      assert_equal 3, Hris::Hibob::ResponseMapper.call(employee, level_field_id: "root.grade")[:hris_level_ordinal]
+    end
+
     should "read no level when the path runs into a value that is not an object" do
       employee = { "id" => "bob-9", "humanReadable" => { "work" => { "level" => "4" } } }
 

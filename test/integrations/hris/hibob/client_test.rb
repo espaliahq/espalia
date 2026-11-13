@@ -114,6 +114,8 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       assert_equal "work.department", Hris::Hibob::Client.field_path("work.department")
       assert_nil Hris::Hibob::Client.field_path("")
       assert_nil Hris::Hibob::Client.field_path(nil)
+      assert_equal "/work/title", Hris::Hibob::Client.field_path("/work/title")
+      assert_equal "employeeLevel", Hris::Hibob::Client.field_path("employeeLevel")
     end
   end
 
