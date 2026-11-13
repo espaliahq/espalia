@@ -28,7 +28,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       page = Nokogiri::HTML5(response.body)
       assert_equal %w[Engineering Checkout Payments Platform],
-                   page.css("nav[aria-labelledby='org-graph-tree-label'] a[href*='unit=']").map { |a| a.at_css("span").text }
+                   page.css("nav[aria-labelledby='org-graph-tree-label'] a[href*='unit=']").map { |a| a.at_css("span span").text }
       assert_equal "Engineering", page.at_css("#org-graph-unit").text
       assert page.at_css("#unit-#{org[:platform]}")
       assert_includes page.at_css("#in-no-team").text, "Ezra Pell"

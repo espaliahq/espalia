@@ -105,7 +105,7 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     page = render_page(comparison_bar: StubComparisonBar.new, comparison: StubComparison.new)
 
     assert_equal "Since 1 Oct", page.at_css("#comparison-bar").text
-    tree_link = page.css("nav[aria-labelledby=org-graph-tree-label] a").find { it.at_css("span").text == "Platform" }
+    tree_link = page.css("nav[aria-labelledby=org-graph-tree-label] a").find { it.at_css("span span").text == "Platform" }
     assert_includes tree_link.text, "was Core"
     card = page.css("[id^='unit-']").find { it.at_css("h4")&.text == "Platform" }
     assert_includes card.text, "was Core"

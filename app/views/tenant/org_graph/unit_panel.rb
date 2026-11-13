@@ -111,7 +111,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
 
     div(class: "mt-3 border-t border-subtle pt-2") do
       p(class: "text-xs font-semibold text-muted") { @comparison.window_label }
-      ul(class: "mt-1 space-y-1 text-sm", aria: { label: "#{@comparison.window_label} in #{unit.name}" }) do
+      ul(class: "mt-1 space-y-1 text-sm text-default", aria: { label: "#{@comparison.window_label} in #{unit.name}" }) do
         changes.each do |change|
           li do
             span(class: "font-medium text-default") { change.name }
