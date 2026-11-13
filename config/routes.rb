@@ -101,6 +101,13 @@ Rails.application.routes.draw do
     # Org Graph screens are finished.
     resource :org_graph, only: :show, controller: "org_graphs"
 
+    # Org Graph settings (#126): one screen, and a controller per panel's
+    # writes.
+    resource :org_graph_settings, only: :show, path: "org_graph/settings", controller: "org_graph_settings"
+    scope "org_graph/settings", module: :org_graph_settings, as: :org_graph_settings do
+      resources :editors, only: [ :create, :destroy ], param: :person_id
+    end
+
     # Feedback export for monthly reporting (#458): `new` is the picker,
     # `index.csv` the download.
     resources :feedback_exports, only: [ :index, :new ]

@@ -30,7 +30,11 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       render Components::Kit::SectionHeading.new(
         "Org Graph",
         subtitle: "Units and who is in each, as the Org Graph knows them today. Read-only for now."
-      )
+      ) do |heading|
+        heading.action do
+          render Components::Kit::Button.new(variant: :outline, tone: :neutral, size: :sm, href: tenant_org_graph_settings_path) { "Settings" }
+        end
+      end
 
       if @overview.any_units?
         div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
