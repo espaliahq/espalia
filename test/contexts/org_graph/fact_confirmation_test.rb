@@ -84,7 +84,7 @@ class OrgGraph::FactConfirmationTest < ActiveSupport::TestCase
   should "write the confirmation to the person's stream through the command handler" do
     tenant = create(:tenant)
     ActsAsTenant.with_tenant(tenant) do
-      handler = OrgGraph::CommandHandler.new
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       handler.record_person(@person_id, **ESPALIA, employment_status: "employed", title: "Engineer")
       handler.confirm_fact(@person_id, "title", confirmed_by_id: @confirmer_id, effective_on: "2026-11-10")
     end
