@@ -245,8 +245,8 @@ moves a retirement causes can be shown as one (7.2).
 with a new event that carries `changed_back_id`, the event it reverses. Nothing is
 deleted: the feed keeps both, and marks the original with the change that undid it. Ending
 a membership puts it back on its earlier terms, a rename takes back the old name, and a
-move goes back where it came from. The inverse takes effect today unless the caller names
-a date, and goes through the ordinary handlers under the same actor, so it is refused
+move goes back where it came from. The inverse takes effect when the original did, so the
+fact reads as if the change never happened, unless the caller names a date. It goes through the ordinary handlers under the same actor, so it is refused
 wherever the change itself would be. It is refused, too:
 
 - for a change another provider supplied, which belongs in that provider;
@@ -255,6 +255,12 @@ wherever the change itself would be. It is refused, too:
   correction never silently undoes someone else's;
 - for creating, retiring or succeeding a unit, which reshape the structure rather than
   change one fact.
+- when the aggregate would write something else, such as ending a moved membership
+  because the person has since left.
+
+The feed starts from the Org Graph's first event, so a deploy that adds it rebuilds it
+(`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
+history a membership's earlier terms would be missing.
 
 The sidebar that shows this is 5.4.
 

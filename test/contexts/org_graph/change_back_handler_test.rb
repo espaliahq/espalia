@@ -30,8 +30,8 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
 
   def latest(unit_id) = as_tenant { OrgUnitActivity.for_unit(unit_id).first }
 
-  def change_back(entry, actor: SYSTEM)
-    as_tenant { OrgGraph::ChangeBackHandler.new(actor:).change_back(entry) }
+  def change_back(entry, actor: SYSTEM, **options)
+    as_tenant { OrgGraph::ChangeBackHandler.new(actor:).change_back(entry, **options) }
   end
 
   def membership(person, unit_id) = as_tenant { OrgMembership.find_by(person:, unit_id:) }
@@ -50,10 +50,31 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
 
     assert_nil membership(@ada, @payments)
     undo = latest(@payments)
-    assert_equal [ "MembershipEnded", set.event_id, Date.new(2026, 2, 5), Time.zone.parse("2026-02-05 10:00") ],
+    assert_equal [ "MembershipEnded", set.event_id, Date.new(2026, 2, 1), Time.zone.parse("2026-02-05 10:00") ],
       [ undo.event_type, undo.changes_back_id, undo.effective_on, undo.learned_at ]
     assert_equal undo.event_id, set.reload.changed_back_by_id
     assert_equal 3, as_tenant { OrgUnitActivity.for_unit(@payments).count }
+  end
+
+  should "take effect on a date the caller names" do
+    as_tenant { @structure.rename_unit(@payments, "Payments Core", effective_on: "2026-02-01") }
+
+    change_back(latest(@payments), effective_on: "2026-03-01")
+
+    assert_equal Date.new(2026, 3, 1), latest(@payments).effective_on
+  end
+
+  should "refuse to move back someone who has since left, and write nothing" do
+    as_tenant do
+      @handler.set_membership(@ada.id, @payments, **ESPALIA)
+      @handler.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01")
+      @handler.leave(@ada.id, **ESPALIA)
+    end
+    moved = latest(@platform)
+
+    assert_raises(RuntimeError, match: "can't move back") { change_back(moved) }
+    assert membership(@ada, @platform)
+    assert_not moved.reload.changed_back?
   end
 
   should "restore a membership's earlier terms, or the membership itself once ended" do

@@ -8,6 +8,9 @@
 # entry another provider supplied, for one already changed back, and for one
 # a later change to the same fact has overtaken, in any unit it touched.
 #
+# The inverse takes effect when the original did, unless the caller names
+# another date, so the fact reads as if the change never happened.
+#
 class OrgGraph::ChangeBackHandler
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
 
@@ -19,16 +22,37 @@ class OrgGraph::ChangeBackHandler
   end
 
   # @param entry [OrgUnitActivity] the entry to change back
-  # @param effective_on [Date, String] when the inverse takes effect
+  # @param effective_on [Date, String, nil] when the inverse takes effect;
+  #   the original's effective date when nil
   # @raise [RuntimeError] if the entry can't be changed back
   # @raise [OrgGraph::Authorization::Refused] if the actor can't make the inverse change
-  def change_back(entry, effective_on: Date.current)
-    ensure_reversible!(entry)
-    options = { effective_on: effective_on.to_s, changed_back_id: entry.event_id }
-    send(:"undo_#{entry.event_type.underscore}", entry, options)
+  def change_back(entry, effective_on: nil)
+    ActiveRecord::Base.transaction do
+      entry = lock(entry)
+      ensure_reversible!(entry)
+      options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
+      send(:"undo_#{entry.event_type.underscore}", entry, options)
+      ensure_inverted!(entry)
+    end
   end
 
   private
+
+  # Locks every unit's row for the change, so a second request waits and
+  # then sees the first one's inverse.
+  def lock(entry)
+    OrgUnitActivity.where(event_id: entry.event_id).order(:id).lock.to_a.find { |row| row.id == entry.id }
+  end
+
+  # Rolls back an inverse the aggregate turned into something else, or skipped
+  # because the fact already reads as it did before.
+  def ensure_inverted!(entry)
+    types = OrgUnitActivity.where(changes_back_id: entry.event_id).distinct.pluck(:event_type)
+    raise "Nothing to change back; it already reads as it did before" if types.empty?
+    return unless entry.event_type == "MembershipMoved" && types != [ "MembershipMoved" ]
+
+    raise "This person can't move back: they have left, or are already in that unit"
+  end
 
   def ensure_reversible!(entry)
     raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
@@ -42,15 +66,14 @@ class OrgGraph::ChangeBackHandler
   end
 
   def undo_membership_set(entry, options)
-    if entry.before
-      @people.set_membership(entry.person_id, entry.unit_id, **terms(entry.before), provider: ESPALIA, **options)
-    else
-      @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options)
-    end
+    return undo_membership_ended(entry, options) if entry.before
+
+    @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options)
   end
 
   def undo_membership_ended(entry, options)
-    @people.set_membership(entry.person_id, entry.unit_id, **terms(entry.before), provider: ESPALIA, **options)
+    terms = entry.before.to_h.symbolize_keys.slice(:allocation, :role)
+    @people.set_membership(entry.person_id, entry.unit_id, **terms, provider: ESPALIA, **options)
   end
 
   def undo_membership_moved(entry, options)
@@ -73,6 +96,4 @@ class OrgGraph::ChangeBackHandler
   def undo_unit_owner_removed(entry, options)
     @structure.add_unit_owner(entry.unit_id, entry.person_id, **options)
   end
-
-  def terms(values) = values.to_h.symbolize_keys.slice(:allocation, :role)
 end
