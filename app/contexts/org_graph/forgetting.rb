@@ -146,8 +146,10 @@ class OrgGraph::Forgetting
         next false if person.forgotten?
 
         scrub_notifications(person.read_attribute(:name))
-        OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
-          .forget_person(person_id, effective_on: on, reason:, retention_years:, requested_by_id:)
+        AuditMetadata.wrap_event_store do
+          OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+            .forget_person(person_id, effective_on: on, reason:, retention_years:, requested_by_id:)
+        end
         erase_identifiers(person)
         true
       end

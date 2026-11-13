@@ -25,3 +25,6 @@ production:
   evidence_request_reminders:
     class: EvidenceRequestReminderSweepJob
     schedule: every hour at minute 40
+  org_graph_forget_due_leavers:
+    class: OrgGraph::ForgetDueLeaversJob
+    schedule: at 2:17am every day
