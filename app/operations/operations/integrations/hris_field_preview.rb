@@ -3,8 +3,8 @@
 # What an HRIS field would give if a level or a fact came from it (#107). A
 # read: it asks the HRIS for that one field and writes nothing.
 #
-# The payload holds counts and the units' labels, never a person, since a
-# preview is about the field.
+# The payload holds counts and the units' labels, never who is in a unit. A
+# label is the field's own value, so a field that names people names them here.
 class Operations::Integrations::HrisFieldPreview < Operations::Base
   description "Preview what an HRIS field would give before choosing it as the source of an Org Graph " \
               "level or fact. For target \"level\": the units it would create, with their labels and how " \
@@ -41,7 +41,7 @@ class Operations::Integrations::HrisFieldPreview < Operations::Base
   private
 
   def payload(preview)
-    counts = preview.to_h.except(:field, :units)
+    counts = preview.to_h.except(:field, :units, :target)
     counts[:units] = preview.units.map(&:to_h) if preview.is_a?(Integrations::HrisFieldPreview::Level)
     { field: { id: preview.field.id, name: preview.field.name, kind: preview.field.kind.to_s }, target: params[:target], **counts }
   end

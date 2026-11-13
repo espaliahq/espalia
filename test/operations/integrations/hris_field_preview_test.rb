@@ -35,7 +35,7 @@ class Operations::Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
     end
   end
 
-  should "give a level's units and counts, and no person" do
+  should "give a level's units and counts, and not who is in each" do
     result = call(field_id: TEAM.id, target: "level")
 
     assert_equal({ field: { id: TEAM.id, name: "Team", kind: "list" }, target: "level", people: 3,
