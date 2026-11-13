@@ -140,7 +140,8 @@ class OrgGraph::StructureCommandHandler
     options = attributed(options, :stated_by_id)
     ActiveRecord::Base.transaction do
       authorize_succession!([ predecessor_ids, successor_ids ])
-      moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids))
+      applied = OrgUnitSuccession.exists?(succession_id: succession_id.to_s.downcase)
+      moves = placement_moves(placements, Array(predecessor_ids), Array(successor_ids), applied:)
       place(moves, effective_on, plan, moved_by_id: options[:stated_by_id])
       with_structure(plan) do |structure|
         structure.record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:,
@@ -151,9 +152,10 @@ class OrgGraph::StructureCommandHandler
 
   private
 
-  # Checks every placement before any is written. Someone already in their
-  # successor and in no predecessor was placed when the plan was last applied.
-  def placement_moves(placements, predecessor_ids, successor_ids)
+  # Checks every placement before any is written. Once the succession is
+  # recorded, someone already in their successor and in no predecessor was
+  # placed when the plan was last applied.
+  def placement_moves(placements, predecessor_ids, successor_ids, applied:)
     predecessor_ids, successor_ids = [ predecessor_ids, successor_ids ].map { |ids| ids.map { |id| id.to_s.downcase } }
     held = OrgMembership.where(person_id: placements.keys, unit_id: predecessor_ids + successor_ids)
                         .group_by(&:person_id)
@@ -164,7 +166,7 @@ class OrgGraph::StructureCommandHandler
 
       memberships = held.fetch(person_id.to_s.downcase, [])
       from = memberships.select { |membership| predecessor_ids.include?(membership.unit_id) }
-      next if from.empty? && memberships.any? { |membership| membership.unit_id == successor_id }
+      next if applied && from.empty? && memberships.any? { |membership| membership.unit_id == successor_id }
       raise ArgumentError, "Only a member of one predecessor can be placed" unless from.one?
 
       [ from.first, successor_id ]

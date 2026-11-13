@@ -139,6 +139,15 @@ class OrgGraph::ApplySuccessionTest < ActiveSupport::TestCase
       end
     end
 
+    should "write nothing when a placement names someone already in the successor, but in no predecessor" do
+      as_tenant { @people.set_membership(@approver.id, @ledger, **ESPALIA) }
+
+      assert_writes_nothing(ArgumentError) do
+        apply_as(approver, predecessor_ids: [ @payments ], successor_ids: [ @billing, @ledger ],
+                           placements: { @approver.id => @ledger })
+      end
+    end
+
     should "refuse a placement when no predecessors are given" do
       assert_writes_nothing(ArgumentError) do
         apply_as(approver, predecessor_ids: nil, successor_ids: [ @billing ], placements: { @ada.id => @billing })
