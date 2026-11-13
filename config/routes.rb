@@ -106,6 +106,8 @@ Rails.application.routes.draw do
     resource :org_graph_settings, only: :show, path: "org_graph/settings", controller: "org_graph_settings"
     scope "org_graph/settings", module: :org_graph_settings, as: :org_graph_settings do
       resources :editors, only: [ :create, :destroy ], param: :person_id
+      resources :fact_providers, only: :update, param: :fact
+      resources :fact_fields, only: :show, param: :fact
       resource :freshness, only: :update, controller: "freshness"
       resource :retention, only: :update, controller: "retention"
       resource :forgetting_due, only: :show

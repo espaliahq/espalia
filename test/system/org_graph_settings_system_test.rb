@@ -4,6 +4,16 @@ require "application_system_test_case"
 
 # The Org Graph settings screen (#126), a panel at a time, at both widths.
 class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
+  CENTRE = Hris::Field.new(id: "work.customColumns.column_centre", name: "Cost centre code", kind: :text)
+
+  # Answers as a connected HiBob would, so nothing here reaches a real HRIS.
+  FakeAdapter = Struct.new(:values) do
+    def provider_name = "hibob"
+    def catalogue_id(field_id) = field_id
+    def field_catalogue = [ CENTRE ]
+    def read_field(_field_id, kind:, alongside: nil) = values
+  end
+
   setup do
     @tenant = FactoryBot.create(:tenant)
     @admin_user = FactoryBot.create(:user)
@@ -90,6 +100,31 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
 
         click_button_with_js_fallback("org-graph-forgetting-off", expect_text: "Scheduled forgetting is off.")
         assert_selector "turbo-frame#org-graph-forgetting-due[complete]", visible: :all
+      end
+
+      should "move a fact to the HRIS, preview a field and read it from there" do
+        hibob = FactoryBot.build(:tenant, :with_hibob_config)
+        @tenant.update!(hris_config: hibob.hris_config, hris_credentials: hibob.hris_credentials)
+        ActsAsTenant.with_tenant(@tenant) { @member.update!(hris_source: "hibob", external_id: "hb-1") }
+        adapter = FakeAdapter.new({ "hb-1" => Hris::FieldValue.new(state: :value, id: nil, label: "CC-7") })
+
+        Hris::BaseAdapter.stub(:for, adapter) do
+          visit tenant_org_graph_settings_path
+          within("#org-graph-fact-cost_centre") { assert_text "From Espalia" }
+
+          select "HiBob", from: "Source of cost centre"
+          click_button_with_js_fallback("org-graph-fact-save-cost_centre", expect_text: "Cost centre now comes from HiBob.")
+          assert_selector "turbo-frame#org-graph-field-cost_centre[complete]", visible: :all
+
+          select "Cost centre code", from: "HRIS field for the cost centre"
+          click_button_with_js_fallback("org-graph-field-preview-cost_centre", expect_text: "Cost centre code as the cost centre")
+          assert_no_sideways_overflow
+          screenshot("fact_field_preview_#{viewport}")
+
+          click_button_with_js_fallback("org-graph-field-use-cost_centre", expect_text: "the HiBob field you chose")
+          assert_selector "turbo-frame#org-graph-field-cost_centre[complete]", visible: :all
+          within("#org-graph-fact-cost_centre") { assert_select "HRIS field for the cost centre", selected: "Cost centre code (in use)" }
+        end
       end
 
       should "say plainly when forgetting has no key" do

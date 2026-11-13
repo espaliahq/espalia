@@ -31,7 +31,9 @@ class Views::Tenant::OrgGraph::SettingsView < Views::Base
       end
 
       div(class: "mt-6 grid gap-6 lg:grid-cols-3") do
-        div(class: "lg:col-span-2 space-y-6 min-w-0")
+        div(class: "lg:col-span-2 space-y-6 min-w-0") do
+          render Views::Tenant::OrgGraph::Settings::SourcesPanel.new(hris: @sources[:hris], facts: @sources[:facts])
+        end
         div(class: "space-y-6 min-w-0") do
           render Views::Tenant::OrgGraph::Settings::EditorsPanel.new(editors: @editors, candidates: @editor_candidates)
           render Views::Tenant::OrgGraph::Settings::FreshnessPanel.new(freshness: @sources[:freshness])
