@@ -64,7 +64,7 @@ class Assessments::FeedbackRecipients
   attr_reader :giver
 
   def selectable
-    Person.active.where(forgotten_at: nil)
+    Person.active.remembered
       .where.not(id: giver.id)
       .where(id: PersonFrameworkAssignment.select(:person_id))
   end

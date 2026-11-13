@@ -26,6 +26,7 @@ class Person < ApplicationRecord
   scope :inactive, -> { where(status: "inactive") }
   scope :hris_managed, -> { where.not(hris_source: nil) }
   scope :forgotten, -> { where.not(forgotten_at: nil) }
+  scope :remembered, -> { where(forgotten_at: nil) }
   scope :in_no_unit, -> { where.not(id: OrgMembership.in_live_units.select(:person_id)) }
 
   # The one way to find a Person from an identity another system holds: the
