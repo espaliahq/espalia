@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Handles commands for a tenant's Org Graph structure: its taxonomy and units.
+# Handles commands for a tenant's Org Graph structure: its taxonomy, its
+# units, and who provides each level and each kind of person fact.
 #
 # Loads {OrgGraph::StructureAggregate} through {OrgGraph::Repository}, which
 # adds the tenant to every event's metadata. Arguments pass straight through
@@ -15,6 +16,16 @@ class OrgGraph::StructureCommandHandler
   # @see OrgGraph::StructureAggregate#define_taxonomy
   def define_taxonomy(levels, **options)
     @repository.with_structure { |structure| structure.define_taxonomy(levels, **options) }
+  end
+
+  # @see OrgGraph::StructureAggregate#set_level_provider
+  def set_level_provider(level_id, provider, **options)
+    @repository.with_structure { |structure| structure.set_level_provider(level_id, provider, **options) }
+  end
+
+  # @see OrgGraph::StructureAggregate#set_fact_provider
+  def set_fact_provider(fact, provider, **options)
+    @repository.with_structure { |structure| structure.set_fact_provider(fact, provider, **options) }
   end
 
   # @see OrgGraph::StructureAggregate#create_unit

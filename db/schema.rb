@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -745,6 +745,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
     t.index ["uid"], name: "index_oauth_applications_on_uid", unique: true
   end
 
+  create_table "org_fact_providers", id: :uuid, default: nil, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.string "fact", null: false
+    t.string "provider", null: false
+    t.date "effective_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "fact"], name: "index_org_fact_providers_on_tenant_id_and_fact", unique: true
+  end
+
   create_table "org_taxonomy_levels", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "name", null: false
@@ -752,6 +762,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
     t.date "effective_on", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "provider", default: "espalia", null: false
+    t.date "provider_effective_on"
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 
@@ -977,6 +989,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "tenants"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
+  add_foreign_key "org_fact_providers", "tenants"
   add_foreign_key "org_taxonomy_levels", "tenants"
   add_foreign_key "org_units", "tenants"
   add_foreign_key "people", "people", column: "manager_id"

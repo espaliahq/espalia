@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# Synchronous projection of a tenant's current structure: its taxonomy levels
-# and its unit tree.
+# Synchronous projection of a tenant's current structure: its taxonomy levels,
+# its unit tree, and who provides each level and each kind of person fact.
 #
-# Writes `org_taxonomy_levels` and `org_units`, and nothing else writes them.
+# Writes `org_taxonomy_levels`, `org_units` and `org_fact_providers`, and
+# nothing else writes them.
 # Both primary keys are event-carried ids, so references survive a rebuild.
 # A level's effective_on is the date its name or place last changed.
 #
@@ -22,7 +23,9 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitCreated,
       OrgGraph::Events::UnitRenamed,
       OrgGraph::Events::UnitMoved,
-      OrgGraph::Events::UnitRetired
+      OrgGraph::Events::UnitRetired,
+      OrgGraph::Events::LevelProviderSet,
+      OrgGraph::Events::FactProviderSet
     ]
   end
 
@@ -33,6 +36,7 @@ class OrgGraph::Projections::Structure
     ActsAsTenant.with_tenant(tenant) do
       OrgUnit.where(tenant_id: tenant.id).delete_all
       OrgTaxonomyLevel.where(tenant_id: tenant.id).delete_all
+      OrgFactProvider.where(tenant_id: tenant.id).delete_all
     end
   end
 
@@ -50,6 +54,8 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitMoved then update_unit(event.data, parent_id: event.data[:parent_id], parent_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
+    when OrgGraph::Events::LevelProviderSet then handle_level_provider_set(event.data)
+    when OrgGraph::Events::FactProviderSet then handle_fact_provider_set(event.data)
     end
   end
 
@@ -82,6 +88,15 @@ class OrgGraph::Projections::Structure
       created_on: data[:effective_on],
       retired_on: nil
     )
+  end
+
+  def handle_level_provider_set(data)
+    OrgTaxonomyLevel.find(data[:level_id]).update!(provider: data[:provider], provider_effective_on: data[:effective_on])
+  end
+
+  def handle_fact_provider_set(data)
+    OrgFactProvider.find_or_initialize_by(fact: data[:fact])
+                   .update!(provider: data[:provider], effective_on: data[:effective_on])
   end
 
   def update_unit(data, **attributes)

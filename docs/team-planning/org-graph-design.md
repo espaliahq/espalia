@@ -89,6 +89,7 @@ where it came from a plan, a reference to the plan's change.
 | `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
+| `LevelProviderSet`, `FactProviderSet` | Who supplies a taxonomy level, or a kind of person fact. See [Providers and provenance](#providers-and-provenance-r5). |
 
 Units carry their provider too: a unit mirrored from an HRIS team is read-only in
 Espalia, and units Espalia holds can hang beneath it. A mirrored unit also carries the
@@ -105,8 +106,9 @@ members are a projection.
   rejects an edit made in Espalia and still takes the sync's rename.
 - **A parent sits at a higher level**, is live, and is never the unit itself or a unit
   beneath it. A unit with live sub-units can't be retired.
-- **Levels an HRIS supplies sit above every level Espalia holds**, for top-level units
-  as much as for a parent and its child.
+- **A unit comes from its level's provider.** Levels an HRIS supplies sit above every
+  level Espalia holds, so the same holds for top-level units as for a parent and its
+  child.
 - **A mirrored unit carries its reference, and one Espalia holds has none.** Two live
   units never mirror the same reference.
 - **A taxonomy level keeps its id through a rename.** A level that still holds a unit
@@ -222,6 +224,10 @@ Facts another provider holds cannot be changed here. They change when the sync s
 Each kind of fact names its provider, per tenant. For structure the setting is per
 taxonomy level, so an HRIS can own departments and teams while Espalia holds the squads
 beneath them.
+
+The setting lives in the structure stream, so each change keeps its date and who made
+it. A fact or a level has exactly one provider, and it's Espalia until another is set.
+A level that holds live units keeps its provider until a handover moves it.
 
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
