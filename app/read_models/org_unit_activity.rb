@@ -64,8 +64,13 @@ class OrgUnitActivity < ApplicationRecord
   # @return [Boolean]
   def reversible? = REVERSIBLE.include?(event_type)
 
+  # @param apart_from [String, nil] a cause whose own later changes don't count
   # @return [Boolean] true when nothing has changed the same fact since
-  def latest? = !self.class.where(unit_id:, subject:).where(position: (position + 1)..).exists?
+  def latest?(apart_from: nil)
+    later = self.class.where(unit_id:, subject:).where(position: (position + 1)..)
+    later = later.where.not("#{CAUSE} = ?", apart_from) if apart_from
+    !later.exists?
+  end
 
   # @return [Boolean]
   def changed_back? = changed_back_by_id.present?
