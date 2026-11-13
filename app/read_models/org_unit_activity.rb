@@ -28,8 +28,6 @@ class OrgUnitActivity < ApplicationRecord
 
   # Every event carries a correlation id; the event's own id stands in for one
   # recorded without.
-  CAUSE = Arel.sql("COALESCE(org_unit_activities.correlation_id, org_unit_activities.event_id::text)")
-  private_constant :CAUSE
 
   # A unit's activity, newest first by when the Org Graph learned of it.
   #
@@ -47,9 +45,9 @@ class OrgUnitActivity < ApplicationRecord
   # @param per_page [Integer] groups per page
   # @return [Array<OrgUnitActivity::Group>]
   def self.feed(unit_id, page: 1, per_page: 25)
-    causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(CAUSE)
-                              .offset((page - 1) * per_page).limit(per_page).pluck(CAUSE)
-    parts = for_unit(unit_id).where("#{CAUSE} IN (?)", causes).group_by(&:cause_id)
+    causes = for_unit(unit_id).reorder(Arel.sql("MAX(position) DESC")).group(:cause_id)
+                              .offset((page - 1) * per_page).limit(per_page).pluck(:cause_id)
+    parts = for_unit(unit_id).where(cause_id: causes).group_by(&:cause_id)
     causes.map { |cause| OrgUnitActivity::Group.new(parts.fetch(cause)) }
   end
 
@@ -58,7 +56,7 @@ class OrgUnitActivity < ApplicationRecord
   # @param cause_id [String]
   # @return [ActiveRecord::Relation<OrgUnitActivity>]
   def self.caused_by(cause_id)
-    where("#{CAUSE} = ?", cause_id.to_s).order(position: :desc)
+    where(cause_id: cause_id.to_s).order(position: :desc)
   end
 
   # @return [Boolean]
@@ -68,13 +66,10 @@ class OrgUnitActivity < ApplicationRecord
   # @return [Boolean] true when nothing has changed the same fact since
   def latest?(apart_from: nil)
     later = self.class.where(unit_id:, subject:).where(position: (position + 1)..)
-    later = later.where.not("#{CAUSE} = ?", apart_from) if apart_from
+    later = later.where.not(cause_id: apart_from) if apart_from
     !later.exists?
   end
 
   # @return [Boolean]
   def changed_back? = changed_back_by_id.present?
-
-  # @return [String] the correlation id this entry's event was written under
-  def cause_id = correlation_id || event_id
 end

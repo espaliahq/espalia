@@ -822,7 +822,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_180000) do
     t.datetime "updated_at", null: false
     t.string "plan_id"
     t.string "plan_change_id"
+    t.string "cause_id"
+    t.index ["tenant_id", "cause_id"], name: "index_org_unit_activities_on_tenant_id_and_cause_id"
     t.index ["tenant_id", "event_id", "unit_id"], name: "idx_on_tenant_id_event_id_unit_id_e1d30b18ce", unique: true
+    t.index ["tenant_id", "unit_id", "cause_id"], name: "idx_on_tenant_id_unit_id_cause_id_edeaf670d0"
     t.index ["tenant_id", "unit_id", "position"], name: "idx_on_tenant_id_unit_id_position_0480dd5559"
     t.index ["tenant_id", "unit_id", "subject", "position"], name: "idx_on_tenant_id_unit_id_subject_position_932e79679d"
   end

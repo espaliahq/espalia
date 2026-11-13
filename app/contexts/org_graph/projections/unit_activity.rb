@@ -107,6 +107,7 @@ class OrgGraph::Projections::UnitActivity
       learned_at: event.timestamp,
       causation_id: event.metadata[:causation_id],
       correlation_id: event.metadata[:correlation_id],
+      cause_id: event.metadata[:correlation_id] || event.event_id,
       changes_back_id: data[:changed_back_id],
       plan_id: data[:plan_id],
       plan_change_id: data[:plan_change_id],
