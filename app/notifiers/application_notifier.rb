@@ -36,6 +36,14 @@ class ApplicationNotifier < Noticed::Event
 
   before_create { OrgGraph::Forgetting.without_forgotten_names(params) }
 
+  # One transaction from the recipient check to Noticed's insert, so an
+  # erasure in this tenant either finishes first or waits for the insert.
+  def deliver(recipients = nil, **)
+    self.class.transaction do
+      super(OrgGraph::Forgetting.without_former_members(params[:tenant_id], recipients || evaluate_recipients), **)
+    end
+  end
+
   # Bind this notifier to a NotificationType.
   #
   # @param type_key [Symbol, String]

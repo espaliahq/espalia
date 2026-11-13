@@ -253,6 +253,16 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_equal "Former member's feedback · Delivery · L2", params[:context]
     end
 
+    should "not reach a login resolved before the erasure and delivered after it" do
+      login = create(:tenant_user, tenant: @tenant, person: @leaver).user
+      colleague = create(:tenant_user, tenant: @tenant).user
+      forgetting.forget_due(on: TODAY)
+
+      FeedbackReceivedNotifier.with(tenant_id: @tenant.id).deliver([ login, colleague ])
+
+      assert_equal [ colleague.id ], Noticed::Notification.where(recipient: [ login, colleague ]).pluck(:recipient_id)
+    end
+
     should "carry the person's id beside every name they copy" do
       pairs = OrgGraph::Forgetting::NAME_PARAMS.merge(OrgGraph::Forgetting::NAME_LIST_PARAMS)
       writers = Rails.root.glob("app/{contexts,jobs}/**/*.rb").select { |path| path.read.include?("Notifier") }

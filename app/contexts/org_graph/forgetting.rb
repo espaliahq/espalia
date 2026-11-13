@@ -75,15 +75,39 @@ class OrgGraph::Forgetting
   # @param params [Hash] the notification's params, changed in place
   # @return [Hash]
   def self.without_forgotten_names(params)
-    tenant = params[:tenant_id].presence && Tenant.find_by(id: params[:tenant_id])
+    tenant = hold_off_erasure(params[:tenant_id])
     ids = named_ids(params)
     return params if tenant.nil? || ids.empty?
+
+    forgotten = Person.unscoped.where(tenant_id: tenant.id, id: ids).where.not(forgotten_at: nil).pluck(:id)
+    forgotten.empty? ? params : drop_names(params, forgotten.to_set)
+  end
+
+  # Keeps a notification from reaching a login whose membership in its
+  # tenant was forgotten: erasure unlinks the login, so it is no longer a
+  # member there. Waits on an erasure in flight, as above.
+  #
+  # @param tenant_id [String, nil]
+  # @param recipients [Array, Object]
+  # @return [Array]
+  def self.without_former_members(tenant_id, recipients)
+    recipients = Array.wrap(recipients)
+    tenant = hold_off_erasure(tenant_id)
+    users = recipients.select { it.is_a?(User) }
+    return recipients if tenant.nil? || users.empty?
+
+    members = TenantUser.unscoped.where(tenant_id: tenant.id, user_id: users.map(&:id), forgotten_at: nil).pluck(:user_id).to_set
+    recipients.reject { it.is_a?(User) && !members.include?(it.id) }
+  end
+
+  def self.hold_off_erasure(tenant_id)
+    tenant = tenant_id.presence && Tenant.find_by(id: tenant_id)
+    return if tenant.nil?
 
     Person.connection.select_value(
       Person.sanitize_sql_array([ "SELECT 1 FROM pg_advisory_xact_lock_shared(?)", OrgGraph::PeopleCutover.lock_key(tenant) ])
     )
-    forgotten = Person.unscoped.where(tenant_id: tenant.id, id: ids).where.not(forgotten_at: nil).pluck(:id)
-    forgotten.empty? ? params : drop_names(params, forgotten.to_set)
+    tenant
   end
 
   def self.named_ids(params)
@@ -106,7 +130,7 @@ class OrgGraph::Forgetting
     end
     params
   end
-  private_class_method :named_ids, :drop_names
+  private_class_method :named_ids, :drop_names, :hold_off_erasure
 
   # @param tenant [Tenant]
   # @param source [String] the HRIS the id comes from

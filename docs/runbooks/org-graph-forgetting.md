@@ -72,4 +72,6 @@ A comment on someone's feedback carries a context line that opens "<name>'s feed
 
 A notification built just before an erasure, from a name read before it, can be written just after it. So every notification checks the ids it carries as it is written, waiting for any erasure in its tenant to commit first, and drops the names of anyone forgotten.
 
+The recipient gets the same check. A notification addressed before an erasure but written after it skips any login that no longer holds a membership in its tenant, since erasure unlinks the forgotten person's login there.
+
 A new notifier that copies a person's name must put the id beside it and add the pair to `OrgGraph::Forgetting::NAME_PARAMS`. A list of names beside a list of ids, such as `skipped_names` and `skipped_ids`, goes in `NAME_LIST_PARAMS` instead.
