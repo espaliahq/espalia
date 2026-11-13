@@ -35,20 +35,21 @@ class Hris::Hibob::Client
   # @param level_field_id [String, nil] the HiBob field holding the level
   #   ordinal, as its path (`work.customColumns.column_0000000000000`) or as a
   #   bare custom-column id. When set, every search requests it.
-  def initialize(service_user_id:, api_token:, level_field_id: nil)
+  # @param mapped_fields [Hash{String => String}] the fields the tenant's
+  #   mapping names, by the part of a fact each holds. Every search requests them.
+  def initialize(service_user_id:, api_token:, level_field_id: nil, mapped_fields: {})
     @service_user_id = service_user_id
     @api_token = api_token
     @level_field_id = level_field_id
+    @mapped_fields = mapped_fields
   end
 
-  # Computes the default field set, including the level custom column when configured.
+  # The base fields, the level field when configured, and the mapped fields.
   #
   # @return [Array<String>]
   def default_fields
-    fields = BASE_FIELDS.dup
-    level_field = self.class.field_path(@level_field_id)
-    fields << level_field if level_field
-    fields
+    extra = [ @level_field_id, *@mapped_fields.values ].filter_map { |field_id| self.class.field_path(field_id) }
+    (BASE_FIELDS + extra).uniq
   end
 
   # The field's path as the people API takes it. Only a bare custom-column id
