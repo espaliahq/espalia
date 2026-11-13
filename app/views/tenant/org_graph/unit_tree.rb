@@ -8,9 +8,11 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
 
   # @param overview [OrgGraph::UnitsOverview]
   # @param tray_id [String] the tray's element id, for the In no team link
-  def initialize(overview:, tray_id:)
+  # @param comparison [OrgGraph::Comparison] marks a unit that changed in the window
+  def initialize(overview:, tray_id:, comparison: OrgGraph::Comparison::NONE)
     @overview = overview
     @tray_id = tray_id
+    @comparison = comparison
   end
 
   def view_template
@@ -59,6 +61,7 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
     ) do
       span(class: "min-w-0 truncate") { unit.name }
       hris_lock(unit) unless unit.held_by_espalia?
+      @comparison.unit_marks(unit).each { render Components::Kit::Badge.new(it, tone: :info) }
       span(class: "ml-auto pl-2 tabular-nums text-muted") { @overview.headcount(unit).to_s }
     end
   end

@@ -7,9 +7,11 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   include Views::Tenant::OrgGraph::Formatting
 
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
-  def initialize(overview:)
+  # @param comparison [OrgGraph::Comparison] marks what changed in the window
+  def initialize(overview:, comparison: OrgGraph::Comparison::NONE)
     @overview = overview
     @unit = overview.selected
+    @comparison = comparison
   end
 
   def view_template
@@ -52,11 +54,15 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
     render Components::Kit::Card.new(density: :compact, id: "unit-#{unit.id}") do |card|
       card.body do
         div(class: "flex items-baseline justify-between gap-3 pt-3") do
-          h4(class: "font-semibold text-default") { unit.name }
+          div(class: "flex flex-wrap items-baseline gap-2") do
+            h4(class: "font-semibold text-default") { unit.name }
+            @comparison.unit_marks(unit).each { render Components::Kit::Badge.new(it, tone: :info) }
+          end
           span(class: "shrink-0 text-sm text-muted tabular-nums") { card_count(unit) }
         end
         p(class: "text-xs text-muted") { @overview.level_of(unit)&.name }
         members_list(unit)
+        people_changes(unit)
         sub_units_line(unit)
       end
     end
@@ -94,6 +100,23 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
         span { [ membership.role, person.job_title ].compact_blank.join(" · ") }
         span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
         hris_level(person)
+      end
+    end
+  end
+
+  def people_changes(unit)
+    changes = @comparison.people_changes(unit)
+    return if changes.empty?
+
+    div(class: "mt-3 border-t border-subtle pt-2") do
+      p(class: "text-xs font-semibold text-muted") { @comparison.window_label }
+      ul(class: "mt-1 space-y-1 text-sm", aria: { label: "#{@comparison.window_label} in #{unit.name}" }) do
+        changes.each do |change|
+          li do
+            span(class: "font-medium text-default") { change.name }
+            plain " #{change.text}"
+          end
+        end
       end
     end
   end

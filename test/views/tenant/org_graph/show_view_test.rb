@@ -19,6 +19,20 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
     end
   end
 
+  class StubComparisonBar < Views::Base
+    def view_template = p(id: "comparison-bar") { "Since 1 Oct" }
+  end
+
+  class StubComparison < OrgGraph::Comparison
+    def unit_marks(unit) = unit.name == "Platform" ? [ "was Core" ] : []
+
+    def people_changes(unit)
+      unit.name == "Platform" ? [ PersonChange.new(name: "Brook Tamsin", text: "joined 5 Nov") ] : []
+    end
+
+    def window_label = "Since 1 Oct"
+  end
+
   setup do
     @tenant = create(:tenant)
     @user = create(:user)
@@ -77,5 +91,24 @@ class Views::Tenant::OrgGraph::ShowViewTest < ActiveSupport::TestCase
 
     assert_includes page.text, "No units yet"
     assert page.at_css("aside##{Views::Tenant::OrgGraph::Sidebar::ID}")
+  end
+
+  should "mark nothing and show no comparison bar by default" do
+    page = render_page
+
+    assert_nil page.at_css("#comparison-bar")
+    refute_includes page.text, "was Core"
+    assert_empty page.css("[aria-label^='Since']")
+  end
+
+  should "mark a unit in the tree and on its card, and list its people changes, from a comparison handed in" do
+    page = render_page(comparison_bar: StubComparisonBar.new, comparison: StubComparison.new)
+
+    assert_equal "Since 1 Oct", page.at_css("#comparison-bar").text
+    tree_link = page.css("nav[aria-labelledby=org-graph-tree-label] a").find { it.at_css("span").text == "Platform" }
+    assert_includes tree_link.text, "was Core"
+    card = page.css("[id^='unit-']").find { it.at_css("h4")&.text == "Platform" }
+    assert_includes card.text, "was Core"
+    assert_equal "Brook Tamsin joined 5 Nov", card.at_css("[aria-label='Since 1 Oct in Platform'] li").text.squish
   end
 end
