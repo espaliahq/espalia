@@ -151,7 +151,9 @@ so each projection decides for itself.
   deleted brings the key back, and the event that recorded the forgetting is missing
   from it too. Nothing outside the backups records what was forgotten, so a restore
   does not carry it out again. The retention period repairs most of it without help: a
-  person past their date is forgotten again on the next run. Two cases need a person:
+  person past their date is forgotten again on the next run. The date is worked out
+  from the leaving date, which the restored events still hold or the next sync records
+  again. Two cases need a person:
   someone forgotten on request before their date, and a deleted plan, which comes back
   and has to be deleted again. A deployment that restores a backup should check for
   both.
