@@ -59,7 +59,8 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       employees.each do |raw_employee|
         mapper = Hris::Hibob::ResponseMapper.new(
           raw_employee,
-          level_field_id: config.level_field_id
+          level_field_id: config.level_field_id,
+          mapped_fields:
         )
         # Dev-only PII guard — pass-through outside development.
         attrs = Hris::DevNameWhimsifier.call(mapper.call)
@@ -227,9 +228,17 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       Hris::Hibob::Client.new(
         service_user_id: creds.service_user_id,
         api_token: creds.api_token,
-        level_field_id: config.level_field_id
+        level_field_id: config.level_field_id,
+        mapped_fields:
       )
     end
+  end
+
+  # The fields the tenant's Org Graph mapping names for HiBob.
+  #
+  # @return [Hash{String => String}]
+  def mapped_fields
+    @mapped_fields ||= ActsAsTenant.with_tenant(tenant) { OrgFactProvider.fields_for(provider_name) }
   end
 
   # @return [Hash] result hash seeded with zero counters and empty sets
@@ -322,7 +331,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       today = Date.current
 
       rows.each do |person, row|
-        facts = row.slice(:title, :level, :site, :country, :fte, :employment_type)
+        facts = row.slice(:title, :level, :cost_centre, :site, :country, :fte, :employment_type)
         if row[:manager_external_id].nil?
           facts[:manager_id] = nil
         elsif (manager = managers[row[:manager_external_id]]) && manager != person

@@ -27,6 +27,9 @@ class OrgGraph::StructureAggregate
   # The facts an HRIS supplies unless someone chose otherwise. The sync writes
   # these, and connecting an HRIS claims them for it.
   HRIS_FACTS = %w[employment_status title level manager site employment].freeze
+  # The parts of a fact an HRIS can be told to read from a field of the tenant's
+  # choosing. The rest come from the fields each adapter reads by default.
+  MAPPABLE_FIELDS = { "cost_centre" => %w[cost_centre], "site" => %w[country] }.freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids,
                     :created_on, :changed_on, keyword_init: true)
@@ -36,6 +39,7 @@ class OrgGraph::StructureAggregate
     @units = {}
     @level_providers = {}
     @fact_providers = {}
+    @fact_fields = {}
     @successions = {}
   end
 
@@ -122,21 +126,30 @@ class OrgGraph::StructureAggregate
     }))
   end
 
-  # Sets who supplies a kind of person fact. An unchanged provider writes
-  # nothing, but the first choice is always written, Espalia included, so a
-  # later {#claim_facts} knows someone chose.
+  # Sets who supplies a kind of person fact and, for an HRIS, the fields it
+  # reads the fact from. A field names its provider in the same event, so no
+  # fact Espalia holds has one. Moving a fact to another provider clears its
+  # fields; restating the same provider without `fields:` keeps them. An
+  # unchanged setting writes nothing, but the first choice is always written,
+  # Espalia included, so a later {#claim_facts} knows someone chose.
   #
   # @param fact [String, Symbol] one of {FACTS}
   # @param provider [String] one of {PROVIDERS}
   # @param effective_on [Date, String]
+  # @param fields [Hash{String => String}, nil] the HRIS field path for each
+  #   part of the fact named in {MAPPABLE_FIELDS}; nil keeps the current ones
   # @param set_by_id [String, nil] person_id of the actor
-  # @raise [ArgumentError] if the fact or the provider is unknown
-  def set_fact_provider(fact, provider, effective_on:, set_by_id: nil)
+  # @raise [ArgumentError] if the fact, the provider or a field is unknown, or
+  #   a field is named for Espalia
+  def set_fact_provider(fact, provider, effective_on:, fields: nil, set_by_id: nil)
     fact = fact.to_s
     raise ArgumentError, "Unknown fact: #{fact}" unless FACTS.include?(fact)
 
     provider = require_provider(provider)
-    return if @fact_providers[fact] == provider
+    unchanged = @fact_providers[fact] == provider
+    current_fields = @fact_fields.fetch(fact, {})
+    fields = fields.nil? && unchanged ? current_fields : require_fields(fact, provider, fields)
+    return if unchanged && fields == current_fields
 
     previous = @fact_providers.fetch(fact, ESPALIA)
 
@@ -144,6 +157,7 @@ class OrgGraph::StructureAggregate
       fact: fact,
       provider: provider,
       previous_provider: previous,
+      fields: fields,
       effective_on: iso_date(effective_on),
       set_by_id: set_by_id
     }))
@@ -381,6 +395,7 @@ class OrgGraph::StructureAggregate
 
   on OrgGraph::Events::FactProviderSet do |event|
     @fact_providers[event.data[:fact]] = event.data[:provider]
+    @fact_fields[event.data[:fact]] = (event.data[:fields] || {}).transform_keys(&:to_s)
   end
 
   on OrgGraph::Events::UnitCreated do |event|
@@ -584,6 +599,20 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
 
     provider
+  end
+
+  # @return [Hash{String => String}]
+  def require_fields(fact, provider, fields)
+    fields = (fields || {}).to_h { |part, path| [ part.to_s, path.to_s.strip ] }
+    return fields if fields.empty?
+
+    raise ArgumentError, "A field needs an HRIS provider, not #{ESPALIA}" if provider == ESPALIA
+
+    unknown = fields.keys - MAPPABLE_FIELDS.fetch(fact, [])
+    raise ArgumentError, "No field can be chosen for #{fact} #{unknown.join(', ')}" if unknown.any?
+    raise ArgumentError, "A field needs a path" if fields.value?("")
+
+    fields
   end
 
   def iso_date(value)

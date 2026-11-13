@@ -155,6 +155,14 @@ To pull an additional field (e.g. employment type, cost center, location) throug
 4. **Tests** — add a case to `response_mapper_test.rb` with fixture data. Update `test/fixtures/files/hibob/people_search_response.json` if needed.
 5. **Adapter** — no changes needed if you just want the field on Person. If the field affects assignment logic, add it to Pass 5.
 
+### A field the tenant's mapping names
+
+An Org Graph fact can be read from a field each tenant chooses. The choice lives beside the fact's provider: `FactProviderSet` carries `fields`, the HRIS path for each part of the fact, and `OrgFactProvider.fields_for(provider)` reads them back. Setting a field always sets its provider in the same event, so a fact Espalia holds never has one. Moving the fact to another provider clears its fields.
+
+The HiBob adapter passes `fields_for("hibob")` to the client, which requests each path beside `BASE_FIELDS`, and to `ResponseMapper#org_graph_facts`, which reads each part from its path. Only the parts in `OrgGraph::StructureAggregate::MAPPABLE_FIELDS` can be mapped: `cost_centre`, and a site's `country`. To make another part mappable, add it there and read it in `#org_graph_facts`. Keep the rule that a fact is reported only when HiBob sends its field, and that a pair waits for both halves.
+
+Take each path from the catalogue (`#field_catalogue`), never typed, so the search names only fields HiBob knows.
+
 ## Adding a new HRIS provider
 
 Subclass `Hris::BaseAdapter` under `app/integrations/hris/<provider>/`:

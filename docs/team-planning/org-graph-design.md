@@ -97,7 +97,7 @@ Dates for the status events and the start date:
 - **`PersonReturned` is effective on the start date when it falls after the leaving**, else the sync's date, since an HRIS may still hold a returner's first start. A leaver whose rehire has not started yet stays left, and their facts are not compared until they return.
 - **`StartDateChanged` supplies or corrects the start date of someone recorded and not left**, effective on that date. `PersonRecorded` carries the start date when the HRIS sends one.
 - **The history projection reads employment as beginning on the start date** when one is held, not on the day the sync first saw the person.
-- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country.
+- **Country stays absent** until the tenant's field mapping names a field for it. HiBob gives a site no country. Once one is mapped, a site is compared only when HiBob sends both.
 
 ### One structure stream per tenant
 
@@ -369,6 +369,8 @@ overwritten those columns on `people`; it is not a handover. A fact whose provid
 ever chosen keeps it, so a re-run reaches only facts added to the list since.
 Disconnecting hands nothing back: that is a handover too.
 
+The field a fact is read from is part of the same setting: `FactProviderSet` carries `fields`, so naming a field names its provider too. Cost centre and a site's country can be mapped today.
+
 When a provider is added for a fact Espalia has been holding, the two are compared.
 Agreement is silent. A disagreement is listed for someone to resolve, and the provider's
 value becomes the Org Graph.
@@ -407,9 +409,8 @@ Someone can state the succession. The screen says which kind each field is.
 The HiBob adapter is most of the way there, and the gaps are small.
 
 - It can already read the field catalogue and the named lists. Nothing calls either yet.
-- It requests a fixed set of fields, with department the only structural one. One extra
-  field per tenant is already supported, for the level. The requested set becomes the
-  fields the tenant's mapping names.
+- It requests a fixed set of fields, with department the only structural one, plus the
+  level field and the fields the tenant's mapping names (6.4).
 - The level field is set by pasting its raw id. The picker replaces that.
 - It asks for both the stored value and the display text. The mapper reads them as a
   pair (`ResponseMapper#list_values`), but the sync still writes only the text.

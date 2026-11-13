@@ -28,9 +28,12 @@ class Hris::Hibob::ResponseMapper
 
   # @param employee [Hash] raw employee data from HiBob API
   # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
-  def initialize(employee, level_field_id: nil)
+  # @param mapped_fields [Hash{String => String}] the field the tenant's mapping
+  #   names for each part of a fact, as {OrgFactProvider.fields_for} gives them
+  def initialize(employee, level_field_id: nil, mapped_fields: {})
     @employee = employee
     @level_field_id = level_field_id
+    @mapped_fields = mapped_fields.transform_keys(&:to_s)
   end
 
   # @return [Hash] mapped Person attributes
@@ -69,19 +72,26 @@ class Hris::Hibob::ResponseMapper
     raw.to_s.strip.presence unless raw.is_a?(Hash)
   end
 
-  # The site, employment and dates the Org Graph records, keyed as
+  # The site, cost centre, employment and dates the Org Graph records, keyed as
   # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
   # the payload carries its field, so one HiBob withholds (the service user
-  # can't read it) is never compared, and FTE and type are written only when
-  # both arrive, since they travel together; a field it sends blank, or a value the
-  # Org Graph can't hold (an FTE outside 1–100, a date that isn't ISO 8601), is
-  # nil. HiBob gives a site no country, so country is always absent.
+  # can't read it) is never compared. A pair travels together, so FTE and type
+  # are written only when both arrive, and so are a site and a mapped country.
+  # A field it sends blank, or a value the Org Graph can't hold (an FTE outside
+  # 1–100, a date that isn't ISO 8601), is nil. HiBob gives a site no country,
+  # so country is nil until the mapping names a field for it, and cost centre
+  # is absent until the mapping names its field.
   #
-  # @return [Hash] any of :site with :country, :fte with :employment_type,
-  #   :started_on and :terminated_on
+  # @return [Hash] any of :site with :country, :cost_centre, :fte with
+  #   :employment_type, :started_on and :terminated_on
   def org_graph_facts
     facts = {}
-    facts.merge!(site: label(%w[work site]), country: nil) if supplied?(%w[work site])
+    country = mapped_path("country")
+    if supplied?(%w[work site]) && (country.nil? || supplied?(country))
+      facts.merge!(site: label(%w[work site]), country: (label(country) if country))
+    end
+    cost_centre = mapped_path("cost_centre")
+    facts[:cost_centre] = label(cost_centre) if cost_centre && supplied?(cost_centre)
     if supplied?(%w[payroll employment fte]) && supplied?(%w[payroll employment type])
       facts.merge!(fte: fraction(value(%w[payroll employment fte])),
         employment_type: human_readable(%w[payroll employment type]))
@@ -105,10 +115,17 @@ class Hris::Hibob::ResponseMapper
 
   private
 
-  attr_reader :employee, :level_field_id
+  attr_reader :employee, :level_field_id, :mapped_fields
+
+  def level_path = path_of(level_field_id)
+
+  # @return [Array<String>, nil]
+  def mapped_path(part)
+    path_of(mapped_fields[part]) if mapped_fields[part].present?
+  end
 
   # HiBob returns root fields (`root.email`) at the top level, not under `root`.
-  def level_path = Hris::Hibob::Client.field_path(level_field_id).delete_prefix("root.").split(".")
+  def path_of(field_id) = Hris::Hibob::Client.field_path(field_id).delete_prefix("root.").split(".")
 
   # Extracts the level ordinal from the HiBob custom column.
   #
@@ -141,7 +158,7 @@ class Hris::Hibob::ResponseMapper
 
   # @param path [Array<String>]
   def supplied?(path)
-    parent = employee.dig(*path[0..-2])
+    parent = parent_of(path)
     (parent.is_a?(Hash) && parent.key?(path.last)) || employee.key?(flat_key(path))
   end
 
@@ -149,7 +166,7 @@ class Hris::Hibob::ResponseMapper
   #
   # @param path [Array<String>]
   def value(path)
-    parent = employee.dig(*path[0..-2])
+    parent = parent_of(path)
     return parent[path.last] if parent.is_a?(Hash) && parent.key?(path.last)
 
     flat = employee[flat_key(path)]
@@ -191,6 +208,9 @@ class Hris::Hibob::ResponseMapper
   end
 
   def flat_key(path) = "/#{path.join('/')}"
+
+  # A root field (`root.id`) has no parent but the employee.
+  def parent_of(path) = path.one? ? employee : employee.dig(*path[0..-2])
 
   # @return [String, nil]
   def build_name

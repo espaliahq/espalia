@@ -888,6 +888,32 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
           new_events.map { |e| [ e.class, *e.data.values_at(:site, :country) ] }
       end
 
+      should "read cost centre and country from the fields the tenant's mapping names" do
+        handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+        handler.set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "work.customColumns.column_cc" },
+                                                          effective_on: Date.current)
+        handler.set_fact_provider("site", "hibob", fields: { country: "address.country" }, effective_on: Date.current)
+        @recorded = org_graph_events.size
+        employees = with_employee("bob-001") do |e|
+          e["work"]["customColumns"] = { "column_cc" => "cc-17" }
+          e["address"] = { "country" => "AU" }
+          e["humanReadable"]["work"]["customColumns"] = { "column_cc" => "Platform" }
+          e["humanReadable"]["address"] = { "country" => "Australia" }
+        end
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::CostCentreChanged, "Platform" ], [ OrgGraph::Events::SiteChanged, "Australia" ] ],
+          new_events.map { |e| [ e.class, e.data[:cost_centre] || e.data[:country] ] }
+      end
+
+      should "request the mapped fields from HiBob" do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
+          fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
+
+        assert_includes Hris::Hibob::Adapter.new(@tenant).send(:client).default_fields, "work.customColumns.column_cc"
+      end
+
       should "write an EmploymentChanged for a new FTE, keeping HiBob's own type label" do
         employees = with_employee("bob-001") do |e|
           e["payroll"]["employment"]["fte"] = 60

@@ -18,4 +18,12 @@ class OrgFactProvider < ApplicationRecord
   def self.provider_for(fact)
     find_by(fact: fact.to_s)&.provider || OrgGraph::StructureAggregate::ESPALIA
   end
+
+  # The fields a provider was told to read, by the part of the fact each holds.
+  #
+  # @param provider [String]
+  # @return [Hash{String => String}] e.g. { "cost_centre" => "work.customColumns.column_1" }
+  def self.fields_for(provider)
+    where(provider: provider).pluck(:fields).reduce({}, :merge)
+  end
 end

@@ -65,6 +65,22 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
         assert_equal 2, OrgFactProvider.count
       end
     end
+
+    should "keep the fields an HRIS reads beside its provider" do
+      as_tenant do
+        @handler.set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "work.customColumns.column_1" },
+                                                           effective_on: "2026-02-01")
+        @handler.set_fact_provider("site", "hibob", fields: { country: "address.country" }, effective_on: "2026-02-01")
+        @handler.set_fact_provider("title", "hibob", effective_on: "2026-02-01")
+
+        assert_equal({ "cost_centre" => "work.customColumns.column_1", "country" => "address.country" },
+                     OrgFactProvider.fields_for("hibob"))
+
+        @handler.set_fact_provider("site", "espalia", effective_on: "2026-03-01")
+
+        assert_equal({ "cost_centre" => "work.customColumns.column_1" }, OrgFactProvider.fields_for("hibob"))
+      end
+    end
   end
 
   context "the owners" do
