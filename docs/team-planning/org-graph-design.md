@@ -238,8 +238,10 @@ its memberships into `org_unit_activities`, and `OrgUnitActivity.for_unit(unit_i
 them newest first. Each entry says who made the change, or which provider supplied it,
 what it changed from and to, when it took effect and when the Org Graph learned it. A move
 between units is an entry in each, naming the other. A succession is an entry in every
-unit it names. Entries keep their event's `causation_id` and `correlation_id`, so the
-moves a retirement causes can be shown as one (7.2).
+unit it names. Each entry keeps its event's `correlation_id`, the cause 7.2 groups by: the
+approval a plan's changes share, or the request that made one direct edit. It keeps
+`causation_id` too, though RES rewrites that inside sync handlers, so it names the event
+that triggered a handler rather than the cause.
 
 **Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
 with a new event that carries `changed_back_id`, the event it reverses. Nothing is
