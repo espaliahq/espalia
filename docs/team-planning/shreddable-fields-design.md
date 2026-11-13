@@ -73,6 +73,9 @@ Two things follow:
 - An aggregate cannot check that a shreddable value is unchanged. The Operation does
   that, against a projection. Comparing hashes is not a substitute: a hash of a salary
   is easy to brute-force.
+- That check may skip a write only when the projection is current. A projection can lag
+  the stream. If it has not applied the stream's latest event, the Operation writes the
+  value. A redundant event costs nothing. A change dropped as "unchanged" is lost.
 
 If a rule truly needs a value in order to decide, the value should not be shreddable.
 
@@ -103,6 +106,24 @@ Deleting a key is not enough. Read models, caches and exports hold decrypted cop
 2. The key is deleted.
 3. Projections handle the event and scrub what they hold. A full rebuild gives the same
    result, which is why the projection spec matters.
+
+Steps 1 and 2 are one database transaction. Keys and events live in the same database,
+so there is no moment when the event exists and the key still does. A crash leaves both
+or neither. Handlers and rebuilds run after the commit, so none can read the value once
+the event is visible.
+
+Step 3 is safe to repeat. A scrub that fails is retried until it succeeds, and running
+it twice changes nothing. Until it runs, a read model may still show the value to someone
+already allowed to see it. That window is the handler's delay, and a deployment should
+alert on a scrub that keeps failing.
+
+A cache is a read model for this purpose. Anything that holds a decrypted value either
+scrubs on the event or is rebuilt from a projection that does. Nothing may cache a
+decrypted value without one of the two.
+
+An export that has left Espalia cannot be recalled. Exporting a shreddable value needs
+the permission to view it, and the export is recorded, so an organisation can say which
+copies forgetting did not reach.
 
 A projection that shows a forgotten value may say why it is gone, a deleted plan or a
 forgotten person, where that helps its reader. The event in step 1 carries the reason,
