@@ -395,7 +395,8 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       squad, guild = events.drop(1)
       assert_equal [ OrgGraph::Events::MembershipSet ] * 2, [ squad.class, guild.class ]
       assert_equal({ person_id: @person_id, unit_id: @squad, allocation: 0.6, role: "Tech lead", provider: "hibob",
-                     effective_on: "2026-11-01", set_by_id: nil, plan_change_id: nil }, squad.data.symbolize_keys)
+                     effective_on: "2026-11-01", set_by_id: nil, plan_change_id: nil, changed_back_id: nil },
+        squad.data.symbolize_keys)
       assert_equal @guild, guild.data[:unit_id]
       assert_nil guild.data[:role]
     end
