@@ -24,6 +24,7 @@ class OrgGraph::PersonAggregate
     @employment_status = nil
     @last_status_change = nil
     @started_on = nil
+    @left_on = nil
     @left_from = nil
     @facts = {}
     @fact_providers = {}
@@ -215,8 +216,12 @@ class OrgGraph::PersonAggregate
   # that gives the status without a status-change date. One that matches
   # writes nothing, so a repeat sync never moves the date of the last change.
   # A join is effective on the start date and a leaving on the termination
-  # date when the provider holds them, else on `effective_on`. A reported
-  # `pending` never moves someone back from employed.
+  # date when the provider holds them, else on `effective_on`. A return is
+  # effective on the start date only when it falls after the leaving, since
+  # a returner's provider may still hold the first start. A leaver whose
+  # termination date arrives or changes gets a PersonLeft on that date. A
+  # reported `pending` never moves someone back from employed, nor a leaver
+  # back before a rehire starts.
   #
   # @param employment_status [String] one of {EMPLOYMENT_STATUSES}
   # @param provider [String] one of {PROVIDERS}
@@ -224,7 +229,10 @@ class OrgGraph::PersonAggregate
   # @param started_on [Date, String, nil]
   # @param left_on [Date, String, nil]
   def match_status(employment_status, provider:, effective_on:, started_on: nil, left_on: nil)
-    return if employment_status == @employment_status
+    if employment_status == @employment_status
+      correct_leaving_date(left_on, provider) if left? && left_on.present?
+      return
+    end
 
     case employment_status
     when "pending" then nil
@@ -233,10 +241,15 @@ class OrgGraph::PersonAggregate
       if @employment_status == "pending"
         join(provider:, effective_on: started_on.presence || effective_on)
       else
-        return_to_work(provider:, effective_on:)
+        return_to_work(provider:, effective_on: return_date(started_on) || effective_on)
       end
     else raise "Can't move from #{@employment_status} to #{employment_status}"
     end
+  end
+
+  # @return [Boolean] whether the person has left
+  def left?
+    @employment_status == "left"
   end
 
   # Supplies or corrects the start date of someone already recorded. Blank or
@@ -290,6 +303,19 @@ class OrgGraph::PersonAggregate
     ensure_leaves_after_start!(data[:effective_on]) if to == "left"
 
     apply(event_class.new(data: data))
+  end
+
+  def correct_leaving_date(left_on, provider)
+    data = provenance(provider, left_on)
+    return if data[:effective_on] == @left_on
+
+    ensure_leaves_after_start!(data[:effective_on])
+    apply(OrgGraph::Events::PersonLeft.new(data: data))
+  end
+
+  def return_date(started_on)
+    started_on = normalize_date(started_on, :started_on)
+    started_on if started_on && @left_on && started_on > @left_on
   end
 
   # A hire who never started may drop out at any date, before or after a correction.
@@ -363,6 +389,7 @@ class OrgGraph::PersonAggregate
     @person_id = event.data[:person_id]
     @employment_status = event.data[:employment_status]
     @started_on = event.data[:started_on]
+    @left_on = event.data[:left_on]
     @facts = event.data.slice(*FACT_KEYS)
     @fact_providers = FACT_KEYS.index_with(event.data[:provider])
   end
@@ -377,6 +404,7 @@ class OrgGraph::PersonAggregate
       @employment_status = status
       @last_status_change = [ event_class, event.data.values_at(:effective_on, :provider) ]
       @started_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonJoined
+      @left_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonLeft
     end
   end
 

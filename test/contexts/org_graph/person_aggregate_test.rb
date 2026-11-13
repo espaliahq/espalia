@@ -295,6 +295,45 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_equal [ "2026-10-20", "2026-10-31" ], events.drop(1).map { |e| e.data[:effective_on] }
     end
 
+    should "correct a leaver's date to the termination date once it arrives, and write nothing after" do
+      record
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-03")
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-04", left_on: "2026-10-31")
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-05", left_on: "2026-10-31")
+      @aggregate.match_status("left", provider: "hibob", effective_on: "2026-11-06")
+
+      assert_equal [ "2026-11-03", "2026-10-31" ], events.drop(1).map { |e| e.data[:effective_on] }
+    end
+
+    should "correct the leaving date of someone first recorded as a leaver" do
+      @aggregate.record(@person_id, **PROVENANCE, employment_status: "left")
+      @aggregate.match_status("left", **PROVENANCE, left_on: "2026-10-31")
+
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-10-31" ], [ events.last.class, events.last.data[:effective_on] ]
+    end
+
+    should "date a return by a start date after the leaving, and by the sync day otherwise" do
+      record(started_on: "2023-01-15")
+      @aggregate.match_status("left", **PROVENANCE, left_on: "2026-06-30")
+      @aggregate.match_status("employed", provider: "hibob", effective_on: "2026-11-05", started_on: "2026-11-02")
+
+      other = OrgGraph::PersonAggregate.new
+      other.record(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      other.match_status("left", **PROVENANCE, left_on: "2026-06-30")
+      other.match_status("employed", provider: "hibob", effective_on: "2026-11-05", started_on: "2023-01-15")
+
+      assert_equal "2026-11-02", events.last.data[:effective_on]
+      assert_equal "2026-11-05", other.unpublished_events.to_a.last.data[:effective_on]
+    end
+
+    should "keep a leaver left while a rehire's start date is still ahead" do
+      record
+      @aggregate.match_status("left", **PROVENANCE)
+      @aggregate.match_status("pending", **PROVENANCE, started_on: "2026-12-01")
+
+      assert @aggregate.left?
+    end
+
     should "never move an employed person back to pending" do
       record
       @aggregate.match_status("pending", **PROVENANCE)

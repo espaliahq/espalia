@@ -118,6 +118,25 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal [ OrgGraph::Events::PersonLeft, "2026-10-31" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
     end
 
+    should "drop a leaving date before the start date, so the person is still recorded and left" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", started_on: "2026-12-01", left_on: "2026-11-15")
+      other = SecureRandom.uuid_v7
+      @handler.sync_person(other, **PROVENANCE, employment_status: "employed", started_on: "2023-01-15")
+      @handler.sync_person(other, **PROVENANCE, employment_status: "left", started_on: "2023-01-15", left_on: "2022-12-31")
+
+      assert_equal [ "left", nil ], stream_events.first.data.values_at(:employment_status, :left_on)
+      leaving = Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(other)).last
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-11-01" ], [ leaving.class, leaving.data[:effective_on] ]
+    end
+
+    should "not compare a leaver's facts or start date while their rehire is pending" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left")
+
+      assert_equal 0, @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending",
+        started_on: "2026-12-01", title: "Lead")
+    end
+
     should "refuse half a pair on the first sync as on every later one" do
       assert_raises(ArgumentError) do
         @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", site: "Sydney")

@@ -41,7 +41,8 @@ class OrgGraph::CommandHandler
   # their stream: the first time, it records them with the facts as they
   # stand; after that, it moves their status if it differs, then supplies or
   # corrects their start date and applies each fact that differs. A leaver's
-  # facts are not compared.
+  # facts are not compared, even while a rehire waits for their start date.
+  # A leaving date before the start date contradicts it and is dropped.
   #
   # @param person_id [String]
   # @param provider [String]
@@ -53,11 +54,12 @@ class OrgGraph::CommandHandler
   # @return [Integer] how many events were written
   def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
     written = 0
+    left_on = nil if leaves_before_start?(left_on, started_on)
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
       if person.recorded?
         person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
-        unless employment_status == "left"
+        unless person.left?
           person.change_start_date(started_on, provider:)
           person.apply_facts(provider:, effective_on:, **facts)
         end
@@ -153,6 +155,12 @@ class OrgGraph::CommandHandler
   end
 
   private
+
+  def leaves_before_start?(left_on, started_on)
+    left_on.present? && started_on.present? && left_on.to_date < started_on.to_date
+  rescue Date::Error, NoMethodError
+    false
+  end
 
   # Reads the structure projection, which is written synchronously with the
   # structure stream, rather than replaying that stream for every person.
