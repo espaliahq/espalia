@@ -44,6 +44,19 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[aria-current='page']", text: /Checkout/
     end
 
+    should "sum up what is beneath the opened unit in taxonomy order, whatever the tree order" do
+      org = build_org_graph(@tenant)
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .create_unit(SecureRandom.uuid_v7, "Atlas", level_id: org[:squad],
+                                                      parent_id: org[:engineering], effective_on: "2026-01-01")
+      end
+
+      get tenant_org_graph_path
+
+      assert_includes response.body, "4 people, 2 teams, 2 squads"
+    end
+
     should "count only the direct members on the opened unit's own card" do
       org = build_org_graph(@tenant)
       ActsAsTenant.with_tenant(@tenant) do
