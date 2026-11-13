@@ -111,6 +111,22 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
     end
   end
 
+  context "with a unit or person the Org Graph doesn't hold" do
+    should "leave it to an admin or an editor" do
+      owner = policy_for(context_for(@other))
+      as_tenant { @handler.add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01") }
+
+      assert_not owner.edit_unit?(nil)
+      assert_not owner.create_unit?(nil)
+      assert_not policy_for(context_for(@lead)).edit_membership?(nil, nil)
+      assert policy_for(context_for(@lead, org_graph_editor: true)).edit_membership?(nil, nil)
+    end
+
+    should "still let the manager chain end a membership of a unit that is gone" do
+      assert policy_for(context_for(@lead)).edit_membership?(@report, nil)
+    end
+  end
+
   context "in a person's manager chain" do
     setup { @policy = policy_for(context_for(@lead)) }
 
