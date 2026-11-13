@@ -247,6 +247,20 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_match(/8 of 16 memberships would end/, result[:errors].sole[:error])
     end
 
+    should "count a retiring unit's members whose move out of it failed" do
+      crowd = Array.new(8) { |index| recorded_person("hb-crowd-#{index}") }
+      mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
+      @catalogue[1] = team_field(%w[t2 Search])
+
+      build = OrgGraph::CommandHandler.method(:new)
+      refusing = ->(**options) { build.call(**options).tap { it.define_singleton_method(:move_membership) { |*| raise "refused" } } }
+      result = OrgGraph::CommandHandler.stub(:new, refusing) { mirror(crowd.to_h { [ it, { division: "d1", team: "t2" } ] }) }
+
+      assert OrgUnit.live.exists?(external_ref: "work.department/t1")
+      assert(crowd.all? { team_membership(it) })
+      assert_match(/8 of 16 memberships would end/, result[:errors].last[:error])
+    end
+
     should "count a membership once when it is both blanked and in a retiring unit" do
       mirror(@staff.to_h { [ it, { division: "d1", team: "t1" } ] })
       @catalogue[1] = team_field(%w[t2 Search])

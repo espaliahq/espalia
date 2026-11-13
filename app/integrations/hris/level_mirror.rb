@@ -199,18 +199,20 @@ class Hris::LevelMirror
 
   # A retiring unit's remaining members are ended with it, so they count
   # against the brake too, and a tripped brake holds those retirements back.
+  # Moves go first: one that fails leaves its person in the unit, to be
+  # counted with the rest.
   #
   # @return [Boolean] false when the brake held the endings back
   def write_memberships(plans, retiring)
     changes = plans.flat_map { |level_plan| membership_changes(level_plan) }
     ends, others = changes.partition { |change| change[:action] == :end }
-    leaving = changes.filter_map { |change| [ change[:person].id, change[:from] ] if change[:from] }.to_set
-    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).pluck(:person_id, :unit_id).count { !leaving.include?(it) }
     held = OrgMembership.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).count
-    braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
-    ends = [] if braked
+    written = others.select { |change| write_membership(change) }
 
-    (others + ends).each { |change| write_membership(change) }
+    leaving = (written + ends).filter_map { |change| [ change[:person].id, change[:from] ] if change[:from] }.to_set
+    retired_with = OrgMembership.where(unit_id: retiring.map(&:id)).pluck(:person_id, :unit_id).count { !leaving.include?(it) }
+    braked = braked?(ends.size + retired_with, held, "memberships would end", "no membership was ended and no unit retired")
+    ends.each { |change| write_membership(change) } unless braked
     !braked
   end
 
@@ -243,8 +245,10 @@ class Hris::LevelMirror
     when :end then people.end_membership(person_id, change[:from], provider: @provider, effective_on: @today)
     end
     counted
+    true
   rescue => e
     @result[:errors] << { person_id: person_id, error: e.message }
+    false
   end
 
   def retiring_units(plans)
