@@ -92,7 +92,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
         "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm",
         selected ? "bg-neutral-muted font-semibold text-default" : "text-default hover:bg-default-hover"
       ],
-      aria: { current: selected ? "true" : nil }
+      aria: { current: selected ? "page" : nil }
     ) do
       span(class: "min-w-0 truncate") { unit.name }
       hris_lock(unit) unless unit.held_by_espalia?

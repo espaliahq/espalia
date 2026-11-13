@@ -41,7 +41,7 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       get tenant_org_graph_path(unit: org[:checkout])
 
       assert_equal "Checkout", Nokogiri::HTML5(response.body).at_css("#org-graph-unit").text
-      assert_select "a[aria-current='true']", text: /Checkout/
+      assert_select "a[aria-current='page']", text: /Checkout/
     end
 
     should "count only the direct members on the opened unit's own card" do
