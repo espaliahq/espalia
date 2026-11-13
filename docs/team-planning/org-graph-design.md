@@ -1,7 +1,8 @@
 # Org Graph — design
 
-> Status: proposal. Nothing here is built. [The index](README.md) lists the companion
-> designs, the mockups and the plan.
+> Status: proposal. Only the person stream and its events are built, in `app/contexts/org_graph/`
+> ([#46](https://github.com/espaliahq/espalia/issues/46)). [The index](README.md) lists the
+> companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
 do, who they report to and which teams they are in, with the history of how that
