@@ -222,6 +222,16 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
       assert_equal "request-2", latest(@payments).cause_id
     end
 
+    should "refuse once one part has been changed back alone, and point to changing back the rest one at a time" do
+      as_tenant do
+        request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+        [ @ada, @grace ].each { |person| request.end_membership(person.id, @payments, **ESPALIA) }
+      end
+      change_back(as_tenant { OrgUnitActivity.caused_by("request-1").first })
+
+      assert_raises(RuntimeError, match: "one entry at a time") { change_back_group("request-1") }
+    end
+
     should "refuse an approved split as a whole, naming the part that can't be changed back" do
       billing = SecureRandom.uuid_v7
       as_tenant do

@@ -94,6 +94,9 @@ class OrgGraph::ChangeBackHandler
 
   def ensure_reversible!(entries, apart_from:)
     raise "Nothing to change back" if entries.empty?
+    if apart_from && entries.any?(&:changed_back?)
+      raise "Part of this change has already been changed back; change the rest back one entry at a time"
+    end
 
     entries.each do |entry|
       raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
