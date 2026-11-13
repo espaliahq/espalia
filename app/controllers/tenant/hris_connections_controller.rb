@@ -39,13 +39,13 @@ class Tenant::HrisConnectionsController < ApplicationController
     messages.presence || tenant.errors.full_messages
   end
 
+  # A form whose level field picker failed to render posts no level field;
+  # that keeps the stored one rather than clearing it.
   def settings_params
     permitted = params.expect(hris_connection: [ :provider, :level_field_id, :sync_enabled ]).to_h.symbolize_keys
-    {
-      provider: permitted[:provider].to_s.strip.presence,
-      sync_enabled: permitted[:sync_enabled],
-      level_field_id: permitted[:level_field_id].to_s.strip.presence
-    }
+    settings = { provider: permitted[:provider].to_s.strip.presence, sync_enabled: permitted[:sync_enabled] }
+    settings[:level_field_id] = permitted[:level_field_id].to_s.strip.presence if permitted.key?(:level_field_id)
+    settings
   end
 
   # @return [Hash] write-only credential fields; a blank keeps the stored value

@@ -74,6 +74,32 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_equal 5, result[:hris_level_ordinal]
     end
 
+    should "read the same level from a field stored as its path" do
+      employee = @fixture["employees"][0]
+
+      result = Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.customColumns.column_test_id")
+
+      assert_equal 5, result[:hris_level_ordinal]
+    end
+
+    should "read a level field outside the custom columns by its path" do
+      employee = { "id" => "bob-9", "humanReadable" => { "work" => { "level" => "4" } } }
+
+      assert_equal 4, Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.level")[:hris_level_ordinal]
+    end
+
+    should "read a root field from the top of humanReadable, where HiBob puts it" do
+      employee = { "id" => "bob-9", "humanReadable" => { "grade" => "3" } }
+
+      assert_equal 3, Hris::Hibob::ResponseMapper.call(employee, level_field_id: "root.grade")[:hris_level_ordinal]
+    end
+
+    should "read no level when the path runs into a value that is not an object" do
+      employee = { "id" => "bob-9", "humanReadable" => { "work" => { "level" => "4" } } }
+
+      assert_nil Hris::Hibob::ResponseMapper.call(employee, level_field_id: "work.level.ordinal")[:hris_level_ordinal]
+    end
+
     should "skip hris_level_ordinal when level_field_id is nil" do
       employee = @fixture["employees"][0]
       result = Hris::Hibob::ResponseMapper.call(employee)
@@ -104,6 +130,13 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       employee = { "humanReadable" => { "work" => { "customColumns" => { "column_test_id" => " Senior " } } } }
 
       assert_equal "Senior", Hris::Hibob::ResponseMapper.new(employee, level_field_id: "column_test_id").level_label
+    end
+
+    should "read the stored catalogue id the same as the bare column id" do
+      employee = { "humanReadable" => { "work" => { "customColumns" => { "column_test_id" => "Senior" } } } }
+      mapper = Hris::Hibob::ResponseMapper.new(employee, level_field_id: "work.customColumns.column_test_id")
+
+      assert_equal "Senior", mapper.level_label
     end
 
     should "be nil without a level column or a value" do
@@ -148,6 +181,17 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
 
       assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "209192163", label: "Platform"), values[:department]
       assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "4417", label: "Software Engineer"), values[:job_title]
+      assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "88", label: "5"), values[:level]
+    end
+
+    should "find the level by its catalogue id" do
+      employee = {
+        "id" => "1",
+        "work" => { "customColumns" => { "column_level" => "88" } },
+        "humanReadable" => { "work" => { "customColumns" => { "column_level" => "5" } } }
+      }
+      values = Hris::Hibob::ResponseMapper.new(employee, level_field_id: "work.customColumns.column_level").list_values
+
       assert_equal Hris::Hibob::ResponseMapper::ListValue.new(id: "88", label: "5"), values[:level]
     end
 

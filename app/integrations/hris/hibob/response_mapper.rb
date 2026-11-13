@@ -20,14 +20,14 @@ class Hris::Hibob::ResponseMapper
   # Maps a single HiBob employee hash to Person attributes.
   #
   # @param employee [Hash] raw employee data from HiBob API
-  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
+  # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
   # @return [Hash] attributes compatible with Person.new
   def self.call(employee, level_field_id: nil)
     new(employee, level_field_id: level_field_id).call
   end
 
   # @param employee [Hash] raw employee data from HiBob API
-  # @param level_field_id [String, nil] HiBob custom column ID for level ordinal
+  # @param level_field_id [String, nil] the level field's path, or a bare custom-column id
   def initialize(employee, level_field_id: nil)
     @employee = employee
     @level_field_id = level_field_id
@@ -65,7 +65,8 @@ class Hris::Hibob::ResponseMapper
   def level_label
     return nil if level_field_id.blank?
 
-    employee.dig("humanReadable", "work", "customColumns", level_field_id).to_s.strip.presence
+    raw = level_path.reduce(employee["humanReadable"]) { |node, key| node[key] if node.is_a?(Hash) }
+    raw.to_s.strip.presence unless raw.is_a?(Hash)
   end
 
   # The list fields' item ids beside their labels, keyed like the attributes they sit
@@ -76,7 +77,7 @@ class Hris::Hibob::ResponseMapper
     {
       department: list_value(%w[work department]),
       job_title: list_value(%w[work title]),
-      level: (list_value([ "work", "customColumns", level_field_id ]) if level_field_id.present?)
+      level: (list_value(level_path) if level_field_id.present?)
     }.compact
   end
 
@@ -84,9 +85,12 @@ class Hris::Hibob::ResponseMapper
 
   attr_reader :employee, :level_field_id
 
+  # HiBob returns root fields (`root.email`) at the top level, not under `root`.
+  def level_path = Hris::Hibob::Client.field_path(level_field_id).delete_prefix("root.").split(".")
+
   # Extracts the level ordinal from the HiBob custom column.
   #
-  # Reads from humanReadable.work.customColumns.<level_field_id>, which
+  # Reads the level field's path under humanReadable, which
   # (with humanReadable=APPEND) contains the display value of the list item.
   # me&u's level list uses the ordinal number as the display value.
   #

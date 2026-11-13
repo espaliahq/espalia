@@ -33,6 +33,7 @@ module HrisPage
       mapping_options: mapping_options(resolution, saved),
       can_edit_mappings: policy(:integrations).update_role_mappings?,
       can_edit_connection: policy(:integrations).update_hris_connection?,
+      hris_connected: saved.hris_config.connected?(saved),
       errors: errors,
       user: current_user,
       current_tenant: saved,

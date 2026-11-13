@@ -34,6 +34,23 @@ class HrisConfigTest < ActiveSupport::TestCase
     end
   end
 
+  context "#connected?" do
+    should "be true with a known provider and stored credentials, sync on or off" do
+      tenant = create(:tenant, :with_hibob_config)
+      tenant.update_hris!(settings: { sync_enabled: false })
+
+      assert tenant.hris_config.connected?(tenant)
+    end
+
+    should "be false without credentials or with an unknown provider" do
+      tenant = create(:tenant, :with_hibob_config)
+      assert_not HrisConfig.new(provider: "workday").connected?(tenant)
+
+      tenant.disconnect_hris!
+      assert_not tenant.reload.hris_config.connected?(tenant)
+    end
+  end
+
   context "#configured?" do
     should "return true when provider, credentials, and sync_enabled are set" do
       tenant = create(:tenant, :with_hibob_config)

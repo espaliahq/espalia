@@ -72,7 +72,7 @@ HrisRoleMapping.new(
 )
 ```
 
-Mode 2 requires `HrisConfig.level_field_id` to be set to the HRIS custom column ID (e.g. `"column_0000000000000"`). The `Client` automatically adds `work.customColumns.<level_field_id>` to the requested fields; the `ResponseMapper` extracts the human-readable value into `person.hris_level_ordinal`.
+Mode 2 requires `HrisConfig.level_field_id` to name the HRIS field holding the level, as its catalogue id (e.g. `"work.customColumns.column_0000000000000"`). An admin chooses it by name on the connection form. The `Client` adds it to the requested fields; the `ResponseMapper` extracts the human-readable value into `person.hris_level_ordinal`.
 
 Both modes can be mixed within one tenant's config.
 
