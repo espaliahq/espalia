@@ -286,8 +286,9 @@ is dated by that start date, since nobody leaves before they start; a pending hi
 disappears leaves on the date of the sync. Someone who comes back keeps their stream and
 gets `PersonReturned`; the earlier `PersonLeft` stays in history as what we believed then.
 
-A failed or partial sync leaves no one, in the Org Graph or in `Person.status`, so both
-read the same set of absent people. A sync is failed or partial when any of these holds
+A failed or partial sync marks no missing person as left, in the Org Graph or in
+`Person.status`, so both read the same set of absent people. Someone HiBob still returns
+as inactive is Pass 2b's, and leaves whatever the brake decides. A sync is failed or partial when any of these holds
 ([#51](https://github.com/espaliahq/espalia/issues/51#issuecomment-6856499516)):
 
 - a page request fails;
