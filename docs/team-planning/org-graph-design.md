@@ -253,7 +253,15 @@ that finds nothing changed writes nothing.
 
 A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
 that misses them. An empty response is a failed sync and leaves no one. Someone who comes
-back keeps their stream and gets `PersonReturned`. Their memberships are to be ended by a
+back keeps their stream and gets `PersonReturned`; the earlier `PersonLeft` stays in
+history as what we believed then.
+
+The sync also brakes: when more than 10% of the employed people, and more than 5, vanish
+in one response, it marks nobody as left, in the Org Graph or in `Person.status`, and
+reports the counts as a sync error. The next sync decides afresh. This is deliberate: a
+partial response looks exactly like a mass leaving, and a leaving cannot be taken back.
+There is no override or per-tenant setting; a story for a manual override can follow if a
+real mass leaving ever needs one. Their memberships are to be ended by a
 handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
