@@ -3,7 +3,7 @@
 > Status: proposal. Nothing here is built. Read [the design](org-graph-design.md) first.
 > This page orders the work. It has no sizes: nobody has estimated it.
 
-The plan has nine epics and 43 stories. A story names the stories it needs. Four need
+The plan has nine epics and 44 stories. A story names the stories it needs. Four need
 nothing and can start together: 1.1, 2.1, 6.0 and 6.2.
 
 ## Epics
@@ -52,6 +52,7 @@ flowchart LR
     s23[2.3 Membership and members]
     s24[2.4 Unit owners]
     s25[2.5 Leaving ends membership]
+    s26[2.6 Retiring ends membership]
   end
   subgraph E3[E3 Reading as of a date]
     s31[3.1 History projection]
@@ -105,14 +106,15 @@ flowchart LR
   s13 --> s14
   s21 --> s22 & s23 & s24 & s61
   s16 --> s25 & s81
-  s23 --> s25 & s31 & s42 & s43 & s51 & s67
+  s23 --> s25 & s26 & s31 & s42 & s43 & s51 & s67
   s31 --> s32 & s33 & s52
   s24 --> s41
   s41 --> s52 & s53
   s42 --> s44 & s52 & s53 & s71
   s43 --> s55
   s44 --> s54 & s72
-  s22 --> s56 & s73
+  s22 --> s26
+  s26 --> s56 & s73
   s53 --> s56
   s33 --> s57
   s60 --> s65
@@ -158,6 +160,7 @@ them.
 | 2.3 | Membership events in the person stream, and a unit members projection | 1.1, 2.1 |
 | 2.4 | Owners: add, remove, inherit from parent, flag a unit with none | 2.1 |
 | 2.5 | Leaving ends memberships on the leaving date | 1.6, 2.3 |
+| 2.6 | Retiring a unit ends its memberships on the retirement date, unless a succession moves them | 2.2, 2.3 |
 
 ### E3 Reading as of a date
 
@@ -185,7 +188,7 @@ them.
 | 5.3 | Unit drawer: name, parent, owners, members | 4.1, 4.2 |
 | 5.4 | Activity sidebar | 4.4 |
 | 5.5 | Stale flags and confirm buttons | 4.3 |
-| 5.6 | Split, merge and retire from the unit drawer | 2.2, 5.3 |
+| 5.6 | Split, merge and retire from the unit drawer | 2.2, 2.6, 5.3 |
 | 5.7 | Compare with a date | 3.3 |
 
 ### E6 Providers and HRIS fields
@@ -209,7 +212,7 @@ them.
 |---|---|---|
 | 7.1 | Commands accept a reference to the plan change they came from | 4.2 |
 | 7.2 | Events from one approval share a cause, and the activity feed shows them as one | 7.1, 4.4 |
-| 7.3 | Applying a split or merge writes `UnitSucceeded` | 2.2, 7.1 |
+| 7.3 | Applying a split or merge writes `UnitSucceeded` | 2.2, 2.6, 7.1 |
 
 ### E8 Forgetting people
 

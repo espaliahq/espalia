@@ -81,4 +81,40 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_raises(ArgumentError) { @handler.apply_facts(@person_id, **PROVENANCE, site: "Sydney") }
     end
   end
+
+  context "memberships" do
+    setup do
+      structure = OrgGraph::StructureCommandHandler.new
+      level = SecureRandom.uuid_v7
+      @squad = SecureRandom.uuid_v7
+      @retired = SecureRandom.uuid_v7
+      structure.define_taxonomy([ { level_id: level, name: "Squad" } ], effective_on: "2026-01-01")
+      structure.create_unit(@squad, "Payments", level_id: level, effective_on: "2026-01-01")
+      structure.create_unit(@retired, "Billing", level_id: level, effective_on: "2026-01-01")
+      @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed")
+    end
+
+    should "set and end a membership in the person's stream" do
+      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **PROVENANCE)
+      @handler.end_membership(@person_id, @squad, **PROVENANCE)
+
+      assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ], stream_events.drop(1).map(&:class)
+    end
+
+    should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
+      @handler.set_membership(@person_id, @retired, **PROVENANCE)
+      OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
+
+      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **PROVENANCE) }
+      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **PROVENANCE) }
+      assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **PROVENANCE) }
+      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **PROVENANCE) }
+    end
+
+    should "not see another tenant's unit" do
+      ActsAsTenant.with_tenant(create(:tenant)) do
+        assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, @squad, **PROVENANCE) }
+      end
+    end
+  end
 end

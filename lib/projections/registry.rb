@@ -30,7 +30,8 @@ module Projections::Registry
     "person_development/evidence_requests"   => "PersonDevelopment::Projections::EvidenceRequests",
     "person_development/comment_thread"      => "PersonDevelopment::Projections::CommentThread",
     "person_development/assessment_authority" => "PersonDevelopment::Projections::AssessmentAuthority",
-    "org_graph/structure"                    => "OrgGraph::Projections::Structure"
+    "org_graph/structure"                    => "OrgGraph::Projections::Structure",
+    "org_graph/members"                      => "OrgGraph::Projections::Members"
   }.freeze
 
   # @return [Array<String>] the registered projection names

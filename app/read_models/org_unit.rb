@@ -14,6 +14,8 @@ class OrgUnit < ApplicationRecord
   belongs_to :parent, class_name: "OrgUnit", optional: true, inverse_of: :children
   belongs_to :level, class_name: "OrgTaxonomyLevel", optional: true, inverse_of: :units
   has_many :children, class_name: "OrgUnit", foreign_key: :parent_id, inverse_of: :parent, dependent: nil
+  has_many :memberships, class_name: "OrgMembership", foreign_key: :unit_id, inverse_of: :unit, dependent: nil
+  has_many :members, through: :memberships, source: :person
   has_many :predecessor_links, class_name: "OrgUnitSuccession", foreign_key: :successor_id,
                                inverse_of: :successor, dependent: nil
   has_many :successor_links, class_name: "OrgUnitSuccession", foreign_key: :predecessor_id,
