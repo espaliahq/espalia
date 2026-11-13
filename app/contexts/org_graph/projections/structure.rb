@@ -3,8 +3,9 @@
 # Synchronous projection of a tenant's current structure: its taxonomy levels
 # and its unit tree.
 #
-# Writes `org_taxonomy_levels` and `org_units`, and nothing else writes them.
-# Both primary keys are event-carried ids, so references survive a rebuild.
+# Writes `org_taxonomy_levels`, `org_units` and `org_unit_successions`, and
+# nothing else writes them. The level and unit primary keys are event-carried
+# ids, so references survive a rebuild.
 # A level's effective_on is the date its name or place last changed.
 #
 class OrgGraph::Projections::Structure
@@ -22,7 +23,8 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitCreated,
       OrgGraph::Events::UnitRenamed,
       OrgGraph::Events::UnitMoved,
-      OrgGraph::Events::UnitRetired
+      OrgGraph::Events::UnitRetired,
+      OrgGraph::Events::UnitSucceeded
     ]
   end
 
@@ -31,6 +33,7 @@ class OrgGraph::Projections::Structure
   # @param tenant [Tenant]
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
+      OrgUnitSuccession.where(tenant_id: tenant.id).delete_all
       OrgUnit.where(tenant_id: tenant.id).delete_all
       OrgTaxonomyLevel.where(tenant_id: tenant.id).delete_all
     end
@@ -50,6 +53,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitRenamed then update_unit(event.data, name: event.data[:name], name_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitMoved then update_unit(event.data, parent_id: event.data[:parent_id], parent_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
+    when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     end
   end
 
@@ -82,6 +86,14 @@ class OrgGraph::Projections::Structure
       created_on: data[:effective_on],
       retired_on: nil
     )
+  end
+
+  def handle_unit_succeeded(data)
+    data[:predecessor_ids].product(data[:successor_ids]).each do |predecessor_id, successor_id|
+      OrgUnitSuccession.find_or_create_by!(succession_id: data[:succession_id], predecessor_id:, successor_id:) do |link|
+        link.effective_on = data[:effective_on]
+      end
+    end
   end
 
   def update_unit(data, **attributes)

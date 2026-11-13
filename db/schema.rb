@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -755,6 +755,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 
+  create_table "org_unit_successions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "tenant_id", null: false
+    t.uuid "succession_id", null: false
+    t.uuid "predecessor_id", null: false
+    t.uuid "successor_id", null: false
+    t.date "effective_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id", "predecessor_id"], name: "index_org_unit_successions_on_tenant_id_and_predecessor_id"
+    t.index ["tenant_id", "succession_id", "predecessor_id", "successor_id"], name: "index_org_unit_successions_on_link", unique: true
+    t.index ["tenant_id", "successor_id"], name: "index_org_unit_successions_on_tenant_id_and_successor_id"
+  end
+
   create_table "org_units", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.string "name", null: false
@@ -978,6 +991,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000001) do
   add_foreign_key "oauth_access_tokens", "tenants"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "org_taxonomy_levels", "tenants"
+  add_foreign_key "org_unit_successions", "tenants"
   add_foreign_key "org_units", "tenants"
   add_foreign_key "people", "people", column: "manager_id"
   add_foreign_key "people", "tenants"
