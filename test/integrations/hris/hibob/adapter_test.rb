@@ -355,7 +355,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         @tenant.hris_config = HrisConfig.new(
           provider: "hibob",
           sync_enabled: true,
-          level_field_id: "column_test_id",
+          level_field_id: "work.customColumns.column_test_id",
           role_mappings: [
             HrisRoleMapping.new(hris_titles: [ "Software Engineer" ], framework_role_code: "ZZZ")
           ]

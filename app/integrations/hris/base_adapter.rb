@@ -16,6 +16,19 @@
 class Hris::BaseAdapter
   FIELD_CATALOGUE_TTL = 1.hour
 
+  # The adapter for the tenant's configured provider.
+  #
+  # @param tenant [Tenant]
+  # @param correlation_id [String, nil]
+  # @return [Hris::BaseAdapter]
+  # @raise [ArgumentError] when the tenant has no provider Espalia knows
+  def self.for(tenant, correlation_id: nil)
+    case tenant.hris_config.provider
+    when "hibob" then Hris::Hibob::Adapter.new(tenant, correlation_id:)
+    else raise ArgumentError, "Unknown HRIS provider: #{tenant.hris_config.provider.inspect}"
+    end
+  end
+
   # @param tenant [Tenant] the tenant whose HRIS data to sync
   # @param correlation_id [String, nil] id correlating every event this
   #   sync run produces — typically the enqueuing job's id. Falls back to

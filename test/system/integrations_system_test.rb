@@ -131,7 +131,6 @@ class IntegrationsSystemTest < ApplicationSystemTestCase
       visit tenant_integration_path("hris")
       assert_text "Connection settings"
 
-      js_fill_in "Level column id", with: " "
       page.execute_script(<<~JS)
         document.getElementById("hris_connection_provider")
           .insertAdjacentHTML("beforeend", "<option value='workday' selected>Workday</option>")

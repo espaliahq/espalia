@@ -4,7 +4,7 @@
 #
 # Four sections rendered as cards:
 #  1. Configuration — provider, credential presence, sync enable flag,
-#     custom level column id, last sync timestamp, and a "Sync now" button.
+#     level field, last sync timestamp, and a "Sync now" button.
 #  2. Unmapped titles — HRIS titles no mapping covers, each with a "Map…"
 #     action (#436). The sync skips these people without a word, so this
 #     card is the only place the gap shows.
@@ -124,7 +124,7 @@ class Views::Integrations::HrisView < Views::Base
       { term: "Sync enabled", detail: yes_no(@hris_config.sync_enabled?) },
       { term: "Last synced", detail: last_synced_label },
       { term: "Credentials", detail: yes_no(@hris_secrets_stored["service_user_id"] && @hris_secrets_stored["api_token"]) },
-      { term: "Level column id", detail: @hris_config.level_field_id.presence || "\u2014" },
+      { term: "Level field", detail: @hris_config.level_field_id.presence || "\u2014" },
       { term: "Webhook secret", detail: yes_no(@hris_secrets_stored["webhook_secret"]) }
     ]
   end
@@ -175,10 +175,7 @@ class Views::Integrations::HrisView < Views::Base
             secret_field(:webhook_secret, "Webhook secret", stored: @hris_secrets_stored["webhook_secret"],
                          empty_placeholder: "Paste the value from the HRIS",
                          hint: "Verifies inbound HRIS webhooks. Only needed when the HRIS sends them.")
-            text_field(:level_field_id, "Level column id", value: @form_config.level_field_id,
-                       placeholder: "column_1234567890123",
-                       hint: "The HRIS custom column holding each person's level ordinal. " \
-                             "Leave blank when titles carry their level in the role mappings.")
+            level_field
             switch_field(:sync_enabled, "Sync enabled", @form_config.sync_enabled?,
                          hint: "While on, the recurring sync imports people, roles and levels from the HRIS.")
 
@@ -204,6 +201,20 @@ class Views::Integrations::HrisView < Views::Base
               "The provider, role mappings and level column stay, so a reconnect only needs new credentials."
       end
     end
+  end
+
+  def level_field
+    if hris_connected?
+      render Views::Integrations::HrisLevelFieldFrame.new(current: @form_config.level_field_id,
+                                                          src: tenant_hris_level_field_path)
+    else
+      render Views::Integrations::HrisLevelFieldFrame.new(current: @form_config.level_field_id,
+                                                          problem: Views::Integrations::HrisLevelFieldFrame::NOT_CONNECTED)
+    end
+  end
+
+  def hris_connected?
+    @hris_config.provider.present? && @hris_secrets_stored["service_user_id"] && @hris_secrets_stored["api_token"]
   end
 
   def provider_field
