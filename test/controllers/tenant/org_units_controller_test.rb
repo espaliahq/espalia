@@ -75,6 +75,18 @@ class Tenant::OrgUnitsControllerTest < ActionDispatch::IntegrationTest
       assert drawer.at_css("form[action='#{tenant_org_unit_owners_path(@org[:engineering])}']"), "owners stay editable"
     end
 
+    should "send a retired unit back to the Units view" do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .retire_unit(@org[:payments], effective_on: "2026-02-01")
+      end
+
+      get edit_tenant_org_unit_path(@org[:payments])
+
+      assert_redirected_to tenant_org_graph_path
+      assert_equal "That unit isn't in the Org Graph.", flash[:alert]
+    end
+
     should "rename a unit from the chosen date and keep that date for the next change" do
       patch tenant_org_unit_path(@org[:platform]), params: { org_unit: { name: "Core" }, effective_on: "2026-11-01" }
 

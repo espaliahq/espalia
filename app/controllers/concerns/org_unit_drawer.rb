@@ -17,7 +17,7 @@ module OrgUnitDrawer
   private
 
   def set_unit
-    @unit = OrgUnit.find(params[:org_unit_id] || params[:id])
+    @unit = OrgUnit.live.find(params[:org_unit_id] || params[:id])
   rescue ActiveRecord::RecordNotFound
     authorize :org_graph, :show_units?
     redirect_to tenant_org_graph_path, alert: "That unit isn't in the Org Graph."
