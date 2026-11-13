@@ -17,6 +17,10 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
   # The README's colours, applied here only: ExampleSeed leaves the demo on Default.
   THEME = { "brand" => { "light" => "#a83265" }, "nav-surface" => { "light" => "#2b2640" } }.freeze
 
+  # Once, before parallel workers fork. See testing.md → "Running One System-Test File".
+  Rails.application.load_tasks if Rake::Task.tasks.empty?
+  Rake::Task["tailwindcss:build"].invoke
+
   setup do
     Rails.application.load_tasks if Rake::Task.tasks.empty?
     @admin = create(:user, email: SeedAdmin::DEV_EMAIL, password: TEST_PASSWORD, global_admin: true)
@@ -80,6 +84,11 @@ class MarketingFlowsSystemTest < ApplicationSystemTestCase
     assert_selector "turbo-frame#assessment-matrix[complete]", visible: :all
     assert_text "Theo Okonkwo"
     assert_text "Code & Systems Quality"
+    segment = "button[aria-label^='Open capability map'] [data-radar-segment]"
+    assert_selector "button[aria-label^='Open capability map']"
+    assert_selector segment, visible: :all
+    fill = page.evaluate_script("getComputedStyle(document.querySelector(#{segment.to_json})).fill")
+    assert_not_equal "rgb(0, 0, 0)", fill, "the radar is styled, not painted black"
     capture "assessment"
   end
 
