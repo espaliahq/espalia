@@ -7,18 +7,19 @@
 # adds the tenant to every event's metadata. Arguments pass straight through
 # to the aggregate, which documents them.
 #
-# A handler built with an actor also refuses what {OrgGraphPolicy} doesn't
-# let that actor change. See {OrgGraph::Authorization}.
+# Each handler names its actor and refuses what {OrgGraphPolicy} doesn't let
+# that actor change. See {OrgGraph::Authorization}.
 #
 class OrgGraph::StructureCommandHandler
   include OrgGraph::Authorization
 
+  # @param actor [AuthorizationContext, Object] who is acting, checked against
+  #   {OrgGraphPolicy}, or {OrgGraph::Authorization::SYSTEM}, which is not
   # @param repository [OrgGraph::Repository]
-  # @param actor [AuthorizationContext, nil] who is acting, checked against
-  #   {OrgGraphPolicy}; nil for the system, which is not checked
-  def initialize(repository: OrgGraph::Repository.new, actor: nil)
+  # @raise [ArgumentError] without an actor
+  def initialize(actor:, repository: OrgGraph::Repository.new)
+    @actor = actor!(actor)
     @repository = repository
-    @actor = actor
   end
 
   # @see OrgGraph::StructureAggregate#define_taxonomy

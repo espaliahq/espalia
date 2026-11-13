@@ -3,14 +3,28 @@
 # Checks {OrgGraphPolicy} before an Org Graph command writes, and records the
 # actor as the person who made the change.
 #
-# A handler built with an actor checks every command against that actor. One
-# built without one is the system: the HRIS sync, a retirement moving its
-# members, a rake task. Nobody is acting, so nothing is checked.
+# Every handler names its actor. A person's {AuthorizationContext} is checked
+# against every command. {SYSTEM} is the system's own work: the HRIS sync, a
+# retirement moving its members, a rake task. It is not checked. A handler
+# with no actor raises, so a path that forgets one fails instead of skipping
+# the check.
 module OrgGraph::Authorization
   # A refused command. The message says who may make the change.
   class Refused < Pundit::NotAuthorizedError; end
 
+  # The actor for writes nobody makes in person.
+  SYSTEM = Object.new.tap { |system| system.define_singleton_method(:inspect) { "OrgGraph::Authorization::SYSTEM" } }.freeze
+
   private
+
+  def actor!(actor)
+    return actor if actor.equal?(SYSTEM) || actor.is_a?(AuthorizationContext)
+
+    raise ArgumentError, "An Org Graph handler needs an actor: an AuthorizationContext, or " \
+                         "OrgGraph::Authorization::SYSTEM for the system's own writes"
+  end
+
+  def system? = @actor.equal?(SYSTEM)
 
   def authorize_structure!
     authorize!(:edit_structure?) do
@@ -65,7 +79,7 @@ module OrgGraph::Authorization
   end
 
   def authorize!(predicate, *records)
-    return unless @actor
+    return if system?
     return if policy.public_send(predicate, *records)
 
     raise Refused, yield
@@ -73,7 +87,7 @@ module OrgGraph::Authorization
 
   # Names the actor in the event, unless the caller already named someone.
   def attributed(options, key)
-    actor_id = @actor&.person&.id
+    actor_id = @actor.person&.id unless system?
     actor_id ? { key => actor_id }.merge(options) : options
   end
 

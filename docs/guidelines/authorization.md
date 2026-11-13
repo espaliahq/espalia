@@ -178,9 +178,9 @@ doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.
 
 The commands check the policy too, as a second layer behind the controller's
-own `authorize :org_graph, …`, which every action still calls. Build the
-handler with the actor and every command it runs is checked, and the actor is
-recorded as the person who made each change:
+own `authorize :org_graph, …`, which every action still calls. Every handler
+names its actor. A person's context is checked against every command it runs,
+and recorded as the person who made each change:
 
 ```ruby
 OrgGraph::StructureCommandHandler.new(actor: pundit_user).rename_unit(unit_id, "Pay", effective_on:)
@@ -191,10 +191,13 @@ A refused command raises `OrgGraph::Authorization::Refused`, a
 `Pundit::NotAuthorizedError` whose message names who may make the change.
 `ApplicationController` handles it like any other refusal and shows its own
 generic flash; a controller that wants the reason on screen rescues it and
-shows `error.message`, as `Assessments::RatingsController` does. A handler built
-without an actor is the system: the HRIS sync, a retirement moving its members,
-a rake task. Nobody is acting, so nothing is checked. Never build one without
-an actor on a path a person drives.
+shows `error.message`, as `Assessments::RatingsController` does.
+
+The system's own writes pass `OrgGraph::Authorization::SYSTEM`: the HRIS sync,
+a retirement moving its members, the HRIS fact claim, a rake task. Nobody is
+acting, so nothing is checked. A handler built with no actor, or with `nil`,
+raises `ArgumentError`, so a screen that forgets to pass one fails instead of
+skipping the check. Pass `SYSTEM` only where no person drives the write.
 
 ## Policy Conventions
 

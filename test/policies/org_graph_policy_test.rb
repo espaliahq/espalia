@@ -5,7 +5,7 @@ require "test_helper"
 class OrgGraphPolicyTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::StructureCommandHandler.new
+    @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     department, team, squad = Array.new(3) { SecureRandom.uuid_v7 }
     @engineering_id, @payments_id, @billing_id, @product_id = Array.new(4) { SecureRandom.uuid_v7 }
 

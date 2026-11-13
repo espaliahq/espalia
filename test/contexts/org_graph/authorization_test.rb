@@ -11,7 +11,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     @department, @team = Array.new(2) { SecureRandom.uuid_v7 }
     @engineering_id, @payments_id, @product_id = Array.new(3) { SecureRandom.uuid_v7 }
 
-    system = OrgGraph::StructureCommandHandler.new
+    system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     system.define_taxonomy([ { level_id: @department, name: "Department" }, { level_id: @team, name: "Team" } ],
       effective_on: "2026-01-01")
     system.create_unit(@engineering_id, "Engineering", level_id: @department, effective_on: "2026-01-01")
@@ -22,7 +22,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     @report = create(:person, tenant: @tenant, name: "Report", manager: @lead)
     @other = create(:person, tenant: @tenant, name: "Other")
     [ @lead, @report, @other ].each do |person|
-      OrgGraph::CommandHandler.new.record_person(person.id, **ESPALIA, employment_status: "employed")
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).record_person(person.id, **ESPALIA, employment_status: "employed")
     end
   end
 
@@ -30,10 +30,21 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  context "with no actor" do
+    should "refuse to build a handler, so a path that forgets one can't skip the check" do
+      [ OrgGraph::CommandHandler, OrgGraph::StructureCommandHandler ].each do |handler|
+        assert_raises(ArgumentError) { handler.new }
+        error = assert_raises(ArgumentError) { handler.new(actor: nil) }
+        assert_match "needs an actor", error.message
+        assert_raises(ArgumentError) { handler.new(actor: @lead) }
+      end
+    end
+  end
+
   context "as the system" do
     should "not be checked" do
-      structure = OrgGraph::StructureCommandHandler.new
-      people = OrgGraph::CommandHandler.new
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
 
       structure.rename_unit(@product_id, "Products", effective_on: "2026-02-01")
       people.change_title(@other.id, "Engineer", **ESPALIA)
@@ -95,7 +106,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
   context "as an owner of a unit above" do
     setup do
-      OrgGraph::StructureCommandHandler.new.add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01")
       @actor = context_for(@other)
     end
 
@@ -113,9 +124,9 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
 
     should "be refused the root, a unit elsewhere, and a move or succession that reaches one" do
-      system = OrgGraph::StructureCommandHandler.new
+      system = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       system.add_unit_owner(@product_id, @lead.id, effective_on: "2026-01-01")
-      OrgGraph::CommandHandler.new.set_membership(@lead.id, @product_id, **ESPALIA)
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_membership(@lead.id, @product_id, **ESPALIA)
 
       refusals = {
         "a unit at the root" => -> {
@@ -148,9 +159,9 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
 
     should "record a succession between units they hold, and remove an owner beneath" do
       squad_id = SecureRandom.uuid_v7
-      OrgGraph::StructureCommandHandler.new.create_unit(squad_id, "Checkout", level_id: @team,
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).create_unit(squad_id, "Checkout", level_id: @team,
         parent_id: @engineering_id, effective_on: "2026-01-01")
-      OrgGraph::StructureCommandHandler.new.add_unit_owner(@payments_id, @lead.id, effective_on: "2026-01-01")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@payments_id, @lead.id, effective_on: "2026-01-01")
 
       structure(@actor).record_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments_id ],
         successor_ids: [ squad_id ], effective_on: "2026-02-01")
@@ -170,7 +181,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
 
     should "let the system move the members out when they retire a unit" do
-      OrgGraph::CommandHandler.new.set_membership(@lead.id, @payments_id, **ESPALIA)
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_membership(@lead.id, @payments_id, **ESPALIA)
 
       structure(@actor).retire_unit(@payments_id, effective_on: "2026-03-01")
 
@@ -198,8 +209,8 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
     end
 
     should "be refused a move between units they don't hold for someone outside their chain" do
-      OrgGraph::StructureCommandHandler.new.add_unit_owner(@product_id, @lead.id, effective_on: "2026-01-01")
-      OrgGraph::CommandHandler.new.set_membership(@other.id, @product_id, **ESPALIA)
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).add_unit_owner(@product_id, @lead.id, effective_on: "2026-01-01")
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_membership(@other.id, @product_id, **ESPALIA)
 
       error = assert_raises(OrgGraph::Authorization::Refused) do
         people(@actor).move_membership(@other.id, @product_id, @payments_id, effective_on: "2026-02-02")

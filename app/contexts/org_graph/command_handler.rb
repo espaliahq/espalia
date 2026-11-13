@@ -8,18 +8,19 @@
 # is the tenant's setting for its kind, for people who carry that provider's
 # external id, and Espalia for anyone else; a membership's is its unit's own.
 #
-# A handler built with an actor also refuses what {OrgGraphPolicy} doesn't
-# let that actor change. See {OrgGraph::Authorization}.
+# Each handler names its actor and refuses what {OrgGraphPolicy} doesn't let
+# that actor change. See {OrgGraph::Authorization}.
 #
 class OrgGraph::CommandHandler
   include OrgGraph::Authorization
 
+  # @param actor [AuthorizationContext, Object] who is acting, checked against
+  #   {OrgGraphPolicy}, or {OrgGraph::Authorization::SYSTEM}, which is not
   # @param repository [OrgGraph::Repository]
-  # @param actor [AuthorizationContext, nil] who is acting, checked against
-  #   {OrgGraphPolicy}; nil for the system, which is not checked
-  def initialize(repository: OrgGraph::Repository.new, actor: nil)
+  # @raise [ArgumentError] without an actor
+  def initialize(actor:, repository: OrgGraph::Repository.new)
+    @actor = actor!(actor)
     @repository = repository
-    @actor = actor
   end
 
   # Records a person the Org Graph has not seen before.
