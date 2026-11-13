@@ -390,6 +390,9 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       end
       assert_nothing_raised { @aggregate.set_membership(@squad, provider: "hibob", effective_on: "2026-06-30") }
       assert_nothing_raised { @aggregate.set_membership(@guild, provider: "hibob", effective_on: "2026-05-01") }
+      assert_raises(RuntimeError, match: /restart before the last one ended/) do
+        @aggregate.set_membership(@squad, allocation: 0.5, provider: "hibob", effective_on: "2026-05-01")
+      end
     end
 
     should "replay the dates from the stream, so a reloaded person keeps the same rules" do

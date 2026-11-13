@@ -163,7 +163,7 @@ class OrgGraph::PersonAggregate
     return if current && current.slice(:allocation, :role, :provider) == terms.merge(provider: provider)
 
     ended_on = @membership_ends[unit_id]
-    if current.nil? && ended_on && data[:effective_on] < ended_on
+    if ended_on && data[:effective_on] < ended_on
       raise "A membership can't restart before the last one ended on #{ended_on}"
     end
 
