@@ -287,6 +287,133 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#record_succession" do
+    setup do
+      @payments = SecureRandom.uuid_v7
+      @billing = SecureRandom.uuid_v7
+      @ledger = SecureRandom.uuid_v7
+      create_unit(@department, "Engineering", level: "Department")
+      [ [ @payments, "Payments" ], [ @billing, "Billing" ], [ @ledger, "Ledger" ] ].each do |id, name|
+        create_unit(id, name, level: "Team", parent_id: @department)
+      end
+    end
+
+    should "record a split, a merge and a replacement, each as one stated link" do
+      split = succeed([ @payments ], [ @billing, @ledger ])
+      merge = succeed([ @billing, @ledger ], [ create_unit(SecureRandom.uuid_v7, "Money", level: "Team") ])
+      replacement = succeed([ @department ], [ create_unit(SecureRandom.uuid_v7, "Platform", level: "Department") ])
+
+      events = structure_events.select { |event| event.is_a?(OrgGraph::Events::UnitSucceeded) }
+      assert_equal [ split, merge, replacement ], events.map { |event| event.data[:succession_id] }
+      assert_equal [ @payments ], events.first.data[:predecessor_ids]
+      assert_equal [ @billing, @ledger ].sort, events.first.data[:successor_ids]
+      assert_equal [ @billing, @ledger ].sort, events.second.data[:predecessor_ids]
+      assert_equal "2026-11-01", events.first.data[:effective_on]
+    end
+
+    should "retire the predecessors through the succession when asked, naming it and the successors" do
+      id = succeed([ @billing, @ledger ], [ @payments ], retire_predecessors: true, stated_by_id: @actor)
+
+      retirements = structure_events.last(2)
+      assert(retirements.all?(OrgGraph::Events::UnitRetired))
+      assert_equal [ @billing, @ledger ].sort, retirements.map { |event| event.data[:unit_id] }.sort
+      assert(retirements.all? { |event| event.data[:succession_id] == id })
+      assert(retirements.all? { |event| event.data[:successor_ids] == [ @payments ] })
+      assert(retirements.all? { |event| event.data[:retired_by_id] == @actor })
+    end
+
+    should "retire a predecessor's sub-units before it when they retire together" do
+      platform = create_unit(SecureRandom.uuid_v7, "Platform", level: "Department")
+      as_tenant do
+        [ @billing, @ledger ].each { |id| @handler.move_unit(id, platform, effective_on: @today) }
+      end
+
+      succeed([ @department, @payments ], [ platform ], retire_predecessors: true)
+
+      assert_equal [ @payments, @department ], structure_events.last(2).map { |event| event.data[:unit_id] }
+    end
+
+    should "leave a plain retirement and a new unit unlinked" do
+      as_tenant { @handler.retire_unit(@ledger, effective_on: @today) }
+      create_unit(SecureRandom.uuid_v7, "Ledger 2", level: "Team", parent_id: @department)
+
+      assert_not(structure_events.any?(OrgGraph::Events::UnitSucceeded))
+      assert_nil structure_events.reverse.find { |event| event.is_a?(OrgGraph::Events::UnitRetired) }.data[:succession_id]
+    end
+
+    should "let someone state a link after the predecessor has retired" do
+      as_tenant { @handler.retire_unit(@ledger, effective_on: @today) }
+
+      succeed([ @ledger ], [ @billing ])
+
+      assert_kind_of OrgGraph::Events::UnitSucceeded, structure_events.last
+    end
+
+    should "write nothing when the same succession is stated again" do
+      id = succeed([ @payments ], [ @billing ])
+
+      assert_no_difference(-> { structure_events.size }) { succeed([ @payments ], [ @billing.upcase ], id: id) }
+      assert_raises(RuntimeError) { succeed([ @payments ], [ @ledger ], id: id) }
+      assert_raises(RuntimeError) do
+        as_tenant do
+          @handler.record_succession(id, predecessor_ids: [ @payments ], successor_ids: [ @billing ], effective_on: @today + 1)
+        end
+      end
+    end
+
+    should "retire the predecessors when a stated succession is restated with retirement" do
+      id = succeed([ @payments ], [ @billing ])
+
+      succeed([ @payments ], [ @billing ], id: id, retire_predecessors: true)
+
+      assert_equal [ OrgGraph::Events::UnitSucceeded, OrgGraph::Events::UnitRetired ], structure_events.last(2).map(&:class)
+      assert_equal id, structure_events.last.data[:succession_id]
+    end
+
+    should "refuse to retire through a restated succession whose successor has since retired" do
+      id = succeed([ @payments ], [ @billing ])
+      as_tenant { @handler.retire_unit(@billing, effective_on: @today) }
+
+      succeed([ @payments ], [ @billing ], id: id)
+      assert_raises(RuntimeError) { succeed([ @payments ], [ @billing ], id: id, retire_predecessors: true) }
+    end
+
+    should "refuse a unit succeeding itself, a missing or retired successor, or an empty side" do
+      as_tenant { @handler.retire_unit(@ledger, effective_on: @today) }
+
+      assert_raises(ArgumentError) { succeed([ @payments ], [ @payments, @billing ]) }
+      assert_raises(RuntimeError) { succeed([ @payments ], [ SecureRandom.uuid_v7 ]) }
+      assert_raises(RuntimeError) { succeed([ @payments ], [ @ledger ]) }
+      assert_raises(ArgumentError) { succeed([], [ @billing ]) }
+      assert_raises(ArgumentError) { succeed([ @payments ], [ "billing" ]) }
+    end
+
+    should "refuse a succession that loops back" do
+      succeed([ @payments ], [ @billing ])
+      succeed([ @billing ], [ @ledger ])
+
+      assert_raises(RuntimeError) { succeed([ @ledger ], [ @payments ]) }
+    end
+
+    should "retire only the predecessors whose provider states it" do
+      as_tenant { [ @payments, @billing, @ledger, @department ].each { |id| @handler.retire_unit(id, effective_on: @today) } }
+      product = create_unit(SecureRandom.uuid_v7, "Product", level: "Department", provider: "hibob", external_ref: "d-8")
+      design = create_unit(SecureRandom.uuid_v7, "Design", level: "Department", provider: "hibob", external_ref: "d-9")
+
+      assert_raises(RuntimeError) { succeed([ product ], [ design ], retire_predecessors: true) }
+      succeed([ product ], [ design ], retire_predecessors: true, provider: "hibob")
+
+      assert_equal "hibob", structure_events.last.data[:provider]
+    end
+
+    should "refuse to retire a predecessor that still holds sub-units outside the succession" do
+      assert_raises(RuntimeError) do
+        succeed([ @department ], [ create_unit(SecureRandom.uuid_v7, "Platform", level: "Department") ],
+                retire_predecessors: true)
+      end
+    end
+  end
+
   private
 
   def as_tenant(&block)
@@ -306,6 +433,14 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
     as_tenant do
       @handler.create_unit(unit_id, name, level_id: level_id(level), effective_on: @today, **options)
     end
+    unit_id
+  end
+
+  def succeed(predecessor_ids, successor_ids, id: SecureRandom.uuid_v7, **options)
+    as_tenant do
+      @handler.record_succession(id, predecessor_ids:, successor_ids:, effective_on: @today, **options)
+    end
+    id
   end
 
   def structure_events

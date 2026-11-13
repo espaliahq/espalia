@@ -23,6 +23,7 @@ class OrgGraph::StructureAggregate
   def initialize
     @levels = []
     @units = {}
+    @successions = {}
   end
 
   # Defines or redefines the tenant's taxonomy, top level first.
@@ -166,17 +167,64 @@ class OrgGraph::StructureAggregate
   # @param retired_by_id [String, nil]
   # @param plan_change_id [String, nil]
   def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
-    unit = editable_unit!(unit_id, provider)
-    unit_id = unit.unit_id
-    raise "Move or retire its sub-units first" if live_units.any? { |child| child.parent_id == unit_id }
+    unit = retirable_unit!(unit_id, provider)
 
-    apply(OrgGraph::Events::UnitRetired.new(data: {
-      unit_id: unit_id,
-      provider: unit.provider,
-      effective_on: iso_date(effective_on),
-      retired_by_id: retired_by_id,
-      plan_change_id: plan_change_id
-    }))
+    apply(retirement(unit, effective_on: iso_date(effective_on), retired_by_id:, plan_change_id:))
+  end
+
+  # States that the successors carry on from the predecessors: a split, a
+  # merge or a replacement. Nothing else ever links two units.
+  #
+  # Restating a succession exactly writes nothing, apart from retiring any
+  # predecessor still live when asked to. A unit can't come to precede
+  # itself, so no chain of successions loops back.
+  #
+  # @param succession_id [String] UUID for the succession
+  # @param predecessor_ids [Array<String>] units that came before, live or retired
+  # @param successor_ids [Array<String>] live units that carry on from them
+  # @param effective_on [Date, String]
+  # @param retire_predecessors [Boolean] also retire each live predecessor,
+  #   naming the succession, so its members move instead of leaving
+  # @param provider [String] who supplies a retirement; must be each
+  #   predecessor's own
+  # @param stated_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil] the plan change it was applied from
+  # @raise [ArgumentError, RuntimeError] if a unit is missing or the link is impossible
+  def record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, retire_predecessors: false,
+                        provider: ESPALIA, stated_by_id: nil, plan_change_id: nil)
+    succession_id = require_id(succession_id, "Succession id")
+    predecessor_ids = require_ids(predecessor_ids, "predecessor")
+    successor_ids = require_ids(successor_ids, "successor")
+    effective_on = iso_date(effective_on)
+    succession = { predecessor_ids: predecessor_ids.sort, successor_ids: successor_ids.sort, effective_on: effective_on }
+    restated = @successions[succession_id] == succession
+    raise "Succession already exists" if @successions.key?(succession_id) && !restated
+
+    unless restated
+      raise ArgumentError, "A unit can't succeed itself" if predecessor_ids.intersect?(successor_ids)
+      raise "Unit not found" unless (predecessor_ids + successor_ids).all? { |id| @units.key?(id) }
+      raise "A unit can't come to precede itself" if preceded_by(predecessor_ids).intersect?(successor_ids)
+    end
+
+    retiring = retire_predecessors ? predecessor_ids.map { |id| @units[id] }.reject(&:retired) : []
+    retiring = retiring.sort_by { |unit| -level_index(unit.level_id) }
+    if (!restated || retiring.any?) && successor_ids.any? { |id| @units[id].retired }
+      raise "A successor must be live"
+    end
+    retiring.each { |unit| retirable_unit!(unit.unit_id, provider, retiring: retiring) }
+
+    unless restated
+      apply(OrgGraph::Events::UnitSucceeded.new(data: {
+        succession_id: succession_id,
+        **succession,
+        stated_by_id: stated_by_id,
+        plan_change_id: plan_change_id
+      }))
+    end
+    retiring.each do |unit|
+      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id, plan_change_id:,
+                             succession_id:, successor_ids: succession[:successor_ids]))
+    end
   end
 
   on OrgGraph::Events::TaxonomyDefined do |event|
@@ -203,6 +251,10 @@ class OrgGraph::StructureAggregate
     @units.fetch(event.data[:unit_id]).retired = true
   end
 
+  on OrgGraph::Events::UnitSucceeded do |event|
+    @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids, :effective_on).symbolize_keys
+  end
+
   private
 
   def editable_unit!(unit_id, provider)
@@ -212,6 +264,44 @@ class OrgGraph::StructureAggregate
     raise "#{unit.provider} supplies this unit; change it there" unless require_provider(provider) == unit.provider
 
     unit
+  end
+
+  # A unit retiring with others may still hold sub-units among them; those
+  # retire before it.
+  def retirable_unit!(unit_id, provider, retiring: [])
+    unit = editable_unit!(unit_id, provider)
+    others = retiring.map(&:unit_id) - [ unit.unit_id ]
+    if live_units.any? { |child| child.parent_id == unit.unit_id && !others.include?(child.unit_id) }
+      raise "Move or retire its sub-units first"
+    end
+
+    unit
+  end
+
+  def retirement(unit, effective_on:, retired_by_id:, plan_change_id:, succession_id: nil, successor_ids: nil)
+    OrgGraph::Events::UnitRetired.new(data: {
+      unit_id: unit.unit_id,
+      provider: unit.provider,
+      effective_on: effective_on,
+      retired_by_id: retired_by_id,
+      plan_change_id: plan_change_id,
+      succession_id: succession_id,
+      successor_ids: successor_ids
+    })
+  end
+
+  # Every unit the given ones carry on from, however far back.
+  def preceded_by(unit_ids)
+    seen = Set.new
+    pending = unit_ids.dup
+    while (unit_id = pending.pop)
+      @successions.each_value do |succession|
+        next unless succession[:successor_ids].include?(unit_id)
+
+        succession[:predecessor_ids].each { |id| pending << id if seen.add?(id) }
+      end
+    end
+    seen
   end
 
   # Levels an HRIS supplies sit above every level Espalia holds, whether or
@@ -270,6 +360,13 @@ class OrgGraph::StructureAggregate
     raise ArgumentError, "#{label} must be a UUID" unless UUID.match?(id.to_s)
 
     id.to_s.downcase
+  end
+
+  def require_ids(ids, label)
+    ids = Array(ids).map { |id| require_id(id, "A #{label} id") }.uniq
+    raise ArgumentError, "A succession needs at least one #{label}" if ids.empty?
+
+    ids
   end
 
   def require_name(name)
