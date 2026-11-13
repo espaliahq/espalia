@@ -147,7 +147,7 @@ class Views::Assessments::CarriedRatings::IndexView < Views::Base
 
   def subject_phrase
     count = rows.size
-    whose = @assessee_name ? "#{@assessee_name.split.first}'s" : "Your"
+    whose = @assessee_name ? "#{Person.first_name(@assessee_name)}'s" : "Your"
     "#{whose} #{count} #{'rating'.pluralize(count)} here #{count == 1 ? 'was' : 'were'}"
   end
 

@@ -45,10 +45,10 @@ class OrgUnitActivity::Group
   #
   # @return [String]
   def summary
-    succession = parts.find { |part| part.event_type == "UnitSucceeded" }
-    return succession_summary(succession.after) if succession
+    succession = parts.find { |part| part.event_type == "UnitSucceeded" }&.then { succession_summary(it.after) }
+    return [ handed_over_phrase, succession, *membership_phrases, *unit_phrases ].compact.to_sentence if handover
 
-    (membership_phrases + unit_phrases).to_sentence
+    succession || (membership_phrases + unit_phrases).to_sentence
   end
 
   private
@@ -79,10 +79,21 @@ class OrgUnitActivity::Group
   def membership_change(part)
     case part.event_type
     when "MembershipMoved" then part.after ? :moved_in : :moved_out
-    when "MembershipSet" then part.before ? :changed : :added
+    when "MembershipSet" then membership_set_change(part)
     when "MembershipEnded" then :removed
     end
   end
+
+  # A handover moves each member to the new provider on the same terms. That
+  # is the handover itself, so it earns no phrase of its own.
+  def membership_set_change(part)
+    return :added unless part.before
+    return if handover && part.before == part.after
+
+    :changed
+  end
+
+  def handover = parts.find { |part| part.event_type == "UnitHandedOver" }
 
   def unit_phrases
     types = parts.map(&:event_type).tally
@@ -101,6 +112,14 @@ class OrgUnitActivity::Group
     return if renames.empty?
 
     "renamed it from #{renames.last.before['name']} to #{renames.first.after['name']}"
+  end
+
+  def handed_over_phrase
+    provider, field = handover.after.values_at("provider", "field")
+    label = HrisConfig.provider_label(provider)
+    return "handed it back to #{label}" if provider == OrgGraph::StructureAggregate::ESPALIA
+
+    "handed it to #{label}, read from #{field}"
   end
 
   def owners_phrase(verb, count)

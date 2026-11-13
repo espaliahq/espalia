@@ -17,8 +17,16 @@ class PersonTest < ActiveSupport::TestCase
     should validate_presence_of(:email)
     should validate_presence_of(:name)
 
-    should "need neither once forgotten" do
-      assert build(:person, name: nil, email: nil, forgotten_at: Time.current).valid?
+    should "need no email once forgotten" do
+      assert build(:person, name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current).valid?
+    end
+  end
+
+  context ".first_name" do
+    should "take the first word of a name, and keep the stand-in whole" do
+      assert_equal "Alex", Person.first_name("Alex Chen")
+      assert_equal Person::FORMER_MEMBER, Person.first_name(Person::FORMER_MEMBER)
+      assert_nil Person.first_name(nil)
     end
   end
 
@@ -27,13 +35,22 @@ class PersonTest < ActiveSupport::TestCase
       @tenant = create(:tenant)
       ActsAsTenant.current_tenant = @tenant
       @person = create(:person, tenant: @tenant)
-      @person.update_columns(name: nil, email: nil, forgotten_at: Time.current)
+      @person.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
     end
     teardown { ActsAsTenant.current_tenant = nil }
 
-    should "read as a former member, while the column holds nothing" do
+    should "read as a former member, to a pluck as well" do
       assert_equal Person::FORMER_MEMBER, @person.reload.name
-      assert_nil Person.where(id: @person.id).pick(:name)
+      assert_equal Person::FORMER_MEMBER, Person.where(id: @person.id).pick(:name)
+    end
+
+    should "be held to the stand-in by the database" do
+      assert_raises(ActiveRecord::StatementInvalid) { @person.update_columns(name: "Someone") }
+    end
+
+    should "need a name while remembered, at the database too" do
+      live = create(:person, tenant: @tenant)
+      assert_raises(ActiveRecord::StatementInvalid) { live.update_columns(name: nil) }
     end
 
     should "have no user to notify" do
@@ -45,7 +62,7 @@ class PersonTest < ActiveSupport::TestCase
     should "not provision from a copy loaded before they were forgotten" do
       live = create(:person, tenant: @tenant)
       stale = Person.find(live.id)
-      live.update_columns(name: nil, email: nil, forgotten_at: Time.current)
+      live.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
 
       assert_no_difference -> { User.count } do
         assert_nil stale.ensure_user!

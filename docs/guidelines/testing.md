@@ -582,6 +582,21 @@ window, so minimize after any resize. On CI, each worker prints its Chrome and
 ChromeDriver versions once (`[system test] Chrome …`), so a new failure family
 can be matched to a browser update.
 
+## Chrome's Password Leak Check Is Off
+
+**`ApplicationSystemTestCase` turns off Chrome's password leak check
+(`profile.password_manager_leak_detection`), so keep it off.** Every test signs
+in with `TEST_PASSWORD`, which is in public breach lists. Once the background
+check reports it, Chrome drops every click and key sent to the tab for the rest
+of that test, while the page itself looks healthy: focused, painted, Stimulus
+connected. ChromeDriver still reports each click as sent; the page just never
+sees it. It hit an early test in each worker, so it read as an order-dependent
+flake ([#106](https://github.com/espaliahq/espalia/issues/106)).
+
+**The tell is input that dies across a whole tab.** If a page receives no
+`mousemove` from `Input.dispatchMouseEvent`, and a new window on the same page
+does, suspect browser UI over the tab before the page or the helpers.
+
 ## Clear Any CDP Emulation You Set
 
 **A CDP emulation outlives the test that set it.** Capybara reuses one browser

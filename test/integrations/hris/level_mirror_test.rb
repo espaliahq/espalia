@@ -223,6 +223,18 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_match(/memberships would end/, result[:errors].sole[:error])
     end
 
+    should "end every membership under one cause when a handover lifts the brake" do
+      crowd = Array.new(8) { |index| recorded_person("hb-crowd-#{index}") }
+      mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
+      cause_id = SecureRandom.uuid_v7
+
+      result = mirror_with(crowd.to_h { [ it, { division: "d1", team: :blank } ] }, cause_id:, brake: false)
+
+      assert_empty result[:errors]
+      assert(crowd.none? { team_membership(it) })
+      assert_equal [ cause_id ], crowd.map { person_events(it).last.metadata[:correlation_id] }.uniq
+    end
+
     should "retire no unit whose retirement would end more memberships than the brake allows" do
       crowd = Array.new(8) { |index| recorded_person("hb-crowd-#{index}") }
       mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
@@ -245,6 +257,20 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert OrgUnit.live.exists?(external_ref: "work.department/t1")
       assert(crowd.all? { team_membership(it) })
       assert_match(/8 of 16 memberships would end/, result[:errors].sole[:error])
+    end
+
+    should "count a retiring unit's members whose move out of it failed" do
+      crowd = Array.new(8) { |index| recorded_person("hb-crowd-#{index}") }
+      mirror(crowd.to_h { [ it, { division: "d1", team: "t1" } ] })
+      @catalogue[1] = team_field(%w[t2 Search])
+
+      build = OrgGraph::CommandHandler.method(:new)
+      refusing = ->(**options) { build.call(**options).tap { it.define_singleton_method(:move_membership) { |*| raise "refused" } } }
+      result = OrgGraph::CommandHandler.stub(:new, refusing) { mirror(crowd.to_h { [ it, { division: "d1", team: "t2" } ] }) }
+
+      assert OrgUnit.live.exists?(external_ref: "work.department/t1")
+      assert(crowd.all? { team_membership(it) })
+      assert_match(/8 of 16 memberships would end/, result[:errors].last[:error])
     end
 
     should "count a membership once when it is both blanked and in a retiring unit" do
@@ -290,10 +316,12 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
 
   private
 
-  def mirror(readings)
+  def mirror(readings) = mirror_with(readings)
+
+  def mirror_with(readings, **options)
     result = { errors: [], split_units: [], org_graph_events: 0 }
     Hris::LevelMirror.new(provider: "hibob", catalogue: @catalogue, readings: readings.to_h { |person, held| [ person, reading(held) ] },
-                          result:, today: TODAY).call
+                          result:, today: TODAY, **options).call
     result
   end
 

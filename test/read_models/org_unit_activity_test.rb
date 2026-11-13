@@ -67,6 +67,18 @@ class OrgUnitActivityTest < ActiveSupport::TestCase
       assert_equal "changed the terms of 1 person", feed(@payments).first.summary
     end
 
+    should "say a handover hands the unit to its provider and field, and back" do
+      matches = { @payments => "work.team/1", @billing => "work.team/2", @ledger => "work.team/3", @platform => "work.team/4" }
+      as_tenant do
+        structure(cause_id: "handover-1").hand_over_level(@team, "hibob", field: "work.team", matches:, effective_on: "2026-07-01")
+        structure(cause_id: "handover-2").hand_back_level(@team, effective_on: "2026-07-02")
+      end
+
+      back, over, = feed(@payments)
+      assert_equal [ "handed it back to Espalia", "handed it to HiBob, read from work.team" ], [ back.summary, over.summary ]
+      assert_equal [ "handover-2", "handover-1" ], [ back.cause_id, over.cause_id ]
+    end
+
     should "page by entry, so a page never splits one cause" do
       as_tenant do
         moves = people(cause_id: "request-1")

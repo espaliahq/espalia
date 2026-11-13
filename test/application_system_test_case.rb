@@ -5,13 +5,19 @@ require "test_helper"
 Dir["#{File.dirname(__FILE__)}/support/system/**/*.rb"].sort.each { |f| require f }
 
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
+  # Every test signs in with TEST_PASSWORD, which is in public breach lists.
+  # Chrome's leak check runs in the background, and once it reports the leak
+  # Chrome drops every click and key sent to the tab for the rest of that
+  # test. Whichever test is running then fails as a dropped click (#106).
+  no_leak_check = ->(options) { options.add_preference("profile.password_manager_leak_detection", false) }
+
   if ENV["CAPYBARA_SERVER_PORT"]
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], options: {
       browser: :remote,
       url: "http://#{ENV["SELENIUM_HOST"]}:4444"
-    }
+    }, &no_leak_check
   else
-    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
+    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], &no_leak_check
   end
 
   # Default to a single worker — each worker runs its own Chrome, and one short
@@ -53,6 +59,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1400,1400")
+    options.add_preference("profile.password_manager_leak_detection", false)
 
     client = Selenium::WebDriver::Remote::Http::Default.new
     client.read_timeout = 120

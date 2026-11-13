@@ -54,6 +54,13 @@ class CalibrationSessions::ParticipantCandidatesTest < ActiveSupport::TestCase
     should "return nothing for a blank query" do
       assert_empty query.search("  ")
     end
+
+    should "not offer a forgotten manager, even to a search for the stand-in" do
+      @em_2.update_columns(name: Person::FORMER_MEMBER, email: nil, forgotten_at: Time.current)
+
+      assert_empty query.search("former")
+      assert_equal [ "Mia Manager" ], query.suggestions.map { |e| e[:person].name }
+    end
   end
 
   context "as a tenant admin" do

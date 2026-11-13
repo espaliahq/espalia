@@ -5,7 +5,10 @@
 > [#48](https://github.com/espaliahq/espalia/issues/48); rollout in
 > [the first-sync runbook](../runbooks/org-graph-first-sync.md)), the structure stream
 > ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
-> ([#54](https://github.com/espaliahq/espalia/issues/54)), which nothing writes to yet.
+> ([#54](https://github.com/espaliahq/espalia/issues/54)), which nothing writes to yet. The
+> units view ([#80](https://github.com/espaliahq/espalia/issues/80)) shows them, read-only, to
+> tenant admins at `/tenant/org_graph` until the Org Graph screens are finished; MCP clients
+> read the same tree through `org_graph_units`.
 > [The index](README.md) lists the companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
@@ -548,7 +551,8 @@ An admin can choose another.
 - **An HRIS field gives one unit per person per level.** It carries no allocation and no
   role. A person split across two teams can only be held by Espalia.
 - **Choosing a field for a level Espalia has been holding is a handover.** The two are
-  compared as above, and the disagreements are listed.
+  compared as above, and the disagreements are listed. Each unit's match is suggested by
+  name and confirmed by a person (6.8, below).
 
 A list field keeps a unit through a rename. Its values have ids of their own, so the
 unit's external reference is the value's id, prefixed with the field's path
@@ -582,6 +586,43 @@ Someone can state the succession. The screen says which kind each field is.
 
 A unit whose people sit under different units above keeps its parent and is listed in
 the sync's result as split, for someone to resolve. Espalia never picks a majority.
+
+#### Handing a level over, and back (6.8)
+
+`Hris::LevelHandover` compares a level Espalia holds with the field it would come from,
+then switches it. The operations are `integrations_hris_level_handover` (the comparison),
+`integrations_hand_over_hris_level` and `integrations_hand_back_hris_level`. The settings
+screen (6.9) hosts them.
+
+- **Suggested by name, confirmed by a person.** Each unit gets the value whose label
+  matches its name, and the values its members hold, with how many hold each. Nothing is
+  matched until an admin confirms a value for the unit.
+- **Every unit is resolved first.** A unit with no value is succeeded into a matched unit,
+  which moves its members there, or retired. The comparison also lists values with no
+  unit, people whose value differs from their unit, people the HRIS sends blank, and
+  people added by hand. Those may stand: the switch moves, ends or keeps them as a sync
+  would. A value matches one unit only, and a unit that can't retire today (it has live
+  sub-units, or a change dated later) blocks the switch until someone deals with it.
+- **One cause, one transaction.** The switch records the field as the level's source,
+  gives each matched unit its value (`UnitHandedOver`), writes each succession and
+  retirement, hands the HRIS the memberships of the people it reads, and mirrors the
+  field once. A failure anywhere writes nothing. A new unit has no parent until a sync
+  reads one. Each unit's feed shows the handover as one entry under that cause, naming
+  the provider and the field it now comes from, never the value; handing back reads the
+  same way.
+- **A fingerprint refuses a stale comparison.** It covers the field's values, the units,
+  the memberships, the matches and the resolutions. The switch is refused if any of them
+  changed since the admin read it.
+- **The brake asks for a count.** The comparison counts the memberships the switch ends
+  with nothing in their place, and the units it retires. Over the brake, the switch goes
+  ahead only when the caller passes both counts exactly as the comparison gave them, as
+  forgetting confirms its count. The sync's own brake is unchanged.
+- **Over MCP only with approval.** The comparison is a plain read. Both switches need
+  in-app approval and the comparison's fingerprint, so an agent cannot switch on a
+  comparison nobody read.
+- **Handing back undoes no history.** The level and its units become Espalia's again and
+  lose their references. Units and memberships stay as they are; successions and
+  retirements made by the handover stand. The brake does not apply in reverse.
 
 #### What the sync needs for this
 
@@ -694,6 +735,10 @@ result for each kind of id separately.
   back. They are removed there first.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
+  - The row's name becomes "Former member" (story 8.3), and a check constraint holds every
+    forgotten row to it. Read models join `people` for names rather than copying them, so every
+    screen, export, MCP read and report shows the stand-in, a raw pluck included.
+    `test/integration/forgotten_person_audit_test.rb` walks every MCP read to keep it so.
   - `org_graph/leavers` drops the person, so they leave the due list. The other Org Graph
     projections hold ids and no identifiers, so they keep their rows unchanged. The history
     projection (3.1) handles `PersonForgotten` from its first version.
@@ -737,8 +782,8 @@ can be added later, at the cost of gaps in history.
 
 - Reasons for a change, and anything else sensitive.
 - Mapping an HRIS value onto a unit Espalia already holds, by hand. A level the HRIS
-  provides mirrors its field's values as they are. At a handover the two are matched by
-  name, and what does not match is listed.
+  provides mirrors its field's values as they are. At a handover each unit's value is
+  suggested by name and confirmed by a person, and what does not match is listed.
 - Positions from an applicant tracking system, and pay from a pay integration.
 - A full editing screen for structure.
 - Suggesting succession. A direct edit that retires one unit and creates another records

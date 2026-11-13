@@ -2407,6 +2407,81 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_hand_back_hris_level",
+        "description" => "Hand an Org Graph structure level back from the HRIS to Espalia, so people edit its units here again. Pass the fingerprint integrations_hris_level_handover gave for the level. Units and memberships stay as they are; successions and retirements made by the handover stand.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "fingerprint" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            }
+          },
+          "required" => [ "level_id", "fingerprint" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "integrations_hand_over_hris_level",
+        "description" => "Hand an Org Graph structure level to an HRIS field, as integrations_hris_level_handover compared it. Pass the same matches and resolutions and that comparison's fingerprint; a changed HRIS or level refuses it. In one change it records the field as the level's source, gives each matched unit its value, succeeds or retires every other unit, and moves memberships to agree with the HRIS. When the comparison is over the brake, pass the memberships it ends and the units it retires as confirm_memberships_ended and confirm_units_retired, exactly as the comparison gave them.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "field_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "matches" => {
+              "type" => "object",
+              "additionalProperties" => {
+                "type" => "string"
+              }
+            },
+            "resolutions" => {
+              "type" => "object",
+              "additionalProperties" => {
+                "type" => "string"
+              }
+            },
+            "fingerprint" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "confirm_memberships_ended" => {
+              "type" => "integer"
+            },
+            "confirm_units_retired" => {
+              "type" => "integer"
+            }
+          },
+          "required" => [ "level_id", "field_id", "matches", "fingerprint" ],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
         "name" => "integrations_hris_field_preview",
         "description" => "Preview what an HRIS field would give before choosing it as the source of an Org Graph " \
                          "level or fact. For target \"level\": the units it would create, with their labels and how " \
@@ -2421,6 +2496,42 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "target"   => { "type" => "string", "enum" => %w[level cost_centre country] }
           },
           "required" => %w[field_id target],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "integrations_hris_level_handover",
+        "description" => "Compare an Org Graph structure level with an HRIS field before handing the level to the HRIS. Each unit gets a suggested value by name, never a match: pass the values a person confirmed in matches (unit id => value key), and for each unit left over a resolution (unit id => a matched unit's id to succeed into, or \"retire\"). Returns the units, the field's values, how many people differ, are blank, were added by hand or would join, the units still unresolved, the counts the brake weighs, and a fingerprint integrations_hand_over_hris_level needs. For a level the HRIS already supplies, says what handing it back would keep, with its fingerprint. Reads the HRIS live; writes nothing.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "level_id" => {
+              "type" => "string",
+              "minLength" => 1,
+              "pattern" => "\\S"
+            },
+            "field_id" => {
+              "type" => "string"
+            },
+            "matches" => {
+              "type" => "object",
+              "additionalProperties" => {
+                "type" => "string"
+              }
+            },
+            "resolutions" => {
+              "type" => "object",
+              "additionalProperties" => {
+                "type" => "string"
+              }
+            }
+          },
+          "required" => [ "level_id" ],
           "additionalProperties" => false
         },
         "annotations" => {
@@ -2510,6 +2621,25 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
             "unit_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" }
           },
           "required" => %w[date],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "org_graph_units",
+        "description" => "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
+                         "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \
+                         "head count (distinct people in it and every unit beneath it) and the person ids of its own " \
+                         "members. Also returns the taxonomy levels, top first, and the ids of active people in no live " \
+                         "unit. Admins only while the Org Graph is unfinished.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {},
+          "required" => [],
           "additionalProperties" => false
         },
         "annotations" => {
