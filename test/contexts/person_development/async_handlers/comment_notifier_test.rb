@@ -131,6 +131,31 @@ class PersonDevelopment::AsyncHandlers::CommentNotifierTest < ActiveSupport::Tes
       assert_equal peer.id, notification.event.params[:feedback_author_id]
       assert_equal peer.name, notification.event.params[:feedback_author_name]
     end
+
+    should "not keep the name of an author erased after the context line was built" do
+      peer = create(:person, tenant: @tenant, name: "Jordan")
+      evidence_id = SecureRandom.uuid_v7
+      @handler.record_evidence(@assessee.id, @framework_id, evidence_id,
+        capability_stable_id: @cap_stable, level_ordinal: 2, source: "peer",
+        evidence_type: "peer_feedback", content: "Paired on the incident",
+        author_id: peer.id, valence: "demonstrated")
+      post!(author: @manager, evidence_id: evidence_id, body: "Strong signal")
+      clear_enqueued_jobs
+
+      notifier = PersonDevelopment::AsyncHandlers::CommentNotifier.new
+      user_for = notifier.method(:user_for)
+      erase_then_look_up = lambda do |person_id|
+        peer.update_columns(name: nil, forgotten_at: Time.current)
+        user_for.call(person_id)
+      end
+      notifier.stub(:user_for, erase_then_look_up) do
+        notifier.send(:notify_recipients, PersonDevelopmentComment.last!)
+      end
+
+      notification = @assessee_user.notifications.reload.sole
+      assert_equal "Former member's feedback · L2", notification.event.params[:context]
+      assert_nil notification.event.params[:feedback_author_name]
+    end
   end
 
   should "not re-notify recipients when the CommentPosted event is redelivered" do

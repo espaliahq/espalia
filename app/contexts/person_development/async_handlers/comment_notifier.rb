@@ -44,18 +44,19 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   private
 
   def notify_recipients(comment)
-    context = context_line(comment)
+    feedback_author = evidence_author(comment)
+    context = context_line(comment, feedback_author.last)
     url = deep_link(comment)
     notified = [ comment.author_id ]
 
     parent_author = parent_author_id(comment)
     if parent_author.present? && notified.exclude?(parent_author)
-      deliver(CommentReplyNotifier, comment, parent_author, context, url)
+      deliver(CommentReplyNotifier, comment, parent_author, context, feedback_author, url)
       notified << parent_author
     end
 
     if notified.exclude?(comment.person_id)
-      deliver(AssessmentCommentedNotifier, comment, comment.person_id, context, url)
+      deliver(AssessmentCommentedNotifier, comment, comment.person_id, context, feedback_author, url)
       notified << comment.person_id
     end
 
@@ -64,17 +65,19 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
     manager_side_ids_for(comment.person_id, comment.framework_id).each do |person_id|
       next if notified.include?(person_id)
 
-      deliver(TeamAssessmentCommentedNotifier, comment, person_id, context, url)
+      deliver(TeamAssessmentCommentedNotifier, comment, person_id, context, feedback_author, url)
       notified << person_id
     end
   end
 
-  def deliver(notifier_class, comment, person_id, context, url)
+  # One author read feeds the context line and its id/name params, so an
+  # erasure between two reads can't leave the context naming them unmarked.
+  def deliver(notifier_class, comment, person_id, context, feedback_author, url)
     user = user_for(person_id)
     return if user.nil?
     return if already_delivered?(notifier_class, user, comment)
 
-    feedback_author_id, feedback_author_name = evidence_author(comment)
+    feedback_author_id, feedback_author_name = feedback_author
 
     notifier_class.with(
       record: comment,
@@ -101,9 +104,8 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
   # prefixed with whose feedback is being discussed for a linkage thread.
   #
   # @return [String, nil]
-  def context_line(comment)
+  def context_line(comment, feedback_author)
     parts = []
-    feedback_author = evidence_author(comment).last
     parts << "#{feedback_author}'s feedback" if feedback_author
     parts << [ capability_name(comment), "L#{comment.level_ordinal}" ].compact.join(" · ")
     parts.join(" · ").presence
