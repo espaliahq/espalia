@@ -90,11 +90,13 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
       # Pass 2b: Record new people in the Org Graph, then write each fact that differs
       record_org_graph_differences(org_graph_facts, managers, result)
 
+      absent = absent_people(employees.filter_map { it["id"] }, result)
+
       # Pass 2c: Leave, in the Org Graph, everyone the response no longer holds
-      record_org_graph_absences(employees, result)
+      record_org_graph_absences(absent, result)
 
       # Pass 3: Deactivate people no longer in HRIS
-      deactivate_removed(employees, result)
+      deactivate_removed(absent, result)
 
       # Pass 3b: Offboard every inactive person still participating —
       # withdraw from open cycles, remove framework assignments
@@ -342,17 +344,16 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   end
 
   # A person HiBob stops returning has left, dated by the sync that first
-  # misses them. An empty response reads as a failed sync rather than
-  # everyone leaving at once, so it writes nothing.
-  def record_org_graph_absences(employees, result)
-    current_external_ids = employees.filter_map { |e| e["id"] }
-    return if current_external_ids.empty?
-
+  # misses them.
+  #
+  # @param absent [ActiveRecord::Relation<Person>] from {#absent_people}
+  # @param result [Hash] running tally
+  def record_org_graph_absences(absent, result)
     with_hris_event_context do
       handler = OrgGraph::CommandHandler.new
       today = Date.current
 
-      Person.where(hris_source: provider_name).where.not(external_id: current_external_ids).find_each do |person|
+      absent.find_each do |person|
         result[:org_graph_events] += handler.record_absence(person.id, provider: provider_name, effective_on: today)
       rescue => e
         result[:errors] << { person_id: person.id, error: e.message }
@@ -372,14 +373,10 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # Marks HRIS-sourced people as inactive if they no longer appear in the response.
   #
-  # @param employees [Array<Hash>] current HiBob employees
+  # @param absent [ActiveRecord::Relation<Person>] from {#absent_people}
   # @param result [Hash] running tally
-  def deactivate_removed(employees, result)
-    current_external_ids = employees.map { |e| e["id"] }.compact
-    stale_people = Person.where(hris_source: "hibob", status: "active")
-                         .where.not(external_id: current_external_ids)
-
-    stale_people.find_each do |person|
+  def deactivate_removed(absent, result)
+    absent.where(status: "active").find_each do |person|
       person.update!(status: "inactive")
       result[:deactivated] += 1
     end

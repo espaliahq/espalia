@@ -451,6 +451,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         )
       end
       @alice = @fixture["employees"].find { |e| e["id"] == "bob-001" }
+      @without_alice = @fixture["employees"].select { |e| e["id"] == "bob-002" }
 
       # Initial sync: alice is created, assigned via her mapped title, and
       # auto-enrolled into the open cycle by AutoEnrollNewAssignments.
@@ -464,7 +465,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
 
     should "offboard a person who disappears from the HRIS response" do
-      result = build_adapter([]).sync_people
+      result = build_adapter(@without_alice).sync_people
 
       assert_equal 1, result[:deactivated]
       assert_equal 1, result[:offboarded]
@@ -497,16 +498,24 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
 
     should "be idempotent — a second sync after offboarding does nothing" do
-      build_adapter([]).sync_people
-      result = build_adapter([]).sync_people
+      build_adapter(@without_alice).sync_people
+      result = build_adapter(@without_alice).sync_people
 
       assert_equal 0, result[:deactivated]
       assert_equal 0, result[:offboarded]
       assert_empty result[:errors]
     end
 
+    should "keep everyone when HiBob returns nobody, as a failed sync" do
+      result = build_adapter([]).sync_people
+
+      assert_equal [ 0, 0 ], [ result[:deactivated], result[:offboarded] ]
+      assert_equal [ "hibob returned nobody, so no one was marked as left" ], result[:errors].map { it[:error] }
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "active", @alice_person.reload.status }
+    end
+
     should "reactivate a returnee like a new hire — re-assigned and re-enrolled" do
-      build_adapter([]).sync_people
+      build_adapter(@without_alice).sync_people
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "inactive", @alice_person.reload.status
       end
@@ -953,6 +962,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
           result = build_adapter([]).sync_people
 
           assert_equal 0, result[:org_graph_events]
+          assert_equal 1, result[:errors].size
           assert_empty new_events
         end
 
@@ -979,6 +989,51 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#sync_people absence brake" do
+    setup do
+      @staff = synthetic_employees(10)
+      build_adapter(@staff).sync_people
+      @recorded = org_graph_events.size
+    end
+
+    should "mark nobody as left when more than 10% and more than 5 people vanish at once" do
+      result = build_adapter(@staff.first(4)).sync_people
+
+      assert_equal 0, result[:deactivated]
+      assert_empty new_events
+      assert_equal [ "6 of 10 employed people are missing from hibob, more than 10% and 5 people, so no one was marked as left" ],
+        result[:errors].map { it[:error] }
+      ActsAsTenant.with_tenant(@tenant) { assert_equal 10, Person.where(status: "active").count }
+    end
+
+    should "mark them left when no more than 5 vanish" do
+      result = build_adapter(@staff.first(5)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 5, result[:deactivated]
+      assert_equal [ OrgGraph::Events::PersonLeft ] * 5, new_events.map(&:class)
+    end
+
+    should "decide afresh on the next sync" do
+      build_adapter(@staff.first(4)).sync_people
+      result = build_adapter(@staff.first(9)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 1, result[:deactivated]
+      assert_equal [ [ OrgGraph::Events::PersonLeft, "syn-9" ] ],
+        new_events.map { |e| [ e.class, ActsAsTenant.with_tenant(@tenant) { Person.find(e.data[:person_id]).external_id } ] }
+    end
+
+    should "mark them left when they are no more than 10% of everyone employed" do
+      staff = synthetic_employees(60)
+      build_adapter(staff).sync_people
+      result = build_adapter(staff.drop(6)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 6, result[:deactivated]
+    end
+  end
+
   private
 
   def org_graph_events
@@ -1000,6 +1055,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   # @return [Hash] the data of the person's PersonRecorded
   def recorded(person)
     Rails.configuration.event_store.read.stream(stream_of(person)).first.data
+  end
+
+  # @param count [Integer]
+  # @return [Array<Hash>] active employees with no manager, cloned from bob-002
+  def synthetic_employees(count)
+    template = @fixture["employees"].find { it["id"] == "bob-002" }
+    Array.new(count) { |i| template.deep_dup.merge("id" => "syn-#{i}", "email" => "syn#{i}@example.com") }
   end
 
   # @param external_id [String]
