@@ -91,6 +91,14 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       assert_includes client.default_fields, "work.title"
     end
 
+    should "request the employment fields and the termination date" do
+      fields = Hris::Hibob::Client.new(service_user_id: "u", api_token: "t").default_fields
+
+      assert_includes fields, "payroll.employment.fte"
+      assert_includes fields, "payroll.employment.type"
+      assert_includes fields, "internal.terminationDate"
+    end
+
     should "include the custom level column when level_field_id is set" do
       client = Hris::Hibob::Client.new(
         service_user_id: "u",

@@ -35,6 +35,16 @@ class OrgGraph::StructureCommandHandler
     claimed
   end
 
+  # @see OrgGraph::StructureAggregate#add_unit_owner
+  def add_unit_owner(unit_id, person_id, **options)
+    @repository.with_structure { |structure| structure.add_unit_owner(unit_id, person_id, **options) }
+  end
+
+  # @see OrgGraph::StructureAggregate#remove_unit_owner
+  def remove_unit_owner(unit_id, person_id, **options)
+    @repository.with_structure { |structure| structure.remove_unit_owner(unit_id, person_id, **options) }
+  end
+
   # @see OrgGraph::StructureAggregate#create_unit
   def create_unit(unit_id, name, **options)
     @repository.with_structure { |structure| structure.create_unit(unit_id, name, **options) }

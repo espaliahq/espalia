@@ -44,25 +44,37 @@ class OrgGraph::CommandHandler
 
   # What a provider's sync calls for each person it returns, in one load of
   # their stream: the first time, it records them with the facts as they
-  # stand; after that, it moves their status if it differs and applies each
-  # fact that differs. A leaver's facts are not compared.
+  # stand; after that, it supplies or corrects their start date, moves their
+  # status if it differs, then applies each fact that differs. A returner's
+  # start date waits until they are back. A leaver's
+  # facts are not compared, even while a rehire waits for their start date.
+  # A leaving date before the start date contradicts it and is dropped.
   #
   # @param person_id [String]
   # @param provider [String]
-  # @param effective_on [Date, String]
-  # @param employment_status [String] "employed" or "left"
+  # @param effective_on [Date, String] the sync's date
+  # @param employment_status [String] "pending", "employed" or "left"
+  # @param started_on [Date, String, nil] the start date the provider holds
+  # @param left_on [Date, String, nil] the leaving date the provider holds
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
-  def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
+  def sync_person(person_id, provider:, effective_on:, employment_status:, started_on: nil, left_on: nil, **facts)
     ensure_provides!(person_id, provider, :employment_status, *facts.keys)
     written = 0
+    left_on = nil if leaves_before_start?(left_on, started_on)
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
       if person.recorded?
-        person.match_status(employment_status, provider:, effective_on:)
-        person.apply_facts(provider:, effective_on:, **facts) unless employment_status == "left"
+        was_left = person.left?
+        person.change_start_date(started_on, provider:) unless was_left
+        person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
+        unless person.left?
+          person.change_start_date(started_on, provider:) if was_left
+          person.apply_facts(provider:, effective_on:, **facts)
+        end
       else
-        person.record(person_id, provider:, effective_on:, employment_status:, **facts)
+        left_on = nil unless employment_status == "left"
+        person.record(person_id, provider:, effective_on:, employment_status:, started_on:, left_on:, **facts)
       end
       written = person.unpublished_events.count
     end
@@ -179,6 +191,12 @@ class OrgGraph::CommandHandler
   end
 
   private
+
+  def leaves_before_start?(left_on, started_on)
+    left_on.present? && started_on.present? && left_on.to_date < started_on.to_date
+  rescue Date::Error, NoMethodError
+    false
+  end
 
   # Reads the structure projection, which is written synchronously with the
   # structure stream, rather than replaying that stream for every person.
