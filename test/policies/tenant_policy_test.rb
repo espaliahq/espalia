@@ -17,6 +17,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
+      assert_not policy.show_org_graph?
       assert_not policy.export_feedback?
     end
   end
@@ -34,6 +35,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert_not policy.show?
       assert_not policy.update_theme?
       assert_not policy.update_scoring_vocabulary?
+      assert_not policy.show_org_graph?
       assert_not policy.export_feedback?
     end
   end
@@ -51,6 +53,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.show?
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
+      assert policy.show_org_graph?
     end
 
     should "deny the feedback export without a linked person to attribute it to" do
@@ -75,6 +78,7 @@ class TenantPolicyTest < ActiveSupport::TestCase
       assert policy.show?
       assert policy.update_theme?
       assert policy.update_scoring_vocabulary?
+      assert policy.show_org_graph?
     end
 
     should "deny the feedback export, which needs a person to attribute it to" do

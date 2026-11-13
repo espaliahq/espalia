@@ -1,0 +1,77 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class OrgGraph::UnitsOverviewTest < ActiveSupport::TestCase
+  include OrgGraphFixture
+
+  setup do
+    @tenant = create(:tenant)
+    @org = build_org_graph(@tenant)
+  end
+
+  def overview(selected_unit_id: nil)
+    ActsAsTenant.with_tenant(@tenant) { OrgGraph::UnitsOverview.new(selected_unit_id:).tap(&:cards) }
+  end
+
+  def unit(key) = OrgUnit.find(@org[key])
+
+  should "open the first root unit by default, and an unknown id falls back to it" do
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal @org[:engineering], OrgGraph::UnitsOverview.new.selected.id
+      assert_equal @org[:engineering], OrgGraph::UnitsOverview.new(selected_unit_id: SecureRandom.uuid_v7).selected.id
+    end
+  end
+
+  should "count each person once across a unit and every unit beneath it" do
+    ActsAsTenant.with_tenant(@tenant) do
+      view = OrgGraph::UnitsOverview.new
+      assert_equal 4, view.headcount(unit(:engineering))
+      assert_equal 3, view.headcount(unit(:checkout))
+      assert_equal 2, view.headcount(unit(:platform))
+    end
+  end
+
+  should "open a unit with no members of its own to its sub-units, and a leaf to itself" do
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal %w[Checkout Platform], OrgGraph::UnitsOverview.new.cards.map(&:name)
+      assert_equal %w[Checkout Payments],
+                   OrgGraph::UnitsOverview.new(selected_unit_id: @org[:checkout]).cards.map(&:name)
+      assert_equal %w[Payments], OrgGraph::UnitsOverview.new(selected_unit_id: @org[:payments]).cards.map(&:name)
+    end
+  end
+
+  should "name a member's other units" do
+    ActsAsTenant.with_tenant(@tenant) do
+      view = OrgGraph::UnitsOverview.new
+      brook = view.members_of(unit(:platform)).find { |membership| membership.person == @org[:brook] }
+      assert_equal %w[Checkout], view.other_units_of(brook).map(&:name)
+    end
+  end
+
+  should "list only active people with no live unit as unplaced" do
+    ActsAsTenant.with_tenant(@tenant) do
+      assert_equal [ "Ezra Pell" ], OrgGraph::UnitsOverview.new.unplaced.map(&:name)
+    end
+  end
+
+  should "leave out a retired unit and count its people as unplaced" do
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::StructureCommandHandler.new.retire_unit(@org[:payments], effective_on: "2026-03-01")
+      view = OrgGraph::UnitsOverview.new
+
+      assert_empty view.children_of(unit(:checkout))
+      assert_equal 3, view.headcount(unit(:engineering))
+      assert_equal [ "Dot Fennick", "Ezra Pell" ], view.unplaced.map(&:name)
+    end
+  end
+
+  should "hold nothing for a tenant with no structure" do
+    ActsAsTenant.with_tenant(create(:tenant)) do
+      view = OrgGraph::UnitsOverview.new
+      assert_not view.any_units?
+      assert_nil view.selected
+      assert_empty view.cards
+    end
+  end
+end
