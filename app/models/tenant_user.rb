@@ -79,9 +79,9 @@ class TenantUser < ApplicationRecord
   # sign-in. The row keeps its values, since a rebuild leaves anyone with no
   # stream alone, and the next HRIS sync records a person it supplies.
   def record_in_org_graph(person)
-    return if Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id, tenant: tenant)).first
-
     transaction(requires_new: true) do
+      next if Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id, tenant: tenant)).first
+
       OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
         .record_person(person.id, **OrgGraph::PeopleCutover.row_facts(person))
     end

@@ -116,6 +116,17 @@ class TenantUserTest < ActiveSupport::TestCase
         assert_equal [ "hibob supplies title; change it there" ], reported
         assert_empty person_stream(@existing)
       end
+
+      should "keep the link when looking up their stream fails in the database" do
+        broken = Object.new
+        def broken.read = ActiveRecord::Base.connection.execute("SELECT no_such_column FROM people")
+
+        Rails.error.stub(:report, ->(*, **) { }) do
+          Rails.configuration.stub(:event_store, broken) { assert_equal @existing, @tenant_user.ensure_person! }
+        end
+
+        assert_equal @existing.id, @tenant_user.reload.person_id
+      end
     end
   end
 
