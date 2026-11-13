@@ -716,6 +716,32 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_equal 1, metadata.map { it[:correlation_id] }.uniq.compact.size
     end
 
+    should "record site, FTE, employment type and start date with the person" do
+      alice = recorded(@people["bob-001"])
+
+      assert_equal [ "Melbourne", nil, 1.0, "Permanent", "2023-01-15" ],
+        alice.values_at(:site, :country, :fte, :employment_type, :started_on)
+    end
+
+    should "record a leaver's termination date" do
+      assert_equal "2026-10-31", recorded(@people["bob-003"])[:left_on]
+    end
+
+    should "keep a hire HiBob shows active before their start date pending, then join them on it" do
+      start = Date.current + 10
+      newcomer = @fixture["employees"].first.deep_dup.merge("id" => "bob-005", "email" => "eve@example.com", "displayName" => "Eve Ito")
+      newcomer["work"] = newcomer["work"].merge("startDate" => start.iso8601, "reportsTo" => nil)
+      employees = @fixture["employees"] + [ newcomer ]
+
+      build_adapter(employees).sync_people
+      eve = ActsAsTenant.with_tenant(@tenant) { Person.find_by(external_id: "bob-005") }
+      assert_equal "pending", recorded(eve)[:employment_status]
+
+      travel_to(start + 1) { build_adapter(employees).sync_people }
+      joined = Rails.configuration.event_store.read.stream(stream_of(eve)).to_a.last
+      assert_equal [ OrgGraph::Events::PersonJoined, start.iso8601 ], [ joined.class, joined.data[:effective_on] ]
+    end
+
     should "record a person HiBob shows as inactive as having left" do
       assert_equal "left", recorded(@people["bob-003"])[:employment_status]
     end
@@ -831,6 +857,61 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_empty result[:errors]
         assert_equal OrgGraph::Events::PersonReturned, new_events.first&.class
         assert_equal @people["bob-003"].id, new_events.first.data[:person_id]
+      end
+
+      should "write a SiteChanged with no country for a new site, and an absent one for a blank site" do
+        moved = with_employee("bob-001") { |e| e["work"]["site"] = "Sydney" }
+        build_adapter(moved).sync_people
+        blank = with_employee("bob-001") { |e| e["work"]["site"] = "" }
+        build_adapter(blank).sync_people
+
+        assert_equal [ [ OrgGraph::Events::SiteChanged, "Sydney", nil ], [ OrgGraph::Events::SiteChanged, nil, nil ] ],
+          new_events.map { |e| [ e.class, *e.data.values_at(:site, :country) ] }
+      end
+
+      should "write an EmploymentChanged for a new FTE, keeping HiBob's own type label" do
+        employees = with_employee("bob-001") do |e|
+          e["payroll"]["employment"]["fte"] = 60
+          e["humanReadable"]["payroll"]["employment"]["type"] = "Part-time permanent"
+        end
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::EmploymentChanged, 0.6, "Part-time permanent" ] ],
+          new_events.map { |e| [ e.class, *e.data.values_at(:fte, :employment_type) ] }
+      end
+
+      should "leave FTE and type uncompared when HiBob withholds them" do
+        employees = with_employee("bob-001") do |e|
+          e.delete("payroll")
+          e["humanReadable"].delete("payroll")
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_empty new_events
+      end
+
+      should "write a StartDateChanged when HiBob's start date differs" do
+        employees = with_employee("bob-001") { |e| e["work"]["startDate"] = "2023-02-01" }
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::StartDateChanged, "2023-02-01" ] ],
+          new_events.map { |e| [ e.class, e.data[:started_on] ] }
+      end
+
+      should "date a leaving by HiBob's termination date" do
+        employees = with_employee("bob-001") do |e|
+          e["isActive"] = false
+          e["internal"] = { "terminationDate" => "2026-11-05" }
+        end
+
+        build_adapter(employees).sync_people
+
+        assert_equal [ [ OrgGraph::Events::PersonLeft, "2026-11-05" ] ],
+          new_events.map { |e| [ e.class, e.data[:effective_on] ] }
       end
 
       should "keep writing Person Development as before" do
