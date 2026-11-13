@@ -201,11 +201,18 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
       confirm(@ada, "membership", unit_id: @payments)
       as_tenant { @handler.leave(@grace.id, **HIBOB) }
 
+      other = create(:tenant)
+      ActsAsTenant.with_tenant(other) do
+        neighbour = create(:person, tenant: other)
+        @handler.record_person(neighbour.id, **ESPALIA, employment_status: "employed", title: "Engineer")
+      end
+
       before = snapshot_read_models(OrgGraph::Projections::FactAges, @tenant)
       assert_equal 3, before[:fact_ages].size
 
       OrgGraph::Projections::FactAges.reset!(tenant: @tenant)
       as_tenant { assert_equal 0, OrgFactAge.count }
+      ActsAsTenant.with_tenant(other) { assert_equal [ "title" ], OrgFactAge.pluck(:fact) }
 
       Projections::Replayer.replay(projection_class: OrgGraph::Projections::FactAges, tenant: @tenant)
 
