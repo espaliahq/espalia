@@ -72,7 +72,8 @@ class OrgGraph::UnitsOverview
   # @param unit [OrgUnit]
   # @return [Array<OrgMembership>] the unit's own members, by name
   def members_of(unit)
-    @memberships.fetch(unit.id, []).sort_by { |membership| membership.person.name }
+    @members ||= {}
+    @members[unit.id] ||= @memberships.fetch(unit.id, []).sort_by { |membership| membership.person.name }
   end
 
   # @param membership [OrgMembership]
