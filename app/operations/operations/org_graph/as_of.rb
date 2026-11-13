@@ -4,21 +4,20 @@
 # live units, who was employed and who belonged where. People come back as
 # ids only; callers join names.
 #
-# Incremental disclosure: defaults to `summary` (units with headcounts). Pass
+# Incremental disclosure: defaults to `summary` (units with member counts). Pass
 # `mode: "full"` for each person's facts and every membership, and `unit_id`
 # to narrow either mode to one unit and the units under it.
 class Operations::OrgGraph::AsOf < Operations::Base
-  DATE_FORMAT = Operations::Reporting::CycleCohort::DATE_FORMAT
   DATE_KEY = Operations::Reporting::CycleCohort::DATE_KEY
   DATE_SCHEMA = { pattern: Operations::Reporting::CycleCohort::DATE_PATTERN }.freeze
 
   description "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
-              "level, owners and headcount. A future date includes changes already recorded for " \
+              "level, owners and direct member count, and the number of employed people. A future date includes changes already recorded for " \
               "it, such as a hire who starts then or a scheduled move. known_on reads what the " \
               "Org Graph knew at the end of that earlier date, leaving out corrections learned " \
               "since. mode \"full\" adds each employed person's facts (title, level, manager, " \
               "site, employment) and every membership. unit_id narrows to that unit and the " \
-              "units under it. People are named by id only."
+              "units under it, counting only the people placed there. People are named by id only."
   category :read
   approval :none
 
@@ -34,9 +33,11 @@ class Operations::OrgGraph::AsOf < Operations::Base
     authorize :org_graph, :show?
   end
 
-  # @return [Hash] `:date`, `:known_on`, `:headcount` and `:units`, each with
+  # @return [Hash] `:date`, `:known_on`, `:people_count` (everyone employed,
+  #   or with `unit_id` everyone placed under it) and `:units`, each with
   #   `:id`, `:name`, `:parent_id`, `:level_id`, `:owner_ids` and
-  #   `:headcount`; in full mode also `:people` and `:memberships`
+  #   `:member_count` (its direct members); in full mode also `:people` and
+  #   `:memberships`
   # @raise [Operations::Base::ParameterError] for a malformed date, or a
   #   unit_id that names no unit live on that date
   def perform
@@ -52,12 +53,12 @@ class Operations::OrgGraph::AsOf < Operations::Base
   private
 
   def payload(snapshot, units, people, memberships)
-    headcounts = memberships.group_by(&:unit_id).transform_values { it.map(&:person_id).uniq.size }
+    member_counts = memberships.group_by(&:unit_id).transform_values { it.map(&:person_id).uniq.size }
     result = {
       date: snapshot.date.iso8601,
       known_on: snapshot.known_on&.iso8601,
-      headcount: people.size,
-      units: units.map { it.to_h.merge(headcount: headcounts.fetch(it.id, 0)) }
+      people_count: people.size,
+      units: units.map { it.to_h.merge(member_count: member_counts.fetch(it.id, 0)) }
     }
     return result unless params[:mode] == "full"
 

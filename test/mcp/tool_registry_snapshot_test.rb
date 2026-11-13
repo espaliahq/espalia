@@ -2491,12 +2491,13 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
       {
         "name" => "org_graph_as_of",
         "description" => "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
-          "level, owners and headcount. A future date includes changes already recorded for " \
-          "it, such as a hire who starts then or a scheduled move. known_on reads what the " \
-          "Org Graph knew at the end of that earlier date, leaving out corrections learned " \
-          "since. mode \"full\" adds each employed person's facts (title, level, manager, " \
-          "site, employment) and every membership. unit_id narrows to that unit and the " \
-          "units under it. People are named by id only.",
+          "level, owners and direct member count, and the number of employed people. A future " \
+          "date includes changes already recorded for it, such as a hire who starts then or a " \
+          "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
+          "date, leaving out corrections learned since. mode \"full\" adds each employed " \
+          "person's facts (title, level, manager, site, employment) and every membership. " \
+          "unit_id narrows to that unit and the units under it, counting only the people " \
+          "placed there. People are named by id only.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

@@ -36,12 +36,12 @@ class Operations::OrgGraph::AsOfTest < ActiveSupport::TestCase
 
   def call(**params) = as_tenant { Operations::OrgGraph::AsOf.call(context: @context, params:) }
 
-  should "summarise the units with their headcounts by default" do
+  should "summarise the units with their member counts by default" do
     result = call(date: "2026-02-15")
 
-    assert_equal [ "2026-02-15", nil, 2 ], result.values_at(:date, :known_on, :headcount)
+    assert_equal [ "2026-02-15", nil, 2 ], result.values_at(:date, :known_on, :people_count)
     assert_equal({ "Engineering" => 0, "Payments" => 1, "Platform" => 0, "Sales" => 1 },
-                 result[:units].to_h { [ it[:name], it[:headcount] ] })
+                 result[:units].to_h { [ it[:name], it[:member_count] ] })
     assert_equal @engineering, result[:units].find { it[:id] == @payments }[:parent_id]
     assert_not result.key?(:people)
   end
@@ -60,7 +60,7 @@ class Operations::OrgGraph::AsOfTest < ActiveSupport::TestCase
 
     assert_equal %w[Engineering Payments Platform], result[:units].map { it[:name] }
     assert_equal [ @ada.id ], result[:people].map { it[:id] }
-    assert_equal 1, result[:headcount]
+    assert_equal 1, result[:people_count]
   end
 
   should "refuse a unit not live on the date, and a malformed date" do
