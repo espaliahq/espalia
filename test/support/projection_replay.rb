@@ -112,6 +112,10 @@ module ProjectionReplayHelpers
           units:           rows(OrgUnit, stable_id: true)
         }
 
+      when "OrgGraph::Projections::Members"
+        # The PK derives from the person and the unit — assert it survives reset! + replay.
+        { memberships: rows(OrgMembership, stable_id: true) }
+
       else
         raise ArgumentError, "No snapshot rule for #{projection_class.name} — add it to #{__FILE__}"
       end

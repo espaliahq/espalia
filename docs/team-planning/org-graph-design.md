@@ -1,8 +1,10 @@
 # Org Graph — design
 
-> Status: proposal. Only the person stream and its events are built, in `app/contexts/org_graph/`
-> ([#46](https://github.com/espaliahq/espalia/issues/46)). [The index](README.md) lists the
-> companion designs, the mockups and the plan.
+> Status: proposal. Built so far, in `app/contexts/org_graph/`: the person stream
+> ([#46](https://github.com/espaliahq/espalia/issues/46)), the structure stream
+> ([#52](https://github.com/espaliahq/espalia/issues/52)) and membership
+> ([#54](https://github.com/espaliahq/espalia/issues/54)). Nothing writes to them yet. [The
+> index](README.md) lists the companion designs, the mockups and the plan.
 
 The Org Graph is Espalia's best-known view of the organisation: who is in it, what they
 do, who they report to and which teams they are in, with the history of how that
@@ -86,7 +88,7 @@ where it came from a plan, a reference to the plan's change.
 | Event | Records |
 |---|---|
 | `TaxonomyDefined` | The tenant's names for its levels. Redefining it is a change like any other. |
-| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. |
+| `UnitCreated`, `UnitRenamed`, `UnitMoved`, `UnitRetired` | A unit's life. Retiring a unit ends each membership in it on that date, unless a succession moves its members to the unit that carries on. |
 | `UnitSucceeded` | That one or more units carry on from one or more others: a split, a merge, a replacement. |
 | `UnitOwnerAdded`, `UnitOwnerRemoved` | Who may edit the unit. |
 
@@ -97,6 +99,18 @@ provider's own reference for it, so a rename in the HRIS is recognised as a rena
 
 Membership is a fact about a person, so it lives in the person's stream. A unit's
 members are a projection.
+
+`OrgGraph::PersonAggregate` holds one membership per unit, so a person can be in several
+units, each with its own allocation and role. An allocation is a share of the person's
+time, above 0 and at most 1, or none when the provider states none, as an HRIS field
+doesn't. Allocations across units are not summed or capped here: an over-allocated person
+is for a plan's checks to flag. The same terms from the same provider write nothing. A
+person who has left can't join a unit, and a membership can only be set in a live unit.
+`MembershipEnded` dates the last day of one membership and leaves the others.
+
+`OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
+An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
+lists the people with no membership of a live unit, for the "in no team" tray.
 
 `OrgGraph::StructureAggregate` holds these rules:
 
