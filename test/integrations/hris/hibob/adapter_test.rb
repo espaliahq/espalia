@@ -55,6 +55,19 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert forgotten.forgotten?
     end
 
+    should "not write a forgotten manager back into their reports' payloads" do
+      forget_row("bob-002")
+      manager = @employees.find { it["id"] == "bob-002" }
+      manager["isActive"] = false
+      manager["internal"] = { "terminationDate" => "2026-10-31" }
+
+      build_adapter(@employees).sync_people
+
+      report = Person.find_by(external_id: "bob-001")
+      assert_nil report.hris_raw_data.dig("work", "reportsTo")
+      assert_equal "bob-002", @employees.first.dig("work", "reportsTo", "id")
+    end
+
     should "refuse to sync, creating nobody, without the forgetting key" do
       forget_row("bob-003")
 

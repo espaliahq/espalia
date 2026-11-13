@@ -334,7 +334,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     is_new = person.new_record?
 
     person.assign_attributes(attrs.except(:hris_raw_data, *(PROJECTED_ATTRS if projected && !is_new)))
-    person.hris_raw_data = attrs[:hris_raw_data]
+    person.hris_raw_data = without_forgotten_manager(attrs[:hris_raw_data])
     person.hris_source = "hibob"
 
     if person.changed? || is_new
@@ -430,6 +430,17 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
 
   # @param external_id [String, nil]
   # @return [Person, nil] the forgotten row this HiBob id once belonged to
+  # A report's payload keeps naming a manager who has been forgotten.
+  def without_forgotten_manager(raw)
+    manager_id = raw&.dig("work", "reportsTo", "id")
+    return raw unless forgotten_person(manager_id) && !Person.exists?(external_id: manager_id.to_s)
+
+    raw.deep_dup.tap do |copy|
+      copy["work"]&.delete("reportsTo")
+      copy.dig("humanReadable", "work")&.delete("reportsTo")
+    end
+  end
+
   def forgotten_person(external_id)
     return if external_id.blank? || !forgotten_digests_held?
 

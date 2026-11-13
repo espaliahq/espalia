@@ -2,7 +2,7 @@
 
 Use this to turn on a tenant's scheduled forgetting, to forget one leaver on request, and to know what a database restore does to people already forgotten (story 8.2). The design is in [org-graph-design.md → Forgetting a person](../team-planning/org-graph-design.md#forgetting-a-person-r7).
 
-Forgetting erases a leaver's name, email, external id and raw HRIS payload from their `people` row, unlinks their tenant membership from its login and Slack id, removes their name from the tenant's stored notifications, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
+Forgetting erases a leaver's name, email, external id and raw HRIS payload from their `people` row, unlinks their tenant membership from its login and Slack id, deletes their own notifications in the tenant, removes their name from the notifications others received, drops them from their reports' stored HRIS payloads and from skipped feedback-exchange records, and writes `PersonForgotten` to their person stream. It cannot be undone from inside the app. Every command and log line names people by id and gives counts, never a name or an email.
 
 ## What is not erased
 

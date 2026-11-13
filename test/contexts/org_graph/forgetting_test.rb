@@ -127,6 +127,26 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert OrgLeaver.where(person_id: @leaver.id).exists?
     end
 
+    should "leave nothing elsewhere that names or reaches them" do
+      member = create(:tenant_user, tenant: @tenant, person: @leaver)
+      theirs = notify(author_name: "Someone Else").notifications.create!(recipient: member.user)
+      elsewhere = Noticed::Event.create!(type: "FeedbackReceivedNotifier", params: { tenant_id: SecureRandom.uuid_v7 })
+        .notifications.create!(recipient: member.user)
+      report = create(:person, tenant: @tenant, hris_raw_data: {
+        "work" => { "title" => "Engineer", "reportsTo" => { "id" => "hb-1", "displayName" => "Pat Example hb-1" } }
+      })
+      ledger = FeedbackExchangeImport.create!(tenant: @tenant, origin: "chip", external_id: "f-1", status: "skipped",
+                                              skip_reason: "recipient_inactive", synced_at: Time.current,
+                                              record: { "recipient" => { "email" => @leaver.email.upcase } })
+
+      forgetting.forget_due(on: TODAY)
+
+      assert_not Noticed::Notification.exists?(theirs.id)
+      assert Noticed::Notification.exists?(elsewhere.id)
+      assert_equal({ "title" => "Engineer" }, report.reload.hris_raw_data["work"])
+      assert_nil ledger.reload.record
+    end
+
     should "clear the forgotten name from notifications in the tenant only" do
       kept = notify(author_name: "Someone Else")
       named = notify(author_name: @leaver.name, assessee_name: @leaver.name)

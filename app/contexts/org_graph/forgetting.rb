@@ -46,6 +46,9 @@ class OrgGraph::Forgetting
                    responder_name started_by_name].freeze
   NAME_LIST_PARAMS = %w[skipped_names].freeze
 
+  # Removes the manager a stored HiBob payload names, in both its shapes.
+  WITHOUT_REPORTS_TO = "hris_raw_data = hris_raw_data #- '{work,reportsTo}' #- '{humanReadable,work,reportsTo}'"
+
   # @return [String, nil]
   def self.key
     Rails.application.credentials.dig(:org_graph, :forgetting_key).presence || ENV["ORG_GRAPH_FORGETTING_KEY"].presence
@@ -157,6 +160,9 @@ class OrgGraph::Forgetting
         next false if person.forgotten?
 
         scrub_notifications(person.read_attribute(:name))
+        drop_notifications_to(person)
+        scrub_exchange_ledger(person.email)
+        scrub_reports_raw_data(person.external_id)
         AuditMetadata.wrap_event_store do
           OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
             .forget_person(person_id, effective_on: on, reason:, retention_years:, requested_by_id:)
@@ -185,13 +191,43 @@ class OrgGraph::Forgetting
       .update_all(person_id: nil, user_id: nil, slack_user_id: nil, forgotten_at: now, updated_at: now)
   end
 
+  # Their own inbox in this tenant. The login is global and stays, so
+  # notifications would otherwise tie it to the former member.
+  def drop_notifications_to(person)
+    user_ids = TenantUser.where(person_id: person.id).where.not(user_id: nil).select(:user_id)
+    Noticed::Notification.where(recipient_type: "User", recipient_id: user_ids)
+      .where(event_id: tenant_events.select(:id)).delete_all
+  end
+
+  # A skipped feedback-exchange record is kept whole to be retried, people's
+  # emails and names included. Without it the row is never retried.
+  def scrub_exchange_ledger(email)
+    return if email.blank?
+
+    FeedbackExchangeImport.where(tenant: @tenant).where.not(record: nil)
+      .where("LOWER(record->'recipient'->>'email') = :email OR LOWER(record->'author'->>'email') = :email",
+             email: email.downcase)
+      .update_all(record: nil, updated_at: Time.current)
+  end
+
+  # A report's stored HiBob payload names their manager under `reportsTo`.
+  # The sync reads the manager from the live response, never from here.
+  def scrub_reports_raw_data(external_id)
+    return if external_id.blank?
+
+    Person.where("hris_raw_data #>> '{work,reportsTo,id}' = ?", external_id.to_s)
+      .update_all(OrgGraph::Forgetting::WITHOUT_REPORTS_TO)
+  end
+
+  def tenant_events = Noticed::Event.where("params->>'tenant_id' = ?", @tenant.id)
+
   # Notifications hold no person id beside each name they copied, so the
   # match is on the name within the tenant. A colleague with the same name
   # loses theirs from an old notification, which then reads "A colleague".
   def scrub_notifications(name)
     return if name.blank?
 
-    events = Noticed::Event.where("params->>'tenant_id' = ?", @tenant.id)
+    events = tenant_events
     NAME_PARAMS.each do |key|
       events.where("params->>? = ?", key, name)
         .update_all([ "params = jsonb_set(params, ARRAY[?], 'null'::jsonb)", key ])
