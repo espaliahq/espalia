@@ -113,6 +113,7 @@ Rails.application.routes.draw do
     # membership change posts to its own resource, keyed by the unit.
     resources :org_people, only: :show, path: "org_graph/people" do
       resources :memberships, only: [ :create, :update, :destroy ], controller: "org_person_memberships"
+      resources :confirmations, only: :create, controller: "org_fact_confirmations"
     end
 
     # Feedback export for monthly reporting (#458): `new` is the picker,

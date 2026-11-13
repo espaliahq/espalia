@@ -7,8 +7,10 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
   include Views::Tenant::OrgGraph::Formatting
 
   # @param overview [OrgGraph::UnitsOverview] with a selected unit
-  def initialize(overview:)
+  # @param confirmations [OrgGraphPolicy::Confirmations, nil] stale flags for the members shown (#142)
+  def initialize(overview:, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @unit = overview.selected
   end
 
@@ -95,7 +97,18 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
         span(class: "tabular-nums") { "#{(membership.allocation * 100).round}%" } if membership.allocation
         hris_level(person)
       end
+      stale_flag(membership) if @confirmations
     end
+  end
+
+  def stale_flag(membership)
+    ages = @confirmations.membership(membership) or return
+
+    render Views::Tenant::OrgGraph::StaleFlag.new(
+      ages:, person: membership.person,
+      subject: "#{membership.person.name}'s membership of #{membership.unit.name}",
+      confirm: @confirmations.membership?(membership), back_to: { return_to: "units", unit: @unit.id }
+    )
   end
 
   def hris_level(person)

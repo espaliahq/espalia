@@ -83,7 +83,7 @@ class Tenant::OrgPeopleControllerTest < ActionDispatch::IntegrationTest
 
       engineering = drawer.at_css("#org-person-team-#{@org[:engineering]}")
       assert_includes engineering.text, "From HiBob"
-      assert_includes engineering.text, "Change it in HiBob."
+      assert_includes engineering.text, "Change it in HiBob, which confirms it every sync."
       assert_empty engineering.css("form")
       assert_equal 2, drawer.at_css("#org-person-team-#{@org[:platform]}").css("form").size
     end

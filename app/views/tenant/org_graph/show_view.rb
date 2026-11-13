@@ -13,8 +13,9 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
   # @param tenants [Array<Tenant>]
   # @param drawer [Phlex::SGML, nil] a component that renders a Drawer
   # @param sidebar [Phlex::SGML, nil] a component that renders a Sidebar
-  def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil)
+  def initialize(overview:, user:, current_tenant:, tenants: [], drawer: nil, sidebar: nil, confirmations: nil)
     @overview = overview
+    @confirmations = confirmations
     @user = user
     @current_tenant = current_tenant
     @tenants = tenants
@@ -39,7 +40,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
           div(class: "mt-6 flex flex-col lg:flex-row gap-6") do
             render Views::Tenant::OrgGraph::UnitTree.new(overview: @overview, tray_id: Views::Tenant::OrgGraph::Tray::ID)
             div(class: "flex-1 min-w-0 space-y-6") do
-              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview)
+              render Views::Tenant::OrgGraph::UnitPanel.new(overview: @overview, confirmations: @confirmations)
               tray
             end
             render @sidebar if @sidebar

@@ -2855,7 +2855,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
                          "allocation, since, and the provider that holds each, \"espalia\" or an HRIS), their employment " \
                          "facts in effect today (title, level, manager, cost centre, site, employment, start date), each " \
                          "with its provider and since when, and their history newest first: each change with the day it " \
-                         "took effect, when the Org Graph learned it, its provider and who made it. A forgotten person " \
+                         "took effect, when the Org Graph learned it, its provider and who made it. A membership or fact " \
+                         "Espalia holds that nobody has changed or confirmed within the tenant's threshold carries " \
+                         "stale: when it was last checked and by whom. A forgotten person " \
                          "reads as \"Former member\". Admins only while the Org Graph is unfinished.",
         "inputSchema" => {
           "type" => "object",
