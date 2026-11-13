@@ -678,6 +678,24 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#sync_people when Espalia holds a fact the sync supplies" do
+    setup do
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new.set_fact_provider("title", "espalia", effective_on: Date.current)
+      end
+      @result = build_adapter(@fixture["employees"]).sync_people
+    end
+
+    should "report each refused person and finish the rest of the run" do
+      people = ActsAsTenant.with_tenant(@tenant) { Person.all.to_a }
+      refused = @result[:errors].select { it[:error] == "espalia supplies title; change it there" }
+
+      assert_equal people.map(&:id).sort, refused.pluck(:person_id).sort
+      assert_equal @fixture["employees"].size, @result[:created]
+      assert_empty org_graph_events
+    end
+  end
+
   context "#sync_people Org Graph differences (Pass 2b)" do
     setup do
       ActsAsTenant.with_tenant(@tenant) do

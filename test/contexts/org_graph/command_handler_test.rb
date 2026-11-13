@@ -4,12 +4,14 @@ require "test_helper"
 
 class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
   PROVENANCE = { provider: "hibob", effective_on: "2026-11-01" }.freeze
+  HELD_BY_ESPALIA = { provider: "espalia", effective_on: "2026-11-01" }.freeze
 
   setup do
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @handler = OrgGraph::CommandHandler.new
     @person_id = SecureRandom.uuid_v7
+    OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
   end
 
   teardown do
@@ -139,26 +141,78 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     end
 
     should "set and end a membership in the person's stream" do
-      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **PROVENANCE)
-      @handler.end_membership(@person_id, @squad, **PROVENANCE)
+      @handler.set_membership(@person_id, @squad, allocation: 0.5, role: "Engineer", **HELD_BY_ESPALIA)
+      @handler.end_membership(@person_id, @squad, **HELD_BY_ESPALIA)
 
       assert_equal [ OrgGraph::Events::MembershipSet, OrgGraph::Events::MembershipEnded ], stream_events.drop(1).map(&:class)
     end
 
     should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
-      @handler.set_membership(@person_id, @retired, **PROVENANCE)
+      @handler.set_membership(@person_id, @retired, **HELD_BY_ESPALIA)
       OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
 
-      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **PROVENANCE) }
-      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **PROVENANCE) }
-      assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **PROVENANCE) }
-      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **PROVENANCE) }
+      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **HELD_BY_ESPALIA) }
+      assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **HELD_BY_ESPALIA) }
+      assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **HELD_BY_ESPALIA) }
+      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **HELD_BY_ESPALIA) }
     end
 
     should "not see another tenant's unit" do
       ActsAsTenant.with_tenant(create(:tenant)) do
-        assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, @squad, **PROVENANCE) }
+        assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, @squad, **HELD_BY_ESPALIA) }
       end
+    end
+  end
+
+  context "refusing another provider's facts" do
+    setup do
+      @structure = OrgGraph::StructureCommandHandler.new
+      @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+    end
+
+    should "refuse a fact from a provider that doesn't hold it, naming the one that does" do
+      assert_raises(RuntimeError, match: "hibob supplies title; change it there") do
+        @handler.change_title(@person_id, "Designer", **HELD_BY_ESPALIA)
+      end
+      assert_raises(RuntimeError, match: "hibob supplies site") do
+        @handler.apply_facts(@person_id, **HELD_BY_ESPALIA, site: "Sydney", country: "Australia")
+      end
+    end
+
+    should "take a fact from whoever holds it once the setting changes" do
+      @structure.set_fact_provider("title", "espalia", effective_on: "2026-11-01")
+
+      @handler.change_title(@person_id, "Designer", **HELD_BY_ESPALIA)
+      assert_equal "Designer", stream_events.last.data[:title]
+      assert_raises(RuntimeError, match: "espalia supplies title") { @handler.change_title(@person_id, "Lead", **PROVENANCE) }
+    end
+
+    should "refuse a sync whose status another provider holds, before touching the stream" do
+      @structure.set_fact_provider("employment_status", "espalia", effective_on: "2026-11-01")
+      written = stream_events.size
+
+      assert_raises(RuntimeError, match: "espalia supplies employment_status") do
+        @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left")
+      end
+      assert_raises(RuntimeError, match: "espalia supplies employment_status") { @handler.leave(@person_id, **PROVENANCE) }
+      assert_equal written, stream_events.size
+    end
+
+    should "take a membership only from the provider of its unit's level" do
+      level = SecureRandom.uuid_v7
+      team = SecureRandom.uuid_v7
+      @structure.define_taxonomy([ { level_id: level, name: "Team" } ], effective_on: "2026-01-01")
+      @structure.set_level_provider(level, "hibob", effective_on: "2026-01-01")
+      @structure.create_unit(team, "Payments", level_id: level, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-1")
+
+      assert_raises(RuntimeError, match: "hibob supplies this unit's level") do
+        @handler.set_membership(@person_id, team, **HELD_BY_ESPALIA)
+      end
+      @handler.set_membership(@person_id, team, **PROVENANCE)
+      assert_raises(RuntimeError, match: "hibob supplies this unit's level") do
+        @handler.end_membership(@person_id, team, **HELD_BY_ESPALIA)
+      end
+      assert_nothing_raised { @handler.end_membership(@person_id, team, **PROVENANCE) }
     end
   end
 end
