@@ -414,7 +414,14 @@ projection keeps one row per fact, per period of validity, per time learned. A c
 adds a row with a later learned time. It never overwrites the row it corrects, or the Org
 Graph could no longer say what it knew before. From it:
 
-- `as_of(instant)` gives the roster and structure the Org Graph knew at that instant.
+- `OrgGraph::AsOf` gives the roster, the structure and the memberships in effect on a day.
+  By default it reads what the Org Graph knows now, so a later day includes the changes
+  already recorded for it: a hire who starts then, a move or a leaving scheduled for it.
+  With `known_on` it reads what was known at the end of that day in UTC. Tenants hold no
+  time zone yet, so for a tenant in Sydney the day ends at 10 or 11 in the morning local
+  time, and a fact learned that afternoon counts as known the next day. People come back as
+  ids, and callers join names, so a forgotten person reads as a former member. MCP clients
+  read it through `org_graph_as_of`.
 - `changes_between(a, b)` lists the facts that differ.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what

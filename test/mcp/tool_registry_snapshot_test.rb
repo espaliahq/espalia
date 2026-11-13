@@ -2600,6 +2600,36 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_as_of",
+        "description" => "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
+          "level, owners and direct member count, and the number of employed people. A future " \
+          "date includes changes already recorded for it, such as a hire who starts then or a " \
+          "scheduled move. known_on reads what the Org Graph knew at 23:59:59 UTC on that " \
+          "earlier date, not in the tenant's local time, leaving out corrections learned " \
+          "since. mode \"full\" adds each employed " \
+          "person's facts (title, level, manager, site, employment) and every membership. " \
+          "unit_id narrows to that unit and the units under it, counting only the people " \
+          "placed there. People are named by id only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "date" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                        "description" => "UTC date, YYYY-MM-DD." },
+            "known_on" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                            "description" => "UTC date, YYYY-MM-DD. Omit for what is known now." },
+            "mode" => { "type" => "string", "enum" => %w[summary full] },
+            "unit_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S", "format" => "uuid" }
+          },
+          "required" => %w[date],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "org_graph_units",
         "description" => "List the Org Graph's live units in tree order, the order the Units page shows them: each " \
                          "with its id, name, level, parent, the provider that holds it (\"espalia\" or an HRIS), its " \
