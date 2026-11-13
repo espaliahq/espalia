@@ -61,6 +61,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
     assert_includes reached, "calibration_sessions_get"
     assert_includes reached, "reporting_cycle_cohort"
     assert_includes reached, "frameworks_suggestion_get"
+    assert_includes reached, "org_graph_activity"
     assert_not_includes reached, "assessments_feedback_recipients", "a search for the stand-in offers them"
 
     as_of = Operations::OrgGraph::AsOf.call(context: lead_context, params: params_by_tool.fetch("org_graph_as_of"))
@@ -166,6 +167,7 @@ class ForgottenPersonAuditTest < ActiveSupport::TestCase
         "integrations_ai_model_status" => {},
         "integrations_feedback_exchange_status" => {},
         "integrations_hris_titles" => {},
+        "org_graph_activity" => { unit_id: @unit_id },
         "org_graph_as_of" => { date: Date.current.iso8601, mode: "full" },
         "org_graph_units" => {},
         "reporting_capability_attainment" => cycle,
