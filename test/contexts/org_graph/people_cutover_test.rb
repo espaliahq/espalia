@@ -126,7 +126,26 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     assert_equal [ ([ @by_hand.id, @second_by_hand.id ] - [ failing_id ]).sole ], report.recorded
   end
 
+  should "wait for a running sync, then cut over once it ends" do
+    syncing = held_off_on_another_connection
+
+    error = assert_raises(RuntimeError) { @cutover.run(apply: true) }
+    assert_match(/sync is running/, error.message)
+    assert_raises(RuntimeError) { @cutover.revert! }
+
+    syncing.close
+    assert @cutover.run(apply: true).applied
+  end
+
   private
+
+  # The lock a sync holds, from a session outside the test's transaction.
+  def held_off_on_another_connection
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    connection = PG.connect(**config.slice(:host, :port, :password).compact, user: config[:username], dbname: config[:database])
+    connection.exec_params("SELECT pg_advisory_lock_shared($1)", [ OrgGraph::PeopleCutover.lock_key(@tenant) ])
+    connection
+  end
 
   def as_tenant(&block)
     ActsAsTenant.with_tenant(@tenant, &block)

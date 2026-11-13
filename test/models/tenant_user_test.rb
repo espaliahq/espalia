@@ -76,12 +76,30 @@ class TenantUserTest < ActiveSupport::TestCase
       assert_equal [ "espalia", "employed" ], recorded.data.values_at(:provider, :employment_status)
     end
 
-    should "leave an existing person's stream alone" do
-      @tenant.update!(org_graph_people_projected_at: Time.current)
-      existing = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant, email: @user.email) }
+    context "for an existing person in a cut-over tenant" do
+      setup do
+        @tenant.update!(org_graph_people_projected_at: Time.current)
+        @existing = ActsAsTenant.with_tenant(@tenant) do
+          create(:person, tenant: @tenant, email: @user.email, job_title: "Analyst", external_id: "bob-1", hris_source: "hibob")
+        end
+      end
 
-      assert_equal existing, @tenant_user.ensure_person!
-      assert_empty person_stream(existing)
+      should "record one with no stream from their row, as their HRIS's" do
+        assert_equal @existing, @tenant_user.ensure_person!
+
+        assert_equal [ "hibob", "Analyst" ], person_stream(@existing).sole.data.values_at(:provider, :title)
+      end
+
+      should "leave one who already has a stream alone" do
+        ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::CommandHandler.new.record_person(@existing.id, provider: "hibob", effective_on: "2026-11-01",
+                                                                   employment_status: "employed")
+        end
+
+        @tenant_user.ensure_person!
+
+        assert_equal 1, person_stream(@existing).size
+      end
     end
   end
 

@@ -23,6 +23,39 @@ class OrgGraph::PeopleCutover
   # @!attribute applied [Boolean] whether the tenant is now cut over
   Report = Data.define(:recorded, :failed, :differences, :applied)
 
+  # Holds off a cut-over of the tenant while the block runs, so a sync that
+  # read the flag at its start finishes before the flag can change. Any
+  # number of holders can overlap.
+  #
+  # @param tenant [Tenant]
+  # @yield the work that must not straddle a cut-over
+  def self.hold_off(tenant)
+    connection = ActiveRecord::Base.connection
+    connection.select_value(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_lock_shared(?)", lock_key(tenant) ]))
+    yield
+  ensure
+    connection&.select_value(ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_unlock_shared(?)", lock_key(tenant) ]))
+  end
+
+  # @param tenant [Tenant]
+  # @return [Integer]
+  def self.lock_key(tenant)
+    Zlib.crc32("org-graph-people-cutover:#{tenant.id}")
+  end
+
+  # The facts to record someone with from their row. A person carrying an
+  # HRIS external id is recorded as that provider's; anyone else, such as
+  # someone added by hand or on first sign-in, as Espalia's.
+  #
+  # @param person [Person]
+  # @return [Hash] keywords for {OrgGraph::CommandHandler#record_person}
+  def self.row_facts(person)
+    held = person.external_id.present? && OrgGraph::PersonAggregate::PROVIDERS.include?(person.hris_source)
+    { provider: held ? person.hris_source : "espalia", effective_on: Date.current,
+      employment_status: OrgGraph::Projections::PeopleColumns.employment_status(person.status),
+      title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id }
+  end
+
   # @param tenant [Tenant]
   # @param event_store [RailsEventStore::Client]
   def initialize(tenant, event_store: Rails.configuration.event_store)
@@ -38,6 +71,7 @@ class OrgGraph::PeopleCutover
     ActiveRecord::Base.transaction do
       @tenant.lock!
       raise ArgumentError, "Tenant is already cut over" if @tenant.org_graph_people_projected?
+      raise "A sync is running for this tenant; try again once it ends" unless exclusive_lock
 
       ActsAsTenant.with_tenant(@tenant) do
         before = snapshot
@@ -58,10 +92,19 @@ class OrgGraph::PeopleCutover
   # Hands the columns back to the HRIS sync. The next sync writes them as it
   # did before the cut-over; the streams keep everything they hold.
   def revert!
-    @tenant.update!(org_graph_people_projected_at: nil)
+    ActiveRecord::Base.transaction do
+      raise "A sync is running for this tenant; try again once it ends" unless exclusive_lock
+
+      @tenant.update!(org_graph_people_projected_at: nil)
+    end
   end
 
   private
+
+  def exclusive_lock
+    sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_try_advisory_xact_lock(?)", self.class.lock_key(@tenant) ])
+    ActiveRecord::Base.connection.select_value(sql)
+  end
 
   def snapshot
     Person.pluck(:id, *OrgGraph::Projections::PeopleColumns::COLUMNS).to_h { |id, *values| [ id, values ] }
@@ -83,9 +126,6 @@ class OrgGraph::PeopleCutover
                                  event_store: @event_store)
   end
 
-  # A person carrying an HRIS external id is recorded as that provider's;
-  # anyone else, such as someone added by hand or on first sign-in, as
-  # Espalia's.
   def record_unrecorded
     handler = OrgGraph::CommandHandler.new(repository: OrgGraph::Repository.new(event_store: @event_store))
     recorded = []
@@ -94,7 +134,7 @@ class OrgGraph::PeopleCutover
     AuditMetadata.with(acting_via: :system, correlation_id: SecureRandom.uuid_v7) do
       AuditMetadata.wrap_event_store do
         Person.where.not(id: recorded_ids).find_each do |person|
-          ActiveRecord::Base.transaction(requires_new: true) { handler.record_person(person.id, **row_facts(person)) }
+          ActiveRecord::Base.transaction(requires_new: true) { handler.record_person(person.id, **self.class.row_facts(person)) }
           recorded << person.id
         rescue => e
           failed[person.id] = e.message
@@ -106,12 +146,5 @@ class OrgGraph::PeopleCutover
 
   def recorded_ids
     OrgGraph::Projections::PeopleColumns.recorded_person_ids(@tenant)
-  end
-
-  def row_facts(person)
-    held = person.external_id.present? && OrgGraph::PersonAggregate::PROVIDERS.include?(person.hris_source)
-    { provider: held ? person.hris_source : "espalia", effective_on: Date.current,
-      employment_status: OrgGraph::Projections::PeopleColumns.employment_status(person.status),
-      title: person.job_title, manager_id: person.manager_id == person.id ? nil : person.manager_id }
   end
 end

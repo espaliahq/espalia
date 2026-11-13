@@ -44,11 +44,12 @@ class TenantUser < ApplicationRecord
 
     ActsAsTenant.with_tenant(tenant) do
       transaction do
+        tenant.lock!
         linked = Person.create_or_find_by!(tenant: tenant, email: user.email) do |p|
           p.name = self.class.derive_person_name(user.email)
           p.status = "active"
         end
-        record_in_org_graph(linked) if linked.previously_new_record? && tenant.org_graph_people_projected?
+        record_in_org_graph(linked) if tenant.org_graph_people_projected?
         update!(person: linked)
         linked
       end
@@ -68,10 +69,12 @@ class TenantUser < ApplicationRecord
 
   private
 
-  # A tenant cut over to the Org Graph projects its people's status from
-  # their streams, so a person created here starts one, held by Espalia.
+  # A tenant cut over to the Org Graph projects its people's columns from
+  # their streams, so a person who has none starts one from their row. The
+  # tenant lock keeps a cut-over from slipping in between.
   def record_in_org_graph(person)
-    OrgGraph::CommandHandler.new.record_person(person.id, provider: "espalia", effective_on: Date.current,
-                                                          employment_status: "employed")
+    return if Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id, tenant: tenant)).first
+
+    OrgGraph::CommandHandler.new.record_person(person.id, **OrgGraph::PeopleCutover.row_facts(person))
   end
 end

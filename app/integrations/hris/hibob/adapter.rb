@@ -55,63 +55,66 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     employees = fetch_employees
     result = build_initial_result
 
-    ActsAsTenant.with_tenant(tenant) do
-      external_id_map = {}
-      managers = Hash.new { |found, ext_id| found[ext_id] = external_id_map[ext_id] || Person.find_by(external_id: ext_id) }
-      manager_links = {}
-      touched_person_ids = []
-      org_graph_facts = {}
-      projected = tenant.org_graph_people_projected?
+    # The flag is read once, so a cut-over waits for this sync to finish.
+    OrgGraph::PeopleCutover.hold_off(tenant) do
+      ActsAsTenant.with_tenant(tenant) do
+        external_id_map = {}
+        managers = Hash.new { |found, ext_id| found[ext_id] = external_id_map[ext_id] || Person.find_by(external_id: ext_id) }
+        manager_links = {}
+        touched_person_ids = []
+        org_graph_facts = {}
+        projected = tenant.org_graph_people_projected?
 
-      # Pass 1: Upsert all employees
-      employees.each do |raw_employee|
-        mapper = Hris::Hibob::ResponseMapper.new(
-          raw_employee,
-          level_field_id: config.level_field_id
-        )
-        # Dev-only PII guard — pass-through outside development.
-        attrs = Hris::DevNameWhimsifier.call(mapper.call)
-        manager_ext_id = mapper.manager_external_id
+        # Pass 1: Upsert all employees
+        employees.each do |raw_employee|
+          mapper = Hris::Hibob::ResponseMapper.new(
+            raw_employee,
+            level_field_id: config.level_field_id
+          )
+          # Dev-only PII guard — pass-through outside development.
+          attrs = Hris::DevNameWhimsifier.call(mapper.call)
+          manager_ext_id = mapper.manager_external_id
 
-        person = upsert_person(attrs, result, projected:)
-        if person
-          external_id_map[attrs[:external_id]] = person
-          manager_links[person] = manager_ext_id if manager_ext_id.present?
-          touched_person_ids << person.id
-          org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
-                                      status: attrs[:status] }.compact
+          person = upsert_person(attrs, result, projected:)
+          if person
+            external_id_map[attrs[:external_id]] = person
+            manager_links[person] = manager_ext_id if manager_ext_id.present?
+            touched_person_ids << person.id
+            org_graph_facts[person] = { title: attrs[:job_title], level: mapper.level_label, manager_external_id: manager_ext_id,
+                                        status: attrs[:status] }.compact
+          end
+        rescue => e
+          result[:errors] << {
+            external_id: raw_employee["id"],
+            email: raw_employee["email"],
+            error: e.message
+          }
         end
-      rescue => e
-        result[:errors] << {
-          external_id: raw_employee["id"],
-          email: raw_employee["email"],
-          error: e.message
-        }
+
+        # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
+        manager_links.each do |person, manager_ext_id|
+          manager = managers[manager_ext_id]
+          person.update!(manager: manager) if manager && person.manager_id != manager.id
+        end unless projected
+
+        # Pass 2b: Record new people in the Org Graph, then write each fact that differs
+        record_org_graph_differences(org_graph_facts, managers, result)
+
+        # Pass 3: Deactivate people no longer in HRIS
+        deactivate_removed(employees, result)
+
+        # Pass 3b: Offboard every inactive person still participating —
+        # withdraw from open cycles, remove framework assignments
+        offboard_inactive(result)
+
+        # Pass 4: Auto-link TenantUsers to Person records by email
+        auto_link_tenant_users
+
+        # Pass 5: Assign (or reassign) to framework roles/levels
+        assign_to_framework(result, touched_person_ids)
+
+        stamp_last_synced
       end
-
-      # Pass 2: Resolve manager relationships, unless the Org Graph writes them (Pass 2b)
-      manager_links.each do |person, manager_ext_id|
-        manager = managers[manager_ext_id]
-        person.update!(manager: manager) if manager && person.manager_id != manager.id
-      end unless projected
-
-      # Pass 2b: Record new people in the Org Graph, then write each fact that differs
-      record_org_graph_differences(org_graph_facts, managers, result)
-
-      # Pass 3: Deactivate people no longer in HRIS
-      deactivate_removed(employees, result)
-
-      # Pass 3b: Offboard every inactive person still participating —
-      # withdraw from open cycles, remove framework assignments
-      offboard_inactive(result)
-
-      # Pass 4: Auto-link TenantUsers to Person records by email
-      auto_link_tenant_users
-
-      # Pass 5: Assign (or reassign) to framework roles/levels
-      assign_to_framework(result, touched_person_ids)
-
-      stamp_last_synced
     end
 
     result
