@@ -92,8 +92,10 @@ class Hris::BaseAdapter
   #
   # @param field_id [String] the field's catalogue id
   # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; whoever withholds it reads as withheld
   # @return [Hash{String => Hris::FieldValue}] keyed by the person's external id
-  def read_field(field_id, kind:)
+  def read_field(field_id, kind:, alongside: nil)
     raise NotImplementedError, "#{self.class}#read_field must be implemented"
   end
 

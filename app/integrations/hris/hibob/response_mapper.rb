@@ -16,6 +16,8 @@
 class Hris::Hibob::ResponseMapper
   # A list field's value: the list item's id, which survives a rename, and its label.
   ListValue = Data.define(:id, :label)
+  # Where each fact another fact travels with sits on a record.
+  FACT_PATHS = { "site" => %w[work site] }.freeze
 
   # Maps a single HiBob employee hash to Person attributes.
   #
@@ -119,10 +121,13 @@ class Hris::Hibob::ResponseMapper
   #
   # @param field_id [String] the field's catalogue id
   # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; a record withholding it withholds this too
   # @return [Hris::FieldValue]
-  def field_value(field_id, kind:)
+  def field_value(field_id, kind:, alongside: nil)
     path = path_of(field_id)
     return Hris::FieldValue.withheld unless supplied?(path)
+    return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
 
     if kind == :list
       item = list_value(path)

@@ -31,7 +31,7 @@ class HrisFieldPreviewSystemTest < ApplicationSystemTestCase
     adapter.define_singleton_method(:provider_name) { "hibob" }
     adapter.define_singleton_method(:catalogue_id) { |field_id| field_id }
     adapter.define_singleton_method(:field_catalogue) { [ TEAM ] }
-    adapter.define_singleton_method(:read_field) { |_field_id, kind:| values }
+    adapter.define_singleton_method(:read_field) { |_field_id, kind:, alongside: nil| values }
     Hris::BaseAdapter.stub(:for, adapter, &)
   end
 

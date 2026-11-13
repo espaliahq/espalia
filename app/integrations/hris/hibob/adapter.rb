@@ -133,13 +133,16 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   #
   # @param field_id [String]
   # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
   # @return [Hash{String => Hris::FieldValue}]
-  def read_field(field_id, kind:)
-    employees = client.search_people(fields: [ "root.id", catalogue_id(field_id) ].uniq, show_inactive: false)
+  def read_field(field_id, kind:, alongside: nil)
+    fields = [ "root.id", catalogue_id(field_id) ]
+    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
+    employees = client.search_people(fields: fields.uniq, show_inactive: false)
     employees.each_with_object({}) do |employee, values|
       next if employee["id"].blank?
 
-      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:)
+      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
     end
   end
 

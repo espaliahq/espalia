@@ -12,7 +12,7 @@ class Operations::Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = fields
-    def read_field(_field_id, kind:) = values
+    def read_field(_field_id, kind:, alongside: nil) = values
   end
 
   setup do

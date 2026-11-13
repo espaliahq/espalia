@@ -42,13 +42,18 @@ class Integrations::HrisFieldPreview
   # @raise [UnknownField] when the catalogue holds no such field
   def call
     field = catalogue_field
-    values = held_values(adapter.read_field(field.id, kind: field.kind))
+    values = held_values(adapter.read_field(field.id, kind: field.kind, alongside:))
     target == LEVEL ? level(field, values) : fact(field, values)
   end
 
   private
 
   attr_reader :tenant, :field_id, :target, :adapter, :repository
+
+  # The fact the sync writes the target only beside, as country with site.
+  def alongside
+    OrgGraph::StructureAggregate::MAPPABLE_FIELDS.find { |base, parts| base != target && parts.include?(target) }&.first
+  end
 
   def catalogue_field
     id = adapter.catalogue_id(field_id)

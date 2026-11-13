@@ -8,11 +8,14 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
   CENTRE = Hris::Field.new(id: "work.customColumns.column_cc", name: "Cost centre", kind: :text)
 
   # Answers the catalogue and the field read as an adapter would.
-  FakeAdapter = Struct.new(:values, :fields) do
+  FakeAdapter = Struct.new(:values, :fields, :asked_alongside) do
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = fields
-    def read_field(_field_id, kind:) = values
+    def read_field(_field_id, kind:, alongside: nil)
+      self.asked_alongside = alongside
+      values
+    end
   end
 
   setup do
@@ -92,6 +95,15 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       result = preview({ "hb-1" => Hris::FieldValue.withheld }, target: "cost_centre", field: CENTRE)
 
       assert_equal 0, result.would_change
+    end
+
+    should "ask for a country only beside the site it travels with, and a cost centre alone" do
+      adapter = FakeAdapter.new({}, [ CENTRE ])
+      Integrations::HrisFieldPreview.new(@tenant, field_id: CENTRE.id, target: "country", adapter:).call
+      assert_equal "site", adapter.asked_alongside
+
+      Integrations::HrisFieldPreview.new(@tenant, field_id: CENTRE.id, target: "cost_centre", adapter:).call
+      assert_nil adapter.asked_alongside
     end
 
     should "write nothing" do

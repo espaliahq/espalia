@@ -12,7 +12,7 @@ class Tenant::HrisFieldPreviewsControllerTest < ActionDispatch::IntegrationTest
     def provider_name = "hibob"
     def catalogue_id(field_id) = field_id
     def field_catalogue = [ TEAM ]
-    def read_field(_field_id, kind:) = error ? raise(error) : values
+    def read_field(_field_id, kind:, alongside: nil) = error ? raise(error) : values
   end
 
   setup do
