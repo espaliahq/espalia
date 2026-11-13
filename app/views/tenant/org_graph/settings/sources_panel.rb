@@ -8,6 +8,22 @@ class Views::Tenant::OrgGraph::Settings::SourcesPanel < Views::Base
   include Views::Tenant::OrgGraph::Settings::FactLabels
 
   ESPALIA = OrgGraph::StructureAggregate::ESPALIA
+  PART_NAMES = { "cost_centre" => "cost centre", "country" => "country" }.freeze
+
+  # The field picker for one fact's part.
+  #
+  # @param fact [String]
+  # @param part [String]
+  # @return [Views::Tenant::OrgGraph::Settings::FieldPickerFrame::Picker]
+  def self.picker(fact, part)
+    routes = Rails.application.routes.url_helpers
+    Views::Tenant::OrgGraph::Settings::FieldPickerFrame::Picker.new(
+      key: fact, target: part, label: "HRIS field for the #{PART_NAMES.fetch(part, part.humanize(capitalize: false))}",
+      url: routes.tenant_org_graph_settings_fact_field_path(fact),
+      use_url: routes.tenant_org_graph_settings_fact_provider_path(fact), field_param: "fields[#{part}]",
+      in_use: "#{LABELS.fetch(fact)} is read from this field now."
+    )
+  end
 
   # @param hris [Hash] provider, label and connected, as Operations::OrgGraph::Sources reads them
   # @param facts [Array<Hash>] fact, provider, fields and mappable_parts, as Operations::OrgGraph::Sources reads them
@@ -72,10 +88,8 @@ class Views::Tenant::OrgGraph::Settings::SourcesPanel < Views::Base
 
   def field_picker(fact)
     div(class: "mt-3") do
-      render Views::Tenant::OrgGraph::Settings::FactFieldFrame.new(
-        fact: fact[:fact], part: fact[:mappable_parts].first,
-        src: tenant_org_graph_settings_fact_field_path(fact[:fact])
-      )
+      picker = self.class.picker(fact[:fact], fact[:mappable_parts].first)
+      render Views::Tenant::OrgGraph::Settings::FieldPickerFrame.new(picker:, src: picker.url)
     end
   end
 

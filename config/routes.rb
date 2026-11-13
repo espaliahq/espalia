@@ -108,6 +108,8 @@ Rails.application.routes.draw do
       resources :editors, only: [ :create, :destroy ], param: :person_id
       resources :fact_providers, only: :update, param: :fact
       resources :fact_fields, only: :show, param: :fact
+      resources :level_providers, only: :update, param: :level_id
+      resources :level_fields, only: :show, param: :level_id
       resource :freshness, only: :update, controller: "freshness"
       resource :retention, only: :update, controller: "retention"
       resource :forgetting_due, only: :show

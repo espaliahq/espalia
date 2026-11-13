@@ -103,9 +103,7 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
       end
 
       should "move a fact to the HRIS, preview a field and read it from there" do
-        hibob = FactoryBot.build(:tenant, :with_hibob_config)
-        @tenant.update!(hris_config: hibob.hris_config, hris_credentials: hibob.hris_credentials)
-        ActsAsTenant.with_tenant(@tenant) { @member.update!(hris_source: "hibob", external_id: "hb-1") }
+        connect_hibob
         adapter = FakeAdapter.new({ "hb-1" => Hris::FieldValue.new(state: :value, id: nil, label: "CC-7") })
 
         Hris::BaseAdapter.stub(:for, adapter) do
@@ -127,6 +125,33 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
       end
 
+      should "read an empty level from an HRIS field and hold it in Espalia again" do
+        connect_hibob
+        tribe_id = SecureRandom.uuid_v7
+        ActsAsTenant.with_tenant(@tenant) do
+          OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+            .define_taxonomy([ { level_id: tribe_id, name: "Tribe" } ], effective_on: Date.current)
+        end
+        adapter = FakeAdapter.new({ "hb-1" => Hris::FieldValue.new(state: :value, id: "7", label: "Payments") })
+
+        Hris::BaseAdapter.stub(:for, adapter) do
+          visit tenant_org_graph_settings_path
+          assert_selector "turbo-frame#org-graph-field-level-#{tribe_id}[complete]", visible: :all
+
+          select "Cost centre code", from: "HRIS field for Tribe"
+          click_button_with_js_fallback("org-graph-field-preview-level-#{tribe_id}", expect_text: "Cost centre code as the level")
+          within("#org-graph-level-#{tribe_id}") { assert_text(/Payments\s*1 person/) }
+          assert_no_sideways_overflow
+          screenshot("level_field_preview_#{viewport}")
+
+          click_button_with_js_fallback("org-graph-field-use-level-#{tribe_id}", expect_text: "Tribe is now read from the HiBob field you chose.")
+          within("#org-graph-level-#{tribe_id}") { assert_text "From HiBob · 0 units" }
+
+          click_button_with_js_fallback("org-graph-level-espalia-#{tribe_id}", expect_text: "Tribe now comes from Espalia.")
+          within("#org-graph-level-#{tribe_id}") { assert_text "From Espalia · 0 units" }
+        end
+      end
+
       should "say plainly when forgetting has no key" do
         OrgGraph::Forgetting.stub(:key, nil) do
           visit tenant_org_graph_settings_path
@@ -138,5 +163,13 @@ class OrgGraphSettingsSystemTest < ApplicationSystemTestCase
         end
       end
     end
+  end
+
+  private
+
+  def connect_hibob
+    hibob = FactoryBot.build(:tenant, :with_hibob_config)
+    @tenant.update!(hris_config: hibob.hris_config, hris_credentials: hibob.hris_credentials)
+    ActsAsTenant.with_tenant(@tenant) { @member.update!(hris_source: "hibob", external_id: "hb-1") }
   end
 end

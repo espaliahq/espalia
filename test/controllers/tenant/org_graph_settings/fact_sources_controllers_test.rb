@@ -69,7 +69,7 @@ class Tenant::OrgGraphSettings::FactSourcesControllersTest < ActionDispatch::Int
         get tenant_org_graph_settings_fact_field_path("cost_centre", field_id: CENTRE.id)
       end
 
-      assert_select "#{FRAME} h2", text: "Cost centre code as the cost centre"
+      assert_select "#{FRAME} h3", text: "Cost centre code as the cost centre"
       assert_select "#{FRAME} form[data-turbo-frame=_top] input[name='fields[cost_centre]'][value='#{CENTRE.id}']"
       assert_select "#org-graph-field-use-cost_centre", text: "Use this field"
     end
