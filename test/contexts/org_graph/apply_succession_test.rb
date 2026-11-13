@@ -66,6 +66,20 @@ class OrgGraph::ApplySuccessionTest < ActiveSupport::TestCase
     end
   end
 
+  should "lock the structure before any person, as retiring a unit does" do
+    locked = []
+    repository = OrgGraph::Repository.new
+    repository.define_singleton_method(:lock_stream) { |stream| locked << stream; super(stream) }
+    handler = OrgGraph::StructureCommandHandler.new(actor: approver, repository:)
+    as_tenant do
+      handler.apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ @payments ], successor_ids: [ @billing ],
+                                                     placements: { @ada.id => @billing }, effective_on: "2026-07-01", **PLAN)
+    end
+
+    assert_equal EventStreamNaming.org_structure_stream(tenant: @tenant), locked.first
+    assert_operator locked.size, :>, 1
+  end
+
   context "an approved merge" do
     should "move every member to the one successor" do
       as_tenant { @people.set_membership(@ada.id, @ledger, **ESPALIA) }

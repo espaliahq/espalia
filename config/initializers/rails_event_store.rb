@@ -96,6 +96,11 @@ Rails.configuration.to_prepare do
   )
 
   event_store.subscribe(
+    OrgGraph::Projections::UnitActivity.new,
+    to: OrgGraph::Projections::UnitActivity.handled_events
+  )
+
+  event_store.subscribe(
     OrgGraph::Projections::Leavers.new,
     to: OrgGraph::Projections::Leavers.handled_events
   )
