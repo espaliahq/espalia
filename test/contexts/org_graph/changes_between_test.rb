@@ -118,7 +118,10 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     as_tenant do
       @structure.move_unit(@billing, nil, effective_on: "2026-03-10")
       @structure.remove_unit_owner(@platform, @ada.id, effective_on: "2026-03-11")
-      @handler.set_membership(@linus.id, @platform, **ESPALIA, effective_on: "2026-03-12", allocation: 1.0)
+      @handler.set_membership(@linus.id, @platform, **ESPALIA, effective_on: "2026-03-12", allocation: 1.0, role: "lead")
+      @handler.change_level(@ada.id, "L4", **ESPALIA, effective_on: "2026-03-13")
+      @handler.change_manager(@linus.id, @ada.id, **ESPALIA, effective_on: "2026-03-20")
+      @handler.change_level(@linus.id, "L2", **ESPALIA, effective_on: "2026-02-15")
     end
 
     from, to = as_of("2026-02-28"), as_of("2026-03-31")
@@ -250,34 +253,35 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
 
   def snapshot_shape(snapshot)
     {
-      people: snapshot.people.map(&:id).to_set,
-      titles: snapshot.people.to_h { [ it.id, it.title ] },
-      placements: snapshot.memberships.to_h { [ [ it.person_id, it.unit_id ], it.allocation ] },
-      units: snapshot.units.to_h { [ it.id, [ it.name, it.parent_id ] ] },
+      people: snapshot.people.to_h { [ it.id, it.to_h.except(:id, :providers).transform_keys(&:to_s).compact ] },
+      placements: snapshot.memberships.to_h { [ [ it.person_id, it.unit_id ], it.to_h.slice(:allocation, :role).transform_keys(&:to_s) ] },
+      units: snapshot.units.to_h { [ it.id, it.to_h.slice(:name, :parent_id, :level_id).transform_keys(&:to_s) ] },
       owners: snapshot.units.flat_map { |unit| unit.owner_ids.map { [ unit.id, it ] } }.sort
     }
   end
 
   # Steps the earlier snapshot through the changes, keeping memberships and
-  # owners only where both ends survive, as as_of does.
+  # owners only where both ends survive, as as_of does. A fact's value holds
+  # the same fields as_of reads into a person, so values merge straight in.
   def apply(shape, changes)
-    people, titles, placements, units = shape[:people].dup, shape[:titles].dup, shape[:placements].dup, shape[:units].dup
+    people, placements, units = shape[:people].deep_dup, shape[:placements].dup, shape[:units].deep_dup
     owners = shape[:owners].to_set
     changes.each do |change|
       case change.kind
-      when :joined
-        people << change.person_id
-        titles[change.person_id] = change.after["title"]
+      when :joined then people[change.person_id] = change.after.except("employment_status").compact
       when :left then people.delete(change.person_id)
-      when :fact_changed then titles[change.person_id] = change.after&.fetch("title") if change.fact == "title" && titles.key?(change.person_id)
-      when :membership_started, :membership_changed then placements[[ change.person_id, change.unit_id ]] = change.after["allocation"]
+      when :fact_changed
+        next unless people.key?(change.person_id)
+
+        person = people[change.person_id].except(*change.before.to_h.keys)
+        people[change.person_id] = person.merge(change.after.to_h).compact
+      when :membership_started, :membership_changed then placements[[ change.person_id, change.unit_id ]] = change.after
       when :membership_ended then placements.delete([ change.person_id, change.unit_id ])
       when :moved
         placements.delete([ change.person_id, change.from_unit_id ])
-        placements[[ change.person_id, change.unit_id ]] = change.after["allocation"]
-      when :unit_created then units[change.unit_id] = change.after.values_at("name", "parent_id")
-      when :unit_renamed then units[change.unit_id] = [ change.after["name"], units[change.unit_id][1] ]
-      when :unit_moved then units[change.unit_id] = [ units[change.unit_id][0], change.after["parent_id"] ]
+        placements[[ change.person_id, change.unit_id ]] = change.after
+      when :unit_created then units[change.unit_id] = change.after.slice("name", "parent_id", "level_id")
+      when :unit_renamed, :unit_moved then units[change.unit_id] = units[change.unit_id].merge(change.after)
       when :unit_retired then units.delete(change.unit_id)
       when :owner_added then owners << [ change.unit_id, change.person_id ]
       when :owner_removed then owners.delete([ change.unit_id, change.person_id ])
@@ -285,10 +289,9 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     end
     {
       people:,
-      titles: titles.slice(*people),
-      placements: placements.select { |(person, unit), _| people.include?(person) && units.key?(unit) },
+      placements: placements.select { |(person, unit), _| people.key?(person) && units.key?(unit) },
       units:,
-      owners: owners.select { |unit, person| units.key?(unit) && people.include?(person) }.sort
+      owners: owners.select { |unit, person| units.key?(unit) && people.key?(person) }.sort
     }
   end
 end
