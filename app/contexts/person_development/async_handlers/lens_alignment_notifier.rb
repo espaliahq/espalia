@@ -42,6 +42,7 @@ class PersonDevelopment::AsyncHandlers::LensAlignmentNotifier < ApplicationJob
     code = "#{role.code}#{row.level_ordinal}"
     LensAlignmentStartedNotifier.with(
       tenant_id: event.metadata[:tenant_id],
+      started_by_id: event.data[:started_by_id],
       started_by_name: Person.where(id: event.data[:started_by_id]).pick(:name),
       role_label: "#{role.name} · #{code}",
       role_code: code,

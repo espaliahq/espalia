@@ -24,6 +24,12 @@ class TenantPolicy < ApplicationPolicy
   # @return [Boolean] whether the viewer can set how long leavers are kept
   def update_retention_period? = tenant_admin?
 
+  # Forgetting can't be undone, so an admin decides it, as they set the
+  # retention period.
+  #
+  # @return [Boolean] whether the viewer can forget a leaver or turn on scheduled forgetting
+  def forget_person? = tenant_admin?
+
   # Narrower than the cycle report's bar (which admits managers): the export
   # carries names and feedback text. A linked Person is required so every
   # export is attributable to someone in the audit log.

@@ -16,6 +16,8 @@
 class Hris::Hibob::ResponseMapper
   # A list field's value: the list item's id, which survives a rename, and its label.
   ListValue = Data.define(:id, :label)
+  # Where each fact another fact travels with sits on a record.
+  FACT_PATHS = { "site" => %w[work site] }.freeze
 
   # Maps a single HiBob employee hash to Person attributes.
   #
@@ -75,8 +77,9 @@ class Hris::Hibob::ResponseMapper
   # The site, cost centre, employment and dates the Org Graph records, keyed as
   # {OrgGraph::CommandHandler#sync_person} takes them. A fact appears only when
   # the payload carries its field, so one HiBob withholds (the service user
-  # can't read it) is never compared. A pair travels together, so FTE and type
-  # are written only when both arrive, and so are a site and a mapped country.
+  # can't read it) is never compared, and nor is one Espalia can't read
+  # ({#readable?}). A pair travels together, so FTE and type are written only
+  # when both arrive, and so are a site and a mapped country.
   # A field it sends blank, or a value the Org Graph can't hold (an FTE outside
   # 1–100, a date that isn't ISO 8601), is nil. HiBob gives a site no country,
   # so country is nil until the mapping names a field for it, and cost centre
@@ -87,11 +90,11 @@ class Hris::Hibob::ResponseMapper
   def org_graph_facts
     facts = {}
     country = mapped_path("country")
-    if supplied?(%w[work site]) && (country.nil? || supplied?(country))
+    if readable?(%w[work site]) && (country.nil? || readable?(country))
       facts.merge!(site: label(%w[work site]), country: (label(country) if country))
     end
     cost_centre = mapped_path("cost_centre")
-    facts[:cost_centre] = label(cost_centre) if cost_centre && supplied?(cost_centre)
+    facts[:cost_centre] = label(cost_centre) if cost_centre && readable?(cost_centre)
     if supplied?(%w[payroll employment fte]) && supplied?(%w[payroll employment type])
       facts.merge!(fte: fraction(value(%w[payroll employment fte])),
         employment_type: human_readable(%w[payroll employment type]))
@@ -111,6 +114,34 @@ class Hris::Hibob::ResponseMapper
       job_title: list_value(%w[work title]),
       level: (list_value(level_path) if level_field_id.present?)
     }.compact
+  end
+
+  # What this person's record holds for one field: a list field's item id
+  # and label, or a text field's text. The label is read as {#org_graph_facts}
+  # reads it, so a preview compares the string the sync would write.
+  #
+  # @param field_id [String] the field's catalogue id
+  # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; a record withholding it withholds this
+  #   too, and one Espalia can't read makes this unreadable, as the sync skips both
+  # @return [Hris::FieldValue]
+  def field_value(field_id, kind:, alongside: nil)
+    path = path_of(field_id)
+    return Hris::FieldValue.withheld unless supplied?(path)
+    return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
+    return Hris::FieldValue.unreadable if unreadable_list?(path)
+    return Hris::FieldValue.unreadable if alongside && unreadable_list?(FACT_PATHS.fetch(alongside))
+
+    if kind == :list
+      item = list_value(path)
+      return Hris::FieldValue.blank if item.nil?
+
+      Hris::FieldValue.new(state: :value, id: item.id, label: label(path))
+    else
+      text = label(path)
+      text ? Hris::FieldValue.new(state: :value, label: text) : Hris::FieldValue.blank
+    end
   end
 
   private
@@ -155,6 +186,24 @@ class Hris::Hibob::ResponseMapper
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
   end
+
+  # A value in a shape Espalia does not know, whatever the field's kind: a hash
+  # or an array where an id or text should be, or a flat wrapper with no
+  # "value" key.
+  def unreadable_list?(path)
+    raw = value(path)
+    return true if raw.is_a?(Hash) || raw.is_a?(Array)
+
+    parent = parent_of(path)
+    return false if parent.is_a?(Hash) && parent.key?(path.last)
+
+    flat = employee[flat_key(path)]
+    flat.is_a?(Hash) && !flat.key?("value")
+  end
+
+  # Supplied in a shape Espalia knows. The sync writes nothing for an
+  # unreadable value, as for a withheld one, so the preview's count holds.
+  def readable?(path) = supplied?(path) && !unreadable_list?(path)
 
   # @param path [Array<String>]
   def supplied?(path)

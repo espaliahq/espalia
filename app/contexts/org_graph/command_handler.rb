@@ -143,6 +143,19 @@ class OrgGraph::CommandHandler
     written
   end
 
+  # Records that a leaver's identifiers were erased. Only {OrgGraph::Forgetting}
+  # calls this, as the system, inside the transaction that erases them, once
+  # it has checked {TenantPolicy#forget_person?} for whoever asked.
+  #
+  # @param person_id [String]
+  # @param options [Hash] keywords accepted by {OrgGraph::PersonAggregate#forget}
+  # @raise [OrgGraph::Authorization::Refused] for any actor but the system
+  def forget_person(person_id, **options)
+    raise Refused, "Only the forgetting step can forget a person" unless system?
+
+    @repository.with_person(person_id, cause_id: @cause_id) { |person| person.forget(**options) }
+  end
+
   # @param person_id [String]
   # @param provider [String]
   # @param effective_on [Date, String] their return date
@@ -214,7 +227,7 @@ class OrgGraph::CommandHandler
   def set_membership(person_id, unit_id, **options)
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_membership!(person_id, unit_id)
-    ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider])
+    ensure_provides_unit!(ensure_live_unit!(unit_id), options[:provider], person_id)
     with_person(person_id, plan) { |person| person.set_membership(unit_id, **attributed(options, :set_by_id)) }
   end
 
@@ -228,7 +241,7 @@ class OrgGraph::CommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     authorize_membership!(person_id, unit_id)
     unit = find_unit(unit_id)
-    ensure_provides_unit!(unit, options[:provider]) if unit
+    ensure_provides_unit!(unit, options[:provider], person_id) if unit
     with_person(person_id, plan) { |person| person.end_membership(unit_id, **attributed(options, :ended_by_id)) }
   end
 
@@ -255,7 +268,9 @@ class OrgGraph::CommandHandler
     authorize_move_membership!(person_id, from_unit_id, unit_id)
     unit = ensure_live_unit!(unit_id)
     membership = OrgMembership.find_by(person_id: person_id, unit_id: from_unit_id.to_s.downcase)
-    ensure_provides_unit!(unit, membership.provider) if membership
+    if membership
+      ensure_provides_unit!(unit, membership.provider, person_id, held: find_unit(from_unit_id)&.provider == unit.provider)
+    end
     with_person(person_id, plan) do |person|
       person.move_membership(from_unit_id, unit_id, **attributed(options, :moved_by_id))
     end
@@ -273,7 +288,7 @@ class OrgGraph::CommandHandler
     plan, options = OrgGraph::PlanReference.extract(options)
     if fact.to_s == OrgGraph::FactConfirmation::MEMBERSHIP
       authorize_membership!(person_id, options[:unit_id])
-      ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA)
+      ensure_provides_unit!(ensure_live_unit!(options[:unit_id]), OrgGraph::StructureAggregate::ESPALIA, person_id)
     else
       authorize_structure!
       ensure_provides!(person_id, OrgGraph::StructureAggregate::ESPALIA, fact.to_sym)
@@ -324,7 +339,21 @@ class OrgGraph::CommandHandler
 
   # A unit keeps the provider it was created with, which was its level's then,
   # so a retired unit's members can still be ended after its level changes hands.
-  def ensure_provides_unit!(unit, provider)
-    raise "#{unit.provider} supplies this unit; change its members there" unless unit.provider == provider.to_s
+  # Espalia may place a person the unit's provider does not know, since its
+  # sync will never place them; that membership stays Espalia's, and Espalia
+  # can still end or move it once the provider comes to know them.
+  def ensure_provides_unit!(unit, provider, person_id, held: holds?(person_id, unit, provider))
+    return if unit.provider == provider.to_s
+    return if provider.to_s == OrgGraph::StructureAggregate::ESPALIA && (held || !known_to?(unit.provider, person_id))
+
+    raise "#{unit.provider} supplies this unit; change its members there"
+  end
+
+  def holds?(person_id, unit, provider)
+    OrgMembership.exists?(person_id: person_id, unit_id: unit.id, provider: provider.to_s)
+  end
+
+  def known_to?(provider, person_id)
+    Person.where(id: person_id, hris_source: provider).where.not(external_id: nil).exists?
   end
 end

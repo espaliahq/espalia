@@ -147,7 +147,7 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     assert_match(/sync is running/, error.message)
     assert_raises(RuntimeError) { @cutover.revert! }
 
-    syncing.close
+    release(syncing)
     assert @cutover.run(apply: true).applied
   end
 
@@ -159,6 +159,12 @@ class OrgGraph::PeopleCutoverTest < ActiveSupport::TestCase
     connection = PG.connect(**config.slice(:host, :port, :password).compact, user: config[:username], dbname: config[:database])
     connection.exec_params("SELECT pg_advisory_lock_shared($1)", [ OrgGraph::PeopleCutover.lock_key(@tenant) ])
     connection
+  end
+
+  # Closing alone returns before the server ends the session and frees its lock.
+  def release(connection)
+    connection.exec_params("SELECT pg_advisory_unlock_shared($1)", [ OrgGraph::PeopleCutover.lock_key(@tenant) ])
+    connection.close
   end
 
   def as_tenant(&block)

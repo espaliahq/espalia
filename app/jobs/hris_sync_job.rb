@@ -34,6 +34,7 @@ class HrisSyncJob < ApplicationJob
       "[HrisSyncJob] Sync complete for tenant #{tenant.id}: " \
       "created=#{result[:created]} updated=#{result[:updated]} " \
       "deactivated=#{result[:deactivated]} org_graph_events=#{result[:org_graph_events]} " \
+      "forgotten_skipped=#{result[:forgotten_skipped]} " \
       "errors=#{result[:errors].size}"
     )
     log_skipped_assignments(tenant, result)

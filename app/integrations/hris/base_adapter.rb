@@ -60,6 +60,14 @@ class Hris::BaseAdapter
     raise NotImplementedError, "#{self.class}#fetch_employees must be implemented"
   end
 
+  # The ids of everyone the HRIS shows as employed or starting, so nobody
+  # it still holds is forgotten. An HRIS error raises.
+  #
+  # @return [Array<String>]
+  def active_external_ids
+    raise NotImplementedError, "#{self.class}#active_external_ids must be implemented"
+  end
+
   # The fields an admin can choose from, cached per tenant. An HRIS error
   # raises, and nothing is cached, so a failure never reads as "no fields".
   #
@@ -85,6 +93,18 @@ class Hris::BaseAdapter
   # @return [Array<Hris::Field>]
   def fetch_field_catalogue
     raise NotImplementedError, "#{self.class}#fetch_field_catalogue must be implemented"
+  end
+
+  # What each current person's record holds for one field, read live and
+  # stored nowhere.
+  #
+  # @param field_id [String] the field's catalogue id
+  # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; whoever withholds it reads as withheld
+  # @return [Hash{String => Hris::FieldValue}] keyed by the person's external id
+  def read_field(field_id, kind:, alongside: nil)
+    raise NotImplementedError, "#{self.class}#read_field must be implemented"
   end
 
   # Returns the provider name (e.g., "hibob", "bamboohr").

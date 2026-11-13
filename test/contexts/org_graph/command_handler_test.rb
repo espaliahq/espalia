@@ -164,6 +164,24 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#forget_person" do
+    should "write the erasure for the system only, and refuse a sync that follows it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-01")
+      admin = create(:tenant_user, tenant: @tenant, role: :admin)
+      as_admin = OrgGraph::CommandHandler.new(actor: AuthorizationContext.new(user: admin.user, tenant_user: admin, person: nil))
+
+      assert_raises(OrgGraph::Authorization::Refused) do
+        as_admin.forget_person(@person_id, effective_on: "2033-11-01", reason: "retention")
+      end
+      @handler.forget_person(@person_id, effective_on: "2033-11-01", reason: "retention", retention_years: 7)
+
+      assert_instance_of OrgGraph::Events::PersonForgotten, stream_events.last
+      assert_raises(RuntimeError, match: /forgotten/) do
+        @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-09-01")
+      end
+    end
+  end
+
   context "#record_absence" do
     should "leave someone the provider stopped returning, once" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
@@ -390,6 +408,59 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
         @handler.end_membership(@person_id, team, **HELD_BY_ESPALIA)
       end
       assert_nothing_raised { @handler.end_membership(@person_id, team, **PROVENANCE) }
+    end
+
+    context "for a person the unit's provider does not know" do
+      setup do
+        level = SecureRandom.uuid_v7
+        @team = SecureRandom.uuid_v7
+        @structure.define_taxonomy([ { level_id: level, name: "Team" } ], effective_on: "2026-01-01")
+        @structure.set_level_provider(level, "hibob", effective_on: "2026-01-01")
+        @structure.create_unit(@team, "Payments", level_id: level, effective_on: "2026-01-01", provider: "hibob", external_ref: "t-1")
+        @hand_added = create(:person, tenant: @tenant).id
+        @handler.record_person(@hand_added, **HELD_BY_ESPALIA, employment_status: "employed")
+      end
+
+      should "let Espalia place them in a unit the HRIS supplies, and end it" do
+        @handler.set_membership(@hand_added, @team, **HELD_BY_ESPALIA)
+        assert_equal "espalia", OrgMembership.find_by!(person_id: @hand_added, unit_id: @team).provider
+
+        @handler.end_membership(@hand_added, @team, **HELD_BY_ESPALIA)
+        assert_nil OrgMembership.find_by(person_id: @hand_added, unit_id: @team)
+      end
+
+      should "let Espalia move them into it and confirm the membership" do
+        squads = SecureRandom.uuid_v7
+        squad = SecureRandom.uuid_v7
+        @structure.define_taxonomy([ { level_id: OrgTaxonomyLevel.first.id, name: "Team" }, { level_id: squads, name: "Squad" } ],
+                                   effective_on: "2026-01-01")
+        @structure.create_unit(squad, "Billing", level_id: squads, effective_on: "2026-01-01")
+        @handler.set_membership(@hand_added, squad, **HELD_BY_ESPALIA)
+
+        @handler.move_membership(@hand_added, squad, @team, effective_on: "2026-11-02")
+        assert_nothing_raised { @handler.confirm_fact(@hand_added, "membership", unit_id: @team, effective_on: "2026-11-03", confirmed_by_id: @person_id) }
+      end
+
+      should "let Espalia end, move and confirm its membership once the HRIS knows them" do
+        other_team = SecureRandom.uuid_v7
+        @structure.create_unit(other_team, "Search", level_id: OrgTaxonomyLevel.first.id, effective_on: "2026-01-01",
+                                                     provider: "hibob", external_ref: "t-2")
+        @handler.set_membership(@hand_added, @team, **HELD_BY_ESPALIA)
+        Person.find(@hand_added).update!(hris_source: "hibob", external_id: "hb-2")
+
+        @handler.move_membership(@hand_added, @team, other_team, effective_on: "2026-11-02")
+        @handler.confirm_fact(@hand_added, "membership", unit_id: other_team, effective_on: "2026-11-03", confirmed_by_id: @person_id)
+        @handler.end_membership(@hand_added, other_team, **HELD_BY_ESPALIA, effective_on: "2026-11-04")
+        assert_not OrgMembership.exists?(person_id: @hand_added)
+      end
+
+      should "still refuse a person the HRIS knows" do
+        Person.find(@hand_added).update!(hris_source: "hibob", external_id: "hb-2")
+
+        assert_raises(RuntimeError, match: "hibob supplies this unit;") do
+          @handler.set_membership(@hand_added, @team, **HELD_BY_ESPALIA)
+        end
+      end
     end
 
     should "move a membership only into a unit the membership's provider supplies" do

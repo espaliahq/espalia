@@ -145,6 +145,66 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
     end
   end
 
+  context "#field_value" do
+    setup do
+      @list = { "work" => { "department" => "4021" }, "humanReadable" => { "work" => { "department" => "Payments" } } }
+    end
+
+    should "read a list field as its item's id and the label HiBob shows" do
+      assert_equal Hris::FieldValue.new(state: :value, id: "4021", label: "Payments"),
+        Hris::Hibob::ResponseMapper.new(@list).field_value("work.department", kind: :list)
+    end
+
+    should "read a list field from the flat payload shape" do
+      employee = @list.except("work").merge("/work/department" => { "value" => 4021 })
+
+      assert_equal "4021", Hris::Hibob::ResponseMapper.new(employee).field_value("work.department", kind: :list).id
+    end
+
+    should "fall back to the item's id when HiBob sends no label for it" do
+      assert_equal "4021",
+        Hris::Hibob::ResponseMapper.new(@list.except("humanReadable")).field_value("work.department", kind: :list).label
+    end
+
+    should "trim a list item's label as the sync does before writing it" do
+      @list["humanReadable"]["work"]["department"] = " Payments  "
+
+      assert_equal "Payments", Hris::Hibob::ResponseMapper.new(@list).field_value("work.department", kind: :list).label
+    end
+
+    should "read a text field as its text, with no id" do
+      employee = { "work" => { "customColumns" => { "column_team" => "  Growth " } } }
+
+      assert_equal Hris::FieldValue.new(state: :value, label: "Growth"),
+        Hris::Hibob::ResponseMapper.new(employee).field_value("column_team", kind: :text)
+    end
+
+    should "read a field HiBob sends empty as blank" do
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "department" => "" } }).field_value("work.department", kind: :list), :blank?
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "department" => nil } }).field_value("work.department", kind: :text), :blank?
+    end
+
+    should "read a list value in a shape it doesn't know as unreadable, never blank" do
+      [ { "id" => "7" }, %w[7 9] ].each do |raw|
+        employee = { "work" => { "customColumns" => { "column_team" => raw } } }
+
+        assert_predicate Hris::Hibob::ResponseMapper.new(employee).field_value("column_team", kind: :list), :unreadable?
+      end
+    end
+
+    should "read a flat wrapper with no value as unreadable, and one holding nil as blank" do
+      unknown = { "/work/department" => { "unexpected" => "7" } }
+      empty = { "/work/department" => { "value" => nil } }
+
+      assert_predicate Hris::Hibob::ResponseMapper.new(unknown).field_value("work.department", kind: :list), :unreadable?
+      assert_predicate Hris::Hibob::ResponseMapper.new(empty).field_value("work.department", kind: :list), :blank?
+    end
+
+    should "read a field the record leaves out as withheld" do
+      assert_predicate Hris::Hibob::ResponseMapper.new({ "work" => { "title" => "Engineer" } }).field_value("work.department", kind: :list), :withheld?
+    end
+  end
+
   context "#manager_external_id" do
     should "extract manager ID from reportsTo object" do
       employee = @fixture["employees"][0]
@@ -244,6 +304,56 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
 
         assert_equal({ site: "Sydney", country: nil, cost_centre: nil },
           Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
+      end
+
+      should "write no cost centre for a value it cannot read, never its label" do
+        employee = { "work" => { "site" => "Sydney", "customColumns" => { "column_cc" => %w[17 18] } },
+                     "address" => { "country" => "AU" },
+                     "humanReadable" => { "work" => { "customColumns" => { "column_cc" => "Platform, Payments" } } } }
+
+        assert_equal({ site: "Sydney", country: "AU" }, Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
+      end
+
+      should "write neither site nor country when either one is unreadable" do
+        unreadable_country = { "work" => { "site" => "Sydney" }, "address" => { "country" => { "id" => "AU" } } }
+        unreadable_site = { "work" => { "site" => %w[1 2] }, "address" => { "country" => "AU" } }
+
+        assert_empty Hris::Hibob::ResponseMapper.new(unreadable_country, mapped_fields: @mapped).org_graph_facts
+        assert_empty Hris::Hibob::ResponseMapper.new(unreadable_site, mapped_fields: @mapped).org_graph_facts
+      end
+
+      should "skip a fact for exactly the people the preview counts as unreadable" do
+        employees = [
+          { "work" => { "customColumns" => { "column_cc" => "17" } } },
+          { "work" => { "customColumns" => { "column_cc" => "" } } },
+          { "work" => { "customColumns" => { "column_cc" => %w[17 18] } } },
+          { "work" => { "customColumns" => { "column_cc" => { "id" => "17" } } } },
+          { "/work/customColumns/column_cc" => { "unexpected" => "17" } },
+          { "work" => {} }
+        ].map { Hris::Hibob::ResponseMapper.new(it, mapped_fields: { cost_centre: "column_cc" }) }
+
+        unreadable = employees.count { it.field_value("column_cc", kind: :list).unreadable? }
+        withheld = employees.count { it.field_value("column_cc", kind: :list).withheld? }
+        skipped = employees.count { !it.org_graph_facts.key?(:cost_centre) }
+
+        assert_equal [ 3, 1 ], [ unreadable, withheld ]
+        assert_equal unreadable + withheld, skipped
+      end
+
+      should "count a country beside an unreadable site as unreadable, since the sync skips the pair" do
+        employee = { "work" => { "site" => %w[1 2] }, "address" => { "country" => "AU" } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped)
+
+        assert_predicate mapper.field_value("address.country", kind: :text, alongside: "site"), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:country)
+      end
+
+      should "count a text field in a shape it doesn't know as unreadable, as the sync skips it" do
+        employee = { "work" => { "customColumns" => { "column_cc" => { "name" => "Platform" } } } }
+        mapper = Hris::Hibob::ResponseMapper.new(employee, mapped_fields: { cost_centre: "column_cc" })
+
+        assert_predicate mapper.field_value("column_cc", kind: :text), :unreadable?
+        assert_not mapper.org_graph_facts.key?(:cost_centre)
       end
 
       should "read a root field, which HiBob returns at the top level" do

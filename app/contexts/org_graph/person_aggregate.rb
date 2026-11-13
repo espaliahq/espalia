@@ -18,6 +18,7 @@ class OrgGraph::PersonAggregate
 
   PROVIDERS = (HrisConfig::PROVIDERS + %w[espalia]).freeze
   EMPLOYMENT_STATUSES = %w[pending employed left].freeze
+  FORGETTING_REASONS = %w[retention request].freeze
   FACT_KEYS = %i[title level manager_id cost_centre site country fte employment_type].freeze
   private_constant :FACT_KEYS
   # The kind of fact each keyword writes, as the provider settings name them
@@ -40,6 +41,7 @@ class OrgGraph::PersonAggregate
     @fact_providers = {}
     @memberships = {}
     @membership_ends = {}
+    @forgotten = false
   end
 
   # Records the person for the first time, with the facts as they stood.
@@ -119,6 +121,34 @@ class OrgGraph::PersonAggregate
     left_on = @started_on if @employment_status == "employed" && @started_on && left_on && left_on < @started_on
     leave(provider:, effective_on: left_on)
   end
+
+  # Records that a leaver's identifiers have been erased. After it, the
+  # stream takes no more events: someone the HRIS shows employed again is a
+  # new person. Forgetting someone already forgotten writes nothing.
+  #
+  # @param effective_on [Date, String] the day of the erasure
+  # @param reason [String] one of {FORGETTING_REASONS}
+  # @param retention_years [Integer, nil] the tenant's period at the time
+  # @param requested_by_id [String, nil] the tenant user who asked, required for a request
+  # @raise [RuntimeError] unless the person has left, or if the reason is invalid
+  def forget(effective_on:, reason:, retention_years: nil, requested_by_id: nil)
+    return if forgotten?
+
+    ensure_recorded!
+    raise "Only a person who has left can be forgotten" unless left?
+    raise "Invalid reason: #{reason}" unless FORGETTING_REASONS.include?(reason)
+    raise "A request needs the person who asked" if reason == "request" && requested_by_id.blank?
+
+    # Leaving ends them, but a failed handler can leave one open, and nothing
+    # can end it once they are forgotten.
+    end_memberships(effective_on:) if @memberships.any?
+    apply(OrgGraph::Events::PersonForgotten.new(data: provenance(OrgGraph::StructureAggregate::ESPALIA, effective_on).merge(
+      reason: reason, retention_years: retention_years, requested_by_id: requested_by_id
+    )))
+  end
+
+  # @return [Boolean] whether the person's identifiers have been erased
+  def forgotten? = @forgotten
 
   # A person who had left is employed again.
   #
@@ -282,6 +312,12 @@ class OrgGraph::PersonAggregate
     changed_on && Date.iso8601(changed_on.to_s)
   end
 
+  # @param key [Symbol, String] one of the person facts, such as :cost_centre
+  # @return [Object, nil] what the Org Graph holds for it now
+  def fact(key)
+    @facts[key.to_sym]
+  end
+
   # @return [Boolean] whether the Org Graph has seen this person yet
   def recorded?
     !@employment_status.nil?
@@ -328,6 +364,8 @@ class OrgGraph::PersonAggregate
   # @param started_on [Date, String, nil]
   # @param left_on [Date, String, nil]
   def match_status(employment_status, provider:, effective_on:, started_on: nil, left_on: nil)
+    raise "This person has been forgotten" if forgotten?
+
     if employment_status == @employment_status
       correct_leaving_date(left_on, provider) if left? && left_on.present?
       return
@@ -386,6 +424,7 @@ class OrgGraph::PersonAggregate
 
   def ensure_recorded!
     raise "Person not recorded" unless recorded?
+    raise "This person has been forgotten" if forgotten?
   end
 
   # Already in the target status, the call writes nothing, unless it repeats the
@@ -518,6 +557,10 @@ class OrgGraph::PersonAggregate
       @facts.merge!(changed)
       @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
     end
+  end
+
+  on OrgGraph::Events::PersonForgotten do |_event|
+    @forgotten = true
   end
 
   on OrgGraph::Events::StartDateChanged do |event|

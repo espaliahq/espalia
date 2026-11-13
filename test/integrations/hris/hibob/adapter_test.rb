@@ -17,6 +17,101 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     ActsAsTenant.current_tenant = nil
   end
 
+  context "a person already forgotten" do
+    setup do
+      @employees = @fixture["employees"]
+    end
+
+    should "stay skipped while HiBob shows them as gone" do
+      forgotten = forget_row("bob-003")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_equal 2, result[:created]
+      assert_nil Person.find_by(external_id: "bob-003")
+      assert_equal OrgGraph::Forgetting.digest(@tenant, "hibob", "bob-003"), forgotten.reload.forgotten_external_id_digest
+    end
+
+    should "stay skipped while a rehire is yet to start" do
+      forget_row("bob-001")
+      @employees.find { it["id"] == "bob-001" }["work"]["startDate"] = (Date.current + 30).iso8601
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_nil Person.find_by(external_id: "bob-001")
+    end
+
+    should "stay skipped while HiBob holds no start date for them" do
+      forget_row("bob-001")
+      @employees.find { it["id"] == "bob-001" }["work"].delete("startDate")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 1, result[:forgotten_skipped]
+      assert_nil Person.find_by(external_id: "bob-001")
+    end
+
+    should "not be adopted by a new hire whose email HiBob leaves blank" do
+      forgotten = forget_row("bob-003")
+      @employees.find { it["id"] == "bob-001" }["email"] = nil
+
+      build_adapter(@employees).sync_people
+
+      assert_nil forgotten.reload.external_id
+      assert_nil forgotten.email
+    end
+
+    should "come back as a new person, unlinked from the forgotten one, once back at work" do
+      forgotten = forget_row("bob-001")
+
+      result = build_adapter(@employees).sync_people
+
+      assert_equal 0, result[:forgotten_skipped]
+      rehired = Person.find_by(external_id: "bob-001")
+      assert_not_equal forgotten.id, rehired.id
+      assert_nil forgotten.reload.forgotten_external_id_digest
+      assert forgotten.forgotten?
+    end
+
+    should "not write a forgotten manager back into their reports' payloads" do
+      forget_row("bob-002")
+      manager = @employees.find { it["id"] == "bob-002" }
+      manager["isActive"] = false
+      manager["internal"] = { "terminationDate" => "2026-10-31" }
+
+      build_adapter(@employees).sync_people
+
+      report = Person.find_by(external_id: "bob-001")
+      assert_nil report.hris_raw_data.dig("work", "reportsTo")
+      assert_equal "bob-002", @employees.first.dig("work", "reportsTo", "id")
+    end
+
+    should "refuse to sync, creating nobody, without the forgetting key" do
+      forget_row("bob-003")
+
+      OrgGraph::Forgetting.stub(:key, nil) do
+        assert_raises(OrgGraph::Forgetting::KeyMissing) { build_adapter(@employees).sync_people }
+      end
+      assert_equal 1, Person.count
+    end
+  end
+
+  context "#active_external_ids" do
+    should "hold everyone HiBob doesn't mark inactive, a hire yet to start included" do
+      ids = @fixture["employees"].map { it["id"].to_s }
+      inactive = @fixture["employees"].select { it["isActive"] == false }.map { it["id"].to_s }
+
+      assert_equal ids - inactive, build_adapter(@fixture["employees"]).active_external_ids
+      assert_not_empty inactive
+    end
+
+    should "refuse an empty response, which would spare nobody" do
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) { build_adapter([]).active_external_ids }
+    end
+  end
+
   context "#sync_people" do
     should "create new Person records for new employees" do
       adapter = build_adapter(@fixture["employees"])
@@ -545,6 +640,45 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#read_field" do
+    should "ask HiBob for the field beside each current person's id, and read each record" do
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      employees = [
+        { "id" => "3141", "work" => { "customColumns" => { "column_team" => "7" } },
+          "humanReadable" => { "work" => { "customColumns" => { "column_team" => "Payments" } } } },
+        { "id" => "2718" },
+        { "work" => { "customColumns" => { "column_team" => "9" } } }
+      ]
+      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_team], show_inactive: false)
+      adapter.instance_variable_set(:@client, client)
+
+      values = adapter.read_field("column_team", kind: :list)
+
+      assert_equal({ "3141" => Hris::FieldValue.new(state: :value, id: "7", label: "Payments"),
+                     "2718" => Hris::FieldValue.withheld }, values)
+      client.verify
+    end
+
+    should "withhold a fact from anyone whose record withholds the fact it travels with" do
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      employees = [
+        { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
+        { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
+      ]
+      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_country work.site],
+        show_inactive: false)
+      adapter.instance_variable_set(:@client, client)
+
+      values = adapter.read_field("column_country", kind: :text, alongside: "site")
+
+      assert_equal({ "3141" => Hris::FieldValue.new(state: :value, label: "Australia"),
+                     "2718" => Hris::FieldValue.withheld }, values)
+      client.verify
+    end
+  end
+
   context "#fetch_field_catalogue" do
     setup do
       @fields = hibob_fixture("people_fields_response.json")
@@ -916,6 +1050,21 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
           new_events.map { |e| [ e.class, e.data[:cost_centre] || e.data[:country] ] }
       end
 
+      should "write no cost centre for a value it cannot read, as for one HiBob withholds" do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
+          fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
+        @recorded = org_graph_events.size
+        employees = with_employee("bob-001") do |e|
+          e["work"]["customColumns"] = { "column_cc" => %w[17 18] }
+          e["humanReadable"]["work"]["customColumns"] = { "column_cc" => "Platform, Payments" }
+        end
+
+        result = build_adapter(employees).sync_people
+
+        assert_empty result[:errors]
+        assert_not new_events.any?(OrgGraph::Events::CostCentreChanged)
+      end
+
       should "request the mapped fields from HiBob" do
         OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).set_fact_provider("cost_centre", "hibob",
           fields: { cost_centre: "work.customColumns.column_cc" }, effective_on: Date.current)
@@ -1247,6 +1396,50 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "mirroring a structure level" do
+    setup do
+      @team_level = SecureRandom.uuid_v7
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+      structure.define_taxonomy([ { level_id: @team_level, name: "Team" } ], effective_on: "2026-01-01")
+      structure.set_level_provider(@team_level, "hibob", field: "work.department", effective_on: "2026-01-01")
+    end
+
+    should "place each person in the unit their record names" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { [ Hris::Field.new(id: "work.department", name: "Department", kind: :text) ] }
+
+      adapter.sync_people
+
+      engineering = OrgUnit.live.find_by!(level_id: @team_level, external_ref: "work.department/Engineering")
+      alice = Person.find_by!(external_id: "bob-001")
+      assert OrgMembership.exists?(person_id: alice.id, unit_id: engineering.id, provider: "hibob")
+    end
+
+    should "mirror nothing when HiBob's field lists can't be read" do
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "timeout") }
+
+      result = adapter.sync_people
+
+      assert_not OrgUnit.exists?(level_id: @team_level)
+      assert(result[:errors].any? { it[:error].include?("no structure level was mirrored") })
+    end
+
+    should "forget a unit's first parent reading when HiBob's field lists can't be read" do
+      unit = SecureRandom.uuid_v7
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .create_unit(unit, "Engineering", level_id: @team_level, provider: "hibob",
+                                                                         external_ref: "work.department/Engineering", effective_on: "2026-01-01")
+      HrisUnitParentProposal.create!(unit_id: unit, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.new(2026, 11, 12))
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "timeout") }
+
+      adapter.sync_people
+
+      assert_not HrisUnitParentProposal.exists?
+    end
+  end
+
   private
 
   def org_graph_events
@@ -1289,6 +1482,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   #
   # @param employees [Array<Hash>]
   # @return [Hris::Hibob::Adapter]
+  def forget_row(external_id)
+    person = create(:person, tenant: @tenant, hris_source: "hibob")
+    person.update_columns(name: nil, email: nil, forgotten_at: Time.current, status: "inactive",
+                          forgotten_external_id_digest: OrgGraph::Forgetting.digest(@tenant, "hibob", external_id))
+    person
+  end
+
   def build_adapter(employees)
     adapter = Hris::Hibob::Adapter.new(@tenant)
     mock_client = Minitest::Mock.new

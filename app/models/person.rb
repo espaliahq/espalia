@@ -25,6 +25,7 @@ class Person < ApplicationRecord
   scope :active, -> { where(status: "active") }
   scope :inactive, -> { where(status: "inactive") }
   scope :hris_managed, -> { where.not(hris_source: nil) }
+  scope :forgotten, -> { where.not(forgotten_at: nil) }
   scope :in_no_unit, -> { where.not(id: OrgMembership.in_live_units.select(:person_id)) }
 
   # The one way to find a Person from an identity another system holds: the
@@ -45,8 +46,21 @@ class Person < ApplicationRecord
     find_by("LOWER(email) = ?", email.to_s.strip.downcase)
   end
 
-  validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :name, presence: true
+  validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :forgotten?
+  validates :name, presence: true, unless: :forgotten?
+
+  # What every screen shows for a person whose identifiers were erased.
+  FORMER_MEMBER = "Former member"
+
+  # @return [Boolean] whether {OrgGraph::Forgetting} erased this person's identifiers
+  def forgotten? = forgotten_at.present?
+
+  # A forgotten row holds no name, so a screen that reads one shows them as
+  # a former member rather than failing. Queries that pluck the column still
+  # read nil.
+  #
+  # @return [String, nil]
+  def name = forgotten? ? FORMER_MEMBER : super
   validates :status, inclusion: { in: %w[active inactive] }
 
   # The User used to deliver a notification directed at this person, lazily
@@ -57,13 +71,20 @@ class Person < ApplicationRecord
   # unlinked membership is adopted rather than duplicated. Idempotent and safe
   # under concurrent provisioning.
   #
-  # @return [User]
+  # @return [User, nil] nil for a forgotten person, who has no address
   def ensure_user!
+    return nil if forgotten?
+
     existing = user
     return existing if existing
 
     ActsAsTenant.with_tenant(tenant) do
       User.transaction do
+        # Forgetting locks this row too, so the email read here is never one
+        # it has just erased.
+        lock!
+        next if forgotten?
+
         account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
         membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
         membership.person ||= self
@@ -75,6 +96,8 @@ class Person < ApplicationRecord
   rescue ActiveRecord::RecordNotUnique
     # A concurrent provision won the race; re-resolve the now-linked user.
     reload
+    return nil if forgotten?
+
     user || raise
   end
 

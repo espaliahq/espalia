@@ -2407,6 +2407,29 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "integrations_hris_field_preview",
+        "description" => "Preview what an HRIS field would give before choosing it as the source of an Org Graph " \
+                         "level or fact. For target \"level\": the units it would create, with their labels and how " \
+                         "many people fall in each, largest first. For a fact (\"cost_centre\", \"country\"): how many " \
+                         "people have a value and how many would change from what the Org Graph holds now. Both count " \
+                         "people the field is blank for and people whose record withholds it. Reads the HRIS live; " \
+                         "writes nothing.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "field_id" => { "type" => "string", "minLength" => 1, "pattern" => "\\S" },
+            "target"   => { "type" => "string", "enum" => %w[level cost_centre country] }
+          },
+          "required" => %w[field_id target],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "integrations_hris_titles",
         "description" => "List the job titles active HRIS people hold, each with the framework role mapping it " \
                          "resolves to (nil = unmapped, so the sync skips those people) and the people the next " \
@@ -2636,6 +2659,49 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         "inputSchema" => {
           "type" => "object",
           "properties" => {},
+          "required" => [],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
+        "name" => "tenants_disable_scheduled_forgetting",
+        "description" => "Turn off scheduled forgetting for the active tenant. Anyone already forgotten stays forgotten.",
+        "inputSchema" => { "type" => "object", "properties" => {}, "required" => [], "additionalProperties" => false },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_enable_scheduled_forgetting",
+        "description" => "Turn on scheduled forgetting for the active tenant. Pass confirm_count, the count " \
+                         "tenants_forgetting_dry_run gives now; the call is refused if it differs.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "confirm_count" => { "type" => "integer" } },
+          "required" => %w[confirm_count],
+          "additionalProperties" => false
+        },
+        "annotations" => {
+          "readOnlyHint" => false,
+          "destructiveHint" => false,
+          "idempotentHint" => false
+        }
+      },
+      {
+        "name" => "tenants_forgetting_dry_run",
+        "description" => "Count the leavers the active tenant would forget today, after checking the HRIS, " \
+                         "and list their person ids. Erases nothing. reason, why you ask, is recorded and " \
+                         "doesn't change the answer.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => { "reason" => { "type" => "string", "enum" => %w[retention request] } },
           "required" => [],
           "additionalProperties" => false
         },
