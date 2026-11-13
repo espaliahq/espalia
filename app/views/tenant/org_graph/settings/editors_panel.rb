@@ -52,6 +52,8 @@ class Views::Tenant::OrgGraph::Settings::EditorsPanel < Views::Base
       @editors[:editors].each do |editor|
         li(class: "flex items-center justify-between gap-2 py-1.5") do
           span(class: "text-default min-w-0 truncate") { editor[:name] }
+          next unless editor[:person_id]
+
           settings_form(tenant_org_graph_settings_editor_path(editor[:person_id]), method: :delete) do
             render Components::Kit::Button.new(variant: :ghost, tone: :danger, size: :sm, type: :submit,
                                                id: "remove-editor-#{editor[:person_id]}",

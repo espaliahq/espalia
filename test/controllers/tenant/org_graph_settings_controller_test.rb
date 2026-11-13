@@ -33,6 +33,19 @@ class Tenant::OrgGraphSettingsControllerTest < ActionDispatch::IntegrationTest
       assert_includes panel.text, "Eve Editor"
       assert_equal [ "Mo Member" ], panel.css("select[name='person_id'] option").map(&:text)
     end
+
+    should "list an editor with no person record without a way to remove them here" do
+      ActsAsTenant.with_tenant(@tenant) do
+        create(:tenant_user, tenant: @tenant, user: create(:user, email: "no.person@example.com"), role: :member,
+                             person: nil, org_graph_editor: true)
+      end
+
+      get tenant_org_graph_settings_path
+
+      assert_response :success
+      row = Nokogiri::HTML5(response.body).css("#org-graph-editors li").find { it.text.include?("no.person@example.com") }
+      assert_nil row.at_css("button")
+    end
   end
 
   context "as an Org Graph editor" do
