@@ -14,7 +14,7 @@ Every later sync writes only what changed: a person HiBob now shows as inactive 
 
 **Who is not recorded.** People HiBob does not return are not recorded: someone added by hand, or deactivated by an earlier sync because they had left HiBob altogether. Their history starts if HiBob returns them again.
 
-**No deploy step.** No migration runs, and no projection needs a rebuild. No projection reads the events this sync writes yet; 1.4 adds that.
+**No deploy step.** No migration runs, and no projection needs a rebuild. Until the tenant is cut over ([org-graph-people-cutover.md](org-graph-people-cutover.md)), no projection writes `people` from these events.
 
 ## Steps
 

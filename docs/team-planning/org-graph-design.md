@@ -145,6 +145,9 @@ person who has left, the membership they came from ends instead.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
 lists the people with no membership of a live unit, for the "in no team" tray.
 
+`OrgGraph::Projections::PeopleColumns` projects `job_title`, `manager_id` and `status` onto
+`people` for a tenant cut over to the Org Graph, and writes nothing for any other tenant.
+
 `OrgGraph::StructureAggregate` holds these rules:
 
 - **A change comes from the unit's own provider.** A command names its provider, which
@@ -216,6 +219,13 @@ someone is named.
 The identifier columns stay as they are: mutable, written by the sync, and the only place
 a name or an email is stored. The other columns become a projection of the person's
 stream.
+
+In practice that means `job_title`, `manager_id` and `status`, one tenant at a time. A
+tenant is cut over once every person has a stream that starts with `PersonRecorded` and a
+rebuild reproduces every row ([runbook](../runbooks/org-graph-people-cutover.md)). Until
+then the sync writes those columns itself. The other non-identifier columns stay with the
+sync for now: `department` until a level is mirrored from an HRIS field (6.7), and
+`level_id`, `role_id` and `hris_level_ordinal` until E9 moves the framework mapping.
 
 The existing Person Development events (`PersonRoleChanged`, `PersonLevelChanged`,
 `ReportingManagerRecorded`) are about a person's place in a framework and stay. They
