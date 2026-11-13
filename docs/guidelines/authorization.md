@@ -173,8 +173,24 @@ Pundit's `authorize` passes none.
 
 Ownership inherits downward: owning Payments gives rights over every squad
 beneath it, even one with owners of its own. Owners and managers lose their
-rights once their `Person` is no longer active. A write with no actor, such as
-the HRIS sync, is a system write and is not checked.
+rights once their `Person` is no longer active. A unit or person the Org Graph
+doesn't hold is left to admins and editors, except that the manager chain can
+still end a membership of a unit that is gone.
+
+The commands check the policy themselves. Build the handler with the actor and
+every command it runs is checked:
+
+```ruby
+OrgGraph::StructureCommandHandler.new(actor: pundit_user).rename_unit(unit_id, "Pay", effective_on:)
+OrgGraph::CommandHandler.new(actor: pundit_user).set_membership(person_id, unit_id, provider:, effective_on:)
+```
+
+A refused command raises `OrgGraph::Authorization::Refused`, a
+`Pundit::NotAuthorizedError` whose message names who may make the change, so
+`ApplicationController` handles it like any other refusal. A handler built
+without an actor is the system: the HRIS sync, a retirement moving its members,
+the seed task. Nobody is acting, so nothing is checked. Never build one without
+an actor on a path a person drives.
 
 ## Policy Conventions
 
