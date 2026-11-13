@@ -8,7 +8,7 @@ class Operations::OrgGraph::Sources < Operations::Base
   description "Read where the Org Graph's data comes from: the connected HRIS, each kind of person fact " \
               "with its provider and the fields an HRIS reads it from, each structure level (top first) " \
               "with its provider, field and number of live units, and the staleness threshold with how " \
-              "many facts Espalia holds are stale, by fact."
+              "many facts Espalia holds are stale, by fact. Admins and Org Graph editors only."
   category :read
   approval :none
 
