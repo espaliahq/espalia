@@ -25,6 +25,7 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitMoved,
       OrgGraph::Events::UnitRetired,
       OrgGraph::Events::UnitSucceeded,
+      OrgGraph::Events::UnitHandedOver,
       OrgGraph::Events::LevelProviderSet,
       OrgGraph::Events::FactProviderSet,
       OrgGraph::Events::UnitOwnerAdded,
@@ -60,6 +61,7 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitMoved then update_unit(event.data, parent_id: event.data[:parent_id], parent_effective_on: event.data[:effective_on])
     when OrgGraph::Events::UnitRetired then update_unit(event.data, retired_on: event.data[:effective_on])
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
+    when OrgGraph::Events::UnitHandedOver then update_unit(event.data, provider: event.data[:provider], external_ref: event.data[:external_ref])
     when OrgGraph::Events::LevelProviderSet then handle_level_provider_set(event.data)
     when OrgGraph::Events::FactProviderSet then handle_fact_provider_set(event.data)
     when OrgGraph::Events::UnitOwnerAdded then handle_unit_owner_added(event.data)

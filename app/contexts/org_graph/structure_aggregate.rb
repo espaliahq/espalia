@@ -138,6 +138,72 @@ class OrgGraph::StructureAggregate
     }))
   end
 
+  # Hands a level Espalia holds to an HRIS field. Each of the level's live
+  # units must be matched to the field's value it becomes; resolve the rest
+  # first, with {#record_succession} or {#retire_unit}. Writes the level's new
+  # provider and field, then hands over each matched unit.
+  #
+  # @param level_id [String] a level Espalia supplies
+  # @param provider [String] the HRIS
+  # @param field [String] the HRIS field id
+  # @param matches [Hash{String => String}] unit_id => the external reference
+  #   of the value it becomes, as the mirror would key it
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @raise [ArgumentError, RuntimeError] if the level is not Espalia's, a live
+  #   unit is unmatched, a match names another unit, or two units share a value
+  def hand_over_level(level_id, provider, field:, matches:, effective_on:, set_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    provider = require_provider(provider)
+    raise ArgumentError, "Hand a level to an HRIS, or hand it back" if provider == ESPALIA
+    raise "Level is not in the taxonomy" unless level_index(level_id)
+    raise "#{level_provider(level_id)} supplies this level, not Espalia" unless level_provider(level_id) == ESPALIA
+
+    field = require_level_field(provider, field)
+    raise ArgumentError, "A handover names the field" unless field
+
+    matches = matches.to_h { |unit_id, ref| [ require_id(unit_id, "Unit id"), ref.to_s.strip ] }
+    units = live_units.select { |unit| unit.level_id == level_id }
+    unmatched = units.map(&:unit_id) - matches.keys
+    raise "Match or resolve every unit first: #{unmatched.map { @units[it].name }.sort.join(', ')}" if unmatched.any?
+    raise "Only the level's live units can be matched" unless (matches.keys - units.map(&:unit_id)).empty?
+    raise ArgumentError, "Each match needs a reference" if matches.values.any?(&:empty?)
+    raise "Two units can't become the same value" unless matches.values.uniq.size == matches.size
+
+    effective_on = iso_date(effective_on)
+    ensure_hris_levels_on_top!(level_ids(@levels), level_id => provider)
+    apply(OrgGraph::Events::LevelProviderSet.new(data: {
+      level_id:, provider:, previous_provider: ESPALIA, field:, effective_on:, set_by_id:
+    }))
+    units.sort_by(&:name).each { |unit| apply(handed_over(unit, provider, matches.fetch(unit.unit_id), effective_on, set_by_id)) }
+  end
+
+  # Hands a level an HRIS provides back to Espalia. Units and memberships stay
+  # as they are; successions and retirements made by the handover stand.
+  # The level's field and its units' references are cleared.
+  #
+  # @param level_id [String] a level an HRIS supplies
+  # @param effective_on [Date, String]
+  # @param set_by_id [String, nil] person_id of the actor
+  # @raise [RuntimeError] if Espalia already holds the level, or a level below
+  #   it is still the HRIS's
+  def hand_back_level(level_id, effective_on:, set_by_id: nil)
+    level_id = require_id(level_id, "Level id")
+    raise "Level is not in the taxonomy" unless level_index(level_id)
+
+    previous = level_provider(level_id)
+    raise "Espalia already holds this level" if previous == ESPALIA
+
+    effective_on = iso_date(effective_on)
+    ensure_hris_levels_on_top!(level_ids(@levels), level_id => ESPALIA)
+    apply(OrgGraph::Events::LevelProviderSet.new(data: {
+      level_id:, provider: ESPALIA, previous_provider: previous, field: nil, effective_on:, set_by_id:
+    }))
+    live_units.select { |unit| unit.level_id == level_id }.sort_by(&:name).each do |unit|
+      apply(handed_over(unit, ESPALIA, nil, effective_on, set_by_id))
+    end
+  end
+
   # Sets who supplies a kind of person fact and, for an HRIS, the fields it
   # reads the fact from. A field names its provider in the same event, so no
   # fact Espalia holds has one. Moving a fact to another provider clears its
@@ -455,10 +521,27 @@ class OrgGraph::StructureAggregate
     touch(unit.parent_id, event.data[:effective_on])
   end
 
+  on OrgGraph::Events::UnitHandedOver do |event|
+    unit = @units.fetch(event.data[:unit_id])
+    unit.provider = event.data[:provider]
+    unit.external_ref = event.data[:external_ref]
+    touch(unit.unit_id, event.data[:effective_on])
+  end
+
   on OrgGraph::Events::UnitSucceeded do |event|
     @successions[event.data[:succession_id]] = event.data.slice(:predecessor_ids, :successor_ids, :effective_on).symbolize_keys
   end
 
+
+  # The date of a unit's last change, the one it can't retire before: its
+  # own edits, its owners, and sub-units arriving beneath it or leaving.
+  #
+  # @param unit_id [String]
+  # @return [Date, nil] nil for a unit the structure doesn't hold
+  def unit_changed_on(unit_id)
+    changed_on = @units[unit_id.to_s.downcase]&.changed_on
+    changed_on && Date.iso8601(changed_on.to_s)
+  end
   private
 
   def live_unit!(unit_id)
@@ -491,6 +574,17 @@ class OrgGraph::StructureAggregate
     end
 
     unit
+  end
+
+  def handed_over(unit, provider, external_ref, effective_on, handed_over_by_id)
+    if external_ref && live_units.any? { |other| other.provider == provider && other.external_ref == external_ref }
+      raise "A live unit already mirrors #{provider} #{external_ref}"
+    end
+
+    OrgGraph::Events::UnitHandedOver.new(data: {
+      unit_id: unit.unit_id, provider:, previous_provider: unit.provider, external_ref:,
+      previous_external_ref: unit.external_ref, effective_on: [ effective_on, unit.changed_on ].max, handed_over_by_id:
+    })
   end
 
   def retirement(unit, effective_on:, retired_by_id:, succession_id: nil, successor_ids: nil)
