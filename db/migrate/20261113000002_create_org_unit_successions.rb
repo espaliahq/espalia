@@ -4,7 +4,7 @@
 # successor, projected from each tenant's OrgStructure stream.
 class CreateOrgUnitSuccessions < ActiveRecord::Migration[8.1]
   def change
-    create_table :org_unit_successions, id: :uuid do |t|
+    create_table :org_unit_successions, id: :uuid, default: nil do |t|
       t.references :tenant, type: :uuid, null: false, foreign_key: true, index: false
       t.uuid :succession_id, null: false
       t.uuid :predecessor_id, null: false

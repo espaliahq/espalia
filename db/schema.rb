@@ -755,7 +755,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_000002) do
     t.index ["tenant_id", "position"], name: "index_org_taxonomy_levels_on_tenant_id_and_position", unique: true
   end
 
-  create_table "org_unit_successions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "org_unit_successions", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "tenant_id", null: false
     t.uuid "succession_id", null: false
     t.uuid "predecessor_id", null: false
