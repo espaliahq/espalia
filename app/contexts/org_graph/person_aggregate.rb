@@ -249,6 +249,18 @@ class OrgGraph::PersonAggregate
       ended_by_id: ended_by_id, changed_back_id: changed_back_id)))
   end
 
+  # Ends every open membership, each on `effective_on` or on its last change
+  # if later, since none can end before it. Each ends as its own provider.
+  #
+  # @param effective_on [Date, String]
+  def end_memberships(effective_on:)
+    ensure_recorded!
+    on = normalize_date(effective_on, :effective_on)
+    @memberships.to_a.each do |unit_id, membership|
+      end_membership(unit_id, provider: membership[:provider], effective_on: [ on, membership[:changed_on].to_s ].max)
+    end
+  end
+
   # Moves the person's membership of one unit to another, keeping its terms
   # and when it began, since the destination carries on from the unit they
   # were in. A person already in the destination keeps that membership, and a
@@ -295,6 +307,12 @@ class OrgGraph::PersonAggregate
   def membership_changed_on(unit_id)
     changed_on = @memberships.dig(unit_id.to_s.downcase, :changed_on)
     changed_on && Date.iso8601(changed_on.to_s)
+  end
+
+  # @param key [Symbol, String] one of the person facts, such as :cost_centre
+  # @return [Object, nil] what the Org Graph holds for it now
+  def fact(key)
+    @facts[key.to_sym]
   end
 
   # @return [Boolean] whether the Org Graph has seen this person yet

@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# "Change it back": undoes one entry of a unit's activity by issuing its
-# inverse as a new event. History keeps both; nothing is deleted.
+# "Change it back": undoes one entry of a unit's activity, or every entry of
+# one cause, by issuing the inverses as new events. History keeps both;
+# nothing is deleted.
 #
 # The inverse goes through the ordinary handlers, under the same actor, so it
 # is refused wherever the change itself would be. It is also refused for an
@@ -17,9 +18,8 @@ class OrgGraph::ChangeBackHandler
   # @param actor [AuthorizationContext, Object] as for {OrgGraph::CommandHandler}
   # @param repository [OrgGraph::Repository]
   def initialize(actor:, repository: OrgGraph::Repository.new)
+    @actor = actor
     @repository = repository
-    @people = OrgGraph::CommandHandler.new(actor:, repository:)
-    @structure = OrgGraph::StructureCommandHandler.new(actor:, repository:)
   end
 
   # @param entry [OrgUnitActivity] the entry to change back
@@ -28,26 +28,58 @@ class OrgGraph::ChangeBackHandler
   # @raise [RuntimeError] if the entry can't be changed back
   # @raise [OrgGraph::Authorization::Refused] if the actor can't make the inverse change
   def change_back(entry, effective_on: nil)
-    ActiveRecord::Base.transaction do
-      entry = lock(entry)
-      ensure_reversible!(entry)
-      options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
-      send(:"undo_#{entry.event_type.underscore}", entry, options)
-      ensure_inverted!(entry)
-    end
+    reverse(effective_on:) { OrgUnitActivity.where(event_id: entry.event_id).order(position: :desc) }
+  end
+
+  # Changes back every entry written under one cause, such as one approved
+  # plan change, newest first, under one new cause. Refused as a whole unless
+  # every part can be changed back; a later change from inside the same cause
+  # doesn't count against an earlier part, as it is reversed first. The inverses
+  # share the request's cause, or a new one outside a request.
+  #
+  # @param cause_id [String] as {OrgUnitActivity::Group#cause_id}
+  # @param effective_on [Date, String, nil] as for {#change_back}
+  # @raise [RuntimeError] if any part can't be changed back
+  # @raise [OrgGraph::Authorization::Refused] if the actor can't make every inverse change
+  def change_back_group(cause_id, effective_on: nil)
+    inverse_cause = AuditMetadata.current[:correlation_id] || SecureRandom.uuid_v7
+    reverse(effective_on:, apart_from: cause_id, inverse_cause:) { OrgUnitActivity.caused_by(cause_id) }
   end
 
   private
 
-  # Takes the stream lock every ordinary write to the fact takes, then reads
-  # the entry afresh, so no change can land between the checks and the inverse.
-  def lock(entry)
-    if entry.subject.to_s.start_with?("membership:")
-      @repository.lock_person(entry.person_id)
-    else
-      @repository.lock_structure
+  def reverse(effective_on:, apart_from: nil, inverse_cause: nil, &rows)
+    ActiveRecord::Base.transaction do
+      held = lock(rows.call)
+      entries = rows.call.to_a
+      raise "This change is still being written; try again in a moment" unless streams(entries) <= held
+      ensure_reversible!(entries, apart_from:)
+      build_handlers(cause_id: inverse_cause)
+      entries.uniq(&:event_id).each do |entry|
+        options = { effective_on: (effective_on || entry.effective_on).to_s, changed_back_id: entry.event_id }
+        send(:"undo_#{entry.event_type.underscore}", entry, options)
+        ensure_inverted!(entry)
+      end
     end
-    OrgUnitActivity.find(entry.id)
+  end
+
+  def build_handlers(cause_id:)
+    @people = OrgGraph::CommandHandler.new(actor: @actor, cause_id:, repository: @repository)
+    @structure = OrgGraph::StructureCommandHandler.new(actor: @actor, cause_id:, repository: @repository)
+  end
+
+  # Takes the stream locks every ordinary write to these facts takes, the
+  # structure's before any person's, so no change can land between the checks
+  # and the inverses. The caller reads the entries afresh once they are held.
+  def lock(entries)
+    structure, person_ids = streams(entries).partition { |stream| stream == :structure }
+    @repository.lock_structure if structure.any?
+    person_ids.sort.each { |person_id| @repository.lock_person(person_id) }
+    streams(entries)
+  end
+
+  def streams(entries)
+    entries.to_set { |entry| entry.subject.to_s.start_with?("membership:") ? entry.person_id : :structure }
   end
 
   # Rolls back an inverse the aggregate turned into something else, or skipped
@@ -60,15 +92,20 @@ class OrgGraph::ChangeBackHandler
     raise "This person can't move back: they have left, or are already in that unit"
   end
 
-  def ensure_reversible!(entry)
-    raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
-    raise "This change has already been changed back" if entry.changed_back?
-    raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
-    raise "A later change has replaced this one; change that back first" unless every_unit_latest?(entry)
-  end
+  def ensure_reversible!(entries, apart_from:)
+    raise "Nothing to change back" if entries.empty?
+    if apart_from && entries.any?(&:changed_back?)
+      raise "Part of this change has already been changed back; change the rest back one entry at a time"
+    end
 
-  def every_unit_latest?(entry)
-    OrgUnitActivity.where(event_id: entry.event_id).all?(&:latest?)
+    entries.each do |entry|
+      raise "#{entry.event_type.titleize} can't be changed back" unless entry.reversible?
+      raise "This change has already been changed back" if entry.changed_back?
+      raise "#{entry.provider} supplies this; change it there" unless (entry.provider || ESPALIA) == ESPALIA
+    end
+    return if entries.all? { |entry| entry.latest?(apart_from:) }
+
+    raise "A later change has replaced this one; change that back first"
   end
 
   def undo_membership_set(entry, options)

@@ -181,13 +181,14 @@ class OrgGraph::Projections::FactAgesTest < ActiveSupport::TestCase
       assert_equal [ [ @ada.id, "membership", @payments ] ], stale(now: START + 31.days)
     end
 
-    should "never list a leaver's facts, and list them again when they return" do
+    should "never list a leaver's facts, and list them again when they return, memberships aside" do
+      as_tenant { @handler.change_manager(@ada.id, @lead.id, **ESPALIA) }
       travel_to START + 31.days
       as_tenant { @handler.leave(@ada.id, **HIBOB) }
       assert_empty stale
 
       as_tenant { @handler.return_to_work(@ada.id, **HIBOB) }
-      assert_equal [ [ @ada.id, "membership", @payments ] ], stale
+      assert_equal [ [ @ada.id, "manager_id", nil ] ], stale
     end
 
     should "never list a fact Espalia writes for someone after they left" do

@@ -155,7 +155,8 @@ person who has left can't join a unit, and a membership can only be set in a liv
 `MembershipMoved` carries a membership to another unit with its allocation, role and
 start, so a move is one fact and the person is never ended and added again. A person
 already in the destination keeps the membership they have there. For them, and for a
-person who has left, the membership they came from ends instead.
+person who has left, the membership they came from ends instead. Leaving ends every membership
+on the leaving date; see [How the sync writes](#how-the-sync-writes).
 
 `OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
@@ -247,10 +248,19 @@ its memberships into `org_unit_activities`, and `OrgUnitActivity.for_unit(unit_i
 them newest first. Each entry says who made the change, or which provider supplied it,
 what it changed from and to, when it took effect and when the Org Graph learned it. A move
 between units is an entry in each, naming the other. A succession is an entry in every
-unit it names. Each entry keeps its event's `correlation_id`, the cause 7.2 groups by: the
-approval a plan's changes share, or the request that made one direct edit. It keeps
-`causation_id` too, though RES rewrites that inside sync handlers, so it names the event
-that triggered a handler rather than the cause.
+unit it names. Each entry keeps its event's `correlation_id`, its cause: the approval a
+plan's changes share, or the request that made one direct edit. It keeps `causation_id`
+too, though RES rewrites that inside sync handlers, so it names the event that triggered a
+handler rather than the cause. An entry also keeps the `plan_id` and `plan_change_id` its
+event carried, so an approved change names the plan change behind it.
+
+**One cause reads as one entry.** `OrgUnitActivity.feed(unit_id, page:)` groups a unit's
+entries by cause into `OrgUnitActivity::Group`s, newest first, and pages by group, so a
+page never splits one. A group's `summary` says what it did in a sentence: "split Payments
+into Billing and Ledger" for a succession, otherwise "moved 10 people out and removed 2
+people". Its `parts` are the entries underneath. A group needs no table of its own: it is
+read from the entries as they stand, so it rebuilds with them. A HiBob sync writes one
+cause per run, so a run reads as one entry in each unit it touched.
 
 **Changing it back writes the inverse.** `OrgGraph::ChangeBackHandler` undoes an entry
 with a new event that carries `changed_back_id`, the event it reverses. Nothing is
@@ -269,10 +279,19 @@ wherever the change itself would be. It is refused, too:
 - when the aggregate would write something else, such as ending a moved membership
   because the person has since left.
 
+**A group changes back whole, or not at all.** `change_back_group(cause_id)` undoes every
+entry of one cause, across every unit it touched, newest first, so a later part never
+blocks an earlier one. Every part must pass the checks above, and a later change counts
+against a part only when it came from outside the group. One refused part refuses the lot
+and writes nothing. Once one part has been changed back alone, the rest go back one entry
+at a time. A unit's feed shows only that unit's parts of a cause, but changing the group
+back reverses the cause in every unit it touched, so the sidebar (5.4) must say so. An approved succession is always refused, since it retires a unit. The
+inverses share one new cause, so the change-back reads as one entry too.
+
 Every write to a stream holds a lock on it until its transaction ends: the person's stream
-for a membership, the tenant's structure stream for the rest. A change-back takes that lock
-before it checks anything, so no change to the fact can land between the checks and the
-inverse.
+for a membership, the tenant's structure stream for the rest. A change-back takes those
+locks before it checks anything, the structure's first and then each person's in id
+order, so no change to the facts can land between the checks and the inverses.
 
 The feed starts from the Org Graph's first event, so a deploy that adds it rebuilds it
 (`REBUILD_ON_DEPLOY=org_graph/unit_activity`) wherever Org Graph events exist. Without that
@@ -374,9 +393,13 @@ delays offboarding by one sync and is reported in the result's errors. The next 
 decides absence afresh and writes the `PersonLeft`, which marks them inactive, and Pass 3b
 offboards them.
 
-A leaver's memberships are to be ended by a
-handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
-created for anyone automatically.
+Leaving ends every open membership on the leaving date (story 2.5).
+`OrgGraph::SyncHandlers::LeaverMemberships` runs on `PersonLeft`, as the system, and ends each from the person's stream in the leaving's
+transaction, with the leaving as each end's cause. A membership that changed after a backdated
+leaving ends on the day it changed. A later `PersonLeft` that corrects the date ends nothing again.
+A returner comes back with no membership, and a new person appears with none. No position is
+created for anyone automatically. A leaver who was a unit's only owner leaves it flagged as having
+none, as [Who may change it](#who-may-change-it) describes; leaving writes no ownership event.
 
 The first sync after this ships writes `PersonRecorded` for everyone. Nothing earlier can
 be reconstructed.
@@ -412,7 +435,7 @@ the reference existed. The Org Graph never reads them.
 The approval is the cause. A handler built with `cause_id:` gives every event it writes,
 a sync handler's included, that id as its `correlation_id`. Without one, events keep the
 request's, so one direct edit still reads as one change. The activity feed groups by
-`correlation_id` (7.2). Undoing a change is a new change with its own cause.
+`correlation_id`. Undoing a change is a new change with its own cause.
 
 Either way the change carries an effective date, so a move can be recorded as having
 happened on the first of the month. A change may be backdated, but a fact's dates stay in

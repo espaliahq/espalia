@@ -616,6 +616,45 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
   end
 
+  context "#read_field" do
+    should "ask HiBob for the field beside each current person's id, and read each record" do
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      employees = [
+        { "id" => "3141", "work" => { "customColumns" => { "column_team" => "7" } },
+          "humanReadable" => { "work" => { "customColumns" => { "column_team" => "Payments" } } } },
+        { "id" => "2718" },
+        { "work" => { "customColumns" => { "column_team" => "9" } } }
+      ]
+      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_team], show_inactive: false)
+      adapter.instance_variable_set(:@client, client)
+
+      values = adapter.read_field("column_team", kind: :list)
+
+      assert_equal({ "3141" => Hris::FieldValue.new(state: :value, id: "7", label: "Payments"),
+                     "2718" => Hris::FieldValue.withheld }, values)
+      client.verify
+    end
+
+    should "withhold a fact from anyone whose record withholds the fact it travels with" do
+      adapter = Hris::Hibob::Adapter.new(@tenant)
+      client = Minitest::Mock.new
+      employees = [
+        { "id" => "3141", "work" => { "site" => "Sydney", "customColumns" => { "column_country" => "Australia" } } },
+        { "id" => "2718", "work" => { "customColumns" => { "column_country" => "Australia" } } }
+      ]
+      client.expect(:search_people, employees, fields: %w[root.id work.customColumns.column_country work.site],
+        show_inactive: false)
+      adapter.instance_variable_set(:@client, client)
+
+      values = adapter.read_field("column_country", kind: :text, alongside: "site")
+
+      assert_equal({ "3141" => Hris::FieldValue.new(state: :value, label: "Australia"),
+                     "2718" => Hris::FieldValue.withheld }, values)
+      client.verify
+    end
+  end
+
   context "#fetch_field_catalogue" do
     setup do
       @fields = hibob_fixture("people_fields_response.json")

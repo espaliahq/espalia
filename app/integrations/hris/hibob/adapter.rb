@@ -129,6 +129,24 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     result
   end
 
+  # Asks HiBob for one field beside each person's id, so a preview never
+  # pulls the rest of their record.
+  #
+  # @param field_id [String]
+  # @param kind [Symbol] :list or :text
+  # @param alongside [String, nil] see {Hris::BaseAdapter#read_field}
+  # @return [Hash{String => Hris::FieldValue}]
+  def read_field(field_id, kind:, alongside: nil)
+    fields = [ "root.id", catalogue_id(field_id) ]
+    fields << Hris::Hibob::ResponseMapper::FACT_PATHS.fetch(alongside).join(".") if alongside
+    employees = client.search_people(fields: fields.uniq, show_inactive: false)
+    employees.each_with_object({}) do |employee, values|
+      next if employee["id"].blank?
+
+      values[employee["id"].to_s] = Hris::Hibob::ResponseMapper.new(employee).field_value(field_id, kind:, alongside:)
+    end
+  end
+
   # Fetches all employees from HiBob, handling pagination.
   #
   # @return [Array<Hash>] raw employee hashes

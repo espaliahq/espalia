@@ -16,6 +16,8 @@
 class Hris::Hibob::ResponseMapper
   # A list field's value: the list item's id, which survives a rename, and its label.
   ListValue = Data.define(:id, :label)
+  # Where each fact another fact travels with sits on a record.
+  FACT_PATHS = { "site" => %w[work site] }.freeze
 
   # Maps a single HiBob employee hash to Person attributes.
   #
@@ -113,6 +115,33 @@ class Hris::Hibob::ResponseMapper
     }.compact
   end
 
+  # What this person's record holds for one field: a list field's item id
+  # and label, or a text field's text. The label is read as {#org_graph_facts}
+  # reads it, so a preview compares the string the sync would write.
+  #
+  # @param field_id [String] the field's catalogue id
+  # @param kind [Symbol] :list or :text, as {Hris::Field#kind}
+  # @param alongside [String, nil] a fact the sync writes this one only with,
+  #   as country travels with site; a record withholding it withholds this too
+  # @return [Hris::FieldValue]
+  def field_value(field_id, kind:, alongside: nil)
+    path = path_of(field_id)
+    return Hris::FieldValue.withheld unless supplied?(path)
+    return Hris::FieldValue.withheld if alongside && !supplied?(FACT_PATHS.fetch(alongside))
+
+    if kind == :list
+      return Hris::FieldValue.unreadable if unreadable_list?(path)
+
+      item = list_value(path)
+      return Hris::FieldValue.blank if item.nil?
+
+      Hris::FieldValue.new(state: :value, id: item.id, label: label(path))
+    else
+      text = label(path)
+      text ? Hris::FieldValue.new(state: :value, label: text) : Hris::FieldValue.blank
+    end
+  end
+
   private
 
   attr_reader :employee, :level_field_id, :mapped_fields
@@ -154,6 +183,19 @@ class Hris::Hibob::ResponseMapper
     return nil if id.nil? || id.is_a?(Hash)
 
     ListValue.new(id: id.to_s, label: employee.dig("humanReadable", *path).presence)
+  end
+
+  # A list value in a shape Espalia does not know: a hash or an array where an
+  # id should be, or a flat wrapper with no "value" key.
+  def unreadable_list?(path)
+    raw = value(path)
+    return true if raw.is_a?(Hash) || raw.is_a?(Array)
+
+    parent = parent_of(path)
+    return false if parent.is_a?(Hash) && parent.key?(path.last)
+
+    flat = employee[flat_key(path)]
+    flat.is_a?(Hash) && !flat.key?("value")
   end
 
   # @param path [Array<String>]
