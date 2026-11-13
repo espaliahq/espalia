@@ -71,6 +71,7 @@ class AssessmentCycles::BulkEnrollmentJob < ApplicationJob
       cycle_row_id: cycle.id,
       cycle_name: cycle.name,
       enrolled: enrolled,
+      skipped_ids: skipped.map(&:id),
       skipped_names: skipped.map(&:name)
     ).deliver(user)
   end

@@ -41,10 +41,14 @@ class OrgGraph::Forgetting
     def self.of(person_ids) = new(count: person_ids.size, person_ids: person_ids)
   end
 
-  # Notification params that copy a person's name by value.
-  NAME_PARAMS = %w[actor_name assessee_name author_name decliner_name requested_by_name requester_name
-                   responder_name started_by_name].freeze
-  NAME_LIST_PARAMS = %w[skipped_names].freeze
+  # Notification params that copy a person's name by value, each beside the
+  # param that holds that person's id. Notifications written before 8.2 have
+  # only the name.
+  NAME_PARAMS = { "actor_name" => "actor_id", "assessee_name" => "assessee_id", "author_name" => "author_id",
+                  "decliner_name" => "decliner_id", "requested_by_name" => "requested_by_id",
+                  "requester_name" => "requester_id", "responder_name" => "responder_id",
+                  "started_by_name" => "started_by_id" }.freeze
+  NAME_LIST_PARAMS = { "skipped_names" => "skipped_ids" }.freeze
 
   # Removes the manager a stored HiBob payload names, in both its shapes.
   WITHOUT_REPORTS_TO = "hris_raw_data = hris_raw_data #- '{work,reportsTo}' #- '{humanReadable,work,reportsTo}'"
@@ -159,7 +163,7 @@ class OrgGraph::Forgetting
         person = Person.lock.find(person_id)
         next false if person.forgotten?
 
-        scrub_notifications(person.read_attribute(:name))
+        scrub_notifications(person.id, person.read_attribute(:name))
         drop_notifications_to(person)
         scrub_exchange_ledger(person.email)
         scrub_reports_raw_data(person.external_id)
@@ -221,25 +225,58 @@ class OrgGraph::Forgetting
 
   def tenant_events = Noticed::Event.where("params->>'tenant_id' = ?", @tenant.id)
 
-  # Notifications hold no person id beside each name they copied, so the
-  # match is on the name within the tenant. A colleague with the same name
-  # loses theirs from an old notification, which then reads "A colleague".
-  def scrub_notifications(name)
-    return if name.blank?
-
-    named = NAME_PARAMS.map { |key| Noticed::Event.sanitize_sql_array([ "params->>? = ?", key, name ]) } +
-            NAME_LIST_PARAMS.map { |key| Noticed::Event.sanitize_sql_array([ "jsonb_exists(params->?, ?)", key, name ]) }
-    ids = tenant_events.where(named.join(" OR ")).pluck(:id)
+  # A notification names a person beside their id, so the scrub matches the
+  # id. One written before 8.2 holds only the name, so there the match is on
+  # the name within the tenant, and a namesake loses theirs too.
+  def scrub_notifications(person_id, name)
+    ids = tenant_events.where(notification_matches(person_id, name).join(" OR ")).pluck(:id)
     return if ids.empty?
 
     events = Noticed::Event.where(id: ids)
-    NAME_PARAMS.each do |key|
-      events.where("params->>? = ?", key, name)
-        .update_all([ "params = jsonb_set(params, ARRAY[?], 'null'::jsonb)", key ])
+    NAME_PARAMS.each do |name_key, id_key|
+      events.where(by_id(id_key, person_id)).or(events.where(legacy_name(name_key, id_key, name)))
+        .update_all([ "params = jsonb_set(params, ARRAY[?], 'null'::jsonb)", name_key ])
     end
-    NAME_LIST_PARAMS.each do |key|
-      events.where("jsonb_exists(params->?, ?)", key, name)
-        .update_all([ "params = jsonb_set(params, ARRAY[?], (params->?) - ?)", key, key, name ])
+    NAME_LIST_PARAMS.each do |names_key, ids_key|
+      events.where(listed_id(ids_key, person_id)).update_all(without_listed(names_key, ids_key, person_id))
+      events.where(legacy_listed_name(names_key, ids_key, name))
+        .update_all([ "params = jsonb_set(params, ARRAY[?], (params->?) - ?)", names_key, names_key, name ])
     end
   end
+
+  def notification_matches(person_id, name)
+    NAME_PARAMS.flat_map { |name_key, id_key| [ by_id(id_key, person_id), legacy_name(name_key, id_key, name) ] } +
+      NAME_LIST_PARAMS.flat_map do |names_key, ids_key|
+        [ listed_id(ids_key, person_id), legacy_listed_name(names_key, ids_key, name) ]
+      end
+  end
+
+  def by_id(id_key, person_id) = sql("params->>? = ?", id_key, person_id)
+
+  def legacy_name(name_key, id_key, name)
+    return "FALSE" if name.blank?
+
+    sql("NOT jsonb_exists(params, ?) AND params->>? = ?", id_key, name_key, name)
+  end
+
+  def listed_id(ids_key, person_id) = sql("jsonb_exists(params->?, ?)", ids_key, person_id)
+
+  def legacy_listed_name(names_key, ids_key, name)
+    return "FALSE" if name.blank?
+
+    sql("NOT jsonb_exists(params, ?) AND jsonb_exists(params->?, ?)", ids_key, names_key, name)
+  end
+
+  # Drops the person's id from the list and the name at the same position.
+  def without_listed(names_key, ids_key, person_id)
+    sql(<<~SQL.squish, names_key, names_key, ids_key, person_id, ids_key, ids_key, person_id)
+      params = jsonb_set(jsonb_set(params, ARRAY[?],
+        COALESCE((SELECT jsonb_agg(listed.name ORDER BY listed.at)
+                  FROM jsonb_array_elements(params->?) WITH ORDINALITY AS listed(name, at)
+                  WHERE params->?->>(listed.at::int - 1) IS DISTINCT FROM ?), '[]'::jsonb)),
+        ARRAY[?], (params->?) - ?)
+    SQL
+  end
+
+  def sql(*args) = Noticed::Event.sanitize_sql_array(args)
 end

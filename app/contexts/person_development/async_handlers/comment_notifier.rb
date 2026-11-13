@@ -77,6 +77,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifier < ApplicationJob
     notifier_class.with(
       record: comment,
       tenant_id: comment.tenant_id,
+      author_id: comment.author_id,
       author_name: comment.author&.name,
       body: comment.body,
       context: context,

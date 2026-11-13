@@ -165,3 +165,8 @@ parsed.
   modal, deliberately, so the write always has an assignment.
 - **A reconnect clears cached Slack ids** (`Tenant#connect_slack!`), so a
   workspace change re-resolves everyone by email on next contact.
+- **A notification that copies a person's name carries their id beside it**
+  (`author_name` with `author_id`, `skipped_names` with `skipped_ids`), and
+  the pair goes in `OrgGraph::Forgetting::NAME_PARAMS`. Forgetting a leaver
+  clears the name wherever the id is theirs; without the id it can only match
+  the name, and a namesake loses theirs too (story 8.2).

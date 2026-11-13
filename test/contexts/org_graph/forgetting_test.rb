@@ -147,7 +147,23 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_nil ledger.reload.record
     end
 
-    should "clear the forgotten name from notifications in the tenant only" do
+    should "clear their name where a notification holds their id, and spare a namesake's" do
+      namesake = create(:person, tenant: @tenant)
+      theirs = notify(author_id: @leaver.id, author_name: @leaver.name,
+                      assessee_id: namesake.id, assessee_name: @leaver.name)
+      stranger = SecureRandom.uuid_v7
+      listed = notify(skipped_ids: [ namesake.id, @leaver.id, stranger ],
+                      skipped_names: [ @leaver.name, @leaver.name, "Someone Else" ])
+
+      forgetting.forget_due(on: TODAY)
+
+      assert_nil theirs.reload.params[:author_name]
+      assert_equal "Pat Example hb-1", theirs.params[:assessee_name]
+      assert_equal [ "Pat Example hb-1", "Someone Else" ], listed.reload.params[:skipped_names]
+      assert_equal [ namesake.id, stranger ], listed.params[:skipped_ids]
+    end
+
+    should "match on the name, within the tenant only, where an older notification holds no id" do
       kept = notify(author_name: "Someone Else")
       named = notify(author_name: @leaver.name, assessee_name: @leaver.name)
       listed = notify(skipped_names: [ @leaver.name, "Someone Else" ])
@@ -161,6 +177,23 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert_nil named.params[:assessee_name]
       assert_equal [ "Someone Else" ], listed.reload.params[:skipped_names]
       assert_equal "Pat Example hb-1", other_tenant.reload.params[:author_name]
+    end
+  end
+
+  context "notifications written from now on" do
+    should "carry the person's id beside every name they copy" do
+      pairs = OrgGraph::Forgetting::NAME_PARAMS.merge(OrgGraph::Forgetting::NAME_LIST_PARAMS)
+      writers = Rails.root.glob("app/{contexts,jobs}/**/*.rb").select { |path| path.read.include?("Notifier") }
+
+      missing = writers.flat_map do |path|
+        source = path.read
+        pairs.filter_map do |name_key, id_key|
+          "#{path.relative_path_from(Rails.root)}: #{name_key} without #{id_key}" if
+            source.include?("#{name_key}:") && !source.include?("#{id_key}:")
+        end
+      end
+
+      assert_empty missing
     end
   end
 

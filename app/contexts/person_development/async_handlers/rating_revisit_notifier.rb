@@ -44,7 +44,9 @@ class PersonDevelopment::AsyncHandlers::RatingRevisitNotifier < ApplicationJob
 
     RatingRevisitRequestedNotifier.with(
       tenant_id: event.metadata[:tenant_id],
+      requested_by_id: data[:requested_by_id],
       requested_by_name: person_name(data[:requested_by_id]),
+      assessee_id: person_id,
       assessee_name: person_name(person_id),
       context: context_line(data, framework_id),
       note: data[:note],

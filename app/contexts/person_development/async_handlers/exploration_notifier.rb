@@ -46,8 +46,10 @@ class PersonDevelopment::AsyncHandlers::ExplorationNotifier < ApplicationJob
     notifier = NOTIFIERS.fetch(event.class).constantize
     params = {
       tenant_id: event.metadata[:tenant_id],
+      actor_id: actor_id,
       actor_name: Person.where(id: actor_id).pick(:name),
       by_assessee: actor_id == exploration.person_id,
+      assessee_id: exploration.person_id,
       assessee_name: Person.where(id: exploration.person_id).pick(:name),
       role_label: exploration.label,
       outcome: event.data[:outcome],
