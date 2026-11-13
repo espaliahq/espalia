@@ -24,7 +24,7 @@ class Tenant::OrgGraphSettingsController < ApplicationController
   #
   # @return [Array<Person>]
   def editor_candidates
-    Person.where(status: "active", id: TenantUser.where(role: :member, org_graph_editor: false).select(:person_id))
+    Person.active.where(id: TenantUser.where(role: :member, org_graph_editor: false).select(:person_id))
           .order(:name).to_a
   end
 end
