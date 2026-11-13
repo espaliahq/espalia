@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_13_190300) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -926,7 +926,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190300) do
     t.string "job_title"
     t.string "level_id"
     t.uuid "manager_id"
-    t.string "name"
+    t.string "name", null: false
     t.string "role_id"
     t.string "status", default: "active", null: false
     t.uuid "tenant_id", null: false
@@ -939,7 +939,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_13_190300) do
     t.index ["tenant_id", "forgotten_external_id_digest"], name: "index_people_on_tenant_id_and_forgotten_external_id_digest", unique: true, where: "(forgotten_external_id_digest IS NOT NULL)"
     t.index ["tenant_id", "status"], name: "index_people_on_tenant_id_and_status"
     t.index ["tenant_id"], name: "index_people_on_tenant_id"
-    t.check_constraint "forgotten_at IS NOT NULL OR name IS NOT NULL AND email IS NOT NULL", name: "people_identified_unless_forgotten"
+    t.check_constraint "forgotten_at IS NULL AND email IS NOT NULL OR forgotten_at IS NOT NULL AND name::text = 'Former member'::text", name: "people_identified_unless_forgotten"
   end
 
   create_table "person_development_comments", id: :uuid, default: nil, force: :cascade do |t|

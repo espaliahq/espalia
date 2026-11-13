@@ -145,7 +145,7 @@ class PersonDevelopment::AsyncHandlers::CommentNotifierTest < ActiveSupport::Tes
       notifier = PersonDevelopment::AsyncHandlers::CommentNotifier.new
       user_for = notifier.method(:user_for)
       erase_then_look_up = lambda do |person_id|
-        peer.update_columns(name: nil, forgotten_at: Time.current)
+        peer.update_columns(name: Person::FORMER_MEMBER, forgotten_at: Time.current)
         user_for.call(person_id)
       end
       notifier.stub(:user_for, erase_then_look_up) do

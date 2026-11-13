@@ -55,7 +55,7 @@ class Assessments::FeedbackRecipients
     neighbours = [ manager ]
     neighbours += manager.direct_reports.active.order(:name).to_a if manager
     neighbours += giver.direct_reports.active.order(:name).to_a
-    people = neighbours.compact.uniq(&:id).reject { |p| p.id == giver.id || p.status != "active" }
+    people = neighbours.compact.uniq(&:id).reject { |p| p.id == giver.id || p.status != "active" || p.forgotten? }
     recipients_for(people)
   end
 
@@ -64,7 +64,7 @@ class Assessments::FeedbackRecipients
   attr_reader :giver
 
   def selectable
-    Person.active
+    Person.active.remembered
       .where.not(id: giver.id)
       .where(id: PersonFrameworkAssignment.select(:person_id))
   end

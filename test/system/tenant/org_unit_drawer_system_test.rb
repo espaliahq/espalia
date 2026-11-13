@@ -64,6 +64,20 @@ class Tenant::OrgUnitDrawerSystemTest < ApplicationSystemTestCase
       assert_no_selector "#org-unit-member-#{@org[:brook].id}"
     end
 
+    should "hold a change back while the date is cleared" do
+      sign_in_as(@admin_user)
+      visit edit_tenant_org_unit_path(@org[:platform])
+      wait_for_stimulus "effective-date"
+
+      js_fill_in "Changes take effect", with: ""
+      js_fill_in "org-unit-name", with: "Core Platform"
+      page.execute_script("document.querySelector('#org-graph-drawer form:has(#org-unit-name) button[type=submit]').click()")
+
+      assert_selector "#org-unit-effective-on:focus"
+      assert_no_text "Renamed."
+      assert_equal "Platform", ActsAsTenant.with_tenant(@tenant) { OrgUnit.find(@org[:platform]).name }
+    end
+
     should "keep an HRIS unit's name and parent read-only" do
       sign_in_as(@admin_user)
       visit edit_tenant_org_unit_path(@org[:engineering])

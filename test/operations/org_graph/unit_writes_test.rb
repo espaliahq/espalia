@@ -159,6 +159,23 @@ class Operations::OrgGraph::UnitWritesTest < ActiveSupport::TestCase
       assert_equal 1, membership(:dot, :platform).allocation
     end
 
+    should "refuse moving a membership the HRIS supplies, even between its own units" do
+      design = SecureRandom.uuid_v7
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                         .create_unit(design, "Design", level_id: @org[:department], provider: "hibob",
+                                                                        external_ref: "dept-200", effective_on: "2026-01-01")
+        OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                .set_membership(@org[:ada].id, @org[:engineering], provider: "hibob", effective_on: "2026-01-05")
+      end
+
+      error = assert_raises(Operations::Base::ParameterError) do
+        call(Operations::OrgGraph::MoveMember, person_id: @org[:ada].id, from_unit_id: @org[:engineering], unit_id: design)
+      end
+      assert_equal "HiBob supplies Ada Quill's place in Engineering; move it there", error.message
+      assert membership(:ada, :engineering)
+    end
+
     should "remove a member" do
       call(Operations::OrgGraph::RemoveMember, person_id: @org[:cyril].id, unit_id: @org[:checkout])
 

@@ -62,7 +62,7 @@ class Assessments::RequestCandidates
   def suggestions
     seen = Set.new
     [ *assessee_candidate, *manager_candidates, *peer_candidates, *report_candidates ].filter_map do |person, relation|
-      next if person.nil? || excluded_id?(person.id) || !seen.add?(person.id)
+      next if person.nil? || person.forgotten? || excluded_id?(person.id) || !seen.add?(person.id)
 
       candidate(person, relation:)
     end
@@ -80,7 +80,7 @@ class Assessments::RequestCandidates
   # The assessee IS selectable. Already-pending people are NOT excluded here —
   # they're flagged instead.
   def selectable
-    Person.active.where.not(id: requester_person_id)
+    Person.active.remembered.where.not(id: requester_person_id)
   end
 
   def candidate(person, relation:)

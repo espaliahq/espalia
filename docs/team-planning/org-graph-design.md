@@ -414,7 +414,14 @@ projection keeps one row per fact, per period of validity, per time learned. A c
 adds a row with a later learned time. It never overwrites the row it corrects, or the Org
 Graph could no longer say what it knew before. From it:
 
-- `as_of(instant)` gives the roster and structure the Org Graph knew at that instant.
+- `OrgGraph::AsOf` gives the roster, the structure and the memberships in effect on a day.
+  By default it reads what the Org Graph knows now, so a later day includes the changes
+  already recorded for it: a hire who starts then, a move or a leaving scheduled for it.
+  With `known_on` it reads what was known at the end of that day in UTC. Tenants hold no
+  time zone yet, so for a tenant in Sydney the day ends at 10 or 11 in the morning local
+  time, and a fact learned that afternoon counts as known the next day. People come back as
+  ids, and callers join names, so a forgotten person reads as a former member. MCP clients
+  read it through `org_graph_as_of`.
 - `changes_between(a, b)` lists the facts that differ.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
@@ -600,7 +607,9 @@ screen (6.9) hosts them.
   gives each matched unit its value (`UnitHandedOver`), writes each succession and
   retirement, hands the HRIS the memberships of the people it reads, and mirrors the
   field once. A failure anywhere writes nothing. A new unit has no parent until a sync
-  reads one.
+  reads one. Each unit's feed shows the handover as one entry under that cause, naming
+  the provider and the field it now comes from, never the value; handing back reads the
+  same way.
 - **A fingerprint refuses a stale comparison.** It covers the field's values, the units,
   the memberships, the matches and the resolutions. The switch is refused if any of them
   changed since the admin read it.
@@ -726,6 +735,10 @@ result for each kind of id separately.
   back. They are removed there first.
 - Projections act on that event. The person renders as a former member. Positions, teams and
   past plans keep their history.
+  - The row's name becomes "Former member" (story 8.3), and a check constraint holds every
+    forgotten row to it. Read models join `people` for names rather than copying them, so every
+    screen, export, MCP read and report shows the stand-in, a raw pluck included.
+    `test/integration/forgotten_person_audit_test.rb` walks every MCP read to keep it so.
   - `org_graph/leavers` drops the person, so they leave the due list. The other Org Graph
     projections hold ids and no identifiers, so they keep their rows unchanged. The history
     projection (3.1) handles `PersonForgotten` from its first version.
