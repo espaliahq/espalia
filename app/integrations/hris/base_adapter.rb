@@ -109,16 +109,16 @@ class Hris::BaseAdapter
       return Person.none
     end
 
-    held = Person.where(hris_source: provider_name)
-    absent = held.where.not(external_id: current_external_ids)
+    held = Person.where(hris_source: provider_name).where.not(external_id: nil)
+    absent = held.where.not(external_id: current_external_ids).pluck(:id, :status)
     employed = held.where(status: "active").count
-    vanished = absent.where(status: "active").count
-    return absent unless vanished > ABSENCE_BRAKE[:people] && vanished > employed * ABSENCE_BRAKE[:share]
+    vanished = absent.count { |_, status| status == "active" }
+    return Person.where(id: absent.map(&:first)) unless vanished > ABSENCE_BRAKE[:people] && vanished > employed * ABSENCE_BRAKE[:share]
 
-    result[:errors] << {
-      error: "#{vanished} of #{employed} employed people are missing from #{provider_name}, more than " \
-        "#{(ABSENCE_BRAKE[:share] * 100).round}% and #{ABSENCE_BRAKE[:people]} people, so no one was marked as left"
-    }
+    message = "#{vanished} of #{employed} employed people are missing from #{provider_name}, more than " \
+      "#{(ABSENCE_BRAKE[:share] * 100).round}% and #{ABSENCE_BRAKE[:people]} people, so no one was marked as left"
+    Rails.logger.warn("[Hris] Absence brake for tenant #{tenant.id}: #{message}")
+    result[:errors] << { error: message }
     Person.none
   end
 
