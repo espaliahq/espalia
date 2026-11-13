@@ -2,8 +2,8 @@
 
 # Sets who supplies a structure level that holds no live units (#126), and
 # for an HRIS the field its units are read from. A level with live units
-# changes hands only through integrations_hand_over_hris_level, which
-# matches each unit first.
+# changes hands only through the handover, which compares it first
+# (integrations_hris_level_handover) and then matches each unit.
 #
 # Approval is :in_app, as for the tenant's other Org Graph settings.
 class Operations::OrgGraph::SetLevelProvider < Operations::Base
