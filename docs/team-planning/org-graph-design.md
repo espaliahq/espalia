@@ -308,7 +308,8 @@ One gap remains. If the Org Graph write fails for one person, the sync still mar
 inactive, so Pass 3b still offboards them from open cycles and framework assignments on
 time. For a while the two disagree: the person is
 inactive but still employed in the Org Graph. The next sync that misses them writes the
-`PersonLeft`, dated that day.
+`PersonLeft`, dated that day, unless that sync is empty, trips the brake or fails the write
+again; then the one after tries.
 
 A leaver's memberships are to be ended by a
 handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
