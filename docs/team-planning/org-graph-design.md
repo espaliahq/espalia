@@ -438,6 +438,10 @@ Graph could no longer say what it knew before. From it:
   counts it apart. A correction to an earlier value leaves a later change standing unless
   it turns that change into another kind or into no change at all. MCP clients read it
   through `org_graph_changes_between`.
+- The Units view's "Compare with a date" (5.7) reads through `ChangesBetween`, in either
+  mode. `OrgGraph::DateComparison` marks units new, renamed, moved or succeeded in today's
+  tree, lists who joined, left or moved on each unit's card, counts each kind and lists the
+  units retired in the window. The window lives in the URL, so a comparison can be shared.
 
 "As of" is by the time the Org Graph learned a fact. A plan pinned to last Tuesday sees what
 was known last Tuesday, even if a backdated correction arrived since. The correction
