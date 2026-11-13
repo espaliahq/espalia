@@ -2529,8 +2529,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "what the Org Graph learned after 23:59:59 UTC on from, up to 23:59:59 UTC on to, " \
           "whatever date it took effect, so backdated corrections show, and a change it " \
           "no longer believes comes back withdrawn. A change's effective_on is the first day " \
-          "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind; " \
-          "mode \"full\" lists every change. People are named by id only.",
+          "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind, " \
+          "with withdrawn changes counted apart; mode \"full\" lists every change. People are " \
+          "named by id only.",
         "inputSchema" => {
           "type" => "object",
           "properties" => {

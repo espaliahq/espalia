@@ -18,8 +18,9 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
               "what the Org Graph learned after 23:59:59 UTC on from, up to 23:59:59 UTC on to, " \
               "whatever date it took effect, so backdated corrections show, and a change it " \
               "no longer believes comes back withdrawn. A change's effective_on is the first day " \
-              "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind; " \
-              "mode \"full\" lists every change. People are named by id only."
+              "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind, " \
+              "with withdrawn changes counted apart; mode \"full\" lists every change. People are " \
+              "named by id only."
   category :read
   approval :none
 
@@ -39,19 +40,22 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
   end
 
   # @return [Hash] `:from`, `:to`, `:by`, `:known_on`, `:counts` (changes
-  #   per kind, every kind listed) and `:fact_counts` (fact changes per
-  #   fact); in full mode also `:changes`, in effective date order
+  #   per kind, every kind listed), `:withdrawn_counts` (the same for
+  #   withdrawn changes) and `:fact_counts` (fact changes per fact, withdrawn
+  #   ones left out); in full mode also `:changes`, in effective date order
   # @raise [Operations::Base::ParameterError] for a malformed date, a `to`
   #   before `from`, or `known_on` by learned date
   def perform
-    result = changes
+    result = reader.call
+    withdrawn, held = result.changes.partition(&:withdrawn)
     payload = {
       from: result.from.iso8601,
       to: result.to.iso8601,
       by: result.by.to_s,
       known_on: result.known_on&.iso8601,
-      counts: ::OrgGraph::ChangesBetween::KINDS.index_with { 0 }.merge(result.changes.map(&:kind).tally),
-      fact_counts: result.changes.select { it.kind == :fact_changed }.map(&:fact).tally
+      counts: tally(held),
+      withdrawn_counts: tally(withdrawn),
+      fact_counts: held.select { it.kind == :fact_changed }.map(&:fact).tally
     }
     return payload unless params[:mode] == "full"
 
@@ -60,12 +64,14 @@ class Operations::OrgGraph::ChangesBetween < Operations::Base
 
   private
 
-  def changes
+  def reader
     ::OrgGraph::ChangesBetween.new(context:, from: parse_date(:from), to: parse_date(:to),
-                                   by: (params[:by].presence || "effective").to_sym, known_on: parse_date(:known_on)).call
+                                   by: (params[:by].presence || "effective").to_sym, known_on: parse_date(:known_on))
   rescue ArgumentError => e
     raise ParameterError, e.message
   end
+
+  def tally(changes) = ::OrgGraph::ChangesBetween::KINDS.index_with { 0 }.merge(changes.map(&:kind).tally)
 
   def serialize(change)
     change.to_h.merge(kind: change.kind.to_s, effective_on: change.effective_on.iso8601,

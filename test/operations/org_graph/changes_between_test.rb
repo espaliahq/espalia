@@ -64,6 +64,10 @@ class Operations::OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     assert_equal [ [ "fact_changed", "2026-03-04", { "title" => "Staff Engineer" }, false ],
                    [ "fact_changed", "2026-03-04", { "title" => "Senior Engineer" }, true ] ],
                  result[:changes].map { it.values_at(:kind, :effective_on, :after, :withdrawn) }
+
+    summary = call(from: "2026-04-09", to: "2026-04-10", by: "learned")
+    assert_equal [ 1, 1, { "title" => 1 } ],
+                 [ summary[:counts][:fact_changed], summary[:withdrawn_counts][:fact_changed], summary[:fact_counts] ]
   end
 
   should "refuse a malformed date, a window that ends before it starts, and known_on by learned date" do
