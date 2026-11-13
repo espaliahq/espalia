@@ -23,6 +23,7 @@ class OrgGraph::UnitsOverview
                       .transform_values { |units| units.sort_by(&:name) }
     @memberships = OrgMembership.where(unit_id: @units.keys).joins(:person).merge(Person.active)
                                 .includes(:person).to_a.group_by(&:unit_id)
+                                .transform_values { |list| list.sort_by { |membership| membership.person.name } }
     @selected_unit_id = selected_unit_id
   end
 
@@ -71,10 +72,7 @@ class OrgGraph::UnitsOverview
 
   # @param unit [OrgUnit]
   # @return [Array<OrgMembership>] the unit's own members, by name
-  def members_of(unit)
-    @members ||= {}
-    @members[unit.id] ||= @memberships.fetch(unit.id, []).sort_by { |membership| membership.person.name }
-  end
+  def members_of(unit) = @memberships.fetch(unit.id, [])
 
   # @param membership [OrgMembership]
   # @return [Array<OrgUnit>] the person's other live units, by name
