@@ -17,6 +17,7 @@
 #
 class OrgGraph::StructureAggregate
   include AggregateRoot
+  prepend OrgGraph::PlanReference::Stamping
 
   ESPALIA = "espalia"
   PROVIDERS = OrgGraph::PersonAggregate::PROVIDERS
@@ -53,10 +54,9 @@ class OrgGraph::StructureAggregate
   #   optional `provider:` for a new level
   # @param effective_on [Date, String] when the taxonomy took effect
   # @param defined_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if the levels are empty, blank or duplicated
   # @raise [RuntimeError] if a level in use is dropped or reordered
-  def define_taxonomy(levels, effective_on:, defined_by_id: nil, plan_change_id: nil)
+  def define_taxonomy(levels, effective_on:, defined_by_id: nil)
     new_providers = new_level_providers(levels)
     levels = normalise_levels(levels)
     return if levels == @levels
@@ -75,8 +75,7 @@ class OrgGraph::StructureAggregate
       levels: levels,
       previous_levels: @levels,
       effective_on: iso_date(effective_on),
-      defined_by_id: defined_by_id,
-      plan_change_id: plan_change_id
+      defined_by_id: defined_by_id
     }))
     new_providers.each do |level_id, provider|
       apply(OrgGraph::Events::LevelProviderSet.new(data: {
@@ -176,10 +175,9 @@ class OrgGraph::StructureAggregate
   #   a mirrored unit, absent for one Espalia holds
   # @param effective_on [Date, String]
   # @param created_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError, RuntimeError] if any invariant above fails
   def create_unit(unit_id, name, level_id:, effective_on:, parent_id: nil, provider: ESPALIA,
-                  external_ref: nil, created_by_id: nil, plan_change_id: nil)
+                  external_ref: nil, created_by_id: nil)
     unit_id = require_id(unit_id, "Unit id")
     level_id = require_id(level_id, "Level id")
     parent_id = require_id(parent_id, "Parent id") if parent_id
@@ -208,8 +206,7 @@ class OrgGraph::StructureAggregate
       provider: provider,
       external_ref: external_ref,
       effective_on: effective_on,
-      created_by_id: created_by_id,
-      plan_change_id: plan_change_id
+      created_by_id: created_by_id
     }))
   end
 
@@ -220,8 +217,7 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param renamed_by_id [String, nil]
-  # @param plan_change_id [String, nil]
-  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil, plan_change_id: nil)
+  def rename_unit(unit_id, name, effective_on:, provider: ESPALIA, renamed_by_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     name = require_name(name)
@@ -234,8 +230,7 @@ class OrgGraph::StructureAggregate
       previous_name: unit.name,
       provider: unit.provider,
       effective_on: effective_on,
-      renamed_by_id: renamed_by_id,
-      plan_change_id: plan_change_id
+      renamed_by_id: renamed_by_id
     }))
   end
 
@@ -247,8 +242,7 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param moved_by_id [String, nil]
-  # @param plan_change_id [String, nil]
-  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil, plan_change_id: nil)
+  def move_unit(unit_id, parent_id, effective_on:, provider: ESPALIA, moved_by_id: nil)
     unit = editable_unit!(unit_id, provider)
     unit_id = unit.unit_id
     parent_id = require_id(parent_id, "Parent id") if parent_id
@@ -263,8 +257,7 @@ class OrgGraph::StructureAggregate
       previous_parent_id: unit.parent_id,
       provider: unit.provider,
       effective_on: effective_on,
-      moved_by_id: moved_by_id,
-      plan_change_id: plan_change_id
+      moved_by_id: moved_by_id
     }))
   end
 
@@ -274,12 +267,11 @@ class OrgGraph::StructureAggregate
   # @param effective_on [Date, String]
   # @param provider [String] who supplies the change; must be the unit's own
   # @param retired_by_id [String, nil]
-  # @param plan_change_id [String, nil]
-  def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil, plan_change_id: nil)
+  def retire_unit(unit_id, effective_on:, provider: ESPALIA, retired_by_id: nil)
     effective_on = iso_date(effective_on)
     unit = retirable_unit!(unit_id, provider, on: effective_on)
 
-    apply(retirement(unit, effective_on:, retired_by_id:, plan_change_id:))
+    apply(retirement(unit, effective_on:, retired_by_id:))
   end
 
   # States that the successors carry on from the predecessors: a split, a
@@ -298,10 +290,9 @@ class OrgGraph::StructureAggregate
   # @param provider [String] who supplies a retirement; must be each
   #   predecessor's own
   # @param stated_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError, RuntimeError] if a unit is missing or the link is impossible
   def record_succession(succession_id, predecessor_ids:, successor_ids:, effective_on:, retire_predecessors: false,
-                        provider: ESPALIA, stated_by_id: nil, plan_change_id: nil)
+                        provider: ESPALIA, stated_by_id: nil)
     succession_id = require_id(succession_id, "Succession id")
     predecessor_ids = require_ids(predecessor_ids, "predecessor")
     successor_ids = require_ids(successor_ids, "successor")
@@ -330,12 +321,11 @@ class OrgGraph::StructureAggregate
       apply(OrgGraph::Events::UnitSucceeded.new(data: {
         succession_id: succession_id,
         **succession,
-        stated_by_id: stated_by_id,
-        plan_change_id: plan_change_id
+        stated_by_id: stated_by_id
       }))
     end
     retiring.each do |unit|
-      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id, plan_change_id:,
+      apply(retirement(unit, effective_on:, retired_by_id: stated_by_id,
                              succession_id:, successor_ids: succession[:successor_ids]))
     end
   end
@@ -348,17 +338,16 @@ class OrgGraph::StructureAggregate
   # @param person_id [String] UUID of the owner
   # @param effective_on [Date, String]
   # @param added_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil, plan_change_id: nil)
+  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return if unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerAdded.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      added_by_id: added_by_id, plan_change_id: plan_change_id
+      added_by_id: added_by_id
     }))
   end
 
@@ -368,17 +357,16 @@ class OrgGraph::StructureAggregate
   # @param person_id [String]
   # @param effective_on [Date, String]
   # @param removed_by_id [String, nil] person_id of the actor
-  # @param plan_change_id [String, nil] the plan change it was applied from
   # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
   # @raise [RuntimeError] if the unit is unknown or retired
-  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil, plan_change_id: nil)
+  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil)
     unit = live_unit!(unit_id)
     person_id = require_id(person_id, "Person id")
     return unless unit.owner_ids.include?(person_id)
 
     apply(OrgGraph::Events::UnitOwnerRemoved.new(data: {
       unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
-      removed_by_id: removed_by_id, plan_change_id: plan_change_id
+      removed_by_id: removed_by_id
     }))
   end
 
@@ -468,13 +456,12 @@ class OrgGraph::StructureAggregate
     unit
   end
 
-  def retirement(unit, effective_on:, retired_by_id:, plan_change_id:, succession_id: nil, successor_ids: nil)
+  def retirement(unit, effective_on:, retired_by_id:, succession_id: nil, successor_ids: nil)
     OrgGraph::Events::UnitRetired.new(data: {
       unit_id: unit.unit_id,
       provider: unit.provider,
       effective_on: effective_on,
       retired_by_id: retired_by_id,
-      plan_change_id: plan_change_id,
       succession_id: succession_id,
       successor_ids: successor_ids
     })

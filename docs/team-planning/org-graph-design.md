@@ -310,6 +310,16 @@ Facts Espalia holds change in two ways. Both issue the same commands.
 - **Directly.** Someone permitted edits the structure. A first version needs little
   here, because a first plan applied whole creates the structure.
 
+Every command takes the plan change it came from as two opaque ids, `plan_id` and
+`plan_change_id`, and writes both on each event it produces. A retirement's member
+moves carry them too. A direct edit carries neither, nor does any event written before
+the reference existed. The Org Graph never reads them.
+
+The approval is the cause. A handler built with `cause_id:` gives every event it writes,
+a sync handler's included, that id as its `correlation_id`. Without one, events keep the
+request's, so one direct edit still reads as one change. The activity feed groups by
+`correlation_id` (7.2). Undoing a change is a new change with its own cause.
+
 Either way the change carries an effective date, so a move can be recorded as having
 happened on the first of the month. A change may be backdated, but a fact's dates stay in
 order: a membership can't end before its latest change or restart before the last one

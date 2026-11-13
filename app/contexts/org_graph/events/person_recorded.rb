@@ -21,6 +21,8 @@
 #   @option data [String, nil] :country country as the provider names it
 #   @option data [Float, nil] :fte full-time equivalent, greater than 0 and at most 1
 #   @option data [String, nil] :employment_type employment type as the provider names it
+#   @option data [String, nil] :plan_id the plan it was applied from
+#   @option data [String, nil] :plan_change_id the plan change it was applied from
 #
 class OrgGraph::Events::PersonRecorded < RubyEventStore::Event
 end
