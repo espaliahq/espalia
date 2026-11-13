@@ -153,6 +153,27 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
       assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
     end
 
+    should "start over when a sync between two readings reads nobody in the unit" do
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      mirror(@staff[0] => { division: "d2" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+    end
+
+    should "start over when a sync between two readings skips the unit's level" do
+      mirror(@staff[0] => { division: "d1", team: "t1" })
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      catalogue = @catalogue
+      @catalogue = [ catalogue[0] ]
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+      @catalogue = catalogue
+      mirror(@staff[0] => { division: "d2", team: "t1" })
+
+      assert_equal unit("work.division/d1").id, unit("work.department/t1").parent_id
+    end
+
     should "move a unit only once two syncs in a row read the same new parent" do
       mirror(@staff[0] => { division: "d1", team: "t1" })
       platform = { division: "d2", team: "t1" }

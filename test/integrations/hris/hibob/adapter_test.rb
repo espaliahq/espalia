@@ -1314,6 +1314,20 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
       assert_not OrgUnit.exists?(level_id: @team_level)
       assert(result[:errors].any? { it[:error].include?("no structure level was mirrored") })
     end
+
+    should "forget a unit's first parent reading when HiBob's field lists can't be read" do
+      unit = SecureRandom.uuid_v7
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .create_unit(unit, "Engineering", level_id: @team_level, provider: "hibob",
+                                                                         external_ref: "work.department/Engineering", effective_on: "2026-01-01")
+      HrisUnitParentProposal.create!(unit_id: unit, parent_id: SecureRandom.uuid_v7, first_seen_on: Date.new(2026, 11, 12))
+      adapter = build_adapter(@fixture["employees"])
+      adapter.define_singleton_method(:fetch_field_catalogue) { raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "timeout") }
+
+      adapter.sync_people
+
+      assert_not HrisUnitParentProposal.exists?
+    end
   end
 
   private

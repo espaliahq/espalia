@@ -413,6 +413,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
     catalogue = begin
       fetch_field_catalogue
     rescue Hris::Hibob::Errors::Error => e
+      Hris::LevelMirror.forget_parent_readings(mirrored_levels)
       result[:errors] << { error: "HiBob's field lists could not be read, so no structure level was mirrored: #{e.message}" }
       return
     end

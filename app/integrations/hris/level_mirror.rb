@@ -35,6 +35,15 @@ class Hris::LevelMirror
     OrgTaxonomyLevel.top_first.where(provider: provider).where.not(provider_field: nil).to_a
   end
 
+  # Drops the first readings of the levels' parents, for a sync that could not
+  # read them, so the next two that can must agree before a unit moves.
+  #
+  # @param levels [Array<OrgTaxonomyLevel>]
+  # @return [void]
+  def self.forget_parent_readings(levels)
+    HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: levels.map(&:id))).destroy_all
+  end
+
   # @param provider [String] the HRIS, such as "hibob"
   # @param catalogue [Array<Hris::Field>] the HRIS's field catalogue
   # @param readings [Hash{Person => #field_value}] each current person's
@@ -59,8 +68,10 @@ class Hris::LevelMirror
     taxonomy = OrgTaxonomyLevel.top_first.pluck(:id)
     plans = @levels.filter_map { |level| plan(level, taxonomy) }
     @plans = plans.index_by { it.level.id }
-    @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: plans.map { it.level.id })).index_by(&:unit_id)
+    @proposals = HrisUnitParentProposal.where(unit_id: OrgUnit.where(level_id: @levels.map(&:id))).index_by(&:unit_id)
+    @read_parents = Set.new
     plans.each { |level_plan| mirror_units(level_plan) }
+    forget_unread_parents
     write_memberships(plans)
     retire_units(plans)
   end
@@ -146,6 +157,7 @@ class Hris::LevelMirror
   end
 
   def reparent(unit, parent)
+    @read_parents << unit.id
     proposal = @proposals[unit.id]
     if parent.nil?
       proposal&.destroy!
@@ -161,6 +173,12 @@ class Hris::LevelMirror
     else
       (proposal || HrisUnitParentProposal.new(unit_id: unit.id)).update!(parent_id: parent, first_seen_on: @today)
     end
+  end
+
+  # A proposal waits for the very next sync's reading; a sync that read no
+  # parent for its unit, or skipped its level, breaks the run of two.
+  def forget_unread_parents
+    @proposals.reject { |unit_id, _| @read_parents.include?(unit_id) }.each_key { |unit_id| @proposals.delete(unit_id).destroy! }
   end
 
   def write_memberships(plans)
