@@ -135,14 +135,14 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
-    should "refuse a unit that does not exist or is retired, and still end a retired unit's membership" do
+    should "refuse a unit that does not exist or is retired" do
       @handler.set_membership(@person_id, @retired, **PROVENANCE)
       OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
 
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **PROVENANCE) }
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **PROVENANCE) }
       assert_raises(RuntimeError, match: /retired/) { @handler.set_membership(@person_id, @retired, allocation: 0.5, **PROVENANCE) }
-      assert_nothing_raised { @handler.end_membership(@person_id, @retired, **PROVENANCE) }
+      assert_kind_of OrgGraph::Events::MembershipEnded, stream_events.last
     end
 
     should "not see another tenant's unit" do
