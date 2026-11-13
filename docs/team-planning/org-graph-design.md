@@ -252,16 +252,25 @@ with the Org Graph's current projection and issues a command for each difference
 that finds nothing changed writes nothing.
 
 A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
-that misses them. An empty response is a failed sync and leaves no one. Someone who comes
-back keeps their stream and gets `PersonReturned`; the earlier `PersonLeft` stays in
-history as what we believed then.
+that misses them. Someone who comes back keeps their stream and gets `PersonReturned`;
+the earlier `PersonLeft` stays in history as what we believed then.
 
-The sync also brakes: when more than 10% of the employed people, and more than 5, vanish
-in one response, it marks nobody as left, in the Org Graph or in `Person.status`, and
-reports the counts as a sync error. The next sync decides afresh. This is deliberate: a
-partial response looks exactly like a mass leaving, and a leaving cannot be taken back.
-There is no override or per-tenant setting; a story for a manual override can follow if a
-real mass leaving ever needs one. Their memberships are to be ended by a
+A failed or partial sync leaves no one, in the Org Graph or in `Person.status`, so the
+two cannot disagree about who left. A sync is failed or partial when any of these holds
+([#51](https://github.com/espaliahq/espalia/issues/51#issuecomment-6856499516)):
+
+- a page request fails;
+- the response is empty;
+- a page has no employee list;
+- the people missing from the response are more than 10% of the tenant's employed
+  HRIS-held people **and** more than 5 people (the brake). The sync result reports the
+  count and the thresholds.
+
+A response that passes those tests and omits a few people, at or below the brake, is not
+partial: those people have left. The brake is deliberate: a partial response looks
+exactly like a mass leaving, and a leaving stays in history. The next sync decides
+afresh. There is no override or per-tenant setting; a story for a manual override can
+follow if a real mass leaving ever needs one. A leaver's memberships are to be ended by a
 handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
