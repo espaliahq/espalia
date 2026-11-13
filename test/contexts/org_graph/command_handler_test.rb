@@ -189,6 +189,14 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal "2026-11-02", stream_events.last.data[:effective_on]
     end
 
+    should "leave someone employed on their start date when it has since moved ahead" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2026-10-01")
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-12-01")
+
+      assert_equal 1, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      assert_equal [ OrgGraph::Events::PersonLeft, "2026-12-01" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
     should "write nothing for someone the Org Graph never recorded" do
       assert_equal 0, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
       assert_empty stream_events

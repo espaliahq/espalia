@@ -89,10 +89,8 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) { |person| person.leave(provider:, effective_on:) }
   end
 
-  # What a provider's sync calls for a person it no longer returns. The
-  # absence is dated by the sync, so leaving someone already left would
-  # correct the date on every sync; they are left alone instead, as is
-  # anyone the Org Graph never recorded.
+  # What a provider's sync calls for a person it no longer returns; see
+  # {OrgGraph::PersonAggregate#leave_when_absent}.
   #
   # @param person_id [String]
   # @param provider [String]
@@ -101,7 +99,7 @@ class OrgGraph::CommandHandler
   def record_absence(person_id, provider:, effective_on:)
     written = 0
     @repository.with_person(person_id) do |person|
-      person.leave(provider:, effective_on:) if person.recorded? && !person.left?
+      person.leave_when_absent(provider:, effective_on:)
       written = person.unpublished_events.count
     end
     written
