@@ -146,6 +146,20 @@ class OrgGraph::HistoryAgreementTest < ActiveSupport::TestCase
       assert_equal "Lead Engineer", as_of("2026-04-15").people.sole.title
       assert_equal "Lead Engineer", live_title
     end
+
+    should "change back the backdated membership change and leave the later terms" do
+      later("2026-03-01") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-03-01", allocation: 0.8) }
+      later("2026-04-15") { @handler.set_membership(@ada.id, @payments, **ESPALIA, effective_on: "2026-02-10", allocation: 1.0) }
+
+      later("2026-04-16") do
+        OrgGraph::ChangeBackHandler.new(actor: SYSTEM).change_back(OrgUnitActivity.for_unit(@payments).first)
+      end
+
+      assert_equal 0.5, history("membership", "2026-02-15", key: @payments)["allocation"]
+      assert_equal({ @payments => 0.5 }, allocations_as_of("2026-02-15"))
+      assert_equal({ @payments => 0.8 }, allocations_as_of("2026-04-16"))
+      assert_equal({ @payments => 0.8 }, live_allocations)
+    end
   end
 
   context "a membership ended on a date" do

@@ -109,9 +109,19 @@ class OrgGraph::ChangeBackHandler
   end
 
   def undo_membership_set(entry, options)
-    return undo_membership_ended(entry, options) if entry.before
+    return @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options) unless entry.before
 
-    @people.end_membership(entry.person_id, entry.unit_id, provider: ESPALIA, **options)
+    terms = (terms_in_effect_before(entry) || entry.before).symbolize_keys.slice(:allocation, :role)
+    @people.set_membership(entry.person_id, entry.unit_id, **terms, provider: ESPALIA, **options)
+  end
+
+  # The entry's `before` is the change learned before it, which a backdated
+  # change sits ahead of, so the terms come from the day before it took effect.
+  def terms_in_effect_before(entry)
+    OrgFactPeriod.current.in_effect_on(entry.effective_on - 1)
+                 .where(subject_type: OrgGraph::Projections::History::PERSON, subject_id: entry.person_id,
+                        fact: "membership", key: entry.unit_id)
+                 .pick(:value)
   end
 
   def undo_membership_ended(entry, options)
