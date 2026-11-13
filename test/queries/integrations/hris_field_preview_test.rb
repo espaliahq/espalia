@@ -80,6 +80,14 @@ class Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
       assert_equal 3, result.would_change, "a new value, a value cleared and a first value change; a match does not"
     end
 
+    should "read each person's stream in the tenant it was given, whatever tenant is current" do
+      ActsAsTenant.current_tenant = nil
+
+      result = preview({ "hb-1" => value("Platform"), "hb-2" => value("Payments") }, target: "cost_centre", field: CENTRE)
+
+      assert_equal 1, result.would_change
+    end
+
     should "never compare a withheld person, so their fact stands" do
       result = preview({ "hb-1" => Hris::FieldValue.withheld }, target: "cost_centre", field: CENTRE)
 

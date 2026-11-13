@@ -76,8 +76,10 @@ class Integrations::HrisFieldPreview
   end
 
   def fact(field, values)
-    changing = values.count do |person_id, value|
-      !value.withheld? && repository.load_person(person_id).fact(target) != (value.label if value.value?)
+    changing = ActsAsTenant.with_tenant(tenant) do
+      values.count do |person_id, value|
+        !value.withheld? && repository.load_person(person_id).fact(target) != (value.label if value.value?)
+      end
     end
     Fact.new(field:, target:, people: values.size, with_value: values.count { it.last.value? }, would_change: changing,
       **tally(values))
