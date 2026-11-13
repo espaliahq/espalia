@@ -426,7 +426,8 @@ Graph could no longer say what it knew before. From it:
   event, so a headcount walk or "compare with a date" can group and count them. By effective
   date it lists what took effect after the first day, up to and including the last: the
   steps from `AsOf` on one day to `AsOf` on the other, with the same `known_on`. By learned
-  date it lists what the Org Graph learned in that window, whatever day it took effect. A
+  date it lists what the Org Graph learned after the end of the first day, up to the end
+  of the last, each read at 23:59:59 UTC as `known_on` is, whatever day it took effect. A
   change it learned before the window and no longer believes, such as one changed back on
   its own day or a value a correction replaced, comes back `withdrawn`. Both readers pick
   their rows through `OrgFactPeriod.known_on`. MCP clients read it through

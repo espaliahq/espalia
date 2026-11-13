@@ -2525,8 +2525,9 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
           "started, ended or changed, moves between units, and units created, renamed, moved, " \
           "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \
           "effect after from, up to and including to; known_on reads what the Org Graph knew " \
-          "at the end of that date. by \"learned\" lists what the Org Graph learned in that " \
-          "window whatever date it took effect, so backdated corrections show, and a change it " \
+          "at 23:59:59 UTC on that date, not in the tenant's local time. by \"learned\" lists " \
+          "what the Org Graph learned after 23:59:59 UTC on from, up to 23:59:59 UTC on to, " \
+          "whatever date it took effect, so backdated corrections show, and a change it " \
           "no longer believes comes back withdrawn. A change's effective_on is the first day " \
           "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind; " \
           "mode \"full\" lists every change. People are named by id only.",

@@ -6,10 +6,11 @@
 # By effective date (the default), the changes that took effect after `from`,
 # up to and including `to`: the steps from `OrgGraph::AsOf` on `from` to
 # `OrgGraph::AsOf` on `to`. It reads what the Org Graph knows now, or with
-# `known_on` what it knew at the end of that day.
+# `known_on` what it knew at 23:59:59 UTC on that day, not in the tenant's
+# local time.
 #
-# By learned date, what the Org Graph learned after the end of `from`, up to
-# the end of `to` (UTC), whatever day each change took effect. A backdated
+# By learned date, what the Org Graph learned after 23:59:59 UTC on `from`,
+# up to 23:59:59 UTC on `to`, whatever day each change took effect. A backdated
 # correction shows here with its earlier date. A change it no longer
 # believes, such as one changed back on its own day, comes back `withdrawn`.
 #
@@ -77,7 +78,7 @@ class OrgGraph::ChangesBetween
   # @param to [Date] the window's last day
   # @param by [Symbol] :effective or :learned
   # @param known_on [Date, nil] by effective date only: read what was known
-  #   at the end of this day
+  #   at 23:59:59 UTC on this day
   # @raise [ArgumentError] for an unknown `by`, a `to` before `from`, or a
   #   `known_on` by learned date
   def initialize(context:, from:, to:, by: :effective, known_on: nil)
