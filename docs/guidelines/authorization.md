@@ -177,8 +177,10 @@ rights once their `Person` is no longer active. A unit or person the Org Graph
 doesn't hold is left to admins and editors, except that the manager chain can
 still end a membership of a unit that is gone.
 
-The commands check the policy themselves. Build the handler with the actor and
-every command it runs is checked:
+The commands check the policy too, as a second layer behind the controller's
+own `authorize :org_graph, …`, which every action still calls. Build the
+handler with the actor and every command it runs is checked, and the actor is
+recorded as the person who made each change:
 
 ```ruby
 OrgGraph::StructureCommandHandler.new(actor: pundit_user).rename_unit(unit_id, "Pay", effective_on:)
@@ -186,8 +188,10 @@ OrgGraph::CommandHandler.new(actor: pundit_user).set_membership(person_id, unit_
 ```
 
 A refused command raises `OrgGraph::Authorization::Refused`, a
-`Pundit::NotAuthorizedError` whose message names who may make the change, so
-`ApplicationController` handles it like any other refusal. A handler built
+`Pundit::NotAuthorizedError` whose message names who may make the change.
+`ApplicationController` handles it like any other refusal and shows its own
+generic flash; a controller that wants the reason on screen rescues it and
+shows `error.message`, as `Assessments::RatingsController` does. A handler built
 without an actor is the system: the HRIS sync, a retirement moving its members,
 the seed task. Nobody is acting, so nothing is checked. Never build one without
 an actor on a path a person drives.
