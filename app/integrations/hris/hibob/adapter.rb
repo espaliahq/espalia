@@ -337,12 +337,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   def org_graph_status(person, started_on, today)
     return "left" if person.status == "inactive"
 
-    future = begin
-      Date.iso8601(started_on.to_s) > today
-    rescue Date::Error
-      false
-    end
-    future ? "pending" : "employed"
+    started_on.present? && Date.iso8601(started_on) > today ? "pending" : "employed"
   end
 
   # Marks HRIS-sourced people as inactive if they no longer appear in the response.

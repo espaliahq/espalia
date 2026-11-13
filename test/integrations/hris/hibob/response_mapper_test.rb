@@ -167,6 +167,15 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
       assert_empty Hris::Hibob::ResponseMapper.new({ "id" => "1", "work" => { "title" => "Engineer" } }).org_graph_facts
     end
 
+    should "hold nothing the Org Graph can't take: an FTE outside 1–100, a date that isn't ISO 8601, a type with no label" do
+      employee = { "work" => { "startDate" => "15/01/2023" }, "internal" => { "terminationDate" => "soon" },
+                   "payroll" => { "employment" => { "fte" => 120, "type" => "4411" } } }
+
+      assert_equal({ fte: nil, employment_type: nil, started_on: nil, terminated_on: nil },
+        Hris::Hibob::ResponseMapper.new(employee).org_graph_facts)
+      assert_nil Hris::Hibob::ResponseMapper.new({ "payroll" => { "employment" => { "fte" => 0 } } }).org_graph_facts[:fte]
+    end
+
     should "read the flat payload shape" do
       employee = { "/work/site" => { "value" => "Sydney" }, "/payroll/employment/fte" => { "value" => 50 },
                    "/work/startDate" => { "value" => "2024-02-01" } }
