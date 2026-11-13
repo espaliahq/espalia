@@ -13,8 +13,9 @@ class Operations::OrgGraph::AsOf < Operations::Base
   description "Read the Org Graph as it stood on one UTC date: the live units with their parent, " \
               "level, owners and direct member count, and the number of employed people. A future " \
               "date includes changes already recorded for it, such as a hire who starts then or a " \
-              "scheduled move. known_on reads what the Org Graph knew at the end of that earlier " \
-              "date, leaving out corrections learned since. mode \"full\" adds each employed " \
+              "scheduled move. known_on reads what the Org Graph knew at 23:59:59 UTC on that " \
+              "earlier date, not in the tenant's local time, leaving out corrections learned " \
+              "since. mode \"full\" adds each employed " \
               "person's facts (title, level, manager, site, employment) and every membership. " \
               "unit_id narrows to that unit and the units under it, counting only the people " \
               "placed there. People are named by id only."
