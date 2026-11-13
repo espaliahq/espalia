@@ -216,8 +216,9 @@ class Views::Tenant::OrgGraph::PersonDrawer < Views::Base
   end
 
   def origin(change)
-    by = change.actor ? "#{change.actor.name}, " : ""
-    "#{HrisConfig.provider_label(change.provider)}. #{by}learned #{day(change.learned_at.to_date)}"
+    learned = "learned #{day(change.learned_at.to_date)}"
+    by = change.actor ? "#{change.actor.name}, #{learned}" : learned.upcase_first
+    "#{HrisConfig.provider_label(change.provider)}. #{by}"
   end
 
   # -- Shared ----------------------------------------------------------------
