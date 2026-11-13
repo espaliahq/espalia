@@ -56,6 +56,8 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
     should "keep the field a level's units are read from, nil until one is named" do
       as_tenant do
         assert_nil OrgTaxonomyLevel.find(@department_level).provider_field
+        @handler.retire_unit(@payments, effective_on: "2026-02-01")
+        @handler.retire_unit(@engineering, effective_on: "2026-02-01", provider: "hibob")
 
         @handler.set_level_provider(@department_level, "hibob", field: "work.custom.department_x", effective_on: "2026-02-01")
         assert_equal "work.custom.department_x", OrgTaxonomyLevel.find(@department_level).provider_field

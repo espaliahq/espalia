@@ -99,7 +99,7 @@ class Hris::LevelMirrorTest < ActiveSupport::TestCase
 
       mirror(hand_added => { division: "d1", team: "t2" })
 
-      assert_equal [ "espalia" ], OrgMembership.where(person_id: hand_added.id).pluck(:provider)
+      assert_equal [ "espalia" ], OrgMembership.where(person_id: hand_added.id, unit_id: OrgUnit.where(level_id: @team)).pluck(:provider)
     end
 
     should "write each person's change as its own cause, by SYSTEM, from the HRIS, dated today" do
