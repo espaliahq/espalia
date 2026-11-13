@@ -12,12 +12,12 @@ class Operations::OrgGraph::RetireUnit < Operations::Base
 
   parameter :unit_id, String, required: true
 
-  # @return [Hash] `{ unit_id, memberships_ended, effective_on }`
+  # @return [Hash] `{ unit_id, memberships_ended, effective_on }`; the count leaves out leavers
   def perform
     unit = live_unit!(:unit_id)
     held_by_espalia!(unit)
     without_live_children!(unit)
-    ended = unit.memberships.count
+    ended = active_memberships(unit).count
 
     structure_handler(cause_id: SecureRandom.uuid_v7).retire_unit(unit.id, effective_on: effective_on)
     { unit_id: unit.id, memberships_ended: ended, effective_on: effective_on }

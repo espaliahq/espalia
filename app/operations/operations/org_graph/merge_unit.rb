@@ -14,7 +14,8 @@ class Operations::OrgGraph::MergeUnit < Operations::Base
   parameter :unit_id, String, required: true
   parameter :into_unit_id, String, required: true
 
-  # @return [Hash] `{ unit_id, into_unit_id, memberships_moved, effective_on }`
+  # @return [Hash] `{ unit_id, into_unit_id, memberships_moved, effective_on }`; the count leaves
+  #   out leavers
   def perform
     unit = live_unit!(:unit_id)
     into = live_unit!(:into_unit_id)
@@ -22,7 +23,7 @@ class Operations::OrgGraph::MergeUnit < Operations::Base
     held_by_espalia!(unit)
     held_by_espalia!(into)
     without_live_children!(unit)
-    moved = unit.memberships.count
+    moved = active_memberships(unit).count
 
     structure_handler(cause_id: SecureRandom.uuid_v7)
       .apply_succession(SecureRandom.uuid_v7, predecessor_ids: [ unit.id ], successor_ids: [ into.id ],

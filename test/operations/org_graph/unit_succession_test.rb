@@ -37,8 +37,17 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
     event_store.read.to_a.select { |event| event.metadata[:correlation_id] == cause }.map { |event| event.class.name.demodulize }
   end
 
+  # Faye has left, and her row in the unit stays until it retires.
+  def with_leaver_in(key)
+    ActsAsTenant.with_tenant(@tenant) do
+      OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                              .set_membership(@org[:faye].id, @org[key], **OrgGraphFixture::PROVENANCE)
+    end
+  end
+
   context "RetireUnit" do
     should "end every membership in the unit under the retirement's cause, naming the caller" do
+      with_leaver_in(:payments)
       result = call(Operations::OrgGraph::RetireUnit, unit_id: @org[:payments], effective_on: "2026-11-02")
 
       assert_equal({ unit_id: @org[:payments], memberships_ended: 1, effective_on: "2026-11-02" }, result)
@@ -116,6 +125,7 @@ class Operations::OrgGraph::UnitSuccessionTest < ActiveSupport::TestCase
 
   context "SplitUnit" do
     should "create the successors beside the unit, move the placed, and leave the rest in no team" do
+      with_leaver_in(:platform)
       result = call(Operations::OrgGraph::SplitUnit, unit_id: @org[:platform], successor_names: [ " Core ", "Edge" ],
                                                      placements: { @org[:ada].id => "Core" }, effective_on: "2026-11-02")
 

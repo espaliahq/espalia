@@ -74,6 +74,13 @@ module Operations::OrgGraph::UnitWrite
           "Move or retire #{unit.name}'s sub-units first: #{children.to_sentence}"
   end
 
+  # The memberships people can see: a leaver's row stays until its unit
+  # retires, but no screen or read tool lists it.
+  #
+  # @param unit [OrgUnit]
+  # @return [ActiveRecord::Relation<OrgMembership>]
+  def active_memberships(unit) = unit.memberships.joins(:person).merge(Person.active)
+
   # @param cause_id [String, nil] shared by every event the handler writes
   def structure_handler(cause_id: nil) = ::OrgGraph::StructureCommandHandler.new(actor: context, cause_id: cause_id)
 

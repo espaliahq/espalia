@@ -32,7 +32,7 @@ class Operations::OrgGraph::SplitUnit < Operations::Base
     without_live_children!(unit)
     successors = successor_names.index_with { SecureRandom.uuid_v7 }
     placements = placements_by_unit(unit, successors)
-    unplaced = unit.memberships.pluck(:person_id) - placements.keys
+    unplaced = active_memberships(unit).pluck(:person_id) - placements.keys
 
     split(unit, successors, placements)
     { unit_id: unit.id, successors: successors.map { |name, id| { unit_id: id, name: name } },
