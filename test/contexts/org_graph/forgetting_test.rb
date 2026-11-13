@@ -108,9 +108,17 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       end
     end
 
+    should "carry on past a person who can't be forgotten" do
+      run = forgetting
+      report = run.stub(:candidates, [ SecureRandom.uuid_v7, @leaver.id ]) { run.forget_due(on: TODAY) }
+
+      assert_equal [ @leaver.id ], report.person_ids
+      assert @leaver.reload.forgotten?
+    end
+
     should "roll the person back whole when the last step fails" do
       TenantUser.stub(:where, ->(*) { raise ActiveRecord::StatementInvalid, "boom" }) do
-        assert_raises(ActiveRecord::StatementInvalid) { forgetting.forget_due(on: TODAY) }
+        assert_equal 0, forgetting.forget_due(on: TODAY).count
       end
 
       assert_not @leaver.reload.forgotten?
@@ -171,6 +179,12 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
       assert forgetting.forget(@leaver.id, requested_by: @admin, on: TODAY)
       assert_equal({ reason: "retention", requested_by_id: @admin.tenant_user.id },
         last_event(@leaver).data.slice(:reason, :requested_by_id))
+    end
+
+    should "answer false, not refuse, for someone already forgotten" do
+      assert forgetting.forget(@leaver.id, requested_by: @admin, on: TODAY)
+
+      assert_equal false, forgetting.forget(@leaver.id, requested_by: @admin, on: TODAY)
     end
 
     should "refuse someone the HRIS still employs" do

@@ -88,7 +88,7 @@ class OrgGraph::Forgetting
   def forget_due(on: Date.current)
     self.class.key!
     years = @tenant.org_graph_config.retention_years
-    Report.of(candidates(on).select { |person_id| erase(person_id, on:, reason: "retention", retention_years: years) })
+    Report.of(candidates(on).select { |person_id| erase_due(person_id, on:, retention_years: years) })
   end
 
   # Forgets one leaver at a tenant admin's request. A leaver not yet due is
@@ -107,6 +107,7 @@ class OrgGraph::Forgetting
     self.class.key!
     raise Pundit::NotAuthorizedError, "Only a tenant admin can forget a person" unless
       TenantPolicy.new(requested_by, @tenant).forget_person?
+    return false if within_tenant { Person.find(person_id).forgotten? }
 
     due = within_tenant { OrgLeaver.due_to_be_forgotten(@tenant, on:) }.include?(person_id)
     raise Refused, "This person is not due to be forgotten; say before_due to forget them now" unless due || before_due
@@ -139,9 +140,19 @@ class OrgGraph::Forgetting
     person_ids.reject { |person_id| active.include?(held[person_id]) }
   end
 
+  # One person who can't be forgotten must not hold up those due after them.
+  def erase_due(person_id, on:, retention_years:)
+    erase(person_id, on:, reason: "retention", retention_years:)
+  rescue => e
+    Rails.error.report(e, context: { tenant_id: @tenant.id, person_id: })
+    Rails.logger.error("[OrgGraph::Forgetting] tenant=#{@tenant.id} person=#{person_id} failed: #{e.class}")
+    false
+  end
+
   def erase(person_id, on:, reason:, retention_years:, requested_by_id: nil)
     within_tenant do
       Person.transaction do
+        hold_off_syncs
         person = Person.lock.find(person_id)
         next false if person.forgotten?
 
@@ -154,6 +165,15 @@ class OrgGraph::Forgetting
         true
       end
     end
+  end
+
+  # Every HRIS sync holds this lock shared for its whole run, and checks once
+  # at its start whether anyone is forgotten. Taken before any row lock, so it
+  # waits for a running sync and never deadlocks with one.
+  def hold_off_syncs
+    Person.connection.select_value(
+      Person.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(?)", OrgGraph::PeopleCutover.lock_key(@tenant) ])
+    )
   end
 
   def erase_identifiers(person)
