@@ -71,7 +71,8 @@ class OrgGraph::PersonProfile
     @history ||= begin
       changes = timeline.flat_map do |(fact, key), periods|
         periods.each_with_index.filter_map do |row, index|
-          summary = change_summary(fact, key, index.zero? ? nil : periods[index - 1].value, row.value)
+          before = periods[index - 1] unless index.zero?
+          summary = change_summary(fact, key, before&.value, row.value) || handover_summary(fact, key, before, row)
           next unless summary
 
           change = Change.new(effective_on: effective_on(row), learned_at: learned_at(row), fact:, key:, summary:,
@@ -151,6 +152,19 @@ class OrgGraph::PersonProfile
     when STATUS then status_summary(before, after)
     when *EMPLOYMENT.keys then fact_summary(EMPLOYMENT.fetch(fact), described(fact, before), described(fact, after))
     end
+  end
+
+  # The same value, now held by another provider: an HRIS taking over a fact
+  # Espalia set, say.
+  def handover_summary(fact, key, before, row)
+    return unless before && before.provider != row.provider && row.value
+
+    subject = case fact
+    when MEMBERSHIP then unit_name(key)
+    when STATUS then "Employment status"
+    else EMPLOYMENT[fact]
+    end
+    "#{subject} now held by #{HrisConfig.provider_label(row.provider)}" if subject
   end
 
   def fact_summary(label, before, after)

@@ -95,6 +95,20 @@ class OrgGraph::PersonProfileTest < ActiveSupport::TestCase
     assert_equal 1, summaries.count("Started")
   end
 
+  should "say when another provider takes over a value without changing it" do
+    as_tenant do
+      @handler.apply_facts(@org[:brook].id, provider: "espalia", effective_on: "2026-02-01", title: "Engineer")
+      @org[:brook].update_columns(hris_source: "hibob", external_id: "hb-brook")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+                                       .set_fact_provider("title", "hibob", effective_on: "2026-03-01")
+      @handler.apply_facts(@org[:brook].id, provider: "hibob", effective_on: "2026-03-01", title: "Engineer")
+    end
+
+    handover = profile(@org[:brook]).history.find { it.summary == "Title now held by HiBob" }
+
+    assert_equal [ Date.new(2026, 3, 1), "hibob" ], [ handover&.effective_on, handover&.provider ]
+  end
+
   should "give the first day of the spell they are in, and no start once they have left" do
     as_tenant { @handler.join(@org[:brook].id, provider: "espalia", effective_on: "2026-02-01") }
     assert_equal Date.new(2026, 1, 5), profile(@org[:brook]).employment.find { it.fact == "started" }.since
