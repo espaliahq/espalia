@@ -57,6 +57,16 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_includes page.at_css("#unit-#{org[:checkout]}").text, "3 people"
     end
 
+    should "name the provider of a unit the HRIS holds, and only of that one" do
+      org = build_org_graph(@tenant)
+
+      get tenant_org_graph_path
+      assert_includes response.body, "From HiBob, read-only"
+
+      get tenant_org_graph_path(unit: org[:platform])
+      assert_not_includes response.body, "read-only"
+    end
+
     should "say so when the tenant has no units" do
       get tenant_org_graph_path
 

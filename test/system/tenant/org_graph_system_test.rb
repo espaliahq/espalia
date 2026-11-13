@@ -26,7 +26,7 @@ class Tenant::OrgGraphSystemTest < ApplicationSystemTestCase
       screenshot("units_view")
 
       assert_selector "#org-graph-unit", text: "Engineering"
-      assert_text "From the HRIS, read-only"
+      assert_text "From HiBob, read-only"
       within("#unit-#{@org[:platform]}") do
         assert_text "Ada Quill"
         assert_text "Brook Tamsin"

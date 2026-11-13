@@ -95,15 +95,17 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       aria: { current: selected ? "true" : nil }
     ) do
       span(class: "min-w-0 truncate") { unit.name }
-      hris_lock unless unit.held_by_espalia?
+      hris_lock(unit) unless unit.held_by_espalia?
       span(class: "ml-auto pl-2 tabular-nums text-muted") { @overview.headcount(unit).to_s }
     end
   end
 
-  def hris_lock
+  def hris_lock(unit)
     icon(:lock, class: "size-3.5 shrink-0 text-muted")
-    span(class: "sr-only") { "from the HRIS" }
+    span(class: "sr-only") { "from #{provider_label(unit)}" }
   end
+
+  def provider_label(unit) = HrisConfig.provider_label(unit.provider)
 
   def selected_unit
     unit = @overview.selected
@@ -115,7 +117,7 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       div(class: "flex flex-wrap items-center gap-x-3 gap-y-1") do
         h3(id: "org-graph-unit", class: "text-lg font-semibold text-default") { unit.name }
         unless unit.held_by_espalia?
-          render Components::Kit::Badge.new("From the HRIS, read-only", leading_icon: :lock)
+          render Components::Kit::Badge.new("From #{provider_label(unit)}, read-only", leading_icon: :lock)
         end
         p(class: "text-sm text-muted") { unit_summary(unit) }
       end
