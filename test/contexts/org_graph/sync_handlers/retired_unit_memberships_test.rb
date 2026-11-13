@@ -55,6 +55,27 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
     end
   end
 
+  should "roll the retirement back with every membership change when one member's change fails" do
+    commands = OrgGraph::CommandHandler.new
+    calls = 0
+    failing_second = commands.method(:end_membership)
+    commands.define_singleton_method(:end_membership) do |*args, **options|
+      raise "member command failed" if (calls += 1) == 2
+
+      failing_second.call(*args, **options)
+    end
+
+    OrgGraph::CommandHandler.stub(:new, commands) do
+      assert_raises(RuntimeError, match: /member command failed/) do
+        as_tenant { @structure.retire_unit(@payments, effective_on: "2026-06-30") }
+      end
+    end
+
+    assert_not(structure_events.any? { |event| event.is_a?(OrgGraph::Events::UnitRetired) })
+    assert_not([ @ada, @grace ].any? { |person| person_events(person).any?(OrgGraph::Events::MembershipEnded) })
+    as_tenant { assert_equal 2, OrgMembership.where(unit_id: @payments).count }
+  end
+
   should "close a membership that began after a backdated retirement on the day it began" do
     as_tenant do
       @people.set_membership(@ada.id, @ledger, **ESPALIA, effective_on: "2026-09-01")
