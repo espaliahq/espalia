@@ -23,6 +23,8 @@ class OrgGraph::PersonAggregate
     @person_id = nil
     @employment_status = nil
     @last_status_change = nil
+    @started_on = nil
+    @left_from = nil
     @facts = {}
     @fact_providers = {}
   end
@@ -144,19 +146,27 @@ class OrgGraph::PersonAggregate
   end
 
   # Already in the target status, the call writes nothing, unless it repeats the
-  # last status event with a different date: that is a corrected date, and the
-  # correction is written as a new event rather than lost.
+  # last status event with a different date or provider: a corrected date or a
+  # handover, written as a new event rather than lost.
   def move_status(event_class, to:, from:, provider:, effective_on:)
     ensure_recorded!
     data = provenance(provider, effective_on)
 
     if @employment_status == to
-      return unless @last_status_change&.first == event_class && @last_status_change.last != data[:effective_on]
+      return unless @last_status_change&.first == event_class
+      return if @last_status_change.last == data.values_at(:effective_on, :provider)
     elsif !from.include?(@employment_status)
       raise "Can't move from #{@employment_status} to #{to}"
     end
+    ensure_leaves_after_start!(data[:effective_on]) if to == "left"
 
     apply(event_class.new(data: data))
+  end
+
+  # A hire who never started may drop out at any date, before or after a correction.
+  def ensure_leaves_after_start!(left_on)
+    had_started = @employment_status == "employed" || @left_from == "employed"
+    raise "A person can't leave before they start" if had_started && @started_on && left_on < @started_on
   end
 
   # A value the person already holds, from the same provider, writes nothing.
@@ -213,6 +223,7 @@ class OrgGraph::PersonAggregate
   on OrgGraph::Events::PersonRecorded do |event|
     @person_id = event.data[:person_id]
     @employment_status = event.data[:employment_status]
+    @started_on = event.data[:started_on]
     @facts = event.data.slice(*FACT_KEYS)
     @fact_providers = FACT_KEYS.index_with(event.data[:provider])
   end
@@ -223,8 +234,10 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::PersonReturned => "employed"
   }.each do |event_class, status|
     on event_class do |event|
+      @left_from = @employment_status if event_class == OrgGraph::Events::PersonLeft && @employment_status != "left"
       @employment_status = status
-      @last_status_change = [ event_class, event.data[:effective_on] ]
+      @last_status_change = [ event_class, event.data.values_at(:effective_on, :provider) ]
+      @started_on = event.data[:effective_on] if event_class == OrgGraph::Events::PersonJoined
     end
   end
 
