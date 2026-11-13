@@ -151,8 +151,10 @@ so each projection decides for itself.
   the key back, and the event that recorded the forgetting is missing from it too. So
   every forgetting decision is also appended to a forgetting log kept apart from the
   database backups: what was forgotten, and the key it deleted. The entry is made
-  durable first, then the transaction that deletes the key commits. An entry with no
-  deletion behind it is harmless, because replaying it deletes the key.
+  durable first, then the transaction that deletes the key commits. The entry is the
+  decision, and it is not taken back. If the process stops before the deletion commits,
+  the live system completes it on start: any entry whose key still exists is carried
+  out. So the log and the live system never disagree for longer than a restart.
   A restore replays the log before the system serves anything, and replaying a decision
   means carrying it out again in full: delete the key, erase the identifiers it
   covered, and rebuild every read model and cache with the keys forgotten. A deployment
