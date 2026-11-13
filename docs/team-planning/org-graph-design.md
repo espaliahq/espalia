@@ -75,6 +75,7 @@ are shreddable from their first event.
 | `CostCentreChanged`, `SiteChanged` | The cost centre as the HRIS names it. |
 | `EmploymentChanged` | FTE and type. |
 | `MembershipSet`, `MembershipEnded` | A unit, an allocation, and the role played there. |
+| `MembershipMoved` | That a membership moved to another unit, keeping its terms. |
 | `FactConfirmed` | That a fact Espalia holds is still true, and who said so. |
 | `PersonForgotten` | That the identifiers have been erased. |
 
@@ -103,7 +104,14 @@ names the succession and its successors, and its members move rather than leave:
   guesses.
 - **Placements are not stored on the structure events.** They are ordinary membership
   commands issued with the split, sharing its cause. The split screen (5.6) and applying
-  a plan (7.3) supply the names; the membership side lands in story 2.6.
+  a plan (7.3) supply the names.
+
+`OrgGraph::SyncHandlers::RetiredUnitMemberships` does this when a unit retires, in each
+member's own stream. Every `MembershipEnded` or `MembershipMoved` it writes has the
+retirement as its cause. A plain retirement ends every open membership in the unit on
+the retirement date, each as its own provider holds it. A membership that began after
+a backdated retirement closes on the day it began. A unit with live sub-units still
+can't be retired, so its members stay where they are.
 
 Units carry their provider too: a unit mirrored from an HRIS team is read-only in
 Espalia, and units Espalia holds can hang beneath it. A mirrored unit also carries the
@@ -120,6 +128,9 @@ doesn't. Allocations across units are not summed or capped here: an over-allocat
 is for a plan's checks to flag. The same terms from the same provider write nothing. A
 person who has left can't join a unit, and a membership can only be set in a live unit.
 `MembershipEnded` dates the last day of one membership and leaves the others.
+`MembershipMoved` carries a membership to another unit with its allocation and role, so a
+move is one fact and the person is never ended and added again. A person already in the
+destination keeps that membership, and the one they came from ends instead.
 
 `OrgGraph::Projections::Members` projects the current memberships into `org_memberships`.
 An ended membership has no row; its history is in the person's stream. `Person.in_no_unit`
