@@ -110,6 +110,7 @@ module ProjectionReplayHelpers
           # Level and unit PKs are event-carried ids — assert they survive reset! + replay.
           taxonomy_levels: rows(OrgTaxonomyLevel, stable_id: true),
           units:           rows(OrgUnit, stable_id: true),
+          fact_providers:  rows(OrgFactProvider, stable_id: true),
           # A link's natural key is (succession_id, predecessor_id, successor_id).
           successions:     rows(OrgUnitSuccession)
         }
