@@ -74,7 +74,7 @@ class OrgGraph::PersonProfile
           summary = change_summary(fact, key, index.zero? ? nil : periods[index - 1].value, row.value)
           next unless summary
 
-          change = Change.new(effective_on: effective_on(fact, row), learned_at: learned_at(row), fact:, key:, summary:,
+          change = Change.new(effective_on: effective_on(row), learned_at: learned_at(row), fact:, key:, summary:,
                               provider: row.provider, actor: actors[row.event_id])
           [ change, row.id ]
         end
@@ -97,13 +97,17 @@ class OrgGraph::PersonProfile
   # @return [Hash{Array(String, String) => Array<OrgFactPeriod>}] each fact's periods, oldest first
   def timeline = periods.group_by { |row| [ row.fact, row.key ] }.transform_values { |rows| rows.sort_by(&:effective_from) }
 
-  # An end is recorded from the day after the last day, which is the day the
-  # person who ended it chose.
-  def effective_on(fact, row)
-    ended = (fact == MEMBERSHIP && row.value.nil?) ||
-            (fact == STATUS && row.value&.fetch("employment_status", nil) == "left")
-    ended ? row.effective_from - 1 : row.effective_from
+  # An ending or a leaving is recorded from the day after the last day, which
+  # is the day the person who made it chose. A move ends on the day it takes effect.
+  def effective_on(row)
+    from_next_day = case (event = events[row.event_id])
+                    when OrgGraph::Events::MembershipEnded, OrgGraph::Events::PersonLeft then true
+                    when OrgGraph::Events::PersonRecorded then row.fact == STATUS && event.data[:left_on].present? && status_of(row) == "left"
+                    end
+    from_next_day ? row.effective_from - 1 : row.effective_from
   end
+
+  def status_of(row) = row.value&.fetch("employment_status", nil)
 
   def in_effect(fact)
     periods.find do |row|
@@ -111,9 +115,12 @@ class OrgGraph::PersonProfile
     end
   end
 
+  # The first day of the spell they are in now; none once they have left.
   def started
-    employed = Array(timeline[[ STATUS, "" ]]).select { |row| row.value&.fetch("employment_status", nil) == "employed" }
-    row = employed.last or return
+    rows = Array(timeline[[ STATUS, "" ]]).select { |row| row.effective_from <= @today }
+    return unless rows.last && status_of(rows.last) == "employed"
+
+    row = rows.reverse.take_while { |r| status_of(r) == "employed" }.last
 
     Fact.new(fact: "started", label: "Started", value: row.effective_from.strftime("%-d %b %Y"),
              provider: row.provider, since: row.effective_from)
@@ -141,7 +148,7 @@ class OrgGraph::PersonProfile
   def change_summary(fact, key, before, after)
     case fact
     when MEMBERSHIP then membership_summary(unit_name(key), before, after)
-    when STATUS then status_summary(after)
+    when STATUS then status_summary(before, after)
     when *EMPLOYMENT.keys then fact_summary(EMPLOYMENT.fetch(fact), described(fact, before), described(fact, after))
     end
   end
@@ -154,6 +161,7 @@ class OrgGraph::PersonProfile
   end
 
   def membership_summary(unit, before, after)
+    return if before == after
     return "Left #{unit}" if after.nil?
     return "Joined #{unit}#{terms(after)}" if before.nil?
 
@@ -167,8 +175,11 @@ class OrgGraph::PersonProfile
     "#{role}#{allocation}"
   end
 
-  def status_summary(value)
-    case value&.fetch("employment_status", nil)
+  def status_summary(before, after)
+    status = after&.fetch("employment_status", nil)
+    return if status == before&.fetch("employment_status", nil)
+
+    case status
     when "pending" then "Due to start"
     when "employed" then "Started"
     when "left" then "Left"

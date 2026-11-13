@@ -73,6 +73,36 @@ class OrgGraph::PersonProfileTest < ActiveSupport::TestCase
     assert_nil history.last.actor, "the system recorded the start, not a person"
   end
 
+  should "date a move's leaving on the day of the move, not the day before" do
+    as_tenant { @handler.move_membership(@org[:brook].id, @org[:platform], @org[:payments], effective_on: "2026-03-02") }
+
+    changes = profile(@org[:brook]).history.index_by(&:summary)
+
+    assert_equal Date.new(2026, 3, 2), changes.fetch("Left Platform").effective_on
+    assert_equal Date.new(2026, 3, 2), changes.keys.grep(/\AJoined Payments/).then { changes.fetch(it.first).effective_on }
+  end
+
+  should "write nothing for a change that changes nothing" do
+    as_tenant do
+      @handler.set_membership(@org[:brook].id, @org[:checkout], allocation: 0.5, role: "Tech lead", provider: "espalia", effective_on: "2026-02-01")
+      @handler.join(@org[:brook].id, provider: "espalia", effective_on: "2026-02-01")
+    end
+
+    summaries = profile(@org[:brook]).history.map(&:summary)
+
+    assert_equal 1, summaries.count { it.start_with?("Joined Checkout") }
+    assert_empty summaries.grep(/\AIn Checkout/)
+    assert_equal 1, summaries.count("Started")
+  end
+
+  should "give the first day of the spell they are in, and no start once they have left" do
+    as_tenant { @handler.join(@org[:brook].id, provider: "espalia", effective_on: "2026-02-01") }
+    assert_equal Date.new(2026, 1, 5), profile(@org[:brook]).employment.find { it.fact == "started" }.since
+
+    as_tenant { @handler.leave(@org[:brook].id, provider: "espalia", effective_on: "2026-03-01") }
+    assert_nil profile(@org[:brook]).employment.find { it.fact == "started" }
+  end
+
   should "read a forgotten person as a former member and keep their history" do
     brook = @org[:brook]
     as_tenant { brook.update_columns(name: nil, email: nil, forgotten_at: Time.current) }
