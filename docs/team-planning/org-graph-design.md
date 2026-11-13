@@ -427,7 +427,7 @@ Graph could no longer say what it knew before. From it:
   one unit to another; a unit created, renamed, moved, retired or succeeded; an owner added
   or removed. Each carries the day it first holds, when it was learned, its provider and its
   event, so a headcount walk or "compare with a date" can group and count them. A joining
-  carries every fact the person holds on their first day, as most are recorded while they
+  carries every fact and membership the person holds on their first day, as most are recorded while they
   are pending. By effective
   date it lists what took effect after the first day, up to and including the last: the
   steps from `AsOf` on one day to `AsOf` on the other, with the same `known_on`. By learned

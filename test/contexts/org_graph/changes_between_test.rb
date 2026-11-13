@@ -71,7 +71,8 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     assert_equal [ :effective, nil ], [ result.by, result.known_on ]
 
     assert_equal [ @linus.id, Date.new(2026, 3, 2) ], one(result, :joined).to_h.values_at(:person_id, :effective_on)
-    assert_equal({ "employment_status" => "employed", "title" => "Designer" }, one(result, :joined).after)
+    assert_equal({ "employment_status" => "employed", "title" => "Designer",
+                   "memberships" => { @platform => { "allocation" => 0.5, "role" => nil } } }, one(result, :joined).after)
     left = one(result, :left)
     assert_equal [ @grace.id, Date.new(2026, 3, 6) ], left.to_h.values_at(:person_id, :effective_on)
 
@@ -122,6 +123,7 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
       @handler.change_level(@ada.id, "L4", **ESPALIA, effective_on: "2026-03-13")
       @handler.change_manager(@linus.id, @ada.id, **ESPALIA, effective_on: "2026-03-20")
       @handler.change_level(@linus.id, "L2", **ESPALIA, effective_on: "2026-02-15")
+      @handler.set_membership(@linus.id, @engineering, **ESPALIA, effective_on: "2026-02-10", allocation: 0.25)
     end
 
     from, to = as_of("2026-02-28"), as_of("2026-03-31")
@@ -278,7 +280,9 @@ class OrgGraph::ChangesBetweenTest < ActiveSupport::TestCase
     owners = shape[:owners].to_set
     changes.each do |change|
       case change.kind
-      when :joined then people[change.person_id] = change.after.except("employment_status").compact
+      when :joined
+        people[change.person_id] = change.after.except("employment_status", "memberships").compact
+        change.after["memberships"].each { |unit, value| placements[[ change.person_id, unit ]] = value }
       when :left then people.delete(change.person_id)
       when :fact_changed
         next unless people.key?(change.person_id)
