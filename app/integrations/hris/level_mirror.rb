@@ -87,7 +87,7 @@ class Hris::LevelMirror
 
     index = taxonomy.index(level.id)
     LevelPlan.new(level:, field:, above_id: (taxonomy[index - 1] if index.positive?), values:,
-                  held: values.values.select(&:value?).group_by(&:key), withheld: values.values.any?(&:withheld?), live_keys:)
+                  held: values.values.select(&:value?).group_by(&:key), withheld: values.values.any? { !it.value? && !it.blank? }, live_keys:)
   end
 
   def mirror_units(level_plan)
