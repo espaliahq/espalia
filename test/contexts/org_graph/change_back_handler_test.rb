@@ -189,6 +189,33 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
     assert_equal @lead.id, latest(@payments).actor_id
   end
 
+  should "say why it would refuse, without writing, and nothing where it would not" do
+    as_tenant do
+      @handler.set_membership(@ada.id, @payments, **ESPALIA)
+      @structure.add_unit_owner(@payments, @lead.id, effective_on: "2026-02-01")
+      @handler.set_membership(@ada.id, @platform, **ESPALIA)
+    end
+    lead = as_tenant { OrgGraph::ChangeBackHandler.new(actor: actor_for(@lead)) }
+    count = as_tenant { OrgUnitActivity.count }
+
+    assert_match "can change this membership", as_tenant { lead.refusal(latest(@platform)) }
+    assert_nil as_tenant { lead.refusal(latest(@payments)) }
+    assert_match "can't be changed back", as_tenant { lead.refusal(OrgUnitActivity.for_unit(@payments).last) }
+    assert_equal count, as_tenant { OrgUnitActivity.count }
+  end
+
+  should "say a move needs rights at both ends before it is changed back" do
+    as_tenant do
+      @structure.add_unit_owner(@platform, @lead.id, effective_on: "2026-02-01")
+      @handler.set_membership(@ada.id, @payments, **ESPALIA)
+      @handler.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01")
+    end
+    lead = OrgGraph::ChangeBackHandler.new(actor: actor_for(@lead))
+
+    assert_match "rights over both Platform and Payments", as_tenant { lead.refusal(latest(@platform)) }
+    assert_nil as_tenant { OrgGraph::ChangeBackHandler.new(actor: SYSTEM).refusal(latest(@platform)) }
+  end
+
   context "#change_back_group" do
     setup do
       @grace = as_tenant { create(:person, tenant: @tenant) }
@@ -224,6 +251,15 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
       AuditMetadata.with(acting_via: :web, correlation_id: "request-2") { change_back_group("request-1") }
 
       assert_equal "request-2", latest(@payments).cause_id
+    end
+
+    should "say why it would refuse the group, and nothing while every part can change back" do
+      cause = latest(@payments).cause_id
+      handler = OrgGraph::ChangeBackHandler.new(actor: SYSTEM)
+
+      assert_nil as_tenant { handler.group_refusal(cause) }
+      change_back(latest(@payments))
+      assert_match "Part of this change", as_tenant { handler.group_refusal(cause) }
     end
 
     should "refuse once one part has been changed back alone, and point to changing back the rest one at a time" do
