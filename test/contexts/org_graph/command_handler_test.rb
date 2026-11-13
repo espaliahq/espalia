@@ -343,6 +343,19 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       assert_equal written, stream_events.size
     end
 
+    should "refuse an absence whose status another provider holds, but not one that writes nothing" do
+      @structure.set_fact_provider("employment_status", "espalia", effective_on: "2026-11-01")
+      written = stream_events.size
+
+      assert_raises(RuntimeError, match: "espalia supplies employment_status") do
+        @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-02")
+      end
+      assert_equal written, stream_events.size
+
+      @handler.leave(@person_id, **HELD_BY_ESPALIA)
+      assert_equal 0, @handler.record_absence(@person_id, provider: "hibob", effective_on: "2026-11-03")
+    end
+
     should "let Espalia record and edit a person who carries no external id from the fact's provider" do
       [ create(:person, tenant: @tenant), create(:person, tenant: @tenant, hris_source: "bamboohr", external_id: "b-1") ].each do |person|
         @handler.record_person(person.id, **HELD_BY_ESPALIA, employment_status: "employed", title: "Engineer")
