@@ -32,10 +32,11 @@ class OrgGraph::PersonProfile
   # @!attribute effective_on [Date] when the change took effect
   # @!attribute learned_at [Time] when the Org Graph learned it
   # @!attribute fact [String]
+  # @!attribute key [String] the unit id for a membership, otherwise ""
   # @!attribute summary [String]
   # @!attribute provider [String]
   # @!attribute actor [Person, nil] who made it, when a person did
-  Change = Data.define(:effective_on, :learned_at, :fact, :summary, :provider, :actor)
+  Change = Data.define(:effective_on, :learned_at, :fact, :key, :summary, :provider, :actor)
 
   attr_reader :person
 
@@ -73,7 +74,7 @@ class OrgGraph::PersonProfile
           summary = change_summary(fact, key, index.zero? ? nil : periods[index - 1].value, row.value)
           next unless summary
 
-          change = Change.new(effective_on: effective_on(fact, row), learned_at: learned_at(row), fact:, summary:,
+          change = Change.new(effective_on: effective_on(fact, row), learned_at: learned_at(row), fact:, key:, summary:,
                               provider: row.provider, actor: actors[row.event_id])
           [ change, row.id ]
         end
@@ -82,6 +83,12 @@ class OrgGraph::PersonProfile
       changes.sort_by { |change, id| [ change.effective_on, change.learned_at, id ] }.reverse.map(&:first)
     end
   end
+
+  # The latest change to a membership, which says who set it as it stands.
+  #
+  # @param unit_id [String]
+  # @return [Change, nil]
+  def last_change_to(unit_id) = history.find { |change| change.fact == MEMBERSHIP && change.key == unit_id }
 
   private
 
@@ -108,7 +115,7 @@ class OrgGraph::PersonProfile
     employed = Array(timeline[[ STATUS, "" ]]).select { |row| row.value&.fetch("employment_status", nil) == "employed" }
     row = employed.last or return
 
-    Fact.new(fact: "started", label: "Started", value: I18n.l(row.effective_from, format: :long),
+    Fact.new(fact: "started", label: "Started", value: row.effective_from.strftime("%-d %b %Y"),
              provider: row.provider, since: row.effective_from)
   end
 
