@@ -251,7 +251,9 @@ Today the adapter assigns attributes and saves. Instead it compares each incomin
 with the Org Graph's current projection and issues a command for each difference. A sync
 that finds nothing changed writes nothing.
 
-A person who disappears from the HRIS gets `PersonLeft`. Their memberships are ended by a
+A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
+that misses them. An empty response is a failed sync and leaves no one. Someone who comes
+back keeps their stream and gets `PersonReturned`. Their memberships are ended by a
 handler, with the leaving date. A new person appears with no membership. No position is
 created for anyone automatically.
 
