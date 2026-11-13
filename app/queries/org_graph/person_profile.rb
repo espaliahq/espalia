@@ -101,9 +101,9 @@ class OrgGraph::PersonProfile
   # is the day the person who made it chose. A move ends on the day it takes effect.
   def effective_on(row)
     from_next_day = case (event = events[row.event_id])
-                    when OrgGraph::Events::MembershipEnded, OrgGraph::Events::PersonLeft then true
-                    when OrgGraph::Events::PersonRecorded then row.fact == STATUS && event.data[:left_on].present? && status_of(row) == "left"
-                    end
+    when OrgGraph::Events::MembershipEnded, OrgGraph::Events::PersonLeft then true
+    when OrgGraph::Events::PersonRecorded then row.fact == STATUS && event.data[:left_on].present? && status_of(row) == "left"
+    end
     from_next_day ? row.effective_from - 1 : row.effective_from
   end
 
