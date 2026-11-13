@@ -148,6 +148,16 @@ A sync runs for a while, and a mapping can change underneath it. The adapter sta
 
 The base adapter caches the catalogue per tenant and HRIS account for an hour (`FIELD_CATALOGUE_TTL`), as plain hashes under a key that names `Hris::Field::SHAPE`, so a deploy that changes the shape never reads an old entry; providers implement only the uncached `fetch_field_catalogue`. **An HRIS failure raises** (the client's `Errors::*`, or `Errors::UnexpectedResponseError` for a body of the wrong shape) **and caches nothing**, so a caller never mistakes an outage for a tenant with no fields. HiBob documents the named lists as an array of `{ name, items }`; the adapter also reads an object keyed by list name, and a list's entries under `values` when it has no `items`, since no live response has confirmed the shape yet. A list with neither array raises. Test with `test/fixtures/files/hibob/people_fields_response.json` and `named_lists_response.json`; the test environment's null cache store means a caching test swaps in a `MemoryStore`.
 
+## Previewing a field
+
+Before an admin chooses the field a level or a fact comes from, `Integrations::HrisFieldPreview` shows what it would give ([#107](https://github.com/espaliahq/espalia/issues/107)). For a level: the units it would make, with their labels and head counts. For a fact (`cost_centre`, `country`): who has a value and who would change from what the Org Graph holds. Both count the people the field is blank for and those whose record withholds it.
+
+- **It writes nothing.** `adapter.read_field(field_id, kind:)` asks the HRIS for that one field beside each current person's id, live and uncached, since `hris_raw_data` holds only the fields the last sync asked for.
+- **One reader with the mirror.** Each record goes through `ResponseMapper#field_value`, which gives a `Hris::FieldValue`: `:value` with a list item's id and label (or a text field's text), `:blank` for a field sent empty, `:withheld` for a record that leaves it out. Units are told apart by `#key`, the list id before the label, so two items sharing a label stay two units, as the mirror (6.7) makes them.
+- **Only the people the sync writes for**: active, from that HRIS, with a row in Espalia. A withheld person is never compared.
+- **"Would change" reads the person's stream** (`OrgGraph::PersonAggregate#fact`), because `org_fact_ages` keeps only facts Espalia provides. That is one stream read per person, fine for a preview an admin asks for.
+- MCP clients call `integrations_hris_field_preview`, which returns counts and unit labels, never a person.
+
 ## Adding a new HRIS field to the sync
 
 To pull an additional field (e.g. employment type, cost center, location) through into `Person`:
