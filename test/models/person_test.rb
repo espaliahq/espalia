@@ -42,6 +42,16 @@ class PersonTest < ActiveSupport::TestCase
       end
     end
 
+    should "not provision from a copy loaded before they were forgotten" do
+      live = create(:person, tenant: @tenant)
+      stale = Person.find(live.id)
+      live.update_columns(name: nil, email: nil, forgotten_at: Time.current)
+
+      assert_no_difference -> { User.count } do
+        assert_nil stale.ensure_user!
+      end
+    end
+
     should "be refused by the database without that mark" do
       assert_raises(ActiveRecord::StatementInvalid) { @person.update_columns(forgotten_at: nil) }
     end

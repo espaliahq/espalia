@@ -80,6 +80,11 @@ class Person < ApplicationRecord
 
     ActsAsTenant.with_tenant(tenant) do
       User.transaction do
+        # Forgetting locks this row too, so the email read here is never one
+        # it has just erased.
+        lock!
+        next if forgotten?
+
         account = User.find_or_create_by!(email: email.to_s.downcase) { |u| u.password = SecureRandom.hex(24) }
         membership = TenantUser.find_or_initialize_by(tenant: tenant, user: account)
         membership.person ||= self
@@ -91,6 +96,8 @@ class Person < ApplicationRecord
   rescue ActiveRecord::RecordNotUnique
     # A concurrent provision won the race; re-resolve the now-linked user.
     reload
+    return nil if forgotten?
+
     user || raise
   end
 
