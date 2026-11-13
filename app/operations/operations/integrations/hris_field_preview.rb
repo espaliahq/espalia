@@ -23,8 +23,8 @@ class Operations::Integrations::HrisFieldPreview < Operations::Base
   end
 
   # @return [Hash]
-  # @raise [Operations::Base::ParameterError] when no HRIS is connected or
-  #   its catalogue holds no such field
+  # @raise [Operations::Base::ParameterError] when no HRIS is connected, its
+  #   catalogue holds no such field, or it refuses or limits the read
   def perform
     tenant = ActsAsTenant.current_tenant
     raise ParameterError, "No HRIS is connected" unless tenant.hris_config.connected?(tenant)
@@ -32,6 +32,10 @@ class Operations::Integrations::HrisFieldPreview < Operations::Base
     payload(Integrations::HrisFieldPreview.new(tenant, field_id: params[:field_id], target: params[:target]).call)
   rescue Integrations::HrisFieldPreview::UnknownField => e
     raise ParameterError, e.message
+  rescue Hris::Hibob::Errors::AuthenticationError
+    raise ParameterError, "The HRIS refused the stored credentials."
+  rescue Hris::Hibob::Errors::RateLimitError
+    raise ParameterError, "The HRIS is limiting requests just now. Try again in a minute."
   end
 
   private

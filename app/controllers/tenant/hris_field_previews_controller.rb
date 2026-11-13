@@ -29,10 +29,6 @@ class Tenant::HrisFieldPreviewsController < ApplicationController
     { preview: result }
   rescue Operations::Base::ParameterError => e
     { problem: e.message }
-  rescue Hris::Hibob::Errors::AuthenticationError
-    { problem: "The HRIS refused the stored credentials." }
-  rescue Hris::Hibob::Errors::RateLimitError
-    { problem: "The HRIS is limiting requests just now. Try again in a minute." }
   rescue StandardError => e
     Rails.error.report(e, handled: true, context: { tenant_id: ActsAsTenant.current_tenant&.id })
     { problem: "The HRIS did not answer as expected. Try again in a minute." }

@@ -59,6 +59,20 @@ class Operations::Integrations::HrisFieldPreviewTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(field_id: TEAM.id, target: "level") }
   end
 
+  should "say so when the HRIS refuses the stored credentials" do
+    @adapter.define_singleton_method(:read_field) { |*, **| raise Hris::Hibob::Errors::AuthenticationError, "401" }
+
+    error = assert_raises(Operations::Base::ParameterError) { call(field_id: TEAM.id, target: "level") }
+    assert_equal "The HRIS refused the stored credentials.", error.message
+  end
+
+  should "say so when the HRIS is limiting requests" do
+    @adapter.define_singleton_method(:read_field) { |*, **| raise Hris::Hibob::Errors::RateLimitError.new(retry_after: 30) }
+
+    error = assert_raises(Operations::Base::ParameterError) { call(field_id: TEAM.id, target: "level") }
+    assert_match "limiting requests", error.message
+  end
+
   should "refuse a member who is not an admin" do
     assert_raises(Pundit::NotAuthorizedError) { call(tenant_user: @member_tenant_user, field_id: TEAM.id, target: "level") }
   end
