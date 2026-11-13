@@ -971,7 +971,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         end
 
         should "deactivate at once and write the PersonLeft on the next sync when the first write fails" do
-          handler = OrgGraph::CommandHandler.new
+          handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
           handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
           failed = OrgGraph::CommandHandler.stub(:new, handler) { build_adapter(@without_bob).sync_people }
           retried = travel(1.day) { build_adapter(@without_bob).sync_people }

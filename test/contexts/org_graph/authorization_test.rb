@@ -66,6 +66,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
       assert_kind_of Pundit::NotAuthorizedError, error
       assert_match "Only a tenant admin or an Org Graph editor", error.message
       assert_raises(OrgGraph::Authorization::Refused) { people(@actor).change_title(@report.id, "Lead", **ESPALIA) }
+      assert_raises(OrgGraph::Authorization::Refused) { people(@actor).record_absence(@report.id, **ESPALIA) }
     end
 
     should "be refused a unit, naming it" do

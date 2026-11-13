@@ -350,7 +350,7 @@ class Hris::Hibob::Adapter < Hris::BaseAdapter
   # @param result [Hash] running tally
   def record_org_graph_absences(absent, result)
     with_hris_event_context do
-      handler = OrgGraph::CommandHandler.new
+      handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       today = Date.current
 
       absent.find_each do |person|
