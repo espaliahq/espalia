@@ -39,6 +39,7 @@ class OrgGraph::PersonAggregate
     @left_from = nil
     @facts = {}
     @fact_providers = {}
+    @fact_dates = {}
     @memberships = {}
     @membership_ends = {}
     @forgotten = false
@@ -532,6 +533,7 @@ class OrgGraph::PersonAggregate
     @left_on = event.data[:left_on]
     @facts = event.data.slice(*FACT_KEYS)
     @fact_providers = FACT_KEYS.index_with(event.data[:provider])
+    @fact_dates = FACT_KEYS.index_with(event.data[:effective_on])
   end
 
   {
@@ -553,9 +555,10 @@ class OrgGraph::PersonAggregate
     OrgGraph::Events::CostCentreChanged, OrgGraph::Events::SiteChanged, OrgGraph::Events::EmploymentChanged
   ].each do |event_class|
     on event_class do |event|
-      changed = event.data.slice(*FACT_KEYS)
+      changed = event.data.slice(*FACT_KEYS).reject { |key, _| @fact_dates[key].to_s > event.data[:effective_on].to_s }
       @facts.merge!(changed)
       @fact_providers.merge!(changed.keys.index_with(event.data[:provider]))
+      @fact_dates.merge!(changed.keys.index_with(event.data[:effective_on]))
     end
   end
 
@@ -570,7 +573,8 @@ class OrgGraph::PersonAggregate
   on OrgGraph::Events::MembershipSet do |event|
     data = event.data
     current = @memberships[data[:unit_id]] || {}
-    @memberships[data[:unit_id]] = data.slice(:allocation, :role, :provider).merge(
+    terms = current[:changed_on].to_s > data[:effective_on].to_s ? current : data
+    @memberships[data[:unit_id]] = terms.slice(:allocation, :role, :provider).merge(
       since: [ current[:since], data[:effective_on] ].compact.min,
       changed_on: [ current[:changed_on], data[:effective_on] ].compact.max
     )
