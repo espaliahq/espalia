@@ -45,7 +45,10 @@ a dev admin (`admin@example.com` / `password123`, development only).
 - **New user-facing surfaces consider MCP exposure.** Build through
   `Operations::*` so the web UI and the MCP server share one implementation,
   or say in the PR why not ([docs/guidelines/mcp-server.md](docs/guidelines/mcp-server.md)).
-- **Update any documentation your change falsifies**, in the same PR.
+- **Update any documentation your change falsifies**, in the same PR. That
+  includes the README's screenshots when your change shows up in one: one
+  command regenerates them, with `pngquant` installed
+  ([docs/screenshots/README.md](docs/screenshots/README.md)).
 
 ## Before opening the PR
 

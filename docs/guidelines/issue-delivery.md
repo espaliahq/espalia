@@ -48,34 +48,44 @@ touches **before** writing code; do not rely on defaults.
    agent, then read the screenshots and judge them yourself — see
    [chrome-mcp.md](chrome-mcp.md) for the URL, credentials, viewports and
    gotchas. One browser driver at a time.
-8. **`bin/rails development:precommit` must be fully green before the PR.** Run
+8. **Refresh the README screenshots your change makes stale**, before the
+   gates below so the new images and any test fix go through them. If the
+   PR adds functionality to a screen the [README](../../README.md) shows, or
+   changes what a reader sees there — a panel, column, control, label or
+   layout — run `README_SCREENSHOTS=1 bin/rails test
+   test/system/marketing_flows_system_test.rb` (with `pngquant` installed)
+   and commit the images of the screens you changed. The test rewrites all
+   of them, so `git restore` the rest: their diff is run-to-run churn. When
+   the test can no longer frame a screen, fix its `capture_*` step. Details:
+   [docs/screenshots/README.md](../screenshots/README.md).
+9. **`bin/rails development:precommit` must be fully green before the PR.** Run
    it directly, never piped, as a foreground call with a long timeout. Fix
    everything it reports, including what looks unrelated. **From a second
    worktree, never run it:** it resets the shared `growth_os_test` database.
    Run its steps one by one under the worktree's own test database, as
    [dev-environment.md → A second worktree](dev-environment.md#a-second-worktree)
    lists them, and say in the PR that you did.
-9. **Run `/code-review` on the branch diff before opening the PR.** Verify each
-   finding against the code, land the real ones as their own stacked commits,
-   and say in your final report which you skipped and why.
-10. **Update the guidelines your change falsifies** — in the same PR, not as a
+10. **Run `/code-review` on the branch diff before opening the PR.** Verify each
+    finding against the code, land the real ones as their own stacked commits,
+    and say in your final report which you skipped and why.
+11. **Update the guidelines your change falsifies** — in the same PR, not as a
     follow-up. If the change adds or changes a user-facing read/write surface,
     either route it through `Operations::*` or state in the PR why MCP exposure
     doesn't apply ([mcp-server.md](mcp-server.md)).
-11. **Open the PR with the full body**: Why / What / Measured (real numbers
+12. **Open the PR with the full body**: Why / What / Measured (real numbers
     where the issue asked for them) / MCP note / Tests / Docs / Screenshots,
     `Closes #<n>`, and the Claude Code footer. Screenshots need the PR's
     number, so open the PR first, then run `bin/pr-screenshots <n> <files…>`
     and edit the printed links into the Screenshots section. Seeded dev data
     only — see [Screenshots in the PR body](#screenshots-in-the-pr-body).
-12. **Track CI, then track the review.** `gh pr checks <n> --watch` in the
+13. **Track CI, then track the review.** `gh pr checks <n> --watch` in the
     foreground. Then read CodeRabbit's *unresolved review threads* over
     GraphQL — `gh pr checks` does not reveal findings, and on a **stacked** PR
     CodeRabbit skips auto-review entirely (see
     [Reading a PR's review](#reading-a-prs-review-what-coderabbit-can-hide)). Fix each
     real finding as its own commit, push, re-watch, and repeat until CI is
     green and nothing unresolved is left unanswered.
-13. **Never merge, force-push, rewrite pushed history, delete branches, or
+14. **Never merge, force-push, rewrite pushed history, delete branches, or
     touch production.** Writes to the dev tenant during verification are fine;
     keep them recognisable.
 
@@ -112,7 +122,7 @@ CodeRabbit can also post no review at all and still show a green row. Check for 
 
 ## Screenshots in the PR body
 
-**Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [chrome-mcp.md](chrome-mcp.md)). GitHub has no image-upload API, so publish them to this repo's orphan **`screenshots` branch** with `bin/pr-screenshots <pr-number> tmp/visual/<task>/<file>.png …` and paste the markdown it prints into the PR body. It needs the PR's number, so open the PR first, then publish and edit the links in. Each image lands under `pr-<n>/` on that branch, which shares no history with `main`. The commit is built with git plumbing and a throwaway index, so the working tree and the current branch are never touched. The links are pinned to the upload's commit, so a later upload can't change an old PR. Because the repo is private, the images render only for people signed in to GitHub with read access. Never commit screenshots to `main` or a feature branch; `tmp/visual/` stays gitignored. **`bin/pr-screenshots` is pre-authorized** via `.claude/settings.json`, so use it by default without asking. The branch is visible to everyone with repo access and is never cleaned up, so publish seeded or demo data only; dev names are whimsified pseudonyms, so dev-tenant screenshots qualify. Never upload a screenshot showing real customer data, credentials or tokens, by this script or by dragging it into the PR editor, which uploads it to GitHub just the same. Redact it or recapture it on seeded data, and leave it out if you can't. Name files for what they show (`desktop-1400-feed-end.png`, not `05b.png`), since the file name, without its extension, becomes the alt text. Skip screenshots entirely for purely backend/internal changes with no visible surface.
+**Include screenshots in PR descriptions to demonstrate new or changed user-facing functionality, when appropriate.** Any PR that adds or changes a front-end surface should show the result in its description — a `## Screenshots` section with the new/changed UI (both viewports when the change is responsive; before/after when it changes existing UI). The mandatory Chrome MCP visual pass already captures these under `tmp/visual/<task>/` (see [chrome-mcp.md](chrome-mcp.md)). GitHub has no image-upload API, so publish them to this repo's orphan **`screenshots` branch** with `bin/pr-screenshots <pr-number> tmp/visual/<task>/<file>.png …` and paste the markdown it prints into the PR body. It needs the PR's number, so open the PR first, then publish and edit the links in. Each image lands under `pr-<n>/` on that branch, which shares no history with `main`. The commit is built with git plumbing and a throwaway index, so the working tree and the current branch are never touched. The links are pinned to the upload's commit, so a later upload can't change an old PR. Because the repo is private, the images render only for people signed in to GitHub with read access. Never commit these PR screenshots to `main` or a feature branch; `tmp/visual/` stays gitignored. The README's images under `docs/screenshots/` are the one exception: they are committed, and *Refresh the README screenshots your change makes stale* under [Ground rules](#ground-rules) says when to refresh them. **`bin/pr-screenshots` is pre-authorized** via `.claude/settings.json`, so use it by default without asking. The branch is visible to everyone with repo access and is never cleaned up, so publish seeded or demo data only; dev names are whimsified pseudonyms, so dev-tenant screenshots qualify. Never upload a screenshot showing real customer data, credentials or tokens, by this script or by dragging it into the PR editor, which uploads it to GitHub just the same. Redact it or recapture it on seeded data, and leave it out if you can't. Name files for what they show (`desktop-1400-feed-end.png`, not `05b.png`), since the file name, without its extension, becomes the alt text. Skip screenshots entirely for purely backend/internal changes with no visible surface.
 
 ## Long-running work: block, don't poll
 
