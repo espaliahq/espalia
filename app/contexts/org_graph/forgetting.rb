@@ -318,14 +318,15 @@ class OrgGraph::Forgetting
   end
 
   def scrub_feedback_contexts(person_id, name)
-    named = sql("params->>'feedback_author_id' = ? AND strpos(params->>'context', ?) > 0", person_id, FEEDBACK_CONTEXT)
+    named = tenant_events.where("params->>'feedback_author_id' = ? AND strpos(params->>'context', ?) > 0",
+                                person_id, FEEDBACK_CONTEXT)
     if name.present?
-      named += " OR " + sql("NOT jsonb_exists(params, 'feedback_author_id') AND starts_with(params->>'context', ?)",
-                            name + FEEDBACK_CONTEXT)
+      named = named.or(tenant_events.where("NOT jsonb_exists(params, 'feedback_author_id') AND starts_with(params->>'context', ?)",
+                                           name + FEEDBACK_CONTEXT))
     end
-    tenant_events.where(named).update_all(sql(<<~SQL.squish, Person::FORMER_MEMBER + FEEDBACK_CONTEXT, FEEDBACK_CONTEXT))
+    named.update_all(sql(<<~SQL.squish, Person::FORMER_MEMBER + FEEDBACK_CONTEXT, FEEDBACK_CONTEXT, FEEDBACK_CONTEXT))
       params = jsonb_set(params, '{context}',
-        to_jsonb(? || substr(params->>'context', strpos(params->>'context', ?) + #{FEEDBACK_CONTEXT.length})))
+        to_jsonb(? || substr(params->>'context', strpos(params->>'context', ?) + char_length(?))))
     SQL
   end
 
