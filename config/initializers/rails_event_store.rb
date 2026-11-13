@@ -155,6 +155,15 @@ Rails.configuration.to_prepare do
     to: AssessmentCycles::SyncHandlers::CalibrationRevisitSync.handled_events
   )
 
+  # RetiredUnitMemberships ends or moves each membership of a retired unit in
+  # the members' person streams. Dispatches OrgGraph person commands — same
+  # projection-rebuild hazard, MUST NOT be registered as a projection.
+  # Subscribed AFTER Members (the projection) so it reads current rows.
+  event_store.subscribe(
+    OrgGraph::SyncHandlers::RetiredUnitMemberships.new,
+    to: OrgGraph::SyncHandlers::RetiredUnitMemberships.handled_events
+  )
+
   # ── Async handlers (via SolidQueue) ──
   # Side-effect handlers (notifications). NOT projections — never register
   # these in Projections::Registry (replaying would re-send notifications).

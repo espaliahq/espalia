@@ -43,13 +43,22 @@ class OrgGraph::StructureCommandHandler
     @repository.with_structure { |structure| structure.move_unit(unit_id, parent_id, **options) }
   end
 
+  # Runs in one transaction with {OrgGraph::SyncHandlers::RetiredUnitMemberships},
+  # since RES commits the retirement before its subscribers run.
+  #
   # @see OrgGraph::StructureAggregate#retire_unit
   def retire_unit(unit_id, **options)
-    @repository.with_structure { |structure| structure.retire_unit(unit_id, **options) }
+    ActiveRecord::Base.transaction do
+      @repository.with_structure { |structure| structure.retire_unit(unit_id, **options) }
+    end
   end
 
+  # One transaction, as {#retire_unit}, when it retires the predecessors.
+  #
   # @see OrgGraph::StructureAggregate#record_succession
   def record_succession(succession_id, **options)
-    @repository.with_structure { |structure| structure.record_succession(succession_id, **options) }
+    ActiveRecord::Base.transaction do
+      @repository.with_structure { |structure| structure.record_succession(succession_id, **options) }
+    end
   end
 end
