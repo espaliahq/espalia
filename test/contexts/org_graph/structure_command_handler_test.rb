@@ -122,6 +122,12 @@ class OrgGraph::StructureCommandHandlerTest < ActiveSupport::TestCase
       end
     end
 
+    should "refuse an unknown provider" do
+      assert_raises(ArgumentError) do
+        create_unit(@department, "Engineering", level: "Department", provider: "workday", external_ref: "d-1")
+      end
+    end
+
     should "refuse a level outside the taxonomy" do
       assert_raises(RuntimeError) do
         as_tenant { @handler.create_unit(@team, "Payments", level_id: SecureRandom.uuid_v7, effective_on: @today) }

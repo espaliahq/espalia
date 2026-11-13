@@ -15,6 +15,7 @@ class OrgGraph::StructureAggregate
   include AggregateRoot
 
   ESPALIA = "espalia"
+  PROVIDERS = (HrisConfig::PROVIDERS + [ ESPALIA ]).freeze
 
   Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, keyword_init: true)
 
@@ -61,7 +62,7 @@ class OrgGraph::StructureAggregate
   # @param name [String]
   # @param level_id [String] a level in the current taxonomy
   # @param parent_id [String, nil] a live unit at a higher level; nil at the top
-  # @param provider [String] "espalia", or the HRIS that supplies the unit
+  # @param provider [String] one of {PROVIDERS}: "espalia", or the HRIS that supplies the unit
   # @param external_ref [String, nil] the provider's own reference; required for
   #   a mirrored unit, absent for one Espalia holds
   # @param effective_on [Date, String]
@@ -258,8 +259,8 @@ class OrgGraph::StructureAggregate
   end
 
   def require_provider(provider)
-    provider = provider.to_s.strip
-    raise ArgumentError, "Provider can't be blank" if provider.empty?
+    provider = provider.to_s
+    raise ArgumentError, "Unknown provider: #{provider}" unless PROVIDERS.include?(provider)
 
     provider
   end
