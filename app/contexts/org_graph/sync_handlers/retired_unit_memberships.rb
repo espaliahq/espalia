@@ -38,7 +38,7 @@ class OrgGraph::SyncHandlers::RetiredUnitMemberships
   def handle(data)
     successor_ids = Array(data[:successor_ids])
     successor_id = successor_ids.first if successor_ids.one?
-    commands = OrgGraph::CommandHandler.new
+    commands = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     repository = OrgGraph::Repository.new
 
     OrgMembership.where(unit_id: data[:unit_id]).to_a.each do |membership|

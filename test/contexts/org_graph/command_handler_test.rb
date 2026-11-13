@@ -9,9 +9,9 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
-    @handler = OrgGraph::CommandHandler.new
+    @handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     @person_id = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-1").id
-    OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
+    OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
   end
 
   teardown do
@@ -200,7 +200,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
   context "memberships" do
     setup do
-      structure = OrgGraph::StructureCommandHandler.new
+      structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       level = SecureRandom.uuid_v7
       @squad = SecureRandom.uuid_v7
       @retired = SecureRandom.uuid_v7
@@ -253,7 +253,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
     should "refuse a unit that does not exist or is retired" do
       @handler.set_membership(@person_id, @retired, **HELD_BY_ESPALIA)
-      OrgGraph::StructureCommandHandler.new.retire_unit(@retired, effective_on: "2026-06-30")
+      OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM).retire_unit(@retired, effective_on: "2026-06-30")
 
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, SecureRandom.uuid_v7, **HELD_BY_ESPALIA) }
       assert_raises(RuntimeError, match: /Unit not found/) { @handler.set_membership(@person_id, "squad", **HELD_BY_ESPALIA) }
@@ -270,7 +270,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
 
   context "refusing another provider's facts" do
     setup do
-      @structure = OrgGraph::StructureCommandHandler.new
+      @structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
       @handler.record_person(@person_id, **PROVENANCE, employment_status: "employed", title: "Engineer")
     end
 

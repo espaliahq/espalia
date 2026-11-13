@@ -31,10 +31,11 @@ class OrgGraphPolicy < ApplicationPolicy
 
   # Rename, retire, or name and remove owners.
   #
-  # @param unit [OrgUnit]
+  # @param unit [OrgUnit, nil] nil for a unit the Org Graph doesn't hold,
+  #   which only an admin or an editor may name
   # @return [Boolean]
   def edit_unit?(unit)
-    edit_structure? || (tenant_member? && unit.owned_by?(person))
+    edit_structure? || (tenant_member? && unit.present? && unit.owned_by?(person))
   end
 
   # @param parent [OrgUnit, nil] nil for a unit at the root
@@ -64,7 +65,7 @@ class OrgGraphPolicy < ApplicationPolicy
   # @param unit [OrgUnit]
   # @return [Boolean]
   def edit_membership?(member, unit)
-    manages?(member) || edit_unit?(unit)
+    edit_structure? || (member.present? && (manages?(member) || edit_unit?(unit)))
   end
 
   # @param member [Person]
@@ -72,12 +73,12 @@ class OrgGraphPolicy < ApplicationPolicy
   # @param to_unit [OrgUnit]
   # @return [Boolean]
   def move_membership?(member, from_unit, to_unit)
-    manages?(member) || (edit_unit?(from_unit) && edit_unit?(to_unit))
+    edit_structure? || (member.present? && (manages?(member) || (edit_unit?(from_unit) && edit_unit?(to_unit))))
   end
 
   private
 
   def manages?(member)
-    tenant_member? && person&.status == "active" && member.managed_by?(person)
+    tenant_member? && person&.status == "active" && member.present? && member.managed_by?(person)
   end
 end

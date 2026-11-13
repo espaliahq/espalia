@@ -55,7 +55,8 @@ The events are immutable, and a person's first `PersonRecorded` is their startin
 tenant = Tenant.find("<tenant id>")
 ActsAsTenant.with_tenant(tenant) do
   person = Person.find("<person id>")
-  OrgGraph::CommandHandler.new.change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
+  OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    .change_title(person.id, "Designer", provider: "hibob", effective_on: Date.current)
 end
 ```
 

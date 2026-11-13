@@ -8,7 +8,7 @@ class OrgGraph::Projections::StructureTest < ActiveSupport::TestCase
 
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::StructureCommandHandler.new
+    @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     @department_level = SecureRandom.uuid_v7
     @team_level = SecureRandom.uuid_v7
     @engineering = SecureRandom.uuid_v7

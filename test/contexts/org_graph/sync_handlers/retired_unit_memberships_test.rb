@@ -5,8 +5,8 @@ require "test_helper"
 class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
-    @structure = OrgGraph::StructureCommandHandler.new
-    @people = OrgGraph::CommandHandler.new
+    @structure = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+    @people = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     @department_level = SecureRandom.uuid_v7
     @team_level = SecureRandom.uuid_v7
     @engineering, @payments, @billing, @ledger = Array.new(4) { SecureRandom.uuid_v7 }
@@ -56,7 +56,7 @@ class OrgGraph::SyncHandlers::RetiredUnitMembershipsTest < ActiveSupport::TestCa
   end
 
   should "roll the retirement back with every membership change when one member's change fails" do
-    commands = OrgGraph::CommandHandler.new
+    commands = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     calls = 0
     failing_second = commands.method(:end_membership)
     commands.define_singleton_method(:end_membership) do |*args, **options|

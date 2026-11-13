@@ -5,7 +5,7 @@ require "test_helper"
 class OrgGraphPolicyTest < ActiveSupport::TestCase
   setup do
     @tenant = create(:tenant)
-    @handler = OrgGraph::StructureCommandHandler.new
+    @handler = OrgGraph::StructureCommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
     department, team, squad = Array.new(3) { SecureRandom.uuid_v7 }
     @engineering_id, @payments_id, @billing_id, @product_id = Array.new(4) { SecureRandom.uuid_v7 }
 
@@ -108,6 +108,30 @@ class OrgGraphPolicyTest < ActiveSupport::TestCase
       as_tenant { @other.update!(status: "inactive") }
 
       assert_not policy_for(context_for(@other)).edit_unit?(unit(@billing_id))
+    end
+  end
+
+  context "with a unit or person the Org Graph doesn't hold" do
+    should "leave it to an admin or an editor" do
+      owner = policy_for(context_for(@other))
+      as_tenant { @handler.add_unit_owner(@engineering_id, @other.id, effective_on: "2026-01-01") }
+
+      assert_not owner.edit_unit?(nil)
+      assert_not owner.create_unit?(nil)
+      assert_not policy_for(context_for(@lead)).edit_membership?(nil, nil)
+      assert policy_for(context_for(@lead, org_graph_editor: true)).edit_membership?(nil, nil)
+    end
+
+    should "refuse an owner a person the graph doesn't hold, even in a unit they own" do
+      as_tenant { @handler.add_unit_owner(@payments_id, @other.id, effective_on: "2026-01-01") }
+      owner = policy_for(context_for(@other))
+
+      assert_not owner.edit_membership?(nil, unit(@payments_id))
+      assert_not owner.move_membership?(nil, unit(@payments_id), unit(@billing_id))
+    end
+
+    should "still let the manager chain end a membership of a unit that is gone" do
+      assert policy_for(context_for(@lead)).edit_membership?(@report, nil)
     end
   end
 
