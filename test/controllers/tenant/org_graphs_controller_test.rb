@@ -44,6 +44,19 @@ class Tenant::OrgGraphsControllerTest < ActionDispatch::IntegrationTest
       assert_select "a[aria-current='true']", text: /Checkout/
     end
 
+    should "count only the direct members on the opened unit's own card" do
+      org = build_org_graph(@tenant)
+      ActsAsTenant.with_tenant(@tenant) do
+        OrgGraph::CommandHandler.new.set_membership(org[:ezra].id, org[:engineering], **OrgGraphFixture::PROVENANCE)
+      end
+
+      get tenant_org_graph_path
+
+      page = Nokogiri::HTML5(response.body)
+      assert_includes page.at_css("#unit-#{org[:engineering]}").text, "1 directly"
+      assert_includes page.at_css("#unit-#{org[:checkout]}").text, "3 people"
+    end
+
     should "say so when the tenant has no units" do
       get tenant_org_graph_path
 

@@ -143,12 +143,22 @@ class Views::Tenant::OrgGraph::ShowView < Views::Base
       card.body do
         div(class: "flex items-baseline justify-between gap-3 pt-3") do
           h4(class: "font-semibold text-default") { unit.name }
-          span(class: "shrink-0 text-sm text-muted tabular-nums") { people(@overview.headcount(unit)) }
+          span(class: "shrink-0 text-sm text-muted tabular-nums") { card_count(unit) }
         end
         p(class: "text-xs text-muted") { @overview.level_of(unit)&.name }
         members_list(unit)
         sub_units_line(unit)
       end
+    end
+  end
+
+  # The opened unit's own card sits beside its sub-units' cards, so it counts
+  # only the people directly in it.
+  def card_count(unit)
+    if unit == @overview.selected && @overview.children_of(unit).any?
+      "#{@overview.members_of(unit).size} directly"
+    else
+      people(@overview.headcount(unit))
     end
   end
 
