@@ -33,7 +33,8 @@ History that was never recorded cannot be rebuilt later.
 ## Dependencies
 
 An arrow runs from a story to a story that needs it. A dependency another one already
-implies is not drawn: 3.1 needs 1.1, and the path to it runs through 2.3.
+implies is not drawn: 3.1 needs 1.1, and the path to it runs through 2.3. 9.1 waits on a
+gate, not a story: all of E1, stable in production.
 
 ```mermaid
 flowchart LR
@@ -99,8 +100,9 @@ flowchart LR
     s92[9.2 Drop direct writes]
   end
 
-  s11 --> s12 & s14 & s23
+  s11 --> s12 & s23
   s12 --> s13 & s15 & s16
+  s13 --> s14
   s21 --> s22 & s23 & s24 & s61
   s16 --> s25 & s81
   s23 --> s25 & s31 & s42 & s43 & s51 & s67
@@ -123,12 +125,16 @@ flowchart LR
   s71 --> s72 & s73
   s81 --> s82
   s82 & s14 --> s83
-  s13 --> s91
+  E1 --> gate{{E1 stable in production}} --> s91
   s91 --> s92
 ```
 
 The longest chain is six stories and ends at the settings screen (6.9). The HRIS field
 work sets the length of the plan.
+
+1.4 follows 1.3 on purpose. Until the first sync has recorded everyone, the streams
+cannot rebuild the `people` columns, and a projection that took over sooner would blank
+them.
 
 ## Stories
 
@@ -139,7 +145,7 @@ work sets the length of the plan.
 | 1.1 | Person stream and its events, each with provider and effective date | none |
 | 1.2 | Sync compares each row with the current projection and writes only differences | 1.1 |
 | 1.3 | First sync writes `PersonRecorded` for everyone | 1.2 |
-| 1.4 | Non-identifier `people` columns become a projection of the stream | 1.1 |
+| 1.4 | Non-identifier `people` columns become a projection of the stream, once every person has one | 1.3 |
 | 1.5 | Sync brings in site and country, FTE and employment type, and start date | 1.2 |
 | 1.6 | A person missing from the HRIS gets `PersonLeft` | 1.2 |
 
@@ -193,8 +199,8 @@ work sets the length of the plan.
 | 6.4 | Sync requests the fields the tenant's mapping names | 6.1 |
 | 6.5 | Mapper keeps the value id beside the display text | 6.0 |
 | 6.6 | Field preview: units, people, blanks | 6.2, 6.4 |
-| 6.7 | Mirror a level from a field: units, renames, membership, parent from shared people | 2.3, 6.4, 6.5 |
-| 6.8 | Handover: compare with what Espalia holds and list disagreements | 6.7 |
+| 6.7 | Mirror a level Espalia does not yet hold from a field: units, renames, membership, parent from shared people | 2.3, 6.4, 6.5 |
+| 6.8 | Handover of a level Espalia holds: compare, list disagreements, then switch. No level is handed over before this ships | 6.7 |
 | 6.9 | Settings screen | 6.3, 6.6, 6.8 |
 
 ### E7 Applying a plan
@@ -210,7 +216,7 @@ work sets the length of the plan.
 | # | Story | Needs |
 |---|---|---|
 | 8.1 | Retention period per tenant, default seven years | 1.6 |
-| 8.2 | Erase identifiers and write `PersonForgotten`, on schedule or on request | 8.1 |
+| 8.2 | Erase identifiers and write `PersonForgotten`, on schedule or on request. A later sync never restores them | 8.1 |
 | 8.3 | Projections and screens show a former member | 8.2, 1.4 |
 
 ### E9 One write path
