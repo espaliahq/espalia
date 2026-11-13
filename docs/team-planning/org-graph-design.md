@@ -199,6 +199,12 @@ the unit, because a cross-functional team has no single line to derive it from. 
 unit's last owner leaves, the unit is flagged and inherits its parent's owners until
 someone is named.
 
+`UnitOwnerAdded` and `UnitOwnerRemoved` live in the structure stream, and any live unit
+takes owners, one an HRIS supplies included. An owner leaves when they are removed, or
+when they leave the company and their `people` row goes inactive. That is read when the
+owners are asked for, so leaving writes no ownership event. A unit nobody up its chain
+owns is flagged too (`OrgUnit#needs_owner?`).
+
 ### What happens to `people`
 
 The identifier columns stay as they are: mutable, written by the sync, and the only place

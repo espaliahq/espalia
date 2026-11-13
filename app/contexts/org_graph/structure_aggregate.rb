@@ -24,7 +24,7 @@ class OrgGraph::StructureAggregate
   # The kinds of person fact a provider supplies, one per family of person event.
   FACTS = %w[employment_status title level manager cost_centre site employment].freeze
 
-  Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, keyword_init: true)
+  Unit = Struct.new(:unit_id, :name, :parent_id, :level_id, :provider, :external_ref, :retired, :owner_ids, keyword_init: true)
 
   def initialize
     @levels = []
@@ -311,6 +311,48 @@ class OrgGraph::StructureAggregate
     end
   end
 
+  # Names a person as one of a unit's owners. A unit can have several, none
+  # primary. Ownership is Espalia's to state, so a unit an HRIS supplies takes
+  # owners too. An existing owner writes nothing.
+  #
+  # @param unit_id [String] a live unit
+  # @param person_id [String] UUID of the owner
+  # @param effective_on [Date, String]
+  # @param added_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil] the plan change it was applied from
+  # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
+  # @raise [RuntimeError] if the unit is unknown or retired
+  def add_unit_owner(unit_id, person_id, effective_on:, added_by_id: nil, plan_change_id: nil)
+    unit = live_unit!(unit_id)
+    person_id = require_id(person_id, "Person id")
+    return if unit.owner_ids.include?(person_id)
+
+    apply(OrgGraph::Events::UnitOwnerAdded.new(data: {
+      unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
+      added_by_id: added_by_id, plan_change_id: plan_change_id
+    }))
+  end
+
+  # Removes one of a unit's owners. A person who isn't one writes nothing.
+  #
+  # @param unit_id [String] a live unit
+  # @param person_id [String]
+  # @param effective_on [Date, String]
+  # @param removed_by_id [String, nil] person_id of the actor
+  # @param plan_change_id [String, nil] the plan change it was applied from
+  # @raise [ArgumentError] if an id isn't a UUID or the date is invalid
+  # @raise [RuntimeError] if the unit is unknown or retired
+  def remove_unit_owner(unit_id, person_id, effective_on:, removed_by_id: nil, plan_change_id: nil)
+    unit = live_unit!(unit_id)
+    person_id = require_id(person_id, "Person id")
+    return unless unit.owner_ids.include?(person_id)
+
+    apply(OrgGraph::Events::UnitOwnerRemoved.new(data: {
+      unit_id: unit.unit_id, person_id: person_id, effective_on: iso_date(effective_on),
+      removed_by_id: removed_by_id, plan_change_id: plan_change_id
+    }))
+  end
+
   on OrgGraph::Events::TaxonomyDefined do |event|
     @levels = event.data[:levels].map { |level| level.to_h.symbolize_keys.slice(:level_id, :name) }
     @level_providers = @level_providers.slice(*level_ids(@levels))
@@ -328,8 +370,16 @@ class OrgGraph::StructureAggregate
     data = event.data
     @units[data[:unit_id]] = Unit.new(
       unit_id: data[:unit_id], name: data[:name], parent_id: data[:parent_id], level_id: data[:level_id],
-      provider: data[:provider], external_ref: data[:external_ref], retired: false
+      provider: data[:provider], external_ref: data[:external_ref], retired: false, owner_ids: Set.new
     )
+  end
+
+  on OrgGraph::Events::UnitOwnerAdded do |event|
+    @units.fetch(event.data[:unit_id]).owner_ids << event.data[:person_id]
+  end
+
+  on OrgGraph::Events::UnitOwnerRemoved do |event|
+    @units.fetch(event.data[:unit_id]).owner_ids.delete(event.data[:person_id])
   end
 
   on OrgGraph::Events::UnitRenamed do |event|
@@ -350,10 +400,16 @@ class OrgGraph::StructureAggregate
 
   private
 
-  def editable_unit!(unit_id, provider)
+  def live_unit!(unit_id)
     unit = @units[unit_id.to_s.downcase]
     raise "Unit not found" unless unit
     raise "Unit is retired" if unit.retired
+
+    unit
+  end
+
+  def editable_unit!(unit_id, provider)
+    unit = live_unit!(unit_id)
     raise "#{unit.provider} supplies this unit; change it there" unless require_provider(provider) == unit.provider
 
     unit

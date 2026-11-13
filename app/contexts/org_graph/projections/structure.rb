@@ -3,8 +3,8 @@
 # Synchronous projection of a tenant's current structure: its taxonomy levels,
 # its unit tree, and who provides each level and each kind of person fact.
 #
-# Writes `org_taxonomy_levels`, `org_units`, `org_unit_successions` and
-# `org_fact_providers`, and nothing else writes them. The level and unit
+# Writes `org_taxonomy_levels`, `org_units`, `org_unit_successions`,
+# `org_unit_owners` and `org_fact_providers`, and nothing else writes them. The level and unit
 # primary keys are event-carried ids, so references survive a rebuild.
 # A level's effective_on is the date its name or place last changed.
 #
@@ -26,7 +26,9 @@ class OrgGraph::Projections::Structure
       OrgGraph::Events::UnitRetired,
       OrgGraph::Events::UnitSucceeded,
       OrgGraph::Events::LevelProviderSet,
-      OrgGraph::Events::FactProviderSet
+      OrgGraph::Events::FactProviderSet,
+      OrgGraph::Events::UnitOwnerAdded,
+      OrgGraph::Events::UnitOwnerRemoved
     ]
   end
 
@@ -36,6 +38,7 @@ class OrgGraph::Projections::Structure
   def self.reset!(tenant:)
     ActsAsTenant.with_tenant(tenant) do
       OrgUnitSuccession.where(tenant_id: tenant.id).delete_all
+      OrgUnitOwner.where(tenant_id: tenant.id).delete_all
       OrgUnit.where(tenant_id: tenant.id).delete_all
       OrgTaxonomyLevel.where(tenant_id: tenant.id).delete_all
       OrgFactProvider.where(tenant_id: tenant.id).delete_all
@@ -59,6 +62,8 @@ class OrgGraph::Projections::Structure
     when OrgGraph::Events::UnitSucceeded then handle_unit_succeeded(event.data)
     when OrgGraph::Events::LevelProviderSet then handle_level_provider_set(event.data)
     when OrgGraph::Events::FactProviderSet then handle_fact_provider_set(event.data)
+    when OrgGraph::Events::UnitOwnerAdded then handle_unit_owner_added(event.data)
+    when OrgGraph::Events::UnitOwnerRemoved then handle_unit_owner_removed(event.data)
     end
   end
 
@@ -108,6 +113,18 @@ class OrgGraph::Projections::Structure
   def handle_fact_provider_set(data)
     OrgFactProvider.find_or_initialize_by(fact: data[:fact])
                    .update!(provider: data[:provider], effective_on: data[:effective_on])
+  end
+
+  def handle_unit_owner_added(data)
+    OrgUnitOwner.find_or_create_by!(unit_id: data[:unit_id], person_id: data[:person_id]) do |owner|
+      owner.owner_since = data[:effective_on]
+    end
+    update_unit(data, owners_lost_on: nil)
+  end
+
+  def handle_unit_owner_removed(data)
+    OrgUnitOwner.where(unit_id: data[:unit_id], person_id: data[:person_id]).delete_all
+    update_unit(data, owners_lost_on: data[:effective_on]) unless OrgUnitOwner.exists?(unit_id: data[:unit_id])
   end
 
   def update_unit(data, **attributes)
