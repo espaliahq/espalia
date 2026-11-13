@@ -246,6 +246,11 @@ class Hris::Hibob::ResponseMapperTest < ActiveSupport::TestCase
           Hris::Hibob::ResponseMapper.new(employee, mapped_fields: @mapped).org_graph_facts)
       end
 
+      should "read a root field, which HiBob returns at the top level" do
+        assert_equal({ cost_centre: "cc-17" },
+          Hris::Hibob::ResponseMapper.new({ "costCentre" => "cc-17" }, mapped_fields: { cost_centre: "root.costCentre" }).org_graph_facts)
+      end
+
       should "read a bare custom-column id and the flat payload shape" do
         employee = { "/work/customColumns/column_cc" => { "value" => "Platform" } }
 

@@ -158,7 +158,7 @@ class Hris::Hibob::ResponseMapper
 
   # @param path [Array<String>]
   def supplied?(path)
-    parent = employee.dig(*path[0..-2])
+    parent = parent_of(path)
     (parent.is_a?(Hash) && parent.key?(path.last)) || employee.key?(flat_key(path))
   end
 
@@ -166,7 +166,7 @@ class Hris::Hibob::ResponseMapper
   #
   # @param path [Array<String>]
   def value(path)
-    parent = employee.dig(*path[0..-2])
+    parent = parent_of(path)
     return parent[path.last] if parent.is_a?(Hash) && parent.key?(path.last)
 
     flat = employee[flat_key(path)]
@@ -208,6 +208,9 @@ class Hris::Hibob::ResponseMapper
   end
 
   def flat_key(path) = "/#{path.join('/')}"
+
+  # A root field (`root.id`) has no parent but the employee.
+  def parent_of(path) = path.one? ? employee : employee.dig(*path[0..-2])
 
   # @return [String, nil]
   def build_name
