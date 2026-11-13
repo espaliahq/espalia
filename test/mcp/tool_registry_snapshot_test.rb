@@ -2518,6 +2518,41 @@ class Mcp::ToolRegistrySnapshotTest < ActiveSupport::TestCase
         }
       },
       {
+        "name" => "org_graph_changes_between",
+        "description" => "What changed in the Org Graph between two UTC dates: joiners, leavers, person " \
+          "fact changes (title, level, manager, cost centre, site, employment), memberships " \
+          "started, ended or changed, moves between units, and units created, renamed, moved, " \
+          "retired, succeeded or re-owned. by \"effective\" (the default) lists what took " \
+          "effect after from, up to and including to; known_on reads what the Org Graph knew " \
+          "at the end of that date. by \"learned\" lists what the Org Graph learned in that " \
+          "window whatever date it took effect, so backdated corrections show, and a change it " \
+          "no longer believes comes back withdrawn. A change's effective_on is the first day " \
+          "it holds, so a leaving dated 30 April shows on 1 May. Defaults to a count per kind; " \
+          "mode \"full\" lists every change. People are named by id only.",
+        "inputSchema" => {
+          "type" => "object",
+          "properties" => {
+            "from" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                        "description" => "UTC date, YYYY-MM-DD. The day before the window opens." },
+            "to" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                      "description" => "UTC date, YYYY-MM-DD. The window's last day." },
+            "by" => { "type" => "string", "enum" => %w[effective learned] },
+            "known_on" => { "type" => "string", "minLength" => 1, "pattern" => "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                            "description" => "UTC date, YYYY-MM-DD. By effective date only; omit for what is known now." },
+            "mode" => { "type" => "string", "enum" => %w[summary full] }
+          },
+          "required" => %w[from to],
+          "additionalProperties" => false,
+          "if" => { "properties" => { "by" => { "const" => "learned" } }, "required" => %w[by] },
+          "then" => { "not" => { "required" => %w[known_on] } }
+        },
+        "annotations" => {
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "idempotentHint" => true
+        }
+      },
+      {
         "name" => "reporting_capability_attainment",
         "description" => "Aggregate capability attainment for an assessment cycle across the caller's " \
           "org subtree (admins see the whole cycle): per role and role family, the share " \
