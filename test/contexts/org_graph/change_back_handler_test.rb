@@ -249,6 +249,22 @@ class OrgGraph::ChangeBackHandlerTest < ActiveSupport::TestCase
       assert membership(@ada, @platform)
     end
 
+    should "refuse a group still being written, rather than reverse a part it holds no lock for" do
+      request = OrgGraph::CommandHandler.new(actor: SYSTEM, cause_id: "request-1")
+      as_tenant { request.move_membership(@ada.id, @payments, @platform, effective_on: "2026-02-01") }
+      repository = OrgGraph::Repository.new
+      grace, payments, platform = @grace, @payments, @platform
+      repository.define_singleton_method(:lock_person) do |person_id|
+        super(person_id)
+        request.move_membership(grace.id, payments, platform, effective_on: "2026-02-01") if person_id != grace.id
+      end
+
+      assert_raises(RuntimeError, match: "still being written") do
+        as_tenant { OrgGraph::ChangeBackHandler.new(actor: SYSTEM, repository:).change_back_group("request-1") }
+      end
+      assert membership(@ada, @platform)
+    end
+
     should "lock the structure before any person, and the people in a fixed order" do
       as_tenant do
         OrgGraph::StructureCommandHandler.new(actor: SYSTEM, cause_id: "request-1")

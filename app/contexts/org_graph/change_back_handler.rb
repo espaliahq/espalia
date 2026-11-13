@@ -50,8 +50,9 @@ class OrgGraph::ChangeBackHandler
 
   def reverse(effective_on:, apart_from: nil, inverse_cause: nil, &rows)
     ActiveRecord::Base.transaction do
-      lock(rows.call)
+      held = lock(rows.call)
       entries = rows.call.to_a
+      raise "This change is still being written; try again in a moment" unless streams(entries) <= held
       ensure_reversible!(entries, apart_from:)
       build_handlers(cause_id: inverse_cause)
       entries.uniq(&:event_id).each do |entry|
@@ -69,11 +70,16 @@ class OrgGraph::ChangeBackHandler
 
   # Takes the stream locks every ordinary write to these facts takes, the
   # structure's before any person's, so no change can land between the checks
-  # and the inverse. The caller reads the entries afresh once they are held.
+  # and the inverses. The caller reads the entries afresh once they are held.
   def lock(entries)
-    memberships, others = entries.partition { |entry| entry.subject.to_s.start_with?("membership:") }
-    @repository.lock_structure if others.any?
-    memberships.map(&:person_id).uniq.sort.each { |person_id| @repository.lock_person(person_id) }
+    structure, person_ids = streams(entries).partition { |stream| stream == :structure }
+    @repository.lock_structure if structure.any?
+    person_ids.sort.each { |person_id| @repository.lock_person(person_id) }
+    streams(entries)
+  end
+
+  def streams(entries)
+    entries.to_set { |entry| entry.subject.to_s.start_with?("membership:") ? entry.person_id : :structure }
   end
 
   # Rolls back an inverse the aggregate turned into something else, or skipped
