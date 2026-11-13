@@ -80,7 +80,7 @@ class Assessments::RequestCandidates
   # The assessee IS selectable. Already-pending people are NOT excluded here —
   # they're flagged instead.
   def selectable
-    Person.active.where.not(id: requester_person_id)
+    Person.active.where(forgotten_at: nil).where.not(id: requester_person_id)
   end
 
   def candidate(person, relation:)
