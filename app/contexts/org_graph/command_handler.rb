@@ -39,8 +39,9 @@ class OrgGraph::CommandHandler
 
   # What a provider's sync calls for each person it returns, in one load of
   # their stream: the first time, it records them with the facts as they
-  # stand; after that, it moves their status if it differs, then supplies or
-  # corrects their start date and applies each fact that differs. A leaver's
+  # stand; after that, it supplies or corrects their start date, moves their
+  # status if it differs, then applies each fact that differs. A returner's
+  # start date waits until they are back. A leaver's
   # facts are not compared, even while a rehire waits for their start date.
   # A leaving date before the start date contradicts it and is dropped.
   #
@@ -58,9 +59,11 @@ class OrgGraph::CommandHandler
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
       if person.recorded?
+        was_left = person.left?
+        person.change_start_date(started_on, provider:) unless was_left
         person.match_status(employment_status, provider:, effective_on:, started_on:, left_on:)
         unless person.left?
-          person.change_start_date(started_on, provider:)
+          person.change_start_date(started_on, provider:) if was_left
           person.apply_facts(provider:, effective_on:, **facts)
         end
       else

@@ -137,6 +137,23 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
         started_on: "2026-12-01", title: "Lead")
     end
 
+    should "check a leaving against the start date the same sync corrects" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", started_on: "2026-11-10")
+
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", started_on: "2026-11-01", left_on: "2026-11-05")
+
+      assert_equal [ [ OrgGraph::Events::StartDateChanged, "2026-11-01" ], [ OrgGraph::Events::PersonLeft, "2026-11-05" ] ],
+        stream_events.drop(1).map { |e| [ e.class, e.data[:effective_on] ] }
+    end
+
+    should "keep a hire pending until their recorded start when the provider sends none, then join them on it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "pending", started_on: "2026-11-20")
+
+      assert_equal 0, @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-05", employment_status: "employed")
+      @handler.sync_person(@person_id, provider: "hibob", effective_on: "2026-11-21", employment_status: "employed")
+      assert_equal [ OrgGraph::Events::PersonJoined, "2026-11-20" ], [ stream_events.last.class, stream_events.last.data[:effective_on] ]
+    end
+
     should "refuse half a pair on the first sync as on every later one" do
       assert_raises(ArgumentError) do
         @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed", site: "Sydney")

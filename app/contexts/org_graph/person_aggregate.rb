@@ -221,7 +221,8 @@ class OrgGraph::PersonAggregate
   # a returner's provider may still hold the first start. A leaver whose
   # termination date arrives or changes gets a PersonLeft on that date. A
   # reported `pending` never moves someone back from employed, nor a leaver
-  # back before a rehire starts.
+  # back before a rehire starts, nor joins a hire whose recorded start is
+  # still ahead when the provider sends none.
   #
   # @param employment_status [String] one of {EMPLOYMENT_STATUSES}
   # @param provider [String] one of {PROVIDERS}
@@ -239,7 +240,9 @@ class OrgGraph::PersonAggregate
     when "left" then leave(provider:, effective_on: left_on.presence || effective_on)
     when "employed"
       if @employment_status == "pending"
-        join(provider:, effective_on: started_on.presence || effective_on)
+        return if started_on.blank? && @started_on && @started_on > normalize_date(effective_on, :effective_on)
+
+        join(provider:, effective_on: started_on.presence || @started_on || effective_on)
       else
         return_to_work(provider:, effective_on: return_date(started_on) || effective_on)
       end
