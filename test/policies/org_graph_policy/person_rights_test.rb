@@ -47,6 +47,12 @@ class OrgGraphPolicy::PersonRightsTest < ActiveSupport::TestCase
       assert rights.membership?(held[@org[:platform]])
     end
 
+    should "not add someone who has left to a team" do
+      rights, = rights_for(@org[:faye], viewer: @viewer, role: :admin)
+
+      assert_not rights.join?
+    end
+
     should "change nothing for a forgotten person" do
       as_tenant { @org[:brook].update_columns(name: nil, email: nil, forgotten_at: Time.current) }
       rights, held = rights_for(@org[:brook], viewer: @viewer, role: :admin)

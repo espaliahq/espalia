@@ -4,7 +4,8 @@
 # {OrgGraphPolicy} so the view only reads flags. The commands check again.
 #
 # A membership an HRIS supplies stays with the HRIS; one added by hand can be
-# moved and ended here. A forgotten person has no memberships left to change.
+# moved and ended here. Only someone active can join a team, since the Units
+# view shows active people only. A forgotten person has nothing left to change.
 class OrgGraphPolicy::PersonRights
   # @param policy [OrgGraphPolicy]
   # @param person [Person]
@@ -34,7 +35,7 @@ class OrgGraphPolicy::PersonRights
 
   # @return [Array<OrgUnit>] the units the viewer may add the person to, in tree order
   def join_choices
-    return [] if @person.forgotten?
+    return [] if @person.forgotten? || @person.status != "active"
 
     @join_choices ||= open_units.select { |unit| @policy.edit_membership?(@person, unit) }
   end
@@ -45,7 +46,9 @@ class OrgGraphPolicy::PersonRights
   private
 
   def open_units
-    held = @memberships.map(&:unit_id)
-    @overview.in_tree_order.reject { |unit| held.include?(unit.id) }
+    @open_units ||= begin
+      held = @memberships.to_set(&:unit_id)
+      @overview.in_tree_order.reject { |unit| held.include?(unit.id) }
+    end
   end
 end
