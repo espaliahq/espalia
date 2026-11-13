@@ -236,6 +236,23 @@ class OrgGraph::ForgettingTest < ActiveSupport::TestCase
   end
 
   context "notifications written from now on" do
+    should "drop the names of people already forgotten, as one built before the erasure lands after it" do
+      namesake = create(:person, tenant: @tenant)
+      name = @leaver.name
+      forgetting.forget_due(on: TODAY)
+
+      late = notify(author_id: @leaver.id, author_name: name, assessee_id: namesake.id, assessee_name: name,
+                    skipped_ids: [ @leaver.id, namesake.id ], skipped_names: [ name, name ],
+                    feedback_author_id: @leaver.id, context: "#{name}'s feedback · Delivery · L2")
+
+      params = late.reload.params
+      assert_nil params[:author_name]
+      assert_equal name, params[:assessee_name]
+      assert_equal [ namesake.id ], params[:skipped_ids]
+      assert_equal [ name ], params[:skipped_names]
+      assert_equal "Former member's feedback · Delivery · L2", params[:context]
+    end
+
     should "carry the person's id beside every name they copy" do
       pairs = OrgGraph::Forgetting::NAME_PARAMS.merge(OrgGraph::Forgetting::NAME_LIST_PARAMS)
       writers = Rails.root.glob("app/{contexts,jobs}/**/*.rb").select { |path| path.read.include?("Notifier") }

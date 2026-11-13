@@ -70,4 +70,6 @@ Every notification written from now on carries the person id beside each name it
 
 A comment on someone's feedback carries a context line that opens "<name>'s feedback". It carries `feedback_author_id` beside it, and forgetting that person rewrites the opening to "Former member's feedback". An older one without the id is matched on the name, as above.
 
+A notification built just before an erasure, from a name read before it, can be written just after it. So every notification checks the ids it carries as it is written, waiting for any erasure in its tenant to commit first, and drops the names of anyone forgotten.
+
 A new notifier that copies a person's name must put the id beside it and add the pair to `OrgGraph::Forgetting::NAME_PARAMS`. A list of names beside a list of ids, such as `skipped_names` and `skipped_ids`, goes in `NAME_LIST_PARAMS` instead.

@@ -67,6 +67,47 @@ class OrgGraph::Forgetting
   # @raise [KeyMissing]
   def self.key! = key || raise(KeyMissing)
 
+  # Drops the names of forgotten people from a notification about to be
+  # written. Waits on an erasure in flight in its tenant, which holds the
+  # lock exclusively until it commits, so a notification built from a name
+  # read before the erasure can't land after its scrub with the name.
+  #
+  # @param params [Hash] the notification's params, changed in place
+  # @return [Hash]
+  def self.without_forgotten_names(params)
+    tenant = params[:tenant_id].presence && Tenant.find_by(id: params[:tenant_id])
+    ids = named_ids(params)
+    return params if tenant.nil? || ids.empty?
+
+    Person.connection.select_value(
+      Person.sanitize_sql_array([ "SELECT 1 FROM pg_advisory_xact_lock_shared(?)", OrgGraph::PeopleCutover.lock_key(tenant) ])
+    )
+    forgotten = Person.unscoped.where(tenant_id: tenant.id, id: ids).where.not(forgotten_at: nil).pluck(:id)
+    forgotten.empty? ? params : drop_names(params, forgotten.to_set)
+  end
+
+  def self.named_ids(params)
+    (NAME_PARAMS.values.map { params[it.to_sym] } +
+      NAME_LIST_PARAMS.values.flat_map { Array(params[it.to_sym]) } +
+      [ params[:feedback_author_id] ]).compact_blank.map(&:to_s).uniq
+  end
+
+  def self.drop_names(params, forgotten)
+    NAME_PARAMS.each { |name_key, id_key| params[name_key.to_sym] = nil if forgotten.include?(params[id_key.to_sym].to_s) }
+    NAME_LIST_PARAMS.each do |names_key, ids_key|
+      next unless params[ids_key.to_sym].is_a?(Array)
+
+      kept = params[ids_key.to_sym].each_with_index.reject { |id, _| forgotten.include?(id.to_s) }
+      params[names_key.to_sym] = kept.map { |_, at| Array(params[names_key.to_sym])[at] } if params.key?(names_key.to_sym)
+      params[ids_key.to_sym] = kept.map(&:first)
+    end
+    if forgotten.include?(params[:feedback_author_id].to_s) && params[:context].to_s.include?(FEEDBACK_CONTEXT)
+      params[:context] = Person::FORMER_MEMBER + params[:context].to_s.partition(FEEDBACK_CONTEXT).drop(1).join
+    end
+    params
+  end
+  private_class_method :named_ids, :drop_names
+
   # @param tenant [Tenant]
   # @param source [String] the HRIS the id comes from
   # @param external_id [String]
@@ -213,7 +254,7 @@ class OrgGraph::Forgetting
   # waits for a running sync and never deadlocks with one.
   def hold_off_syncs
     Person.connection.select_value(
-      Person.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(?)", OrgGraph::PeopleCutover.lock_key(@tenant) ])
+      Person.sanitize_sql_array([ "SELECT 1 FROM pg_advisory_xact_lock(?)", OrgGraph::PeopleCutover.lock_key(@tenant) ])
     )
   end
 

@@ -34,6 +34,8 @@ class ApplicationNotifier < Noticed::Event
   # The NotificationType key this notifier delivers. Set via `notifies`.
   class_attribute :notification_type_key, instance_writer: false
 
+  before_create { OrgGraph::Forgetting.without_forgotten_names(params) }
+
   # Bind this notifier to a NotificationType.
   #
   # @param type_key [Symbol, String]
