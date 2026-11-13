@@ -45,6 +45,13 @@ class Operations::OrgGraph::EditorsTest < ActiveSupport::TestCase
     assert_raises(Operations::Base::ParameterError) { call(:RemoveEditor, person_id: @admin.person_id) }
   end
 
+  should "refuse someone who has left" do
+    ActsAsTenant.with_tenant(@tenant) { @member.person.update!(status: "inactive") }
+
+    assert_raises(Operations::Base::ParameterError) { call(:AddEditor, person_id: @member.person_id) }
+    assert_not @member.reload.org_graph_editor?
+  end
+
   should "refuse a person with no account in this organisation" do
     stranger = ActsAsTenant.with_tenant(@tenant) { create(:person, tenant: @tenant) }
 
