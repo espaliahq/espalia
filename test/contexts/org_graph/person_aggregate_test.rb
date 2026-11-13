@@ -535,4 +535,51 @@ class OrgGraph::PersonAggregateTest < ActiveSupport::TestCase
       assert_nothing_raised { pending.set_membership(@squad, **PROVENANCE) }
     end
   end
+
+  context "#forget" do
+    setup do
+      record
+      @aggregate.leave(**PROVENANCE)
+    end
+
+    should "record the erasure as Espalia's, with its reason and period" do
+      @aggregate.forget(effective_on: "2033-06-01", reason: "retention", retention_years: 7)
+
+      forgotten = events.last
+      assert_kind_of OrgGraph::Events::PersonForgotten, forgotten
+      assert_equal({ person_id: @person_id, provider: "espalia", effective_on: "2033-06-01", reason: "retention",
+                     retention_years: 7, requested_by_id: nil }, forgotten.data)
+    end
+
+    should "name who asked for a request" do
+      assert_raises(RuntimeError, match: /who asked/) { @aggregate.forget(effective_on: "2027-01-01", reason: "request") }
+
+      @aggregate.forget(effective_on: "2027-01-01", reason: "request", requested_by_id: "tnu_admin")
+      assert_equal "tnu_admin", events.last.data[:requested_by_id]
+    end
+
+    should "refuse anyone who has not left" do
+      employed = OrgGraph::PersonAggregate.new
+      employed.record(@person_id, **PROVENANCE, employment_status: "employed")
+
+      assert_raises(RuntimeError, match: /has left/) { employed.forget(effective_on: "2033-06-01", reason: "retention") }
+    end
+
+    should "refuse an unknown reason" do
+      assert_raises(RuntimeError, match: /Invalid reason/) { @aggregate.forget(effective_on: "2033-06-01", reason: "tidy") }
+    end
+
+    should "write nothing the second time, and nothing at all afterwards" do
+      @aggregate.forget(effective_on: "2033-06-01", reason: "retention")
+      reloaded = OrgGraph::PersonAggregate.new
+      events.each { |event| reloaded.apply(event) }
+
+      assert_no_difference -> { reloaded.unpublished_events.count } do
+        reloaded.forget(effective_on: "2033-06-02", reason: "retention")
+      end
+      assert_raises(RuntimeError, match: /forgotten/) { reloaded.return_to_work(**PROVENANCE) }
+      assert_raises(RuntimeError, match: /forgotten/) { reloaded.match_status("left", **PROVENANCE, left_on: "2026-01-01") }
+      assert_raises(RuntimeError, match: /forgotten/) { reloaded.change_title("Engineer", **PROVENANCE) }
+    end
+  end
 end

@@ -43,6 +43,13 @@ class OrgGraph::Projections::LeaversTest < ActiveSupport::TestCase
       assert_empty due
     end
 
+    should "drop someone once they are forgotten" do
+      leave(@ada, "2024-01-01")
+      as_tenant { @handler.forget_person(@ada.id, effective_on: TODAY, reason: "retention", retention_years: 7) }
+
+      assert_empty due
+    end
+
     should "count from a corrected leaving date" do
       leave(@ada, "2027-01-01")
       as_tenant do

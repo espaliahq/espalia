@@ -164,6 +164,24 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     end
   end
 
+  context "#forget_person" do
+    should "write the erasure for the system only, and refuse a sync that follows it" do
+      @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-10-01")
+      admin = create(:tenant_user, tenant: @tenant, role: :admin)
+      as_admin = OrgGraph::CommandHandler.new(actor: AuthorizationContext.new(user: admin.user, tenant_user: admin, person: nil))
+
+      assert_raises(OrgGraph::Authorization::Refused) do
+        as_admin.forget_person(@person_id, effective_on: "2033-11-01", reason: "retention")
+      end
+      @handler.forget_person(@person_id, effective_on: "2033-11-01", reason: "retention", retention_years: 7)
+
+      assert_instance_of OrgGraph::Events::PersonForgotten, stream_events.last
+      assert_raises(RuntimeError, match: /forgotten/) do
+        @handler.sync_person(@person_id, **PROVENANCE, employment_status: "left", left_on: "2026-09-01")
+      end
+    end
+  end
+
   context "#record_absence" do
     should "leave someone the provider stopped returning, once" do
       @handler.sync_person(@person_id, **PROVENANCE, employment_status: "employed")
