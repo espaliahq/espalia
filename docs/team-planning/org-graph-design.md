@@ -280,8 +280,40 @@ Today the adapter assigns attributes and saves. Instead it compares each incomin
 with the Org Graph's current projection and issues a command for each difference. A sync
 that finds nothing changed writes nothing.
 
-A person who disappears from the HRIS gets `PersonLeft`. Their memberships are ended by a
-handler, with the leaving date. A new person appears with no membership. No position is
+A person who disappears from the HRIS gets `PersonLeft` once, dated by the first sync
+that misses them. For someone recorded as employed whose start date is still ahead, it
+is dated by that start date, since nobody leaves before they start; a pending hire who
+disappears leaves on the date of the sync. Someone who comes back keeps their stream and
+gets `PersonReturned`; the earlier `PersonLeft` stays in history as what we believed then.
+
+A failed or partial sync marks no missing person as left, in the Org Graph or in
+`Person.status`, so both read the same set of absent people. Someone HiBob still returns
+as inactive is Pass 2b's, and leaves whatever the brake decides. A sync is failed or partial when any of these holds
+([#51](https://github.com/espaliahq/espalia/issues/51#issuecomment-6856499516)):
+
+- a page request fails;
+- the response is empty;
+- a page has no employee list;
+- the employed people missing from the response are more than 10% of the tenant's
+  employed HRIS-held people **and** more than 5 people (the brake). People already
+  inactive in `Person.status` do not count towards it. The sync result reports the
+  count and the thresholds.
+
+A response that passes those tests and omits a few people, at or below the brake, is not
+partial: those people have left. The brake is deliberate: a partial response looks
+exactly like a mass leaving, and a leaving stays in history. The next sync decides
+afresh. There is no override or per-tenant setting; a story for a manual override can
+follow if a real mass leaving ever needs one.
+
+One gap remains. If the Org Graph write fails for one person, the sync still marks them
+inactive, so Pass 3b still offboards them from open cycles and framework assignments on
+time. For a while the two disagree: the person is
+inactive but still employed in the Org Graph. The next sync that misses them writes the
+`PersonLeft`, dated that day, unless that sync is empty, trips the brake or fails the write
+again; then the one after tries.
+
+A leaver's memberships are to be ended by a
+handler, with the leaving date (story 2.5). A new person appears with no membership. No position is
 created for anyone automatically.
 
 The first sync after this ships writes `PersonRecorded` for everyone. Nothing earlier can

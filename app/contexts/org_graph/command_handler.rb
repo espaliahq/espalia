@@ -121,6 +121,25 @@ class OrgGraph::CommandHandler
     with_person(person_id, OrgGraph::PlanReference.new(**plan)) { |person| person.leave(provider:, effective_on:) }
   end
 
+  # What a provider's sync calls for a person it no longer returns; see
+  # {OrgGraph::PersonAggregate#leave_when_absent}. Refused only when it would
+  # write, so a historic leaver doesn't fail every sync once Espalia holds status.
+  #
+  # @param person_id [String]
+  # @param provider [String]
+  # @param effective_on [Date, String] the sync's date
+  # @return [Integer] how many events were written
+  def record_absence(person_id, provider:, effective_on:)
+    authorize_structure!
+    written = 0
+    @repository.with_person(person_id) do |person|
+      person.leave_when_absent(provider:, effective_on:)
+      written = person.unpublished_events.count
+      ensure_provides!(person_id, provider, :employment_status) if written.positive?
+    end
+    written
+  end
+
   # @param person_id [String]
   # @param provider [String]
   # @param effective_on [Date, String] their return date

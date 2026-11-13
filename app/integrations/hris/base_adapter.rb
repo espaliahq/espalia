@@ -16,6 +16,13 @@
 class Hris::BaseAdapter
   FIELD_CATALOGUE_TTL = 1.hour
 
+  # A deliberate brake: when more of the employed people vanish from one
+  # response than both of these, the sync marks nobody as left. A partial
+  # response, such as a service user who lost sight of a department, looks
+  # exactly like a mass leaving, and a leaving stays in history. The next
+  # sync decides afresh.
+  ABSENCE_BRAKE = { share: 0.10, people: 5 }.freeze
+
   # The adapter for the tenant's configured provider.
   #
   # @param tenant [Tenant]
@@ -88,6 +95,32 @@ class Hris::BaseAdapter
   end
 
   private
+
+  # The provider's people a response no longer holds, or none when the
+  # response is empty or trips {ABSENCE_BRAKE}. A refusal is reported in
+  # the result's errors, with counts only.
+  #
+  # @param current_external_ids [Array<String>] the ids the response holds
+  # @param result [Hash] running tally of sync results
+  # @return [ActiveRecord::Relation<Person>]
+  def absent_people(current_external_ids, result)
+    if current_external_ids.empty?
+      result[:errors] << { error: "#{provider_name} returned nobody, so no one was marked as left" }
+      return Person.none
+    end
+
+    held = Person.where(hris_source: provider_name).where.not(external_id: nil)
+    absent = held.where.not(external_id: current_external_ids).pluck(:id, :status)
+    employed = held.where(status: "active").count
+    vanished = absent.count { |_, status| status == "active" }
+    return Person.where(id: absent.map(&:first)) unless vanished > ABSENCE_BRAKE[:people] && vanished > employed * ABSENCE_BRAKE[:share]
+
+    message = "#{vanished} of #{employed} employed people are missing from #{provider_name}, more than " \
+      "#{(ABSENCE_BRAKE[:share] * 100).round}% and #{ABSENCE_BRAKE[:people]} people, so no one was marked as left"
+    Rails.logger.warn("[Hris] Absence brake for tenant #{tenant.id}: #{message}")
+    result[:errors] << { error: message }
+    Person.none
+  end
 
   # Keyed on the service user too, so reconnecting to another HRIS account
   # never serves the old account's fields.

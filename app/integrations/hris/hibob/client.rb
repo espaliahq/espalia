@@ -81,7 +81,11 @@ class Hris::Hibob::Client
       body[:cursor] = cursor if cursor
 
       response = request_with_retry(:post, "people/search", body: body)
-      employees = response["employees"] || []
+      employees = response["employees"]
+      # A page without its list would otherwise end the fetch early, and the
+      # people on the pages never read would read as having left.
+      raise Hris::Hibob::Errors::UnexpectedResponseError, "HiBob people search page has no employee list" unless employees.is_a?(Array)
+
       all_employees.concat(employees)
 
       cursor = response["cursor"]

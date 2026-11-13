@@ -61,6 +61,16 @@ class Hris::Hibob::ClientTest < ActiveSupport::TestCase
       assert_equal "bob-002", employees[1]["id"]
     end
 
+    should "raise rather than stop early when a later page has no employee list" do
+      pages = [
+        { "employees" => [ { "id" => "bob-001", "email" => "a@b.com" } ], "cursor" => "next-page-token" },
+        { "cursor" => "another-token" }
+      ]
+      @stubs.post("/v1/people/search") { [ 200, { "Content-Type" => "application/json" }, pages.shift ] }
+
+      assert_raises(Hris::Hibob::Errors::UnexpectedResponseError) { @client.search_people }
+    end
+
     should "raise AuthenticationError on 401" do
       @stubs.post("/v1/people/search") { raise Faraday::UnauthorizedError }
 

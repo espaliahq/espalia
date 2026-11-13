@@ -69,6 +69,7 @@ class OrgGraph::AuthorizationTest < ActiveSupport::TestCase
         structure(@actor).set_fact_provider("cost_centre", "hibob", fields: { cost_centre: "root.id" }, effective_on: "2026-02-01")
       end
       assert_raises(OrgGraph::Authorization::Refused) { people(@actor).change_title(@report.id, "Lead", **ESPALIA) }
+      assert_raises(OrgGraph::Authorization::Refused) { people(@actor).record_absence(@report.id, **ESPALIA) }
     end
 
     should "be refused a unit, naming it" do

@@ -452,6 +452,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         )
       end
       @alice = @fixture["employees"].find { |e| e["id"] == "bob-001" }
+      @without_alice = @fixture["employees"].select { |e| e["id"] == "bob-002" }
 
       # Initial sync: alice is created, assigned via her mapped title, and
       # auto-enrolled into the open cycle by AutoEnrollNewAssignments.
@@ -465,7 +466,7 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
 
     should "offboard a person who disappears from the HRIS response" do
-      result = build_adapter([]).sync_people
+      result = build_adapter(@without_alice).sync_people
 
       assert_equal 1, result[:deactivated]
       assert_equal 1, result[:offboarded]
@@ -498,16 +499,24 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
     end
 
     should "be idempotent — a second sync after offboarding does nothing" do
-      build_adapter([]).sync_people
-      result = build_adapter([]).sync_people
+      build_adapter(@without_alice).sync_people
+      result = build_adapter(@without_alice).sync_people
 
       assert_equal 0, result[:deactivated]
       assert_equal 0, result[:offboarded]
       assert_empty result[:errors]
     end
 
+    should "keep everyone when HiBob returns nobody, as a failed sync" do
+      result = build_adapter([]).sync_people
+
+      assert_equal [ 0, 0 ], [ result[:deactivated], result[:offboarded] ]
+      assert_equal [ "hibob returned nobody, so no one was marked as left" ], result[:errors].map { it[:error] }
+      ActsAsTenant.with_tenant(@tenant) { assert_equal "active", @alice_person.reload.status }
+    end
+
     should "reactivate a returnee like a new hire — re-assigned and re-enrolled" do
-      build_adapter([]).sync_people
+      build_adapter(@without_alice).sync_people
       ActsAsTenant.with_tenant(@tenant) do
         assert_equal "inactive", @alice_person.reload.status
       end
@@ -971,6 +980,123 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
         assert_equal 1, result[:role_changed]
         assert_operator person_development_event_count, :>, pd_before
       end
+
+      context "when HiBob no longer returns someone" do
+        setup do
+          @without_bob = @fixture["employees"].reject { it["id"] == "bob-001" }
+        end
+
+        should "write a PersonLeft dated by the first sync to miss them, and none on later days" do
+          first = build_adapter(@without_bob).sync_people
+          second = travel(1.day) { build_adapter(@without_bob).sync_people }
+
+          assert_empty first[:errors]
+          assert_equal [ 1, 0 ], [ first[:org_graph_events], second[:org_graph_events] ]
+          assert_equal [ [ OrgGraph::Events::PersonLeft, @people["bob-001"].id, Date.current.iso8601, "hibob" ] ],
+            new_events.map { |e| [ e.class, *e.data.values_at(:person_id, :effective_on, :provider) ] }
+        end
+
+        should "share one correlation id between the leaving and the sync's other changes" do
+          employees = with_employee("bob-002") { |e| e["work"]["title"] = e["humanReadable"]["work"]["title"] = "Staff Engineer" }
+          build_adapter(employees.reject { it["id"] == "bob-001" }).sync_people
+
+          assert_equal [ OrgGraph::Events::PersonLeft, OrgGraph::Events::TitleChanged ].to_set, new_events.to_set(&:class)
+          assert_equal 1, new_events.map { it.metadata[:correlation_id] }.uniq.size
+        end
+
+        should "deactivate at once and write the PersonLeft on the next sync when the first write fails" do
+          handler = OrgGraph::CommandHandler.new(actor: OrgGraph::Authorization::SYSTEM)
+          handler.define_singleton_method(:record_absence) { |*, **| raise "event store down" }
+          failed = OrgGraph::CommandHandler.stub(:new, handler) { build_adapter(@without_bob).sync_people }
+          retried = travel(1.day) { build_adapter(@without_bob).sync_people }
+
+          assert_equal [ "event store down" ], failed[:errors].map { it[:error] }
+          assert_equal "inactive", @people["bob-001"].reload.status
+          assert_empty retried[:errors]
+          assert_equal [ [ OrgGraph::Events::PersonLeft, Date.tomorrow.iso8601 ] ],
+            new_events.map { |e| [ e.class, e.data[:effective_on] ] }
+        end
+
+        should "write nothing for a leaver HiBob already showed as inactive" do
+          result = travel(1.day) { build_adapter(@fixture["employees"].reject { it["id"] == "bob-003" }).sync_people }
+
+          assert_empty result[:errors]
+          assert_empty new_events
+        end
+
+        should "write nothing for anyone when HiBob returns nobody" do
+          result = build_adapter([]).sync_people
+
+          assert_equal 0, result[:org_graph_events]
+          assert_equal 1, result[:errors].size
+          assert_empty new_events
+        end
+
+        should "write nothing for anyone when the fetch fails" do
+          adapter = Hris::Hibob::Adapter.new(@tenant)
+          failing = Object.new
+          failing.define_singleton_method(:search_people) { |**| raise Hris::Hibob::Errors::ApiError.new(status: 503, body: "down") }
+          adapter.instance_variable_set(:@client, failing)
+
+          assert_raises(Hris::Hibob::Errors::ApiError) { adapter.sync_people }
+          assert_empty new_events
+        end
+
+        should "write a PersonReturned on the same stream when they come back" do
+          build_adapter(@without_bob).sync_people
+          result = build_adapter(@fixture["employees"]).sync_people
+
+          assert_empty result[:errors]
+          assert_equal [ OrgGraph::Events::PersonLeft, OrgGraph::Events::PersonReturned ],
+            Rails.configuration.event_store.read.stream(stream_of(@people["bob-001"])).to_a.drop(1).map(&:class)
+          assert_equal @people["bob-001"].id, ActsAsTenant.with_tenant(@tenant) { Person.find_by(external_id: "bob-001").id }
+        end
+      end
+    end
+  end
+
+  context "#sync_people absence brake" do
+    setup do
+      @staff = synthetic_employees(10)
+      build_adapter(@staff).sync_people
+      @recorded = org_graph_events.size
+    end
+
+    should "mark nobody as left when more than 10% and more than 5 people vanish at once" do
+      result = build_adapter(@staff.first(4)).sync_people
+
+      assert_equal 0, result[:deactivated]
+      assert_empty new_events
+      assert_equal [ "6 of 10 employed people are missing from hibob, more than 10% and 5 people, so no one was marked as left" ],
+        result[:errors].map { it[:error] }
+      ActsAsTenant.with_tenant(@tenant) { assert_equal 10, Person.where(status: "active").count }
+    end
+
+    should "mark them left when no more than 5 vanish" do
+      result = build_adapter(@staff.first(5)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 5, result[:deactivated]
+      assert_equal [ OrgGraph::Events::PersonLeft ] * 5, new_events.map(&:class)
+    end
+
+    should "decide afresh on the next sync" do
+      build_adapter(@staff.first(4)).sync_people
+      result = build_adapter(@staff.first(9)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 1, result[:deactivated]
+      assert_equal [ [ OrgGraph::Events::PersonLeft, "syn-9" ] ],
+        new_events.map { |e| [ e.class, ActsAsTenant.with_tenant(@tenant) { Person.find(e.data[:person_id]).external_id } ] }
+    end
+
+    should "mark them left when they are no more than 10% of everyone employed" do
+      staff = synthetic_employees(60)
+      build_adapter(staff).sync_people
+      result = build_adapter(staff.drop(6)).sync_people
+
+      assert_empty result[:errors]
+      assert_equal 6, result[:deactivated]
     end
   end
 
@@ -996,6 +1122,13 @@ class Hris::Hibob::AdapterTest < ActiveSupport::TestCase
   # @return [Hash] the data of the person's PersonRecorded
   def recorded(person)
     Rails.configuration.event_store.read.stream(stream_of(person)).first.data
+  end
+
+  # @param count [Integer]
+  # @return [Array<Hash>] active employees with no manager, cloned from bob-002
+  def synthetic_employees(count)
+    template = @fixture["employees"].find { it["id"] == "bob-002" }
+    Array.new(count) { |i| template.deep_dup.merge("id" => "syn-#{i}", "email" => "syn#{i}@example.com") }
   end
 
   # @param external_id [String]
