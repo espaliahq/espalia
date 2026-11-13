@@ -257,6 +257,11 @@ yet. That gives every scenario the same four numbers, everywhere a total appears
   and the shortfall of one whose budget lines do not meet its cost. This is the new money
   the scenario needs.
 
+The draws on a budget line never add up to more than its amount. When positions together
+ask for more than a line holds, filled positions draw first, then open ones in the order
+they were created. What the line cannot cover is unfunded, and Remaining never falls
+below zero.
+
 Nobody wires each position to a budget line by hand. The plan works out a default in two steps, and
 shows its reason beside the position.
 

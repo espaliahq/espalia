@@ -264,8 +264,10 @@ The likely answer is to list it for someone to resolve, as a disagreement is.
 - The sync must not undo it. An HRIS often keeps returning a person long after they
   leave, and a sync that upserts every row it is given would write the name back. The
   row keeps a keyed hash of the external id, enough to recognise the person and nothing
-  to identify them by. The sync skips a row that matches a forgotten person. If the HRIS
-  shows them employed again, they are recorded as a new person.
+  to identify them by. The sync skips a matching row for as long as the HRIS
+  shows the person as not employed. When it shows them employed again, the sync creates a
+  new person with a new id, and moves the hash's match to that record so later syncs
+  update it. The new record and the forgotten one are never linked.
 
 Operational facts are retained. In a small organisation they can still point to one
 person: the only principal designer in a team is identifiable without a name. We accept

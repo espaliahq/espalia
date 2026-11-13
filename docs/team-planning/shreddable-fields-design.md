@@ -147,6 +147,12 @@ so each projection decides for itself.
   unreadable in the live system at once. It is gone for good when the last backup taken
   before the key was deleted has expired. A deployment's backup retention is therefore
   its real time to forget, and should be stated.
+- **A restore must not undo forgetting.** A backup from before a key was deleted brings
+  the key back, and the event that recorded the forgetting is missing from it too. So
+  the id of every deleted key is also appended to a forgetting log kept apart from the
+  database backups. A restore replays that log, deleting each key it lists, before the
+  system serves anything. A deployment with no such log cannot promise that a restore
+  keeps what was forgotten, and must say so.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
   fact without rewriting history. Covering existing evidence and comments is a separate
   migration with its own design.

@@ -286,6 +286,9 @@ Approval is the one process this module owns.
   `ChangeApplied`. So approving a scenario that changes any of them needs both
   permissions: to approve, and to apply changes to the Org Graph. Without the second the
   approval is refused whole. It is never recorded with its changes left unapplied.
+  `PlanApproved`, the Org Graph's events and each `ChangeApplied` are one transaction.
+  The plan stream and the Org Graph's streams share an event store, so they commit
+  together or not at all. A change the Org Graph rejects fails the whole approval.
 - **Facts another system holds** are not written by Espalia. Espalia is the source for
   the implementation: an Operation serves the approved change list, and an agent or a
   person raises each change upstream with their own authority there.
