@@ -10,7 +10,7 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
     @tenant = create(:tenant)
     ActsAsTenant.current_tenant = @tenant
     @handler = OrgGraph::CommandHandler.new
-    @person_id = SecureRandom.uuid_v7
+    @person_id = create(:person, tenant: @tenant, hris_source: "hibob", external_id: "hb-1").id
     OrgGraph::StructureCommandHandler.new.claim_facts(OrgGraph::StructureAggregate::FACTS, "hibob", effective_on: "2026-01-01")
   end
 
@@ -230,6 +230,25 @@ class OrgGraph::CommandHandlerTest < ActiveSupport::TestCase
       end
       assert_raises(RuntimeError, match: "espalia supplies employment_status") { @handler.leave(@person_id, **PROVENANCE) }
       assert_equal written, stream_events.size
+    end
+
+    should "let Espalia record and edit a person who carries no external id from the fact's provider" do
+      [ create(:person, tenant: @tenant), create(:person, tenant: @tenant, hris_source: "bamboohr", external_id: "b-1") ].each do |person|
+        @handler.record_person(person.id, **HELD_BY_ESPALIA, employment_status: "employed", title: "Engineer")
+        @handler.change_title(person.id, "Designer", **HELD_BY_ESPALIA)
+
+        assert_equal "Designer", Rails.configuration.event_store.read.stream(EventStreamNaming.person_stream(person.id)).to_a.last.data[:title]
+      end
+    end
+
+    should "refuse the HRIS sync for a person who carries no external id from it" do
+      hand_added = create(:person, tenant: @tenant)
+      @handler.record_person(hand_added.id, **HELD_BY_ESPALIA, employment_status: "employed")
+
+      assert_raises(RuntimeError, match: "espalia supplies employment_status;") do
+        @handler.sync_person(hand_added.id, **PROVENANCE, employment_status: "employed", title: "Engineer")
+      end
+      assert_raises(RuntimeError, match: "espalia supplies title;") { @handler.change_title(hand_added.id, "Engineer", **PROVENANCE) }
     end
 
     should "take a membership only from its unit's provider" do

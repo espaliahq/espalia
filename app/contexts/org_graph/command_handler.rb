@@ -5,7 +5,8 @@
 # Each method loads the person's stream, runs the command, and stores the
 # resulting events. Every command names its provider and effective date, and
 # is refused unless that provider supplies what it changes: a fact's provider
-# is the tenant's setting for its kind, a membership's is its unit's own.
+# is the tenant's setting for its kind, for people who carry that provider's
+# external id, and Espalia for anyone else; a membership's is its unit's own.
 #
 class OrgGraph::CommandHandler
   # @param repository [OrgGraph::Repository]
@@ -18,7 +19,7 @@ class OrgGraph::CommandHandler
   # @param person_id [String] UUID of the person
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#record}
   def record_person(person_id, **facts)
-    ensure_provides!(facts[:provider], *facts.keys)
+    ensure_provides!(person_id, facts[:provider], *facts.keys)
     @repository.with_person(person_id) { |person| person.record(person_id, **facts) }
   end
 
@@ -32,7 +33,7 @@ class OrgGraph::CommandHandler
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
   def apply_facts(person_id, provider:, effective_on:, **facts)
-    ensure_provides!(provider, *facts.keys)
+    ensure_provides!(person_id, provider, *facts.keys)
     written = 0
     @repository.with_person(person_id) do |person|
       person.apply_facts(provider:, effective_on:, **facts)
@@ -53,7 +54,7 @@ class OrgGraph::CommandHandler
   # @param facts [Hash] keywords accepted by {OrgGraph::PersonAggregate#apply_facts}
   # @return [Integer] how many events were written
   def sync_person(person_id, provider:, effective_on:, employment_status:, **facts)
-    ensure_provides!(provider, :employment_status, *facts.keys)
+    ensure_provides!(person_id, provider, :employment_status, *facts.keys)
     written = 0
     @repository.with_person(person_id) do |person|
       person.check_facts!(facts)
@@ -72,7 +73,7 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their start date
   def join(person_id, provider:, effective_on:)
-    ensure_provides!(provider, :employment_status)
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.join(provider:, effective_on:) }
   end
 
@@ -80,7 +81,7 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their leaving date
   def leave(person_id, provider:, effective_on:)
-    ensure_provides!(provider, :employment_status)
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.leave(provider:, effective_on:) }
   end
 
@@ -88,35 +89,35 @@ class OrgGraph::CommandHandler
   # @param provider [String]
   # @param effective_on [Date, String] their return date
   def return_to_work(person_id, provider:, effective_on:)
-    ensure_provides!(provider, :employment_status)
+    ensure_provides!(person_id, provider, :employment_status)
     @repository.with_person(person_id) { |person| person.return_to_work(provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param title [String, nil]
   def change_title(person_id, title, provider:, effective_on:)
-    ensure_provides!(provider, :title)
+    ensure_provides!(person_id, provider, :title)
     @repository.with_person(person_id) { |person| person.change_title(title, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param level [String, nil] the provider's level, before any framework mapping
   def change_level(person_id, level, provider:, effective_on:)
-    ensure_provides!(provider, :level)
+    ensure_provides!(person_id, provider, :level)
     @repository.with_person(person_id) { |person| person.change_level(level, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param manager_id [String, nil] person_id of the new manager, or nil for none
   def change_manager(person_id, manager_id, provider:, effective_on:)
-    ensure_provides!(provider, :manager_id)
+    ensure_provides!(person_id, provider, :manager_id)
     @repository.with_person(person_id) { |person| person.change_manager(manager_id, provider:, effective_on:) }
   end
 
   # @param person_id [String]
   # @param cost_centre [String, nil]
   def change_cost_centre(person_id, cost_centre, provider:, effective_on:)
-    ensure_provides!(provider, :cost_centre)
+    ensure_provides!(person_id, provider, :cost_centre)
     @repository.with_person(person_id) { |person| person.change_cost_centre(cost_centre, provider:, effective_on:) }
   end
 
@@ -124,7 +125,7 @@ class OrgGraph::CommandHandler
   # @param site [String, nil]
   # @param country [String, nil]
   def change_site(person_id, site:, country:, provider:, effective_on:)
-    ensure_provides!(provider, :site)
+    ensure_provides!(person_id, provider, :site)
     @repository.with_person(person_id) { |person| person.change_site(site:, country:, provider:, effective_on:) }
   end
 
@@ -132,7 +133,7 @@ class OrgGraph::CommandHandler
   # @param fte [Numeric, nil]
   # @param employment_type [String, nil]
   def change_employment(person_id, fte:, employment_type:, provider:, effective_on:)
-    ensure_provides!(provider, :fte)
+    ensure_provides!(person_id, provider, :fte)
     @repository.with_person(person_id) do |person|
       person.change_employment(fte:, employment_type:, provider:, effective_on:)
     end
@@ -189,10 +190,17 @@ class OrgGraph::CommandHandler
     unit
   end
 
-  # Reads the fact providers the structure projection writes, as above.
-  def ensure_provides!(provider, *keys)
-    keys.filter_map { |key| OrgGraph::PersonAggregate::FACT_KINDS[key] }.uniq.each do |kind|
+  # Reads the fact providers the structure projection writes, as above. A
+  # provider holds a fact only for people who carry its external id: anyone
+  # else, added by hand or with an account, is Espalia's for every fact.
+  def ensure_provides!(person_id, provider, *keys)
+    kinds = keys.filter_map { |key| OrgGraph::PersonAggregate::FACT_KINDS[key] }.uniq
+    return if kinds.empty?
+
+    source = Person.where(id: person_id).where.not(external_id: nil).pick(:hris_source)
+    kinds.each do |kind|
       holder = OrgFactProvider.provider_for(kind)
+      holder = OrgGraph::StructureAggregate::ESPALIA unless holder == source
       raise "#{holder} supplies #{kind}; change it there" unless holder == provider.to_s
     end
   end

@@ -274,8 +274,10 @@ sit beneath a parent that didn't yet exist.
 Facts another provider holds cannot be changed here. They change when the sync says so.
 Every person command is refused unless its provider holds what it writes: the tenant's
 setting for that kind of fact, or for a membership, its unit's own provider. A unit keeps
-the provider it was created with, which was its level's then, so a retired unit's members
-can still be ended after its level changes hands. The error names the
+the provider it was created with, which was its level's then, and a membership moves only
+into a unit the same provider supplies. The setting reaches only people who carry that
+provider's external id: anyone else, added by hand or with an account, is Espalia's for
+every fact, so Espalia edits them and the sync never writes them. The error names the
 provider that does. The sync reports a refused person and carries on with the rest.
 
 ## Providers and provenance (R5)
