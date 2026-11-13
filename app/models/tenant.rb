@@ -259,6 +259,7 @@ class Tenant < ApplicationRecord
       save!
     end
     claim_hris_facts_after_save
+    true
   end
 
   # Hands the HRIS the person facts it supplies by default
