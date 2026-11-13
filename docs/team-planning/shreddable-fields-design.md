@@ -147,19 +147,14 @@ so each projection decides for itself.
   unreadable in the live system at once. It is gone for good when the last backup taken
   before the key was deleted has expired. A deployment's backup retention is therefore
   its real time to forget, and should be stated.
-- **A restore must not undo forgetting.** A backup from before a key was deleted brings
-  the key back, and the event that recorded the forgetting is missing from it too. So
-  every forgetting decision is also appended to a forgetting log kept apart from the
-  database backups: what was forgotten, and the key it deleted. The entry is made
-  durable first, then the transaction that deletes the key commits. The entry is the
-  decision, and it is not taken back. If the process stops before the deletion commits,
-  the live system completes it on start: any entry whose key still exists is carried
-  out. So the log and the live system never disagree for longer than a restart.
-  A restore replays the log before the system serves anything, and replaying a decision
-  means carrying it out again in full: delete the key, erase the identifiers it
-  covered, and rebuild every read model and cache with the keys forgotten. A deployment
-  with no such log cannot promise that a restore keeps what was forgotten, and must say
-  so.
+- **A restore can undo forgetting. We accept that.** A backup from before a key was
+  deleted brings the key back, and the event that recorded the forgetting is missing
+  from it too. Nothing outside the backups records what was forgotten, so a restore
+  does not carry it out again. The retention period repairs most of it without help: a
+  person past their date is forgotten again on the next run. Two cases need a person:
+  someone forgotten on request before their date, and a deleted plan, which comes back
+  and has to be deleted again. A deployment that restores a backup should check for
+  both.
 - **Events already written stay in clear.** A field cannot be made shreddable after the
   fact without rewriting history. Covering existing evidence and comments is a separate
   migration with its own design.
