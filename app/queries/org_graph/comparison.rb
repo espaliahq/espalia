@@ -18,5 +18,8 @@ class OrgGraph::Comparison
   # @return [String, nil] the heading above a card's people changes, such as "Since 1 Oct"
   def window_label = nil
 
+  # @return [Hash] query parameters a link keeps so the comparison stays on
+  def params = {}
+
   NONE = new.freeze
 end

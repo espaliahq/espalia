@@ -61,7 +61,6 @@ class OrgGraph::DateComparison < OrgGraph::Comparison
     @changes = OrgGraph::ChangesBetween.new(context:, from: window.from, to: window.to, by: window.by).call.changes
   end
 
-  # @return [Hash] the query parameters that keep this comparison
   def params = @window.params
 
   # @return [Boolean]

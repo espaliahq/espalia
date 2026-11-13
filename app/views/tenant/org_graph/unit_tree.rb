@@ -52,7 +52,7 @@ class Views::Tenant::OrgGraph::UnitTree < Views::Base
   def tree_link(unit)
     selected = unit.id == @overview.selected&.id
     a(
-      href: tenant_org_graph_path(unit: unit.id),
+      href: tenant_org_graph_path(unit: unit.id, **@comparison.params),
       class: [
         "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm",
         selected ? "bg-neutral-muted font-semibold text-default" : "text-default hover:bg-default-hover"

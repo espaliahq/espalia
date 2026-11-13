@@ -137,7 +137,7 @@ class Views::Tenant::OrgGraph::UnitPanel < Views::Base
       plain "Beneath: "
       children.each_with_index do |child, index|
         plain ", " if index.positive?
-        a(href: tenant_org_graph_path(unit: child.id), class: "text-link hover:text-link-hover underline") do
+        a(href: tenant_org_graph_path(unit: child.id, **@comparison.params), class: "text-link hover:text-link-hover underline") do
           "#{child.name} #{@overview.headcount(child)}"
         end
       end
